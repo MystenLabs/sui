@@ -638,7 +638,11 @@ where
                     pending_transaction,
                 } => {
                     debug!(tx_digest=?pending_transaction, "Objects locked by a previous transaction, re-executing the previous transaction");
-                    if self.retry_pending_tx(pending_transaction).await.is_err() {
+                    if let Err(err) = self.retry_pending_tx(pending_transaction).await {
+                        debug!(
+                            "Retrying pending tx failed: {:?}. Resetting the transaction lock",
+                            err
+                        );
                         self.store.reset_transaction_lock(&owned_objects).await?;
                     }
                     self.set_transaction_lock(&owned_objects, transaction.clone())
@@ -670,12 +674,21 @@ where
     }
 
     async fn retry_pending_tx(&self, digest: TransactionDigest) -> Result<(), anyhow::Error> {
-        let tx = self
-            .store
-            .get_transaction(&digest)?
-            .ok_or(SuiError::TransactionNotFound { digest })?;
-        self.execute_transaction(tx).await?;
-        Ok(())
+        let tx = self.store.get_transaction(&digest)?;
+        match tx {
+            Some(tx) => {
+                self.execute_transaction(tx).await?;
+                Ok(())
+            }
+            None => {
+                // It's possible that the tx has been executed already.
+                if self.store.get_certified_transaction(&digest)?.is_some() {
+                    Ok(())
+                } else {
+                    Err(SuiError::TransactionNotFound { digest }.into())
+                }
+            }
+        }
     }
 
     async fn download_object_from_authorities(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
@@ -683,7 +696,8 @@ where
         if let ObjectRead::Exists(obj_ref, object, _) = &result {
             let local_object = self.store.get_object(&object_id)?;
             if local_object.is_none()
-                || &local_object.unwrap().compute_object_reference() != obj_ref
+                // We only update local object if the validator version is newer.
+                || local_object.unwrap().version() < obj_ref.1
             {
                 self.store.insert_object_direct(*obj_ref, object).await?;
             }
@@ -1075,53 +1089,61 @@ where
 
         debug!(tx_digest = ?tx_digest, "Received execute_transaction request");
 
-        let span = tracing::debug_span!(
-            "gateway_execute_transaction",
-            ?tx_digest,
-            tx_kind = tx.data.kind_as_str()
-        );
-
-        // Use start_coarse_time() if the below turns out to have a perf impact
-        let timer = self.metrics.transaction_latency.start_timer();
-        let mut res = self
-            .execute_transaction_impl(tx.clone(), false)
-            .instrument(span.clone())
-            .await;
-        // NOTE: below only records latency if this completes.
-        timer.stop_and_record();
-
-        let mut remaining_retries = MAX_NUM_TX_RETRIES;
-        while res.is_err() {
-            if remaining_retries == 0 {
-                error!(
-                    num_retries = MAX_NUM_TX_RETRIES,
+        // Ensure idempotency.
+        let (certificate, effects) = match QueryHelpers::get_transaction(&self.store, tx_digest) {
+            Ok((cert, effects)) => (cert, effects),
+            _ => {
+                let span = tracing::debug_span!(
+                    "gateway_execute_transaction",
                     ?tx_digest,
-                    "All transaction retries failed"
+                    tx_kind = tx.data.kind_as_str()
                 );
-                // Okay to unwrap since we checked that this is an error
-                return Err(res.unwrap_err());
+
+                // Use start_coarse_time() if the below turns out to have a perf impact
+                let timer = self.metrics.transaction_latency.start_timer();
+                let mut res = self
+                    .execute_transaction_impl(tx.clone(), false)
+                    .instrument(span.clone())
+                    .await;
+                // NOTE: below only records latency if this completes.
+                timer.stop_and_record();
+
+                let mut remaining_retries = MAX_NUM_TX_RETRIES;
+                while res.is_err() {
+                    if remaining_retries == 0 {
+                        error!(
+                            num_retries = MAX_NUM_TX_RETRIES,
+                            ?tx_digest,
+                            "All transaction retries failed"
+                        );
+                        // Okay to unwrap since we checked that this is an error
+                        return Err(res.unwrap_err());
+                    }
+                    remaining_retries -= 1;
+                    self.metrics.total_tx_retries.inc();
+
+                    debug!(
+                        remaining_retries,
+                        ?tx_digest,
+                        ?res,
+                        "Retrying failed transaction"
+                    );
+
+                    res = self
+                        .execute_transaction_impl(tx.clone(), remaining_retries == 0)
+                        .instrument(span.clone())
+                        .await;
+                }
+
+                // Okay to unwrap() since we checked that this is Ok
+                let (certificate, effects) = res.unwrap();
+                let effects = effects.effects;
+
+                debug!(?tx_digest, "Transaction succeeded");
+                (certificate, effects)
             }
-            remaining_retries -= 1;
-            self.metrics.total_tx_retries.inc();
+        };
 
-            debug!(
-                remaining_retries,
-                ?tx_digest,
-                ?res,
-                "Retrying failed transaction"
-            );
-
-            res = self
-                .execute_transaction_impl(tx.clone(), remaining_retries == 0)
-                .instrument(span.clone())
-                .await;
-        }
-
-        // Okay to unwrap() since we checked that this is Ok
-        let (certificate, effects) = res.unwrap();
-        let effects = effects.effects;
-
-        debug!(tx_digest = ?tx_digest, "Transaction succeeded");
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
@@ -1443,7 +1465,7 @@ where
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
-        let (cert, effect) = QueryHelpers::get_transaction(&self.store, digest)?;
+        let (cert, effect) = QueryHelpers::get_transaction(&self.store, &digest)?;
 
         Ok(TransactionEffectsResponse {
             certificate: cert.try_into()?,
