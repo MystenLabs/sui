@@ -329,7 +329,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> StoreTables<S> {
                     .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
                     .collect::<BTreeMap<_, _>>()
             }
-            _ => return Err(anyhow!(format!("No such table name: {}", table_name))),
+            _ => anyhow::bail!("No such table name: {}", table_name)),
         })
     }
 }
