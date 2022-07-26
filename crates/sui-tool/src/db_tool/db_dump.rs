@@ -14,6 +14,7 @@ pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
         .map(|q| {
             q.iter()
                 .filter_map(|s| {
+                    // The `default` table is not used
                     if s != "default" {
                         Some(s.clone())
                     } else {

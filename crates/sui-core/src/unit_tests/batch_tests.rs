@@ -409,7 +409,8 @@ async fn test_batch_store_retrieval() {
     let inner_store = store.clone();
     for _i in 0u64..105 {
         let t0 = &authority_state.batch_notifier.ticket().expect("ok");
-        inner_store.tables
+        inner_store
+            .tables
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
@@ -423,7 +424,8 @@ async fn test_batch_store_retrieval() {
 
     for _i in 110u64..120 {
         let t0 = &authority_state.batch_notifier.ticket().expect("ok");
-        inner_store.tables
+        inner_store
+            .tables
             .executed_sequence
             .insert(&t0.seq(), &tx_zero)
             .expect("Failed to write.");
