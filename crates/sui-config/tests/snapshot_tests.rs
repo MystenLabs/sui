@@ -29,7 +29,6 @@ fn empty_genesis_snapshot_matches() {
 
 #[test]
 fn populated_genesis_snapshot_matches() {
-    // let mut rng = StdRng::from_seed([0; 32]);
     let genesis_config = GenesisConfig::for_local_testing();
     let (_account_keys, objects) = genesis_config
         .generate_accounts(&mut StdRng::from_seed([0; 32]))
