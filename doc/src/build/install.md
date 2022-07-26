@@ -174,6 +174,8 @@ In macOS, other than the aforementioned [Brew](#brew) package manager, the gener
 
 In Microsoft Windows, also install:
 
+[Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/)
+
 [C++ build tools](https://visualstudio.microsoft.com/downloads/)
 
 The [LLVM Compiler Infrastructure](https://releases.llvm.org/)
