@@ -129,7 +129,11 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
 
     if (!showData || showData.length === 0) return null;
 
-    return <TableCard tabledata={tableData} />;
+    return (
+        <div data-testid="tx">
+            <TableCard tabledata={tableData} />
+        </div>
+    );
 }
 
 function TxForIDStatic({
