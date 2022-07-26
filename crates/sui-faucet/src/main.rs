@@ -163,6 +163,7 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;
 
+    info!(?address, "Sync client states");
     // Sync client to retrieve objects from the network.
     SuiClientCommands::SyncClientState {
         address: Some(address),
