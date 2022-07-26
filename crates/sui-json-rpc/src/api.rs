@@ -155,10 +155,15 @@ pub trait RpcTransactionBuilder {
     #[method(name = "transferObject")]
     async fn transfer_object(
         &self,
+        /// the transaction signer's Sui address
         signer: SuiAddress,
+        /// the ID of the object to be transferred
         object_id: ObjectID,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
+        /// the recipient's Sui address
         recipient: SuiAddress,
     ) -> RpcResult<TransactionBytes>;
 
@@ -166,10 +171,13 @@ pub trait RpcTransactionBuilder {
     #[method(name = "transferSui")]
     async fn transfer_sui(
         &self,
+        /// the transaction signer's Sui address
         signer: SuiAddress,
         sui_object_id: ObjectID,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
         recipient: SuiAddress,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
         amount: Option<u64>,
     ) -> RpcResult<TransactionBytes>;
 
@@ -177,13 +185,21 @@ pub trait RpcTransactionBuilder {
     #[method(name = "moveCall")]
     async fn move_call(
         &self,
+        /// the transaction signer's Sui address
         signer: SuiAddress,
+        /// the Move package ID, e.g. `0x2`
         package_object_id: ObjectID,
+        /// the Move module name, e.g. `devnet_nft`
         module: String,
+        /// the move function name, e.g. `mint`
         function: String,
+        /// the type arguments of the Move function
         type_arguments: Vec<SuiTypeTag>,
+        /// the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format
         arguments: Vec<SuiJsonValue>,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
@@ -191,9 +207,13 @@ pub trait RpcTransactionBuilder {
     #[method(name = "publish")]
     async fn publish(
         &self,
+        /// the transaction signer's Sui address
         sender: SuiAddress,
+        /// the compiled bytes of a move module, the
         compiled_modules: Vec<Base64>,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
@@ -201,10 +221,15 @@ pub trait RpcTransactionBuilder {
     #[method(name = "splitCoin")]
     async fn split_coin(
         &self,
+        /// the transaction signer's Sui address
         signer: SuiAddress,
+        /// the coin object to be spilt
         coin_object_id: ObjectID,
+        /// the amounts to split out from the coin
         split_amounts: Vec<u64>,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
@@ -212,10 +237,15 @@ pub trait RpcTransactionBuilder {
     #[method(name = "mergeCoins")]
     async fn merge_coin(
         &self,
+        /// the transaction signer's Sui address
         signer: SuiAddress,
+        /// the coin object to merge into, this coin will remain after the transaction
         primary_coin: ObjectID,
+        /// the coin object to be merged, this coin will be destroyed, the balance will be added to `primary_coin`
         coin_to_merge: ObjectID,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
@@ -223,9 +253,13 @@ pub trait RpcTransactionBuilder {
     #[method(name = "batchTransaction")]
     async fn batch_transaction(
         &self,
+        /// the transaction signer's Sui address
         signer: SuiAddress,
+        /// list of transaction request parameters
         single_transaction_params: Vec<RPCTransactionRequestParams>,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
         gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 }

@@ -6958,6 +6958,7 @@ dependencies = [
  "proc-macro2 1.0.40",
  "quote 1.0.20",
  "syn 1.0.98",
+ "unescape",
  "workspace-hack 0.1.0",
 ]
 

@@ -26,6 +26,7 @@
       "params": [
         {
           "name": "signer",
+          "description": "the transaction signer's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -33,6 +34,7 @@
         },
         {
           "name": "single_transaction_params",
+          "description": "list of transaction request parameters",
           "required": true,
           "schema": {
             "type": "array",
@@ -43,12 +45,14 @@
         },
         {
           "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
           "required": true,
           "schema": {
             "type": "integer",
@@ -92,7 +96,7 @@
         },
         {
           "name": "pub_key",
-          "description": "signer\\'s public key, as base-64 encoded string",
+          "description": "signer's public key, as base-64 encoded string",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -118,7 +122,7 @@
       "params": [
         {
           "name": "event_type",
-          "description": "the event type, e.g. \\'0x2::devnet_nft::MintNFTEvent\\'",
+          "description": "the event type, e.g. '0x2::devnet_nft::MintNFTEvent'",
           "required": true,
           "schema": {
             "type": "string"
@@ -136,7 +140,7 @@
         },
         {
           "name": "start_time",
-          "description": "the matching events\\' timestamp will be after the specified start time",
+          "description": "the matching events' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -146,7 +150,7 @@
         },
         {
           "name": "end_time",
-          "description": "the matching events\\' timestamp will be before the specified end time",
+          "description": "the matching events' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -203,7 +207,7 @@
         },
         {
           "name": "start_time",
-          "description": "the matching events\\' timestamp will be after the specified start time",
+          "description": "the matching events' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -213,7 +217,7 @@
         },
         {
           "name": "end_time",
-          "description": "the matching events\\' timestamp will be before the specified end time",
+          "description": "the matching events' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -262,7 +266,7 @@
         },
         {
           "name": "start_time",
-          "description": "the matching events\\' timestamp will be after the specified start time",
+          "description": "the matching events' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -272,7 +276,7 @@
         },
         {
           "name": "end_time",
-          "description": "the matching events\\' timestamp will be before the specified end time",
+          "description": "the matching events' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -303,7 +307,7 @@
       "params": [
         {
           "name": "owner",
-          "description": "the owner\\'s Sui address",
+          "description": "the owner's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -321,7 +325,7 @@
         },
         {
           "name": "start_time",
-          "description": "the matching events\\' timestamp will be after the specified start time",
+          "description": "the matching events' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -331,7 +335,7 @@
         },
         {
           "name": "end_time",
-          "description": "the matching events\\' timestamp will be before the specified end time",
+          "description": "the matching events' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -362,7 +366,7 @@
       "params": [
         {
           "name": "sender",
-          "description": "the sender\\'s Sui address",
+          "description": "the sender's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -380,7 +384,7 @@
         },
         {
           "name": "start_time",
-          "description": "the matching events\\' timestamp will be after the specified start time",
+          "description": "the matching events' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -390,7 +394,7 @@
         },
         {
           "name": "end_time",
-          "description": "the matching events\\' timestamp will be before the specified end time",
+          "description": "the matching events' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -476,7 +480,7 @@
       "params": [
         {
           "name": "address",
-          "description": "the owner\\'s Sui address",
+          "description": "the owner's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -781,11 +785,11 @@
           "name": "Full Node API"
         }
       ],
-      "description": "Return list of transactions for a specified sender\\'s Sui address.",
+      "description": "Return list of transactions for a specified sender's Sui address.",
       "params": [
         {
           "name": "addr",
-          "description": "the sender\\'s Sui address",
+          "description": "the sender's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -826,7 +830,7 @@
       "params": [
         {
           "name": "start",
-          "description": "the matching transactions\\' sequence number will be greater than or equals to the starting sequence number",
+          "description": "the matching transactions' sequence number will be greater than or equals to the starting sequence number",
           "required": true,
           "schema": {
             "type": "integer",
@@ -836,7 +840,7 @@
         },
         {
           "name": "end",
-          "description": "the matching transactions\\' sequence number will be less than the ending sequence number",
+          "description": "the matching transactions' sequence number will be less than the ending sequence number",
           "required": true,
           "schema": {
             "type": "integer",
@@ -875,11 +879,11 @@
           "name": "Full Node API"
         }
       ],
-      "description": "Return list of transactions for a specified recipient\\'s Sui address.",
+      "description": "Return list of transactions for a specified recipient's Sui address.",
       "params": [
         {
           "name": "addr",
-          "description": "the recipient\\'s Sui address",
+          "description": "the recipient's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -920,6 +924,7 @@
       "params": [
         {
           "name": "signer",
+          "description": "the transaction signer's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -927,6 +932,7 @@
         },
         {
           "name": "primary_coin",
+          "description": "the coin object to merge into, this coin will remain after the transaction",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -934,6 +940,7 @@
         },
         {
           "name": "coin_to_merge",
+          "description": "the coin object to be merged, this coin will be destroyed, the balance will be added to `primary_coin`",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -941,12 +948,14 @@
         },
         {
           "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
           "required": true,
           "schema": {
             "type": "integer",
@@ -974,6 +983,7 @@
       "params": [
         {
           "name": "signer",
+          "description": "the transaction signer's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -981,6 +991,7 @@
         },
         {
           "name": "package_object_id",
+          "description": "the Move package ID, e.g. `0x2`",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -988,6 +999,7 @@
         },
         {
           "name": "module",
+          "description": "the Move module name, e.g. `devnet_nft`",
           "required": true,
           "schema": {
             "type": "string"
@@ -995,6 +1007,7 @@
         },
         {
           "name": "function",
+          "description": "the move function name, e.g. `mint`",
           "required": true,
           "schema": {
             "type": "string"
@@ -1002,6 +1015,7 @@
         },
         {
           "name": "type_arguments",
+          "description": "the type arguments of the Move function",
           "required": true,
           "schema": {
             "type": "array",
@@ -1012,6 +1026,7 @@
         },
         {
           "name": "arguments",
+          "description": "the arguments to be passed into the Move function, in [SuiJson](https://docs.sui.io/build/sui-json) format",
           "required": true,
           "schema": {
             "type": "array",
@@ -1022,12 +1037,14 @@
         },
         {
           "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
           "required": true,
           "schema": {
             "type": "integer",
@@ -1055,6 +1072,7 @@
       "params": [
         {
           "name": "sender",
+          "description": "the transaction signer's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -1062,6 +1080,7 @@
         },
         {
           "name": "compiled_modules",
+          "description": "the compiled bytes of a move module, the",
           "required": true,
           "schema": {
             "type": "array",
@@ -1072,12 +1091,14 @@
         },
         {
           "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
           "required": true,
           "schema": {
             "type": "integer",
@@ -1105,6 +1126,7 @@
       "params": [
         {
           "name": "signer",
+          "description": "the transaction signer's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -1112,6 +1134,7 @@
         },
         {
           "name": "coin_object_id",
+          "description": "the coin object to be spilt",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -1119,6 +1142,7 @@
         },
         {
           "name": "split_amounts",
+          "description": "the amounts to split out from the coin",
           "required": true,
           "schema": {
             "type": "array",
@@ -1131,12 +1155,14 @@
         },
         {
           "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
           "required": true,
           "schema": {
             "type": "integer",
@@ -1218,10 +1244,11 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create an unsigned transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
+      "description": "Create an unsigned transaction to transfer an object from one address to another. The object's type must allow public transfers",
       "params": [
         {
           "name": "signer",
+          "description": "the transaction signer's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -1229,6 +1256,7 @@
         },
         {
           "name": "object_id",
+          "description": "the ID of the object to be transferred",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -1236,12 +1264,14 @@
         },
         {
           "name": "gas",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
           }
         },
         {
           "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
           "required": true,
           "schema": {
             "type": "integer",
@@ -1251,6 +1281,7 @@
         },
         {
           "name": "recipient",
+          "description": "the recipient's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -1276,6 +1307,7 @@
       "params": [
         {
           "name": "signer",
+          "description": "the transaction signer's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -1290,6 +1322,7 @@
         },
         {
           "name": "gas_budget",
+          "description": "the gas budget, the transaction will fail if the gas cost exceed the budget",
           "required": true,
           "schema": {
             "type": "integer",
@@ -1306,6 +1339,7 @@
         },
         {
           "name": "amount",
+          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
           "schema": {
             "type": "integer",
             "format": "uint64",
