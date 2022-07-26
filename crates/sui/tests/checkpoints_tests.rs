@@ -203,7 +203,7 @@ async fn end_to_end() {
     wait_for_advance_to_next_checkpoint(&handles, &transaction_digests).await;
 }
 
-// #[tokio::test]
+#[tokio::test]
 async fn end_to_end_with_one_byzantine() {
     telemetry_subscribers::init_for_testing();
     // Make a few test transactions.

@@ -14,8 +14,8 @@ use sui_config::{
 use sui_types::{
     base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress},
     crypto::{
-        AccountKeyPair, AuthorityKeyPair, AuthorityPublicKey, AuthorityPublicKeyBytes,
-        AuthoritySignature, KeypairTraits, Signature, ToFromBytes,
+        AuthorityKeyPair, AuthorityPublicKey, AuthorityPublicKeyBytes,
+        AuthoritySignature, KeypairTraits, ToFromBytes,
     },
     object::Object,
 };
@@ -196,7 +196,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     AuthoritySignature::from_bytes(&signature_bytes)?;
                 let name = path
                     .file_name()
-                    .ok_or(anyhow::anyhow!("Invalid signature file"))?;
+                    .ok_or_else(|| anyhow::anyhow!("Invalid signature file"))?;
                 let public_key =
                     AuthorityPublicKeyBytes::from_bytes(&decode_bytes_hex::<Vec<u8>>(name)?[..])?;
                 signatures.insert(public_key, signature);

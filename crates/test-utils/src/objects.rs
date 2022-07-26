@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{test_account_keys, test_keys};
+use crate::{test_account_keys};
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{MoveObject, Object, Owner, OBJECT_START_VERSION};

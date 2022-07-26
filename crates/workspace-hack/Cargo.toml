@@ -44,7 +44,6 @@ axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "
 axum-core = { version = "0.2", default-features = false }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 backtrace = { version = "0.3", features = ["std"] }
-base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
 base64 = { version = "0.13", features = ["alloc", "std"] }
 base64ct = { version = "1", default-features = false, features = ["alloc", "std"] }
 bcs = { version = "0.1", default-features = false }
@@ -54,6 +53,7 @@ bimap = { version = "0.6", features = ["std"] }
 bincode = { version = "1", default-features = false }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
+bitcoin_hashes = { version = "0.11", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
 blake2 = { version = "0.9", features = ["std"] }
@@ -90,10 +90,9 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
-config-1ff49526a7fa5493 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+config-cbcdb16e7fe39e4e = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", features = ["benchmark", "rand"] }
-const-oid = { version = "0.9", default-features = false }
+consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", features = ["benchmark", "rand"] }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "2", default-features = false }
@@ -110,23 +109,22 @@ crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crossterm-2b5c6dc72f624058 = { package = "crossterm", version = "0.23" }
 crossterm-adf3d7031871b0af = { package = "crossterm", version = "0.24" }
-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", features = ["copy_key"] }
-crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
+crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", features = ["copy_key"] }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
 crypto-mac = { version = "0.8", default-features = false, features = ["std"] }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 curve25519-dalek = { version = "3", default-features = false, features = ["alloc", "serde", "std", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+dag = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
 datatest-stable = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
-der = { version = "0.6", default-features = false, features = ["alloc", "const-oid", "oid", "zeroize"] }
 derive_builder = { version = "0.11", features = ["std"] }
 determinator = { version = "0.9", default-features = false }
 deunicode = { version = "0.4", default-features = false }
+dhat = { version = "0.3", default-features = false }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
@@ -142,23 +140,20 @@ dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 dyn-clone = { version = "1", default-features = false }
-ecdsa = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
 ed25519 = { version = "1", default-features = false, features = ["serde", "std"] }
 ed25519-dalek = { version = "1", features = ["batch", "merlin", "rand", "serde", "serde_bytes", "serde_crate", "std", "u64_backend"] }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "rand", "serde", "serde_bytes", "serde_crate", "std"] }
 either = { version = "1", features = ["use_std"] }
-elliptic-curve = { version = "0.12", default-features = false, features = ["alloc", "arithmetic", "digest", "ff", "group", "hazmat", "pkcs8", "sec1", "std"] }
 endian-type = { version = "0.1", default-features = false }
 env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+executor = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
-ff = { version = "0.12", default-features = false }
 fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
@@ -189,7 +184,6 @@ globwalk = { version = "0.8", default-features = false }
 gloo-net = { version = "0.2", default-features = false, features = ["futures-channel", "futures-core", "futures-sink", "json", "pin-project", "serde", "serde_json", "websocket"] }
 gloo-timers = { version = "0.2", features = ["futures", "futures-channel", "futures-core"] }
 gloo-utils = { version = "0.1", default-features = false }
-group = { version = "0.12", default-features = false }
 guppy = { version = "0.14", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
@@ -204,7 +198,7 @@ heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = 
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicode", "unicode-segmentation"] }
 hex = { version = "0.4", features = ["alloc", "std"] }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
-hmac = { version = "0.12", default-features = false, features = ["reset", "std"] }
+hmac = { version = "0.12", default-features = false, features = ["std"] }
 http = { version = "0.2", default-features = false }
 http-body = { version = "0.4", default-features = false }
 http-range-header = { version = "0.3", default-features = false }
@@ -238,7 +232,6 @@ jsonrpsee-types = { version = "0.15", default-features = false }
 jsonrpsee-wasm-client = { version = "0.15", default-features = false }
 jsonrpsee-ws-client = { version = "0.15", features = ["tls"] }
 jsonrpsee-ws-server = { version = "0.15", default-features = false }
-k256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "pkcs8", "schnorr", "sha2", "sha256", "std"] }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
@@ -307,11 +300,11 @@ multimap = { version = "0.8", default-features = false }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
-network = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+network = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
-node = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false, features = ["benchmark"] }
+node = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false, features = ["benchmark"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
 nom-15128469a54ed75a = { package = "nom", version = "7", features = ["alloc", "std"] }
 normalize-line-endings = { version = "0.3", default-features = false }
@@ -354,7 +347,6 @@ phf_shared = { version = "0.10", features = ["std", "uncased"] }
 pin-project = { version = "1", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
 pin-utils = { version = "0.1", default-features = false }
-pkcs8 = { version = "0.9", default-features = false, features = ["alloc"] }
 plotters = { version = "0.3", default-features = false, features = ["area_series", "line_series", "plotters-svg", "svg_backend"] }
 plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
@@ -365,7 +357,7 @@ predicates-tree = { version = "1", default-features = false }
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 prettyplease = { version = "0.1", default-features = false }
-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false, features = ["benchmark"] }
+primary = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false, features = ["benchmark"] }
 proc-macro2-dff4ba8e3ae991db = { package = "proc-macro2", version = "1", features = ["proc-macro", "span-locations"] }
 prometheus = { version = "0.13", features = ["protobuf"] }
 proptest = { version = "1", features = ["bit-set", "break-dead-code", "fork", "lazy_static", "quick-error", "regex-syntax", "rusty-fork", "std", "tempfile", "timeout"] }
@@ -397,7 +389,6 @@ regex-syntax = { version = "0.6", features = ["unicode", "unicode-age", "unicode
 remove_dir_all = { version = "0.5", default-features = false }
 reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "hyper-tls", "json", "native-tls-crate", "serde_json", "tokio-native-tls"] }
 retain_mut = { version = "0.1", default-features = false }
-rfc6979 = { version = "0.3", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
 roaring = { version = "0.9", default-features = false }
 rocksdb = { version = "0.18", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
@@ -416,7 +407,8 @@ schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"]
 scopeguard = { version = "1", features = ["use_std"] }
 sct-3b31131e45eafb45 = { package = "sct", version = "0.6", default-features = false }
 sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = false }
-sec1 = { version = "0.3", features = ["alloc", "base16ct", "der", "generic-array", "pkcs8", "point", "subtle", "zeroize"] }
+secp256k1 = { version = "0.24", features = ["alloc", "bitcoin_hashes", "rand", "std"] }
+secp256k1-sys = { version = "0.6", default-features = false, features = ["alloc", "std"] }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
 send_wrapper = { version = "0.4", default-features = false }
 serde-c38e5c1d305a1b54 = { package = "serde", version = "0.8", features = ["std"] }
@@ -440,7 +432,7 @@ sha3-93f6ce9d446188ac = { package = "sha3", version = "0.10", features = ["std"]
 sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9", features = ["std"] }
 sharded-slab = { version = "0.1", default-features = false }
 shell-words = { version = "1", features = ["std"] }
-signature = { version = "1", features = ["digest", "digest-preview", "rand-preview", "rand_core", "std"] }
+signature = { version = "1", features = ["std"] }
 simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
@@ -451,7 +443,6 @@ smawk = { version = "0.3", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7" }
 spin = { version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
-spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct"] }
 sqlformat = { version = "0.1", default-features = false }
 sqlx = { version = "0.5", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
 sqlx-core = { version = "0.5", default-features = false, features = ["_rt-tokio", "_tls-rustls", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "sha2", "sqlite", "tokio-stream", "webpki", "webpki-roots"] }
@@ -464,7 +455,7 @@ strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-featur
 strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
 structopt = { version = "0.3" }
 strum = { version = "0.24", features = ["std"] }
-subtle = { version = "2", default-features = false, features = ["i128", "std"] }
+subtle = { version = "2", default-features = false, features = ["std"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["clone-impls", "derive", "extra-traits", "full", "parsing", "printing", "proc-macro", "quote", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
 tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "unicode-width"] }
@@ -482,6 +473,7 @@ test-fuzz-runtime = { version = "3", default-features = false }
 textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-features = false }
 textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", features = ["smawk", "unicode-linebreak", "unicode-width"] }
 thiserror = { version = "1", default-features = false }
+thousands = { version = "0.2", default-features = false }
 thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
 thrift = { version = "0.15", default-features = false }
@@ -524,7 +516,7 @@ twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
 typenum = { version = "1", default-features = false }
-types = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a" }
+types = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b" }
 ucd-trie = { version = "0.1", features = ["std"] }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
@@ -558,8 +550,8 @@ webpki-647d43efb71741da = { package = "webpki", version = "0.21", features = ["s
 webpki-3c51e837cfc5589a = { package = "webpki", version = "0.22", default-features = false, features = ["alloc", "std"] }
 webpki-roots-647d43efb71741da = { package = "webpki-roots", version = "0.21", default-features = false }
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false, features = ["benchmark"] }
-workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+worker = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false, features = ["benchmark"] }
+workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 yaml-rust = { version = "0.4", default-features = false }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zstd-sys = { version = "1", default-features = false }
@@ -602,7 +594,6 @@ axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "
 axum-core = { version = "0.2", default-features = false }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
 backtrace = { version = "0.3", features = ["std"] }
-base16ct = { version = "0.1", default-features = false, features = ["alloc"] }
 base64 = { version = "0.13", features = ["alloc", "std"] }
 base64ct = { version = "1", default-features = false, features = ["alloc", "std"] }
 bcs = { version = "0.1", default-features = false }
@@ -614,6 +605,7 @@ bincode = { version = "1", default-features = false }
 bindgen = { version = "0.59", default-features = false, features = ["runtime"] }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
+bitcoin_hashes = { version = "0.11", default-features = false }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
 blake2 = { version = "0.9", features = ["std"] }
@@ -657,10 +649,9 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
-config-1ff49526a7fa5493 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+config-cbcdb16e7fe39e4e = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", features = ["benchmark", "rand"] }
-const-oid = { version = "0.9", default-features = false }
+consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", features = ["benchmark", "rand"] }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "2", default-features = false }
@@ -677,15 +668,14 @@ crossterm-647d43efb71741da = { package = "crossterm", version = "0.21" }
 crossterm-3c51e837cfc5589a = { package = "crossterm", version = "0.22" }
 crossterm-2b5c6dc72f624058 = { package = "crossterm", version = "0.23" }
 crossterm-adf3d7031871b0af = { package = "crossterm", version = "0.24" }
-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", features = ["copy_key"] }
-crypto-bigint = { version = "0.4", default-features = false, features = ["generic-array", "rand_core", "zeroize"] }
+crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", features = ["copy_key"] }
 crypto-common = { version = "0.1", default-features = false, features = ["std"] }
 crypto-mac = { version = "0.8", default-features = false, features = ["std"] }
 csv = { version = "1", default-features = false }
 csv-core = { version = "0.1" }
 curve25519-dalek = { version = "3", default-features = false, features = ["alloc", "serde", "std", "u64_backend"] }
 curve25519-dalek-fiat = { version = "0.1", default-features = false, features = ["alloc", "fiat-crypto", "fiat_u64_backend", "std"] }
-dag = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+dag = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 darling-594e8ee84c453af0 = { package = "darling", version = "0.13", features = ["suggestions"] }
 darling-582f2526e08bb6a0 = { package = "darling", version = "0.14", features = ["suggestions"] }
 darling_core-594e8ee84c453af0 = { package = "darling_core", version = "0.13", default-features = false, features = ["strsim", "suggestions"] }
@@ -696,7 +686,6 @@ dashmap = { version = "5", default-features = false }
 data-encoding = { version = "2", features = ["alloc", "std"] }
 datatest-stable = { version = "0.1", default-features = false }
 debug-ignore = { version = "1", default-features = false }
-der = { version = "0.6", default-features = false, features = ["alloc", "const-oid", "oid", "zeroize"] }
 derivative = { version = "2", default-features = false, features = ["use_core"] }
 derive-syn-parse = { version = "0.1", default-features = false }
 derive_builder = { version = "0.11", features = ["std"] }
@@ -704,6 +693,7 @@ derive_builder_core = { version = "0.11", default-features = false }
 derive_builder_macro = { version = "0.11", default-features = false }
 determinator = { version = "0.9", default-features = false }
 deunicode = { version = "0.4", default-features = false }
+dhat = { version = "0.3", default-features = false }
 diff = { version = "0.1", default-features = false }
 difference = { version = "2" }
 difflib = { version = "0.4", default-features = false }
@@ -720,24 +710,21 @@ dissimilar = { version = "1", default-features = false }
 dotenv = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 dyn-clone = { version = "1", default-features = false }
-ecdsa = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
 ed25519 = { version = "1", default-features = false, features = ["serde", "std"] }
 ed25519-dalek = { version = "1", features = ["batch", "merlin", "rand", "serde", "serde_bytes", "serde_crate", "std", "u64_backend"] }
 ed25519-dalek-fiat = { version = "0.1", default-features = false, features = ["fiat_u64_backend", "rand", "serde", "serde_bytes", "serde_crate", "std"] }
 either = { version = "1", features = ["use_std"] }
-elliptic-curve = { version = "0.12", default-features = false, features = ["alloc", "arithmetic", "digest", "ff", "group", "hazmat", "pkcs8", "sec1", "std"] }
 endian-type = { version = "0.1", default-features = false }
 enum_dispatch = { version = "0.3", default-features = false }
 env_logger = { version = "0.9", features = ["atty", "humantime", "regex", "termcolor"] }
 ethnum = { version = "1", default-features = false }
 event-listener = { version = "2", default-features = false }
-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+executor = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
-ff = { version = "0.12", default-features = false }
 fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
@@ -769,7 +756,6 @@ globwalk = { version = "0.8", default-features = false }
 gloo-net = { version = "0.2", default-features = false, features = ["futures-channel", "futures-core", "futures-sink", "json", "pin-project", "serde", "serde_json", "websocket"] }
 gloo-timers = { version = "0.2", features = ["futures", "futures-channel", "futures-core"] }
 gloo-utils = { version = "0.1", default-features = false }
-group = { version = "0.12", default-features = false }
 guppy = { version = "0.14", default-features = false, features = ["guppy-summaries", "rayon", "rayon1", "summaries", "toml"] }
 guppy-summaries = { version = "0.7", default-features = false }
 guppy-workspace-hack = { version = "0.1", default-features = false }
@@ -785,7 +771,7 @@ heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicod
 hex = { version = "0.4", features = ["alloc", "std"] }
 hex-literal = { version = "0.3", default-features = false }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
-hmac = { version = "0.12", default-features = false, features = ["reset", "std"] }
+hmac = { version = "0.12", default-features = false, features = ["std"] }
 home = { version = "0.5", default-features = false }
 http = { version = "0.2", default-features = false }
 http-body = { version = "0.4", default-features = false }
@@ -825,7 +811,6 @@ jsonrpsee-types = { version = "0.15", default-features = false }
 jsonrpsee-wasm-client = { version = "0.15", default-features = false }
 jsonrpsee-ws-client = { version = "0.15", features = ["tls"] }
 jsonrpsee-ws-server = { version = "0.15", default-features = false }
-k256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "pkcs8", "schnorr", "sha2", "sha256", "std"] }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
@@ -900,11 +885,11 @@ mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "12
 name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
-network = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+network = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 nexlint = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nexlint-lints = { git = "https://github.com/nextest-rs/nexlint.git", rev = "bff03c566c9e22b1f4e67f516d0fd592a5a88f20", default-features = false }
 nibble_vec = { version = "0.1", default-features = false }
-node = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false, features = ["benchmark"] }
+node = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false, features = ["benchmark"] }
 nom-cdf1610d3e1514e9 = { package = "nom", version = "5", features = ["alloc", "lexical", "lexical-core", "std"] }
 nom-15128469a54ed75a = { package = "nom", version = "7", features = ["alloc", "std"] }
 normalize-line-endings = { version = "0.3", default-features = false }
@@ -958,7 +943,6 @@ pin-project = { version = "1", default-features = false }
 pin-project-internal = { version = "1", default-features = false }
 pin-project-lite = { version = "0.2", default-features = false }
 pin-utils = { version = "0.1", default-features = false }
-pkcs8 = { version = "0.9", default-features = false, features = ["alloc"] }
 pkg-config = { version = "0.3", default-features = false }
 plotters = { version = "0.3", default-features = false, features = ["area_series", "line_series", "plotters-svg", "svg_backend"] }
 plotters-backend = { version = "0.3", default-features = false }
@@ -970,7 +954,7 @@ predicates-tree = { version = "1", default-features = false }
 pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 prettyplease = { version = "0.1", default-features = false }
-primary = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false, features = ["benchmark"] }
+primary = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false, features = ["benchmark"] }
 proc-macro-crate = { version = "1", default-features = false }
 proc-macro-error = { version = "1", features = ["syn", "syn-error"] }
 proc-macro-error-attr = { version = "1", default-features = false }
@@ -1011,7 +995,6 @@ regex-syntax = { version = "0.6", features = ["unicode", "unicode-age", "unicode
 remove_dir_all = { version = "0.5", default-features = false }
 reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "hyper-tls", "json", "native-tls-crate", "serde_json", "tokio-native-tls"] }
 retain_mut = { version = "0.1", default-features = false }
-rfc6979 = { version = "0.3", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
 roaring = { version = "0.9", default-features = false }
 rocksdb = { version = "0.18", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
@@ -1035,7 +1018,8 @@ schemars_derive = { version = "0.8", default-features = false }
 scopeguard = { version = "1", features = ["use_std"] }
 sct-3b31131e45eafb45 = { package = "sct", version = "0.6", default-features = false }
 sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = false }
-sec1 = { version = "0.3", features = ["alloc", "base16ct", "der", "generic-array", "pkcs8", "point", "subtle", "zeroize"] }
+secp256k1 = { version = "0.24", features = ["alloc", "bitcoin_hashes", "rand", "std"] }
+secp256k1-sys = { version = "0.6", default-features = false, features = ["alloc", "std"] }
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
 semver-parser = { version = "0.10", default-features = false }
@@ -1065,7 +1049,7 @@ sha3-274715c4dabd11b0 = { package = "sha3", version = "0.9", features = ["std"] 
 sharded-slab = { version = "0.1", default-features = false }
 shell-words = { version = "1", features = ["std"] }
 shlex = { version = "1", features = ["std"] }
-signature = { version = "1", features = ["digest", "digest-preview", "rand-preview", "rand_core", "std"] }
+signature = { version = "1", features = ["std"] }
 simplelog = { version = "0.9", features = ["termcolor"] }
 siphasher = { version = "0.3", features = ["std"] }
 sized-chunks = { version = "0.6", features = ["std"] }
@@ -1076,7 +1060,6 @@ smawk = { version = "0.3", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7" }
 spin = { version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
-spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct"] }
 sqlformat = { version = "0.1", default-features = false }
 sqlx = { version = "0.5", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
 sqlx-core = { version = "0.5", default-features = false, features = ["_rt-tokio", "_tls-rustls", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "sha2", "sqlite", "tokio-stream", "webpki", "webpki-roots"] }
@@ -1093,7 +1076,7 @@ structopt-derive = { version = "0.4", default-features = false }
 strum = { version = "0.24", features = ["std"] }
 strum_macros = { version = "0.24", default-features = false }
 subprocess = { version = "0.2", default-features = false }
-subtle = { version = "2", default-features = false, features = ["i128", "std"] }
+subtle = { version = "2", default-features = false, features = ["std"] }
 syn-3575ec1268b04181 = { package = "syn", version = "0.15", features = ["clone-impls", "derive", "extra-traits", "full", "parsing", "printing", "proc-macro", "quote", "visit"] }
 syn-dff4ba8e3ae991db = { package = "syn", version = "1", features = ["clone-impls", "derive", "extra-traits", "full", "parsing", "printing", "proc-macro", "quote", "visit", "visit-mut"] }
 sync_wrapper = { version = "0.1", default-features = false }
@@ -1115,6 +1098,7 @@ textwrap-a6292c17cd707f01 = { package = "textwrap", version = "0.11", default-fe
 textwrap-3575ec1268b04181 = { package = "textwrap", version = "0.15", features = ["smawk", "unicode-linebreak", "unicode-width"] }
 thiserror = { version = "1", default-features = false }
 thiserror-impl = { version = "1", default-features = false }
+thousands = { version = "0.2", default-features = false }
 thread_local = { version = "1", default-features = false }
 threadpool = { version = "1", default-features = false }
 thrift = { version = "0.15", default-features = false }
@@ -1162,7 +1146,7 @@ twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
 typenum = { version = "1", default-features = false }
-types = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a" }
+types = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b" }
 ucd-trie = { version = "0.1", features = ["std"] }
 uncased = { version = "0.9", default-features = false }
 unescape = { version = "0.1", default-features = false }
@@ -1208,8 +1192,8 @@ webpki-3c51e837cfc5589a = { package = "webpki", version = "0.22", default-featur
 webpki-roots-647d43efb71741da = { package = "webpki-roots", version = "0.21", default-features = false }
 webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
-worker = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false, features = ["benchmark"] }
-workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", default-features = false }
+worker = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false, features = ["benchmark"] }
+workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "91f5e4dd0489576f46a223499f7f78bc421a7d0b", default-features = false }
 yaml-rust = { version = "0.4", default-features = false }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zeroize_derive = { version = "1", default-features = false }

@@ -413,12 +413,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "base16ct"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349a06037c7bf932dd7e7d1f653678b2038b9ad46a74102f1fc7bd7872678cce"
-
-[[package]]
 name = "base64"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1000,25 +994,10 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "arc-swap",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "multiaddr",
- "serde 1.0.140",
- "serde_json",
- "thiserror",
- "tracing",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
-]
-
-[[package]]
-name = "config"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "arc-swap",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "crypto",
  "multiaddr",
  "serde 1.0.140",
  "serde_json",
@@ -1046,41 +1025,15 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "arc-swap",
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "match_opt",
- "prometheus",
- "rand 0.7.3",
- "rocksdb",
- "serde 1.0.140",
- "serde_bytes",
- "thiserror",
- "tokio",
- "tracing",
- "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
-]
-
-[[package]]
-name = "consensus"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "arc-swap",
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "config 0.1.0",
+ "crypto",
+ "dag",
  "match_opt",
  "prometheus",
  "rand 0.7.3",
@@ -1091,15 +1044,9 @@ dependencies = [
  "tokio",
  "tracing",
  "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "types",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
 ]
-
-[[package]]
-name = "const-oid"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "722e23542a15cea1f65d4a1419c4cfd7a26706c70871a13a04238ca3f40f1661"
 
 [[package]]
 name = "constant_time_eq"
@@ -1346,35 +1293,6 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "anyhow",
- "base64ct",
- "blake2",
- "blst",
- "digest 0.10.3",
- "ed25519-dalek",
- "eyre",
- "hex",
- "hkdf",
- "k256",
- "once_cell",
- "rand 0.7.3",
- "readonly",
- "schemars",
- "serde 1.0.140",
- "serde_bytes",
- "serde_json",
- "serde_with",
- "signature",
- "tokio",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "zeroize",
-]
-
-[[package]]
-name = "crypto"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "anyhow",
@@ -1398,18 +1316,6 @@ dependencies = [
  "signature",
  "tokio",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "zeroize",
-]
-
-[[package]]
-name = "crypto-bigint"
-version = "0.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f2b443d17d49dad5ef0ede301c3179cc923b8822f3393b4d2c28c269dd4a122"
-dependencies = [
- "generic-array 0.14.5",
- "rand_core 0.6.3",
- "subtle",
  "zeroize",
 ]
 
@@ -1496,26 +1402,10 @@ dependencies = [
 [[package]]
 name = "dag"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "arc-swap",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "dashmap",
- "either",
- "itertools",
- "once_cell",
- "serde 1.0.140",
- "thiserror",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
-]
-
-[[package]]
-name = "dag"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "arc-swap",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "crypto",
  "dashmap",
  "either",
  "itertools",
@@ -1629,16 +1519,6 @@ name = "debug-ignore"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e51694c5f8b91baf933e6429a3df4ff3e9f1160386d150790b97bef73337d1b"
-
-[[package]]
-name = "der"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13dd2ae565c0a381dde7fade45fce95984c568bdcb4700a4fdbe3175e0380b2f"
-dependencies = [
- "const-oid",
- "zeroize",
-]
 
 [[package]]
 name = "derivative"
@@ -1871,18 +1751,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9d07a982d1fb29db01e5a59b1918e03da4df7297eaeee7686ac45542fd4e59c8"
 
 [[package]]
-name = "ecdsa"
-version = "0.14.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3bd46e0c364655e5baf2f5e99b603e7a09905da9966d7928d7470af393b28670"
-dependencies = [
- "der",
- "elliptic-curve",
- "rfc6979",
- "signature",
-]
-
-[[package]]
 name = "ed25519"
 version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1928,26 +1796,6 @@ name = "either"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f107b87b6afc2a64fd13cac55fe06d6c8859f12d4b14cbcdd2c67d0976781be"
-
-[[package]]
-name = "elliptic-curve"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c47abd0a791d2ac0c7aa1118715f85b83689e4522c4e3a244e159d4fc9848a8d"
-dependencies = [
- "base16ct",
- "crypto-bigint",
- "der",
- "digest 0.10.3",
- "ff",
- "generic-array 0.14.5",
- "group",
- "pkcs8",
- "rand_core 0.6.3",
- "sec1",
- "subtle",
- "zeroize",
-]
 
 [[package]]
 name = "encoding_rs"
@@ -2035,48 +1883,19 @@ checksum = "77f3309417938f28bf8228fcff79a4a37103981e3e186d2ccd19c74b38f4eb71"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "async-trait",
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "futures",
- "multiaddr",
- "mysten-network",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "rocksdb",
- "serde 1.0.140",
- "thiserror",
- "tokio",
- "tokio-util",
- "tonic",
- "tracing",
- "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
-]
-
-[[package]]
-name = "executor"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "async-trait",
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "config 0.1.0",
+ "consensus",
+ "crypto",
  "futures",
  "multiaddr",
  "mysten-network",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "primary",
  "rocksdb",
  "serde 1.0.140",
  "thiserror",
@@ -2085,8 +1904,8 @@ dependencies = [
  "tonic",
  "tracing",
  "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "types",
+ "worker",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
 ]
 
@@ -2144,16 +1963,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2c4c9e43643f5a3be4ca5b67d26b98031ff9db6806c3440ae32e02e3ceac3f1b"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "ff"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "df689201f395c6b90dfe87127685f8dbfc083a5e779e613575d8bd7314300c3e"
-dependencies = [
- "rand_core 0.6.3",
- "subtle",
 ]
 
 [[package]]
@@ -2485,17 +2294,6 @@ dependencies = [
  "js-sys",
  "wasm-bindgen",
  "web-sys",
-]
-
-[[package]]
-name = "group"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7391856def869c1c81063a03457c676fbcd419709c3dfb33d8d319de484b154d"
-dependencies = [
- "ff",
- "rand_core 0.6.3",
- "subtle",
 ]
 
 [[package]]
@@ -3210,18 +3008,6 @@ dependencies = [
  "tokio-util",
  "tracing",
  "tracing-futures",
-]
-
-[[package]]
-name = "k256"
-version = "0.11.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c8a5a96d92d849c4499d99461da81c9cdc1467418a8ed2aaeb407e8d85940ed"
-dependencies = [
- "cfg-if 1.0.0",
- "ecdsa",
- "elliptic-curve",
- "sha2 0.10.2",
 ]
 
 [[package]]
@@ -4317,35 +4103,13 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "async-trait",
- "backoff",
- "bytes",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "futures",
- "multiaddr",
- "mysten-network",
- "rand 0.7.3",
- "thiserror",
- "tokio",
- "tokio-util",
- "tonic",
- "tracing",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
-]
-
-[[package]]
-name = "network"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "anyhow",
  "async-trait",
  "backoff",
  "bytes",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "crypto",
  "futures",
  "multiaddr",
  "mysten-network",
@@ -4355,7 +4119,7 @@ dependencies = [
  "tokio-util",
  "tonic",
  "tracing",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "types",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
 ]
 
@@ -4415,42 +4179,6 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "anyhow",
- "arc-swap",
- "async-trait",
- "axum",
- "bincode",
- "bytes",
- "cfg-if 1.0.0",
- "clap 2.34.0",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "futures",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "prometheus",
- "rand 0.7.3",
- "telemetry-subscribers",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tracing",
- "tracing-log",
- "tracing-subscriber 0.3.15",
- "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "url",
- "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
-]
-
-[[package]]
-name = "node"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "anyhow",
@@ -4461,12 +4189,12 @@ dependencies = [
  "bytes",
  "cfg-if 1.0.0",
  "clap 2.34.0",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "config 0.1.0",
+ "consensus",
+ "crypto",
+ "executor",
  "futures",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "primary",
  "prometheus",
  "rand 0.7.3",
  "telemetry-subscribers",
@@ -4478,9 +4206,9 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber 0.3.15",
  "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "types",
  "url",
- "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "worker",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
 ]
 
@@ -5082,16 +4810,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
-name = "pkcs8"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9eca2c590a5f85da82668fa685c09ce2888b9430e83299debf1f34b65fd4a4ba"
-dependencies = [
- "der",
- "spki",
-]
-
-[[package]]
 name = "pkg-config"
 version = "0.3.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5196,44 +4914,6 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "async-recursion",
- "async-trait",
- "base64",
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "dashmap",
- "derive_builder",
- "ed25519-dalek",
- "futures",
- "itertools",
- "multiaddr",
- "mysten-network",
- "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "once_cell",
- "prometheus",
- "prost",
- "rand 0.7.3",
- "serde 1.0.140",
- "thiserror",
- "tokio",
- "tokio-util",
- "tonic",
- "tower",
- "tracing",
- "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
-]
-
-[[package]]
-name = "primary"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "async-recursion",
@@ -5242,9 +4922,9 @@ dependencies = [
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "config 0.1.0",
+ "consensus",
+ "crypto",
  "dashmap",
  "derive_builder",
  "ed25519-dalek",
@@ -5252,7 +4932,7 @@ dependencies = [
  "itertools",
  "multiaddr",
  "mysten-network",
- "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "network",
  "once_cell",
  "prometheus",
  "prost",
@@ -5265,7 +4945,7 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "types",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
 ]
 
@@ -5770,17 +5450,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4389f1d5789befaf6029ebd9f7dac4af7f7e3d61b69d4f30e2ac02b57e7712b0"
 
 [[package]]
-name = "rfc6979"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "88c86280f057430a52f4861551b092a01b419b8eacefc7c995eacb9dc132fe32"
-dependencies = [
- "crypto-bigint",
- "hmac",
- "zeroize",
-]
-
-[[package]]
 name = "ring"
 version = "0.16.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6039,20 +5708,6 @@ checksum = "d53dcdb7c9f8158937a7981b48accfd39a43af418591a5d008c7b22b5e1b7ca4"
 dependencies = [
  "ring",
  "untrusted",
-]
-
-[[package]]
-name = "sec1"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3be24c1842290c45df0a7bf069e0c268a747ad05a192f2fd7dcfdbc1cba40928"
-dependencies = [
- "base16ct",
- "der",
- "generic-array 0.14.5",
- "pkcs8",
- "subtle",
- "zeroize",
 ]
 
 [[package]]
@@ -6436,10 +6091,6 @@ name = "signature"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f054c6c1a6e95179d6f23ed974060dcefb2d9388bb7256900badad682c499de4"
-dependencies = [
- "digest 0.10.3",
- "rand_core 0.6.3",
-]
 
 [[package]]
 name = "simplelog"
@@ -6536,16 +6187,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f6002a767bff9e83f8eeecf883ecb8011875a21ae8da43bffb817a57e78cc09"
 dependencies = [
  "lock_api 0.4.7",
-]
-
-[[package]]
-name = "spki"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67cf02bbac7a337dc36e4f5a693db6c21e7863f45070f7064577eb4367a3212b"
-dependencies = [
- "base64ct",
- "der",
 ]
 
 [[package]]
@@ -6764,7 +6405,7 @@ dependencies = [
  "clap 3.1.18",
  "colored",
  "ed25519-dalek",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "executor",
  "futures",
  "jemalloc-ctl",
  "jemallocator",
@@ -6846,7 +6487,7 @@ dependencies = [
  "jemallocator",
  "move-core-types",
  "multiaddr",
- "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "node",
  "num_cpus",
  "prometheus",
  "rand 0.8.5",
@@ -6901,8 +6542,8 @@ dependencies = [
  "arc-swap",
  "bcs",
  "camino",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "config 0.1.0",
+ "crypto",
  "dirs",
  "move-binary-format",
  "move-core-types",
@@ -6934,8 +6575,8 @@ dependencies = [
  "bytes",
  "chrono",
  "clap 3.1.18",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "crypto",
+ "executor",
  "futures",
  "move-binary-format",
  "move-bytecode-utils",
@@ -6944,7 +6585,7 @@ dependencies = [
  "move-vm-runtime",
  "multiaddr",
  "mysten-network",
- "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "node",
  "once_cell",
  "parking_lot 0.12.1",
  "pretty_assertions",
@@ -6976,7 +6617,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "types",
  "workspace-hack 0.1.0",
 ]
 
@@ -7301,7 +6942,7 @@ dependencies = [
  "anyhow",
  "clap 3.1.18",
  "colored",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "executor",
  "futures",
  "mysten-network",
  "rocksdb",
@@ -7352,11 +6993,11 @@ dependencies = [
  "base64ct",
  "bcs",
  "bincode",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "crypto",
  "curve25519-dalek",
  "digest 0.10.3",
  "enum_dispatch",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "executor",
  "hex",
  "hkdf",
  "itertools",
@@ -8270,42 +7911,15 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "base64",
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "derive_builder",
- "ed25519-dalek",
- "proptest",
- "proptest-derive",
- "prost",
- "rand 0.7.3",
- "serde 1.0.140",
- "thiserror",
- "tokio",
- "tokio-util",
- "tonic",
- "typed-store",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
-]
-
-[[package]]
-name = "types"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "base64",
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "config 0.1.0",
+ "crypto",
+ "dag",
  "derive_builder",
  "ed25519-dalek",
  "proptest",
@@ -8867,37 +8481,6 @@ dependencies = [
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "anyhow",
- "async-trait",
- "bincode",
- "blake2",
- "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "ed25519-dalek",
- "futures",
- "multiaddr",
- "mysten-network",
- "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "prometheus",
- "serde 1.0.140",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tonic",
- "tower",
- "tracing",
- "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
-]
-
-[[package]]
-name = "worker"
-version = "0.1.0"
 source = "git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b#91f5e4dd0489576f46a223499f7f78bc421a7d0b"
 dependencies = [
  "anyhow",
@@ -8905,14 +8488,14 @@ dependencies = [
  "bincode",
  "blake2",
  "bytes",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "config 0.1.0",
+ "crypto",
  "ed25519-dalek",
  "futures",
  "multiaddr",
  "mysten-network",
- "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "network",
+ "primary",
  "prometheus",
  "serde 1.0.140",
  "tokio",
@@ -8922,7 +8505,7 @@ dependencies = [
  "tower",
  "tracing",
  "typed-store",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
+ "types",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
 ]
 
@@ -8967,7 +8550,6 @@ dependencies = [
  "axum-core",
  "backoff",
  "backtrace",
- "base16ct",
  "base64",
  "base64ct",
  "bcs",
@@ -8979,6 +8561,7 @@ dependencies = [
  "bindgen",
  "bit-set",
  "bit-vec",
+ "bitcoin_hashes",
  "bitflags",
  "bitmaps",
  "blake2",
@@ -9022,10 +8605,9 @@ dependencies = [
  "colored",
  "colored-diff",
  "combine",
- "config 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
+ "config 0.1.0",
  "config 0.11.0",
- "consensus 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "const-oid",
+ "consensus",
  "constant_time_eq",
  "core2",
  "crc",
@@ -9042,15 +8624,14 @@ dependencies = [
  "crossterm 0.22.1",
  "crossterm 0.23.2",
  "crossterm 0.24.0",
- "crypto 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "crypto-bigint",
+ "crypto",
  "crypto-common",
  "crypto-mac",
  "csv",
  "csv-core",
  "curve25519-dalek",
  "curve25519-dalek-fiat",
- "dag 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
+ "dag",
  "darling 0.13.4",
  "darling 0.14.1",
  "darling_core 0.13.4",
@@ -9061,7 +8642,6 @@ dependencies = [
  "data-encoding",
  "datatest-stable",
  "debug-ignore",
- "der",
  "derivative",
  "derive-syn-parse",
  "derive_builder",
@@ -9069,6 +8649,7 @@ dependencies = [
  "derive_builder_macro",
  "determinator",
  "deunicode",
+ "dhat",
  "diff",
  "difference",
  "difflib",
@@ -9085,24 +8666,21 @@ dependencies = [
  "dotenv",
  "downcast",
  "dyn-clone",
- "ecdsa",
  "ed25519",
  "ed25519-dalek",
  "ed25519-dalek-fiat",
  "either",
- "elliptic-curve",
  "endian-type",
  "enum_dispatch",
  "env_logger",
  "ethnum",
  "event-listener",
- "executor 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
+ "executor",
  "eyre",
  "fail",
  "fastrand",
  "fd-lock",
  "fdlimit",
- "ff",
  "fiat-crypto",
  "fixedbitset 0.2.0",
  "fixedbitset 0.4.1",
@@ -9134,7 +8712,6 @@ dependencies = [
  "gloo-net",
  "gloo-timers",
  "gloo-utils",
- "group",
  "guppy",
  "guppy-summaries",
  "guppy-workspace-hack",
@@ -9190,7 +8767,6 @@ dependencies = [
  "jsonrpsee-wasm-client",
  "jsonrpsee-ws-client",
  "jsonrpsee-ws-server",
- "k256",
  "keccak",
  "kstring",
  "lazy_static 0.2.11",
@@ -9265,11 +8841,11 @@ dependencies = [
  "name-variant",
  "named-lock",
  "nested",
- "network 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
+ "network",
  "nexlint",
  "nexlint-lints",
  "nibble_vec",
- "node 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
+ "node",
  "nom 5.1.2",
  "nom 7.1.1",
  "normalize-line-endings",
@@ -9323,7 +8899,6 @@ dependencies = [
  "pin-project-internal",
  "pin-project-lite",
  "pin-utils",
- "pkcs8",
  "pkg-config",
  "plotters",
  "plotters-backend",
@@ -9335,7 +8910,7 @@ dependencies = [
  "pretty",
  "pretty_assertions",
  "prettyplease",
- "primary 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
+ "primary",
  "proc-macro-crate",
  "proc-macro-error",
  "proc-macro-error-attr",
@@ -9376,7 +8951,6 @@ dependencies = [
  "remove_dir_all",
  "reqwest",
  "retain_mut",
- "rfc6979",
  "ring",
  "roaring",
  "rocksdb",
@@ -9400,7 +8974,8 @@ dependencies = [
  "scopeguard",
  "sct 0.6.1",
  "sct 0.7.0",
- "sec1",
+ "secp256k1",
+ "secp256k1-sys",
  "semver 0.11.0",
  "semver 1.0.9",
  "semver-parser",
@@ -9441,7 +9016,6 @@ dependencies = [
  "socket2",
  "soketto",
  "spin 0.9.4",
- "spki",
  "sqlformat",
  "sqlx",
  "sqlx-core",
@@ -9480,6 +9054,7 @@ dependencies = [
  "textwrap 0.15.0",
  "thiserror",
  "thiserror-impl",
+ "thousands",
  "thread_local",
  "threadpool",
  "thrift",
@@ -9527,7 +9102,7 @@ dependencies = [
  "typed-arena",
  "typed-store",
  "typenum",
- "types 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
+ "types",
  "ucd-trie",
  "uncased",
  "unescape",
@@ -9573,388 +9148,8 @@ dependencies = [
  "webpki-roots 0.21.1",
  "webpki-roots 0.22.3",
  "which",
- "worker 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a)",
- "yaml-rust",
- "zeroize",
- "zeroize_derive",
- "zstd-sys",
-]
-
-[[package]]
-name = "workspace-hack"
-version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=5ba330d0cefa33ba835ffe56489e6500a2909d8a#5ba330d0cefa33ba835ffe56489e6500a2909d8a"
-dependencies = [
- "addr2line",
- "adler",
- "ahash",
- "aho-corasick",
- "ansi_term",
- "anyhow",
- "arc-swap",
- "ark-bls12-377",
- "ark-crypto-primitives",
- "ark-ec",
- "ark-ed-on-bw6-761",
- "ark-ed-on-cp6-782",
- "ark-ff",
- "ark-ff-asm",
- "ark-ff-macros",
- "ark-relations",
- "ark-serialize",
- "ark-serialize-derive",
- "ark-snark",
- "ark-std",
- "arrayref",
- "arrayvec 0.7.2",
- "async-recursion",
- "async-stream",
- "async-stream-impl",
- "async-trait",
- "atty",
- "autocfg",
- "axum",
- "axum-core",
- "backoff",
- "backtrace",
- "base16ct",
- "base64",
- "base64ct",
- "bincode",
- "bindgen",
- "bit-set",
- "bit-vec",
- "bitflags",
- "blake2",
- "blake2s_simd",
- "block-buffer 0.10.2",
- "block-buffer 0.9.0",
- "bls-crypto",
- "blst",
- "bs58",
- "bstr",
- "byteorder",
- "bytes",
- "bzip2-sys",
- "cast 0.3.0",
- "cc",
- "cexpr",
- "cfg-if 1.0.0",
- "clang-sys",
- "clap 2.34.0",
- "clap 3.1.18",
- "clap_lex",
- "cmake",
- "collectable",
- "const-oid",
- "constant_time_eq",
- "core2",
- "criterion",
- "criterion-plot",
- "crossbeam",
- "crossbeam-channel",
- "crossbeam-deque",
- "crossbeam-epoch",
- "crossbeam-queue",
- "crossbeam-utils",
- "crossterm 0.24.0",
- "crypto-bigint",
- "crypto-common",
- "crypto-mac",
- "csv",
- "csv-core",
- "curve25519-dalek",
- "darling 0.13.4",
- "darling 0.14.1",
- "darling_core 0.13.4",
- "darling_core 0.14.1",
- "darling_macro 0.13.4",
- "darling_macro 0.14.1",
- "dashmap",
- "data-encoding",
- "der",
- "derivative",
- "derive_builder",
- "derive_builder_core",
- "derive_builder_macro",
- "diff",
- "difflib",
- "digest 0.10.3",
- "digest 0.9.0",
- "downcast",
- "dyn-clone",
- "ecdsa",
- "ed25519",
- "ed25519-dalek",
- "either",
- "elliptic-curve",
- "env_logger",
- "eyre",
- "fastrand",
- "fdlimit",
- "ff",
- "fixedbitset 0.4.1",
- "float-cmp",
- "fnv",
- "form_urlencoded",
- "fragile",
- "futures",
- "futures-channel",
- "futures-core",
- "futures-executor",
- "futures-io",
- "futures-macro",
- "futures-sink",
- "futures-task",
- "futures-util",
- "generic-array 0.14.5",
- "gethostname",
- "getrandom 0.1.16",
- "getrandom 0.2.6",
- "gimli",
- "glob",
- "group",
- "h2",
- "half",
- "hashbrown 0.12.1",
- "hdrhistogram",
- "heck 0.3.3",
- "heck 0.4.0",
- "hex",
- "hex-literal",
- "hkdf",
- "hmac",
- "http",
- "http-body",
- "http-range-header",
- "httparse",
- "httpdate",
- "humantime",
- "hyper",
- "hyper-timeout",
- "ident_case",
- "idna",
- "indenter",
- "indexmap",
- "instant",
- "integer-encoding",
- "itertools",
- "itoa 0.4.8",
- "itoa 1.0.2",
- "jobserver",
- "json",
- "k256",
- "keccak",
- "lazy_static 1.4.0",
- "lazycell",
- "libc",
- "libloading",
- "librocksdb-sys",
- "libz-sys",
- "linked-hash-map",
- "lock_api 0.4.7",
- "log",
- "lru",
- "match_opt",
- "matchers",
- "matches",
- "matchit",
- "memchr",
- "memoffset",
- "merlin",
- "mime",
- "minimal-lexical",
- "miniz_oxide",
- "mio 0.8.3",
- "mockall",
- "mockall_derive",
- "multiaddr",
- "multihash",
- "multihash-derive",
- "multimap",
- "mysten-network",
- "nom 7.1.1",
- "normalize-line-endings",
- "num-bigint",
- "num-integer",
- "num-traits 0.2.15",
- "num_cpus",
- "object 0.29.0",
- "once_cell",
- "oorandom",
- "opaque-debug 0.3.0",
- "opentelemetry",
- "opentelemetry-jaeger",
- "opentelemetry-semantic-conventions",
- "ordered-float 1.1.1",
- "os_str_bytes",
- "parking_lot 0.12.1",
- "parking_lot_core 0.9.3",
- "paste",
- "peeking_take_while",
- "percent-encoding",
- "pest",
- "petgraph 0.6.2",
- "pin-project",
- "pin-project-internal",
- "pin-project-lite",
- "pin-utils",
- "pkcs8",
- "pkg-config",
- "plotters",
- "plotters-backend",
- "plotters-svg",
- "ppv-lite86",
- "predicates",
- "predicates-core",
- "predicates-tree",
- "pretty_assertions",
- "prettyplease",
- "proc-macro-crate",
- "proc-macro-error",
- "proc-macro-error-attr",
- "proc-macro2 0.4.30",
- "proc-macro2 1.0.40",
- "prometheus",
- "proptest",
- "proptest-derive",
- "prost",
- "prost-build",
- "prost-derive",
- "prost-types",
- "protobuf",
- "quick-error 1.2.3",
- "quick-error 2.0.1",
- "quote 0.6.13",
- "quote 1.0.20",
- "rand 0.7.3",
- "rand 0.8.5",
- "rand_chacha 0.3.1",
- "rand_core 0.5.1",
- "rand_core 0.6.3",
- "rand_pcg",
- "rand_xorshift",
- "rayon",
- "rayon-core",
- "readonly",
- "regex",
- "regex-automata",
- "regex-syntax",
- "remove_dir_all",
- "rfc6979",
- "ring",
- "rocksdb",
- "rustc-demangle",
- "rustc-hash",
- "rustc_version 0.3.3",
- "rustls 0.20.6",
- "rustls-pemfile",
- "rusty-fork",
- "ryu",
- "same-file",
- "schemars",
- "schemars_derive",
- "scopeguard",
- "sct 0.7.0",
- "sec1",
- "semver 0.11.0",
- "semver-parser",
- "serde 1.0.140",
- "serde-reflection",
- "serde_bytes",
- "serde_cbor",
- "serde_derive",
- "serde_derive_internals",
- "serde_json",
- "serde_test",
- "serde_urlencoded",
- "serde_with",
- "serde_with_macros",
- "serde_yaml",
- "sha2 0.10.2",
- "sha2 0.9.9",
- "sha3 0.10.1",
- "sharded-slab",
- "shlex",
- "signature",
- "slab",
- "smallvec",
- "socket2",
- "spki",
- "static_assertions",
- "strsim 0.10.0",
- "strsim 0.8.0",
- "structopt",
- "structopt-derive",
- "subtle",
- "syn 0.15.44",
- "syn 1.0.98",
- "sync_wrapper",
- "synstructure",
- "telemetry-subscribers",
- "tempfile",
- "termcolor",
- "termtree",
- "textwrap 0.11.0",
- "textwrap 0.15.0",
- "thiserror",
- "thiserror-impl",
- "thread_local",
- "threadpool",
- "thrift",
- "time 0.3.9",
- "tinytemplate",
- "tinyvec",
- "tinyvec_macros",
- "tokio",
- "tokio-io-timeout",
- "tokio-macros",
- "tokio-rustls 0.23.4",
- "tokio-stream",
- "tokio-util",
- "toml",
- "tonic",
- "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
- "tonic-health",
- "tower",
- "tower-http",
- "tower-layer",
- "tower-service",
- "tracing",
- "tracing-appender",
- "tracing-attributes",
- "tracing-bunyan-formatter",
- "tracing-chrome",
- "tracing-core",
- "tracing-futures",
- "tracing-log",
- "tracing-opentelemetry",
- "tracing-subscriber 0.2.25",
- "tracing-subscriber 0.3.15",
- "tracing-test",
- "tracing-test-macro",
- "try-lock",
- "typed-store",
- "typenum",
- "ucd-trie",
- "unicode-bidi",
- "unicode-ident",
- "unicode-normalization",
- "unicode-segmentation",
- "unicode-width",
- "unicode-xid 0.1.0",
- "unicode-xid 0.2.3",
- "unsigned-varint",
- "untrusted",
- "url",
- "vec_map",
- "version_check",
- "wait-timeout",
- "walkdir",
- "want",
- "webpki 0.22.0",
- "which",
+ "worker",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=91f5e4dd0489576f46a223499f7f78bc421a7d0b)",
  "yaml-rust",
  "zeroize",
  "zeroize_derive",

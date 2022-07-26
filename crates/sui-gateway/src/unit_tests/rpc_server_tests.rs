@@ -59,7 +59,7 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let signature = keystore.sign(address, &tx_bytes)?;
 
     let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let flag_bytes = Base64::from_bytes(&signature.flag_bytes());
+    let flag_bytes = Base64::from_bytes(signature.flag_bytes());
     let signature_bytes = Base64::from_bytes(signature.signature_bytes());
     let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
@@ -100,7 +100,7 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let signature = keystore.sign(address, &tx_bytes)?;
 
     let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let flag_bytes = Base64::from_bytes(&signature.flag_bytes());
+    let flag_bytes = Base64::from_bytes(signature.flag_bytes());
     let signature_bytes = Base64::from_bytes(signature.signature_bytes());
     let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
@@ -150,7 +150,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let signature = keystore.sign(address, &tx_bytes)?;
 
     let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let flag_bytes = Base64::from_bytes(&signature.flag_bytes());
+    let flag_bytes = Base64::from_bytes(signature.flag_bytes());
     let signature_bytes = Base64::from_bytes(signature.signature_bytes());
     let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
