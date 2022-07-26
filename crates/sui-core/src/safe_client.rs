@@ -7,8 +7,8 @@ use futures::StreamExt;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::PublicKeyBytes;
 use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointRequest, CheckpointRequestType,
-    CheckpointResponse, CheckpointSequenceNumber,
+    AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointContents, CheckpointRequest,
+    CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
@@ -403,6 +403,26 @@ where
         Ok(())
     }
 
+    fn verify_contents_exist<T>(
+        &self,
+        request_content: bool,
+        checkpoint: &Option<T>,
+        contents: &Option<CheckpointContents>,
+    ) -> SuiResult {
+        match (request_content, checkpoint, contents) {
+            // If content is requested, checkpoint is not None, but we are not getting any content,
+            // it's an error.
+            // If content is not requested, or checkpoint is None, yet we are still getting content,
+            // it's an error.
+            (true, Some(_), None) | (false, _, Some(_)) | (_, None, Some(_)) => {
+                Err(SuiError::ByzantineAuthoritySuspicion {
+                    authority: self.address,
+                })
+            }
+            _ => Ok(()),
+        }
+    }
+
     pub async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
@@ -428,21 +448,34 @@ where
             },
             CheckpointRequestType::PastCheckpoint(seq) => {
                 if let AuthorityCheckpointInfo::Past(past) = &resp.info {
-                    match past {
-                        Some(_) => {
-                            if detail && resp.detail.is_none() {
-                                // peer has the checkpoint, but refused to give us the contents.
-                                // (For AuthorityCheckpointInfo::Proposal, contents are not
-                                // guaranteed to exist yet).
-                                return Err(SuiError::ByzantineAuthoritySuspicion {
-                                    authority: self.address,
-                                });
-                            }
-                        }
-                        // Checkpoint wasn't found, so detail is obviously not required.
-                        None => (),
-                    }
+                    self.verify_contents_exist(detail, past, &resp.detail)?;
                     self.verify_checkpoint_sequence(Some(*seq), past)?;
+                    Ok(resp)
+                } else {
+                    Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                    })
+                }
+            }
+            CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
+                if let AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint) = &resp.info {
+                    // Checks that the sequence number is correct.
+                    self.verify_checkpoint_sequence(*seq, checkpoint)?;
+                    self.verify_contents_exist(detail, checkpoint, &resp.detail)?;
+                    Ok(resp)
+                } else {
+                    Err(SuiError::ByzantineAuthoritySuspicion {
+                        authority: self.address,
+                    })
+                }
+            }
+            CheckpointRequestType::CheckpointProposal => {
+                if let AuthorityCheckpointInfo::CheckpointProposal {
+                    proposal,
+                    prev_cert: _,
+                } = &resp.info
+                {
+                    self.verify_contents_exist(detail, proposal, &resp.detail)?;
                     Ok(resp)
                 } else {
                     Err(SuiError::ByzantineAuthoritySuspicion {

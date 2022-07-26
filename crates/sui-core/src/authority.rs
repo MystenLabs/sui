@@ -988,6 +988,12 @@ impl AuthorityState {
             CheckpointRequestType::PastCheckpoint(seq) => {
                 checkpoint_store.handle_past_checkpoint(request.detail, *seq)
             }
+            CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
+                checkpoint_store.handle_authenticated_checkpoint(seq, request.detail)
+            }
+            CheckpointRequestType::CheckpointProposal => {
+                checkpoint_store.handle_proposal(request.detail)
+            }
         }
     }
 

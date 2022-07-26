@@ -26,7 +26,7 @@ use sui_types::{
         CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use typed_store::{
     reopen,
     rocks::{open_cf_opts, DBBatch, DBMap},
@@ -333,6 +333,51 @@ impl CheckpointStore {
         })
     }
 
+    pub fn handle_proposal(&mut self, detail: bool) -> Result<CheckpointResponse, SuiError> {
+        let locals = self.get_locals();
+        let latest_checkpoint_proposal = &locals.current_proposal;
+
+        let signed_proposal = latest_checkpoint_proposal
+            .as_ref()
+            .map(|proposal| proposal.signed_summary.clone());
+
+        let contents = match (detail, &signed_proposal) {
+            (true, Some(proposal)) => self
+                .checkpoint_contents
+                .get(&proposal.summary.sequence_number)?,
+            _ => None,
+        };
+
+        let prev_cert = match &signed_proposal {
+            Some(proposal) if proposal.summary.sequence_number > 0 => {
+                let seq = proposal.summary.sequence_number;
+                let checkpoint = self.checkpoints.get(&(seq - 1))?;
+                match checkpoint {
+                    Some(AuthenticatedCheckpoint::Signed(_)) | None => {
+                        error!(
+                            "Invariant violation detected: Validator is making a proposal for checkpoint {:?}, but no certificate exists for checkpoint {:?}",
+                            seq,
+                            seq - 1,
+                        );
+                        return Err(SuiError::from(
+                            "Checkpoint proposal sequence number inconsistent with latest cert",
+                        ));
+                    }
+                    Some(AuthenticatedCheckpoint::Certified(c)) => Some(c),
+                }
+            }
+            _ => None,
+        };
+
+        Ok(CheckpointResponse {
+            info: AuthorityCheckpointInfo::CheckpointProposal {
+                proposal: signed_proposal,
+                prev_cert,
+            },
+            detail: contents,
+        })
+    }
+
     pub fn handle_past_checkpoint(
         &self,
         detail: bool,
@@ -350,6 +395,25 @@ impl CheckpointStore {
         Ok(CheckpointResponse {
             info: AuthorityCheckpointInfo::Past(checkpoint),
             detail: content,
+        })
+    }
+
+    pub fn handle_authenticated_checkpoint(
+        &mut self,
+        seq: &Option<CheckpointSequenceNumber>,
+        detail: bool,
+    ) -> SuiResult<CheckpointResponse> {
+        let checkpoint = match seq {
+            Some(s) => self.checkpoints.get(s)?,
+            None => self.latest_stored_checkpoint(),
+        };
+        let contents = match (&checkpoint, detail) {
+            (Some(c), true) => self.checkpoint_contents.get(&c.summary().sequence_number)?,
+            _ => None,
+        };
+        Ok(CheckpointResponse {
+            info: AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint),
+            detail: contents,
         })
     }
 

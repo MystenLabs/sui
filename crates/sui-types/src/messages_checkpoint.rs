@@ -99,6 +99,13 @@ impl CheckpointRequest {
             detail,
         }
     }
+
+    pub fn authenticated(seq: Option<CheckpointSequenceNumber>, detail: bool) -> CheckpointRequest {
+        CheckpointRequest {
+            request_type: CheckpointRequestType::AuthenticatedCheckpoint(seq),
+            detail,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -107,6 +114,12 @@ pub enum CheckpointRequestType {
     LatestCheckpointProposal,
     // Requests a past checkpoint
     PastCheckpoint(CheckpointSequenceNumber),
+    /// Request a stored authenticated checkpoint.
+    /// if a sequence number is specified, return the checkpoint with that sequence number;
+    /// otherwise if None returns the latest authenticated checkpoint stored.
+    AuthenticatedCheckpoint(Option<CheckpointSequenceNumber>),
+    /// Request the current checkpoint proposal.
+    CheckpointProposal,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -116,6 +129,8 @@ pub struct CheckpointResponse {
     pub info: AuthorityCheckpointInfo,
     // If the detail flag in the request was set, then return
     // the list of transactions as well.
+    // If the request is AuthenticatedCheckpoint, the detail is for the returned authenticated
+    // checkpoint; if the request is CheckpointProposal, the detail is for the returned proposal.
     pub detail: Option<CheckpointContents>,
 }
 
@@ -138,6 +153,31 @@ impl CheckpointResponse {
                 }
                 Ok(())
             }
+            AuthorityCheckpointInfo::AuthenticatedCheckpoint(ckpt) => {
+                if let Some(ckpt) = ckpt {
+                    ckpt.verify(committee, self.detail.as_ref())?;
+                }
+                Ok(())
+            }
+            AuthorityCheckpointInfo::CheckpointProposal {
+                proposal,
+                prev_cert,
+            } => {
+                if let Some(p) = proposal {
+                    p.verify(committee, self.detail.as_ref())?;
+                    if p.summary.sequence_number > 0 {
+                        let cert = prev_cert.as_ref().ok_or_else(|| {
+                            SuiError::from("No checkpoint cert provided along with proposal")
+                        })?;
+                        cert.verify(committee, None)?;
+                        fp_ensure!(
+                            p.summary.sequence_number - 1 == cert.summary.sequence_number,
+                            SuiError::from("Checkpoint proposal sequence number inconsistent with previous cert")
+                        );
+                    }
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -156,6 +196,15 @@ pub enum AuthorityCheckpointInfo {
     },
     // Returns the requested checkpoint.
     Past(Option<AuthenticatedCheckpoint>),
+    AuthenticatedCheckpoint(Option<AuthenticatedCheckpoint>),
+    /// The latest proposal must be signed by the validator.
+    /// For any proposal with sequence number > 0, a certified checkpoint for the previous
+    /// checkpoint must be returned, in order prove that this validator can indeed make a proposal
+    /// for its sequence number.
+    CheckpointProposal {
+        proposal: Option<SignedCheckpointProposalSummary>,
+        prev_cert: Option<CertifiedCheckpointSummary>,
+    },
 }
 
 // TODO: Rename to AuthenticatedCheckpointSummary
