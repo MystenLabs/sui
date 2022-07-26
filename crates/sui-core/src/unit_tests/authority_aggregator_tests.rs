@@ -1030,32 +1030,46 @@ async fn test_quorum_once_with_timeout() {
         },
     );
 
-    let log = Arc::new(Mutex::new(Vec::new()));
-    let start = Instant::now();
-    agg.quorum_once_with_timeout(
-        None,
-        None,
-        |_name, client| {
-            let digest = TransactionDigest::new([0u8; 32]);
-            let log = log.clone();
-            Box::pin(async move {
-                // log the start time of the request
-                log.lock().unwrap().push(Instant::now() - start);
-                client.handle_transaction_info_request(digest.into()).await
-            })
-        },
-        Duration::from_millis(100),
-        Some(Duration::from_millis(30 * 50)),
-    )
-    .await
-    .unwrap();
+    let case = |agg: AuthorityAggregator<MockAuthorityApi>, authority_request_timeout: u64| async move {
+        let log = Arc::new(Mutex::new(Vec::new()));
+        let start = Instant::now();
+        agg.quorum_once_with_timeout(
+            None,
+            None,
+            |_name, client| {
+                let digest = TransactionDigest::new([0u8; 32]);
+                let log = log.clone();
+                Box::pin(async move {
+                    // log the start time of the request
+                    log.lock().unwrap().push(Instant::now() - start);
+                    client.handle_transaction_info_request(digest.into()).await
+                })
+            },
+            Duration::from_millis(authority_request_timeout),
+            Some(Duration::from_millis(30 * 50)),
+        )
+        .await
+        .unwrap();
+        Arc::try_unwrap(log).unwrap().into_inner().unwrap()
+    };
 
-    // New requests are started every 50ms even though each request times out individually.
+    // New requests are started every 50ms even though each request hangs for 1000ms.
     // The 15th request succeeds, and we exit before processing the remaining authorities.
     assert_eq!(
-        log.lock().unwrap().clone(),
+        case(agg.clone(), 1000).await,
         (0..15)
             .map(|d| Duration::from_millis(d * 50))
+            .collect::<Vec<Duration>>()
+    );
+
+    *count.lock().unwrap() = 0;
+    // Here individual requests time out relatively quickly (100ms), but we continue increasing
+    // the parallelism every 50ms
+    assert_eq!(
+        case(agg.clone(), 100).await,
+        [0, 50, 100, 100, 150, 150, 200, 200, 200, 250, 250, 250, 300, 300, 300]
+            .iter()
+            .map(|d| Duration::from_millis(*d))
             .collect::<Vec<Duration>>()
     );
 }

@@ -708,6 +708,7 @@ where
                 match res {
                     Event::StartNext => {
                         trace!(now = ?tokio::time::Instant::now() - start, "eagerly beginning next request");
+                        futures.push(schedule_next());
                     }
                     Event::Request(name, res) => {
                         match res {
@@ -734,6 +735,8 @@ where
                         *next_authority,
                         self.authority_clients[next_authority].clone(),
                     ));
+                } else {
+                    break;
                 }
             }
 
