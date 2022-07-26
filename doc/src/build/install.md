@@ -172,9 +172,9 @@ In macOS, other than the aforementioned [Brew](#brew) package manager, the gener
 
 ### Microsoft Windows-specific
 
-In Microsoft Windows, also install:
+In Microsoft Windows 11, also install:
 
-[Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/)
+For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/)
 
 [C++ build tools](https://visualstudio.microsoft.com/downloads/)
 
