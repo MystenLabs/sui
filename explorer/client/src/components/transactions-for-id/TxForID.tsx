@@ -56,7 +56,7 @@ const viewFn = (results: any) => <TxForIDView showData={results} />;
 
 function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
     // TODO: Ideally move this to a prop:
-    const hasTimeColumn = showData?.[0].timestamp_ms;
+    const hasTimeColumn = showData?.[0]?.timestamp_ms;
 
     const tableData = useMemo(
         () => ({
