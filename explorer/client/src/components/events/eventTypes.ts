@@ -10,16 +10,16 @@
 }
 */
 
-import type { ObjectId, ObjectOwner, SuiAddress } from "@mysten/sui.js";
+import type { ObjectId, ObjectOwner, SuiAddress } from '@mysten/sui.js';
 
 export type NewObjectEvent = {
     newObject: {
-        packageId: ObjectId,
-        transactionModule: string,
-        sender: SuiAddress,
-        recipient: ObjectOwner,
-        objectId: ObjectId
-    }
-}
+        packageId: ObjectId;
+        transactionModule: string;
+        sender: SuiAddress;
+        recipient: ObjectOwner;
+        objectId: ObjectId;
+    };
+};
 
 //type SuiEventType = NewObjectEvent;
