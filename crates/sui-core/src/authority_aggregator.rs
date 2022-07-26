@@ -6,7 +6,7 @@ use crate::authority_client::AuthorityAPI;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
 
-use futures::{future, StreamExt};
+use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use move_core_types::value::MoveStructLayout;
 use sui_types::crypto::AuthoritySignature;
 use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
@@ -41,7 +41,7 @@ pub const DEFAULT_RETRIES: usize = 4;
 #[path = "unit_tests/authority_aggregator_tests.rs"]
 pub mod authority_aggregator_tests;
 
-pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
+pub type AsyncResult<'a, T, E> = BoxFuture<'a, Result<T, E>>;
 
 #[derive(Clone)]
 pub struct TimeoutConfig {
@@ -54,6 +54,16 @@ pub struct TimeoutConfig {
     // Timeout used when making serial requests. Should be smaller, since we wait to hear from each
     // authority before continuing.
     pub serial_authority_request_timeout: Duration,
+
+    // Timeout used to determine when to start a second "serial" request for
+    // quorum_once_with_timeout. This is a latency optimization that prevents us from having
+    // to wait an entire serial_authority_request_timeout interval before starting a second
+    // request.
+    //
+    // If this is set to zero, then quorum_once_with_timeout becomes completely parallelized - if
+    // it is set to a value greater than serial_authority_request_timeout then it becomes
+    // completely serial.
+    pub serial_authority_request_interval: Duration,
 }
 
 impl Default for TimeoutConfig {
@@ -63,6 +73,7 @@ impl Default for TimeoutConfig {
             pre_quorum_timeout: Duration::from_secs(60),
             post_quorum_timeout: Duration::from_secs(30),
             serial_authority_request_timeout: Duration::from_secs(5),
+            serial_authority_request_interval: Duration::from_millis(1000),
         }
     }
 }
@@ -633,29 +644,99 @@ where
         authority_errors: &mut HashMap<AuthorityName, SuiError>,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, S, SuiError>,
+        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
         S: Send,
     {
+        let start = tokio::time::Instant::now();
         let mut delay = Duration::from_secs(1);
         loop {
             let authorities_shuffled = self.committee.shuffle_by_stake(preferences, restrict_to);
+            let mut authorities_shuffled = authorities_shuffled.iter();
 
-            // TODO: possibly increase concurrency after first failure to reduce latency.
-            for name in authorities_shuffled {
-                let client = &self.authority_clients[&name];
+            type RequestResult<S> = Result<Result<S, SuiError>, tokio::time::error::Elapsed>;
 
-                let res = timeout(timeout_each_authority, map_each_authority(name, client)).await;
-
-                match res {
-                    // timeout
-                    Err(_) => authority_errors.insert(name, SuiError::TimeoutError),
-                    // request completed
-                    Ok(inner_res) => match inner_res {
-                        Err(e) => authority_errors.insert(name, e),
-                        Ok(res) => return Ok(res),
-                    },
-                };
+            enum Event<S> {
+                StartNext,
+                Request(AuthorityName, RequestResult<S>),
             }
+
+            let mut futures = FuturesUnordered::<BoxFuture<'a, Event<S>>>::new();
+
+            let start_req = |name: AuthorityName, client: SafeClient<A>| {
+                let map_each_authority = map_each_authority.clone();
+                Box::pin(async move {
+                    trace!(?name, now = ?tokio::time::Instant::now() - start, "new request");
+                    let map = map_each_authority(name, client);
+                    Event::Request(name, timeout(timeout_each_authority, map).await)
+                })
+            };
+
+            let schedule_next = || {
+                let delay = self.timeouts.serial_authority_request_interval;
+                Box::pin(async move {
+                    sleep(delay).await;
+                    Event::StartNext
+                })
+            };
+
+            // This process is intended to minimize latency in the face of unreliable authorities,
+            // without creating undue load on authorities.
+            //
+            // The fastest possible process from the
+            // client's point of view would simply be to issue a concurrent request to every
+            // authority and then take the winner - this would create unnecessary load on
+            // authorities.
+            //
+            // The most efficient process from the network's point of view is to do one request at
+            // a time, however if the first validator that the client contacts is unavailable or
+            // slow, the client must wait for the serial_authority_request_timeout period to elapse
+            // before starting its next request.
+            //
+            // So, this process is designed as a compromise between these two extremes.
+            // - We start one request, and schedule another request to begin after
+            //   serial_authority_request_interval.
+            // - Whenever a request finishes, if it succeeded, we return. if it failed, we start a
+            //   new request.
+            // - If serial_authority_request_interval elapses, we begin a new request even if the
+            //   previous one is not finished, and schedule another future request.
+
+            let name = authorities_shuffled.next().unwrap();
+            futures.push(start_req(*name, self.authority_clients[name].clone()));
+            futures.push(schedule_next());
+
+            while let Some(res) = futures.next().await {
+                match res {
+                    Event::StartNext => {
+                        trace!(now = ?tokio::time::Instant::now() - start, "eagerly beginning next request");
+                    }
+                    Event::Request(name, res) => {
+                        match res {
+                            // timeout
+                            Err(_) => {
+                                debug!(?name, "authority request timed out");
+                                authority_errors.insert(name, SuiError::TimeoutError);
+                            }
+                            // request completed
+                            Ok(inner_res) => {
+                                trace!(?name, now = ?tokio::time::Instant::now() - start,
+                                       "request completed successfully");
+                                match inner_res {
+                                    Err(e) => authority_errors.insert(name, e),
+                                    Ok(res) => return Ok(res),
+                                };
+                            }
+                        };
+                    }
+                }
+
+                if let Some(next_authority) = authorities_shuffled.next() {
+                    futures.push(start_req(
+                        *next_authority,
+                        self.authority_clients[next_authority].clone(),
+                    ));
+                }
+            }
+
             info!(
                 ?authority_errors,
                 "quorum_once_with_timeout failed on all authorities, retrying in {:?}", delay
@@ -684,7 +765,7 @@ where
         timeout_total: Option<Duration>,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, S, SuiError>,
+        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
         S: Send,
     {
         let mut authority_errors = HashMap::new();

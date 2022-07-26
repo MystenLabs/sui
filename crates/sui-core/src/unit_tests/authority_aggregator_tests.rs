@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use move_core_types::{account_address::AccountAddress, ident_str};
 use signature::Signer;
@@ -12,13 +12,17 @@ use sui_config::ValidatorInfo;
 use sui_types::crypto::{get_key_pair, PublicKeyBytes};
 use sui_types::crypto::{KeyPair, KeypairTraits, Signature};
 
-use sui_types::messages::Transaction;
+use sui_types::messages::*;
 use sui_types::object::{Object, GAS_VALUE_FOR_TESTING};
 
 use super::*;
 use crate::authority::AuthorityState;
-use crate::authority_client::LocalAuthorityClient;
-use crate::authority_client::LocalAuthorityClientFaultConfig;
+use crate::authority_client::{
+    AuthorityAPI, BatchInfoResponseItemStream, LocalAuthorityClient,
+    LocalAuthorityClientFaultConfig,
+};
+
+use tokio::time::Instant;
 
 pub async fn init_local_authorities(
     committee_size: usize,
@@ -80,6 +84,7 @@ pub async fn init_local_authorities_with_genesis(
         pre_quorum_timeout: Duration::from_secs(5),
         post_quorum_timeout: Duration::from_secs(5),
         serial_authority_request_timeout: Duration::from_secs(1),
+        serial_authority_request_interval: Duration::from_secs(1),
     };
     (
         AuthorityAggregator::new_with_timeouts(
@@ -911,4 +916,146 @@ async fn test_process_transaction_fault_fail() {
     )
     .await
     .is_err());
+}
+
+#[tokio::test(start_paused = true)]
+async fn test_quorum_once_with_timeout() {
+    telemetry_subscribers::init_for_testing();
+
+    #[derive(Clone)]
+    struct MockAuthorityApi {
+        delay: Duration,
+        count: Arc<Mutex<u32>>,
+    }
+
+    #[async_trait]
+    impl AuthorityAPI for MockAuthorityApi {
+        /// Initiate a new transaction to a Sui or Primary account.
+        async fn handle_transaction(
+            &self,
+            _transaction: Transaction,
+        ) -> Result<TransactionInfoResponse, SuiError> {
+            unreachable!();
+        }
+
+        /// Execute a certificate.
+        async fn handle_certificate(
+            &self,
+            _certificate: CertifiedTransaction,
+        ) -> Result<TransactionInfoResponse, SuiError> {
+            unreachable!()
+        }
+
+        /// Handle Account information requests for this account.
+        async fn handle_account_info_request(
+            &self,
+            _request: AccountInfoRequest,
+        ) -> Result<AccountInfoResponse, SuiError> {
+            unreachable!();
+        }
+
+        /// Handle Object information requests for this account.
+        async fn handle_object_info_request(
+            &self,
+            _request: ObjectInfoRequest,
+        ) -> Result<ObjectInfoResponse, SuiError> {
+            unreachable!();
+        }
+
+        /// Handle Object information requests for this account.
+        async fn handle_transaction_info_request(
+            &self,
+            _request: TransactionInfoRequest,
+        ) -> Result<TransactionInfoResponse, SuiError> {
+            let count = {
+                let mut count = self.count.lock().unwrap();
+                *count += 1;
+                *count
+            };
+
+            // timeout until the 15th request
+            if count < 15 {
+                tokio::time::sleep(self.delay).await;
+            }
+
+            let res = TransactionInfoResponse {
+                signed_transaction: None,
+                certified_transaction: None,
+                signed_effects: None,
+            };
+            Ok(res)
+        }
+
+        async fn handle_batch_stream(
+            &self,
+            _request: BatchInfoRequest,
+        ) -> Result<BatchInfoResponseItemStream, SuiError> {
+            unreachable!();
+        }
+
+        async fn handle_checkpoint(
+            &self,
+            _request: CheckpointRequest,
+        ) -> Result<CheckpointResponse, SuiError> {
+            unreachable!();
+        }
+    }
+
+    let count = Arc::new(Mutex::new(0));
+
+    let new_client = |delay: u64| {
+        let delay = Duration::from_millis(delay);
+        let count = count.clone();
+        MockAuthorityApi { delay, count }
+    };
+
+    let mut authorities = BTreeMap::new();
+    let mut clients = BTreeMap::new();
+    for _ in 0..30 {
+        let (_, sec) = get_key_pair();
+        let name: AuthorityName = sec.public().into();
+        authorities.insert(name, 1);
+        clients.insert(name, new_client(1000));
+    }
+
+    let committee = Committee::new(0, authorities).unwrap();
+
+    let agg = AuthorityAggregator::new_with_timeouts(
+        committee,
+        clients,
+        AuthAggMetrics::new_for_tests(),
+        TimeoutConfig {
+            serial_authority_request_interval: Duration::from_millis(50),
+            ..Default::default()
+        },
+    );
+
+    let log = Arc::new(Mutex::new(Vec::new()));
+    let start = Instant::now();
+    agg.quorum_once_with_timeout(
+        None,
+        None,
+        |_name, client| {
+            let digest = TransactionDigest::new([0u8; 32]);
+            let log = log.clone();
+            Box::pin(async move {
+                // log the start time of the request
+                log.lock().unwrap().push(Instant::now() - start);
+                client.handle_transaction_info_request(digest.into()).await
+            })
+        },
+        Duration::from_millis(100),
+        Some(Duration::from_millis(30 * 50)),
+    )
+    .await
+    .unwrap();
+
+    // New requests are started every 50ms even though each request times out individually.
+    // The 15th request succeeds, and we exit before processing the remaining authorities.
+    assert_eq!(
+        log.lock().unwrap().clone(),
+        (0..15)
+            .map(|d| Duration::from_millis(d * 50))
+            .collect::<Vec<Duration>>()
+    );
 }
