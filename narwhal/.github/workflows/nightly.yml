@@ -27,6 +27,22 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
+  ignored:
+    name: Run long-running tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - uses: taiki-e/install-action@nextest
+      # Enable caching of the 'librocksdb-sys' crate by additionally caching the
+      # 'librocksdb-sys' src directory which is managed by cargo
+      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+        with:
+          path: ~/.cargo/registry/src/**/librocksdb-sys-*
+      - name: cargo test
+        run: |
+          cargo nextest run --profile ci --run-ignored ignored-only
+
   beta:
     name: Run test on the beta channel
     runs-on: ubuntu-latest
