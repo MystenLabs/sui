@@ -90,8 +90,11 @@ function DisplayBox({
         return (
             <>
                 {hasClickedImage && (
-                    <div onClick={handleImageClick}>
-                        <div className={styles.container}>
+                    <div
+                        className={styles.modalcontainer}
+                        onClick={handleImageClick}
+                    >
+                        <div className={styles.modal}>
                             <img
                                 id="loadedImage"
                                 className={styles.largeimage}

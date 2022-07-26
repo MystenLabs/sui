@@ -6,7 +6,12 @@ img.smallimage {
     @apply object-scale-down w-[100%] cursor-pointer;
 }
 
-.container {
+div.modalcontainer,
+div.detailsbg {
+    @apply fixed top-0 left-0 w-full h-full z-20;
+}
+
+.modal {
     @apply w-[100%] h-[90%] max-h-[450px]  z-50 fixed left-0 top-[5%] text-center justify-center flex flex-wrap;
 }
 
@@ -31,7 +36,7 @@ div.filetype {
 }
 
 div.detailsbg {
-    @apply fixed top-0 left-0 w-full h-full bg-sui-grey-100 z-20 opacity-[0.85];
+    @apply bg-sui-grey-100 z-20 opacity-[0.85];
 }
 
 .codebox {
