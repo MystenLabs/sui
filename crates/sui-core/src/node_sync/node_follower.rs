@@ -429,7 +429,7 @@ where
 
         let (digest, _effects_digest) = arg.digests();
 
-        // check if we the tx is already locally final
+        // check if the tx is already locally final
         if self.state.database.effects_exists(digest)? {
             return Ok(());
         }

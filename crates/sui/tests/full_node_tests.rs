@@ -5,7 +5,7 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::{collections::BTreeMap, sync::Arc};
 
-use futures::{future, StreamExt};
+use futures::future;
 use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
@@ -28,7 +28,6 @@ use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
-    batch::UpdateItem,
     messages::{Transaction, TransactionInfoRequest},
 };
 use test_utils::network::setup_network_and_wallet;

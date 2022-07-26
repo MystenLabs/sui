@@ -220,7 +220,7 @@ async fn test_parent_cert_exec() {
 
     do_cert(authority_clients[0], &cert1).await;
     do_cert(authority_clients[1], &cert1).await;
-    let effects1 = do_cert(&authority_clients[2], &cert1).await;
+    let effects1 = do_cert(authority_clients[2], &cert1).await;
     info!(digest = ?tx1.digest(), "cert1 finished");
 
     // now create a tx to transfer that object (only on 3 authorities), and then execute it on one
@@ -240,7 +240,7 @@ async fn test_parent_cert_exec() {
     do_transaction(authority_clients[1], &tx2).await;
     do_transaction(authority_clients[2], &tx2).await;
     let cert2 = extract_cert(&authority_clients, &aggregator.committee, tx2.digest()).await;
-    do_cert(&authority_clients[0], &cert2).await;
+    do_cert(authority_clients[0], &cert2).await;
     info!(digest = ?tx2.digest(), "cert2 finished");
 
     // the 4th authority has never heard of either of these transactions. Tell it to execute the
