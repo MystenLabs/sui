@@ -120,7 +120,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
         with:
-          channel-id: 'build-failures-sui'
+          channel-id: 'narwhal-tusk'
           payload: |
             {
               "text": "NARWAL Workflow *${{ github.workflow }}* failed",
