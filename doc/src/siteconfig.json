@@ -127,7 +127,7 @@
         "sublist": [
           {
             "name": "Use Almost Any OS",
-            "url": "/build/install"
+            "url": "/build/install#supported-oses"
           },
           {
             "name": "Try Sui Wallet Browser Extension",
