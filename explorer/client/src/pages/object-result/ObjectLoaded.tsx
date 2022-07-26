@@ -48,7 +48,6 @@ function ObjectLoaded({ data }: { data: DataType }) {
         [showConnectedEntities]
     );
     const clickSetShowTx = useCallback(() => setShowTx(!showTx), [showTx]);
-    const prepLabel = (label: string) => label.split('_').join(' ');
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
 
@@ -256,7 +255,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                 <div className={styles.propertybox}>
                                     {properties.map(([key, value], index) => (
                                         <div key={`property-${index}`}>
-                                            <p>{prepLabel(key)}</p>
+                                            <p>{key}</p>
                                             <p>{value}</p>
                                         </div>
                                     ))}
@@ -303,7 +302,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                 <div className={styles.bytecodebox}>
                                     {properties.map(([key, value], index) => (
                                         <div key={`property-${index}`}>
-                                            <div>{prepLabel(key)}</div>
+                                            <div>{key}</div>
                                             <div className={codestyle.code}>
                                                 {value}
                                             </div>
