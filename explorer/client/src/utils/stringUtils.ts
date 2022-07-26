@@ -50,13 +50,26 @@ export function truncate(fullStr: string, strLen: number, separator?: string) {
     );
 }
 
-export function extractFileType(displayString: string) {
-    return `1 ${
-        displayString.startsWith(IPFS_START_STRING) ||
-        findIPFSvalue(displayString)
-            ? 'IPFS'
-            : displayString.split('.').at(-1)?.toUpperCase()
-    } File`;
+export async function extractFileType(displayString: string) {
+    const OPTIONS = ['PNG', 'JPG', 'JPEG'];
+    // First check file extension:
+    let result = displayString.split('.').at(-1)?.toUpperCase();
+
+    if (!OPTIONS.includes(result || '')) {
+        // Second check Content-Type header:
+        result = await fetch(displayString).then((resp) =>
+            resp?.headers
+                ?.get('Content-Type')
+                ?.split('/')
+                ?.at(-1)
+                ?.toUpperCase()
+        );
+        // If neither work, don't specify:
+        if (!OPTIONS.includes(result || '')) {
+            result = '';
+        }
+    }
+    return `1 ${result} Image File`;
 }
 
 /* Currently unused but potentially useful:
