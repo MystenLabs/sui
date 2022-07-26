@@ -650,6 +650,7 @@ where
         let errors = active_authority
             .node_sync_handle()
             .sync_checkpoint(&contents)
+            .await?
             .zip(futures::stream::iter(contents.iter()))
             .filter_map(|(r, digests)| async move {
                 r.map_err(|e| {
