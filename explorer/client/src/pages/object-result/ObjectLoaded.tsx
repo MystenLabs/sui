@@ -6,9 +6,9 @@ import ReactJson from 'react-json-view';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
 import Longtext from '../../components/longtext/Longtext';
+import ModulesWrapper from '../../components/module/ModulesWrapper';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transactions-for-id/TxForID';
-import codestyle from '../../styles/bytecode.module.css';
 import theme from '../../styles/theme.module.css';
 import { getOwnerStr, parseImageURL } from '../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../utils/stringUtils';
@@ -291,26 +291,12 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             Child Objects {showConnectedEntities ? '' : '+'}
                         </h2>
                     ) : (
-                        <div>
-                            <h2
-                                className={styles.clickableheader}
-                                onClick={clickSetShowProperties}
-                            >
-                                Modules {showProperties ? '' : '+'}
-                            </h2>
-                            {showProperties && (
-                                <div className={styles.bytecodebox}>
-                                    {properties.map(([key, value], index) => (
-                                        <div key={`property-${index}`}>
-                                            <div>{key}</div>
-                                            <div className={codestyle.code}>
-                                                {value}
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        <ModulesWrapper
+                            data={{
+                                title: 'Modules',
+                                content: properties,
+                            }}
+                        />
                     )}
                     {showConnectedEntities &&
                         data.objType !== 'Move Package' && (

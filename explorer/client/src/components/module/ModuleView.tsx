@@ -8,13 +8,13 @@ import codestyle from '../../styles/bytecode.module.css';
 
 import type { Language } from 'prism-react-renderer';
 
-import styles from './TxModuleView.module.css';
+import styles from './ModuleView.module.css';
 // inclue Rust language.
 // @ts-ignore
 (typeof global !== 'undefined' ? global : window).Prism = Prism;
 require('prismjs/components/prism-rust');
 
-function TxModuleView({ itm }: { itm: any }) {
+function ModuleView({ itm }: { itm: any }) {
     return (
         <section className={styles.modulewrapper}>
             <div className={styles.moduletitle}>{itm[0]}</div>
@@ -58,4 +58,4 @@ function TxModuleView({ itm }: { itm: any }) {
     );
 }
 
-export default TxModuleView;
+export default ModuleView;
