@@ -21,11 +21,10 @@ use sui_types::{
     messages_checkpoint::CheckpointContents,
 };
 
-use std::future::Future;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
-use futures::stream::FuturesOrdered;
+use futures::{future::BoxFuture, stream::FuturesOrdered, FutureExt};
 
 use tap::TapFallible;
 
@@ -635,33 +634,6 @@ where
     }
 }
 
-pub struct MappedRx(oneshot::Receiver<SuiResult>);
-
-impl Future for MappedRx {
-    type Output = SuiResult;
-
-    fn poll(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> std::task::Poll<Self::Output> {
-        let inner = std::pin::Pin::new(&mut self.0);
-        match inner.poll(cx) {
-            std::task::Poll::Ready(res) => {
-                let res = res.map_err(|e| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                });
-
-                std::task::Poll::Ready(match res {
-                    Ok(r) => r,
-                    Err(e) => Err(e),
-                })
-            }
-
-            std::task::Poll::Pending => std::task::Poll::Pending,
-        }
-    }
-}
-
 /// A cloneable handle that can send messages to a NodeSyncState
 #[derive(Clone)]
 pub struct NodeSyncHandle {
@@ -680,6 +652,18 @@ impl NodeSyncHandle {
 
     fn new_from_sender(sender: mpsc::Sender<DigestsMessage>) -> Self {
         Self { sender }
+    }
+
+    fn map_rx(rx: oneshot::Receiver<SuiResult>) -> BoxFuture<'static, SuiResult> {
+        Box::pin(rx.map(|res| {
+            let res = res.map_err(|e| SuiError::GenericAuthorityError {
+                error: e.to_string(),
+            });
+            match res {
+                Ok(r) => r,
+                Err(e) => Err(e),
+            }
+        }))
     }
 
     async fn send_msg_with_tx(
@@ -703,7 +687,7 @@ impl NodeSyncHandle {
             let (tx, rx) = oneshot::channel();
             let msg = DigestsMessage::new_for_ckpt(digests, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
-            futures.push(MappedRx(rx));
+            futures.push(Self::map_rx(rx));
         }
 
         Ok(futures)
@@ -718,7 +702,7 @@ impl NodeSyncHandle {
             let (tx, rx) = oneshot::channel();
             let msg = DigestsMessage::new_for_exec_driver(&digest, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
-            futures.push(MappedRx(rx));
+            futures.push(Self::map_rx(rx));
         }
 
         Ok(futures)
@@ -730,7 +714,7 @@ impl<A> DigestHandler<A> for NodeSyncHandle
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    type DigestResult = MappedRx;
+    type DigestResult = BoxFuture<'static, SuiResult>;
 
     async fn handle_digest(
         &self,
@@ -744,7 +728,7 @@ where
             DigestsMessage::new(&digests, follower.peer_name, tx),
         )
         .await?;
-        Ok(MappedRx(rx))
+        Ok(Self::map_rx(rx))
     }
 }
 
