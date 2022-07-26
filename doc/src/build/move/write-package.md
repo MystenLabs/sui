@@ -66,7 +66,7 @@ will be represented by Sui objects; in particular, we want a sword to
 be an upgradable asset that can be shared between different players. A
 sword asset can be defined similarly to another asset we are already
 familiar with from our
-[First look at Move source code](index.md#first-look-at-move-source-code). That
+[First look at Move source code](../move/index.md#first-look-at-move-source-code). That
 is a `Coin` struct type.
 
 
