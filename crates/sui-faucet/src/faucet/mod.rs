@@ -8,6 +8,7 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
 };
+use uuid::Uuid;
 
 mod simple_faucet;
 pub use self::simple_faucet::SimpleFaucet;
@@ -28,6 +29,7 @@ pub trait Faucet {
     /// Send `Coin<SUI>` of the specified amount to the recipient
     async fn send(
         &self,
+        id: Uuid,
         recipient: SuiAddress,
         amounts: &[u64],
     ) -> Result<FaucetReceipt, FaucetError>;
@@ -68,7 +70,10 @@ mod tests {
         let recipient = SuiAddress::random_for_testing_only();
         let amounts = vec![1, 2, 3];
 
-        let FaucetReceipt { sent } = faucet.send(recipient, &amounts).await.unwrap();
+        let FaucetReceipt { sent } = faucet
+            .send(Uuid::new_v4(), recipient, &amounts)
+            .await
+            .unwrap();
         let mut actual_amounts: Vec<u64> = sent.iter().map(|c| c.amount).collect();
         actual_amounts.sort_unstable();
         assert_eq!(actual_amounts, amounts);

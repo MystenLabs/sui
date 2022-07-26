@@ -1508,7 +1508,7 @@ impl ExecutionState for AuthorityState {
                 // consensus.
                 certificate.verify(&self.committee.load())?;
 
-                debug!(digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
+                debug!(tx_digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
 
                 self.database
                     .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)

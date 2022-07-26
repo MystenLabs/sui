@@ -270,7 +270,7 @@ where
                 continue;
             }
 
-            debug!(digest = ?cert_digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+            debug!(tx_digest = ?cert_digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
 
             match cert_handler.handle(target_cert.clone()).await {
                 Ok(_) => {
@@ -285,7 +285,7 @@ where
             // the previous certificates, so we need to read them from the source
             // authority.
             debug!(
-                digest = ?cert_digest,
+                tx_digest = ?cert_digest,
                 "Missing previous certificates, need to find parents from source authorities"
             );
 
@@ -293,7 +293,7 @@ where
             // we try to get its dependencies. But the second time we have already tried
             // to update its dependencies, so we should just admit failure.
             if attempted_certificates.contains(&cert_digest) {
-                trace!(digest = ?cert_digest, "bailing out after second attempt to fetch");
+                trace!(tx_digest = ?cert_digest, "bailing out after second attempt to fetch");
                 return Err(SuiError::AuthorityInformationUnavailable);
             }
             attempted_certificates.insert(cert_digest);
@@ -345,9 +345,9 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-            trace!(digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
+            trace!(tx_digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
             for returned_digest in &signed_effects.effects.dependencies {
-                trace!(digest =? returned_digest, "Found parent of missing cert");
+                trace!(tx_digest =? returned_digest, "Found parent of missing cert");
 
                 let inner_transaction_info = source_client
                     .handle_transaction_info_request(TransactionInfoRequest {
@@ -1199,7 +1199,9 @@ where
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
+        let tx_digest = transaction.digest();
         debug!(
+            tx_digest = ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             "Broadcasting transaction request to authorities"
@@ -1245,7 +1247,8 @@ where
                                 certified_transaction: Some(inner_certificate),
                                 ..
                             }) => {
-                                trace!(?name, weight, "Received prev certificate from authority");
+                                let tx_digest = inner_certificate.digest();
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Received prev certificate from validator handle_transaction");
                                 state.certificate = Some(inner_certificate);
                             }
 
@@ -1256,6 +1259,8 @@ where
                                 signed_transaction: Some(inner_signed_transaction),
                                 ..
                             }) => {
+                                let tx_digest = inner_signed_transaction.digest();
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
                                 state.signatures.push((
                                     name,
                                     inner_signed_transaction.auth_sign_info.signature,
@@ -1284,6 +1289,7 @@ where
                             Err(err) => {
                                 // We have an error here.
                                 // Append to the list off errors
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction");
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
@@ -1301,9 +1307,10 @@ where
                         if state.bad_stake > validity {
                             // Too many errors
                             debug!(
+                                tx_digest = ?tx_digest,
                                 num_errors = state.errors.len(),
                                 bad_stake = state.bad_stake,
-                                "Too many errors, validity threshold exceeded. Errors={:?}",
+                                "Too many errors from validators handle_transaction, validity threshold exceeded. Errors={:?}",
                                 state.errors
                             );
                             self.metrics
@@ -1338,12 +1345,13 @@ where
             .await?;
 
         debug!(
+            tx_digest = ?tx_digest,
             num_errors = state.errors.len(),
             good_stake = state.good_stake,
             bad_stake = state.bad_stake,
             num_signatures = state.signatures.len(),
             has_certificate = state.certificate.is_some(),
-            "Received signatures response from authorities for transaction req broadcast"
+            "Received signatures response from validators handle_transaction"
         );
         if !state.errors.is_empty() {
             trace!("Errors received: {:?}", state.errors);
@@ -1387,12 +1395,14 @@ where
             errors: vec![],
         };
 
+        let tx_digest = certificate.digest();
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
         let cert_ref = &certificate;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
         debug!(
+            tx_digest = ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
@@ -1415,6 +1425,11 @@ where
                                 .await;
 
                         if res.is_ok() {
+                            debug!(
+                                tx_digest = ?tx_digest,
+                                ?name,
+                                "Validator handled certificate successfully",
+                            );
                             // We got an ok answer, so returning the result of processing
                             // the transaction.
                             return res;
@@ -1424,11 +1439,16 @@ where
                         // We only attempt to update authority and retry if we are seeing LockErrors.
                         // For any other error, we stop here and return.
                         if !matches!(res, Err(SuiError::LockErrors { .. })) {
-                            debug!("Error from handle_confirmation_transaction(): {:?}", res);
+                            debug!(
+                                tx_digest = ?tx_digest,
+                                ?name,
+                                "Error from validator handle_confirmation_transaction: {:?}",
+                                res
+                            );
                             return res;
                         }
 
-                        debug!(authority =? name, error =? res, ?timeout_after_quorum, "Authority out of date - syncing certificates");
+                        debug!(authority =? name, error =? res, ?timeout_after_quorum, "Validator out of date - syncing certificates");
                         // If we got LockErrors, we try to update the authority.
                         self
                             .sync_certificate_to_authority(
@@ -1472,6 +1492,10 @@ where
 
                                 if entry.stake >= threshold {
                                     // It will set the timeout quite high.
+                                    debug!(
+                                        tx_digest = ?tx_digest,
+                                        "Got quorum for validators handle_certificate."
+                                    );
                                     return Ok(ReduceOutput::ContinueWithTimeout(
                                         state,
                                         timeout_after_quorum,
@@ -1489,8 +1513,11 @@ where
                                 state.errors.push(err);
                                 state.bad_stake += weight;
                                 if state.bad_stake > validity {
-                                    debug!(bad_stake = state.bad_stake,
-                                        "Too many bad responses from cert processing, validity threshold exceeded.");
+                                    debug!(
+                                        tx_digest = ?tx_digest,
+                                        bad_stake = state.bad_stake,
+                                        "Too many bad responses from validators cert processing, validity threshold exceeded."
+                                    );
                                     return Err(SuiError::QuorumFailedToExecuteCertificate { errors: state.errors });
                                 }
                             }
@@ -1504,9 +1531,10 @@ where
             .await?;
 
         debug!(
+            tx_digest = ?tx_digest,
             num_unique_effects = state.effects_map.len(),
             bad_stake = state.bad_stake,
-            "Received effects responses from authorities"
+            "Received effects responses from validators"
         );
 
         // Check that one effects structure has more than 2f votes,
@@ -1519,6 +1547,7 @@ where
             } = stake_info;
             if stake >= threshold {
                 debug!(
+                    tx_digest = ?tx_digest,
                     good_stake = stake,
                     "Found an effect with good stake over threshold"
                 );
