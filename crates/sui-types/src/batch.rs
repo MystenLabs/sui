@@ -3,9 +3,7 @@
 
 use crate::base_types::{AuthorityName, ExecutionDigests};
 use crate::committee::{Committee, EpochId};
-use crate::crypto::{
-    sha3_hash, AuthoritySignInfo, AuthoritySignature, BcsSignable, SuiAuthoritySignature,
-};
+use crate::crypto::{sha3_hash, AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
 use crate::error::{SuiError, SuiResult};
 use serde::{Deserialize, Serialize};
 
@@ -22,7 +20,6 @@ pub type BatchDigest = [u8; 32];
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct TransactionBatch(pub Vec<(TxSequenceNumber, ExecutionDigests)>);
-impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Debug, Serialize, Deserialize)]
 pub struct AuthorityBatch {
@@ -42,8 +39,6 @@ pub struct AuthorityBatch {
     /// The digest of all transactions digests in this batch
     pub transactions_digest: [u8; 32],
 }
-
-impl BcsSignable for AuthorityBatch {}
 
 impl AuthorityBatch {
     pub fn digest(&self) -> BatchDigest {

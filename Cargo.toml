@@ -38,5 +38,10 @@ members = [
 # debug = true
 # strip = "debuginfo"
 
+[profile.bench-profiling]
+inherits = "release"
+# Important for performance/memory profiling
+debug = true
+
 [profile.bench]
 debug = true

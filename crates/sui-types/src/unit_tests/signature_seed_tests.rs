@@ -1,20 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::crypto::BcsSignable;
-use crate::signature_seed::SignatureSeed;
-use serde::{Deserialize, Serialize};
+use crate::{crypto::bcs_signable_test::Foo, signature_seed::SignatureSeed};
 
 #[cfg(test)]
 const TEST_ID: [u8; 16] = [0u8; 16];
 #[cfg(test)]
 const TEST_DOMAIN: [u8; 16] = [1u8; 16];
-
-#[cfg(test)]
-#[derive(Serialize, Deserialize)]
-struct Foo(String);
-
-impl BcsSignable for Foo {}
 
 #[test]
 fn test_deterministic_addresses_by_id() {

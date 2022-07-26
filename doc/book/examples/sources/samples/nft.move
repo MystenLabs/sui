@@ -67,7 +67,7 @@ module examples::devnet_nft {
         };
 
         event::emit(NFTMinted {
-            object_id: *object::info_id(&nft.id),
+            object_id: *object::info_id(&nft.info),
             creator: sender,
             name: nft.name,
         });
@@ -93,7 +93,7 @@ module examples::devnet_nft {
 
     /// Permanently delete `nft`
     public entry fun burn(nft: DevNetNFT, _: &mut TxContext) {
-        let DevNetNFT { id, name: _, description: _, url: _ } = nft;
-        object::delete(id)
+        let DevNetNFT { info, name: _, description: _, url: _ } = nft;
+        object::delete(info)
     }
 }

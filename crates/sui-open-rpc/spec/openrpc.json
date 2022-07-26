@@ -12,7 +12,7 @@
       "name": "Apache-2.0",
       "url": "https://raw.githubusercontent.com/MystenLabs/sui/main/LICENSE"
     },
-    "version": "0.1.0"
+    "version": "0.6.1"
   },
   "methods": [
     {
@@ -22,6 +22,7 @@
           "name": "Transaction Builder API"
         }
       ],
+      "description": "Create an unsigned batched transaction.",
       "params": [
         {
           "name": "signer",
@@ -75,6 +76,7 @@
       "params": [
         {
           "name": "tx_bytes",
+          "description": "transaction data bytes, as base-64 encoded string",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -82,6 +84,7 @@
         },
         {
           "name": "signature",
+          "description": "transaction signature, as base-64 encoded string",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -89,6 +92,7 @@
         },
         {
           "name": "pub_key",
+          "description": "signer\\'s public key, as base-64 encoded string",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/Base64"
@@ -110,9 +114,11 @@
           "name": "Event Read API"
         }
       ],
+      "description": "Return list of events matching the specified event type",
       "params": [
         {
           "name": "event_type",
+          "description": "the event type, e.g. \\'0x2::devnet_nft::MintNFTEvent\\'",
           "required": true,
           "schema": {
             "type": "string"
@@ -120,6 +126,7 @@
         },
         {
           "name": "count",
+          "description": "maximum size of the result",
           "required": true,
           "schema": {
             "type": "integer",
@@ -129,6 +136,7 @@
         },
         {
           "name": "start_time",
+          "description": "the matching events\\' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -138,6 +146,7 @@
         },
         {
           "name": "end_time",
+          "description": "the matching events\\' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -164,9 +173,11 @@
           "name": "Event Read API"
         }
       ],
+      "description": "Return list of events emitted by a specified Move module",
       "params": [
         {
           "name": "package",
+          "description": "the Move package ID",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -174,6 +185,7 @@
         },
         {
           "name": "module",
+          "description": "the module name",
           "required": true,
           "schema": {
             "type": "string"
@@ -181,6 +193,7 @@
         },
         {
           "name": "count",
+          "description": "maximum size of the result",
           "required": true,
           "schema": {
             "type": "integer",
@@ -190,6 +203,7 @@
         },
         {
           "name": "start_time",
+          "description": "the matching events\\' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -199,6 +213,7 @@
         },
         {
           "name": "end_time",
+          "description": "the matching events\\' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -225,9 +240,11 @@
           "name": "Event Read API"
         }
       ],
+      "description": "Return list of events involving a specified object",
       "params": [
         {
           "name": "object",
+          "description": "the object ID",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -235,6 +252,7 @@
         },
         {
           "name": "count",
+          "description": "maximum size of the result",
           "required": true,
           "schema": {
             "type": "integer",
@@ -244,6 +262,7 @@
         },
         {
           "name": "start_time",
+          "description": "the matching events\\' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -253,6 +272,7 @@
         },
         {
           "name": "end_time",
+          "description": "the matching events\\' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -279,9 +299,11 @@
           "name": "Event Read API"
         }
       ],
+      "description": "Return list of events involving a specified owner.",
       "params": [
         {
           "name": "owner",
+          "description": "the owner\\'s Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -289,6 +311,7 @@
         },
         {
           "name": "count",
+          "description": "maximum size of the result",
           "required": true,
           "schema": {
             "type": "integer",
@@ -298,6 +321,7 @@
         },
         {
           "name": "start_time",
+          "description": "the matching events\\' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -307,6 +331,7 @@
         },
         {
           "name": "end_time",
+          "description": "the matching events\\' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -333,9 +358,11 @@
           "name": "Event Read API"
         }
       ],
+      "description": "Return list of events involving a specified sender.",
       "params": [
         {
           "name": "sender",
+          "description": "the sender\\'s Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -343,6 +370,7 @@
         },
         {
           "name": "count",
+          "description": "maximum size of the result",
           "required": true,
           "schema": {
             "type": "integer",
@@ -352,6 +380,7 @@
         },
         {
           "name": "start_time",
+          "description": "the matching events\\' timestamp will be after the specified start time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -361,6 +390,7 @@
         },
         {
           "name": "end_time",
+          "description": "the matching events\\' timestamp will be before the specified end time",
           "required": true,
           "schema": {
             "type": "integer",
@@ -387,9 +417,11 @@
           "name": "Event Read API"
         }
       ],
+      "description": "Return list of events emitted by a specified transaction.",
       "params": [
         {
           "name": "digest",
+          "description": "digest of the transaction, as base-64 encoded string",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/TransactionDigest"
@@ -418,6 +450,7 @@
       "params": [
         {
           "name": "object_id",
+          "description": "the ID of the queried object",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -443,6 +476,7 @@
       "params": [
         {
           "name": "address",
+          "description": "the owner\\'s Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -467,9 +501,11 @@
           "name": "Read API"
         }
       ],
+      "description": "Return the list of objects owned by an object.",
       "params": [
         {
           "name": "object_id",
+          "description": "the ID of the owner object",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -494,10 +530,11 @@
           "name": "BCS API"
         }
       ],
-      "description": "Return the raw BCS serialised move object bytes for a specified object",
+      "description": "Return the raw BCS serialized move object bytes for a specified object.",
       "params": [
         {
           "name": "object_id",
+          "description": "the id of the object",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -519,9 +556,11 @@
           "name": "Read API"
         }
       ],
+      "description": "Return list of recent transaction digest.",
       "params": [
         {
           "name": "count",
+          "description": "maximum size of the result",
           "required": true,
           "schema": {
             "type": "integer",
@@ -560,6 +599,7 @@
           "name": "Read API"
         }
       ],
+      "description": "Return the total number of transactions known to the server.",
       "params": [],
       "result": {
         "name": "u64",
@@ -578,9 +618,11 @@
           "name": "Read API"
         }
       ],
+      "description": "Return the transaction response object.",
       "params": [
         {
           "name": "digest",
+          "description": "the digest of the queried transaction",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/TransactionDigest"
@@ -602,9 +644,11 @@
           "name": "Full Node API"
         }
       ],
+      "description": "Return list of transactions for a specified input object.",
       "params": [
         {
           "name": "object",
+          "description": "the ID of the input object",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -641,9 +685,11 @@
           "name": "Full Node API"
         }
       ],
+      "description": "Return list of transactions for a specified move function.",
       "params": [
         {
           "name": "package",
+          "description": "the Move package ID, e.g. `0x2`",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -651,12 +697,14 @@
         },
         {
           "name": "module",
+          "description": "the Move module name, e.g. `devnet_nft`",
           "schema": {
             "type": "string"
           }
         },
         {
           "name": "function",
+          "description": "the move function name, e.g. `mint`",
           "schema": {
             "type": "string"
           }
@@ -692,9 +740,11 @@
           "name": "Full Node API"
         }
       ],
+      "description": "Return list of transactions for a specified mutated object.",
       "params": [
         {
           "name": "object",
+          "description": "the ID of the mutated object",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -731,9 +781,11 @@
           "name": "Full Node API"
         }
       ],
+      "description": "Return list of transactions for a specified sender\\'s Sui address.",
       "params": [
         {
           "name": "addr",
+          "description": "the sender\\'s Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -770,9 +822,11 @@
           "name": "Read API"
         }
       ],
+      "description": "Return list of transaction digests within the queried range.",
       "params": [
         {
           "name": "start",
+          "description": "the matching transactions\\' sequence number will be greater than or equals to the starting sequence number",
           "required": true,
           "schema": {
             "type": "integer",
@@ -782,6 +836,7 @@
         },
         {
           "name": "end",
+          "description": "the matching transactions\\' sequence number will be less than the ending sequence number",
           "required": true,
           "schema": {
             "type": "integer",
@@ -820,9 +875,11 @@
           "name": "Full Node API"
         }
       ],
+      "description": "Return list of transactions for a specified recipient\\'s Sui address.",
       "params": [
         {
           "name": "addr",
+          "description": "the recipient\\'s Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -859,6 +916,7 @@
           "name": "Transaction Builder API"
         }
       ],
+      "description": "Create an unsigned transaction to merge multiple coins into one coin.",
       "params": [
         {
           "name": "signer",
@@ -912,7 +970,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Execute a Move call transaction by calling the specified function in the module of a given package.",
+      "description": "Create an unsigned transaction to execute a Move call on the network, by calling the specified function in the module of a given package.",
       "params": [
         {
           "name": "signer",
@@ -993,7 +1051,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Publish Move module.",
+      "description": "Create an unsigned transaction to publish Move module.",
       "params": [
         {
           "name": "sender",
@@ -1043,6 +1101,7 @@
           "name": "Transaction Builder API"
         }
       ],
+      "description": "Create an unsigned transaction to split a coin object into multiple coins.",
       "params": [
         {
           "name": "signer",
@@ -1107,9 +1166,11 @@
           "name": "PubSub"
         }
       ],
+      "description": "Subscribe to a stream of Sui event",
       "params": [
         {
           "name": "filter",
+          "description": "the filter criteria of the event stream, see the [Sui docs](https://docs.sui.io/build/pubsub#event-filters) for detailed examples.",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/EventFilter"
@@ -1135,6 +1196,7 @@
       "params": [
         {
           "name": "address",
+          "description": "the Sui address to be synchronized",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -1156,7 +1218,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Create a transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
+      "description": "Create an unsigned transaction to transfer an object from one address to another. The object\\'s type must allow public transfers",
       "params": [
         {
           "name": "signer",
@@ -1210,7 +1272,7 @@
           "name": "Transaction Builder API"
         }
       ],
-      "description": "Send SUI coin object to a Sui address. The SUI object is also used as the gas object.",
+      "description": "Create an unsigned transaction to send SUI coin object to a Sui address. The SUI object is also used as the gas object.",
       "params": [
         {
           "name": "signer",
@@ -2518,16 +2580,27 @@
         ],
         "properties": {
           "gas": {
-            "$ref": "#/components/schemas/ObjectRef"
+            "description": "the gas object to be used",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ObjectRef"
+              }
+            ]
           },
           "inputObjects": {
+            "description": "objects to be used in this transaction",
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/InputObjectKind"
             }
           },
           "txBytes": {
-            "$ref": "#/components/schemas/Base64"
+            "description": "transaction data bytes, as base-64 encoded string",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Base64"
+              }
+            ]
           }
         }
       },

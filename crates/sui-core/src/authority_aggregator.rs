@@ -32,6 +32,8 @@ use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
+use tap::TapFallible;
+
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
 pub const DEFAULT_RETRIES: usize = 4;
 
@@ -542,10 +544,38 @@ where
             Result<V, SuiError>,
         ) -> AsyncResult<'a, ReduceOutput<S>, SuiError>,
     {
-        let authorities_shuffled = self.committee.shuffle_by_stake();
+        self.quorum_map_then_reduce_with_timeout_and_prefs(
+            None,
+            initial_state,
+            map_each_authority,
+            reduce_result,
+            initial_timeout,
+        )
+        .await
+    }
+
+    pub(crate) async fn quorum_map_then_reduce_with_timeout_and_prefs<'a, S, V, FMap, FReduce>(
+        &'a self,
+        authority_prefences: Option<&BTreeSet<AuthorityName>>,
+        initial_state: S,
+        map_each_authority: FMap,
+        reduce_result: FReduce,
+        initial_timeout: Duration,
+    ) -> Result<S, SuiError>
+    where
+        FMap: FnOnce(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, V, SuiError> + Clone,
+        FReduce: Fn(
+            S,
+            AuthorityName,
+            StakeUnit,
+            Result<V, SuiError>,
+        ) -> AsyncResult<'a, ReduceOutput<S>, SuiError>,
+    {
+        let authorities_shuffled = self.committee.shuffle_by_stake(authority_prefences, None);
 
         // First, execute in parallel for each authority FMap.
         let mut responses: futures::stream::FuturesUnordered<_> = authorities_shuffled
+            .iter()
             .map(|name| {
                 let client = &self.authority_clients[name];
                 let execute = map_each_authority.clone();
@@ -593,7 +623,7 @@ where
     async fn quorum_once_inner<'a, S, FMap>(
         &'a self,
         // try these authorities first
-        preferences: &[AuthorityName],
+        preferences: Option<&BTreeSet<AuthorityName>>,
         // only attempt from these authorities.
         restrict_to: Option<&BTreeSet<AuthorityName>>,
         // The async function used to apply to each authority. It takes an authority name,
@@ -608,25 +638,20 @@ where
     {
         let mut delay = Duration::from_secs(1);
         loop {
-            let authorities_shuffled = self.committee.shuffle_by_stake().filter(|a| {
-                // preferences will usually be small so linear search probably ok.
-                !preferences.contains(a) && restrict_to.map(|r| r.contains(a)).unwrap_or(true)
-            });
-
-            let authorities_shuffled = preferences.iter().chain(authorities_shuffled);
+            let authorities_shuffled = self.committee.shuffle_by_stake(preferences, restrict_to);
 
             // TODO: possibly increase concurrency after first failure to reduce latency.
             for name in authorities_shuffled {
-                let client = &self.authority_clients[name];
+                let client = &self.authority_clients[&name];
 
-                let res = timeout(timeout_each_authority, map_each_authority(*name, client)).await;
+                let res = timeout(timeout_each_authority, map_each_authority(name, client)).await;
 
                 match res {
                     // timeout
-                    Err(_) => authority_errors.insert(*name, SuiError::TimeoutError),
+                    Err(_) => authority_errors.insert(name, SuiError::TimeoutError),
                     // request completed
                     Ok(inner_res) => match inner_res {
-                        Err(e) => authority_errors.insert(*name, e),
+                        Err(e) => authority_errors.insert(name, e),
                         Ok(res) => return Ok(res),
                     },
                 };
@@ -648,7 +673,7 @@ where
     pub(crate) async fn quorum_once_with_timeout<'a, S, FMap>(
         &'a self,
         // try these authorities first
-        preferences: &[AuthorityName],
+        preferences: Option<&BTreeSet<AuthorityName>>,
         // only attempt from these authorities.
         restrict_to: Option<&BTreeSet<AuthorityName>>,
         // The async function used to apply to each authority. It takes an authority name,
@@ -1580,7 +1605,7 @@ where
         timeout_total: Option<Duration>,
     ) -> SuiResult<CheckpointResponse> {
         self.quorum_once_with_timeout(
-            &[],
+            None,
             Some(authorities),
             |_, client| Box::pin(async move { client.handle_checkpoint(request.clone()).await }),
             self.timeouts.serial_authority_request_timeout,
@@ -1597,7 +1622,7 @@ where
         timeout_total: Option<Duration>,
     ) -> SuiResult<(CertifiedCheckpointSummary, Option<CheckpointContents>)> {
         self.quorum_once_with_timeout(
-            &[],
+            None,
             Some(authorities),
             |_, client| {
                 Box::pin(async move {
@@ -1625,21 +1650,54 @@ where
         .await
     }
 
-    pub async fn handle_transaction_and_effects_info_request(
+    pub async fn handle_cert_info_request(
         &self,
         digest: &TransactionDigest,
-        effects_digest: Option<&TransactionEffectsDigest>,
+        timeout_total: Option<Duration>,
+    ) -> SuiResult<TransactionInfoResponse> {
+        self.quorum_once_with_timeout(
+            None,
+            None,
+            |_authority, client| {
+                Box::pin(async move {
+                    let resp = client
+                        .handle_transaction_info_request((*digest).into())
+                        .await?;
+
+                    if let TransactionInfoResponse {
+                        certified_transaction: Some(_),
+                        signed_effects: Some(_),
+                        ..
+                    } = &resp
+                    {
+                        Ok(resp)
+                    } else {
+                        // handle_transaction_info_request returns success even if it doesn't have
+                        // any data.
+                        Err(SuiError::TransactionNotFound { digest: *digest })
+                    }
+                })
+            },
+            self.timeouts.serial_authority_request_timeout,
+            timeout_total,
+        )
+        .await
+    }
+
+    pub async fn handle_transaction_and_effects_info_request(
+        &self,
+        digests: &ExecutionDigests,
         // authorities known to have the effects we are requesting.
         authorities: Option<&BTreeSet<AuthorityName>>,
         timeout_total: Option<Duration>,
     ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
         self.quorum_once_with_timeout(
-            &[],
+            None,
             authorities,
             |authority, client| {
                 Box::pin(async move {
                     let resp = client
-                        .handle_transaction_and_effects_info_request(digest, effects_digest)
+                        .handle_transaction_and_effects_info_request(digests)
                         .await?;
 
                     match (resp.certified_transaction, resp.signed_effects) {
@@ -1650,7 +1708,9 @@ where
                                 // cert and effects, so if they now say they don't, they're byzantine.
                                 Err(SuiError::ByzantineAuthoritySuspicion { authority })
                             } else {
-                                Err(SuiError::TransactionNotFound { digest: *digest })
+                                Err(SuiError::TransactionNotFound {
+                                    digest: digests.transaction,
+                                })
                             }
                         }
                     }
@@ -1660,5 +1720,121 @@ where
             timeout_total,
         )
         .await
+    }
+
+    /// Given a certificate, execute the cert on remote validators (and preferentially on the
+    /// signers of the cert who are guaranteed to be able to process it immediately) until we
+    /// receive f+1 identical SignedTransactionEffects - at this point we know we have the
+    /// true effects for the cert, because of f+1 validators, at least 1 must be honest.
+    ///
+    /// It is assumed that this method will not be called by any of the signers of the cert, since
+    /// they can simply execute the cert locally and compute their own effects.
+    pub async fn execute_cert_to_true_effects(
+        &self,
+        cert: &CertifiedTransaction,
+    ) -> SuiResult<SignedTransactionEffects> {
+        let digest = cert.digest();
+
+        #[derive(Debug)]
+        struct ExecuteCertState {
+            cumulative_weight: StakeUnit,
+            good_weight: StakeUnit,
+            digests: HashMap<TransactionEffectsDigest, StakeUnit>,
+            true_effects: Option<SignedTransactionEffects>,
+            errors: Vec<(AuthorityName, SuiError)>,
+        }
+
+        let signers: BTreeSet<_> = cert
+            .auth_sign_info
+            .authorities(&self.committee)
+            .filter_map(|r| r.ok())
+            .cloned()
+            .collect();
+
+        let initial_state = ExecuteCertState {
+            cumulative_weight: 0,
+            good_weight: 0,
+            digests: HashMap::new(),
+            true_effects: None,
+            errors: Vec::new(),
+        };
+
+        let validity = self.committee.validity_threshold();
+        let total_weight = self.committee.total_votes;
+
+        debug!(
+            ?validity,
+            ?total_weight,
+            ?digest,
+            "execute_cert_to_true_effects"
+        );
+        let final_state = self
+            .quorum_map_then_reduce_with_timeout_and_prefs(
+                Some(&signers),
+                initial_state,
+                |_name, client| {
+                    Box::pin(async move { client.handle_certificate(cert.clone()).await })
+                },
+                |mut state, name, weight, result| {
+                    Box::pin(async move {
+                        state.cumulative_weight += weight;
+                        match result {
+                            Ok(TransactionInfoResponse {
+                                signed_effects: Some(effects),
+                                ..
+                            }) => {
+                                state.good_weight += weight;
+                                trace!(?name, ?weight, "successfully executed cert on peer");
+                                let entry = state.digests.entry(*effects.digest()).or_insert(0);
+                                *entry += weight;
+
+                                if *entry >= validity {
+                                    state.true_effects = Some(effects);
+                                    return Ok(ReduceOutput::End(state));
+                                }
+                            }
+
+                            // validator returned OK but did not give us an effects
+                            Ok(_) => {
+                                info!(?name, "peer failed to return effects");
+                                state.errors.push((
+                                    name,
+                                    SuiError::ByzantineAuthoritySuspicion { authority: name },
+                                ));
+                            }
+
+                            Err(e) => {
+                                state.errors.push((name, e));
+                            }
+                        }
+
+                        let weight_remaining = total_weight - state.cumulative_weight;
+                        if weight_remaining + state.good_weight < validity {
+                            // The main realistic case in which this might happen is if a validator
+                            // cannot reach the rest of the committee on the network. (The
+                            // unrealistic case is that the security assumption has failed).
+                            info!(
+                                ?digest,
+                                ?total_weight,
+                                ?state,
+                                "cannot reach validity threshold for effects!"
+                            );
+                            Ok(ReduceOutput::End(state))
+                        } else {
+                            Ok(ReduceOutput::Continue(state))
+                        }
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                self.timeouts.pre_quorum_timeout,
+            )
+            .await?;
+
+        final_state
+            .true_effects
+            .ok_or(SuiError::TooManyIncorrectAuthorities {
+                errors: final_state.errors,
+            })
+            .tap_err(|e| info!(?digest, "execute_cert_to_true_effects failed: {}", e))
     }
 }

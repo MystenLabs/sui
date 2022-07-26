@@ -515,16 +515,17 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
                 &(object.owner, object_ref.0),
                 &ObjectInfo::new(&object_ref, object),
             )?;
+            // Only initialize lock for owned objects.
+            // TODO: Skip this for quasi-shared objects.
+            self.lock_service
+                .initialize_locks(&[object_ref], false /* is_force_reset */)
+                .await?;
         }
 
         // Update the parent
         self.tables
             .parent_sync
             .insert(&object_ref, &object.previous_transaction)?;
-
-        self.lock_service
-            .initialize_locks(&[object_ref], false /* is_force_reset */)
-            .await?;
 
         Ok(())
     }

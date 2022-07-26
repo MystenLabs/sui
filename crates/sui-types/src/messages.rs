@@ -6,8 +6,8 @@ use super::{base_types::*, batch::*, committee::Committee, error::*, event::Even
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AggregateAccountSignature, AggregateAuthoritySignature, AuthoritySignInfo,
-    AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable, EmptySignInfo, Signable,
-    Signature, SuiAuthoritySignature, VerificationObligation,
+    AuthoritySignature, AuthorityStrongQuorumSignInfo, EmptySignInfo, Signable, Signature,
+    SuiAuthoritySignature, VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
@@ -326,10 +326,7 @@ pub struct TransactionData {
     pub gas_budget: u64,
 }
 
-impl TransactionData
-where
-    Self: BcsSignable,
-{
+impl TransactionData {
     pub fn new(
         kind: TransactionKind,
         sender: SuiAddress,
@@ -1405,8 +1402,6 @@ impl TransactionEffects {
     }
 }
 
-impl BcsSignable for TransactionEffects {}
-
 impl Display for TransactionEffects {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
@@ -1762,8 +1757,6 @@ impl Display for CertifiedTransaction {
     }
 }
 
-impl BcsSignable for TransactionData {}
-
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConsensusOutput {
     #[serde(with = "serde_bytes")]
@@ -1832,8 +1825,6 @@ pub struct EpochInfo {
     /// from the previous epoch. The first checkpoint of the first epoch would be 0.
     last_checkpoint: CheckpointSequenceNumber,
 }
-
-impl BcsSignable for EpochInfo {}
 
 impl EpochInfo {
     pub fn new(

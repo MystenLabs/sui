@@ -739,7 +739,7 @@ where
     let next_checkpoint_sequence_number = checkpoint_db.lock().next_checkpoint();
     let mut fragments_num = 0;
 
-    for authority in committee.shuffle_by_stake() {
+    for authority in committee.shuffle_by_stake(None, None).iter() {
         // We have ran out of authorities?
         if available_authorities.is_empty() {
             // We have created as many fragments as possible, so exit.
