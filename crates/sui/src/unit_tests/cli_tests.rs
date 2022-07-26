@@ -115,6 +115,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
                 public_key: get_key_pair::<AuthorityKeyPair>().1.public().into(),
                 stake: 1,
                 delegation: 1,
+                gas_price: 1,
                 network_address: sui_config::utils::new_network_address(),
                 narwhal_primary_to_primary: sui_config::utils::new_network_address(),
                 narwhal_worker_to_primary: sui_config::utils::new_network_address(),
