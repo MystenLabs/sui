@@ -1237,6 +1237,11 @@ where
     // TODO: Get rid of the sync API.
     // https://github.com/MystenLabs/sui/issues/1045
     async fn sync_account_state(&self, account_addr: SuiAddress) -> Result<(), anyhow::Error> {
+        debug!(
+            ?account_addr,
+            "Syncing account states from validators starts."
+        );
+
         let (active_object_certs, _deleted_refs_certs) = self
             .authorities
             .sync_all_owned_objects(account_addr, Duration::from_secs(60))
@@ -1246,7 +1251,7 @@ where
             ?active_object_certs,
             deletec = ?_deleted_refs_certs,
             ?account_addr,
-            "Syncing account states"
+            "Syncing account states from validators ends."
         );
 
         for (object, _option_layout, _option_cert) in active_object_certs {
@@ -1254,6 +1259,7 @@ where
                 .insert_object_direct(object.compute_object_reference(), &object)
                 .await?;
         }
+        debug!(?account_addr, "Syncing account states ends.");
 
         Ok(())
     }
