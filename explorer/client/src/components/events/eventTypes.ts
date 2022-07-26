@@ -10,16 +10,53 @@
 }
 */
 
-import type { ObjectId, ObjectOwner, SuiAddress } from '@mysten/sui.js';
+import type { ObjectId, ObjectOwner, SequenceNumber, SuiAddress } from '@mysten/sui.js';
 
-export type NewObjectEvent = {
-    newObject: {
-        packageId: ObjectId;
-        transactionModule: string;
-        sender: SuiAddress;
-        recipient: ObjectOwner;
-        objectId: ObjectId;
-    };
+// event types mirror those in "sui-json-rpc-types/lib.rs"
+export type MoveEvent = {
+    packageId: ObjectId;
+    transactionModule: string;
+    sender: SuiAddress;
+    type: string;
+    fields?: object;        // TODO - better type
+    bcs: string;
+}
+
+export type PublishEvent = {
+    sender: SuiAddress;
+    packageId: ObjectId;
+}
+
+export type TransferObjectEvent = {
+    packageId: ObjectId;
+    transactionModule: string;
+    sender: SuiAddress;
+    recipient: ObjectOwner;
+    objectId: ObjectId;
+    version: SequenceNumber;
+    type: string;   // TODO - better type
+}
+
+export type DeleteObjectEvent = {
+    packageId: ObjectId;
+    transactionModule: string;
+    sender: SuiAddress;
+    objectId: ObjectId;
 };
 
-//type SuiEventType = NewObjectEvent;
+export type NewObjectEvent = {
+    packageId: ObjectId;
+    transactionModule: string;
+    sender: SuiAddress;
+    recipient: ObjectOwner;
+    objectId: ObjectId;
+};
+
+export type SuiEventType =
+    { moveEvent: MoveEvent } |
+    { publish: PublishEvent } |
+    { transferObject: TransferObjectEvent } |
+    { deleteObject: DeleteObjectEvent }|
+    { newObject: NewObjectEvent } |
+    { epochChange: bigint } |
+    { checkpoint: bigint }

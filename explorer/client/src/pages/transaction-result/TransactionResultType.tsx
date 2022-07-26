@@ -6,6 +6,7 @@ import type {
     ExecutionStatusType,
     SuiObjectRef,
 } from '@mysten/sui.js';
+import { SuiEventType } from '../../components/events/eventTypes';
 
 export type DataType = CertifiedTransaction & {
     loadState: string;
@@ -15,6 +16,7 @@ export type DataType = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
+    events: SuiEventType[];
     timestamp_ms: number | null;
 };
 
