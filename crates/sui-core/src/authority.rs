@@ -202,13 +202,13 @@ impl AuthorityMetrics {
             .unwrap(),
             follower_items_streamed: register_int_counter_with_registry!(
                 "follower_items_streamed",
-                "Number of transactions/signed .tables.batches streamed to followers",
+                "Number of transactions/signed batches streamed to followers",
                 registry,
             )
             .unwrap(),
             follower_items_loaded: register_int_counter_with_registry!(
                 "follower_items_loaded",
-                "Number of transactions/signed .tables.batches loaded from db to be streamed to followers",
+                "Number of transactions/signed batches loaded from db to be streamed to followers",
                 registry,
             )
             .unwrap(),
@@ -294,7 +294,7 @@ pub struct AuthorityState {
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
-    /// and create .tables.batches for this authority.
+    /// and create batches for this authority.
     /// Keep as None if there is no need for this.
     pub(crate) batch_channels: BroadcastSender, // TODO: remove pub
 
@@ -895,7 +895,7 @@ impl AuthorityState {
     }
 
     /// Handles a request for a batch info. It returns a sequence of
-    /// [.tables.batches, transactions, .tables.batches, transactions] as UpdateItems, and a flag
+    /// [batches, transactions, batches, transactions] as UpdateItems, and a flag
     /// that if true indicates the request goes beyond the last batch in the
     /// database.
     pub async fn handle_batch_info_request(
@@ -1065,10 +1065,10 @@ impl AuthorityState {
 
         state
             .init_batches_from_database()
-            .expect("Init .tables.batches failed!");
+            .expect("Init batches failed!");
 
         // If a checkpoint store is present, ensure it is up-to-date with the latest
-        // .tables.batches.
+        // batches.
         if let Some(checkpoint) = &state.checkpoints {
             let next_expected_tx = checkpoint.lock().next_transaction_sequence_expected();
 
@@ -1079,7 +1079,7 @@ impl AuthorityState {
                 .batches
                 .iter()
                 .skip_to(&next_expected_tx)
-                .expect("Seeking .tables.batches should never fail at this point")
+                .expect("Seeking batches should never fail at this point")
             {
                 let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                     .database
