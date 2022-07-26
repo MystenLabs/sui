@@ -556,7 +556,7 @@ where
 
     pub(crate) async fn quorum_map_then_reduce_with_timeout_and_prefs<'a, S, V, FMap, FReduce>(
         &'a self,
-        authority_prefences: Option<&HashSet<AuthorityName>>,
+        authority_prefences: Option<&BTreeSet<AuthorityName>>,
         initial_state: S,
         map_each_authority: FMap,
         reduce_result: FReduce,
@@ -623,9 +623,9 @@ where
     async fn quorum_once_inner<'a, S, FMap>(
         &'a self,
         // try these authorities first
-        preferences: Option<&HashSet<AuthorityName>>,
+        preferences: Option<&BTreeSet<AuthorityName>>,
         // only attempt from these authorities.
-        restrict_to: Option<&HashSet<AuthorityName>>,
+        restrict_to: Option<&BTreeSet<AuthorityName>>,
         // The async function used to apply to each authority. It takes an authority name,
         // and authority client parameter and returns a Result<V>.
         map_each_authority: FMap,
@@ -673,9 +673,9 @@ where
     pub(crate) async fn quorum_once_with_timeout<'a, S, FMap>(
         &'a self,
         // try these authorities first
-        preferences: Option<&HashSet<AuthorityName>>,
+        preferences: Option<&BTreeSet<AuthorityName>>,
         // only attempt from these authorities.
-        restrict_to: Option<&HashSet<AuthorityName>>,
+        restrict_to: Option<&BTreeSet<AuthorityName>>,
         // The async function used to apply to each authority. It takes an authority name,
         // and authority client parameter and returns a Result<V>.
         map_each_authority: FMap,
@@ -1601,7 +1601,7 @@ where
         &self,
         request: &CheckpointRequest,
         // authorities known to have the checkpoint we are requesting.
-        authorities: &HashSet<AuthorityName>,
+        authorities: &BTreeSet<AuthorityName>,
         timeout_total: Option<Duration>,
     ) -> SuiResult<CheckpointResponse> {
         self.quorum_once_with_timeout(
@@ -1618,7 +1618,7 @@ where
         &self,
         request: &CheckpointRequest,
         // authorities known to have the checkpoint we are requesting.
-        authorities: &HashSet<AuthorityName>,
+        authorities: &BTreeSet<AuthorityName>,
         timeout_total: Option<Duration>,
     ) -> SuiResult<(CertifiedCheckpointSummary, Option<CheckpointContents>)> {
         self.quorum_once_with_timeout(
@@ -1688,7 +1688,7 @@ where
         &self,
         digests: &ExecutionDigests,
         // authorities known to have the effects we are requesting.
-        authorities: Option<&HashSet<AuthorityName>>,
+        authorities: Option<&BTreeSet<AuthorityName>>,
         timeout_total: Option<Duration>,
     ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
         self.quorum_once_with_timeout(
@@ -1744,7 +1744,7 @@ where
             errors: Vec<(AuthorityName, SuiError)>,
         }
 
-        let signers: HashSet<_> = cert
+        let signers: BTreeSet<_> = cert
             .auth_sign_info
             .authorities(&self.committee)
             .filter_map(|r| r.ok())

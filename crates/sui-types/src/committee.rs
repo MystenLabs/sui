@@ -10,7 +10,7 @@ use rand_latest::rngs::OsRng;
 use rand_latest::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 pub type EpochId = u64;
 
@@ -154,9 +154,9 @@ impl Committee {
     pub fn shuffle_by_stake(
         &self,
         // try these authorities first
-        preferences: Option<&HashSet<AuthorityName>>,
+        preferences: Option<&BTreeSet<AuthorityName>>,
         // only attempt from these authorities.
-        restrict_to: Option<&HashSet<AuthorityName>>,
+        restrict_to: Option<&BTreeSet<AuthorityName>>,
     ) -> Vec<AuthorityName> {
         let restricted = self
             .voting_rights
@@ -293,7 +293,7 @@ mod test {
 
         assert_eq!(committee.shuffle_by_stake(None, None).len(), 3);
 
-        let mut pref = HashSet::new();
+        let mut pref = BTreeSet::new();
         pref.insert(a2);
 
         // preference always comes first
@@ -307,7 +307,7 @@ mod test {
             );
         }
 
-        let mut restrict = HashSet::new();
+        let mut restrict = BTreeSet::new();
         restrict.insert(a2);
 
         for _ in 0..100 {
@@ -317,10 +317,10 @@ mod test {
         }
 
         // empty preferences are valid
-        let res = committee.shuffle_by_stake(Some(&HashSet::new()), None);
+        let res = committee.shuffle_by_stake(Some(&BTreeSet::new()), None);
         assert_eq!(3, res.len());
 
-        let res = committee.shuffle_by_stake(None, Some(&HashSet::new()));
+        let res = committee.shuffle_by_stake(None, Some(&BTreeSet::new()));
         assert_eq!(0, res.len());
     }
 }

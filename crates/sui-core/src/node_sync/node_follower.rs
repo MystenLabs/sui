@@ -11,7 +11,7 @@ use async_trait::async_trait;
 
 use tokio_stream::{Stream, StreamExt};
 
-use std::collections::{hash_map, HashMap, HashSet};
+use std::collections::{hash_map, BTreeSet, HashMap};
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
@@ -59,7 +59,7 @@ impl EffectsStakeMap {
     }
 
     // Get the set of authorities who voted for a digest.
-    pub fn voters(&self, digest: &TransactionEffectsDigest) -> HashSet<AuthorityName> {
+    pub fn voters(&self, digest: &TransactionEffectsDigest) -> BTreeSet<AuthorityName> {
         self.effects_vote_map
             .get(digest)
             .unwrap_or(&HashMap::new())
@@ -558,7 +558,7 @@ where
     // Transactions are not currently persisted anywhere, however (validators delete them eagerly).
     async fn download_cert_and_effects(
         &self,
-        authorities_with_cert: Option<HashSet<AuthorityName>>,
+        authorities_with_cert: Option<BTreeSet<AuthorityName>>,
         req: &DownloadRequest,
     ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
         let tx_digest = req.transaction_digest();
@@ -599,7 +599,7 @@ where
     }
 
     async fn download_impl(
-        authorities: Option<HashSet<AuthorityName>>,
+        authorities: Option<BTreeSet<AuthorityName>>,
         aggregator: Arc<AuthorityAggregator<A>>,
         req: &DownloadRequest,
         node_sync_store: Arc<NodeSyncStore>,

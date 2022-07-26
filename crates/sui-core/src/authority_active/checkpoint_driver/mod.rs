@@ -3,7 +3,7 @@
 
 use std::ops::Deref;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet},
     sync::Arc,
     time::Duration,
 };
@@ -566,7 +566,7 @@ where
             Ok(true)
         }
         Action::NewCert => {
-            let available_authorities: HashSet<_> = checkpoint
+            let available_authorities: BTreeSet<_> = checkpoint
                 .signatory_authorities(committee)
                 .filter_map(|x| match x {
                     Ok(&a) => {
@@ -620,7 +620,7 @@ where
     let latest_checkpoint = checkpoint_db.lock().latest_stored_checkpoint()?;
     // We use the latest available authorities not the authorities that signed the checkpoint
     // since these might be gone after the epoch they were active.
-    let available_authorities: HashSet<_> = latest_known_checkpoint
+    let available_authorities: BTreeSet<_> = latest_known_checkpoint
         .signatory_authorities(&net.committee)
         .collect::<SuiResult<BTreeSet<_>>>()?
         .iter()
@@ -683,7 +683,7 @@ where
 pub async fn get_one_checkpoint_with_contents<A>(
     net: Arc<AuthorityAggregator<A>>,
     sequence_number: CheckpointSequenceNumber,
-    available_authorities: &HashSet<AuthorityName>,
+    available_authorities: &BTreeSet<AuthorityName>,
 ) -> Result<(CertifiedCheckpointSummary, CheckpointContents), SuiError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -702,7 +702,7 @@ pub async fn get_one_checkpoint<A>(
     net: Arc<AuthorityAggregator<A>>,
     sequence_number: CheckpointSequenceNumber,
     contents: bool,
-    available_authorities: &HashSet<AuthorityName>,
+    available_authorities: &BTreeSet<AuthorityName>,
 ) -> Result<(CertifiedCheckpointSummary, Option<CheckpointContents>), SuiError>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
