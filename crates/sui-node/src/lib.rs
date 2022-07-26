@@ -143,10 +143,7 @@ impl SuiNode {
                     let epoch_validators = &sui_system_state.validators.active_validators;
 
                     for validator in epoch_validators {
-                        let net_addr: &[u8] = &validator.metadata.net_address.clone();
-                        let str_addr = std::str::from_utf8(net_addr)?;
-                        let address: Multiaddr = str_addr.parse()?;
-                        //let address = Multiaddr::try_from(net_addr)?;
+                        let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
                         let channel = net_config.connect_lazy(&address)?;
                         let client = NetworkAuthorityClient::new(channel);
                         let name: &[u8] = &validator.metadata.name;

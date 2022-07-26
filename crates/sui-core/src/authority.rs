@@ -298,7 +298,7 @@ pub struct AuthorityState {
     pub event_handler: Option<Arc<EventHandler>>,
 
     /// The checkpoint store
-    pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
+    pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
