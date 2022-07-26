@@ -226,6 +226,10 @@ To [experiment with Devnet](../explore/devnet.md) or [use the Sui Wallet Browser
 To request SUI test tokens:
 
 1. Join the [Sui Discord](https://discord.com/invite/sui) If you haven’t already.
+1. [Start the Sui network](cli-client.md#starting-the-network) with:
+   ```shell
+   $ sui start
+   ```
 1. Identify your address through either the Sui Wallet Browser Extension or by running the command:
    ```shell
    $ sui client active-address
