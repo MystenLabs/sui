@@ -6,16 +6,12 @@ use std::path::PathBuf;
 
 use insta::assert_yaml_snapshot;
 use multiaddr::Multiaddr;
+use narwhal_crypto::traits::KeyPair;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
-use sui_config::NetworkConfig;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
-
-#[test]
-fn genesis_snapshot_matches() {
-    let genesis = Builder::new().build();
-    assert_yaml_snapshot!(genesis);
-}
+use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_types::crypto::get_key_pair_from_rng;
 
 #[test]
 fn genesis_config_snapshot_matches() {
@@ -23,6 +19,43 @@ fn genesis_config_snapshot_matches() {
     assert_yaml_snapshot!(genesis_config, {
         ".accounts[].gas_objects[].object_id" => "[fake object id]"
     });
+}
+
+#[test]
+fn empty_genesis_snapshot_matches() {
+    let genesis = Builder::new().build();
+    assert_yaml_snapshot!(genesis);
+}
+
+#[test]
+fn populated_genesis_snapshot_matches() {
+    // let mut rng = StdRng::from_seed([0; 32]);
+    let genesis_config = GenesisConfig::for_local_testing();
+    let (_account_keys, objects) = genesis_config
+        .generate_accounts(&mut StdRng::from_seed([0; 32]))
+        .unwrap();
+    let key = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let validator = ValidatorInfo {
+        name: "0".into(),
+        public_key: key.public().into(),
+        stake: 1,
+        delegation: 0,
+        network_address: Multiaddr::empty(),
+        narwhal_primary_to_primary: Multiaddr::empty(),
+        narwhal_worker_to_primary: Multiaddr::empty(),
+        narwhal_primary_to_worker: Multiaddr::empty(),
+        narwhal_worker_to_worker: Multiaddr::empty(),
+        narwhal_consensus_address: Multiaddr::empty(),
+    };
+
+    let genesis = Builder::new()
+        .add_objects(objects)
+        .add_validator(validator)
+        .build();
+    assert_yaml_snapshot!(genesis.validator_set());
+    assert_yaml_snapshot!(genesis.committee().unwrap());
+    assert_yaml_snapshot!(genesis.narwhal_committee());
+    assert_yaml_snapshot!(genesis.sui_system_object());
 }
 
 #[test]
