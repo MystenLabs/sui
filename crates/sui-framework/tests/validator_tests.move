@@ -27,6 +27,7 @@ module sui::validator_tests {
                 x"FFFF",
                 init_stake,
                 option::none(),
+                1,
                 ctx
             );
             assert!(validator::stake_amount(&validator) == 10, 0);
@@ -57,6 +58,7 @@ module sui::validator_tests {
             x"FFFF",
             init_stake,
             option::none(),
+            1,
             ctx
         );
 
@@ -80,8 +82,8 @@ module sui::validator_tests {
             assert!(validator::pending_stake_amount(&validator) == 30, 0);
             assert!(validator::pending_withdraw(&validator) == 5, 0);
 
-            // Calling `adjust_stake` will withdraw the coin and transfer to sender.
-            validator::adjust_stake(&mut validator);
+            // Calling `adjust_stake_and_gas_price` will withdraw the coin and transfer to sender.
+            validator::adjust_stake_and_gas_price(&mut validator);
 
             assert!(validator::stake_amount(&validator) == 35, 0);
             assert!(validator::pending_stake_amount(&validator) == 0, 0);

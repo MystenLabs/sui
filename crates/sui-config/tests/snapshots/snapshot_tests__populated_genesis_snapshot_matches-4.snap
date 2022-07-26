@@ -50,6 +50,7 @@ validators:
         net_address: []
         next_epoch_stake: 1
         next_epoch_delegation: 0
+        next_epoch_gas_price: 1
       stake_amount: 1
       delegation: 0
       pending_stake: 0
@@ -59,6 +60,7 @@ validators:
       delegator_count: 0
       pending_delegator_count: 0
       pending_delegator_withdraw_count: 0
+      gas_price: 1
   pending_validators: []
   pending_removals: []
   next_epoch_validators:
@@ -101,6 +103,7 @@ validators:
       net_address: []
       next_epoch_stake: 1
       next_epoch_delegation: 0
+      next_epoch_gas_price: 1
 treasury_cap:
   value: 100000000000001
 storage_fund:
@@ -111,4 +114,5 @@ parameters:
   storage_gas_price: 1
 delegation_reward:
   value: 0
+reference_gas_price: 0
 

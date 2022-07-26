@@ -208,6 +208,7 @@ pub fn get_new_validator() -> ValidatorInfo {
         public_key: keypair.public().into(),
         stake: 1,
         delegation: 0,
+        gas_price: 1,
         network_address: sui_config::utils::new_network_address(),
         narwhal_primary_to_primary: sui_config::utils::new_network_address(),
         narwhal_worker_to_primary: sui_config::utils::new_network_address(),
