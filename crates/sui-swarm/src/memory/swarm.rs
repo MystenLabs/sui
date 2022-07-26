@@ -73,7 +73,7 @@ impl<R> SwarmBuilder<R> {
 
 impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
     /// Create the configured Swarm.
-    pub fn build(self) -> Swarm {
+    pub fn build(self, fullnode_count: Option<usize>) -> Swarm {
         let dir = if let Some(dir) = self.dir {
             SwarmDirectory::Persistent(dir)
         } else {
@@ -97,11 +97,19 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
             .map(|config| (config.sui_address(), Node::new(config.to_owned())))
             .collect();
 
+        let mut fullnodes = HashMap::new();
+
+        if let Some(cnt) = fullnode_count {
+            (0..cnt).for_each(|_| {
+                let config = network_config.generate_fullnode_config();
+                fullnodes.insert(config.sui_address(), Node::new(config));
+            });
+        }
         Swarm {
             dir,
             network_config,
             validators,
-            fullnodes: HashMap::new(),
+            fullnodes,
         }
     }
 
@@ -141,11 +149,20 @@ impl Swarm {
     /// Start all of the Validators associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
         // Start all the validators
-        let start_handles = self
+        let mut start_handles = self
             .validators
             .values_mut()
             .map(|validator| validator.spawn())
             .collect::<Result<Vec<_>>>()?;
+
+        // start all fullnodes if any
+        start_handles.append(
+            &mut self
+                .fullnodes
+                .values_mut()
+                .map(|node| node.spawn())
+                .collect::<Result<Vec<_>>>()?,
+        );
 
         try_join_all(start_handles).await?;
 
@@ -265,7 +282,7 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let mut swarm = Swarm::builder()
             .committee_size(NonZeroUsize::new(4).unwrap())
-            .build();
+            .build(None);
 
         swarm.launch().await.unwrap();
 

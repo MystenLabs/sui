@@ -1124,7 +1124,6 @@ impl SuiTransactionEffects {
             events: effect
                 .events
                 .into_iter()
-                // TODO: figure out how to map the non-Move events
                 .map(|event| SuiEvent::try_from(event, resolver))
                 .collect::<Result<_, _>>()?,
             dependencies: effect.dependencies,
