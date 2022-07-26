@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
-use std::path::PathBuf;
 use std::{collections::BTreeMap, sync::Arc};
 
 use futures::future;
@@ -10,8 +9,7 @@ use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
-use move_package::BuildConfig;
-use serde_json::json;
+use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
 use tokio::time::{sleep, Duration};
@@ -19,16 +17,15 @@ use tracing::info;
 
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
-use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     SplitCoinResponse, SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue,
-    SuiObjectInfo, SuiObjectRead, TransactionResponse,
+    SuiObjectInfo, SuiObjectRead,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
 use sui_types::{
-    base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest},
-    messages::{Transaction, TransactionInfoRequest},
+    base_types::{ObjectID, SuiAddress, TransactionDigest},
+    messages::TransactionInfoRequest,
 };
 use test_utils::network::setup_network_and_wallet;
 
@@ -125,138 +122,6 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn publish_basics_package(context: &WalletContext, sender: SuiAddress) -> ObjectRef {
-    info!(?sender, "publish_basics_package");
-
-    let transaction = {
-        let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        path.push("../../sui_programmability/examples/basics");
-
-        let build_config = BuildConfig::default();
-        let modules = sui_framework::build_move_package(&path, build_config).unwrap();
-
-        let all_module_bytes = modules
-            .iter()
-            .map(|m| {
-                let mut module_bytes = Vec::new();
-                m.serialize(&mut module_bytes).unwrap();
-                module_bytes
-            })
-            .collect();
-
-        let data = context
-            .gateway
-            .publish(sender, all_module_bytes, None, 50000)
-            .await
-            .unwrap();
-
-        let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
-        Transaction::new(data, signature)
-    };
-
-    let resp = context
-        .gateway
-        .execute_transaction(transaction)
-        .await
-        .unwrap();
-
-    if let TransactionResponse::PublishResponse(resp) = resp {
-        let package_ref = resp.package.to_object_ref();
-        info!(?package_ref, "package created");
-        package_ref
-    } else {
-        panic!()
-    }
-}
-
-async fn move_transaction(
-    context: &WalletContext,
-    module: &'static str,
-    function: &'static str,
-    package_ref: ObjectRef,
-    arguments: Vec<SuiJsonValue>,
-    sender: SuiAddress,
-    gas_object: Option<ObjectID>,
-) -> TransactionResponse {
-    info!(?package_ref, ?arguments, "move_transaction");
-
-    let data = context
-        .gateway
-        .move_call(
-            sender,
-            package_ref.0,
-            module.into(),
-            function.into(),
-            vec![], // type_args
-            arguments,
-            gas_object,
-            50000,
-        )
-        .await
-        .unwrap();
-
-    let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
-    let tx = Transaction::new(data, signature);
-
-    context.gateway.execute_transaction(tx).await.unwrap()
-}
-
-async fn publish_package_and_make_counter(
-    context: &WalletContext,
-    sender: SuiAddress,
-) -> (ObjectRef, ObjectID) {
-    let package_ref = publish_basics_package(context, sender).await;
-
-    info!(?package_ref);
-
-    let create_shared_obj_resp = move_transaction(
-        context,
-        "counter",
-        "create",
-        package_ref,
-        vec![],
-        sender,
-        None,
-    )
-    .await;
-
-    let counter_id = if let TransactionResponse::EffectResponse(effects) = create_shared_obj_resp {
-        effects.effects.created[0].clone().reference.object_id
-    } else {
-        panic!()
-    };
-    info!(?counter_id);
-    (package_ref, counter_id)
-}
-
-async fn increment_counter(
-    context: &WalletContext,
-    sender: SuiAddress,
-    gas_object: Option<ObjectID>,
-    package_ref: ObjectRef,
-    counter_id: ObjectID,
-) -> TransactionDigest {
-    let resp = move_transaction(
-        context,
-        "counter",
-        "increment",
-        package_ref,
-        vec![SuiJsonValue::new(json!(counter_id.to_hex_literal())).unwrap()],
-        sender,
-        gas_object,
-    )
-    .await;
-
-    let digest = if let TransactionResponse::EffectResponse(effects) = resp {
-        effects.certificate.transaction_digest
-    } else {
-        panic!()
-    };
-
-    info!(?digest);
-    digest
-}
-
 #[tokio::test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
@@ -268,10 +133,10 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
 
     let sender = context.config.accounts.get(0).cloned().unwrap();
 
-    let (package_ref, counter_id) = publish_package_and_make_counter(&context, sender).await;
+    let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
 
-    let digest = increment_counter(&context, sender, None, package_ref, counter_id).await;
-
+    let effects = increment_counter(&context, sender, None, package_ref, counter_id).await;
+    let digest = effects.certificate.transaction_digest;
     wait_for_tx(digest, node.state().clone()).await;
 
     Ok(())
@@ -286,8 +151,9 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config).await?;
     let sender = context.config.accounts.get(0).cloned().unwrap();
-    let (package_ref, counter_id) = publish_package_and_make_counter(&context, sender).await;
-    let digest = increment_counter(&context, sender, None, package_ref, counter_id).await;
+    let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
+    let effects = increment_counter(&context, sender, None, package_ref, counter_id).await;
+    let digest = effects.certificate.transaction_digest;
 
     wait_for_tx(digest, node.state().clone()).await;
     let txes = node
@@ -433,7 +299,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let mut futures = Vec::new();
 
     let sender = context.config.accounts.get(0).cloned().unwrap();
-    let (package_ref, counter_id) = publish_package_and_make_counter(&context, sender).await;
+    let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
 
     let context = Arc::new(Mutex::new(context));
 
@@ -492,7 +358,10 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
                 let context = &context.lock().await;
                 shared_tx_digest = Some(
-                    increment_counter(context, sender, gas_object, package_ref, counter_id).await,
+                    increment_counter(context, sender, gas_object, package_ref, counter_id)
+                        .await
+                        .certificate
+                        .transaction_digest,
                 );
             }
             tx.send((owned_tx_digest.unwrap(), shared_tx_digest.unwrap()))
