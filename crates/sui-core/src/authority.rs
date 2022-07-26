@@ -40,12 +40,12 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
-
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
     committee::Committee,
     crypto::AuthoritySignature,
+    crypto::PublicKey,
     error::{SuiError, SuiResult},
     fp_ensure,
     messages::*,
@@ -1497,16 +1497,20 @@ impl AuthorityState {
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
+    type PubKey = PublicKey;
     type Transaction = ConsensusTransaction;
     type Error = SuiError;
+    type Outcome = Vec<u8>;
 
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
     async fn handle_consensus_transaction(
         &self,
+        // TODO [2533]: use this once integrating Narwhal reconfiguration
+        _consensus_output: &narwhal_consensus::ConsensusOutput<Self::PubKey>,
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<Vec<u8>, Self::Error> {
+    ) -> Result<(Self::Outcome, Option<narwhal_config::Committee<PublicKey>>), Self::Error> {
         self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
@@ -1528,7 +1532,8 @@ impl ExecutionState for AuthorityState {
                     .await?;
 
                 // TODO: This return time is not ideal.
-                Ok(Vec::default())
+                // TODO [2533]: edit once integrating Narwhal reconfiguration
+                Ok((Vec::default(), None))
             }
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
@@ -1556,7 +1561,8 @@ impl ExecutionState for AuthorityState {
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
                 // is not expecting any reply.
-                Ok(Vec::default())
+                // TODO [2533]: edit once integrating Narwhal reconfiguration
+                Ok((Vec::default(), None))
             }
         }
     }

@@ -14,7 +14,7 @@ signature = "1.5.0"
 camino = "1.0.9"
 ed25519-dalek = "1"
 base64ct = "1"
-tokio = { version = "1.20.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 async-trait = "0.1.53"
 serde_with = { version = "1.14.0", features = ["hex"] }
 tracing = "0.1.35"
