@@ -5,7 +5,6 @@ use super::{
     authority_store::{AuthenticatedEpoch, InternalSequenceNumber, ObjectKey},
     *,
 };
-use anyhow::anyhow;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
