@@ -208,7 +208,6 @@ impl CheckpointStore {
         Ok(())
     }
 
-    #[cfg(test)]
     pub fn set_locals_for_testing(&mut self, locals: CheckpointLocals) -> Result<(), SuiError> {
         self.set_locals(Arc::new(locals.clone()), locals)
     }

@@ -39,6 +39,7 @@ async fn test_start_epoch_change() {
     let (net, states) = init_local_authorities(4, genesis_objects.clone()).await;
     let state = states[0].clone();
     // Set the checkpoint number to be near the end of epoch.
+
     state
         .checkpoints
         .as_ref()

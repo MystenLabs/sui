@@ -192,29 +192,26 @@ where
         net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
 
         for validator in next_epoch_validators {
-            let net_addr: &[u8] = &validator.net_address.clone();
-            let str_addr =
-                std::str::from_utf8(net_addr).map_err(|e| SuiError::GenericAuthorityError {
+            let address = Multiaddr::try_from(validator.net_address).map_err(|e| {
+                SuiError::GenericAuthorityError {
                     error: e.to_string(),
-                });
-            let address: Multiaddr = str_addr
-                .unwrap()
-                .parse()
-                .map_err(|e: multiaddr::Error| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                })
-                .unwrap();
+                }
+            })?;
 
-            let channel = net_config
-                .connect_lazy(&address)
-                .map_err(|e| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                })
-                .unwrap();
+            let channel =
+                net_config
+                    .connect_lazy(&address)
+                    .map_err(|e| SuiError::GenericAuthorityError {
+                        error: e.to_string(),
+                    })?;
             let client: A = A::recreate(channel);
-            let name: &[u8] = &validator.name;
-            let public_key_bytes = PublicKeyBytes::from_bytes(name)
-                .map_err(|e| SuiError::KeyConversionError(e.to_string()))?;
+
+            let pub_key_raw: &[u8] = &validator.pubkey_bytes;
+            let public_key_bytes = PublicKeyBytes::from_bytes(pub_key_raw).map_err(|e| {
+                SuiError::GenericAuthorityError {
+                    error: e.to_string(),
+                }
+            })?;
             new_clients.insert(public_key_bytes, client);
         }
 

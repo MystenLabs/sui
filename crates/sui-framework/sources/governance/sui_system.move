@@ -99,17 +99,15 @@ module sui::sui_system {
         stake: Coin<SUI>,
         ctx: &mut TxContext,
     ) {
-        std::debug::print<u64>(&self.epoch);
-
-//        assert!(
-//            validator_set::total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
-//            0
-//        );
-//        let stake_amount = coin::value(&stake);
-//        assert!(
-//            stake_amount >= self.parameters.min_validator_stake,
-//            0
-//        );
+        assert!(
+            validator_set::total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
+            0
+        );
+        let stake_amount = coin::value(&stake);
+        assert!(
+            stake_amount >= self.parameters.min_validator_stake,
+            0
+        );
         let validator = validator::new(
             tx_context::sender(ctx),
             pubkey_bytes,
