@@ -6,6 +6,7 @@ use crate::authority_active::gossip::configurable_batch_action_client::{
     init_configurable_authorities, BatchAction, ConfigurableBatchActionClient,
 };
 use crate::authority_active::MAX_RETRY_DELAY_MS;
+use crate::authority_aggregator::AuthorityAggregator;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
