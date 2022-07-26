@@ -10,7 +10,9 @@ use sui_config::genesis::Genesis;
 use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_types::{base_types::*, messages::*, object::Owner};
+use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
+
+use futures::stream::StreamExt;
 
 use clap::*;
 
@@ -69,6 +71,40 @@ pub enum ToolCommand {
         db_path: String,
         #[clap(subcommand)]
         cmd: Option<DbToolCommand>,
+    },
+
+    /// Pull down the batch stream for a validator(s).
+    /// Note that this command currently operates sequentially, so it will block on the first
+    /// validator indefinitely. Therefore you should generally use this with a --validator=
+    /// argument.
+    #[clap(name = "batch-stream")]
+    BatchStream {
+        #[clap(long, help = "SequenceNumber to start at")]
+        seq: Option<u64>,
+
+        #[clap(long, help = "Number of items to request", default_value_t = 1000)]
+        len: u64,
+
+        #[clap(
+            long,
+            help = "Validator to fetch from - if not specified, all validators are queried"
+        )]
+        validator: Option<AuthorityName>,
+
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+    },
+
+    #[clap(name = "dump-validators")]
+    DumpValidators {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+    },
+
+    #[clap(name = "dump-genesis")]
+    DumpGenesis {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
     },
 }
 
@@ -292,9 +328,59 @@ async fn get_object(
     ret
 }
 
+async fn handle_batch(client: &dyn AuthorityAPI, req: &BatchInfoRequest) {
+    let mut streamx = Box::pin(client.handle_batch_stream(req.clone()).await.unwrap());
+
+    while let Some(item) = streamx.next().await {
+        match item {
+            Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
+                println!("batch: {:?}", signed_batch);
+            }
+
+            Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests)))) => {
+                println!("item: {:?}, {:?}", seq, digests);
+            }
+
+            // Return any errors.
+            Err(err) => {
+                println!("error: {}", err);
+            }
+        }
+    }
+}
+
 impl ToolCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
         match self {
+            ToolCommand::BatchStream {
+                seq,
+                validator,
+                genesis,
+                len,
+            } => {
+                let clients = make_clients(genesis)?;
+
+                let clients: Vec<_> = clients
+                    .iter()
+                    .filter(|(name, _)| {
+                        if let Some(v) = validator {
+                            v == **name
+                        } else {
+                            true
+                        }
+                    })
+                    .collect();
+
+                let req = BatchInfoRequest {
+                    start: seq,
+                    length: len,
+                };
+
+                for (name, c) in clients.iter() {
+                    println!("validator batch stream: {:?}", name);
+                    handle_batch(*c, &req).await;
+                }
+            }
             ToolCommand::FetchObject {
                 id,
                 validator,
@@ -343,6 +429,16 @@ impl ToolCommand {
                     Some(c) => execute_db_tool_command(path, c)?,
                     None => print_db_all_tables(path)?,
                 }
+            }
+
+            ToolCommand::DumpValidators { genesis } => {
+                let genesis = Genesis::load(genesis).unwrap();
+                println!("{:#?}", genesis.validator_set());
+            }
+
+            ToolCommand::DumpGenesis { genesis } => {
+                let genesis = Genesis::load(genesis).unwrap();
+                println!("{:#?}", genesis);
             }
         };
         Ok(())
