@@ -12,7 +12,7 @@ There are two ways to pass objects by reference: read-only references (`&T`) and
 The `ColorObject` we defined in the previous chapter looks like:
 ```rust
 struct ColorObject has key {
-    info: Info,
+    id: UID,
     red: u8,
     green: u8,
     blue: u8,
@@ -34,7 +34,7 @@ In the above function signature, `from_object` can be a read-only reference beca
 > :bulb: Although `from_object` is a read-only reference in this transaction, it is still a mutable object in Sui storage--another transaction could be sent to mutate the object at the same time! To prevent this, Sui must lock any mutable object used as a transaction input, even when it's passed as a read-only reference. In addition, only an object's owner can send a transaction that locks the object.
 
 Let's write a unit test to see how we could interact with multiple objects of the same type in tests.
-In the previous chapter, we introduced the `take_owned<T>` API, which takes an object of type `T` from the global storage created by previous transactions. However, what if there are multiple objects of the same type? `take_owned<T>` will no longer be able to tell which one to return. To solve this problem, we need to use two new APIs. The first is `tx_context::last_created_object_id(ctx)`, which returns the ID of the most recently created object. The second is `test_scenario::take_owned_by_id<T>`, which returns an object of type `T` with a specific object ID.
+In the previous chapter, we introduced the `take_owned<T>` API, which takes an object of type `T` from the global storage created by previous transactions. However, what if there are multiple objects of the same type? `take_owned<T>` will no longer be able to tell which one to return. To solve this problem, we need to use two new, test-only APIs. The first is `tx_context::last_created_object_id(ctx)`, which returns the ID of the most recently created object. The second is `test_scenario::take_owned_by_id<T>`, which returns an object of type `T` with a specific object ID.
 Now let's take a look at the test (`test_copy_into`):
 ```rust
 let owner = @0x1;
@@ -76,27 +76,27 @@ test_scenario::next_tx(scenario, &owner);
 ```
 
 ### Pass objects by value
-Objects can also be passed by value into an entry function. By doing so, the object is moved out of Sui storage (a.k.a. deleted). It is then up to the Move code to decide where this object should go.
+Objects can also be passed by value into an entry function. By doing so, the object is moved out of Sui storage. It is then up to the Move code to decide where this object should go.
 
-> :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `Info` as a field, and the [Info struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) does not have the `drop` ability, the Sui object struct type [must not](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (e.g., transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described below.
+> :books: Since every [Sui object struct type](./ch1-object-basics.md#define-sui-object) must include `UID` as its first field, and the [UID struct](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) does not have the `drop` ability, the Sui object struct type [cannot](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#drop) have the `drop` ability either. Hence, any Sui object cannot be arbitrarily dropped and must be either consumed (e.g., transferred to another owner) or deleted by [unpacking](https://move-book.com/advanced-topics/struct.html#destructing-structures), as described below.
 
 There are two ways we can deal with a pass-by-value Sui object in Move:
 
 #### Option 1. Delete the object
 If the intention is to actually delete the object, we can unpack the object. This can be done only in the module that defined the struct type, due to Move's [privileged struct operations rules](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations). Upon unpacking, if any field is also of struct type, recursive unpacking and deletion will be required.
 
-However, the `info` field of a Sui object requires special handling. We must call the following API in the [object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
+However, the `id` field of a Sui object requires special handling. We must call the following API in the [object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
 ```rust
-public fun delete(info: Info);
+public fun delete(id: UID) { ... }
 ```
 Let's define a function in the `ColorObject` module that allows us to delete the object:
 ```rust
     public entry fun delete(object: ColorObject) {
-        let ColorObject { info, red: _, green: _, blue: _ } = object;
-        object::delete(info);
+        let ColorObject { id, red: _, green: _, blue: _ } = object;
+        object::delete(id);
     }
 ```
-As we can see, the object is unpacked, generating individual fields. The u8 values are primitive types and can all be dropped. However the `info` cannot be dropped and must be explicitly deleted through the `object::delete` API. At the end of this call, the object will no longer be stored on-chain.
+As we can see, the object is unpacked, generating individual fields. The u8 values are primitive types and can all be dropped. However the `id` (which has type `UID`) cannot be dropped and must be explicitly deleted through the `object::delete` API. At the end of this call, the object will no longer be stored on-chain.
 
 We can add a unit test for it, as well:
 ```rust
