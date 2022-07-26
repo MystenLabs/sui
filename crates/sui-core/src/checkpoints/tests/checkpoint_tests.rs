@@ -617,13 +617,23 @@ fn set_get_checkpoint() {
     // --- TEST 0 ---
 
     // There is no previous checkpoint
-    let response = cps1.handle_past_checkpoint(true, 0).unwrap();
-    assert!(matches!(response.info, AuthorityCheckpointInfo::Past(None)));
+    let response = cps1
+        .handle_authenticated_checkpoint(&Some(0), true)
+        .unwrap();
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::AuthenticatedCheckpoint(None)
+    ));
     assert!(response.detail.is_none());
 
     // There is no previous checkpoint
-    let response = cps1.handle_past_checkpoint(true, 0).unwrap();
-    assert!(matches!(response.info, AuthorityCheckpointInfo::Past(None)));
+    let response = cps1
+        .handle_authenticated_checkpoint(&Some(0), true)
+        .unwrap();
+    assert!(matches!(
+        response.info,
+        AuthorityCheckpointInfo::AuthenticatedCheckpoint(None)
+    ));
     assert!(response.detail.is_none());
 
     // ---
@@ -687,13 +697,16 @@ fn set_get_checkpoint() {
     // --- TEST 1 ---
 
     // Now we have a signed checkpoint
-    let response = cps1.handle_past_checkpoint(true, 0).unwrap();
+    let response = cps1
+        .handle_authenticated_checkpoint(&Some(0), true)
+        .unwrap();
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Signed(..)))
+        AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(AuthenticatedCheckpoint::Signed(..)))
     ));
-    if let AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Signed(signed))) =
-        response.info
+    if let AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(
+        AuthenticatedCheckpoint::Signed(signed),
+    )) = response.info
     {
         signed.verify(&committee, response.detail.as_ref()).unwrap();
     }
@@ -701,10 +714,14 @@ fn set_get_checkpoint() {
     // Make a certificate
     let mut signed_checkpoint: Vec<SignedCheckpointSummary> = Vec::new();
     for x in [&mut cps1, &mut cps2, &mut cps3] {
-        match x.handle_past_checkpoint(true, 0).unwrap().info {
-            AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Signed(signed))) => {
-                signed_checkpoint.push(signed)
-            }
+        match x
+            .handle_authenticated_checkpoint(&Some(0), true)
+            .unwrap()
+            .info
+        {
+            AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(
+                AuthenticatedCheckpoint::Signed(signed),
+            )) => signed_checkpoint.push(signed),
             _ => unreachable!(),
         };
     }
@@ -721,10 +738,14 @@ fn set_get_checkpoint() {
         .unwrap();
 
     // Now we have a certified checkpoint
-    let response = cps1.handle_past_checkpoint(true, 0).unwrap();
+    let response = cps1
+        .handle_authenticated_checkpoint(&Some(0), true)
+        .unwrap();
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Certified(..)))
+        AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(AuthenticatedCheckpoint::Certified(
+            ..
+        )))
     ));
 
     // --- TEST 3 ---
@@ -751,10 +772,14 @@ fn set_get_checkpoint() {
     .unwrap();
 
     // Now we have a certified checkpoint
-    let response = cps4.handle_past_checkpoint(true, 0).unwrap();
+    let response = cps4
+        .handle_authenticated_checkpoint(&Some(0), true)
+        .unwrap();
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Certified(..)))
+        AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(AuthenticatedCheckpoint::Certified(
+            ..
+        )))
     ));
 }
 
@@ -1440,7 +1465,7 @@ fn test_fragment_full_flow() {
     assert_eq!(cps0.next_checkpoint(), 0);
 
     let response = cps0
-        .handle_past_checkpoint(true, 0)
+        .handle_authenticated_checkpoint(&Some(0), true)
         .expect("No errors on response");
     // Ensure the reconstruction worked
     assert_eq!(response.detail.unwrap().transactions.len(), 2);
@@ -1826,12 +1851,14 @@ async fn checkpoint_messaging_flow() {
     let mut failed_authorities = HashSet::new();
     for (auth, client) in &setup.aggregator.authority_clients {
         let response = client
-            .handle_checkpoint(CheckpointRequest::past(0, true))
+            .handle_checkpoint(CheckpointRequest::authenticated(Some(0), true))
             .await
             .expect("No issues");
 
         match &response.info {
-            AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Signed(checkpoint))) => {
+            AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(
+                AuthenticatedCheckpoint::Signed(checkpoint),
+            )) => {
                 signed_checkpoint.push(checkpoint.clone());
                 contents = response.detail.clone();
             }

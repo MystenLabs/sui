@@ -432,6 +432,8 @@ where
 
         let resp = self.authority_client.handle_checkpoint(request).await?;
 
+        // TODO: Some errors below are byzantine suspicion errors, but we are not returning it that way.
+
         // Verify signatures
         resp.verify(&self.committee)?;
 
@@ -446,17 +448,6 @@ where
                     authority: self.address,
                 }),
             },
-            CheckpointRequestType::PastCheckpoint(seq) => {
-                if let AuthorityCheckpointInfo::Past(past) = &resp.info {
-                    self.verify_contents_exist(detail, past, &resp.detail)?;
-                    self.verify_checkpoint_sequence(Some(*seq), past)?;
-                    Ok(resp)
-                } else {
-                    Err(SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                    })
-                }
-            }
             CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
                 if let AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint) = &resp.info {
                     // Checks that the sequence number is correct.

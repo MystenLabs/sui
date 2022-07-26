@@ -378,26 +378,6 @@ impl CheckpointStore {
         })
     }
 
-    pub fn handle_past_checkpoint(
-        &self,
-        detail: bool,
-        seq: CheckpointSequenceNumber,
-    ) -> Result<CheckpointResponse, SuiError> {
-        // Get the checkpoint with a given sequence number
-        let checkpoint = self.checkpoints.get(&seq)?;
-
-        // If a checkpoint is found, and if requested, return the list of transaction digest in it.
-        let content = match (detail, &checkpoint) {
-            (true, Some(_)) => self.checkpoint_contents.get(&seq)?,
-            _ => None,
-        };
-
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Past(checkpoint),
-            detail: content,
-        })
-    }
-
     pub fn handle_authenticated_checkpoint(
         &mut self,
         seq: &Option<CheckpointSequenceNumber>,

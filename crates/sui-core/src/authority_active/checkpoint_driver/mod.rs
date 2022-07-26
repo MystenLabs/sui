@@ -708,7 +708,8 @@ where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
     net.get_certified_checkpoint(
-        &CheckpointRequest::past(sequence_number, contents),
+        sequence_number,
+        contents,
         available_authorities,
         // Loop forever until we get the cert from someone.
         None,

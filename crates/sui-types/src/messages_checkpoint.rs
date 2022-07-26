@@ -92,14 +92,6 @@ impl CheckpointRequest {
         }
     }
 
-    /// Create a request for a past checkpoint from the authority
-    pub fn past(seq: CheckpointSequenceNumber, detail: bool) -> CheckpointRequest {
-        CheckpointRequest {
-            request_type: CheckpointRequestType::PastCheckpoint(seq),
-            detail,
-        }
-    }
-
     pub fn authenticated(seq: Option<CheckpointSequenceNumber>, detail: bool) -> CheckpointRequest {
         CheckpointRequest {
             request_type: CheckpointRequestType::AuthenticatedCheckpoint(seq),
@@ -112,8 +104,6 @@ impl CheckpointRequest {
 pub enum CheckpointRequestType {
     // Request the latest proposal and previous checkpoint.
     LatestCheckpointProposal,
-    // Requests a past checkpoint
-    PastCheckpoint(CheckpointSequenceNumber),
     /// Request a stored authenticated checkpoint.
     /// if a sequence number is specified, return the checkpoint with that sequence number;
     /// otherwise if None returns the latest authenticated checkpoint stored.
@@ -144,12 +134,6 @@ impl CheckpointResponse {
                     if let Some(previous) = previous {
                         previous.verify(committee, None)?;
                     }
-                }
-                Ok(())
-            }
-            AuthorityCheckpointInfo::Past(ckpt) => {
-                if let Some(ckpt) = ckpt {
-                    ckpt.verify(committee, self.detail.as_ref())?;
                 }
                 Ok(())
             }
@@ -194,8 +178,6 @@ pub enum AuthorityCheckpointInfo {
         // updates.
         // last_local_sequence: TxSequenceNumber,
     },
-    // Returns the requested checkpoint.
-    Past(Option<AuthenticatedCheckpoint>),
     AuthenticatedCheckpoint(Option<AuthenticatedCheckpoint>),
     /// The latest proposal must be signed by the validator.
     /// For any proposal with sequence number > 0, a certified checkpoint for the previous
