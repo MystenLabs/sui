@@ -270,7 +270,7 @@ where
                 continue;
             }
 
-            debug!(digest = ?cert_digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+            debug!(tx_digest = ?cert_digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
 
             match cert_handler.handle(target_cert.clone()).await {
                 Ok(_) => {
@@ -285,7 +285,7 @@ where
             // the previous certificates, so we need to read them from the source
             // authority.
             debug!(
-                digest = ?cert_digest,
+                tx_digest = ?cert_digest,
                 "Missing previous certificates, need to find parents from source authorities"
             );
 
@@ -293,7 +293,7 @@ where
             // we try to get its dependencies. But the second time we have already tried
             // to update its dependencies, so we should just admit failure.
             if attempted_certificates.contains(&cert_digest) {
-                trace!(digest = ?cert_digest, "bailing out after second attempt to fetch");
+                trace!(tx_digest = ?cert_digest, "bailing out after second attempt to fetch");
                 return Err(SuiError::AuthorityInformationUnavailable);
             }
             attempted_certificates.insert(cert_digest);
@@ -345,9 +345,9 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-            trace!(digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
+            trace!(tx_digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
             for returned_digest in &signed_effects.effects.dependencies {
-                trace!(digest =? returned_digest, "Found parent of missing cert");
+                trace!(tx_digest =? returned_digest, "Found parent of missing cert");
 
                 let inner_transaction_info = source_client
                     .handle_transaction_info_request(TransactionInfoRequest {
@@ -1201,7 +1201,7 @@ where
         let validity = self.committee.validity_threshold();
         let tx_digest = transaction.digest();
         debug!(
-            digest = ?tx_digest,
+            tx_digest = ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             "Broadcasting transaction request to authorities"
@@ -1248,7 +1248,7 @@ where
                                 ..
                             }) => {
                                 let tx_digest = inner_certificate.digest();
-                                debug!(digest = ?tx_digest, ?name, weight, "Received prev certificate from validator handle_transaction");
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Received prev certificate from validator handle_transaction");
                                 state.certificate = Some(inner_certificate);
                             }
 
@@ -1260,7 +1260,7 @@ where
                                 ..
                             }) => {
                                 let tx_digest = inner_signed_transaction.digest();
-                                debug!(digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
                                 state.signatures.push((
                                     name,
                                     inner_signed_transaction.auth_sign_info.signature,
@@ -1289,7 +1289,7 @@ where
                             Err(err) => {
                                 // We have an error here.
                                 // Append to the list off errors
-                                debug!(digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction");
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction");
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
@@ -1307,7 +1307,7 @@ where
                         if state.bad_stake > validity {
                             // Too many errors
                             debug!(
-                                digest = ?tx_digest,
+                                tx_digest = ?tx_digest,
                                 num_errors = state.errors.len(),
                                 bad_stake = state.bad_stake,
                                 "Too many errors from validators handle_transaction, validity threshold exceeded. Errors={:?}",
@@ -1345,7 +1345,7 @@ where
             .await?;
 
         debug!(
-            digest = ?tx_digest,
+            tx_digest = ?tx_digest,
             num_errors = state.errors.len(),
             good_stake = state.good_stake,
             bad_stake = state.bad_stake,
@@ -1402,7 +1402,7 @@ where
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
         debug!(
-            digest = ?tx_digest,
+            tx_digest = ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
@@ -1426,7 +1426,7 @@ where
 
                         if res.is_ok() {
                             debug!(
-                                digest = ?tx_digest,
+                                tx_digest = ?tx_digest,
                                 ?name,
                                 "Validator handled certificate successfully",
                             );
@@ -1440,7 +1440,7 @@ where
                         // For any other error, we stop here and return.
                         if !matches!(res, Err(SuiError::LockErrors { .. })) {
                             debug!(
-                                digest = ?tx_digest,
+                                tx_digest = ?tx_digest,
                                 ?name,
                                 "Error from validator handle_confirmation_transaction: {:?}",
                                 res
@@ -1493,7 +1493,7 @@ where
                                 if entry.stake >= threshold {
                                     // It will set the timeout quite high.
                                     debug!(
-                                        digest = ?tx_digest,
+                                        tx_digest = ?tx_digest,
                                         "Got quorum for validators handle_certificate."
                                     );
                                     return Ok(ReduceOutput::ContinueWithTimeout(
@@ -1514,7 +1514,7 @@ where
                                 state.bad_stake += weight;
                                 if state.bad_stake > validity {
                                     debug!(
-                                        digest = ?tx_digest,
+                                        tx_digest = ?tx_digest,
                                         bad_stake = state.bad_stake,
                                         "Too many bad responses from validators cert processing, validity threshold exceeded."
                                     );
@@ -1531,7 +1531,7 @@ where
             .await?;
 
         debug!(
-            digest = ?tx_digest,
+            tx_digest = ?tx_digest,
             num_unique_effects = state.effects_map.len(),
             bad_stake = state.bad_stake,
             "Received effects responses from validators"
@@ -1547,7 +1547,7 @@ where
             } = stake_info;
             if stake >= threshold {
                 debug!(
-                    digest = ?tx_digest,
+                    tx_digest = ?tx_digest,
                     good_stake = stake,
                     "Found an effect with good stake over threshold"
                 );

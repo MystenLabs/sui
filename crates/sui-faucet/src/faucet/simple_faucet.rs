@@ -11,6 +11,7 @@ use sui_types::{
     messages::Transaction,
 };
 use tracing::info;
+use uuid::Uuid;
 
 use crate::{Faucet, FaucetError, FaucetReceipt};
 
@@ -129,9 +130,12 @@ impl SimpleFaucet {
             )
             .await?;
         let signature = context.keystore.sign(&signer, &data.to_bytes())?;
+        let tx = Transaction::new(data, signature);
+
+        info!(tx_digest = ?tx.digest(), coin_id = ?coin_id, gas_object_id = ?gas_object_id, "Broadcasting split coin txn");
         let response = context
             .gateway
-            .execute_transaction(Transaction::new(data, signature))
+            .execute_transaction(tx)
             .await?
             .to_split_coin_response()?;
         let new_coins = response.new_coins;
@@ -154,9 +158,12 @@ impl SimpleFaucet {
             .public_transfer_object(signer, coin_id, Some(gas_object_id), budget, recipient)
             .await?;
         let signature = context.keystore.sign(&signer, &data.to_bytes())?;
+
+        let tx = Transaction::new(data, signature);
+        info!(tx_digest = ?tx.digest(), recipient = ?recipient, coin_id = ?coin_id, gas_object_id = ?gas_object_id, "Broadcasting transfer obj txn");
         let response = context
             .gateway
-            .execute_transaction(Transaction::new(data, signature))
+            .execute_transaction(tx)
             .await?
             .to_effect_response()?;
         let effects = response.effects;
@@ -172,10 +179,11 @@ impl SimpleFaucet {
 impl Faucet for SimpleFaucet {
     async fn send(
         &self,
+        id: Uuid,
         recipient: SuiAddress,
         amounts: &[u64],
     ) -> Result<FaucetReceipt, FaucetError> {
-        info!(?recipient, "Getting requests");
+        info!(?recipient, uuid = ?id, "Getting faucet requests");
         let (coins, tx_digest) = self.get_coins(amounts).await?;
         let coin_ids = coins.iter().map(|c| c.id()).collect::<Vec<ObjectID>>();
         info!(?recipient, ?tx_digest, ?coin_ids, "SplitCoin txn succeeded");

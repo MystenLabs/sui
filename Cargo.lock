@@ -6754,6 +6754,7 @@ dependencies = [
  "tower",
  "tower-http",
  "tracing",
+ "uuid",
  "workspace-hack 0.1.0",
 ]
 
@@ -8224,6 +8225,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "936e4b492acfd135421d8dca4b1aa80a7bfc26e702ef3af710e0752684df5372"
 
 [[package]]
+name = "uuid"
+version = "1.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd6469f4314d5f1ffec476e05f17cc9a78bc7a27a6a857842170bdf8d6f98d2f"
+dependencies = [
+ "getrandom 0.2.6",
+ "rand 0.8.5",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9242,6 +9253,7 @@ dependencies = [
  "unzip-n",
  "url",
  "utf8parse",
+ "uuid",
  "variant_count",
  "vcpkg",
  "vec_map",

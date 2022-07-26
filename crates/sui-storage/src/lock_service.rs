@@ -184,7 +184,7 @@ impl LockServiceImpl {
                 // TODO: it should be impossible for this to fail unless the store has been
                 // corrupted. Remove this check when we feel confident enough.
                 if let Err(e) = self.locks_exist(inputs) {
-                    error!(digest = ?tx, "Locks did not exist for unsequenced transaction! \
+                    error!(tx_digest = ?tx, "Locks did not exist for unsequenced transaction! \
                                          possible data store corruption");
                     Err(e)
                 } else {

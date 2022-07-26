@@ -868,7 +868,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // on subsequent calls.
         trace!(
             ?assigned_seq,
-            digest = ?transaction_digest,
+            tx_digest = ?transaction_digest,
             ?effects_digest,
             "storing sequence number to executed_sequence"
         );
@@ -1235,7 +1235,7 @@ impl<S: Eq + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             })
             .unzip();
 
-        trace!(digest = ?transaction_digest,
+        trace!(tx_digest = ?transaction_digest,
                ?sequenced_to_write, ?schedule_to_write,
                "locking shared objects");
 
