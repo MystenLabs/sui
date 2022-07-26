@@ -21,6 +21,7 @@ tracing = "0.1.35"
 sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "sqlite" ] }
 strum = "^0.24"
 strum_macros = "^0.24"
+anyhow = "1.0.58"
 
 sui-types = { path = "../sui-types" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}

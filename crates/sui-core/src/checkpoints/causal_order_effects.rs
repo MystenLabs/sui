@@ -182,6 +182,7 @@ impl EffectsStore for Arc<AuthorityStore> {
         transactions: impl Iterator<Item = &'a ExecutionDigests>,
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(self
+            .tables
             .effects
             .multi_get(transactions.map(|d| d.transaction))?
             .into_iter()
