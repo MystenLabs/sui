@@ -383,6 +383,13 @@ where
     /// And when it's out-of-dated in the rare case, we need to be able to understand the error
     /// returned from validators and update the object locally so that the wallet can retry.
     async fn get_object_internal(&self, object_id: &ObjectID) -> SuiResult<Object> {
+        if let Ok(Some(o)) = self.store.get_object(object_id) {
+            if o.is_immutable() {
+                // If an object is immutable, it can never be mutated and hence is guaranteed to
+                // be up-to-date. No need to download from validators.
+                return Ok(o);
+            }
+        }
         let object = self
             .download_object_from_authorities(*object_id)
             .await?
