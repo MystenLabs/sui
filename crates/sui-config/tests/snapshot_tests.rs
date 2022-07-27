@@ -1,14 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// To review and fix test failures in this file,
+// This file contains tests that detect changes in Sui configs.
+// If a PR breaks one or more tests here, the PR probably has a real impact
+// on a production configuration file. When test failure happens, the PR should
+// be marked as a breaking change and reviewers should be aware of this.
+//
+// Owners and operators of production configuration files can add themselves to
+// .github/CODEOWNERS for the corresponding snapshot tests, so they can get notified
+// of changes. PRs that modifies snapshot files should wait for reviews from
+// code owners (if any) before merging.
+//
+// To review snapshot changes, and fix snapshot differences,
 // 0. Install cargo-insta
 // 1. Run `cargo insta test --review` under `./sui-config`.
 // 2. Review, accept or reject changes.
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
-use std::str::FromStr;
 
 use insta::assert_yaml_snapshot;
 use multiaddr::Multiaddr;
@@ -27,12 +36,12 @@ fn genesis_config_snapshot_matches() {
     let public_key = PublicKeyBytes::from(keypair.public());
     let fake_addr = SuiAddress::from(&public_key);
 
-    let fake_obj_id = "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866";
+    let fake_obj_id = ObjectID::from(fake_addr);
     let mut genesis_config = GenesisConfig::for_local_testing();
     for account in &mut genesis_config.accounts {
         account.address = Some(fake_addr);
         for gas_obj in &mut account.gas_objects {
-            gas_obj.object_id = ObjectID::from_str(fake_obj_id).unwrap();
+            gas_obj.object_id = fake_obj_id;
         }
     }
     assert_yaml_snapshot!(genesis_config);
