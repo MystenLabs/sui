@@ -196,7 +196,7 @@ where
                 SuiError::GenericAuthorityError {
                     error: e.to_string(),
                 }
-            })?;
+            })?; //TODO: handle what happens if a validator registers with a faulty address
 
             let channel =
                 net_config

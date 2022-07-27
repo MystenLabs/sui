@@ -21,7 +21,7 @@ use test_utils::objects::test_gas_objects;
 use test_utils::transaction::submit_single_owner_transaction;
 
 #[tokio::test]
-async fn test_epoch_change_committee_updates() {
+async fn reconfig_end_to_end_tests() {
     let mut configs = test_authority_configs();
     for c in configs.validator_configs.iter_mut() {
         c.enable_gossip = true;
@@ -55,8 +55,6 @@ async fn test_epoch_change_committee_updates() {
         nodes.push(node);
     }
 
-    let _sui_system_state_ref = states[0].get_sui_system_state_object_ref().await.unwrap();
-
     // get sui system state and confirm it matches network info
     let sui_system_state = states[0].get_sui_system_state_object().await.unwrap();
     let mut net_addrs_from_chain: Vec<Multiaddr> = Vec::new();
@@ -75,27 +73,32 @@ async fn test_epoch_change_committee_updates() {
         assert_eq!(conf, chain);
     }
 
-    for node in nodes {
-        let active = node.active().unwrap();
-        active.start_epoch_change().await.unwrap();
-        tokio::time::sleep(Duration::from_millis(100)).await;
+    let results: Vec<_> = nodes
+        .iter()
+        .map(|node| async {
+            let active = node.active().unwrap();
+            active.start_epoch_change().await.unwrap();
+            tokio::time::sleep(Duration::from_millis(100)).await;
 
-        node.state()
-            .checkpoints
-            .as_ref()
-            .unwrap()
-            .lock()
-            .set_locals_for_testing(CheckpointLocals {
-                next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH + 1,
-                proposal_next_transaction: None,
-                next_transaction_sequence: 0,
-                no_more_fragments: true,
-                current_proposal: None,
-            })
-            .unwrap();
+            node.state()
+                .checkpoints
+                .as_ref()
+                .unwrap()
+                .lock()
+                .set_locals_for_testing(CheckpointLocals {
+                    next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH + 1,
+                    proposal_next_transaction: None,
+                    next_transaction_sequence: 0,
+                    no_more_fragments: true,
+                    current_proposal: None,
+                })
+                .unwrap();
 
-        active.finish_epoch_change().await.unwrap();
-    }
+            active.finish_epoch_change().await.unwrap();
+        })
+        .collect();
+
+    futures::future::join_all(results).await;
 
     // refresh the system state and network addresses
     let sui_system_state = states[0].get_sui_system_state_object().await.unwrap();
