@@ -4,7 +4,7 @@
   "description": "React interface for Sui Wallet Adapter",
   "main": "lib/index.js",
   "scripts": {
-    "build": "react-scripts build"
+    "build": "tsc -p tsconfig.json"
   },
   "author": "",
   "license": "ISC",
