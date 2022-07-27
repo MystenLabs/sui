@@ -1,4 +1,5 @@
-// Contains 
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 
 import { MoveCallTransaction, SuiAddress, TransactionResponse } from "@mysten/sui.js";
 
