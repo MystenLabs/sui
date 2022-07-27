@@ -1,0 +1,19 @@
+.txback {
+    @apply w-full pb-2 px-0;
+
+    border-bottom: 1px solid #f0f1f2;
+}
+
+.txback button {
+    @apply px-0;
+}
+
+.txback a {
+    @apply text-sui-dark text-[14px] font-[500] md:text-[15px] no-underline hover:text-sui;
+}
+
+.longtext {
+    @apply bg-transparent border-0 font-sans text-sm text-[#1F6493] font-[500] cursor-pointer hover:text-sui-grey-80;
+
+    box-sizing: border-box;
+}

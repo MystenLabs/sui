@@ -5,6 +5,7 @@ import { useEffect, useState, useCallback } from 'react';
 import ReactJson from 'react-json-view';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
+import GoBack from '../../components/goback/GoBack';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
@@ -94,6 +95,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
 
     return (
         <>
+            <GoBack />
             <div className={styles.resultbox}>
                 {viewedData.url !== '' && (
                     <div className={styles.display}>
