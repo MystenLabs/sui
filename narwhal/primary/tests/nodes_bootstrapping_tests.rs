@@ -88,6 +88,68 @@ async fn test_node_staggered_starts() {
     assert!(max - min <= 2.0, "Nodes shouldn't be that behind");
 }
 
+#[ignore]
+#[tokio::test]
+async fn test_second_node_restart() {
+    // Enabled debug tracing so we can easily observe the
+    // nodes logs.
+    let _guard = setup_tracing();
+
+    let restart_delay = Duration::from_secs(120);
+    let node_advance_delay = Duration::from_secs(60);
+
+    // A cluster of 4 nodes will be created
+    let mut cluster = Cluster::new(None, None);
+
+    // ===== Start the cluster ====
+    cluster.start(Some(4), Some(1), None).await;
+
+    // Let the nodes advance a bit
+    tokio::time::sleep(node_advance_delay).await;
+
+    // Now restart node 2 with some delay between
+    cluster.authority(2).restart(true, restart_delay).await;
+
+    // now wait a bit to give the opportunity to recover
+    tokio::time::sleep(node_advance_delay).await;
+
+    // Ensure that nodes have made progress
+    let rounds = authorities_latest_commit_round(&cluster).await;
+    assert_eq!(
+        rounds.len(),
+        4,
+        "Expected to have received commit metrics from all nodes"
+    );
+    assert!(rounds.values().all(|v| v > &1.0), "All nodes are available so all should have made progress and committed at least after the first round");
+
+    // We expect all the nodes to have managed to catch up by now
+    // and be pretty much in similar rounds. The threshold here is
+    // not defined by some rule but more of an expectation.
+    let (min, max) = rounds.values().into_iter().minmax().into_option().unwrap();
+    assert!(max - min <= 2.0, "Nodes shouldn't be that behind");
+
+    // Now restart node 3 with some delay between
+    cluster.authority(3).restart(true, restart_delay).await;
+
+    // now wait a bit to give the opportunity to recover
+    tokio::time::sleep(node_advance_delay).await;
+
+    // Ensure that nodes have made progress
+    let rounds = authorities_latest_commit_round(&cluster).await;
+    assert_eq!(
+        rounds.len(),
+        4,
+        "Expected to have received commit metrics from all nodes"
+    );
+    assert!(rounds.values().all(|v| v > &1.0), "All nodes are available so all should have made progress and committed at least after the first round");
+
+    // We expect all the nodes to have managed to catch up by now
+    // and be pretty much in similar rounds. The threshold here is
+    // not defined by some rule but more of an expectation.
+    let (min, max) = rounds.values().into_iter().minmax().into_option().unwrap();
+    assert!(max - min <= 2.0, "Nodes shouldn't be that behind");
+}
+
 async fn authorities_latest_commit_round(cluster: &Cluster) -> HashMap<usize, f64> {
     let mut authorities_latest_commit = HashMap::new();
 

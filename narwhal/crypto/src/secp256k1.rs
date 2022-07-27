@@ -10,8 +10,10 @@ use once_cell::sync::OnceCell;
 use rust_secp256k1::{constants, rand::rngs::OsRng, Message, PublicKey, Secp256k1, SecretKey};
 use serde::{de, Deserialize, Serialize};
 use signature::{Signature, Signer, Verifier};
-use std::fmt::{self, Debug, Display};
-use std::str::FromStr;
+use std::{
+    fmt::{self, Debug, Display},
+    str::FromStr,
+};
 
 #[readonly::make]
 #[derive(Debug, Clone)]
