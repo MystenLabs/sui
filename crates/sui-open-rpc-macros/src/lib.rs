@@ -165,7 +165,6 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
                         syn::FnArg::Typed(arg) => {
                             let description = if let Some(description) = arg.attrs.iter().position(|a|a.path.is_ident("doc")){
                                 let doc = extract_doc_comments(&arg.attrs);
-                                println!("{}", doc);
                                 arg.attrs.remove(description);
                                 Some(doc)
                             }else{
