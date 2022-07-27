@@ -8,6 +8,7 @@
 
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use insta::assert_yaml_snapshot;
 use multiaddr::Multiaddr;
@@ -16,14 +17,20 @@ use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
 use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::get_key_pair_from_rng;
 
 #[test]
 fn genesis_config_snapshot_matches() {
-    let genesis_config = GenesisConfig::for_local_testing();
-    assert_yaml_snapshot!(genesis_config, {
-        ".accounts[].gas_objects[].object_id" => "[fake object id]"
-    });
+    let fake_obj_id = "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866";
+    let mut genesis_config = GenesisConfig::for_local_testing();
+    for account in &mut genesis_config.accounts {
+        account.address = Some(SuiAddress::from_str(fake_obj_id).unwrap());
+        for gas_obj in &mut account.gas_objects {
+            gas_obj.object_id = ObjectID::from_str(fake_obj_id).unwrap();
+        }
+    }
+    assert_yaml_snapshot!(genesis_config);
 }
 
 #[test]

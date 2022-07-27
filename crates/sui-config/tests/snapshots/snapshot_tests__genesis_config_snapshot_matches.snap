@@ -5,64 +5,69 @@ expression: genesis_config
 validator_genesis_info: ~
 committee_size: 4
 accounts:
-  - gas_objects:
-      - object_id: "[fake object id]"
+  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+    gas_objects:
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-    gas_object_ranges: []
-  - gas_objects:
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
     gas_object_ranges: []
-  - gas_objects:
-      - object_id: "[fake object id]"
+  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+    gas_objects:
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-    gas_object_ranges: []
-  - gas_objects:
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-      - object_id: "[fake object id]"
-        gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
     gas_object_ranges: []
-  - gas_objects:
-      - object_id: "[fake object id]"
+  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+    gas_objects:
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
-      - object_id: "[fake object id]"
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+    gas_object_ranges: []
+  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+    gas_objects:
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+    gas_object_ranges: []
+  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+    gas_objects:
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
+        gas_value: 100000000
+      - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
     gas_object_ranges: []
 
