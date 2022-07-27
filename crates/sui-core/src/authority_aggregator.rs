@@ -32,6 +32,7 @@ use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::TapFallible;
 
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
@@ -1726,23 +1727,26 @@ where
 
     pub async fn get_certified_checkpoint(
         &self,
-        request: &CheckpointRequest,
+        sequence_number: CheckpointSequenceNumber,
+        request_contents: bool,
         // authorities known to have the checkpoint we are requesting.
         authorities: &BTreeSet<AuthorityName>,
         timeout_total: Option<Duration>,
     ) -> SuiResult<(CertifiedCheckpointSummary, Option<CheckpointContents>)> {
+        let request = CheckpointRequest::authenticated(Some(sequence_number), request_contents);
         self.quorum_once_with_timeout(
             None,
             Some(authorities),
             |_, client| {
+                let r = request.clone();
                 Box::pin(async move {
-                    let resp = client.handle_checkpoint(request.clone()).await?;
+                    let resp = client.handle_checkpoint(r).await?;
 
                     if let CheckpointResponse {
                         info:
-                            AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Certified(
-                                past,
-                            ))),
+                            AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(
+                                AuthenticatedCheckpoint::Certified(past),
+                            )),
                         detail,
                     } = resp
                     {

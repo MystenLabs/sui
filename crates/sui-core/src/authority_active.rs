@@ -55,9 +55,7 @@ use gossip::{gossip_process, node_sync_process};
 pub mod checkpoint_driver;
 use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use crate::epoch::reconfiguration::Reconfigurable;
-use checkpoint_driver::{
-    checkpoint_process, get_latest_proposal_and_checkpoint_from_all, sync_to_checkpoint,
-};
+use checkpoint_driver::{checkpoint_process, get_latest_checkpoint_from_all, sync_to_checkpoint};
 
 pub mod execution_driver;
 
@@ -261,7 +259,7 @@ where
         // TODO: fullnode should not get proposals
         // TODO: potentially move get_latest_proposal_and_checkpoint_from_all and
         // sync_to_checkpoint out of checkpoint_driver
-        let (checkpoint_summary, _) = get_latest_proposal_and_checkpoint_from_all(
+        let checkpoint_summary = get_latest_checkpoint_from_all(
             self.net(),
             checkpoint_process_control.extra_time_after_quorum,
             checkpoint_process_control.timeout_until_quorum,

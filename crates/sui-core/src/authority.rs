@@ -984,11 +984,11 @@ impl AuthorityState {
             })?
             .lock();
         match &request.request_type {
-            CheckpointRequestType::LatestCheckpointProposal => {
-                checkpoint_store.handle_latest_proposal(request)
+            CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
+                checkpoint_store.handle_authenticated_checkpoint(seq, request.detail)
             }
-            CheckpointRequestType::PastCheckpoint(seq) => {
-                checkpoint_store.handle_past_checkpoint(request.detail, *seq)
+            CheckpointRequestType::CheckpointProposal => {
+                checkpoint_store.handle_proposal(request.detail)
             }
         }
     }
