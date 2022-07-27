@@ -5,13 +5,13 @@
 module sui::collection_tests {
     use sui::bag::{Self, Bag};
     use sui::collection::{Self, Collection};
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::test_scenario;
     use sui::typed_id;
     use sui::tx_context;
 
     struct Object has key, store {
-        info: Info,
+        id: UID,
     }
 
     #[test]
@@ -31,8 +31,8 @@ module sui::collection_tests {
             let collection = test_scenario::take_owned<Collection<Object>>(scenario);
             assert!(collection::size(&collection) == 0, 0);
 
-            let obj1 = Object { info: object::new(test_scenario::ctx(scenario)) };
-            let obj2 = Object { info: object::new(test_scenario::ctx(scenario)) };
+            let obj1 = Object { id: object::new(test_scenario::ctx(scenario)) };
+            let obj2 = Object { id: object::new(test_scenario::ctx(scenario)) };
 
             let item_id1 = collection::add(&mut collection, obj1, test_scenario::ctx(scenario));
             let item_id2 = collection::add(&mut collection, obj2, test_scenario::ctx(scenario));
@@ -61,7 +61,7 @@ module sui::collection_tests {
         test_scenario::next_tx(scenario, &sender);
         {
             let collection = test_scenario::take_owned<Collection<Object>>(scenario);
-            let obj = Object { info: object::new(test_scenario::ctx(scenario)) };
+            let obj = Object { id: object::new(test_scenario::ctx(scenario)) };
             collection::add(&mut collection, obj, test_scenario::ctx(scenario));
             test_scenario::return_owned(scenario, collection);
         };
@@ -128,9 +128,9 @@ module sui::collection_tests {
         let ctx = tx_context::dummy();
         let collection = collection::new_with_max_capacity<Object>(&mut ctx, 1);
 
-        let obj1 = Object { info: object::new(&mut ctx) };
+        let obj1 = Object { id: object::new(&mut ctx) };
         collection::add(&mut collection, obj1, &mut ctx);
-        let obj2 = Object { info: object::new(&mut ctx) };
+        let obj2 = Object { id: object::new(&mut ctx) };
         collection::add(&mut collection, obj2, &mut ctx);
         collection::transfer(collection, tx_context::sender(&ctx));
     }

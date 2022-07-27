@@ -8,12 +8,12 @@
 /// - the owner of the counter can reset it to any value
 module basics::counter {
     use sui::transfer;
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
 
     /// A shared counter.
     struct Counter has key {
-        info: Info,
+        id: UID,
         owner: address,
         value: u64
     }
@@ -29,7 +29,7 @@ module basics::counter {
     /// Create and share a Counter object.
     public entry fun create(ctx: &mut TxContext) {
         transfer::share_object(Counter {
-            info: object::new(ctx),
+            id: object::new(ctx),
             owner: tx_context::sender(ctx),
             value: 0
         })

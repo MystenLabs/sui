@@ -5,13 +5,13 @@
 module defi::shared_escrow {
     use std::option::{Self, Option};
 
-    use sui::object::{Self, ID, Info};
+    use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// An object held in escrow
     struct EscrowedObj<T: key + store, phantom ExchangeForT: key + store> has key, store {
-        info: Info,
+        id: UID,
         /// owner of the escrowed object
         creator: address,
         /// intended recipient of the escrowed object
@@ -40,11 +40,11 @@ module defi::shared_escrow {
         ctx: &mut TxContext
     ) {
         let creator = tx_context::sender(ctx);
-        let info = object::new(ctx);
+        let id = object::new(ctx);
         let escrowed = option::some(escrowed_item);
         transfer::share_object(
             EscrowedObj<T,ExchangeForT> {
-                info, creator, recipient, exchange_for, escrowed
+                id, creator, recipient, exchange_for, escrowed
             }
         );
     }

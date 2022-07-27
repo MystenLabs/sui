@@ -11,7 +11,7 @@ module games::sea_hero_helper {
     use games::sea_hero::{Self, SeaMonster, RUM};
     use games::hero::Hero;
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -20,7 +20,7 @@ module games::sea_hero_helper {
     /// The two players split the reward for slaying the monster according to
     /// the `helper_reward` parameter.
     struct HelpMeSlayThisMonster has key {
-        info: Info,
+        id: UID,
         /// Monster to be slay by the owner of this object
         monster: SeaMonster,
         /// Identity of the user that originally owned the monster
@@ -50,7 +50,7 @@ module games::sea_hero_helper {
         );
         transfer::transfer(
             HelpMeSlayThisMonster {
-                info: object::new(ctx),
+                id: object::new(ctx),
                 monster,
                 monster_owner: tx_context::sender(ctx),
                 helper_reward
@@ -65,12 +65,12 @@ module games::sea_hero_helper {
         hero: &Hero, wrapper: HelpMeSlayThisMonster, ctx: &mut TxContext,
     ): Coin<RUM> {
         let HelpMeSlayThisMonster {
-            info,
+            id,
             monster,
             monster_owner,
             helper_reward
         } = wrapper;
-        object::delete(info);
+        object::delete(id);
         let owner_reward = sea_hero::slay(hero, monster);
         let helper_reward = coin::take(&mut owner_reward, helper_reward, ctx);
         transfer::transfer(coin::from_balance(owner_reward, ctx), monster_owner);
@@ -81,12 +81,12 @@ module games::sea_hero_helper {
     /// to, and are willing to kindly return the monster to its owner.
     public fun return_to_owner(wrapper: HelpMeSlayThisMonster) {
         let HelpMeSlayThisMonster {
-            info,
+            id,
             monster,
             monster_owner,
             helper_reward: _
         } = wrapper;
-        object::delete(info);
+        object::delete(id);
         sea_hero::transfer_monster(monster, monster_owner)
     }
 

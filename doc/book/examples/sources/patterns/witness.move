@@ -4,13 +4,13 @@
 /// Module that defines a generic type `Guardian<T>` which can only be
 /// instantiated with a witness.
 module examples::guardian {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
     /// Phantom parameter T can only be initialized in the `create_guardian`
     /// function. But the types passed here must have `drop`.
     struct Guardian<phantom T: drop> has key, store {
-        info: Info
+        id: UID
     }
 
     /// The first argument of this function is an actual instance of the
@@ -18,7 +18,7 @@ module examples::guardian {
     public fun create_guardian<T: drop>(
         _witness: T, ctx: &mut TxContext
     ): Guardian<T> {
-        Guardian { info: object::new(ctx) }
+        Guardian { id: object::new(ctx) }
     }
 }
 

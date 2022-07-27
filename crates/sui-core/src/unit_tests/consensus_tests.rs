@@ -36,8 +36,8 @@ pub fn test_gas_objects() -> Vec<Object> {
 pub fn test_shared_object() -> Object {
     let seed = "0x6666666666666660";
     let shared_object_id = ObjectID::from_hex_literal(seed).unwrap();
-    let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
-    let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
+    let content = GasCoin::new(shared_object_id, 10);
+    let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
     Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
 }
 

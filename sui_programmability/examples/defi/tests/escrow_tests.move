@@ -3,7 +3,7 @@
 
 #[test_only]
 module defi::escrow_tests {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::test_scenario::{Self, Scenario};
 
     use defi::escrow::{Self, EscrowedObj};
@@ -19,12 +19,12 @@ module defi::escrow_tests {
 
     // Example of an object type used for exchange
     struct ItemA has key, store {
-        info: Info
+        id: UID
     }
 
     // Example of the other object type used for exchange
     struct ItemB has key, store {
-        info: Info
+        id: UID
     }
 
     #[test]
@@ -118,7 +118,7 @@ module defi::escrow_tests {
         {
             let ctx = test_scenario::ctx(scenario);
             let escrowed = ItemA {
-                info: item_a_versioned_id
+                id: item_a_versioned_id
             };
             let recipient = bob;
             if (override_recipient) {
@@ -138,7 +138,7 @@ module defi::escrow_tests {
         {
             let ctx = test_scenario::ctx(scenario);
             let escrowed = ItemB {
-                info: item_b_versioned_id
+                id: item_b_versioned_id
             };
             escrow::create<ItemB, ItemA>(
                 alice,

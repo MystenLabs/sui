@@ -4,7 +4,7 @@
 #[test_only]
 module nfts::cross_chain_airdrop_tests {
     use nfts::cross_chain_airdrop::{Self, CrossChainAirdropOracle, ERC721};
-    use sui::object::{Info};
+    use sui::object::{UID};
     use sui::test_scenario::{Self, Scenario};
 
     // Error codes
@@ -21,7 +21,7 @@ module nfts::cross_chain_airdrop_tests {
     const TOKEN_URI: vector<u8> = b"ipfs://QmeSjSinHpPnmXmspMjwiXyN6zS4E9zccariGR3jxcaWtq/101";
 
     struct Object has key {
-        info: Info,
+        id: UID,
     }
 
     #[test]

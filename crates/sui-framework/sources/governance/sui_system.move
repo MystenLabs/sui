@@ -6,7 +6,7 @@ module sui::sui_system {
     use sui::coin::{Self, Coin};
     use sui::delegation::{Self, Delegation};
     use sui::epoch_reward_record::{Self, EpochRewardRecord};
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
@@ -39,7 +39,7 @@ module sui::sui_system {
 
     /// The top-level object containing all information of the Sui system.
     struct SuiSystemState has key {
-        info: Info,
+        id: UID,
         /// The current epoch ID, starting from 0.
         epoch: u64,
         /// Contains all information about the validators.
@@ -69,7 +69,7 @@ module sui::sui_system {
     ) {
         let state = SuiSystemState {
             // Use a hardcoded ID.
-            info: object::sui_system_state(),
+            id: object::sui_system_state(),
             epoch: 0,
             validators: validator_set::new(validators),
             sui_supply,

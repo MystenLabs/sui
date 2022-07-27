@@ -5,7 +5,7 @@ module examples::restricted_transfer {
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::sui::SUI;
 
@@ -13,19 +13,19 @@ module examples::restricted_transfer {
     const EWrongAmount: u64 = 0;
 
     /// A Capability that allows bearer to create new `TitleDeed`s.
-    struct GovernmentCapability has key { info: Info }
+    struct GovernmentCapability has key { id: UID }
 
     /// An object that marks a property ownership. Can only be issued
     /// by an authority.
     struct TitleDeed has key {
-        info: Info,
+        id: UID,
         // ... some additional fields
     }
 
     /// A centralized registry that approves property ownership
     /// transfers and collects fees.
     struct LandRegistry has key {
-        info: Info,
+        id: UID,
         balance: Balance<SUI>,
         fee: u64
     }
@@ -33,11 +33,11 @@ module examples::restricted_transfer {
     /// Create a `LandRegistry` on module init.
     fun init(ctx: &mut TxContext) {
         transfer::transfer(GovernmentCapability {
-            info: object::new(ctx)
+            id: object::new(ctx)
         }, tx_context::sender(ctx));
 
         transfer::share_object(LandRegistry {
-            info: object::new(ctx),
+            id: object::new(ctx),
             balance: balance::zero<SUI>(),
             fee: 10000
         })
@@ -51,7 +51,7 @@ module examples::restricted_transfer {
         ctx: &mut TxContext
     ) {
         transfer::transfer(TitleDeed {
-            info: object::new(ctx)
+            id: object::new(ctx)
         }, for)
     }
 

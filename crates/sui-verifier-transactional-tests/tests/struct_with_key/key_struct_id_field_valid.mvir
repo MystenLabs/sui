@@ -5,6 +5,6 @@
 module 0x0.m {
     import 0x2.object;
     struct S has key {
-        info: object.Info
+        id: object.UID
     }
 }
