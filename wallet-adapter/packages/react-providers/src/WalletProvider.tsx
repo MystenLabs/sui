@@ -1,12 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// /*
-//  * This provider provides an API for the 
-//  * 
-//  * 
-//  */
-
 import { FC, ReactNode, useCallback, useEffect, useState } from "react";
 import type { SuiAddress, MoveCallTransaction, TransactionResponse } from '@mysten/sui.js';
 import { WalletCapabilities } from "sui-base-wallet-adapter";
