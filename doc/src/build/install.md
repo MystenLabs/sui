@@ -2,7 +2,7 @@
 title: Install Sui
 ---
 
-Welcome to the Sui development environment! This site is available in two versions available in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest](https://docs.sui.io/learn) upstream (`main`) branch. Use the `devnet` version for app development on top of Sui. Use the Latest (`main`) branch for [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
+Welcome to the Sui development environment! This site is available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest](https://docs.sui.io/learn) upstream (`main`) branch. Use the `devnet` version for app development on top of Sui. Use the Latest (`main`) branch for [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
 
 ## Summary
 
