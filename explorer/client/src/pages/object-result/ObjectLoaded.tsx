@@ -24,6 +24,8 @@ function ObjectLoaded({ data }: { data: DataType }) {
     const [showConnectedEntities, setShowConnectedEntities] = useState(false);
     const [showTx, setShowTx] = useState(true);
 
+    const IS_MOVE_PACKAGE = data.objType === 'Move Package';
+
     useEffect(() => {
         setShowDescription(true);
         setShowProperties(true);
@@ -73,13 +75,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
         .filter(([key, _]) => key !== 'name')
         .filter(([_, value]) => checkIsPropertyType(value));
 
-    const descriptionTitle =
-        data.objType === 'Move Package' ? 'Package Description' : 'Description';
+    const descriptionTitle = IS_MOVE_PACKAGE
+        ? 'Package Description'
+        : 'Description';
 
-    const detailsTitle =
-        data.objType === 'Move Package'
-            ? 'Disassembled Bytecode'
-            : 'Properties';
+    const detailsTitle = IS_MOVE_PACKAGE
+        ? 'Disassembled Bytecode'
+        : 'Properties';
 
     const isPublisherGenesis =
         data.objType === 'Move Package' && data?.publisherAddress === 'Genesis';
@@ -98,7 +100,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
             <ObjAddressHeader
                 data={{
                     objId: data.id,
-                    objKind: 'Object',
+                    objKind: IS_MOVE_PACKAGE ? 'Package' : 'Object',
                 }}
             />
             <div className={styles.resultbox}>
@@ -187,13 +189,13 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                     )}
                                 </div>
                             )}
-                            {data.objType !== 'Move Package' && (
+                            {!IS_MOVE_PACKAGE && (
                                 <div>
                                     <div>Type</div>
                                     <div>{prepObjTypeValue(data.objType)}</div>
                                 </div>
                             )}
-                            {data.objType !== 'Move Package' && (
+                            {!IS_MOVE_PACKAGE && (
                                 <div>
                                     <div>Owner</div>
                                     <div id="owner">
@@ -250,7 +252,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             )}
                         </div>
                     )}
-                    {properties.length > 0 && data.objType !== 'Move Package' && (
+                    {properties.length > 0 && !IS_MOVE_PACKAGE && (
                         <>
                             <h2
                                 className={styles.clickableheader}
@@ -290,7 +292,7 @@ function ObjectLoaded({ data }: { data: DataType }) {
                                 </div>
                             </div>
                         ))}
-                    {data.objType !== 'Move Package' ? (
+                    {!IS_MOVE_PACKAGE ? (
                         <h2
                             className={styles.clickableheader}
                             onClick={clickSetShowConnectedEntities}
@@ -305,10 +307,9 @@ function ObjectLoaded({ data }: { data: DataType }) {
                             }}
                         />
                     )}
-                    {showConnectedEntities &&
-                        data.objType !== 'Move Package' && (
-                            <OwnedObjects id={data.id} byAddress={false} />
-                        )}
+                    {showConnectedEntities && !IS_MOVE_PACKAGE && (
+                        <OwnedObjects id={data.id} byAddress={false} />
+                    )}
                     <h2
                         className={styles.clickableheader}
                         onClick={clickSetShowTx}
