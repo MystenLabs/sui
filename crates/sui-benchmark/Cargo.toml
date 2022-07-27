@@ -14,7 +14,7 @@ futures = "0.3.21"
 serde = { version = "1.0.140", features = ["derive"] }
 serde_json = "1.0.80"
 tempfile = "3.3.0"
-tokio = { version = "1.20.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 strum = "0.24.1"
 strum_macros = "0.24.2"
 num_cpus = "1.13.1"
@@ -35,7 +35,7 @@ sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "5ba330d0cefa33ba835ffe56489e6500a2909d8a", package = "node" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "node" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-node = { path = "../sui-node" }
 workspace-hack = { path = "../workspace-hack"}

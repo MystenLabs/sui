@@ -1899,6 +1899,11 @@ async fn shared_object() {
     // Sequence the certificate to assign a sequence number to the shared object.
     authority
         .handle_consensus_transaction(
+            // TODO [2533]: use this once integrating Narwhal reconfiguration
+            &narwhal_consensus::ConsensusOutput {
+                certificate: narwhal_types::Certificate::default(),
+                consensus_index: narwhal_types::SequenceNumber::default(),
+            },
             /* last_consensus_index */ ExecutionIndices::default(),
             ConsensusTransaction::UserTransaction(Box::new(certificate.clone())),
         )
@@ -1976,7 +1981,12 @@ async fn test_consensus_message_processed() {
     async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction) {
         authority
             .handle_consensus_transaction(
-                ExecutionIndices::default(),
+                // TODO [2533]: use this once integrating Narwhal reconfiguration
+                &narwhal_consensus::ConsensusOutput {
+                    certificate: narwhal_types::Certificate::default(),
+                    consensus_index: narwhal_types::SequenceNumber::default(),
+                },
+                /* last_consensus_index */ ExecutionIndices::default(),
                 ConsensusTransaction::UserTransaction(Box::new(cert.clone())),
             )
             .await
