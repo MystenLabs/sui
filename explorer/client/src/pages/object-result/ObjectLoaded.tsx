@@ -5,7 +5,6 @@ import { useEffect, useState, useCallback } from 'react';
 import ReactJson from 'react-json-view';
 
 import DisplayBox from '../../components/displaybox/DisplayBox';
-import GoBack from '../../components/goback/GoBack';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
@@ -13,6 +12,7 @@ import TxForID from '../../components/transactions-for-id/TxForID';
 import theme from '../../styles/theme.module.css';
 import { getOwnerStr, parseImageURL } from '../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../utils/stringUtils';
+import ObjAddressHeader from './ObjectResultHeader';
 import { type DataType } from './ObjectResultType';
 
 import styles from './ObjectResult.module.css';
@@ -95,7 +95,12 @@ function ObjectLoaded({ data }: { data: DataType }) {
 
     return (
         <>
-            <GoBack />
+            <ObjAddressHeader
+                data={{
+                    objId: data.id,
+                    objKind: 'Object',
+                }}
+            />
             <div className={styles.resultbox}>
                 {viewedData.url !== '' && (
                     <div className={styles.display}>
