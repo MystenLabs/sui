@@ -85,9 +85,9 @@ pub struct CheckpointRequest {
 
 impl CheckpointRequest {
     /// Create a request for the latest checkpoint proposal from the authority
-    pub fn latest(detail: bool) -> CheckpointRequest {
+    pub fn proposal(detail: bool) -> CheckpointRequest {
         CheckpointRequest {
-            request_type: CheckpointRequestType::LatestCheckpointProposal,
+            request_type: CheckpointRequestType::CheckpointProposal,
             detail,
         }
     }
@@ -102,8 +102,6 @@ impl CheckpointRequest {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CheckpointRequestType {
-    // Request the latest proposal and previous checkpoint.
-    LatestCheckpointProposal,
     /// Request a stored authenticated checkpoint.
     /// if a sequence number is specified, return the checkpoint with that sequence number;
     /// otherwise if None returns the latest authenticated checkpoint stored.
@@ -127,16 +125,6 @@ pub struct CheckpointResponse {
 impl CheckpointResponse {
     pub fn verify(&self, committee: &Committee) -> SuiResult {
         match &self.info {
-            AuthorityCheckpointInfo::Proposal { current, previous } => {
-                if let Some(current) = current {
-                    current.verify(committee, self.detail.as_ref())?;
-                    // detail pertains to the current proposal, not the previous
-                    if let Some(previous) = previous {
-                        previous.verify(committee, None)?;
-                    }
-                }
-                Ok(())
-            }
             AuthorityCheckpointInfo::AuthenticatedCheckpoint(ckpt) => {
                 if let Some(ckpt) = ckpt {
                     ckpt.verify(committee, self.detail.as_ref())?;
@@ -168,16 +156,6 @@ impl CheckpointResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
-    // Returns the current proposal if any, and
-    // the previous checkpoint.
-    Proposal {
-        current: Option<SignedCheckpointProposalSummary>,
-        previous: Option<AuthenticatedCheckpoint>,
-        // Include in all responses the local state of the sequence
-        // of transaction to allow followers to track the latest
-        // updates.
-        // last_local_sequence: TxSequenceNumber,
-    },
     AuthenticatedCheckpoint(Option<AuthenticatedCheckpoint>),
     /// The latest proposal must be signed by the validator.
     /// For any proposal with sequence number > 0, a certified checkpoint for the previous

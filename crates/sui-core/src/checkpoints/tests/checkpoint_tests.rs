@@ -19,6 +19,7 @@ use sui_types::{
     batch::UpdateItem,
     crypto::{get_key_pair_from_rng, KeypairTraits},
     messages::{CertifiedTransaction, ExecutionStatus},
+    messages_checkpoint::CheckpointRequest,
     object::Object,
     utils::{make_committee_key, make_committee_key_num},
     waypoint::GlobalCheckpoint,
@@ -390,17 +391,15 @@ fn latest_proposal() {
 
     // No checkpoint no proposal
 
-    let request = CheckpointRequest::latest(false);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1.handle_proposal(false).expect("no errors");
     assert!(response.detail.is_none());
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Proposal { .. }
+        AuthorityCheckpointInfo::CheckpointProposal {
+            proposal: None,
+            prev_cert: None,
+        }
     ));
-    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
-        assert!(current.is_none());
-        assert!(matches!(previous, None));
-    }
 
     // ---
 
@@ -413,18 +412,21 @@ fn latest_proposal() {
     // First checkpoint condition
 
     // Check the latest checkpoint with no detail
-    let request = CheckpointRequest::latest(false);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1.handle_proposal(false).expect("no errors");
     assert!(response.detail.is_none());
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Proposal { .. }
+        AuthorityCheckpointInfo::CheckpointProposal { .. }
     ));
-    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
-        assert!(current.is_some());
-        assert!(matches!(previous, None));
+    if let AuthorityCheckpointInfo::CheckpointProposal {
+        proposal,
+        prev_cert,
+    } = response.info
+    {
+        assert!(proposal.is_some());
+        assert!(prev_cert.is_none());
 
-        let current_proposal = current.unwrap();
+        let current_proposal = proposal.unwrap();
         current_proposal
             .verify(&committee, None)
             .expect("no signature error");
@@ -434,18 +436,21 @@ fn latest_proposal() {
     // --- TEST 2 ---
 
     // Check the latest checkpoint with detail
-    let request = CheckpointRequest::latest(true);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1.handle_proposal(false).expect("no errors");
     assert!(response.detail.is_some());
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Proposal { .. }
+        AuthorityCheckpointInfo::CheckpointProposal { .. }
     ));
-    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
-        assert!(current.is_some());
-        assert!(matches!(previous, None));
+    if let AuthorityCheckpointInfo::CheckpointProposal {
+        proposal,
+        prev_cert,
+    } = response.info
+    {
+        assert!(proposal.is_some());
+        assert!(prev_cert.is_none());
 
-        let current_proposal = current.unwrap();
+        let current_proposal = proposal.unwrap();
         current_proposal
             .verify(&committee, response.detail.as_ref())
             .expect("no signature error");
@@ -540,15 +545,14 @@ fn latest_proposal() {
     cps1.promote_signed_checkpoint_to_cert(&cert, &committee, &CheckpointMetrics::new_for_tests())
         .unwrap();
 
-    let request = CheckpointRequest::latest(false);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1.handle_proposal(false).expect("no errors");
     assert!(response.detail.is_none());
     // The proposal should have been cleared now.
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Proposal {
-            current: None,
-            previous: Some(AuthenticatedCheckpoint::Certified { .. })
+        AuthorityCheckpointInfo::CheckpointProposal {
+            proposal: None,
+            prev_cert: Some(_)
         }
     ));
 
@@ -561,20 +565,20 @@ fn latest_proposal() {
     // --- TEST 4 ---
 
     // Get the full proposal with previous proposal
-    let request = CheckpointRequest::latest(true);
-    let response = cps1.handle_latest_proposal(&request).expect("no errors");
+    let response = cps1.handle_proposal(true).expect("no errors");
     assert!(matches!(
         response.info,
-        AuthorityCheckpointInfo::Proposal { .. }
+        AuthorityCheckpointInfo::CheckpointProposal { .. }
     ));
-    if let AuthorityCheckpointInfo::Proposal { current, previous } = response.info {
-        assert!(current.is_some());
-        assert!(matches!(
-            previous,
-            Some(AuthenticatedCheckpoint::Certified { .. })
-        ));
+    if let AuthorityCheckpointInfo::CheckpointProposal {
+        proposal,
+        prev_cert,
+    } = response.info
+    {
+        assert!(proposal.is_some());
+        assert!(matches!(prev_cert, Some(_)));
 
-        let current_proposal = current.unwrap();
+        let current_proposal = proposal.unwrap();
         current_proposal
             .verify(&committee, None)
             .expect("no signature error");
@@ -1790,22 +1794,22 @@ async fn checkpoint_messaging_flow() {
 
     for (auth, client) in &setup.aggregator.authority_clients {
         let response = client
-            .handle_checkpoint(CheckpointRequest::latest(true))
+            .handle_checkpoint(CheckpointRequest::proposal(true))
             .await
             .expect("No issues");
 
         assert!(matches!(
             response.info,
-            AuthorityCheckpointInfo::Proposal { .. }
+            AuthorityCheckpointInfo::CheckpointProposal { .. }
         ));
 
-        if let AuthorityCheckpointInfo::Proposal { current, .. } = &response.info {
-            assert!(current.is_some());
+        if let AuthorityCheckpointInfo::CheckpointProposal { proposal, .. } = &response.info {
+            assert!(proposal.is_some());
 
             proposals.push((
                 *auth,
                 CheckpointProposal::new_from_signed_proposal_summary(
-                    current.as_ref().unwrap().clone(),
+                    proposal.as_ref().unwrap().clone(),
                     response.detail.unwrap(),
                 ),
             ));

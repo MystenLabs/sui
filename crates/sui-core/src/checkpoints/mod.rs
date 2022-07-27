@@ -22,8 +22,8 @@ use sui_types::{
     fp_ensure,
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
-        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
-        CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
+        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointResponse,
+        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
 use tracing::{debug, error, info};
@@ -291,48 +291,6 @@ impl CheckpointStore {
 
     // Define handlers for request
 
-    pub fn handle_latest_proposal(
-        &mut self,
-        request: &CheckpointRequest,
-    ) -> Result<CheckpointResponse, SuiError> {
-        // Try to load any latest proposal
-        let locals = self.get_locals();
-        let latest_checkpoint_proposal = &locals.current_proposal;
-
-        // Load the latest checkpoint from the database
-        let previous_checkpoint = self
-            .checkpoints
-            .iter()
-            .skip_to_last()
-            .next()
-            .map(|(_, c)| c);
-
-        // Get the current proposal if there is one.
-        let current = latest_checkpoint_proposal
-            .as_ref()
-            .map(|proposal| proposal.signed_summary.clone());
-
-        // If requested include either the transactions in the latest checkpoint proposal
-        // or the unprocessed transactions that block the generation of a proposal.
-        let detail = if request.detail {
-            latest_checkpoint_proposal
-                .as_ref()
-                // If the checkpoint exist return its contents.
-                .map(|proposal| proposal.transactions.clone())
-        } else {
-            None
-        };
-
-        // Make the response
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Proposal {
-                current,
-                previous: previous_checkpoint,
-            },
-            detail,
-        })
-    }
-
     pub fn handle_proposal(&mut self, detail: bool) -> Result<CheckpointResponse, SuiError> {
         let locals = self.get_locals();
         let latest_checkpoint_proposal = &locals.current_proposal;
@@ -341,10 +299,8 @@ impl CheckpointStore {
             .as_ref()
             .map(|proposal| proposal.signed_summary.clone());
 
-        let contents = match (detail, &signed_proposal) {
-            (true, Some(proposal)) => self
-                .checkpoint_contents
-                .get(&proposal.summary.sequence_number)?,
+        let contents = match (detail, &latest_checkpoint_proposal) {
+            (true, Some(proposal)) => Some(proposal.transactions.clone()),
             _ => None,
         };
 
