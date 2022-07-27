@@ -1,6 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// To review and fix test failures in this file,
+// 0. Install cargo-insta
+// 1. Run `cargo insta test --review` under `./sui-config`.
+// 2. Review, accept or reject changes.
+
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 
@@ -55,6 +60,7 @@ fn populated_genesis_snapshot_matches() {
     assert_yaml_snapshot!(genesis.committee().unwrap());
     assert_yaml_snapshot!(genesis.narwhal_committee());
     assert_yaml_snapshot!(genesis.sui_system_object());
+    // Serialized `genesis` is not static and cannot be snapshot tested.
 }
 
 #[test]
