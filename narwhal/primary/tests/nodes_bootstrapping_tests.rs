@@ -99,7 +99,7 @@ async fn test_second_node_restart() {
     let node_advance_delay = Duration::from_secs(60);
 
     // A cluster of 4 nodes will be created
-    let mut cluster = Cluster::new(None, None);
+    let mut cluster = Cluster::new(None, None, true);
 
     // ===== Start the cluster ====
     cluster.start(Some(4), Some(1), None).await;
