@@ -18,6 +18,7 @@ use test_utils::{
     authority::test_authority_aggregator,
     messages::{make_counter_create_transaction, make_counter_increment_transaction},
     objects::{generate_gas_object, generate_gas_objects_for_testing},
+    test_account_keys,
     transaction::publish_counter_package,
 };
 
@@ -38,7 +39,14 @@ impl Payload for SharedCounterTestPayload {
         })
     }
     fn make_transaction(&self) -> TransactionEnvelope<EmptySignInfo> {
-        make_counter_increment_transaction(self.gas.0, self.package_ref, self.counter_id)
+        let (sender, keypair) = test_account_keys().pop().unwrap();
+        make_counter_increment_transaction(
+            self.gas.0,
+            self.package_ref,
+            self.counter_id,
+            sender,
+            &keypair,
+        )
     }
     fn get_object_id(&self) -> ObjectID {
         self.counter_id
@@ -83,8 +91,13 @@ impl StressTestCtx<dyn Payload> for SharedCounterTestCtx {
             .map(|g| (quorum_driver_handler.clone_quorum_driver(), g));
         // create counters
         let futures = qd_and_gas.map(|(qd, gas_object)| async move {
-            let tx =
-                make_counter_create_transaction(gas_object.compute_object_reference(), package_ref);
+            let (sender, keypair) = test_account_keys().pop().unwrap();
+            let tx = make_counter_create_transaction(
+                gas_object.compute_object_reference(),
+                package_ref,
+                sender,
+                &keypair,
+            );
             if let ExecuteTransactionResponse::EffectsCert(result) = qd
                 .execute_transaction(ExecuteTransactionRequest {
                     transaction: tx,
