@@ -26,6 +26,41 @@ network will charge for gas using its native currency SUI. This transaction fee
 equals the computational effort of executing operations on the Sui network (i.e.
 gas units) times the price of gas in the SUI currency (i.e. the gas price).
 
+## Quick script
+If you prefer not to enter command step by step, or need to go though it multiple
+times for whatever reason (change some move source code ), this automated script
+may be useful to save some time.
+Run this script from the project repo root.
+```sh
+#!/bin/bash
+# a bash script to automate the process of publishing the game package
+# this script should be run at root of the repo
+
+# assign address
+CLIENT_ADDRESS=$(sui client addresses | tail -n +2)
+echo $CLIENT_ADDRESS
+ADMIN=$CLIENT_ADDRESS | head -n 1
+PLAYER_X=$CLIENT_ADDRESS | head -n 2
+PLAYER_Y=$CLIENT_ADDRESS | head -n 3
+
+# gas id
+IFS='|'
+ADMIN_GAS=$(sui client gas --address $ADMIN | sed -n 3p)
+read -a tmparr <<< "$ADMIN_GAS"
+ADMIN_GAS_ID=`echo ${tmparr[0]} | xargs`
+
+X_GAS=$(sui client gas --address $PLAYER_X | sed -n 3p)
+read -a tmparr <<< "$X_GAS"
+X_GAS_ID=`echo ${tmparr[0]} | xargs`
+
+Y_GAS=$(sui client gas --address $PLAYER_Y | sed -n 3p)
+read -a tmparr <<< "$Y_GAS"
+Y_GAS_ID=`echo ${tmparr[0]} | xargs`
+
+# publish games
+sui client publish --path ./sui_programmability/examples/games --gas $ADMIN_GAS_ID --gas-budget 30000
+```
+
 ## Gather accounts and gas objects
 
 In that new terminal, let us take a look at the account addresses we own in
