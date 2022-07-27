@@ -1,7 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::max;
 use std::collections::{BTreeMap, HashMap, VecDeque};
+use tracing::debug;
 
 use sui_types::base_types::ExecutionDigests;
 use sui_types::committee::StakeUnit;
@@ -45,6 +47,8 @@ impl FragmentReconstruction {
         let mut proposals: HashMap<AuthorityName, CheckpointProposalSummary> = HashMap::new();
         let mut extra_transactions = BTreeMap::new();
 
+        let total_fragments_count = fragments.len();
+        let mut max_weight_seen = 0;
         for frag in fragments {
             // Double check we have only been given waypoints for the correct sequence number
             debug_assert!(frag.proposer.summary.sequence_number == seq);
@@ -74,6 +78,7 @@ impl FragmentReconstruction {
 
             // Merge the link.
             let (top, weight) = span.merge(n1, n2);
+            max_weight_seen = max(max_weight_seen, weight);
 
             // We have found a connected component larger than the 2/3 threshold
             if weight >= committee.quorum_threshold() {
@@ -110,6 +115,12 @@ impl FragmentReconstruction {
                 });
             }
         }
+        debug!(
+            ?max_weight_seen,
+            ?total_fragments_count,
+            num_fragments_used = fragments_used.len(),
+            "Unable to construct a checkpoint after using all fragments",
+        );
 
         // If we run out of candidates with no checkpoint, there is no
         // checkpoint yet.
