@@ -395,24 +395,25 @@ describe('End-to-end Tests', () => {
         });
     });
     describe('Transactions for ID', () => {
-        const txResults =
-            'TxIdTimeTxTypeStatusAddressesXHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressYHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZITP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZJTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZKTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZLTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZMTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZNTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZOTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZPTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressGHTP9gcFmF5K...KFhdqfpdK8=1min3secsagoTransfer✖From:senderAddressTo:receiv...dressDa4vHc9IwbvO...+xnJ7Zx5E4=17days1houragoTransfer✔From:senderAddressTo:receiv...dress';
-
         it('are displayed from and to address', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
-                .with('#tx')
+                .with('[data-testid="tx"]')
                 .get.textContent();
-            expect(fromResults.replace(/\s/g, '')).toBe(txResults);
+            expect(fromResults.replace(/\s/g, '')).toMatchInlineSnapshot(
+                `"TimeTxTypeTransactionIDAddressesGas<1secagoTransferXHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferYHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZITP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZJTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZKTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZLTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZMTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZNTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZOTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZPTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress411m3sagoTransferGHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress4117d1hagoTransferDa4vHc9IwbvO...+xnJ7Zx5E4=senderAddressreceiv...dress41"`
+            );
         });
         it('are displayed for input and mutated object', async () => {
             const address = 'CollectionObject';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
-                .with('#tx')
+                .with('[data-testid="tx"]')
                 .get.textContent();
-            expect(fromResults.replace(/\s/g, '')).toBe(txResults);
+            expect(fromResults.replace(/\s/g, '')).toMatchInlineSnapshot(
+                `"TimeTxTypeTransactionIDAddressesGas<1secagoTransferXHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferYHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZITP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZJTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZKTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZLTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZMTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZNTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZOTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZPTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress411m3sagoTransferGHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress4117d1hagoTransferDa4vHc9IwbvO...+xnJ7Zx5E4=senderAddressreceiv...dress41"`
+            );
         });
     });
 });
