@@ -436,7 +436,7 @@ fn latest_proposal() {
     // --- TEST 2 ---
 
     // Check the latest checkpoint with detail
-    let response = cps1.handle_proposal(false).expect("no errors");
+    let response = cps1.handle_proposal(true).expect("no errors");
     assert!(response.detail.is_some());
     assert!(matches!(
         response.info,
@@ -552,7 +552,7 @@ fn latest_proposal() {
         response.info,
         AuthorityCheckpointInfo::CheckpointProposal {
             proposal: None,
-            prev_cert: Some(_)
+            prev_cert: None,
         }
     ));
 
