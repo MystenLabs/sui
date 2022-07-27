@@ -47,8 +47,7 @@ Then send your work our way. We will get back to you shortly.
 In order to obtain the Sui source code, follow the steps to download (`git clone`) the `sui` repository
 at [Install Sui](../build/install.md#source-code).
 
-> **Tip:** The install docs recommend use of the `devnet` branch as the last stable release. To instead
-> contribute changes to Sui, use the `main` branch.
+This site is available in two versions available in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest](https://docs.sui.io/learn) upstream (`main`) branch. Use the `devnet` version for app development on top of Sui. Use the Latest (`main`) branch for [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
 
 And see the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
 * https://mystenlabs.github.io/sui/ - the Sui blockchain
