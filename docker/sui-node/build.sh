@@ -12,17 +12,13 @@ GIT_REVISION="$(git describe --always --dirty)"
 BUILD_DATE="$(date -u +'%Y-%m-%d')"
 
 # option to build using debug symbols
-if [[ "$1" == "--debug-symbols" ]]; then
+if [ "$1" = "--debug-symbols" ]; then
 	PROFILE="bench-profiling"
 	echo "Building with debug symbols enabled"
-elif [[ -z "$1 " ]]; then
-	PROFILE="release"
+	shift
 else
-	PROFILE=""
-	echo "Did not understand arg $1... try --debug-symbols"
-	exit 1
+	PROFILE="release"
 fi
-shift
 
 echo
 echo "Building sui-node docker image"
