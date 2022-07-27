@@ -22,9 +22,11 @@ Simply leave the terminal with Sui running and start a new terminal for the
 remainder of this tutorial.
 
 This tutorial models gas fees under a simplified schema. In practice, the Sui
-network will charge for gas using its native currency SUI. This transaction fee
+network charges for gas using its native currency SUI. This transaction fee
 equals the computational effort of executing operations on the Sui network (i.e.
 gas units) times the price of gas in the SUI currency (i.e. the gas price).
+
+When you complete the setup steps, you can use the either use following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather accounts and gas objects](#gather-accounts-and-gas-objects) section.
 
 ## Quick script
 If you prefer not to enter command step by step, or need to go though it multiple
@@ -63,13 +65,12 @@ sui client publish --path ./sui_programmability/examples/games --gas $ADMIN_GAS_
 
 ## Gather accounts and gas objects
 
-In that new terminal, let us take a look at the account addresses we own in
-our CLI client with the command:
+In the new terminal session you started, use the following command in the Sui CLI client to view the account addresses we own:
 ```shell
 $ sui client addresses
 ```
 
-Which will result in output resembling:
+Which results in output resembling:
 ```shell
 Showing 5 results.
 ECF53CE22D1B2FB588573924057E9ADDAD1D8385
@@ -78,7 +79,8 @@ ECF53CE22D1B2FB588573924057E9ADDAD1D8385
 DB4C7667636471AFF396B900EB7B63FACAF629B6
 A6BBB1930E01495EE93CE912EA01C29695E07890
 ```
-Note that since these addresses are random generated, they will be different from what you see. We are going to need three addresses to play TicTacToe. Let's pick the first three addresses. Let's call them ADMIN, PLAYER_X and PLAYER_O.
+Note that since these addresses are randomly generated, they are different from the values you see when you run the command. We need three addresses to play TicTacToe. Let's pick the first three addresses. Let's call them ADMIN, PLAYER_X and PLAYER_O. 
+
 Since we will be using these addresses and gas objects repeatedly in the rest of this tutorial, let's make them environment variables so that we don't have to retype them every time:
 ```
 $ export ADMIN=ECF53CE22D1B2FB588573924057E9ADDAD1D8385
@@ -86,7 +88,7 @@ export PLAYER_X=7B61DA6AACED7F28C1187D998955F10464BEAE55
 export PLAYER_O=251CF224B6BA3A019D04B6041357C20490F7A322
 ```
 
-For each of these addresses, let's discover their gas objects for each account address:
+For each of these addresses, let's discover the gas objects associated with each account address:
 ```
 $ sui client gas --address $ADMIN
                 Object ID                 |  Version   |  Gas Value
@@ -131,7 +133,7 @@ To publish the game, we run the publish command and specify the path to the sour
 $ sui client publish --path ./sui/sui_programmability/examples/games --gas $ADMIN_GAS --gas-budget 30000
 ```
 
-Which will yield results resembling:
+Which yields results resembling:
 ```shell
 ----- Certificate ----
 Signed Authorities : ...
@@ -149,7 +151,7 @@ export PACKAGE=A613A7FF8CB03E0DFC0D157E232BBA50C5F19D17
 ```
 
 ## Playing TicTacToe
-As we mentioned earlier, we will need 3 parties to participate in this game: Admin, PlayerX and PlayerO.
+As we mentioned earlier, we need 3 parties to participate in this game: Admin, PlayerX and PlayerO.
 As a high level, the game works as following:
 1. The admin creates a game, which also specifies the addresses of the two players. This will also create two capability objects and send to each of the addresses to give them permission to participate in the same game. This ensures that an arbitrary person cannot attempt to join this game.
 2. Each player takes turns to send a *Mark* object to the admin indicating where they want to place their mark.
@@ -184,7 +186,7 @@ F1B8161BD97D3CD6627E739AD675089C5ACFB452 SequenceNumber(1) o#1c92bdf7646cad2a653
 Mutated Objects:
 38B89FE9F4A4823F1406938E87A8767CBD7F0B93 SequenceNumber(2) o#26dbaf7ec2032a6270a45498ad46ac0b1ddbc361fcff20cadafaf5d39b8181b1
 ```
-The above call created three objects. For each object, it printed out a tuple of three values (object_id, version, object_digest). Object ID is what we care about here. Since we don't have a real application here to display things for us, we need a bit of object printing magic to figure out which object is which. Let's print out the metadata of each created object (replace the object ID with what you see on your screen):
+The preceding call created three objects. For each object, it printed out a tuple of three values (object_id, version, object_digest). Object ID is what we care about here. Since we don't have a real application here to display things for us, we need a bit of object printing magic to figure out which object is which. Let's print out the metadata of each created object (replace the object ID with what you see on your screen):
 ```
 $ sui client object --id 5851B7EA07B93E68696BC0CF811D2E266DFB880D
 Owner: AddressOwner(k#251cf224b6ba3a019d04b6041357c20490f7a322)
