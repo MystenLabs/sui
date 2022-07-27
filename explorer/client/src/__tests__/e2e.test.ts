@@ -11,7 +11,7 @@ const BASE_URL = 'http://localhost:8080';
 //Standardized CSS Selectors
 
 const coinGroup = (num: number) => {
-    const trunk = `#groupCollection > tr:nth-child(${num + 1})`;
+    const trunk = `#groupCollection > tbody > tr:nth-child(${num})`;
     return {
         base: () => trunk,
         field: (numField: number) => `${trunk} > td:nth-child(${numField})`,
