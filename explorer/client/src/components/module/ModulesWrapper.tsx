@@ -4,22 +4,22 @@
 import { useMemo, useState, useEffect } from 'react';
 
 import Pagination from '../../components/pagination/Pagination';
-import TxModuleView from './TxModuleView';
+import ModuleView from './ModuleView';
 
-import styles from './TxModuleView.module.css';
+import styles from './ModuleView.module.css';
 
-type TxModules = {
+type Modules = {
     title: string;
     content: any[];
 };
 
-const TX_MODULES_PER_PAGE = 3;
+const MODULES_PER_PAGE = 3;
 // TODO: Include Pagination for now use viewMore and viewLess
-function TxModuleViewWrapper({ data }: { data: TxModules }) {
+function ModuleViewWrapper({ data }: { data: Modules }) {
     const moduleData = useMemo(() => data, [data]);
     const [modulesPageNumber, setModulesPageNumber] = useState(1);
     const totalModulesCount = moduleData.content.length;
-    const numOfMudulesToShow = TX_MODULES_PER_PAGE;
+    const numOfMudulesToShow = MODULES_PER_PAGE;
 
     useEffect(() => {
         setModulesPageNumber(modulesPageNumber);
@@ -32,8 +32,8 @@ function TxModuleViewWrapper({ data }: { data: TxModules }) {
 
     return (
         <div className={styles.modulewraper}>
-            <h3 className={styles.txtitle}>Modules </h3>
-            <div className={styles.txmodule}>
+            <h3 className={styles.title}>{data.title}</h3>
+            <div className={styles.module}>
                 {moduleData.content
                     .filter(
                         (_, index) =>
@@ -42,7 +42,7 @@ function TxModuleViewWrapper({ data }: { data: TxModules }) {
                             index < modulesPageNumber * numOfMudulesToShow
                     )
                     .map((item, idx) => (
-                        <TxModuleView itm={item} key={idx} />
+                        <ModuleView itm={item} key={idx} />
                     ))}
             </div>
             {totalModulesCount > numOfMudulesToShow && (
@@ -57,4 +57,4 @@ function TxModuleViewWrapper({ data }: { data: TxModules }) {
         </div>
     );
 }
-export default TxModuleViewWrapper;
+export default ModuleViewWrapper;

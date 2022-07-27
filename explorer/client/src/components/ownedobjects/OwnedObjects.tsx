@@ -242,39 +242,38 @@ function GroupView({ results }: { results: resultType }) {
                 id="groupCollection"
                 className={`${styles.groupview} ${tablestyle.table}`}
             >
-                <tr>
-                    <th>Type</th>
-                    <th>Balance</th>
-                </tr>
-                {uniqueTypes.map((typeV) => {
-                    const subObjList = results.filter(
-                        ({ Type }) => Type === typeV
-                    );
-                    return (
-                        <tr key={typeV} onClick={shrinkObjList(subObjList)}>
-                            <td className={styles.tablespacing}>
-                                {handleCoinType(typeV)}
-                            </td>
-                            <td className={styles.tablespacing}>
-                                {subObjList[0]._isCoin &&
-                                subObjList.every(
-                                    (el) => el.balance !== undefined
-                                )
-                                    ? `${subObjList.reduce(
-                                          (prev, current) =>
-                                              prev.add(current.balance!),
-                                          Coin.getZero()
-                                      )}`
-                                    : ''}
-                            </td>
-                        </tr>
-                    );
-                })}
-                {lastRowHas2Elements(uniqueTypes) && (
-                    <div
-                        className={`${styles.objectbox} ${styles.fillerbox}`}
-                    />
-                )}
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Balance</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {uniqueTypes.map((typeV) => {
+                        const subObjList = results.filter(
+                            ({ Type }) => Type === typeV
+                        );
+                        return (
+                            <tr key={typeV} onClick={shrinkObjList(subObjList)}>
+                                <td className={styles.tablespacing}>
+                                    {handleCoinType(typeV)}
+                                </td>
+                                <td className={styles.tablespacing}>
+                                    {subObjList[0]._isCoin &&
+                                    subObjList.every(
+                                        (el) => el.balance !== undefined
+                                    )
+                                        ? `${subObjList.reduce(
+                                              (prev, current) =>
+                                                  prev.add(current.balance!),
+                                              Coin.getZero()
+                                          )}`
+                                        : ''}
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
             </table>
         );
     } else {

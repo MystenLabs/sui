@@ -22,11 +22,11 @@ use sui_types::{
     fp_ensure,
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
-        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
-        CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
+        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointResponse,
+        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use typed_store::{
     reopen,
     rocks::{open_cf_opts, DBBatch, DBMap},
@@ -291,65 +291,65 @@ impl CheckpointStore {
 
     // Define handlers for request
 
-    pub fn handle_latest_proposal(
-        &mut self,
-        request: &CheckpointRequest,
-    ) -> Result<CheckpointResponse, SuiError> {
-        // Try to load any latest proposal
+    pub fn handle_proposal(&mut self, detail: bool) -> Result<CheckpointResponse, SuiError> {
         let locals = self.get_locals();
         let latest_checkpoint_proposal = &locals.current_proposal;
 
-        // Load the latest checkpoint from the database
-        let previous_checkpoint = self
-            .checkpoints
-            .iter()
-            .skip_to_last()
-            .next()
-            .map(|(_, c)| c);
-
-        // Get the current proposal if there is one.
-        let current = latest_checkpoint_proposal
+        let signed_proposal = latest_checkpoint_proposal
             .as_ref()
             .map(|proposal| proposal.signed_summary.clone());
 
-        // If requested include either the transactions in the latest checkpoint proposal
-        // or the unprocessed transactions that block the generation of a proposal.
-        let detail = if request.detail {
-            latest_checkpoint_proposal
-                .as_ref()
-                // If the checkpoint exist return its contents.
-                .map(|proposal| proposal.transactions.clone())
-        } else {
-            None
+        let contents = match (detail, &latest_checkpoint_proposal) {
+            (true, Some(proposal)) => Some(proposal.transactions.clone()),
+            _ => None,
         };
 
-        // Make the response
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Proposal {
-                current,
-                previous: previous_checkpoint,
-            },
-            detail,
-        })
-    }
-
-    pub fn handle_past_checkpoint(
-        &self,
-        detail: bool,
-        seq: CheckpointSequenceNumber,
-    ) -> Result<CheckpointResponse, SuiError> {
-        // Get the checkpoint with a given sequence number
-        let checkpoint = self.checkpoints.get(&seq)?;
-
-        // If a checkpoint is found, and if requested, return the list of transaction digest in it.
-        let content = match (detail, &checkpoint) {
-            (true, Some(_)) => self.checkpoint_contents.get(&seq)?,
+        let prev_cert = match &signed_proposal {
+            Some(proposal) if proposal.summary.sequence_number > 0 => {
+                let seq = proposal.summary.sequence_number;
+                let checkpoint = self.checkpoints.get(&(seq - 1))?;
+                match checkpoint {
+                    Some(AuthenticatedCheckpoint::Signed(_)) | None => {
+                        error!(
+                            "Invariant violation detected: Validator is making a proposal for checkpoint {:?}, but no certificate exists for checkpoint {:?}",
+                            seq,
+                            seq - 1,
+                        );
+                        return Err(SuiError::from(
+                            "Checkpoint proposal sequence number inconsistent with latest cert",
+                        ));
+                    }
+                    Some(AuthenticatedCheckpoint::Certified(c)) => Some(c),
+                }
+            }
             _ => None,
         };
 
         Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Past(checkpoint),
-            detail: content,
+            info: AuthorityCheckpointInfo::CheckpointProposal {
+                proposal: signed_proposal,
+                prev_cert,
+            },
+            detail: contents,
+        })
+    }
+
+    pub fn handle_authenticated_checkpoint(
+        &mut self,
+        seq: &Option<CheckpointSequenceNumber>,
+        detail: bool,
+    ) -> SuiResult<CheckpointResponse> {
+        let checkpoint = match seq {
+            Some(s) => self.checkpoints.get(s)?,
+            None => self.latest_stored_checkpoint(),
+        };
+        let contents = match (&checkpoint, detail) {
+            (Some(c), true) => self.checkpoint_contents.get(&c.summary().sequence_number)?,
+            _ => None,
+        };
+        Ok(CheckpointResponse {
+            info: AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint),
+            detail: contents,
         })
     }
 
@@ -471,7 +471,7 @@ impl CheckpointStore {
         &mut self,
         fragment: &CheckpointFragment,
         committee: &Committee,
-    ) -> Result<CheckpointResponse, SuiError> {
+    ) -> SuiResult {
         // Check structure is correct and signatures verify
         fragment.verify(committee)?;
 
@@ -524,10 +524,7 @@ impl CheckpointStore {
         //       according to the byte length of the fragment, to create
         //       incentives for nodes to submit smaller fragments.
 
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Success,
-            detail: None,
-        })
+        Ok(())
     }
 
     /// This function should be called by the consensus output, it is idempotent,

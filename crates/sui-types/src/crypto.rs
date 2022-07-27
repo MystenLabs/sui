@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use std::fmt::Display;
+use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
@@ -576,6 +576,23 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         let message_index = obligation.add_message(data);
         self.add_to_verification_obligation(committee, &mut obligation, message_index)?;
         obligation.verify_all()?;
+        Ok(())
+    }
+}
+
+impl<const S: bool> Display for AuthorityQuorumSignInfo<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "{} {{ epoch: {:?}, signers_map: {:?} }}",
+            if S {
+                "AuthorityStrongQuorumSignInfo"
+            } else {
+                "AuthorityWeakQuorumSignInfo"
+            },
+            self.epoch,
+            self.signers_map,
+        )?;
         Ok(())
     }
 }

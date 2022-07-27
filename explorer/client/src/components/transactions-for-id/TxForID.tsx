@@ -6,8 +6,7 @@ import {
     type ExecutionStatusType,
     type TransactionKindName,
 } from '@mysten/sui.js';
-import cl from 'classnames';
-import { useState, useEffect, useContext } from 'react';
+import { useState, useEffect, useContext, useMemo } from 'react';
 
 import { NetworkContext } from '../../context';
 import {
@@ -15,15 +14,14 @@ import {
     getDataOnTxDigests,
 } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
+import { numberSuffix } from '../../utils/numberUtil';
 import { deduplicate } from '../../utils/searchUtil';
 import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
 import { truncate } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
 import ErrorResult from '../error-result/ErrorResult';
-import Longtext from '../longtext/Longtext';
 import PaginationLogic from '../pagination/PaginationLogic';
-
-import styles from './TxForID.module.css';
+import TableCard from '../table/TableCard';
 
 const TRUNCATE_LENGTH = 14;
 const ITEMS_PER_PAGE = 20;
@@ -40,6 +38,7 @@ type TxnData = {
     From: string;
     To?: string;
     timestamp_ms?: number | null;
+    txGas: number;
 };
 
 type categoryType = 'address' | 'object';
@@ -56,70 +55,83 @@ const getTx = async (
 const viewFn = (results: any) => <TxForIDView showData={results} />;
 
 function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
-    if (!showData || showData.length === 0) return <></>;
+    // TODO: Ideally move this to a prop:
+    const hasTimeColumn = showData?.[0]?.timestamp_ms;
+
+    const tableData = useMemo(
+        () => ({
+            data: (showData ?? []).map((data) => ({
+                date: `${timeAgo(data.timestamp_ms, undefined, true)} ago`,
+                txTypes: {
+                    txTypeName: data.kind,
+                    status: data.status,
+                },
+                transactionId: [
+                    {
+                        url: data.txId,
+                        name: truncate(data.txId, 26, '...'),
+                        category: 'transactions',
+                        isLink: true,
+                        copy: false,
+                    },
+                ],
+                addresses: [
+                    {
+                        url: data.From,
+                        name: truncate(data.From, TRUNCATE_LENGTH),
+                        category: 'addresses',
+                        isLink: true,
+                        copy: false,
+                    },
+                    ...(data.To
+                        ? [
+                              {
+                                  url: data.To,
+                                  name: truncate(data.To, TRUNCATE_LENGTH),
+                                  category: 'addresses',
+                                  isLink: true,
+                                  copy: false,
+                              },
+                          ]
+                        : []),
+                ],
+                gas: numberSuffix(data.txGas),
+            })),
+            columns: [
+                ...(hasTimeColumn
+                    ? [
+                          {
+                              headerLabel: 'Time',
+                              accessorKey: 'date',
+                          },
+                      ]
+                    : []),
+                {
+                    headerLabel: 'TxType',
+                    accessorKey: 'txTypes',
+                },
+                {
+                    headerLabel: 'Transaction ID',
+                    accessorKey: 'transactionId',
+                },
+                {
+                    headerLabel: 'Addresses',
+                    accessorKey: 'addresses',
+                },
+                {
+                    headerLabel: 'Gas',
+                    accessorKey: 'gas',
+                },
+            ],
+        }),
+        [hasTimeColumn, showData]
+    );
+
+    if (!showData || showData.length === 0) return null;
 
     return (
-        <div id="tx" className={styles.txresults}>
-            <div className={styles.txheader}>
-                <div className={styles.txid}>TxId</div>
-                {showData[0].timestamp_ms && (
-                    <div className={styles.txage}>Time</div>
-                )}
-                <div className={styles.txtype}>TxType</div>
-                <div className={styles.txstatus}>Status</div>
-                <div className={styles.txadd}>Addresses</div>
-            </div>
-
-            {showData.map((x, index) => (
-                <div key={`txid-${index}`} className={styles.txrow}>
-                    <div className={styles.txid}>
-                        <Longtext
-                            text={x.txId}
-                            category="transactions"
-                            isLink={true}
-                            alttext={truncate(x.txId, 26, '...')}
-                        />
-                    </div>
-                    {x.timestamp_ms && (
-                        <div className={styles.txage}>
-                            {`${timeAgo(x.timestamp_ms)} ago`}
-                        </div>
-                    )}
-                    <div className={styles.txtype}>{x.kind}</div>
-                    <div
-                        className={cl(
-                            styles.txstatus,
-                            styles[x.status.toLowerCase()]
-                        )}
-                    >
-                        {x.status === 'success' ? '\u2714' : '\u2716'}
-                    </div>
-                    <div className={styles.txadd}>
-                        <div>
-                            From:
-                            <Longtext
-                                text={x.From}
-                                category="addresses"
-                                isLink={true}
-                                isCopyButton={false}
-                                alttext={truncate(x.From, TRUNCATE_LENGTH)}
-                            />
-                        </div>
-                        {x.To && (
-                            <div>
-                                To :
-                                <Longtext
-                                    text={x.To}
-                                    category="addresses"
-                                    isLink={true}
-                                    isCopyButton={false}
-                                    alttext={truncate(x.To, TRUNCATE_LENGTH)}
-                                />
-                            </div>
-                        )}
-                    </div>
-                </div>
-            ))}
+        <div data-testid="tx">
+            <TableCard tabledata={tableData} />
         </div>
     );
 }
@@ -168,6 +180,7 @@ function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
                             kind: el!.kind,
                             From: el!.From,
                             To: el!.To,
+                            txGas: el!.txGas,
                             timestamp_ms: el!.timestamp_ms,
                         }));
                         setData({

@@ -76,6 +76,8 @@ mod gas_tests;
 
 pub use sui_adapter::temporary_store::TemporaryStore;
 
+pub mod authority_store_tables;
+
 mod authority_store;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
@@ -108,6 +110,8 @@ pub struct AuthorityMetrics {
     num_input_objs: Histogram,
     num_shared_objects: Histogram,
     batch_size: Histogram,
+
+    total_consensus_txns: IntCounter,
 
     pub follower_items_streamed: IntCounter,
     pub follower_items_loaded: IntCounter,
@@ -195,6 +199,12 @@ impl AuthorityMetrics {
                 "batch_size",
                 "Distribution of size of transaction batch",
                 POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_consensus_txns: register_int_counter_with_registry!(
+                "total_consensus_txns",
+                "Total number of consensus transactions received from narwhal",
                 registry,
             )
             .unwrap(),
@@ -982,11 +992,11 @@ impl AuthorityState {
             })?
             .lock();
         match &request.request_type {
-            CheckpointRequestType::LatestCheckpointProposal => {
-                checkpoint_store.handle_latest_proposal(request)
+            CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
+                checkpoint_store.handle_authenticated_checkpoint(seq, request.detail)
             }
-            CheckpointRequestType::PastCheckpoint(seq) => {
-                checkpoint_store.handle_past_checkpoint(request.detail, *seq)
+            CheckpointRequestType::CheckpointProposal => {
+                checkpoint_store.handle_proposal(request.detail)
             }
         }
     }
@@ -1073,6 +1083,7 @@ impl AuthorityState {
             // Get all unprocessed checkpoints
             for (_seq, batch) in state
                 .database
+                .tables
                 .batches
                 .iter()
                 .skip_to(&next_expected_tx)
@@ -1080,6 +1091,7 @@ impl AuthorityState {
             {
                 let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                     .database
+                    .tables
                     .executed_sequence
                     .iter()
                     .skip_to(&batch.batch.initial_sequence_number)
@@ -1247,7 +1259,7 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        QueryHelpers::get_transaction(&self.database, digest)
+        QueryHelpers::get_transaction(&self.database, &digest)
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
@@ -1495,6 +1507,7 @@ impl ExecutionState for AuthorityState {
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
     ) -> Result<Vec<u8>, Self::Error> {
+        self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
                 // Ensure the input is a shared object certificate. Remember that Byzantine authorities
@@ -1508,7 +1521,7 @@ impl ExecutionState for AuthorityState {
                 // consensus.
                 certificate.verify(&self.committee.load())?;
 
-                debug!(digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
+                debug!(tx_digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
 
                 self.database
                     .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)

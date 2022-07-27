@@ -1,0 +1,32 @@
+@use '_values/colors';
+@use '_utils';
+
+.container {
+    display: flex;
+    flex-flow: row nowrap;
+    max-width: 100%;
+    overflow: hidden;
+    align-items: baseline;
+
+    @include utils.typography('star/text-lg');
+
+    &.neutral {
+        color: inherit;
+    }
+
+    &.positive {
+        color: colors.$green-dark-text;
+    }
+
+    &.negative {
+        color: #be2d2d;
+    }
+}
+
+.symbol {
+    margin-left: 4px;
+
+    &.diff-symbol {
+        @include utils.typography('header/search-text');
+    }
+}

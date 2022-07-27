@@ -6,7 +6,7 @@ use crate::authority_client::AuthorityAPI;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
 
-use futures::{future, StreamExt};
+use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
 use move_core_types::value::MoveStructLayout;
 use sui_types::crypto::AuthoritySignature;
 use sui_types::object::{Object, ObjectFormatOptions, ObjectRead};
@@ -32,6 +32,7 @@ use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
+use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::TapFallible;
 
 const OBJECT_DOWNLOAD_CHANNEL_BOUND: usize = 1024;
@@ -41,7 +42,7 @@ pub const DEFAULT_RETRIES: usize = 4;
 #[path = "unit_tests/authority_aggregator_tests.rs"]
 pub mod authority_aggregator_tests;
 
-pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
+pub type AsyncResult<'a, T, E> = BoxFuture<'a, Result<T, E>>;
 
 #[derive(Clone)]
 pub struct TimeoutConfig {
@@ -54,6 +55,16 @@ pub struct TimeoutConfig {
     // Timeout used when making serial requests. Should be smaller, since we wait to hear from each
     // authority before continuing.
     pub serial_authority_request_timeout: Duration,
+
+    // Timeout used to determine when to start a second "serial" request for
+    // quorum_once_with_timeout. This is a latency optimization that prevents us from having
+    // to wait an entire serial_authority_request_timeout interval before starting a second
+    // request.
+    //
+    // If this is set to zero, then quorum_once_with_timeout becomes completely parallelized - if
+    // it is set to a value greater than serial_authority_request_timeout then it becomes
+    // completely serial.
+    pub serial_authority_request_interval: Duration,
 }
 
 impl Default for TimeoutConfig {
@@ -63,6 +74,7 @@ impl Default for TimeoutConfig {
             pre_quorum_timeout: Duration::from_secs(60),
             post_quorum_timeout: Duration::from_secs(30),
             serial_authority_request_timeout: Duration::from_secs(5),
+            serial_authority_request_interval: Duration::from_millis(1000),
         }
     }
 }
@@ -259,7 +271,7 @@ where
                 continue;
             }
 
-            debug!(digest = ?cert_digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
+            debug!(tx_digest = ?cert_digest, authority =? cert_handler.destination_name(), "Running confirmation transaction for missing cert");
 
             match cert_handler.handle(target_cert.clone()).await {
                 Ok(_) => {
@@ -274,7 +286,7 @@ where
             // the previous certificates, so we need to read them from the source
             // authority.
             debug!(
-                digest = ?cert_digest,
+                tx_digest = ?cert_digest,
                 "Missing previous certificates, need to find parents from source authorities"
             );
 
@@ -282,7 +294,7 @@ where
             // we try to get its dependencies. But the second time we have already tried
             // to update its dependencies, so we should just admit failure.
             if attempted_certificates.contains(&cert_digest) {
-                trace!(digest = ?cert_digest, "bailing out after second attempt to fetch");
+                trace!(tx_digest = ?cert_digest, "bailing out after second attempt to fetch");
                 return Err(SuiError::AuthorityInformationUnavailable);
             }
             attempted_certificates.insert(cert_digest);
@@ -334,9 +346,9 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-            trace!(digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
+            trace!(tx_digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
             for returned_digest in &signed_effects.effects.dependencies {
-                trace!(digest =? returned_digest, "Found parent of missing cert");
+                trace!(tx_digest =? returned_digest, "Found parent of missing cert");
 
                 let inner_transaction_info = source_client
                     .handle_transaction_info_request(TransactionInfoRequest {
@@ -633,29 +645,102 @@ where
         authority_errors: &mut HashMap<AuthorityName, SuiError>,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, S, SuiError>,
+        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
         S: Send,
     {
+        let start = tokio::time::Instant::now();
         let mut delay = Duration::from_secs(1);
         loop {
             let authorities_shuffled = self.committee.shuffle_by_stake(preferences, restrict_to);
+            let mut authorities_shuffled = authorities_shuffled.iter();
 
-            // TODO: possibly increase concurrency after first failure to reduce latency.
-            for name in authorities_shuffled {
-                let client = &self.authority_clients[&name];
+            type RequestResult<S> = Result<Result<S, SuiError>, tokio::time::error::Elapsed>;
 
-                let res = timeout(timeout_each_authority, map_each_authority(name, client)).await;
-
-                match res {
-                    // timeout
-                    Err(_) => authority_errors.insert(name, SuiError::TimeoutError),
-                    // request completed
-                    Ok(inner_res) => match inner_res {
-                        Err(e) => authority_errors.insert(name, e),
-                        Ok(res) => return Ok(res),
-                    },
-                };
+            enum Event<S> {
+                StartNext,
+                Request(AuthorityName, RequestResult<S>),
             }
+
+            let mut futures = FuturesUnordered::<BoxFuture<'a, Event<S>>>::new();
+
+            let start_req = |name: AuthorityName, client: SafeClient<A>| {
+                let map_each_authority = map_each_authority.clone();
+                Box::pin(async move {
+                    trace!(?name, now = ?tokio::time::Instant::now() - start, "new request");
+                    let map = map_each_authority(name, client);
+                    Event::Request(name, timeout(timeout_each_authority, map).await)
+                })
+            };
+
+            let schedule_next = || {
+                let delay = self.timeouts.serial_authority_request_interval;
+                Box::pin(async move {
+                    sleep(delay).await;
+                    Event::StartNext
+                })
+            };
+
+            // This process is intended to minimize latency in the face of unreliable authorities,
+            // without creating undue load on authorities.
+            //
+            // The fastest possible process from the
+            // client's point of view would simply be to issue a concurrent request to every
+            // authority and then take the winner - this would create unnecessary load on
+            // authorities.
+            //
+            // The most efficient process from the network's point of view is to do one request at
+            // a time, however if the first validator that the client contacts is unavailable or
+            // slow, the client must wait for the serial_authority_request_timeout period to elapse
+            // before starting its next request.
+            //
+            // So, this process is designed as a compromise between these two extremes.
+            // - We start one request, and schedule another request to begin after
+            //   serial_authority_request_interval.
+            // - Whenever a request finishes, if it succeeded, we return. if it failed, we start a
+            //   new request.
+            // - If serial_authority_request_interval elapses, we begin a new request even if the
+            //   previous one is not finished, and schedule another future request.
+
+            let name = authorities_shuffled.next().unwrap();
+            futures.push(start_req(*name, self.authority_clients[name].clone()));
+            futures.push(schedule_next());
+
+            while let Some(res) = futures.next().await {
+                match res {
+                    Event::StartNext => {
+                        trace!(now = ?tokio::time::Instant::now() - start, "eagerly beginning next request");
+                        futures.push(schedule_next());
+                    }
+                    Event::Request(name, res) => {
+                        match res {
+                            // timeout
+                            Err(_) => {
+                                debug!(?name, "authority request timed out");
+                                authority_errors.insert(name, SuiError::TimeoutError);
+                            }
+                            // request completed
+                            Ok(inner_res) => {
+                                trace!(?name, now = ?tokio::time::Instant::now() - start,
+                                       "request completed successfully");
+                                match inner_res {
+                                    Err(e) => authority_errors.insert(name, e),
+                                    Ok(res) => return Ok(res),
+                                };
+                            }
+                        };
+                    }
+                }
+
+                if let Some(next_authority) = authorities_shuffled.next() {
+                    futures.push(start_req(
+                        *next_authority,
+                        self.authority_clients[next_authority].clone(),
+                    ));
+                } else {
+                    break;
+                }
+            }
+
             info!(
                 ?authority_errors,
                 "quorum_once_with_timeout failed on all authorities, retrying in {:?}", delay
@@ -684,7 +769,7 @@ where
         timeout_total: Option<Duration>,
     ) -> Result<S, SuiError>
     where
-        FMap: Fn(AuthorityName, &'a SafeClient<A>) -> AsyncResult<'a, S, SuiError>,
+        FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
         S: Send,
     {
         let mut authority_errors = HashMap::new();
@@ -1118,7 +1203,9 @@ where
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
+        let tx_digest = transaction.digest();
         debug!(
+            tx_digest = ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             "Broadcasting transaction request to authorities"
@@ -1164,7 +1251,8 @@ where
                                 certified_transaction: Some(inner_certificate),
                                 ..
                             }) => {
-                                trace!(?name, weight, "Received prev certificate from authority");
+                                let tx_digest = inner_certificate.digest();
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Received prev certificate from validator handle_transaction");
                                 state.certificate = Some(inner_certificate);
                             }
 
@@ -1175,6 +1263,8 @@ where
                                 signed_transaction: Some(inner_signed_transaction),
                                 ..
                             }) => {
+                                let tx_digest = inner_signed_transaction.digest();
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
                                 state.signatures.push((
                                     name,
                                     inner_signed_transaction.auth_sign_info.signature,
@@ -1203,6 +1293,7 @@ where
                             Err(err) => {
                                 // We have an error here.
                                 // Append to the list off errors
+                                debug!(tx_digest = ?tx_digest, ?name, weight, "Failed to get signed transaction from validator handle_transaction");
                                 state.errors.push(err);
                                 state.bad_stake += weight; // This is the bad stake counter
                             }
@@ -1220,9 +1311,10 @@ where
                         if state.bad_stake > validity {
                             // Too many errors
                             debug!(
+                                tx_digest = ?tx_digest,
                                 num_errors = state.errors.len(),
                                 bad_stake = state.bad_stake,
-                                "Too many errors, validity threshold exceeded. Errors={:?}",
+                                "Too many errors from validators handle_transaction, validity threshold exceeded. Errors={:?}",
                                 state.errors
                             );
                             self.metrics
@@ -1257,12 +1349,13 @@ where
             .await?;
 
         debug!(
+            tx_digest = ?tx_digest,
             num_errors = state.errors.len(),
             good_stake = state.good_stake,
             bad_stake = state.bad_stake,
             num_signatures = state.signatures.len(),
             has_certificate = state.certificate.is_some(),
-            "Received signatures response from authorities for transaction req broadcast"
+            "Received signatures response from validators handle_transaction"
         );
         if !state.errors.is_empty() {
             trace!("Errors received: {:?}", state.errors);
@@ -1306,12 +1399,14 @@ where
             errors: vec![],
         };
 
+        let tx_digest = certificate.digest();
         let timeout_after_quorum = self.timeouts.post_quorum_timeout;
 
         let cert_ref = &certificate;
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
         debug!(
+            tx_digest = ?tx_digest,
             quorum_threshold = threshold,
             validity_threshold = validity,
             ?timeout_after_quorum,
@@ -1334,6 +1429,11 @@ where
                                 .await;
 
                         if res.is_ok() {
+                            debug!(
+                                tx_digest = ?tx_digest,
+                                ?name,
+                                "Validator handled certificate successfully",
+                            );
                             // We got an ok answer, so returning the result of processing
                             // the transaction.
                             return res;
@@ -1343,11 +1443,16 @@ where
                         // We only attempt to update authority and retry if we are seeing LockErrors.
                         // For any other error, we stop here and return.
                         if !matches!(res, Err(SuiError::LockErrors { .. })) {
-                            debug!("Error from handle_confirmation_transaction(): {:?}", res);
+                            debug!(
+                                tx_digest = ?tx_digest,
+                                ?name,
+                                "Error from validator handle_confirmation_transaction: {:?}",
+                                res
+                            );
                             return res;
                         }
 
-                        debug!(authority =? name, error =? res, ?timeout_after_quorum, "Authority out of date - syncing certificates");
+                        debug!(authority =? name, error =? res, ?timeout_after_quorum, "Validator out of date - syncing certificates");
                         // If we got LockErrors, we try to update the authority.
                         self
                             .sync_certificate_to_authority(
@@ -1391,6 +1496,10 @@ where
 
                                 if entry.stake >= threshold {
                                     // It will set the timeout quite high.
+                                    debug!(
+                                        tx_digest = ?tx_digest,
+                                        "Got quorum for validators handle_certificate."
+                                    );
                                     return Ok(ReduceOutput::ContinueWithTimeout(
                                         state,
                                         timeout_after_quorum,
@@ -1408,8 +1517,11 @@ where
                                 state.errors.push(err);
                                 state.bad_stake += weight;
                                 if state.bad_stake > validity {
-                                    debug!(bad_stake = state.bad_stake,
-                                        "Too many bad responses from cert processing, validity threshold exceeded.");
+                                    debug!(
+                                        tx_digest = ?tx_digest,
+                                        bad_stake = state.bad_stake,
+                                        "Too many bad responses from validators cert processing, validity threshold exceeded."
+                                    );
                                     return Err(SuiError::QuorumFailedToExecuteCertificate { errors: state.errors });
                                 }
                             }
@@ -1423,9 +1535,10 @@ where
             .await?;
 
         debug!(
+            tx_digest = ?tx_digest,
             num_unique_effects = state.effects_map.len(),
             bad_stake = state.bad_stake,
-            "Received effects responses from authorities"
+            "Received effects responses from validators"
         );
 
         // Check that one effects structure has more than 2f votes,
@@ -1438,6 +1551,7 @@ where
             } = stake_info;
             if stake >= threshold {
                 debug!(
+                    tx_digest = ?tx_digest,
                     good_stake = stake,
                     "Found an effect with good stake over threshold"
                 );
@@ -1616,23 +1730,26 @@ where
 
     pub async fn get_certified_checkpoint(
         &self,
-        request: &CheckpointRequest,
+        sequence_number: CheckpointSequenceNumber,
+        request_contents: bool,
         // authorities known to have the checkpoint we are requesting.
         authorities: &BTreeSet<AuthorityName>,
         timeout_total: Option<Duration>,
     ) -> SuiResult<(CertifiedCheckpointSummary, Option<CheckpointContents>)> {
+        let request = CheckpointRequest::authenticated(Some(sequence_number), request_contents);
         self.quorum_once_with_timeout(
             None,
             Some(authorities),
             |_, client| {
+                let r = request.clone();
                 Box::pin(async move {
-                    let resp = client.handle_checkpoint(request.clone()).await?;
+                    let resp = client.handle_checkpoint(r).await?;
 
                     if let CheckpointResponse {
                         info:
-                            AuthorityCheckpointInfo::Past(Some(AuthenticatedCheckpoint::Certified(
-                                past,
-                            ))),
+                            AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(
+                                AuthenticatedCheckpoint::Certified(past),
+                            )),
                         detail,
                     } = resp
                     {

@@ -172,7 +172,9 @@ In macOS, other than the aforementioned [Brew](#brew) package manager, the gener
 
 ### Microsoft Windows-specific
 
-In Microsoft Windows, also install:
+In Microsoft Windows 11, also install:
+
+For Windows on ARM64 only - [Visual Studio 2022 Preview](https://visualstudio.microsoft.com/vs/preview/)
 
 [C++ build tools](https://visualstudio.microsoft.com/downloads/)
 
@@ -226,7 +228,7 @@ To [experiment with Devnet](../explore/devnet.md) or [use the Sui Wallet Browser
 To request SUI test tokens:
 
 1. Join the [Sui Discord](https://discord.com/invite/sui) If you haven’t already.
-1. Identify your address through either the Sui Wallet Browser Extension or by running the command:
+1. Identify your address through either the Sui Wallet Browser Extension or by running the following command and electing to connect to a Sui RPC server if prompted:
    ```shell
    $ sui client active-address
    ```

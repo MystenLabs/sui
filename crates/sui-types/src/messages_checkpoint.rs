@@ -85,17 +85,16 @@ pub struct CheckpointRequest {
 
 impl CheckpointRequest {
     /// Create a request for the latest checkpoint proposal from the authority
-    pub fn latest(detail: bool) -> CheckpointRequest {
+    pub fn proposal(detail: bool) -> CheckpointRequest {
         CheckpointRequest {
-            request_type: CheckpointRequestType::LatestCheckpointProposal,
+            request_type: CheckpointRequestType::CheckpointProposal,
             detail,
         }
     }
 
-    /// Create a request for a past checkpoint from the authority
-    pub fn past(seq: CheckpointSequenceNumber, detail: bool) -> CheckpointRequest {
+    pub fn authenticated(seq: Option<CheckpointSequenceNumber>, detail: bool) -> CheckpointRequest {
         CheckpointRequest {
-            request_type: CheckpointRequestType::PastCheckpoint(seq),
+            request_type: CheckpointRequestType::AuthenticatedCheckpoint(seq),
             detail,
         }
     }
@@ -103,10 +102,12 @@ impl CheckpointRequest {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CheckpointRequestType {
-    // Request the latest proposal and previous checkpoint.
-    LatestCheckpointProposal,
-    // Requests a past checkpoint
-    PastCheckpoint(CheckpointSequenceNumber),
+    /// Request a stored authenticated checkpoint.
+    /// if a sequence number is specified, return the checkpoint with that sequence number;
+    /// otherwise if None returns the latest authenticated checkpoint stored.
+    AuthenticatedCheckpoint(Option<CheckpointSequenceNumber>),
+    /// Request the current checkpoint proposal.
+    CheckpointProposal,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -116,26 +117,36 @@ pub struct CheckpointResponse {
     pub info: AuthorityCheckpointInfo,
     // If the detail flag in the request was set, then return
     // the list of transactions as well.
+    // If the request is AuthenticatedCheckpoint, the detail is for the returned authenticated
+    // checkpoint; if the request is CheckpointProposal, the detail is for the returned proposal.
     pub detail: Option<CheckpointContents>,
 }
 
 impl CheckpointResponse {
     pub fn verify(&self, committee: &Committee) -> SuiResult {
         match &self.info {
-            AuthorityCheckpointInfo::Success => Ok(()),
-            AuthorityCheckpointInfo::Proposal { current, previous } => {
-                if let Some(current) = current {
-                    current.verify(committee, self.detail.as_ref())?;
-                    // detail pertains to the current proposal, not the previous
-                    if let Some(previous) = previous {
-                        previous.verify(committee, None)?;
-                    }
+            AuthorityCheckpointInfo::AuthenticatedCheckpoint(ckpt) => {
+                if let Some(ckpt) = ckpt {
+                    ckpt.verify(committee, self.detail.as_ref())?;
                 }
                 Ok(())
             }
-            AuthorityCheckpointInfo::Past(ckpt) => {
-                if let Some(ckpt) = ckpt {
-                    ckpt.verify(committee, self.detail.as_ref())?;
+            AuthorityCheckpointInfo::CheckpointProposal {
+                proposal,
+                prev_cert,
+            } => {
+                if let Some(p) = proposal {
+                    p.verify(committee, self.detail.as_ref())?;
+                    if p.summary.sequence_number > 0 {
+                        let cert = prev_cert.as_ref().ok_or_else(|| {
+                            SuiError::from("No checkpoint cert provided along with proposal")
+                        })?;
+                        cert.verify(committee, None)?;
+                        fp_ensure!(
+                            p.summary.sequence_number - 1 == cert.summary.sequence_number,
+                            SuiError::from("Checkpoint proposal sequence number inconsistent with previous cert")
+                        );
+                    }
                 }
                 Ok(())
             }
@@ -145,20 +156,15 @@ impl CheckpointResponse {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
-    // Denotes success of he operation with no return
-    Success,
-    // Returns the current proposal if any, and
-    // the previous checkpoint.
-    Proposal {
-        current: Option<SignedCheckpointProposalSummary>,
-        previous: Option<AuthenticatedCheckpoint>,
-        // Include in all responses the local state of the sequence
-        // of transaction to allow followers to track the latest
-        // updates.
-        // last_local_sequence: TxSequenceNumber,
+    AuthenticatedCheckpoint(Option<AuthenticatedCheckpoint>),
+    /// The latest proposal must be signed by the validator.
+    /// For any proposal with sequence number > 0, a certified checkpoint for the previous
+    /// checkpoint must be returned, in order prove that this validator can indeed make a proposal
+    /// for its sequence number.
+    CheckpointProposal {
+        proposal: Option<SignedCheckpointProposalSummary>,
+        prev_cert: Option<CertifiedCheckpointSummary>,
     },
-    // Returns the requested checkpoint.
-    Past(Option<AuthenticatedCheckpoint>),
 }
 
 // TODO: Rename to AuthenticatedCheckpointSummary

@@ -17,3 +17,4 @@ proc-macro2 = "1.0"
 itertools = "0.10.3"
 derive-syn-parse = "0.1.5"
 workspace-hack = { path = "../workspace-hack"}
+unescape = "0.1.0"

@@ -15,6 +15,7 @@ use syn::{
     parse, parse_macro_input, Attribute, GenericArgument, LitStr, PatType, Path, PathArguments,
     Token, TraitItem, Type,
 };
+use unescape::unescape;
 
 /// Add a <service name>OpenRpc struct and implementation providing access to Open RPC doc builder.
 /// This proc macro must be use in conjunction with `jsonrpsee_proc_macro::rpc`
@@ -164,6 +165,7 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
                         syn::FnArg::Typed(arg) => {
                             let description = if let Some(description) = arg.attrs.iter().position(|a|a.path.is_ident("doc")){
                                 let doc = extract_doc_comments(&arg.attrs);
+                                println!("{}", doc);
                                 arg.attrs.remove(description);
                                 Some(doc)
                             }else{
@@ -268,7 +270,7 @@ fn respan_token_stream(stream: TokenStream2, span: Span) -> TokenStream2 {
 }
 
 fn extract_doc_comments(attrs: &[syn::Attribute]) -> String {
-    attrs
+    let s = attrs
         .iter()
         .filter(|attr| {
             attr.path.is_ident("doc")
@@ -281,7 +283,8 @@ fn extract_doc_comments(attrs: &[syn::Attribute]) -> String {
             let s = attr.tokens.to_string();
             s[4..s.len() - 1].to_string()
         })
-        .join(" ")
+        .join(" ");
+    unescape(&s).unwrap_or_else(|| panic!("Cannot unescape doc comments : [{s}]"))
 }
 
 #[derive(Parse, Debug)]

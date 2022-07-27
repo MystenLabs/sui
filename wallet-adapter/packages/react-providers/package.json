@@ -1,0 +1,27 @@
+{
+  "name": "sui-wallet-adapter-react",
+  "version": "1.0.0",
+  "description": "React interface for Sui Wallet Adapter",
+  "main": "lib/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "author": "",
+  "license": "ISC",
+  "peerDependencies": {
+    "@mysten/sui.js": "^0.8.0",
+    "react": "*",
+    "react-dom": "*"
+  },
+  "dependencies": {
+    "sui-base-wallet-adapter": "file:../adapters/base-adapter"
+  },
+  "devDependencies": {
+    "typescript": "^4.7.4",
+    "@mysten/sui.js": "^0.8.0",
+    "@types/react": "^18.0.15",
+    "@types/react-dom": "^18.0.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0"
+  }
+}

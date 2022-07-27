@@ -2032,6 +2032,7 @@ async fn test_consensus_message_processed() {
                 .unwrap();
             authority2
                 .database
+                .tables
                 .effects
                 .get(transaction_digest)
                 .unwrap()

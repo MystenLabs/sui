@@ -15,22 +15,22 @@ section .codeview {
     @apply text-sm font-semibold pt-2 pb-2;
 }
 
-.txmodule {
+.module {
     @apply grid grid-cols-1 md:grid-cols-3 gap-0 pt-2 md:pb-2;
 }
 
-.txmodule section {
+.module section {
     border-top: 1px solid #f0f1f2;
     border-bottom: 1px solid #f0f1f2;
     @apply md:p-3 pb-0;
 }
 
-.txmodule section:first-child {
+.module section:first-child {
     @apply pl-0;
 }
 
 .itemviewtitle,
-.txtitle {
+.title {
     @apply text-sui-grey-100 font-[500] text-lg  mt-5 mb-0;
 }
 
@@ -38,23 +38,6 @@ section .codeview pre {
     @apply m-0 p-0;
 
     background: transparent;
-}
-
-.moretxbtn {
-    @apply text-right bg-transparent cursor-pointer border-0  text-[#636870] hover:text-gray-400 transition-colors duration-200 ease-in-out font-normal text-sm p-2;
-}
-
-.moretxbtn::after {
-    margin: 5px;
-    content: '';
-    background-image: url('../../assets/SVGIcons/chevron-down.svg');
-    @apply text-sm;
-
-    width: 12px;
-    height: 12px;
-    position: absolute;
-    margin-top: 4px;
-    transform: rotate(0deg);
 }
 
 .viewless::after {

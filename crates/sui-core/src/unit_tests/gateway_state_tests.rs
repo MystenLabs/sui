@@ -353,10 +353,10 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
 
 #[tokio::test]
 async fn test_equivocation_resilient() {
+    telemetry_subscribers::init_for_testing();
     let (addr1, key1) = get_key_pair();
     let coin_object = Object::with_owner_for_testing(addr1);
-    let gas_object = Object::with_owner_for_testing(addr1);
-    let genesis_objects = vec![coin_object.clone(), gas_object.clone()];
+    let genesis_objects = vec![coin_object.clone()];
     let gateway = Arc::new(Box::new(create_gateway_state(genesis_objects).await));
 
     let mut handles = vec![];
@@ -364,16 +364,13 @@ async fn test_equivocation_resilient() {
     // Make sure that one of them succeeds and there are no pending tx in the end.
     for _ in 0..20 {
         let (recipient, _) = get_key_pair();
-        let data = gateway
-            .public_transfer_object(
-                addr1,
-                coin_object.id(),
-                Some(gas_object.id()),
-                GAS_VALUE_FOR_TESTING,
-                recipient,
-            )
-            .await
-            .unwrap();
+        let data = TransactionData::new_transfer_sui(
+            recipient,
+            addr1,
+            None,
+            coin_object.compute_object_reference(),
+            1000,
+        );
         let signature = key1.sign(&data.to_bytes());
         let handle = tokio::task::spawn({
             let gateway_copy = gateway.clone();
@@ -393,6 +390,7 @@ async fn test_equivocation_resilient() {
             .count(),
         1
     );
+    println!("{:?}", gateway.store().pending_transactions().iter().next());
     assert_eq!(gateway.store().pending_transactions().iter().count(), 0);
 }
 
