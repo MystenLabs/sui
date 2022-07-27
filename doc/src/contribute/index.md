@@ -4,7 +4,7 @@ title: Contributing to Sui
 
 This page describes how to add to Sui. If you merely need to get the Sui binaries, follow [Install Sui](../build/install.md).
 
-This site is available in two versions available in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest](https://docs.sui.io/learn) upstream (`main`) branch. Use the `devnet` version for app development on top of Sui. Use the Latest (`main`) branch for contributing to the Sui blockchain as described on this page. Always check and submit fixes to the `main` branch.
+This site is available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for contributing to the Sui blockchain as described on this page. Always check and submit fixes to the `main` branch.
 
 Find answers to common questions in our [FAQ](../contribute/faq.md). Read other sub-pages in this section for ways to contribute to Sui.
 
