@@ -18,14 +18,19 @@ use rand::SeedableRng;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::get_key_pair_from_rng;
+use sui_types::crypto::{get_key_pair_from_rng, PublicKeyBytes};
 
 #[test]
 fn genesis_config_snapshot_matches() {
+    // Test creating fake SuiAddress from PublicKeyBytes.
+    let keypair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let public_key = PublicKeyBytes::from(keypair.public());
+    let fake_addr = SuiAddress::from(&public_key);
+
     let fake_obj_id = "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866";
     let mut genesis_config = GenesisConfig::for_local_testing();
     for account in &mut genesis_config.accounts {
-        account.address = Some(SuiAddress::from_str(fake_obj_id).unwrap());
+        account.address = Some(fake_addr);
         for gas_obj in &mut account.gas_objects {
             gas_obj.object_id = ObjectID::from_str(fake_obj_id).unwrap();
         }

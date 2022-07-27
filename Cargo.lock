@@ -2803,6 +2803,8 @@ checksum = "36fb7ec420af04ce7d1a422945cd19c52bf01772ead45934cee77f056dca1081"
 dependencies = [
  "console",
  "once_cell",
+ "pest",
+ "pest_derive",
  "serde 1.0.140",
  "serde_json",
  "serde_yaml",
