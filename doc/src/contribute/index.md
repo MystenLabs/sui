@@ -26,6 +26,8 @@ using the [Template for Reporting Issues](https://github.com/MystenLabs/sui/blob
 Send ideas to:
 doc@mystenlabs.com
 
+Or report them in the [#docs](https://discord.com/channels/916379725201563759/1001562806862233701) channel of Discord.
+
 ### Issues
 And file documentation fixes or requests for improvement at:
 https://github.com/MystenLabs/sui/issues/new/choose

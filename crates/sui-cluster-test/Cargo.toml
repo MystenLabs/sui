@@ -11,7 +11,7 @@ serde = { version = "1.0.139", features = ["derive"] }
 futures = "0.3.21"
 serde_json = "1.0.80"
 tempfile = "3.3.0"
-tokio = { version = "1.20.0", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 tracing = { version = "0.1.35", features = ["log"] }
 clap = { version = "3.1.14", features = ["derive"] }
 reqwest = { version = "0.11.11", features = ["blocking", "json"] }

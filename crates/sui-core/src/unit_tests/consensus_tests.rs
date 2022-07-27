@@ -105,6 +105,11 @@ async fn listen_to_sequenced_transaction() {
     // Set the shared object locks.
     state
         .handle_consensus_transaction(
+            // TODO [2533]: use this once integrating Narwhal reconfiguration
+            &narwhal_consensus::ConsensusOutput {
+                certificate: narwhal_types::Certificate::default(),
+                consensus_index: narwhal_types::SequenceNumber::default(),
+            },
             ExecutionIndices::default(),
             ConsensusTransaction::UserTransaction(certificate),
         )
@@ -178,6 +183,11 @@ async fn submit_transaction_to_consensus() {
             // Set the shared object locks.
             state_guard
                 .handle_consensus_transaction(
+                    // TODO [2533]: use this once integrating Narwhal reconfiguration
+                    &narwhal_consensus::ConsensusOutput {
+                        certificate: narwhal_types::Certificate::default(),
+                        consensus_index: narwhal_types::SequenceNumber::default(),
+                    },
                     ExecutionIndices::default(),
                     ConsensusTransaction::UserTransaction(certificate.clone()),
                 )
