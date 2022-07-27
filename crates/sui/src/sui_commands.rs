@@ -406,7 +406,7 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
             SuiClientConfig {
                 accounts: vec![new_address],
                 keystore,
-                gateway: GatewayType::RPC(url.to_string()),
+                gateway: GatewayType::RPC(url),
                 active_address: Some(new_address),
             }
             .persisted(wallet_conf_path)
