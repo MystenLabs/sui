@@ -8,6 +8,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use sui_adapter::genesis;
+use sui_types::crypto::AccountKeyPair;
 use sui_types::{crypto::get_key_pair, messages::ExecutionStatus, object::Object};
 
 //use super::super::AuthorityState;
@@ -196,7 +197,7 @@ async fn pending_exec_full() {
 async fn test_parent_cert_exec() {
     telemetry_subscribers::init_for_testing();
 
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
     let (aggregator, authorities) =
@@ -225,7 +226,7 @@ async fn test_parent_cert_exec() {
 
     // now create a tx to transfer that object (only on 3 authorities), and then execute it on one
     // authority only.
-    let (addr2, _) = get_key_pair();
+    let (addr2, _): (_, AccountKeyPair) = get_key_pair();
 
     let tx2 = transfer_object_move_transaction(
         addr1,

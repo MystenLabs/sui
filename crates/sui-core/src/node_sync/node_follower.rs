@@ -739,13 +739,13 @@ mod tests {
     use narwhal_crypto::traits::KeyPair;
     use sui_types::{
         base_types::{AuthorityName, TransactionEffectsDigest},
-        crypto::get_key_pair,
+        crypto::{get_key_pair, AuthorityKeyPair},
     };
 
     use super::EffectsStakeMap;
 
     fn random_authority_name() -> AuthorityName {
-        let key = get_key_pair();
+        let key: (_, AuthorityKeyPair) = get_key_pair();
         key.1.public().into()
     }
 

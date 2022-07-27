@@ -35,6 +35,7 @@ tonic = "0.7"
 strum = "^0.24"
 strum_macros = "^0.24"
 roaring = "0.9.0"
+enum_dispatch = "^0.3"
 
 # This version is incompatible with ed25519-dalek
 rand_latest = { version = "0.8.5", package = "rand" }
@@ -55,3 +56,4 @@ workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 bincode = "1.3.3"
+

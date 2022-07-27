@@ -14,8 +14,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
+use sui_types::crypto::AuthorityKeyPair;
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
-use sui_types::crypto::{KeyPair, PublicKeyBytes};
 use sui_types::sui_serde::KeyPairBase64;
 
 #[serde_as]
@@ -24,7 +25,7 @@ use sui_types::sui_serde::KeyPairBase64;
 pub struct NodeConfig {
     #[serde(default = "default_key_pair")]
     #[serde_as(as = "Arc<KeyPairBase64>")]
-    pub key_pair: Arc<KeyPair>,
+    pub key_pair: Arc<AuthorityKeyPair>,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
@@ -53,7 +54,7 @@ pub struct NodeConfig {
     pub genesis: Genesis,
 }
 
-fn default_key_pair() -> Arc<KeyPair> {
+fn default_key_pair() -> Arc<AuthorityKeyPair> {
     Arc::new(sui_types::crypto::get_key_pair().1)
 }
 
@@ -84,11 +85,11 @@ pub fn default_websocket_address() -> Option<SocketAddr> {
 impl Config for NodeConfig {}
 
 impl NodeConfig {
-    pub fn key_pair(&self) -> &KeyPair {
+    pub fn key_pair(&self) -> &AuthorityKeyPair {
         &self.key_pair
     }
 
-    pub fn public_key(&self) -> PublicKeyBytes {
+    pub fn public_key(&self) -> AuthorityPublicKeyBytes {
         self.key_pair.public().into()
     }
 
@@ -142,7 +143,7 @@ impl ConsensusConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub name: String,
-    pub public_key: PublicKeyBytes,
+    pub public_key: AuthorityPublicKeyBytes,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
     pub network_address: Multiaddr,
@@ -164,7 +165,7 @@ impl ValidatorInfo {
         (&self.public_key()).into()
     }
 
-    pub fn public_key(&self) -> PublicKeyBytes {
+    pub fn public_key(&self) -> AuthorityPublicKeyBytes {
         self.public_key
     }
 
@@ -180,7 +181,7 @@ impl ValidatorInfo {
         &self.network_address
     }
 
-    pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<PublicKeyBytes, u64> {
+    pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<AuthorityPublicKeyBytes, u64> {
         validator_set
             .iter()
             .map(|validator| {

@@ -37,6 +37,10 @@ rustyline-derive = "0.7.0"
 colored = "2.0.0"
 unescape = "0.1.0"
 shell-words = "1.1.0"
+rocksdb = "0.18.0"
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
+tempfile = "3.3.0"
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "executor" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 move-prover = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }

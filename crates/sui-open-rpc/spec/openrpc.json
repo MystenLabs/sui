@@ -87,6 +87,14 @@
           }
         },
         {
+          "name": "flag",
+          "description": "Flag of the signature scheme that is used.",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/Base64"
+          }
+        },
+        {
           "name": "signature",
           "description": "transaction signature, as base-64 encoded string",
           "required": true,
@@ -1461,6 +1469,9 @@
           }
         ]
       },
+      "Ed25519SuiSignature": {
+        "$ref": "#/components/schemas/Base64"
+      },
       "Event": {
         "oneOf": [
           {
@@ -2532,7 +2543,20 @@
         "minimum": 0.0
       },
       "Signature": {
-        "$ref": "#/components/schemas/Base64"
+        "oneOf": [
+          {
+            "type": "object",
+            "required": [
+              "Ed25519SuiSignature"
+            ],
+            "properties": {
+              "Ed25519SuiSignature": {
+                "$ref": "#/components/schemas/Ed25519SuiSignature"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
       },
       "SplitCoinResponse": {
         "type": "object",

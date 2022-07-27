@@ -17,7 +17,7 @@ use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duratio
 use sui_types::{
     base_types::{AuthorityName, ObjectID, TransactionDigest},
     batch::UpdateItem,
-    crypto::{get_key_pair_from_rng, KeypairTraits},
+    crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     messages::{CertifiedTransaction, ExecutionStatus},
     messages_checkpoint::CheckpointRequest,
     object::Object,
@@ -27,7 +27,6 @@ use sui_types::{
 
 use crate::authority_aggregator::AuthAggMetrics;
 use parking_lot::Mutex;
-use sui_types::crypto::KeyPair;
 
 pub struct TestCausalOrderPendCertNoop;
 
@@ -50,13 +49,21 @@ impl PendCertificateForExecution for TestCausalOrderPendCertNoop {
     }
 }
 
-fn random_ckpoint_store() -> (Committee, Vec<KeyPair>, Vec<(PathBuf, CheckpointStore)>) {
+fn random_ckpoint_store() -> (
+    Committee,
+    Vec<AuthorityKeyPair>,
+    Vec<(PathBuf, CheckpointStore)>,
+) {
     random_ckpoint_store_num(4)
 }
 
 fn random_ckpoint_store_num(
     num: usize,
-) -> (Committee, Vec<KeyPair>, Vec<(PathBuf, CheckpointStore)>) {
+) -> (
+    Committee,
+    Vec<AuthorityKeyPair>,
+    Vec<(PathBuf, CheckpointStore)>,
+) {
     let mut rng = StdRng::from_seed(RNG_SEED);
     let (keys, committee) = make_committee_key_num(num, &mut rng);
     let stores = keys
@@ -1595,8 +1602,8 @@ pub async fn checkpoint_tests_setup(
 
     // Generate a large number of objects for testing
     for _i in 0..num_objects {
-        let (addr1, key1) = get_key_pair_from_rng(&mut rng);
-        let (addr2, _) = get_key_pair_from_rng(&mut rng);
+        let (addr1, key1): (_, AccountKeyPair) = get_key_pair_from_rng(&mut rng);
+        let (addr2, _): (_, AccountKeyPair) = get_key_pair_from_rng(&mut rng);
         let gas_object1 = Object::with_owner_for_testing(addr1);
         let gas_object2 = Object::with_owner_for_testing(addr1);
 

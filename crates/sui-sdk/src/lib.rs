@@ -193,12 +193,13 @@ impl SuiClient {
     pub async fn execute_transaction(
         &self,
         tx_bytes: Base64,
+        flag: Base64,
         signature: Base64,
         pub_key: Base64,
     ) -> anyhow::Result<TransactionResponse> {
         Ok(match &self.client {
-            Client::Http(c) => c.execute_transaction(tx_bytes, signature, pub_key),
-            Client::Ws(c) => c.execute_transaction(tx_bytes, signature, pub_key),
+            Client::Http(c) => c.execute_transaction(tx_bytes, flag, signature, pub_key),
+            Client::Ws(c) => c.execute_transaction(tx_bytes, flag, signature, pub_key),
         }
         .await?)
     }

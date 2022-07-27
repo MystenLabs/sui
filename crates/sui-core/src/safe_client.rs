@@ -5,7 +5,7 @@
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use futures::StreamExt;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
     AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointContents, CheckpointRequest,
     CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
@@ -21,11 +21,15 @@ use tracing::{info, warn};
 pub struct SafeClient<C> {
     authority_client: C,
     committee: Committee,
-    address: PublicKeyBytes,
+    address: AuthorityPublicKeyBytes,
 }
 
 impl<C> SafeClient<C> {
-    pub fn new(authority_client: C, committee: Committee, address: PublicKeyBytes) -> Self {
+    pub fn new(
+        authority_client: C,
+        committee: Committee,
+        address: AuthorityPublicKeyBytes,
+    ) -> Self {
         Self {
             authority_client,
             committee,

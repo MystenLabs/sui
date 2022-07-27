@@ -9,7 +9,10 @@ use anyhow::bail;
 use async_trait::async_trait;
 use sui_json_rpc_types::SuiExecutionStatus;
 use sui_types::{
-    crypto::get_key_pair, event::TransferType, object::Owner, SUI_FRAMEWORK_OBJECT_ID,
+    crypto::{get_key_pair, AccountKeyPair},
+    event::TransferType,
+    object::Owner,
+    SUI_FRAMEWORK_OBJECT_ID,
 };
 use tracing::info;
 pub struct NativeTransferTest;
@@ -30,7 +33,7 @@ impl TestCaseImpl for NativeTransferTest {
         let gas_obj = sui_objs.swap_remove(0);
         let obj_to_transfer = sui_objs.swap_remove(0);
         let signer = ctx.get_wallet_address();
-        let (recipient_addr, _) = get_key_pair();
+        let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
         let data = ctx
             .get_gateway()
             .public_transfer_object(

@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::test_keys;
+use crate::test_account_keys;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{MoveObject, Object, Owner, OBJECT_START_VERSION};
@@ -11,7 +11,7 @@ pub fn test_gas_objects() -> Vec<Object> {
         .map(|i| {
             let seed = format!("0x444444444444444{i}");
             let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
-            let (owner, _) = test_keys().pop().unwrap();
+            let (owner, _) = test_account_keys().pop().unwrap();
             Object::with_id_owner_for_testing(gas_object_id, owner)
         })
         .collect()
@@ -20,7 +20,7 @@ pub fn test_gas_objects() -> Vec<Object> {
 /// Make a few test gas objects (all with the same owner).
 pub fn generate_gas_object() -> Object {
     let gas_object_id = ObjectID::random();
-    let (owner, _) = test_keys().pop().unwrap();
+    let (owner, _) = test_account_keys().pop().unwrap();
     Object::with_id_owner_for_testing(gas_object_id, owner)
 }
 
@@ -29,7 +29,7 @@ pub fn generate_gas_objects_for_testing(count: usize) -> Vec<Object> {
     (0..count)
         .map(|_i| {
             let gas_object_id = ObjectID::random();
-            let (owner, _) = test_keys().pop().unwrap();
+            let (owner, _) = test_account_keys().pop().unwrap();
             Object::with_id_owner_gas_for_testing(gas_object_id, owner, u64::MAX)
         })
         .collect()

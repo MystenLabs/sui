@@ -150,6 +150,7 @@ export function isSignaturePubkeyPair(obj: any, _argumentName?: string): obj is 
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
+        obj.flag instanceof Base64DataBuffer &&
         obj.signature instanceof Base64DataBuffer &&
         obj.pubKey instanceof PublicKey
     )
