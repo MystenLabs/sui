@@ -275,7 +275,7 @@ impl LockServiceImpl {
         }
 
         if !locks_to_write.is_empty() {
-            trace!(?locks_to_write, "Writing locks");
+            debug!(?tx_digest, ?locks_to_write, "Writing locks");
             self.transaction_lock
                 .batch()
                 .insert_batch(&self.transaction_lock, locks_to_write)?

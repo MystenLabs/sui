@@ -20,7 +20,7 @@ use prometheus::{
     Registry,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
-use tracing::{debug, error, Instrument};
+use tracing::{debug, error, Instrument, trace};
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_types::gas_coin::GasCoin;
@@ -693,16 +693,25 @@ where
 
     async fn download_object_from_authorities(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
         let result = self.authorities.get_object_info_execute(object_id).await?;
-        if let ObjectRead::Exists(obj_ref, object, _) = &result {
-            let local_object = self.store.get_object(&object_id)?;
-            if local_object.is_none()
-                // We only update local object if the validator version is newer.
-                || local_object.unwrap().version() < obj_ref.1
-            {
-                self.store.insert_object_direct(*obj_ref, object).await?;
+        match &result {
+            ObjectRead::Exists(object_ref, object, _) => {
+                debug!(?object_ref, "Download object result: object exists");
+                let local_object = self.store.get_object(&object_id)?;
+                if local_object.is_none()
+                    // We only update local object if the validator version is newer.
+                    || local_object.unwrap().version() < object_ref.1
+                {
+                    self.store.insert_object_direct(*object_ref, object).await?;
+                }
+                trace!(?object_id, "Downloaded object details: {}", result);
+            }
+            ObjectRead::Deleted(object_ref) => {
+                debug!(?object_ref, "Download object result: object is deleted");
+            }
+            ObjectRead::NotExists(_) => {
+                debug!(?object_id, "Download object result: object does not exist");
             }
         }
-        debug!("Downloaded object from authorities: {}", result);
 
         Ok(result)
     }
