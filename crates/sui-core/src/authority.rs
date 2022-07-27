@@ -111,6 +111,8 @@ pub struct AuthorityMetrics {
     num_shared_objects: Histogram,
     batch_size: Histogram,
 
+    total_consensus_txns: IntCounter,
+
     pub follower_items_streamed: IntCounter,
     pub follower_items_loaded: IntCounter,
     pub follower_connections: IntCounter,
@@ -197,6 +199,12 @@ impl AuthorityMetrics {
                 "batch_size",
                 "Distribution of size of transaction batch",
                 POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_consensus_txns: register_int_counter_with_registry!(
+                "total_consensus_txns",
+                "Total number of consensus transactions received from narwhal",
                 registry,
             )
             .unwrap(),
@@ -1499,6 +1507,7 @@ impl ExecutionState for AuthorityState {
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
     ) -> Result<Vec<u8>, Self::Error> {
+        self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
                 // Ensure the input is a shared object certificate. Remember that Byzantine authorities
