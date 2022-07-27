@@ -17,7 +17,7 @@ proptest = "1.0.0"
 proptest-derive = "0.3.0"
 prost = "0.10.4"
 rand = "0.7.3"
-serde = { version = "1.0.139", features = ["derive"] }
+serde = { version = "1.0.140", features = ["derive"] }
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 thiserror = "1.0.31"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
@@ -33,12 +33,12 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 hex = "0.4.3"
 prost-build = "0.10.4"
-serde_test = "1.0.139"
+serde_test = "1.0.140"
 tonic-build = { version = "0.7.2", features = [ "prost", "transport" ] }
-criterion = "0.3.5"
+criterion = "0.3.6"
 
 [build-dependencies]
-rustversion = "1"
+rustversion = "1.0.8"
 
 [features]
 default = []

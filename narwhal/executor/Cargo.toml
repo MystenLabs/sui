@@ -12,7 +12,7 @@ blake2 = "0.9"
 bytes = "1.2.0"
 futures = "0.3.21"
 rocksdb = { version = "0.18.0", features = ["snappy", "lz4", "zstd", "zlib"], default-features = false }
-serde = { version = "1.0.139", features = ["derive"] }
+serde = { version = "1.0.140", features = ["derive"] }
 thiserror = "1.0.31"
 tokio = { version = "1.20.1", features = ["sync"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
@@ -29,7 +29,6 @@ worker = { path = "../worker" }
 
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
-
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
