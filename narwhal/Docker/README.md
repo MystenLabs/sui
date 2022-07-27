@@ -167,7 +167,7 @@ from the database and log data. This is useful to preserve the state between mul
  - python3
  - You must build the narwhal `node` binary at top level:
 
-   ```cargo build --release --all-features```
+   ```cargo build --release --features "benchmark"```
    
    That binary is necessary for generating the keys for the validators and the committee.json seed file.
    
