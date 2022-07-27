@@ -19,7 +19,7 @@ async fn test_node_staggered_starts() {
     let node_staggered_delay = Duration::from_secs(60 * 5); // 5 minutes
 
     // A cluster of 4 nodes will be created
-    let cluster = Cluster::new(None, None);
+    let cluster = Cluster::new(None, None, true);
 
     // ==== Start first authority ====
     cluster.authority(0).start(false, Some(1)).await;

@@ -318,21 +318,6 @@ impl Primary {
             rx_helper_requests,
         );
 
-        if !internal_consensus {
-            // Spawn a grpc server to accept requests from external consensus layer.
-            ConsensusAPIGrpc::spawn(
-                parameters.consensus_api_grpc.socket_addr,
-                tx_get_block_commands,
-                tx_block_removal_commands,
-                parameters.consensus_api_grpc.get_collections_timeout,
-                parameters.consensus_api_grpc.remove_collections_timeout,
-                block_synchronizer_handler,
-                dag,
-                committee.clone(),
-                endpoint_metrics,
-            );
-        }
-
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state
         let state_handler_handle = StateHandler::spawn(
             name.clone(),
@@ -342,6 +327,23 @@ impl Primary {
             rx_state_handler,
             tx_reconfigure,
         );
+
+        let consensus_api_handle = if !internal_consensus {
+            // Spawn a grpc server to accept requests from external consensus layer.
+            Some(ConsensusAPIGrpc::spawn(
+                parameters.consensus_api_grpc.socket_addr,
+                tx_get_block_commands,
+                tx_block_removal_commands,
+                parameters.consensus_api_grpc.get_collections_timeout,
+                parameters.consensus_api_grpc.remove_collections_timeout,
+                block_synchronizer_handler,
+                dag,
+                committee.clone(),
+                endpoint_metrics,
+            ))
+        } else {
+            None
+        };
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -354,7 +356,7 @@ impl Primary {
                 .primary_to_primary
         );
 
-        vec![
+        let mut handles = vec![
             primary_receiver_handle,
             worker_receiver_handle,
             core_handle,
@@ -367,7 +369,13 @@ impl Primary {
             proposer_handle,
             helper_handle,
             state_handler_handle,
-        ]
+        ];
+
+        if let Some(h) = consensus_api_handle {
+            handles.push(h);
+        }
+
+        handles
     }
 }
 

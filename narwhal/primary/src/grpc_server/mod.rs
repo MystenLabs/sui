@@ -12,7 +12,7 @@ use consensus::dag::Dag;
 use crypto::traits::VerifyingKey;
 use multiaddr::Multiaddr;
 use std::{sync::Arc, time::Duration};
-use tokio::sync::mpsc::Sender;
+use tokio::{sync::mpsc::Sender, task::JoinHandle};
 use tracing::{error, info};
 use types::{ConfigurationServer, ProposerServer, ValidatorServer};
 
@@ -49,7 +49,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         dag: Option<Arc<Dag<PublicKey>>>,
         committee: SharedCommittee<PublicKey>,
         endpoints_metrics: EndpointMetrics,
-    ) {
+    ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let _ = Self {
                 socket_addr,
@@ -65,7 +65,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
             .run()
             .await
             .map_err(|e| error!("{:?}", e));
-        });
+        })
     }
 
     async fn run(&mut self) -> Result<(), Box<dyn std::error::Error>> {
