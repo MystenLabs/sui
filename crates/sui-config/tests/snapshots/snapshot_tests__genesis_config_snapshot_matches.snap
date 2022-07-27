@@ -5,7 +5,7 @@ expression: genesis_config
 validator_genesis_info: ~
 committee_size: 4
 accounts:
-  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+  - address: aab9ae3da3fc17b9f07fccef1657294f99590cd7
     gas_objects:
       - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
@@ -18,7 +18,7 @@ accounts:
       - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
     gas_object_ranges: []
-  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+  - address: aab9ae3da3fc17b9f07fccef1657294f99590cd7
     gas_objects:
       - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
@@ -31,7 +31,7 @@ accounts:
       - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
     gas_object_ranges: []
-  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+  - address: aab9ae3da3fc17b9f07fccef1657294f99590cd7
     gas_objects:
       - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
@@ -44,7 +44,7 @@ accounts:
       - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
     gas_object_ranges: []
-  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+  - address: aab9ae3da3fc17b9f07fccef1657294f99590cd7
     gas_objects:
       - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
@@ -57,7 +57,7 @@ accounts:
       - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
     gas_object_ranges: []
-  - address: 0fa3e0b50000496a53bafcea629fcbcfff2a9866
+  - address: aab9ae3da3fc17b9f07fccef1657294f99590cd7
     gas_objects:
       - object_id: "0x0fa3e0b50000496a53bafcea629fcbcfff2a9866"
         gas_value: 100000000
