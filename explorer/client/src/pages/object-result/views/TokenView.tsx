@@ -55,97 +55,76 @@ function TokenView({ data }: { data: DataType }) {
             >
                 {viewedData.name && <h1>{viewedData.name}</h1>}{' '}
                 <h2 className={styles.header}>Description</h2>
-                <div className={theme.textresults} id="descriptionResults">
-                    <div>
-                        <div>Object ID</div>
-                        <div id="objectID">
-                            <Longtext
-                                text={viewedData.id}
-                                category="objects"
-                                isLink={false}
-                            />
-                        </div>
-                    </div>
-                    {viewedData.tx_digest && (
-                        <div>
-                            <div>Last Transaction ID</div>
-                            <div id="lasttxID">
+                <table className={theme.textresults}>
+                    <tbody>
+                        <tr>
+                            <td>Type</td>
+                            <td>{prepObjTypeValue(viewedData.objType)}</td>
+                        </tr>
+
+                        <tr>
+                            <td>Object ID</td>
+                            <td id="objectID">
                                 <Longtext
-                                    text={viewedData.tx_digest}
-                                    category="transactions"
-                                    isLink={true}
+                                    text={viewedData.id}
+                                    category="objects"
+                                    isLink={false}
+                                    isCopyButton={false}
                                 />
-                            </div>
-                        </div>
-                    )}
-                    <div>
-                        <div>Version</div>
-                        <div>{viewedData.version}</div>
-                    </div>
-                    {viewedData.publisherAddress && (
-                        <div>
-                            <div>Publisher</div>
-                            <div id="lasttxID">
+                            </td>
+                        </tr>
+
+                        {viewedData.tx_digest && (
+                            <tr>
+                                <td>Last Transaction ID</td>
+                                <td>
+                                    <Longtext
+                                        text={viewedData.tx_digest}
+                                        category="transactions"
+                                        isLink={true}
+                                        isCopyButton={false}
+                                    />
+                                </td>
+                            </tr>
+                        )}
+
+                        <tr>
+                            <td>Version</td>
+                            <td>{viewedData.version}</td>
+                        </tr>
+
+                        <tr>
+                            <td>Owner</td>
+                            <td id="owner">
                                 <Longtext
-                                    text={viewedData.publisherAddress}
-                                    category="addresses"
-                                    isLink={true}
+                                    text={
+                                        typeof viewedData.owner === 'string'
+                                            ? viewedData.owner
+                                            : typeof viewedData.owner
+                                    }
+                                    category="unknown"
+                                    isLink={
+                                        viewedData.owner !== 'Immutable' &&
+                                        viewedData.owner !== 'Shared'
+                                    }
+                                    isCopyButton={false}
                                 />
-                            </div>
-                        </div>
-                    )}
-                    {viewedData.readonly && (
-                        <div>
-                            <div>Read Only?</div>
-                            {viewedData.readonly === 'true' ? (
-                                <div
-                                    id="readOnlyStatus"
-                                    className={styles.immutable}
-                                >
-                                    True
-                                </div>
-                            ) : (
-                                <div
-                                    id="readOnlyStatus"
-                                    className={styles.mutable}
-                                >
-                                    False
-                                </div>
-                            )}
-                        </div>
-                    )}
-                    <div>
-                        <div>Type</div>
-                        <div>{prepObjTypeValue(viewedData.objType)}</div>
-                    </div>
-                    <div>
-                        <div>Owner</div>
-                        <div id="owner">
-                            <Longtext
-                                text={
-                                    typeof viewedData.owner === 'string'
-                                        ? viewedData.owner
-                                        : typeof viewedData.owner
-                                }
-                                category="unknown"
-                                isLink={
-                                    viewedData.owner !== 'Immutable' &&
-                                    viewedData.owner !== 'Shared'
-                                }
-                            />
-                        </div>
-                    </div>
-                    {viewedData.contract_id && (
-                        <div>
-                            <div>Contract ID</div>
-                            <Longtext
-                                text={viewedData.contract_id.bytes}
-                                category="objects"
-                                isLink={true}
-                            />
-                        </div>
-                    )}
-                </div>
+                            </td>
+                        </tr>
+                        {viewedData.contract_id && (
+                            <tr>
+                                <td>Contract ID</td>
+                                <td>
+                                    <Longtext
+                                        text={viewedData.contract_id.bytes}
+                                        category="objects"
+                                        isLink={true}
+                                    />
+                                </td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
                 {properties.length > 0 && (
                     <>
                         <h2 className={styles.header}>{detailsTitle}</h2>
