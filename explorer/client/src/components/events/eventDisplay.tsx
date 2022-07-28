@@ -103,7 +103,7 @@ export function moveEventDisplay(event: MoveEvent): EventDisplayData {
 }
 
 export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
-    const packMod = `${event.packageId}::${event.transactionModule}`
+    const packMod = `${event.packageId}::${event.transactionModule}`;
 
     return {
         top: {
@@ -141,7 +141,7 @@ export function transferObjectEventDisplay(
 export function deleteObjectEventDisplay(
     event: DeleteObjectEvent
 ): EventDisplayData {
-    const packMod = `${event.packageId}::${event.transactionModule}`
+    const packMod = `${event.packageId}::${event.transactionModule}`;
     return {
         top: {
             title: 'Delete Object',
