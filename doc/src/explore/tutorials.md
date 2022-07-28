@@ -234,12 +234,12 @@ export OCAP=5851B7EA07B93E68696BC0CF811D2E266DFB880D
 export GAME=F1B8161BD97D3CD6627E739AD675089C5ACFB452
 ```
 
-By convention, Player X goes first. Player X wants to put a mark at the center of the gameboard ((1, 1)). This needs to take two steps. First Player X creates a Mark object with the placement intention and send it to the admin.
+By convention, PlayerX goes first. PlayerX wants to put a mark at the center of the gameboard ((1, 1)). This needs to take two steps. First PlayerX creates a Mark object with the placement intention and send it to the admin.
 We will call the `send_mark_to_game` function in `TicTacToe`, whose signature looks like this:
 ```
 public entry fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address, row: u64, col: u64, ctx: &mut TxContext);
 ```
-The `cap` argument will be Player X's capability object (XCAP), and `game_address` argument will be the admin's address (ADMIN):
+The `cap` argument will be PlayerX's capability object (XCAP), and `game_address` argument will be the admin's address (ADMIN):
 ```shell
 $ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 1 1 --gas $X_GAS --gas-budget 1000
 ```
@@ -278,7 +278,7 @@ _|X|_
  | |
 ```
 
-Player O now tries to put a mark at (0, 0):
+PlayerO now tries to put a mark at (0, 0):
 ```shell
 $ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $OCAP $ADMIN 0 0 --gas $O_GAS --gas-budget 1000
 ```
@@ -314,7 +314,7 @@ _|X|_
  | |
 ```
 
-Player X puts a mark at (0, 2):
+PlayerX puts a mark at (0, 2):
 ```shell
 $ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 0 2 --gas $X_GAS --gas-budget 1000
 ```
@@ -342,7 +342,7 @@ _|X|_
  | |
 ```
 
-Player O places a mark at (1, 0):
+PlayerO places a mark at (1, 0):
 ```shell
 $ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $OCAP $ADMIN 1 0 --gas $O_GAS --gas-budget 1000
 ```
@@ -369,7 +369,7 @@ O|_|X
 O|X|_
  | |
 ```
-This is a chance for Player X to win! X now mints the winning mark at (2, 0):
+This is a chance for PlayerX to win! X now mints the winning mark at (2, 0):
 ```shell
 $ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 2 0 --gas $X_GAS --gas-budget 1000
 ```
