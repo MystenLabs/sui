@@ -218,7 +218,10 @@ function eventToDisplay(event: SuiEvent) {
     if ('newObject' in event && isNewObjectEvent(event.newObject))
         return newObjectEventDisplay(event.newObject);
 
-    if ('transferObject' in event && isTransferObjectEvent(event.transferObject))
+    if (
+        'transferObject' in event &&
+        isTransferObjectEvent(event.transferObject)
+    )
         return transferObjectEventDisplay(event.transferObject);
 
     return {

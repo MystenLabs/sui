@@ -1,6 +1,10 @@
 import { getOwnerStr } from '../../utils/objectUtils';
 
-import type { MoveEvent, NewObjectEvent, TransferObjectEvent } from '@mysten/sui.js';
+import type {
+    MoveEvent,
+    NewObjectEvent,
+    TransferObjectEvent,
+} from '@mysten/sui.js';
 
 export function moveEventDisplay(event: MoveEvent) {
     return {
@@ -90,7 +94,7 @@ export function transferObjectEventDisplay(event: TransferObjectEvent) {
                 },
             ],
         },
-        fields: null
+        fields: null,
     };
 }
 
