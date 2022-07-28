@@ -4,7 +4,6 @@ import DisplayBox from '../../../components/displaybox/DisplayBox';
 import Longtext from '../../../components/longtext/Longtext';
 import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../../components/transactions-for-id/TxForID';
-import theme from '../../../styles/theme.module.css';
 import { getOwnerStr, parseImageURL } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
@@ -55,7 +54,7 @@ function TokenView({ data }: { data: DataType }) {
             >
                 {viewedData.name && <h1>{viewedData.name}</h1>}{' '}
                 <h2 className={styles.header}>Description</h2>
-                <table className={theme.textresults}>
+                <table className={styles.description}>
                     <tbody>
                         <tr>
                             <td>Type</td>

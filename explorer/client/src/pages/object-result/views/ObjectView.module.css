@@ -47,6 +47,24 @@ div.textbox > div > div > div.unconstrained {
     @apply h-fit break-normal min-h-[1.5rem];
 }
 
+/* Description CSS */
+
+table.description {
+    @apply border-collapse mb-[3.75rem];
+}
+
+table.description > tbody > tr > td:first-child {
+    @apply text-sui-grey-80 text-[0.875rem] leading-[1.063rem] font-medium pr-6;
+}
+
+table.description > tbody > tr > td:nth-child(2) {
+    @apply font-mono;
+}
+
+table.description > tbody > tr:not(:last-child) > td {
+    @apply pb-2.5;
+}
+
 /* Property Box CSS */
 
 div.propertybox {
