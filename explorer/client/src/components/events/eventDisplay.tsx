@@ -9,6 +9,7 @@ import {
 import { isBigIntOrNumber } from '../../utils/numberUtil';
 import { getOwnerStr } from '../../utils/objectUtils';
 
+import type { Category } from '../../pages/transaction-result/TransactionResultType';
 import type {
     MoveEvent,
     NewObjectEvent,
@@ -19,28 +20,27 @@ import type {
     DeleteObjectEvent,
     PublishEvent,
 } from '@mysten/sui.js';
-import type { Category } from '../../pages/transaction-result/TransactionResultType';
 
 export type ContentItem = {
-    label: string,
-    value: string,
-    monotypeClass: boolean,
-    link?: boolean,
-    category?: Category,
-}
+    label: string;
+    value: string;
+    monotypeClass: boolean;
+    link?: boolean;
+    category?: Category;
+};
 
 export type EventDisplayData = {
     top: {
-        title: string,
-        content: (ContentItem | ContentItem[])[],
-    },
+        title: string;
+        content: (ContentItem | ContentItem[])[];
+    };
     fields?: {
-        title: string,
+        title: string;
         // css class name to apply to the 'Fields' sub-header
-        titleStyle?: string,
-        content: (ContentItem | ContentItem[])[],
-    }
-}
+        titleStyle?: string;
+        content: (ContentItem | ContentItem[])[];
+    };
+};
 
 function addressContent(label: string, addr: SuiAddress) {
     return {
@@ -117,7 +117,9 @@ export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
     };
 }
 
-export function transferObjectEventDisplay(event: TransferObjectEvent): EventDisplayData {
+export function transferObjectEventDisplay(
+    event: TransferObjectEvent
+): EventDisplayData {
     return {
         top: {
             title: 'Transfer Object',
@@ -142,7 +144,9 @@ export function transferObjectEventDisplay(event: TransferObjectEvent): EventDis
     };
 }
 
-export function deleteObjectEventDisplay(event: DeleteObjectEvent): EventDisplayData {
+export function deleteObjectEventDisplay(
+    event: DeleteObjectEvent
+): EventDisplayData {
     return {
         top: {
             title: 'Delete Object',
@@ -165,13 +169,21 @@ export function publishEventDisplay(event: PublishEvent): EventDisplayData {
             title: 'Publish',
             content: [
                 addressContent('Sender', event.sender),
-                objectContent('Package', event.packageId),
+                {
+                    label: 'Package',
+                    value: event.packageId,
+                    monotypeClass: true,
+                },
             ],
         },
     };
 }
 
-export function bigintDisplay(title: string, label: string, value: bigint): EventDisplayData {
+export function bigintDisplay(
+    title: string,
+    label: string,
+    value: bigint
+): EventDisplayData {
     return {
         top: {
             title: title,
