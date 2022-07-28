@@ -40,7 +40,7 @@ pub fn generate_gas_objects_with_owner(count: usize, owner: SuiAddress) -> Vec<O
     (0..count)
         .map(|_i| {
             let gas_object_id = ObjectID::random();
-            Object::with_id_owner_for_testing(gas_object_id, owner)
+            Object::with_id_owner_gas_for_testing(gas_object_id, owner, u64::MAX)
         })
         .collect()
 }

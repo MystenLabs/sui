@@ -207,7 +207,7 @@ pub fn make_counter_increment_transaction(
     package_ref: ObjectRef,
     counter_id: ObjectID,
     sender: SuiAddress,
-    keypair: &dyn Signer<Signature>,
+    keypair: &KeyPair,
 ) -> Transaction {
     let data = TransactionData::new_move_call(
         sender,
