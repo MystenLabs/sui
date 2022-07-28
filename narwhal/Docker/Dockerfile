@@ -11,8 +11,8 @@ WORKDIR "$WORKDIR/narwhal"
 ARG BUILD_MODE
 
 # Install basic dependencies
-RUN apt-get update \
-    && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y --no-install-recommends \
+RUN apt-get -qq update \
+    && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get -qq install -y --no-install-recommends \
     tzdata \
     git \
     ca-certificates \
