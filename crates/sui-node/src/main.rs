@@ -5,7 +5,11 @@ use anyhow::Result;
 use clap::Parser;
 use multiaddr::Multiaddr;
 use std::path::PathBuf;
+use std::time::Duration;
 use sui_config::{Config, NodeConfig};
+use sui_telemetry::send_telemetry_event;
+use tokio::task;
+use tokio::time::sleep;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -73,6 +77,14 @@ async fn main() -> Result<()> {
             }
         });
     }
+
+    task::spawn(async move {
+        loop {
+            sleep(Duration::from_secs(3600)).await;
+            send_telemetry_event().await;
+        }
+    })
+    .await?;
 
     sui_node::admin::start_admin_server(config.admin_interface_port, filter_handle);
 
