@@ -72,12 +72,16 @@ function fieldsContent(fields: { [key: string]: any }) {
     });
 }
 
-function contentLine(label: string, value: string, monotypeClass: boolean = false) {
+function contentLine(
+    label: string,
+    value: string,
+    monotypeClass: boolean = false
+) {
     return {
         label,
         value,
         monotypeClass,
-    }
+    };
 }
 
 export function moveEventDisplay(event: MoveEvent): EventDisplayData {
@@ -85,11 +89,7 @@ export function moveEventDisplay(event: MoveEvent): EventDisplayData {
         top: {
             title: 'Move Event',
             content: [
-                {
-                    label: 'Type',
-                    value: event.type,
-                    monotypeClass: true,
-                },
+                contentLine('Type', event.type, true),
                 addressContent('Sender', event.sender as string),
                 contentLine('BCS', event.bcs, true),
             ],
@@ -103,11 +103,13 @@ export function moveEventDisplay(event: MoveEvent): EventDisplayData {
 }
 
 export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
+    const packMod = `${event.packageId}::${event.transactionModule}`
+
     return {
         top: {
             title: 'New Object',
             content: [
-                contentLine('Module', `${event.packageId}::${event.transactionModule}`, true),
+                contentLine('Module', packMod, true),
                 [
                     addressContent('', event.sender),
                     addressContent('', getOwnerStr(event.recipient)),
@@ -139,11 +141,12 @@ export function transferObjectEventDisplay(
 export function deleteObjectEventDisplay(
     event: DeleteObjectEvent
 ): EventDisplayData {
+    const packMod = `${event.packageId}::${event.transactionModule}`
     return {
         top: {
             title: 'Delete Object',
             content: [
-                contentLine('Module', `${event.packageId}::${event.transactionModule}`, true),
+                contentLine('Module', packMod, true),
                 objectContent('Object ID', event.objectId),
                 addressContent('Sender', event.sender),
             ],
@@ -171,9 +174,7 @@ export function bigintDisplay(
     return {
         top: {
             title: title,
-            content: [
-                contentLine(label, value.toString()),
-            ],
+            content: [contentLine(label, value.toString())],
         },
     };
 }
