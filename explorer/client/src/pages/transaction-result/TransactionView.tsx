@@ -11,6 +11,7 @@ import {
     getMovePackageContent,
     getObjectId,
     getTransferSuiTransaction,
+    isMoveEvent,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
@@ -29,6 +30,7 @@ import type {
     SuiTransactionKind,
     SuiObjectRef,
     SuiEvent,
+    MoveEvent,
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
@@ -140,6 +142,7 @@ function formatByTransactionKind(
 
 type TxItemView = {
     title: string;
+    titleStyle?: string;
     content: {
         label?: string | number | any;
         value: string | number;
@@ -152,7 +155,15 @@ type TxItemView = {
 function ItemView({ data }: { data: TxItemView }) {
     return (
         <div className={styles.itemView}>
-            <div className={styles.itemviewtitle}>{data.title}</div>
+            <div
+                className={
+                    data.titleStyle
+                        ? styles[data.titleStyle]
+                        : styles.itemviewtitle
+                }
+            >
+                {data.title}
+            </div>
             <div className={styles.itemviewcontent}>
                 {data.content.map((item, index) => {
                     return (
@@ -192,23 +203,69 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
+function moveEventDisplay(event: MoveEvent) {
+    return {
+        top: {
+            title: 'MoveEvent',
+            content: [
+                {
+                    label: 'Type',
+                    value: event.type,
+                    monotypeClass: true,
+                },
+                {
+                    label: 'Sender',
+                    value: event.sender,
+                    monotypeClass: true,
+                },
+                {
+                    label: 'BCS',
+                    value: event.bcs,
+                    monotypeClass: true,
+                },
+            ],
+        },
+        fields: {
+            title: 'Fields',
+            titleStyle: 'itemfieldstitle',
+            content: Object.keys(event.fields).map((k) => {
+                return {
+                    label: k,
+                    value: event.fields[k].toString(),
+                    monotypeClass: true,
+                };
+            }),
+        },
+    };
+}
+
 function eventToDisplay(event: SuiEvent) {
     console.log('event to display', event);
-    const isNewObject = 'newObject' in event;
-    const inner = isNewObject ? event.newObject : null;
 
-    if (inner === null) {
-        return {
-            label: 'null (FIX ME)',
-            value: null,
-            monotypeClass: false,
-        };
-    }
+    if ('moveEvent' in event && isMoveEvent(event.moveEvent))
+        return moveEventDisplay(event.moveEvent);
 
     return {
-        label: '',
-        value: event,
-        monotypeClass: false,
+        top: {
+            title: 'FIX TITLE',
+            content: [
+                {
+                    label: '',
+                    value: 'none (FIX ME)',
+                    monotypeClass: false,
+                },
+            ],
+        },
+        fields: {
+            title: 'Fields',
+            content: [
+                {
+                    label: '',
+                    value: 'none (FIX ME)',
+                    monotypeClass: false,
+                },
+            ],
+        },
     };
 }
 
@@ -229,14 +286,17 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         ...(txdata.txError ? { error: txdata.txError } : {}),
     };
 
-    console.log('txdata', txdata);
-    console.log('txdata events', txdata.events);
-    const txEventData = {
-        title: 'Events',
-        content: txdata.events?.map(eventToDisplay),
-    };
+    const txEventData = txdata.events?.map(eventToDisplay);
+    console.log('txdata', txdata, txEventData);
 
-    console.log(txEventData);
+    const txEventDisplay = txEventData?.map((ed) => {
+        return (
+            <div className={styles.txgridcomponent} key={ed.top.title}>
+                <ItemView data={ed.top as TxItemView} />
+                <ItemView data={ed.fields as TxItemView} />
+            </div>
+        );
+    });
 
     const transactionSignatureData = {
         title: 'Transaction Signatures',
@@ -384,12 +444,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                         <ItemView data={GasStorageFees} />
                     </div>
                 </section>
-                <section title="Events">
-                    <div className={styles.txgridcomponent}>
-                        <ItemView data={transactionSignatureData} />
-                        <ItemView data={validatorSignatureData} />
-                    </div>
-                </section>
+                <section title="Events">{txEventDisplay}</section>
                 <section title="Signatures">
                     <div className={styles.txgridcomponent}>
                         <ItemView data={transactionSignatureData} />
