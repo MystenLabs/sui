@@ -251,9 +251,14 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         );
     });
 
-    let eventTitlesDisplay = eventTitles.map(et => (
+    let eventTitlesDisplay = eventTitles.map((et) => (
         <div key={et} className={styles.eventtitle}>
-            <Longtext text={et} category={'unknown'} isCopyButton={false} isLink={false}/>
+            <Longtext
+                text={et}
+                category={'unknown'}
+                isCopyButton={false}
+                isLink={false}
+            />
         </div>
     ));
 
@@ -412,7 +417,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                             {txEventDisplay}
                         </div>
                     </div>
-
                 </section>
                 <section title="Signatures">
                     <div className={styles.txgridcomponent}>

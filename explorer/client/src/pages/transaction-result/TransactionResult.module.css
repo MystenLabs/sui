@@ -13,20 +13,24 @@
 .eventtitle {
     @apply pl-2;
 }
+
 .eventtitle:hover {
-    @apply bg-blue-100;
+    @apply bg-blue-100 cursor-pointer;
     border-radius: 6px;
 }
 
 .txeventsleft {
-    @apply col-span-1;
+    @apply col-span-1 hidden md:block;
+
     margin-top: 12.5%;
     line-height: 200%;
     margin-right: 5%;
     border-right: 1px solid #f0f1f2;
 }
+
 .txeventsright {
-    @apply col-span-4;
+    @apply col-span-5 md:col-span-4 overflow-y-scroll;
+    height:100vh;   /* enables scrolling list independtly of page */
 }
 
 .txcomponent {
