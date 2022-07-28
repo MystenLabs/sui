@@ -1,5 +1,7 @@
 .objheader {
-    @apply pb-2 mb-0;
+    @apply pb-[40px] mb-[30px];
+
+    border-bottom: 1px solid #f0f1f2;
 }
 
 .objtypes {
