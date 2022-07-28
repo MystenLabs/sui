@@ -14,12 +14,11 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
-import { eventToDisplay } from '../../components/events/eventDisplay';
+import { eventToDisplay, getAddressesLinks } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
 import { type Link, TxAddresses } from '../../components/table/TableCard';
 import Tabs from '../../components/tabs/Tabs';
-import { truncate } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 import TxResultHeader from './TxResultHeader';
@@ -170,18 +169,8 @@ function ItemView({ data }: { data: TxItemView }) {
                     // handle sender -> recipient display in one line
                     let links: Link[] = [];
                     if (Array.isArray(item)) {
-                        links = item.map((content, ci) => {
-                            return {
-                                url: content.value,
-                                name: truncate(content.value, 20),
-                                copy: false,
-                                category: 'addresses',
-                                isLink: true,
-                            } as Link;
-                        });
-
+                        links = getAddressesLinks(item);
                         item.label = 'Sender, Recipient';
-                        console.log('links array display', item, links);
                     }
 
                     return (
@@ -203,7 +192,7 @@ function ItemView({ data }: { data: TxItemView }) {
                                     item.monotypeClass && styles.mono
                                 )}
                             >
-                                {Array.isArray(item) ? (
+                                {links.length > 1 ? (
                                     <TxAddresses content={links}></TxAddresses>
                                 ) : (
                                     <></>

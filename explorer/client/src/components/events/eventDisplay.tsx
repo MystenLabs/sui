@@ -8,8 +8,10 @@ import {
 
 import { isBigIntOrNumber } from '../../utils/numberUtil';
 import { getOwnerStr } from '../../utils/objectUtils';
+import { truncate } from '../../utils/stringUtils';
 
 import type { Category } from '../../pages/transaction-result/TransactionResultType';
+import type { Link } from '../table/TableCard';
 import type {
     MoveEvent,
     NewObjectEvent,
@@ -136,6 +138,18 @@ export function transferObjectEventDisplay(
             ],
         },
     };
+}
+
+export function getAddressesLinks(item: ContentItem[]): Link[] {
+    return item.map(content => {
+        return {
+            url: content.value,
+            name: truncate(content.value, 20),
+            copy: false,
+            category: content.category,
+            isLink: true,
+        } as Link;
+    });
 }
 
 export function deleteObjectEventDisplay(
