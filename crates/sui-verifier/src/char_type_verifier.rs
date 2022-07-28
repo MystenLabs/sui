@@ -24,6 +24,7 @@ use move_binary_format::{
         SignatureToken, StructDefinition, StructHandle, TypeSignature,
     },
 };
+use move_core_types::{ident_str, language_storage::ModuleId};
 use sui_types::{
     base_types::{TX_CONTEXT_MODULE_NAME, TX_CONTEXT_STRUCT_NAME},
     error::ExecutionError,
@@ -33,14 +34,22 @@ use sui_types::{
 use crate::{verification_failure, INIT_FN_NAME};
 
 pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
+    // In Sui's framework code there is an exception to the characteristic type rule - we have a SUI
+    // type in the sui module but it is instantiated and the module has no initializer (the reason
+    // for it is that the SUI coin is only instantiated during genesis). It is easiest to simply
+    // special-case this module particularly that this is framework code and thus deemed correct.
+    if ModuleId::new(SUI_FRAMEWORK_ADDRESS, ident_str!("sui").to_owned()) == module.self_id() {
+        return Ok(());
+    }
+
     let view = BinaryIndexedView::Module(module);
+    let mod_handle = view.module_handle_at(module.self_module_handle_idx);
+    let mod_name = view.identifier_at(mod_handle.name).as_str();
     let struct_defs = &module.struct_defs;
+    let mut char_type_candidate = None;
     for def in struct_defs {
         let struct_handle = module.struct_handle_at(def.struct_handle);
         let struct_name = view.identifier_at(struct_handle.name).as_str();
-        let mod_handle = view.module_handle_at(module.self_module_handle_idx);
-        let mod_name = view.identifier_at(mod_handle.name).as_str();
-        let mut candidate_exists = false;
         if struct_name.to_ascii_uppercase() == struct_name
             && mod_name.to_ascii_uppercase() == struct_name
         {
@@ -49,31 +58,31 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
             // if we reached this point, it means we have a legitimate characteristic type candidate
             // and we have to make sure that both the init function's signature reflects this and
             // that this type is not instantiated in any function of the module
-            candidate_exists = true;
+            char_type_candidate = Some((struct_name, struct_handle, def));
+            break; // no reason to look any further
         }
-        for fn_def in &module.function_defs {
-            let fn_handle = module.function_handle_at(fn_def.function);
-            let fn_name = module.identifier_at(fn_handle.name);
-            if fn_name == INIT_FN_NAME {
-                if candidate_exists {
-                    // only verify if init function conforms to characteristic types requirements if
-                    // we have a
-                    // characteristic type candidate
-                    verify_init_function_char_type(module, fn_handle, struct_name, struct_handle)
-                        .map_err(verification_failure)?;
-                } else {
-                    // if there is no characteristic type candidate than the init function should
-                    // have only one parameter of tx_context type
-                    verify_init_function_single_param(module, fn_handle)
-                        .map_err(verification_failure)?;
-                }
-            }
-            if candidate_exists {
-                // only verify lack of characteristic types instantiations if we have a
-                // characteristic type candidate
-                verify_no_instantiations(module, fn_def, struct_name, def)
+    }
+    for fn_def in &module.function_defs {
+        let fn_handle = module.function_handle_at(fn_def.function);
+        let fn_name = module.identifier_at(fn_handle.name);
+        if fn_name == INIT_FN_NAME {
+            if let Some((struct_name, struct_handle, _)) = char_type_candidate {
+                // only verify if init function conforms to characteristic types requirements if we
+                // have a characteristic type candidate
+                verify_init_function_char_type(module, fn_handle, struct_name, struct_handle)
+                    .map_err(verification_failure)?;
+            } else {
+                // if there is no characteristic type candidate than the init function should have
+                // only one parameter of tx_context type
+                verify_init_function_single_param(module, fn_handle)
                     .map_err(verification_failure)?;
             }
+        }
+        if let Some((struct_name, _, def)) = char_type_candidate {
+            // only verify lack of characteristic types instantiations if we have a
+            // characteristic type candidate
+            verify_no_instantiations(module, fn_def, struct_name, def)
+                .map_err(verification_failure)?;
         }
     }
 
@@ -112,7 +121,7 @@ fn verify_char_type(
         || struct_def.field(0).unwrap().signature != TypeSignature(SignatureToken::Bool)
     {
         return Err(format!(
-            "characteristic type candidate {}::{} must have a single bool field only",
+            "characteristic type candidate {}::{} must have a single bool field only (or no fields)",
             module.self_id(),
             struct_name,
         ));
@@ -125,7 +134,6 @@ fn verify_char_type(
             struct_name,
         ));
     }
-
     Ok(())
 }
 
