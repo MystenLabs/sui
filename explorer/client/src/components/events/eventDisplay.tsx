@@ -1,10 +1,11 @@
-import { getOwnerStr } from '../../utils/objectUtils';
-
 import {
     isMoveEvent,
     isNewObjectEvent,
     isTransferObjectEvent,
 } from '@mysten/sui.js';
+
+import { getOwnerStr } from '../../utils/objectUtils';
+
 import type {
     MoveEvent,
     NewObjectEvent,
@@ -111,7 +112,6 @@ export function transferObjectEventDisplay(event: TransferObjectEvent) {
         fields: null,
     };
 }
-
 
 export function eventToDisplay(event: SuiEvent) {
     console.log('event to display', event);

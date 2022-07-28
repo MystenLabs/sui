@@ -14,9 +14,7 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
-import {
-    eventToDisplay,
-} from '../../components/events/eventDisplay';
+import { eventToDisplay } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
 import Tabs from '../../components/tabs/Tabs';
