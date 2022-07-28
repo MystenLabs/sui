@@ -3,24 +3,19 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::consensus::{ConsensusState, Dag};
 use config::Committee;
-use crypto::traits::VerifyingKey;
 use std::collections::HashSet;
 use tracing::debug;
 use types::{Certificate, CertificateDigest, Round};
 
 /// Order the past leaders that we didn't already commit.
-pub fn order_leaders<'a, PublicKey: VerifyingKey, LeaderElector>(
-    committee: &Committee<PublicKey>,
-    leader: &Certificate<PublicKey>,
-    state: &'a ConsensusState<PublicKey>,
+pub fn order_leaders<'a, LeaderElector>(
+    committee: &Committee,
+    leader: &Certificate,
+    state: &'a ConsensusState,
     get_leader: LeaderElector,
-) -> Vec<Certificate<PublicKey>>
+) -> Vec<Certificate>
 where
-    LeaderElector: Fn(
-        &Committee<PublicKey>,
-        Round,
-        &'a Dag<PublicKey>,
-    ) -> Option<&'a (CertificateDigest, Certificate<PublicKey>)>,
+    LeaderElector: Fn(&Committee, Round, &'a Dag) -> Option<&'a (CertificateDigest, Certificate)>,
 {
     let mut to_commit = vec![leader.clone()];
     let mut leader = leader;
@@ -44,11 +39,7 @@ where
 }
 
 /// Checks if there is a path between two leaders.
-fn linked<PublicKey: VerifyingKey>(
-    leader: &Certificate<PublicKey>,
-    prev_leader: &Certificate<PublicKey>,
-    dag: &Dag<PublicKey>,
-) -> bool {
+fn linked(leader: &Certificate, prev_leader: &Certificate, dag: &Dag) -> bool {
     let mut parents = vec![leader];
     for r in (prev_leader.round()..leader.round()).rev() {
         parents = dag
@@ -64,11 +55,11 @@ fn linked<PublicKey: VerifyingKey>(
 
 /// Flatten the dag referenced by the input certificate. This is a classic depth-first search (pre-order):
 /// https://en.wikipedia.org/wiki/Tree_traversal#Pre-order
-pub fn order_dag<PublicKey: VerifyingKey>(
+pub fn order_dag(
     gc_depth: Round,
-    leader: &Certificate<PublicKey>,
-    state: &ConsensusState<PublicKey>,
-) -> Vec<Certificate<PublicKey>> {
+    leader: &Certificate,
+    state: &ConsensusState,
+) -> Vec<Certificate> {
     debug!("Processing sub-dag of {:?}", leader);
     let mut ordered = Vec::new();
     let mut already_ordered = HashSet::new();

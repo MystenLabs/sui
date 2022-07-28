@@ -91,7 +91,7 @@ async fn test_get_collections() {
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch.clone());
+            let message = WorkerMessage::Batch(batch.clone());
             let serialized_batch = bincode::serialize(&message).unwrap();
             store
                 .batch_store
@@ -274,7 +274,7 @@ async fn test_remove_collections() {
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch.clone());
+            let message = WorkerMessage::Batch(batch.clone());
             let serialized_batch = bincode::serialize(&message).unwrap();
             store
                 .batch_store
@@ -418,7 +418,7 @@ async fn test_read_causal_signed_certificates() {
 
     // Make the data store.
     let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage<Ed25519PublicKey> = NodeStorage::reopen(temp_dir());
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
 
     let mut collection_ids: Vec<CertificateDigest> = Vec::new();
 
@@ -616,7 +616,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     // Make the data store.
     let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage<Ed25519PublicKey> = NodeStorage::reopen(temp_dir());
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
 
     let mut collection_ids: Vec<CertificateDigest> = Vec::new();
 
@@ -977,22 +977,22 @@ async fn test_get_collections_with_missing_certificates() {
 
 async fn fixture_certificate(
     key: &Ed25519KeyPair,
-    header_store: Store<HeaderDigest, Header<Ed25519PublicKey>>,
-    certificate_store: Store<CertificateDigest, Certificate<Ed25519PublicKey>>,
+    header_store: Store<HeaderDigest, Header>,
+    certificate_store: Store<CertificateDigest, Certificate>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     batch_store: Store<BatchDigest, SerializedBatchMessage>,
-) -> (Certificate<Ed25519PublicKey>, Batch) {
+) -> (Certificate, Batch) {
     let batch = fixture_batch_with_transactions(10);
     let worker_id = 0;
 
-    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch.clone());
+    let message = WorkerMessage::Batch(batch.clone());
     let serialized_batch = bincode::serialize(&message).unwrap();
     let batch_digest = batch.digest();
 
     let mut payload = BTreeMap::new();
     payload.insert(batch_digest, worker_id);
 
-    let builder = types::HeaderBuilder::<Ed25519PublicKey>::default();
+    let builder = types::HeaderBuilder::default();
     let header = builder
         .author(key.public().clone())
         .round(1)

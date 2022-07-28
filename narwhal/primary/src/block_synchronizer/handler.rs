@@ -8,7 +8,7 @@ use crate::{
     BlockHeader,
 };
 use async_trait::async_trait;
-use crypto::{traits::VerifyingKey, Hash};
+use crypto::Hash;
 use futures::future::join_all;
 #[cfg(test)]
 use mockall::*;
@@ -68,7 +68,7 @@ impl Error {
 /// certificate has been processed, before it returns it back as result.
 #[cfg_attr(test, automock)]
 #[async_trait]
-pub trait Handler<PublicKey: VerifyingKey> {
+pub trait Handler {
     /// It retrieves the requested blocks via the block_synchronizer making
     /// sure though that they are fully validated. The certificates will only
     /// be returned when they have properly processed via the core module
@@ -76,7 +76,7 @@ pub trait Handler<PublicKey: VerifyingKey> {
     async fn get_and_synchronize_block_headers(
         &self,
         block_ids: Vec<CertificateDigest>,
-    ) -> Vec<Result<Certificate<PublicKey>, Error>>;
+    ) -> Vec<Result<Certificate, Error>>;
 
     /// It retrieves the requested blocks via the block_synchronizer, but it
     /// doesn't synchronize the fetched headers, meaning that no processing
@@ -84,41 +84,41 @@ pub trait Handler<PublicKey: VerifyingKey> {
     async fn get_block_headers(
         &self,
         block_ids: Vec<CertificateDigest>,
-    ) -> Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>;
+    ) -> Vec<BlockSynchronizeResult<BlockHeader>>;
 
     /// Synchronizes the block payload for the provided certificates via the
     /// block synchronizer and returns the result back.
     async fn synchronize_block_payloads(
         &self,
-        certificates: Vec<Certificate<PublicKey>>,
-    ) -> Vec<Result<Certificate<PublicKey>, Error>>;
+        certificates: Vec<Certificate>,
+    ) -> Vec<Result<Certificate, Error>>;
 }
 
 /// A helper struct to allow us access the block_synchronizer in a synchronous
 /// way. It also offers methods to both fetch the certificates and way to
 /// process them and causally complete their history.
-pub struct BlockSynchronizerHandler<PublicKey: VerifyingKey> {
+pub struct BlockSynchronizerHandler {
     /// Channel to send commands to the block_synchronizer.
-    tx_block_synchronizer: Sender<Command<PublicKey>>,
+    tx_block_synchronizer: Sender<Command>,
 
     /// Channel to send the fetched certificates to Core for
     /// further processing, validation and possibly causal
     /// completion.
-    tx_core: Sender<PrimaryMessage<PublicKey>>,
+    tx_core: Sender<PrimaryMessage>,
 
     /// The store that holds the certificates.
-    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate>,
 
     /// The timeout while waiting for a certificate to become available
     /// after submitting for processing to core.
     certificate_deliver_timeout: Duration,
 }
 
-impl<PublicKey: VerifyingKey> BlockSynchronizerHandler<PublicKey> {
+impl BlockSynchronizerHandler {
     pub fn new(
-        tx_block_synchronizer: Sender<Command<PublicKey>>,
-        tx_core: Sender<PrimaryMessage<PublicKey>>,
-        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        tx_block_synchronizer: Sender<Command>,
+        tx_core: Sender<PrimaryMessage>,
+        certificate_store: Store<CertificateDigest, Certificate>,
         certificate_deliver_timeout: Duration,
     ) -> Self {
         Self {
@@ -130,10 +130,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizerHandler<PublicKey> {
     }
 
     #[instrument(level = "debug", skip_all)]
-    async fn wait_all(
-        &self,
-        certificates: Vec<Certificate<PublicKey>>,
-    ) -> Vec<Result<Certificate<PublicKey>, Error>> {
+    async fn wait_all(&self, certificates: Vec<Certificate>) -> Vec<Result<Certificate, Error>> {
         let futures: Vec<_> = certificates
             .into_iter()
             .map(|c| self.wait(c.digest()))
@@ -143,7 +140,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizerHandler<PublicKey> {
     }
 
     #[instrument(level = "debug", skip_all, err)]
-    async fn wait(&self, block_id: CertificateDigest) -> Result<Certificate<PublicKey>, Error> {
+    async fn wait(&self, block_id: CertificateDigest) -> Result<Certificate, Error> {
         if let Ok(result) = timeout(
             self.certificate_deliver_timeout,
             self.certificate_store.notify_read(block_id),
@@ -160,7 +157,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizerHandler<PublicKey> {
 }
 
 #[async_trait]
-impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<PublicKey> {
+impl Handler for BlockSynchronizerHandler {
     /// The method will return a separate result for each requested block id.
     /// If a certificate has been successfully retrieved (and processed via core
     /// if has been fetched from peers) then an OK result will be returned with the
@@ -174,14 +171,14 @@ impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<Pu
     async fn get_and_synchronize_block_headers(
         &self,
         block_ids: Vec<CertificateDigest>,
-    ) -> Vec<Result<Certificate<PublicKey>, Error>> {
+    ) -> Vec<Result<Certificate, Error>> {
         if block_ids.is_empty() {
             trace!("No blocks were provided, will now return an empty list");
             return vec![];
         }
 
         let sync_results = self.get_block_headers(block_ids).await;
-        let mut results: Vec<Result<Certificate<PublicKey>, Error>> = Vec::new();
+        let mut results: Vec<Result<Certificate, Error>> = Vec::new();
 
         // send certificates to core for processing and potential
         // causal completion
@@ -239,7 +236,7 @@ impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<Pu
     async fn get_block_headers(
         &self,
         block_ids: Vec<CertificateDigest>,
-    ) -> Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>> {
+    ) -> Vec<BlockSynchronizeResult<BlockHeader>> {
         if block_ids.is_empty() {
             trace!("No blocks were provided, will now return an empty list");
             return vec![];
@@ -275,8 +272,8 @@ impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler<Pu
     #[instrument(level = "debug", skip_all)]
     async fn synchronize_block_payloads(
         &self,
-        certificates: Vec<Certificate<PublicKey>>,
-    ) -> Vec<Result<Certificate<PublicKey>, Error>> {
+        certificates: Vec<Certificate>,
+    ) -> Vec<Result<Certificate, Error>> {
         if certificates.is_empty() {
             trace!("No certificates were provided, will now return an empty list");
             return vec![];

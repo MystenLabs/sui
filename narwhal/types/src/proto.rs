@@ -12,7 +12,7 @@ use crate::{
     Batch, BatchDigest, BatchMessage, BlockError, BlockErrorKind, CertificateDigest, Transaction,
 };
 use bytes::{Buf, Bytes};
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 
 pub use narwhal::{
     collection_retrieval_result::RetrievalResult,
@@ -41,7 +41,7 @@ pub use narwhal::{
     RoundsRequest, RoundsResponse, Transaction as TransactionProto, ValidatorData,
 };
 
-impl<PublicKey: VerifyingKey> From<PublicKey> for PublicKeyProto {
+impl From<PublicKey> for PublicKeyProto {
     fn from(pub_key: PublicKey) -> Self {
         PublicKeyProto {
             bytes: Bytes::from(pub_key.as_ref().to_vec()),

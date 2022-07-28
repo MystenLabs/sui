@@ -11,7 +11,7 @@ use crate::{
 use bincode::deserialize;
 use config::{Committee, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
+use crypto::Hash;
 use futures::{
     future::{join_all, try_join_all},
     stream::FuturesUnordered,
@@ -131,11 +131,7 @@ async fn test_successful_blocks_delete() {
             .unwrap()
             .primary_to_worker;
 
-        let handle = worker_listener::<Ed25519PublicKey>(
-            worker_address,
-            batch_digests,
-            tx_delete_batches.clone(),
-        );
+        let handle = worker_listener(worker_address, batch_digests, tx_delete_batches.clone());
         handlers.push(handle);
     }
 
@@ -429,8 +425,7 @@ async fn test_unlocking_pending_requests() {
     }
 
     // AND we confirm that we have an internal pending request with 3 different senders
-    let request_key: RequestKey =
-        BlockRemover::<Ed25519PublicKey>::construct_blocks_request_key(&block_ids);
+    let request_key: RequestKey = BlockRemover::construct_blocks_request_key(&block_ids);
 
     assert_eq!(remover.pending_removal_requests.len(), 1);
     assert_eq!(
@@ -457,7 +452,7 @@ async fn test_unlocking_pending_requests() {
     assert!(remover.map_tx_removal_results.is_empty());
 }
 
-pub fn worker_listener<PublicKey: VerifyingKey>(
+pub fn worker_listener(
     address: multiaddr::Multiaddr,
     expected_batch_ids: Vec<BatchDigest>,
     tx_delete_batches: Sender<DeleteBatchResult>,
@@ -467,7 +462,7 @@ pub fn worker_listener<PublicKey: VerifyingKey>(
     tokio::spawn(async move {
         let message = recv.recv().await.unwrap();
         match deserialize(&message.payload) {
-            Ok(PrimaryWorkerMessage::<PublicKey>::DeleteBatches(ids)) => {
+            Ok(PrimaryWorkerMessage::DeleteBatches(ids)) => {
                 assert_eq!(
                     ids.clone(),
                     expected_batch_ids,
@@ -485,10 +480,7 @@ pub fn worker_listener<PublicKey: VerifyingKey>(
     })
 }
 
-async fn populate_genesis<K: Borrow<Dag<Ed25519PublicKey>>>(
-    dag: &K,
-    committee: &Committee<Ed25519PublicKey>,
-) {
+async fn populate_genesis<K: Borrow<Dag>>(dag: &K, committee: &Committee) {
     assert!(join_all(
         Certificate::genesis(committee)
             .iter()

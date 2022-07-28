@@ -8,7 +8,6 @@ use crate::{
 };
 use config::Committee;
 use consensus::ConsensusOutput;
-use crypto::traits::VerifyingKey;
 use std::{fmt::Debug, sync::Arc};
 use store::Store;
 use tokio::{
@@ -30,42 +29,39 @@ pub mod executor_tests;
 /// consensus messages in the right and complete order. All transactions data referenced by the
 /// certificate should already be downloaded in the temporary storage. This module ensures it does
 /// not processes twice the same transaction (despite crash-recovery).
-pub struct Core<State: ExecutionState<PubKey = PublicKey>, PublicKey: VerifyingKey> {
+pub struct Core<State: ExecutionState> {
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// The (global) state to perform execution.
     execution_state: Arc<State>,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receive ordered consensus output to execute.
-    rx_subscriber: Receiver<ConsensusOutput<PublicKey>>,
+    rx_subscriber: Receiver<ConsensusOutput>,
     /// Outputs executed transactions.
     tx_output: Sender<ExecutorOutput<State>>,
     /// The indices ensuring we do not execute twice the same transaction.
     execution_indices: ExecutionIndices,
 }
 
-impl<State: ExecutionState<PubKey = PublicKey>, PublicKey: VerifyingKey> Drop
-    for Core<State, PublicKey>
-{
+impl<State: ExecutionState> Drop for Core<State> {
     fn drop(&mut self) {
         self.execution_state.release_consensus_write_lock();
     }
 }
 
-impl<State, PublicKey> Core<State, PublicKey>
+impl<State> Core<State>
 where
-    State: ExecutionState<PubKey = PublicKey> + Send + Sync + 'static,
+    State: ExecutionState + Send + Sync + 'static,
     State::Outcome: Send + 'static,
     State::Error: Debug,
-    PublicKey: VerifyingKey,
 {
     /// Spawn a new executor in a dedicated tokio task.
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
         execution_state: Arc<State>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_subscriber: Receiver<ConsensusOutput<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_subscriber: Receiver<ConsensusOutput>,
         tx_output: Sender<ExecutorOutput<State>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -114,10 +110,7 @@ where
     }
 
     /// Execute a single certificate.
-    async fn execute_certificate(
-        &mut self,
-        message: &ConsensusOutput<PublicKey>,
-    ) -> SubscriberResult<()> {
+    async fn execute_certificate(&mut self, message: &ConsensusOutput) -> SubscriberResult<()> {
         // Skip the certificate if it contains no transactions.
         if message.certificate.header.payload.is_empty() {
             self.execution_indices.skip_certificate();
@@ -141,7 +134,7 @@ where
     /// Execute a single batch of transactions.
     async fn execute_batch(
         &mut self,
-        consensus_output: &ConsensusOutput<PublicKey>,
+        consensus_output: &ConsensusOutput,
         batch_digest: BatchDigest,
         total_batches: usize,
     ) -> SubscriberResult<()> {
@@ -162,7 +155,7 @@ where
 
         // Deserialize the consensus workers' batch message to retrieve a list of transactions.
         let transactions = match bincode::deserialize(&batch)? {
-            WorkerMessage::<PublicKey>::Batch(Batch(x)) => x,
+            WorkerMessage::Batch(Batch(x)) => x,
             _ => bail!(SubscriberError::UnexpectedProtocolMessage),
         };
 
@@ -227,14 +220,11 @@ where
     /// Execute a single transaction.
     async fn execute_transaction(
         &mut self,
-        consensus_output: &ConsensusOutput<PublicKey>,
+        consensus_output: &ConsensusOutput,
         serialized: SerializedTransaction,
         total_transactions: usize,
         total_batches: usize,
-    ) -> SubscriberResult<(
-        <State as ExecutionState>::Outcome,
-        Option<Committee<PublicKey>>,
-    )> {
+    ) -> SubscriberResult<(<State as ExecutionState>::Outcome, Option<Committee>)> {
         // Compute the next expected indices. Those will be persisted upon transaction execution
         // and are only used for crash-recovery.
         self.execution_indices

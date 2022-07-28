@@ -5,19 +5,18 @@ use crate::{
     fixtures::{test_store, test_u64_certificates},
     sequencer::MockSequencer,
 };
-use crypto::ed25519::Ed25519PublicKey;
 use test_utils::committee;
 use tokio::sync::mpsc::{channel, Sender};
 use types::Certificate;
 
 /// Spawn a mock consensus core and a test subscriber.
 async fn spawn_consensus_and_subscriber(
-    rx_sequence: Receiver<Certificate<Ed25519PublicKey>>,
-    tx_batch_loader: Sender<ConsensusOutput<Ed25519PublicKey>>,
-    tx_executor: Sender<ConsensusOutput<Ed25519PublicKey>>,
+    rx_sequence: Receiver<Certificate>,
+    tx_batch_loader: Sender<ConsensusOutput>,
+    tx_executor: Sender<ConsensusOutput>,
 ) -> (
     Store<BatchDigest, SerializedBatchMessage>,
-    watch::Sender<ReconfigureNotification<Ed25519PublicKey>>,
+    watch::Sender<ReconfigureNotification>,
 ) {
     let (tx_consensus_to_client, rx_consensus_to_client) = channel(10);
     let (tx_client_to_consensus, rx_client_to_consensus) = channel(10);
@@ -32,7 +31,7 @@ async fn spawn_consensus_and_subscriber(
     // Spawn a test subscriber.
     let store = test_store();
     let next_consensus_index = SequenceNumber::default();
-    Subscriber::<Ed25519PublicKey>::spawn(
+    Subscriber::spawn(
         store.clone(),
         rx_reconfigure,
         rx_consensus_to_client,
@@ -127,7 +126,7 @@ async fn synchronize() {
     // Spawn a subscriber.
     let store = test_store();
     let next_consensus_index = SequenceNumber::default();
-    Subscriber::<Ed25519PublicKey>::spawn(
+    Subscriber::spawn(
         store.clone(),
         rx_reconfigure,
         rx_consensus_to_client,

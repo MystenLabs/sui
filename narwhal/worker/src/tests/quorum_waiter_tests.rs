@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::worker::WorkerMessage;
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use crypto::traits::KeyPair;
 use test_utils::{batch, committee, keys, WorkerToWorkerMockServer};
 use tokio::sync::mpsc::channel;
 
@@ -29,7 +29,7 @@ async fn wait_for_quorum() {
 
     // Make a batch.
     let batch = batch();
-    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch.clone());
+    let message = WorkerMessage::Batch(batch.clone());
     let serialized = bincode::serialize(&message).unwrap();
 
     // Spawn enough listeners to acknowledge our batches.

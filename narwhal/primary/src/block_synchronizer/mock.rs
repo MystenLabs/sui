@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::{BlockHeader, BlockSynchronizeResult, Command};
-use crypto::{traits::VerifyingKey, Hash};
+use crypto::Hash;
 use std::collections::HashMap;
 use tokio::sync::{
     mpsc::{channel, Receiver, Sender},
@@ -10,17 +10,17 @@ use tokio::sync::{
 use types::CertificateDigest;
 
 #[derive(Debug)]
-enum Core<PublicKey: VerifyingKey> {
+enum Core {
     SynchronizeBlockHeaders {
         block_ids: Vec<CertificateDigest>,
         times: u32,
-        result: Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>,
+        result: Vec<BlockSynchronizeResult<BlockHeader>>,
         ready: oneshot::Sender<()>,
     },
     SynchronizeBlockPayload {
         block_ids: Vec<CertificateDigest>,
         times: u32,
-        result: Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>,
+        result: Vec<BlockSynchronizeResult<BlockHeader>>,
         ready: oneshot::Sender<()>,
     },
     AssertExpectations {
@@ -28,26 +28,26 @@ enum Core<PublicKey: VerifyingKey> {
     },
 }
 
-struct MockBlockSynchronizerCore<PublicKey: VerifyingKey> {
+struct MockBlockSynchronizerCore {
     /// A map that holds the expected requests for sync block headers and their
     /// stubbed response.
     block_headers_expected_requests:
-        HashMap<Vec<CertificateDigest>, (u32, Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>)>,
+        HashMap<Vec<CertificateDigest>, (u32, Vec<BlockSynchronizeResult<BlockHeader>>)>,
 
     /// A map that holds the expected requests for sync block payload and their
     /// stubbed response.
     block_payload_expected_requests:
-        HashMap<Vec<CertificateDigest>, (u32, Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>)>,
+        HashMap<Vec<CertificateDigest>, (u32, Vec<BlockSynchronizeResult<BlockHeader>>)>,
 
     /// Channel to receive the messages that are supposed to be sent to the
     /// block synchronizer.
-    rx_commands: Receiver<Command<PublicKey>>,
+    rx_commands: Receiver<Command>,
 
     /// Channel to receive the commands to mock the requests.
-    rx_core: Receiver<Core<PublicKey>>,
+    rx_core: Receiver<Core>,
 }
 
-impl<PublicKey: VerifyingKey> MockBlockSynchronizerCore<PublicKey> {
+impl MockBlockSynchronizerCore {
     async fn run(&mut self) {
         loop {
             tokio::select! {
@@ -151,12 +151,12 @@ impl<PublicKey: VerifyingKey> MockBlockSynchronizerCore<PublicKey> {
 /// A mock helper for the BlockSynchronizer to help us mock the responses
 /// eliminating the need to wire in the actual BlockSynchronizer when needed
 /// for other components.
-pub struct MockBlockSynchronizer<PublicKey: VerifyingKey> {
-    tx_core: Sender<Core<PublicKey>>,
+pub struct MockBlockSynchronizer {
+    tx_core: Sender<Core>,
 }
 
-impl<PublicKey: VerifyingKey> MockBlockSynchronizer<PublicKey> {
-    pub fn new(rx_commands: Receiver<Command<PublicKey>>) -> Self {
+impl MockBlockSynchronizer {
+    pub fn new(rx_commands: Receiver<Command>) -> Self {
         let (tx_core, rx_core) = channel(1);
 
         let mut core = MockBlockSynchronizerCore {
@@ -181,7 +181,7 @@ impl<PublicKey: VerifyingKey> MockBlockSynchronizer<PublicKey> {
     pub async fn expect_synchronize_block_headers(
         &self,
         block_ids: Vec<CertificateDigest>,
-        result: Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>,
+        result: Vec<BlockSynchronizeResult<BlockHeader>>,
         times: u32,
     ) {
         let (tx, rx) = oneshot::channel();
@@ -208,7 +208,7 @@ impl<PublicKey: VerifyingKey> MockBlockSynchronizer<PublicKey> {
     pub async fn expect_synchronize_block_payload(
         &self,
         block_ids: Vec<CertificateDigest>,
-        result: Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>>,
+        result: Vec<BlockSynchronizeResult<BlockHeader>>,
         times: u32,
     ) {
         let (tx, rx) = oneshot::channel();

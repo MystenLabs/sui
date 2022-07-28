@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::{ed25519::Ed25519PublicKey, Hash};
+use crypto::Hash;
 use proptest::arbitrary::Arbitrary;
 use serde_test::{assert_tokens, Token};
 use types::{serialized_batch_digest, Batch, WorkerMessage};
@@ -64,8 +64,7 @@ fn test_bincode_serde_batch() {
 fn test_bincode_serde_batch_message() {
     let tx = || vec![1; 5];
 
-    let txes: WorkerMessage<Ed25519PublicKey> =
-        WorkerMessage::Batch(Batch((0..2).map(|_| tx()).collect()));
+    let txes: WorkerMessage = WorkerMessage::Batch(Batch((0..2).map(|_| tx()).collect()));
 
     let txes_bytes = bincode::serialize(&txes).unwrap();
 
@@ -92,7 +91,7 @@ proptest::proptest! {
         batch in Batch::arbitrary()
     ) {
         let digest = batch.digest();
-        let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch);
+        let message = WorkerMessage::Batch(batch);
         let serialized = bincode::serialize(&message).expect("Failed to serialize our own batch");
         let digest_from_serialized = serialized_batch_digest(&serialized).expect("Failed to hash serialized batch");
         assert_eq!(digest, digest_from_serialized);

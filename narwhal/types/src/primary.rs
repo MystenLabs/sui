@@ -10,7 +10,7 @@ use bytes::Bytes;
 use config::{Committee, Epoch, WorkerId};
 use crypto::{
     traits::{EncodeDecodeBase64, Signer, VerifyingKey},
-    Digest, Hash, SignatureService, DIGEST_LEN,
+    Digest, Hash, PublicKey, Signature, SignatureService, Verifier, DIGEST_LEN,
 };
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
@@ -76,21 +76,20 @@ impl Hash for Batch {
 
 #[derive(Clone, Serialize, Deserialize, Default, Builder)]
 #[builder(pattern = "owned", build_fn(skip))]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
-pub struct Header<PublicKey: VerifyingKey> {
+pub struct Header {
     pub author: PublicKey,
     pub round: Round,
     pub epoch: Epoch,
     pub payload: BTreeMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: HeaderDigest,
-    pub signature: <PublicKey as VerifyingKey>::Sig,
+    pub signature: Signature,
 }
 
-impl<PublicKey: VerifyingKey> HeaderBuilder<PublicKey> {
-    pub fn build<F>(self, signer: &F) -> Result<Header<PublicKey>, crypto::traits::Error>
+impl HeaderBuilder {
+    pub fn build<F>(self, signer: &F) -> Result<Header, crypto::traits::Error>
     where
-        F: Signer<PublicKey::Sig>,
+        F: Signer<Signature>,
     {
         let h = Header {
             author: self.author.unwrap(),
@@ -99,7 +98,7 @@ impl<PublicKey: VerifyingKey> HeaderBuilder<PublicKey> {
             payload: self.payload.unwrap(),
             parents: self.parents.unwrap(),
             id: HeaderDigest::default(),
-            signature: PublicKey::Sig::default(),
+            signature: Signature::default(),
         };
 
         Ok(Header {
@@ -122,14 +121,14 @@ impl<PublicKey: VerifyingKey> HeaderBuilder<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> Header<PublicKey> {
+impl Header {
     pub async fn new(
         author: PublicKey,
         round: Round,
         epoch: Epoch,
         payload: BTreeMap<BatchDigest, WorkerId>,
         parents: BTreeSet<CertificateDigest>,
-        signature_service: &mut SignatureService<PublicKey::Sig>,
+        signature_service: &mut SignatureService<Signature>,
     ) -> Self {
         let header = Self {
             author,
@@ -138,7 +137,7 @@ impl<PublicKey: VerifyingKey> Header<PublicKey> {
             payload,
             parents,
             id: HeaderDigest::default(),
-            signature: PublicKey::Sig::default(),
+            signature: Signature::default(),
         };
         let id = header.digest();
         let signature = signature_service.request_signature(id.into()).await;
@@ -149,7 +148,7 @@ impl<PublicKey: VerifyingKey> Header<PublicKey> {
         }
     }
 
-    pub fn verify(&self, committee: &Committee<PublicKey>) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -205,7 +204,7 @@ impl fmt::Display for HeaderDigest {
     }
 }
 
-impl<PublicKey: VerifyingKey> Hash for Header<PublicKey> {
+impl Hash for Header {
     type TypedDigest = HeaderDigest;
 
     fn digest(&self) -> HeaderDigest {
@@ -225,7 +224,7 @@ impl<PublicKey: VerifyingKey> Hash for Header<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> fmt::Debug for Header<PublicKey> {
+impl fmt::Debug for Header {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
@@ -242,13 +241,13 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Header<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> fmt::Display for Header<PublicKey> {
+impl fmt::Display for Header {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(f, "B{}({})", self.round, self.author.encode_base64())
     }
 }
 
-impl<PublicKey: VerifyingKey> PartialEq for Header<PublicKey> {
+impl PartialEq for Header {
     fn eq(&self, other: &Self) -> bool {
         self.digest() == other.digest()
     }
@@ -256,7 +255,7 @@ impl<PublicKey: VerifyingKey> PartialEq for Header<PublicKey> {
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
-pub struct Vote<PublicKey: VerifyingKey> {
+pub struct Vote {
     pub id: HeaderDigest,
     pub round: Round,
     pub epoch: Epoch,
@@ -265,11 +264,11 @@ pub struct Vote<PublicKey: VerifyingKey> {
     pub signature: <PublicKey as VerifyingKey>::Sig,
 }
 
-impl<PublicKey: VerifyingKey> Vote<PublicKey> {
+impl Vote {
     pub async fn new(
-        header: &Header<PublicKey>,
+        header: &Header,
         author: &PublicKey,
-        signature_service: &mut SignatureService<PublicKey::Sig>,
+        signature_service: &mut SignatureService<Signature>,
     ) -> Self {
         let vote = Self {
             id: header.id,
@@ -277,7 +276,7 @@ impl<PublicKey: VerifyingKey> Vote<PublicKey> {
             epoch: header.epoch,
             origin: header.author.clone(),
             author: author.clone(),
-            signature: PublicKey::Sig::default(),
+            signature: Signature::default(),
         };
         let signature = signature_service
             .request_signature(vote.digest().into())
@@ -285,7 +284,7 @@ impl<PublicKey: VerifyingKey> Vote<PublicKey> {
         Self { signature, ..vote }
     }
 
-    pub fn verify(&self, committee: &Committee<PublicKey>) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -329,7 +328,7 @@ impl fmt::Display for VoteDigest {
     }
 }
 
-impl<PublicKey: VerifyingKey> Hash for Vote<PublicKey> {
+impl Hash for Vote {
     type TypedDigest = VoteDigest;
 
     fn digest(&self) -> VoteDigest {
@@ -344,7 +343,7 @@ impl<PublicKey: VerifyingKey> Hash for Vote<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> fmt::Debug for Vote<PublicKey> {
+impl fmt::Debug for Vote {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
@@ -358,21 +357,20 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Vote<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> PartialEq for Vote<PublicKey> {
+impl PartialEq for Vote {
     fn eq(&self, other: &Self) -> bool {
         self.digest() == other.digest()
     }
 }
 
 #[derive(Clone, Serialize, Deserialize, Default)]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
-pub struct Certificate<PublicKey: VerifyingKey> {
-    pub header: Header<PublicKey>,
+pub struct Certificate {
+    pub header: Header,
     pub votes: Vec<(PublicKey, <PublicKey as VerifyingKey>::Sig)>,
 }
 
-impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
-    pub fn genesis(committee: &Committee<PublicKey>) -> Vec<Self> {
+impl Certificate {
+    pub fn genesis(committee: &Committee) -> Vec<Self> {
         committee
             .authorities
             .keys()
@@ -387,7 +385,7 @@ impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
             .collect()
     }
 
-    pub fn verify(&self, committee: &Committee<PublicKey>) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),
@@ -425,7 +423,7 @@ impl<PublicKey: VerifyingKey> Certificate<PublicKey> {
             weight >= committee.quorum_threshold(),
             DagError::CertificateRequiresQuorum
         );
-        let (pks, sigs): (Vec<PublicKey>, Vec<PublicKey::Sig>) = self.votes.iter().cloned().unzip();
+        let (pks, sigs): (Vec<PublicKey>, Vec<Signature>) = self.votes.iter().cloned().unzip();
         // Verify the signatures
         let certificate_digest: Digest = Digest::from(self.digest());
         PublicKey::verify_batch(certificate_digest.as_ref(), &pks, &sigs).map_err(DagError::from)
@@ -477,7 +475,7 @@ impl fmt::Display for CertificateDigest {
     }
 }
 
-impl<PublicKey: VerifyingKey> Hash for Certificate<PublicKey> {
+impl Hash for Certificate {
     type TypedDigest = CertificateDigest;
 
     fn digest(&self) -> CertificateDigest {
@@ -492,7 +490,7 @@ impl<PublicKey: VerifyingKey> Hash for Certificate<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> fmt::Debug for Certificate<PublicKey> {
+impl fmt::Debug for Certificate {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
         write!(
             f,
@@ -506,7 +504,7 @@ impl<PublicKey: VerifyingKey> fmt::Debug for Certificate<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> PartialEq for Certificate<PublicKey> {
+impl PartialEq for Certificate {
     fn eq(&self, other: &Self) -> bool {
         let mut ret = self.header.id == other.header.id;
         ret &= self.round() == other.round();
@@ -516,7 +514,7 @@ impl<PublicKey: VerifyingKey> PartialEq for Certificate<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> Affiliated for Certificate<PublicKey> {
+impl Affiliated for Certificate {
     fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest> {
         self.header.parents.iter().cloned().collect()
     }
@@ -531,10 +529,10 @@ impl<PublicKey: VerifyingKey> Affiliated for Certificate<PublicKey> {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
-pub enum PrimaryMessage<PublicKey: VerifyingKey> {
-    Header(Header<PublicKey>),
-    Vote(Vote<PublicKey>),
-    Certificate(Certificate<PublicKey>),
+pub enum PrimaryMessage {
+    Header(Header),
+    Vote(Vote),
+    Certificate(Certificate),
     CertificatesRequest(Vec<CertificateDigest>, /* requestor */ PublicKey),
 
     CertificatesBatchRequest {
@@ -542,7 +540,7 @@ pub enum PrimaryMessage<PublicKey: VerifyingKey> {
         requestor: PublicKey,
     },
     CertificatesBatchResponse {
-        certificates: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)>,
+        certificates: Vec<(CertificateDigest, Option<Certificate>)>,
         from: PublicKey,
     },
 
@@ -560,9 +558,9 @@ pub enum PrimaryMessage<PublicKey: VerifyingKey> {
 /// Message to reconfigure worker tasks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
-pub enum ReconfigureNotification<PublicKey: VerifyingKey> {
+pub enum ReconfigureNotification {
     /// Indicate the committee has been updated.
-    NewCommittee(Committee<PublicKey>),
+    NewCommittee(Committee),
     /// Indicate a shutdown.
     Shutdown,
 }
@@ -570,13 +568,13 @@ pub enum ReconfigureNotification<PublicKey: VerifyingKey> {
 /// The messages sent by the primary to its workers.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
-pub enum PrimaryWorkerMessage<PublicKey: VerifyingKey> {
+pub enum PrimaryWorkerMessage {
     /// The primary indicates that the worker need to sync the target missing batches.
     Synchronize(Vec<BatchDigest>, /* target */ PublicKey),
     /// The primary indicates a round update.
     Cleanup(Round),
     /// Reconfigure the worker.
-    Reconfigure(ReconfigureNotification<PublicKey>),
+    Reconfigure(ReconfigureNotification),
     /// The primary requests a batch from the worker
     RequestBatch(BatchDigest),
     /// Delete the batches, dictated from the provided vector of digest, from the worker node
@@ -642,7 +640,7 @@ impl fmt::Display for BlockErrorKind {
 /// The messages sent by the workers to their primary.
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
-pub enum WorkerPrimaryMessage<PublicKey: VerifyingKey> {
+pub enum WorkerPrimaryMessage {
     /// The worker indicates it sealed a new batch.
     OurBatch(BatchDigest, WorkerId),
     /// The worker indicates it received a batch's digest from another authority.
@@ -655,7 +653,7 @@ pub enum WorkerPrimaryMessage<PublicKey: VerifyingKey> {
     /// An error has been returned by worker
     Error(WorkerPrimaryError),
     /// Reconfiguration message sent by the executor (usually upon epoch change).
-    Reconfigure(ReconfigureNotification<PublicKey>),
+    Reconfigure(ReconfigureNotification),
 }
 
 #[derive(Debug, Serialize, Deserialize, thiserror::Error, Clone, Eq, PartialEq)]

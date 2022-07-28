@@ -4,7 +4,10 @@ use config::{Parameters, SharedCommittee, WorkerId};
 use consensus::{
     bullshark::Bullshark, dag::Dag, metrics::ConsensusMetrics, Consensus, SubscriberHandler,
 };
-use crypto::traits::{KeyPair, Signer, VerifyingKey};
+use crypto::{
+    traits::{KeyPair as _, VerifyingKey},
+    KeyPair, PublicKey,
+};
 use executor::{ExecutionState, Executor, ExecutorOutput, SerializedTransaction, SubscriberResult};
 use primary::{NetworkModel, PayloadToken, Primary};
 use prometheus::Registry;
@@ -33,15 +36,15 @@ pub mod metrics;
 pub mod restarter;
 
 /// All the data stores of the node.
-pub struct NodeStorage<PublicKey: VerifyingKey> {
-    pub header_store: Store<HeaderDigest, Header<PublicKey>>,
-    pub certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+pub struct NodeStorage {
+    pub header_store: Store<HeaderDigest, Header>,
+    pub certificate_store: Store<CertificateDigest, Certificate>,
     pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     pub batch_store: Store<BatchDigest, SerializedBatchMessage>,
-    pub consensus_store: Arc<ConsensusStore<PublicKey>>,
+    pub consensus_store: Arc<ConsensusStore>,
 }
 
-impl<PublicKey: VerifyingKey> NodeStorage<PublicKey> {
+impl NodeStorage {
     /// The datastore column family names.
     const HEADERS_CF: &'static str = "headers";
     const CERTIFICATES_CF: &'static str = "certificates";
@@ -67,8 +70,8 @@ impl<PublicKey: VerifyingKey> NodeStorage<PublicKey> {
         .expect("Cannot open database");
 
         let (header_map, certificate_map, payload_map, batch_map, last_committed_map, sequence_map) = reopen!(&rocksdb,
-            Self::HEADERS_CF;<HeaderDigest, Header<PublicKey>>,
-            Self::CERTIFICATES_CF;<CertificateDigest, Certificate<PublicKey>>,
+            Self::HEADERS_CF;<HeaderDigest, Header>,
+            Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
             Self::BATCHES_CF;<BatchDigest, SerializedBatchMessage>,
             Self::LAST_COMMITTED_CF;<PublicKey, Round>,
@@ -99,13 +102,13 @@ impl Node {
     pub const CHANNEL_CAPACITY: usize = 1_000;
 
     /// Spawn a new primary. Optionally also spawn the consensus and a client executing transactions.
-    pub async fn spawn_primary<Keys, PublicKey, State>(
+    pub async fn spawn_primary<State>(
         // The private-public key pair of this authority.
-        keypair: Keys,
+        keypair: KeyPair,
         // The committee information.
-        committee: SharedCommittee<PublicKey>,
+        committee: SharedCommittee,
         // The node's storage.
-        store: &NodeStorage<PublicKey>,
+        store: &NodeStorage,
         // The configuration parameters.
         parameters: Parameters,
         // Whether to run consensus (and an executor client) or not.
@@ -122,9 +125,7 @@ impl Node {
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
-        PublicKey: VerifyingKey,
-        Keys: KeyPair<PubKey = PublicKey> + Signer<PublicKey::Sig> + Send + 'static,
-        State: ExecutionState<PubKey = PublicKey> + Send + Sync + 'static,
+        State: ExecutionState + Send + Sync + 'static,
         State::Outcome: Send + 'static,
         State::Error: Debug,
     {
@@ -141,8 +142,7 @@ impl Node {
         let (dag, network_model) = if !internal_consensus {
             debug!("Consensus is disabled: the primary will run w/o Tusk");
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
-            let (handle, dag) =
-                Dag::new(&*committee.load(), rx_new_certificates, consensus_metrics);
+            let (handle, dag) = Dag::new(&committee.load(), rx_new_certificates, consensus_metrics);
 
             handles.push(handle);
 
@@ -220,15 +220,15 @@ impl Node {
     }
 
     /// Spawn the consensus core and the client executing transactions.
-    async fn spawn_consensus<PublicKey, State>(
+    async fn spawn_consensus<State>(
         name: PublicKey,
-        committee: SharedCommittee<PublicKey>,
-        store: &NodeStorage<PublicKey>,
+        committee: SharedCommittee,
+        store: &NodeStorage,
         parameters: Parameters,
         execution_state: Arc<State>,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification<PublicKey>>,
-        rx_new_certificates: Receiver<Certificate<PublicKey>>,
-        tx_feedback: Sender<Certificate<PublicKey>>,
+        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        rx_new_certificates: Receiver<Certificate>,
+        tx_feedback: Sender<Certificate>,
         tx_confirmation: Sender<(
             SubscriberResult<<State as ExecutionState>::Outcome>,
             SerializedTransaction,
@@ -237,7 +237,7 @@ impl Node {
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
-        State: ExecutionState<PubKey = PublicKey> + Send + Sync + 'static,
+        State: ExecutionState + Send + Sync + 'static,
         State::Outcome: Send + 'static,
         State::Error: Debug,
     {
@@ -299,15 +299,15 @@ impl Node {
     }
 
     /// Spawn a specified number of workers.
-    pub fn spawn_workers<PublicKey: VerifyingKey>(
+    pub fn spawn_workers(
         // The public key of this authority.
         name: PublicKey,
         // The ids of the validators to spawn.
         ids: Vec<WorkerId>,
         // The committee information.
-        committee: SharedCommittee<PublicKey>,
+        committee: SharedCommittee,
         // The node's storage,
-        store: &NodeStorage<PublicKey>,
+        store: &NodeStorage,
         // The configuration parameters.
         parameters: Parameters,
         // The prometheus metrics Registry

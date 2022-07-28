@@ -4,7 +4,7 @@
 use crate::{header_waiter::WaiterMessage, primary::PayloadToken};
 use config::{Committee, WorkerId};
 use consensus::dag::Dag;
-use crypto::{traits::VerifyingKey, Hash as _};
+use crypto::{Hash as _, PublicKey};
 use std::{collections::HashMap, sync::Arc};
 use store::Store;
 use tokio::sync::mpsc::Sender;
@@ -16,31 +16,31 @@ pub mod synchronizer_tests;
 
 /// The `Synchronizer` checks if we have all batches and parents referenced by a header. If we don't, it sends
 /// a command to the `Waiter` to request the missing data.
-pub struct Synchronizer<PublicKey: VerifyingKey> {
+pub struct Synchronizer {
     /// The public key of this primary.
     name: PublicKey,
     /// The persistent storage.
-    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// Send commands to the `HeaderWaiter`.
-    tx_header_waiter: Sender<WaiterMessage<PublicKey>>,
+    tx_header_waiter: Sender<WaiterMessage>,
     /// Send commands to the `CertificateWaiter`.
-    tx_certificate_waiter: Sender<Certificate<PublicKey>>,
+    tx_certificate_waiter: Sender<Certificate>,
     /// The genesis and its digests.
-    genesis: Vec<(CertificateDigest, Certificate<PublicKey>)>,
+    genesis: Vec<(CertificateDigest, Certificate)>,
     /// The dag used for the external consensus
-    dag: Option<Arc<Dag<PublicKey>>>,
+    dag: Option<Arc<Dag>>,
 }
 
-impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
+impl Synchronizer {
     pub fn new(
         name: PublicKey,
-        committee: &Committee<PublicKey>,
-        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        committee: &Committee,
+        certificate_store: Store<CertificateDigest, Certificate>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        tx_header_waiter: Sender<WaiterMessage<PublicKey>>,
-        tx_certificate_waiter: Sender<Certificate<PublicKey>>,
-        dag: Option<Arc<Dag<PublicKey>>>,
+        tx_header_waiter: Sender<WaiterMessage>,
+        tx_certificate_waiter: Sender<Certificate>,
+        dag: Option<Arc<Dag>>,
     ) -> Self {
         let mut synchronizer = Self {
             name,
@@ -56,7 +56,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     }
 
     /// Update the genesis (called upon reconfiguration).
-    pub fn update_genesis(&mut self, committee: &Committee<PublicKey>) {
+    pub fn update_genesis(&mut self, committee: &Committee) {
         self.genesis = Certificate::genesis(committee)
             .into_iter()
             .map(|x| (x.digest(), x))
@@ -66,7 +66,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     /// Returns `true` if we have all transactions of the payload. If we don't, we return false,
     /// synchronize with other nodes (through our workers), and re-schedule processing of the
     /// header for when we will have its complete payload.
-    pub async fn missing_payload(&mut self, header: &Header<PublicKey>) -> DagResult<bool> {
+    pub async fn missing_payload(&mut self, header: &Header) -> DagResult<bool> {
         // We don't store the payload of our own workers.
         if header.author == self.name {
             return Ok(false);
@@ -109,10 +109,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     /// Returns the parents of a header if we have them all. If at least one parent is missing,
     /// we return an empty vector, synchronize with other nodes, and re-schedule processing
     /// of the header for when we will have all the parents.
-    pub async fn get_parents(
-        &mut self,
-        header: &Header<PublicKey>,
-    ) -> DagResult<Vec<Certificate<PublicKey>>> {
+    pub async fn get_parents(&mut self, header: &Header) -> DagResult<Vec<Certificate>> {
         let mut missing = Vec::new();
         let mut parents = Vec::new();
         for digest in &header.parents {
@@ -146,10 +143,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
     /// Check whether we have seen all the ancestors of the certificate. If we don't, send the
     /// certificate to the `CertificateWaiter` which will trigger re-processing once we have
     /// all the missing data.
-    pub async fn deliver_certificate(
-        &mut self,
-        certificate: &Certificate<PublicKey>,
-    ) -> DagResult<bool> {
+    pub async fn deliver_certificate(&mut self, certificate: &Certificate) -> DagResult<bool> {
         for digest in &certificate.header.parents {
             if self.genesis.iter().any(|(x, _)| x == digest) {
                 continue;

@@ -9,7 +9,7 @@ use crate::{
 };
 use async_recursion::async_recursion;
 use config::{Committee, Epoch};
-use crypto::{traits::VerifyingKey, Hash as _, SignatureService};
+use crypto::{Hash as _, PublicKey, Signature, SignatureService};
 use network::{CancelOnDropHandler, MessageResult, PrimaryNetwork};
 use std::{
     collections::{HashMap, HashSet},
@@ -38,38 +38,38 @@ use types::{
 #[path = "tests/core_tests.rs"]
 pub mod core_tests;
 
-pub struct Core<PublicKey: VerifyingKey> {
+pub struct Core {
     /// The public key of this primary.
     name: PublicKey,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
     /// The persistent storage keyed to headers.
-    header_store: Store<HeaderDigest, Header<PublicKey>>,
+    header_store: Store<HeaderDigest, Header>,
     /// The persistent storage keyed to certificates.
-    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate>,
     /// Handles synchronization with other nodes and our workers.
-    synchronizer: Synchronizer<PublicKey>,
+    synchronizer: Synchronizer,
     /// Service to sign headers.
-    signature_service: SignatureService<PublicKey::Sig>,
+    signature_service: SignatureService<Signature>,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receiver for dag messages (headers, votes, certificates).
-    rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
+    rx_primaries: Receiver<PrimaryMessage>,
     /// Receives loopback headers from the `HeaderWaiter`.
-    rx_header_waiter: Receiver<Header<PublicKey>>,
+    rx_header_waiter: Receiver<Header>,
     /// Receives loopback certificates from the `CertificateWaiter`.
-    rx_certificate_waiter: Receiver<Certificate<PublicKey>>,
+    rx_certificate_waiter: Receiver<Certificate>,
     /// Receives our newly created headers from the `Proposer`.
-    rx_proposer: Receiver<Header<PublicKey>>,
+    rx_proposer: Receiver<Header>,
     /// Output all certificates to the consensus layer.
-    tx_consensus: Sender<Certificate<PublicKey>>,
+    tx_consensus: Sender<Certificate>,
     /// Send valid a quorum of certificates' ids to the `Proposer` (along with their round).
-    tx_proposer: Sender<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
+    tx_proposer: Sender<(Vec<Certificate>, Round, Epoch)>,
 
     /// The last garbage collected round.
     gc_round: Round,
@@ -78,11 +78,11 @@ pub struct Core<PublicKey: VerifyingKey> {
     /// The set of headers we are currently processing.
     processing: HashMap<Round, HashSet<HeaderDigest>>,
     /// The last header we proposed (for which we are waiting votes).
-    current_header: Header<PublicKey>,
+    current_header: Header,
     /// Aggregates votes into a certificate.
-    votes_aggregator: VotesAggregator<PublicKey>,
+    votes_aggregator: VotesAggregator,
     /// Aggregates certificates to use as parents for new headers.
-    certificates_aggregators: HashMap<Round, Box<CertificatesAggregator<PublicKey>>>,
+    certificates_aggregators: HashMap<Round, Box<CertificatesAggregator>>,
     /// A network sender to send the batches to the other workers.
     network: PrimaryNetwork,
     /// Keeps the cancel handlers of the messages we sent.
@@ -91,24 +91,24 @@ pub struct Core<PublicKey: VerifyingKey> {
     metrics: Arc<PrimaryMetrics>,
 }
 
-impl<PublicKey: VerifyingKey> Core<PublicKey> {
+impl Core {
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
-        header_store: Store<HeaderDigest, Header<PublicKey>>,
-        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
-        synchronizer: Synchronizer<PublicKey>,
-        signature_service: SignatureService<PublicKey::Sig>,
+        committee: Committee,
+        header_store: Store<HeaderDigest, Header>,
+        certificate_store: Store<CertificateDigest, Certificate>,
+        synchronizer: Synchronizer,
+        signature_service: SignatureService<Signature>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
-        rx_committee: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
-        rx_header_waiter: Receiver<Header<PublicKey>>,
-        rx_certificate_waiter: Receiver<Certificate<PublicKey>>,
-        rx_proposer: Receiver<Header<PublicKey>>,
-        tx_consensus: Sender<Certificate<PublicKey>>,
-        tx_proposer: Sender<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
+        rx_committee: watch::Receiver<ReconfigureNotification>,
+        rx_primaries: Receiver<PrimaryMessage>,
+        rx_header_waiter: Receiver<Header>,
+        rx_certificate_waiter: Receiver<Certificate>,
+        rx_proposer: Receiver<Header>,
+        tx_consensus: Sender<Certificate>,
+        tx_proposer: Sender<(Vec<Certificate>, Round, Epoch)>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -144,7 +144,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     #[instrument(level = "debug", skip_all)]
-    async fn process_own_header(&mut self, header: Header<PublicKey>) -> DagResult<()> {
+    async fn process_own_header(&mut self, header: Header) -> DagResult<()> {
         if header.epoch < self.committee.epoch() {
             debug!("Proposer outdated");
             return Ok(());
@@ -178,7 +178,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
     #[async_recursion]
     #[instrument(level = "debug", skip_all)]
-    async fn process_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
+    async fn process_header(&mut self, header: &Header) -> DagResult<()> {
         debug!("Processing {:?} round:{:?}", header, header.round);
         let header_source = if self.name.eq(&header.author) {
             "own"
@@ -219,7 +219,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         // Ensure we have the parents. If at least one parent is missing, the synchronizer returns an empty
         // vector; it will gather the missing parents (as well as all ancestors) from other nodes and then
         // reschedule processing of this header.
-        let parents: Vec<Certificate<PublicKey>> = self.synchronizer.get_parents(header).await?;
+        let parents: Vec<Certificate> = self.synchronizer.get_parents(header).await?;
         if parents.is_empty() {
             self.metrics
                 .headers_suspended
@@ -305,7 +305,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
     #[async_recursion]
     #[instrument(level = "debug", skip_all)]
-    async fn process_vote(&mut self, vote: Vote<PublicKey>) -> DagResult<()> {
+    async fn process_vote(&mut self, vote: Vote) -> DagResult<()> {
         debug!("Processing {:?}", vote);
 
         // Add it to the votes' aggregator and try to make a new certificate.
@@ -346,7 +346,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
 
     #[async_recursion]
     #[instrument(level = "debug", skip_all)]
-    async fn process_certificate(&mut self, certificate: Certificate<PublicKey>) -> DagResult<()> {
+    async fn process_certificate(&mut self, certificate: Certificate) -> DagResult<()> {
         debug!(
             "Processing {:?} round:{:?}",
             certificate,
@@ -435,7 +435,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         Ok(())
     }
 
-    fn sanitize_header(&mut self, header: &Header<PublicKey>) -> DagResult<()> {
+    fn sanitize_header(&mut self, header: &Header) -> DagResult<()> {
         if header.epoch > self.committee.epoch() {
             self.try_update_committee();
         }
@@ -459,7 +459,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         Ok(())
     }
 
-    fn sanitize_vote(&mut self, vote: &Vote<PublicKey>) -> DagResult<()> {
+    fn sanitize_vote(&mut self, vote: &Vote) -> DagResult<()> {
         if vote.epoch > self.committee.epoch() {
             self.try_update_committee();
         }
@@ -487,7 +487,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
         vote.verify(&self.committee).map_err(DagError::from)
     }
 
-    fn sanitize_certificate(&mut self, certificate: &Certificate<PublicKey>) -> DagResult<()> {
+    fn sanitize_certificate(&mut self, certificate: &Certificate) -> DagResult<()> {
         if certificate.epoch() > self.committee.epoch() {
             self.try_update_committee();
         }
@@ -524,7 +524,7 @@ impl<PublicKey: VerifyingKey> Core<PublicKey> {
     }
 
     /// Update the committee and cleanup internal state.
-    fn update_committee(&mut self, committee: Committee<PublicKey>) {
+    fn update_committee(&mut self, committee: Committee) {
         tracing::info!("Committee updated to epoch {}", committee.epoch);
         self.last_voted.clear();
         self.processing.clear();

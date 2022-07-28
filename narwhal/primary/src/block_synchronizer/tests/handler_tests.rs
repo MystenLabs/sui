@@ -8,7 +8,7 @@ use crate::{
     common::create_db_stores,
     BlockHeader, MockBlockSynchronizer,
 };
-use crypto::{ed25519::Ed25519PublicKey, Hash};
+use crypto::Hash;
 use std::{collections::HashSet, time::Duration};
 use test_utils::{certificate, fixture_header_with_payload};
 use tokio::sync::mpsc::channel;
@@ -234,7 +234,7 @@ async fn test_synchronize_block_payload() {
     };
 
     // AND a certificate with payload already available
-    let cert_stored: Certificate<Ed25519PublicKey> = certificate(&fixture_header_with_payload(1));
+    let cert_stored: Certificate = certificate(&fixture_header_with_payload(1));
     for e in cert_stored.clone().header.payload {
         payload_store.write(e, 1).await;
     }

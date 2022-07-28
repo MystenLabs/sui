@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::WorkerId;
-use crypto::traits::VerifyingKey;
 use store::Store;
 use tokio::{
     sync::{
@@ -26,17 +25,17 @@ pub mod processor_tests;
 pub struct Processor;
 
 impl Processor {
-    pub fn spawn<PublicKey: VerifyingKey>(
+    pub fn spawn(
         // Our worker's id.
         id: WorkerId,
         // The persistent storage.
         store: Store<BatchDigest, SerializedBatchMessage>,
         // Receive reconfiguration signals.
-        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        mut rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         // Input channel to receive batches.
         mut rx_batch: Receiver<SerializedBatchMessage>,
         // Output channel to send out batches' digests.
-        tx_digest: Sender<WorkerPrimaryMessage<PublicKey>>,
+        tx_digest: Sender<WorkerPrimaryMessage>,
         // Whether we are processing our own batches or the batches of other nodes.
         own_digest: bool,
     ) -> JoinHandle<()> {

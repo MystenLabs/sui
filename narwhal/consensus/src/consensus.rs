@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::ConsensusMetrics, ConsensusOutput, SequenceNumber};
 use config::Committee;
-use crypto::{traits::VerifyingKey, Hash};
+use crypto::{Hash, PublicKey};
 use std::{
     cmp::{max, Ordering},
     collections::HashMap,
@@ -23,11 +23,10 @@ use types::{
 };
 
 /// The representation of the DAG in memory.
-pub type Dag<PublicKey> =
-    HashMap<Round, HashMap<PublicKey, (CertificateDigest, Certificate<PublicKey>)>>;
+pub type Dag = HashMap<Round, HashMap<PublicKey, (CertificateDigest, Certificate)>>;
 
 /// The state that needs to be persisted for crash-recovery.
-pub struct ConsensusState<PublicKey: VerifyingKey> {
+pub struct ConsensusState {
     /// The last committed round.
     pub last_committed_round: Round,
     // Keeps the last committed round for each authority. This map is used to clean up the dag and
@@ -35,13 +34,13 @@ pub struct ConsensusState<PublicKey: VerifyingKey> {
     pub last_committed: HashMap<PublicKey, Round>,
     /// Keeps the latest committed certificate (and its parents) for every authority. Anything older
     /// must be regularly cleaned up through the function `update`.
-    pub dag: Dag<PublicKey>,
+    pub dag: Dag,
     /// Metrics handler
     pub metrics: Arc<ConsensusMetrics>,
 }
 
-impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
-    pub fn new(genesis: Vec<Certificate<PublicKey>>, metrics: Arc<ConsensusMetrics>) -> Self {
+impl ConsensusState {
+    pub fn new(genesis: Vec<Certificate>, metrics: Arc<ConsensusMetrics>) -> Self {
         let genesis = genesis
             .into_iter()
             .map(|x| (x.origin(), (x.digest(), x)))
@@ -63,10 +62,10 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
 
     #[instrument(level = "info", skip_all)]
     pub async fn new_from_store(
-        genesis: Vec<Certificate<PublicKey>>,
+        genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,
         recover_last_committed: HashMap<PublicKey, Round>,
-        cert_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        cert_store: Store<CertificateDigest, Certificate>,
         gc_depth: Round,
     ) -> Self {
         let last_committed_round = *recover_last_committed
@@ -93,11 +92,11 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
 
     #[instrument(level = "info", skip_all)]
     pub async fn construct_dag_from_cert_store(
-        cert_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        cert_store: Store<CertificateDigest, Certificate>,
         last_committed_round: Round,
         gc_depth: Round,
-    ) -> Dag<PublicKey> {
-        let mut dag: Dag<PublicKey> = HashMap::new();
+    ) -> Dag {
+        let mut dag: Dag = HashMap::new();
         info!(
             "Recreating dag from last committed round: {}",
             last_committed_round
@@ -119,7 +118,7 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
                 }
                 None => {
                     dag.entry(cert.header.round)
-                        .or_insert_with(|| HashMap::new())
+                        .or_insert_with(HashMap::new)
                         .insert(cert.header.author.clone(), (digest, cert.clone()));
                 }
             }
@@ -134,7 +133,7 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
     }
 
     /// Update and clean up internal state base on committed certificates.
-    pub fn update(&mut self, certificate: &Certificate<PublicKey>, gc_depth: Round) {
+    pub fn update(&mut self, certificate: &Certificate, gc_depth: Round) {
         self.last_committed
             .entry(certificate.origin())
             .and_modify(|r| *r = max(*r, certificate.round()))
@@ -168,33 +167,33 @@ impl<PublicKey: VerifyingKey> ConsensusState<PublicKey> {
 }
 
 /// Describe how to sequence input certificates.
-pub trait ConsensusProtocol<PublicKey: VerifyingKey> {
+pub trait ConsensusProtocol {
     fn process_certificate(
         &mut self,
         // The state of the consensus protocol.
-        state: &mut ConsensusState<PublicKey>,
+        state: &mut ConsensusState,
         // The latest consensus index.
         consensus_index: SequenceNumber,
         // The new certificate.
-        certificate: Certificate<PublicKey>,
-    ) -> StoreResult<Vec<ConsensusOutput<PublicKey>>>;
+        certificate: Certificate,
+    ) -> StoreResult<Vec<ConsensusOutput>>;
 
-    fn update_committee(&mut self, new_committee: Committee<PublicKey>) -> StoreResult<()>;
+    fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()>;
 }
 
-pub struct Consensus<PublicKey: VerifyingKey, ConsensusProtocol> {
+pub struct Consensus<ConsensusProtocol> {
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
 
     /// Receive reconfiguration update.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
-    rx_primary: Receiver<Certificate<PublicKey>>,
+    rx_primary: Receiver<Certificate>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
-    tx_primary: Sender<Certificate<PublicKey>>,
+    tx_primary: Sender<Certificate>,
     /// Outputs the sequence of ordered certificates to the application layer.
-    tx_output: Sender<ConsensusOutput<PublicKey>>,
+    tx_output: Sender<ConsensusOutput>,
 
     /// The (global) consensus index. We assign one index to each sequenced certificate. this is
     /// helpful for clients.
@@ -207,19 +206,18 @@ pub struct Consensus<PublicKey: VerifyingKey, ConsensusProtocol> {
     metrics: Arc<ConsensusMetrics>,
 }
 
-impl<PublicKey, Protocol> Consensus<PublicKey, Protocol>
+impl<Protocol> Consensus<Protocol>
 where
-    PublicKey: VerifyingKey,
-    Protocol: ConsensusProtocol<PublicKey> + Send + 'static,
+    Protocol: ConsensusProtocol + Send + 'static,
 {
     pub fn spawn(
-        committee: Committee<PublicKey>,
-        store: Arc<ConsensusStore<PublicKey>>,
-        cert_store: Store<CertificateDigest, Certificate<PublicKey>>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_primary: Receiver<Certificate<PublicKey>>,
-        tx_primary: Sender<Certificate<PublicKey>>,
-        tx_output: Sender<ConsensusOutput<PublicKey>>,
+        committee: Committee,
+        store: Arc<ConsensusStore>,
+        cert_store: Store<CertificateDigest, Certificate>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_primary: Receiver<Certificate>,
+        tx_primary: Sender<Certificate>,
+        tx_output: Sender<ConsensusOutput>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
         gc_depth: Round,
@@ -245,10 +243,7 @@ where
         })
     }
 
-    fn reconfigure(
-        &mut self,
-        new_committee: Committee<PublicKey>,
-    ) -> StoreResult<ConsensusState<PublicKey>> {
+    fn reconfigure(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
         self.committee = new_committee.clone();
         self.protocol.update_committee(new_committee)?;
         tracing::debug!("Committee updated to {}", self.committee);
@@ -262,7 +257,7 @@ where
     async fn run(
         &mut self,
         recover_last_committed: HashMap<PublicKey, Round>,
-        cert_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        cert_store: Store<CertificateDigest, Certificate>,
         gc_depth: Round,
     ) -> StoreResult<()> {
         // The consensus state (everything else is immutable).

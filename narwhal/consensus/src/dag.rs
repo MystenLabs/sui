@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::Committee;
-use crypto::{traits::VerifyingKey, Hash};
+use crypto::{Hash, PublicKey};
 use dag::node_dag::{NodeDag, NodeDagError};
 use std::{
     borrow::Borrow,
@@ -33,16 +33,16 @@ pub mod dag_tests;
 /// certified collection by that authority at that round.
 ///
 #[derive(Debug)]
-struct InnerDag<PublicKey: VerifyingKey> {
+struct InnerDag {
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
-    rx_primary: Receiver<Certificate<PublicKey>>,
+    rx_primary: Receiver<Certificate>,
 
     /// Receives new commands for the Dag.
-    rx_commands: Receiver<DagCommand<PublicKey>>,
+    rx_commands: Receiver<DagCommand>,
 
     /// The Virtual DAG data structure, which lets us track certificates in a memory-conscious way
-    dag: NodeDag<Certificate<PublicKey>>,
+    dag: NodeDag<Certificate>,
 
     /// Secondary index: An authority-aware map of the DAG's veertex Certificates
     vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
@@ -52,14 +52,14 @@ struct InnerDag<PublicKey: VerifyingKey> {
 }
 
 /// The publicly exposed Dag handle, to which one can send commands
-pub struct Dag<PublicKey: VerifyingKey> {
-    tx_commands: Sender<DagCommand<PublicKey>>,
+pub struct Dag {
+    tx_commands: Sender<DagCommand>,
 }
 
 /// Represents the errors that can be encountered in this concrete, [`VerifyingKey`],
 /// [`Certificate`] and [`Round`]-aware variant of the Dag.
 #[derive(Debug, Error)]
-pub enum ValidatorDagError<PublicKey: VerifyingKey> {
+pub enum ValidatorDagError {
     #[error("No remaining certificates in Dag for this authority: {0}")]
     OutOfCertificates(PublicKey),
     #[error("No known certificates for this authority: {0} at round {1}")]
@@ -69,41 +69,38 @@ pub enum ValidatorDagError<PublicKey: VerifyingKey> {
     DagInvariantViolation(#[from] dag::node_dag::NodeDagError),
 }
 
-enum DagCommand<PublicKey: VerifyingKey> {
-    Insert(
-        Certificate<PublicKey>,
-        oneshot::Sender<Result<(), ValidatorDagError<PublicKey>>>,
-    ),
+enum DagCommand {
+    Insert(Certificate, oneshot::Sender<Result<(), ValidatorDagError>>),
     Contains(CertificateDigest, oneshot::Sender<bool>),
     HasEverContained(CertificateDigest, oneshot::Sender<bool>),
     Rounds(
         PublicKey,
-        oneshot::Sender<Result<std::ops::RangeInclusive<Round>, ValidatorDagError<PublicKey>>>,
+        oneshot::Sender<Result<std::ops::RangeInclusive<Round>, ValidatorDagError>>,
     ),
     ReadCausal(
         CertificateDigest,
-        oneshot::Sender<Result<Vec<CertificateDigest>, ValidatorDagError<PublicKey>>>,
+        oneshot::Sender<Result<Vec<CertificateDigest>, ValidatorDagError>>,
     ),
     NodeReadCausal(
         (PublicKey, Round),
-        oneshot::Sender<Result<Vec<CertificateDigest>, ValidatorDagError<PublicKey>>>,
+        oneshot::Sender<Result<Vec<CertificateDigest>, ValidatorDagError>>,
     ),
     Remove(
         Vec<CertificateDigest>,
-        oneshot::Sender<Result<(), ValidatorDagError<PublicKey>>>,
+        oneshot::Sender<Result<(), ValidatorDagError>>,
     ),
     NotifyRead(
         CertificateDigest,
-        oneshot::Sender<Result<Certificate<PublicKey>, ValidatorDagError<PublicKey>>>,
+        oneshot::Sender<Result<Certificate, ValidatorDagError>>,
     ),
 }
 
-impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
+impl InnerDag {
     fn new(
-        committee: &Committee<PublicKey>,
-        rx_primary: Receiver<Certificate<PublicKey>>,
-        rx_commands: Receiver<DagCommand<PublicKey>>,
-        dag: NodeDag<Certificate<PublicKey>>,
+        committee: &Committee,
+        rx_primary: Receiver<Certificate>,
+        rx_commands: Receiver<DagCommand>,
+        dag: NodeDag<Certificate>,
         vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
         metrics: Arc<ConsensusMetrics>,
     ) -> Self {
@@ -180,10 +177,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     }
 
     #[instrument(level = "trace", skip_all, fields(certificate = ?certificate), err)]
-    fn insert(
-        &mut self,
-        certificate: Certificate<PublicKey>,
-    ) -> Result<(), ValidatorDagError<PublicKey>> {
+    fn insert(&mut self, certificate: Certificate) -> Result<(), ValidatorDagError> {
         let digest = certificate.digest();
         let round = certificate.round();
         let origin = certificate.origin();
@@ -220,7 +214,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     fn rounds(
         &mut self,
         origin: PublicKey,
-    ) -> Result<std::ops::RangeInclusive<Round>, ValidatorDagError<PublicKey>> {
+    ) -> Result<std::ops::RangeInclusive<Round>, ValidatorDagError> {
         // Our garbage collection is a mark-and-sweep algorithm, where the mark part is in `make_compressible` and
         // `read_causal` triggers a sweep.
         // To make sure we don't return rounds as live when wouldn't be seen as such from a subsequent `read_causal`
@@ -264,7 +258,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     fn read_causal(
         &self,
         start: CertificateDigest,
-    ) -> Result<impl Iterator<Item = CertificateDigest>, ValidatorDagError<PublicKey>> {
+    ) -> Result<impl Iterator<Item = CertificateDigest>, ValidatorDagError> {
         let bft = self.dag.bft(start)?;
         Ok(bft.map(|node_ref| node_ref.value().digest()))
     }
@@ -276,7 +270,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
         &self,
         origin: PublicKey,
         round: Round,
-    ) -> Result<impl Iterator<Item = CertificateDigest>, ValidatorDagError<PublicKey>> {
+    ) -> Result<impl Iterator<Item = CertificateDigest>, ValidatorDagError> {
         let vertices = self.vertices.read().unwrap();
         let start_digest = vertices.get(&(origin.clone(), round)).ok_or(
             ValidatorDagError::NoCertificateForCoordinates(origin, round),
@@ -286,10 +280,7 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
 
     /// Removes certificates from the Dag, reclaiming memory in the process.
     #[instrument(level = "trace", skip_all, fields(num_certificate_ids = digests.len()), err)]
-    fn remove(
-        &mut self,
-        digests: Vec<CertificateDigest>,
-    ) -> Result<(), ValidatorDagError<PublicKey>> {
+    fn remove(&mut self, digests: Vec<CertificateDigest>) -> Result<(), ValidatorDagError> {
         {
             // TODO: lock-free atomicity
             let mut vertices = self.vertices.write().unwrap();
@@ -342,10 +333,10 @@ impl<PublicKey: VerifyingKey> InnerDag<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> Dag<PublicKey> {
+impl Dag {
     pub fn new(
-        committee: &Committee<PublicKey>,
-        rx_primary: Receiver<Certificate<PublicKey>>,
+        committee: &Committee,
+        rx_primary: Receiver<Certificate>,
         metrics: Arc<ConsensusMetrics>,
     ) -> (JoinHandle<()>, Self) {
         let (tx_commands, rx_commands) = tokio::sync::mpsc::channel(DEFAULT_CHANNEL_SIZE);
@@ -371,10 +362,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
     /// - the certificate is well-formed (e.g. hashes match),
     /// - all the parents' certificates are recursively valid and have been inserted in the Dag.
     ///
-    pub async fn insert(
-        &self,
-        certificate: Certificate<PublicKey>,
-    ) -> Result<(), ValidatorDagError<PublicKey>> {
+    pub async fn insert(&self, certificate: Certificate) -> Result<(), ValidatorDagError> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self
             .tx_commands
@@ -425,7 +413,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
     pub async fn rounds(
         &self,
         origin: PublicKey,
-    ) -> Result<std::ops::RangeInclusive<Round>, ValidatorDagError<PublicKey>> {
+    ) -> Result<std::ops::RangeInclusive<Round>, ValidatorDagError> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self
             .tx_commands
@@ -444,7 +432,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
     pub async fn read_causal(
         &self,
         start: CertificateDigest,
-    ) -> Result<Vec<CertificateDigest>, ValidatorDagError<PublicKey>> {
+    ) -> Result<Vec<CertificateDigest>, ValidatorDagError> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self
             .tx_commands
@@ -464,7 +452,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
         &self,
         origin: PublicKey,
         round: Round,
-    ) -> Result<Vec<CertificateDigest>, ValidatorDagError<PublicKey>> {
+    ) -> Result<Vec<CertificateDigest>, ValidatorDagError> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self
             .tx_commands
@@ -486,7 +474,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
     pub async fn remove<J: Borrow<CertificateDigest>>(
         &self,
         digest: impl IntoIterator<Item = J>,
-    ) -> Result<(), ValidatorDagError<PublicKey>> {
+    ) -> Result<(), ValidatorDagError> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self
             .tx_commands
@@ -507,7 +495,7 @@ impl<PublicKey: VerifyingKey> Dag<PublicKey> {
     pub async fn notify_read(
         &self,
         digest: CertificateDigest,
-    ) -> Result<Certificate<PublicKey>, ValidatorDagError<PublicKey>> {
+    ) -> Result<Certificate, ValidatorDagError> {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self
             .tx_commands

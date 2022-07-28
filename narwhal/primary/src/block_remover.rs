@@ -6,7 +6,7 @@
 use crate::{utils, PayloadToken};
 use config::{Committee, WorkerId};
 use consensus::dag::{Dag, ValidatorDagError};
-use crypto::{traits::VerifyingKey, Digest, Hash};
+use crypto::{Digest, Hash, PublicKey};
 use futures::{
     future::{join_all, try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -111,8 +111,8 @@ pub struct DeleteBatchMessage {
 ///         .expect("Failed creating database");
 ///
 ///     let (certificate_map, headers_map, payload_map) = reopen!(&rocksdb,
-///             CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>,
-///             HEADERS_CF;<HeaderDigest, Header<Ed25519PublicKey>>,
+///             CERTIFICATES_CF;<CertificateDigest, Certificate>,
+///             HEADERS_CF;<HeaderDigest, Header>,
 ///             PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 ///     let certificate_store = Store::new(certificate_map);
 ///     let headers_store = Store::new(headers_map);
@@ -153,7 +153,7 @@ pub struct DeleteBatchMessage {
 ///     );
 ///
 ///     // A dummy certificate
-///     let certificate = Certificate::<Ed25519PublicKey>::default();
+///     let certificate = Certificate::default();
 ///
 ///     // Send a command to receive a block
 ///     tx_commands
@@ -181,36 +181,36 @@ pub struct DeleteBatchMessage {
 ///     }
 /// # }
 /// ```
-pub struct BlockRemover<PublicKey: VerifyingKey> {
+pub struct BlockRemover {
     /// The public key of this primary.
     name: PublicKey,
 
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
 
     /// Storage that keeps the Certificates by their digest id.
-    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate>,
 
     /// Storage that keeps the headers by their digest id
-    header_store: Store<HeaderDigest, Header<PublicKey>>,
+    header_store: Store<HeaderDigest, Header>,
 
     /// The persistent storage for payload markers from workers.
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
 
     /// The Dag structure for managing the stored certificates
-    dag: Option<Arc<Dag<PublicKey>>>,
+    dag: Option<Arc<Dag>>,
 
     /// Network driver allowing to send messages.
     worker_network: PrimaryToWorkerNetwork,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
 
     /// Receives the commands to execute against
     rx_commands: Receiver<BlockRemoverCommand>,
 
     /// Checks whether a pending request already exists
-    pending_removal_requests: HashMap<RequestKey, Vec<Certificate<PublicKey>>>,
+    pending_removal_requests: HashMap<RequestKey, Vec<Certificate>>,
 
     /// Holds the senders that are pending to be notified for
     /// a removal request.
@@ -224,22 +224,22 @@ pub struct BlockRemover<PublicKey: VerifyingKey> {
     rx_delete_batches: Receiver<DeleteBatchResult>,
 
     /// Outputs all the successfully deleted certificates
-    tx_removed_certificates: Sender<Certificate<PublicKey>>,
+    tx_removed_certificates: Sender<Certificate>,
 }
 
-impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
+impl BlockRemover {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
-        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
-        header_store: Store<HeaderDigest, Header<PublicKey>>,
+        committee: Committee,
+        certificate_store: Store<CertificateDigest, Certificate>,
+        header_store: Store<HeaderDigest, Header>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        dag: Option<Arc<Dag<PublicKey>>>,
+        dag: Option<Arc<Dag>>,
         worker_network: PrimaryToWorkerNetwork,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_commands: Receiver<BlockRemoverCommand>,
         rx_delete_batches: Receiver<DeleteBatchResult>,
-        removed_certificates: Sender<Certificate<PublicKey>>,
+        removed_certificates: Sender<Certificate>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -375,9 +375,9 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
 
     async fn cleanup_internal_state(
         &mut self,
-        certificates: Vec<Certificate<PublicKey>>,
+        certificates: Vec<Certificate>,
         batches_by_worker: HashMap<WorkerId, Vec<BatchDigest>>,
-    ) -> Result<(), Either<TypedStoreError, ValidatorDagError<PublicKey>>> {
+    ) -> Result<(), Either<TypedStoreError, ValidatorDagError>> {
         let header_ids: Vec<HeaderDigest> = certificates.iter().map(|c| c.header.id).collect();
 
         self.header_store
@@ -463,15 +463,13 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                 // find the blocks in certificates store
                 match self.certificate_store.read_all(ids.clone()).await {
                     Ok(certificates) => {
-                        let non_found_certificates: Vec<(
-                            Option<Certificate<PublicKey>>,
-                            CertificateDigest,
-                        )> = certificates
-                            .clone()
-                            .into_iter()
-                            .zip(ids.clone())
-                            .filter(|(c, digest)| c.is_none())
-                            .collect();
+                        let non_found_certificates: Vec<(Option<Certificate>, CertificateDigest)> =
+                            certificates
+                                .clone()
+                                .into_iter()
+                                .zip(ids.clone())
+                                .filter(|(c, digest)| c.is_none())
+                                .collect();
 
                         if !non_found_certificates.is_empty() {
                             let c: Vec<CertificateDigest> =
@@ -480,7 +478,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                         }
 
                         // ensure that we store only the found certificates
-                        let found_certificates: Vec<Certificate<PublicKey>> =
+                        let found_certificates: Vec<Certificate> =
                             certificates.into_iter().flatten().collect();
 
                         let receivers = self
@@ -522,7 +520,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
 
     async fn send_delete_requests_to_workers(
         &mut self,
-        certificates: Vec<Certificate<PublicKey>>,
+        certificates: Vec<Certificate>,
     ) -> Vec<(RequestKey, oneshot::Receiver<DeleteBatchResult>)> {
         // For each certificate, batch the requests by worker
         // and send the requests
@@ -539,7 +537,7 @@ impl<PublicKey: VerifyingKey> BlockRemover<PublicKey> {
                 .expect("Worker id not found")
                 .primary_to_worker;
 
-            let message = PrimaryWorkerMessage::<PublicKey>::DeleteBatches(batch_ids.clone());
+            let message = PrimaryWorkerMessage::DeleteBatches(batch_ids.clone());
 
             // send the request
             self.worker_network

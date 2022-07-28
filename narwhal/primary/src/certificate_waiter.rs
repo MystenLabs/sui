@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::PrimaryMetrics;
 use config::Committee;
-use crypto::traits::VerifyingKey;
 use dashmap::DashMap;
 use futures::{
     future::try_join_all,
@@ -39,21 +38,21 @@ const GC_RESOLUTION: u64 = 10_000;
 
 /// Waits to receive all the ancestors of a certificate before looping it back to the `Core`
 /// for further processing.
-pub struct CertificateWaiter<PublicKey: VerifyingKey> {
+pub struct CertificateWaiter {
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
     /// The persistent storage.
-    store: Store<CertificateDigest, Certificate<PublicKey>>,
+    store: Store<CertificateDigest, Certificate>,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
     /// Watch channel notifying of epoch changes, it is only used for cleanup.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives sync commands from the `Synchronizer`.
-    rx_synchronizer: Receiver<Certificate<PublicKey>>,
+    rx_synchronizer: Receiver<Certificate>,
     /// Loops back to the core certificates for which we got all parents.
-    tx_core: Sender<Certificate<PublicKey>>,
+    tx_core: Sender<Certificate>,
     /// List of digests (certificates) that are waiting to be processed. Their processing will
     /// resume when we get all their dependencies. The map holds a cancellation `Sender`
     /// which we can use to give up on a certificate.
@@ -63,15 +62,15 @@ pub struct CertificateWaiter<PublicKey: VerifyingKey> {
     metrics: Arc<PrimaryMetrics>,
 }
 
-impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
+impl CertificateWaiter {
     pub fn spawn(
-        committee: Committee<PublicKey>,
-        store: Store<CertificateDigest, Certificate<PublicKey>>,
+        committee: Committee,
+        store: Store<CertificateDigest, Certificate>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_synchronizer: Receiver<Certificate<PublicKey>>,
-        tx_core: Sender<Certificate<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_synchronizer: Receiver<Certificate>,
+        tx_core: Sender<Certificate>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -95,10 +94,10 @@ impl<PublicKey: VerifyingKey> CertificateWaiter<PublicKey> {
     /// delivers the specified header.
     async fn waiter(
         missing: Vec<CertificateDigest>,
-        store: &Store<CertificateDigest, Certificate<PublicKey>>,
-        deliver: Certificate<PublicKey>,
+        store: &Store<CertificateDigest, Certificate>,
+        deliver: Certificate,
         cancel_handle: oneshot::Receiver<()>,
-    ) -> DagResult<Certificate<PublicKey>> {
+    ) -> DagResult<Certificate> {
         let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
 
         tokio::select! {

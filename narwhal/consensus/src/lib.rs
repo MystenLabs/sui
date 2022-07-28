@@ -16,7 +16,7 @@ pub mod tusk;
 mod utils;
 
 pub use crate::{consensus::Consensus, subscriber::SubscriberHandler};
-use crypto::traits::VerifyingKey;
+
 use serde::{Deserialize, Serialize};
 use std::ops::RangeInclusive;
 use types::{Certificate, SequenceNumber};
@@ -26,10 +26,9 @@ pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
 
 /// The output format of the consensus.
 #[derive(Serialize, Deserialize, Clone, Debug)]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
-pub struct ConsensusOutput<PublicKey: VerifyingKey> {
+pub struct ConsensusOutput {
     /// The sequenced certificate.
-    pub certificate: Certificate<PublicKey>,
+    pub certificate: Certificate,
     /// The (global) index associated with this certificate.
     pub consensus_index: SequenceNumber,
 }

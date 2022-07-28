@@ -6,7 +6,7 @@ use crate::{
         BLS12377AggregateSignature, BLS12377KeyPair, BLS12377PrivateKey, BLS12377PublicKey,
         BLS12377PublicKeyBytes, BLS12377Signature,
     },
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, ToFromBytes, VerifyingKey},
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey},
 };
 use rand::{rngs::StdRng, SeedableRng as _};
 use signature::{Signer, Verifier};

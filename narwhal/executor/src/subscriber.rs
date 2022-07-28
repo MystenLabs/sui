@@ -5,7 +5,6 @@ use crate::{
     errors::{SubscriberError, SubscriberResult},
 };
 use consensus::{ConsensusOutput, ConsensusSyncRequest};
-use crypto::traits::VerifyingKey;
 use futures::{
     future::try_join_all,
     stream::{FuturesOrdered, StreamExt},
@@ -30,33 +29,33 @@ pub mod subscriber_tests;
 /// transaction it references. We assume that the messages we receives from consensus has
 /// already been authenticated (ie. they really come from a trusted consensus node) and
 /// integrity-validated (ie. no corrupted messages).
-pub struct Subscriber<PublicKey: VerifyingKey> {
+pub struct Subscriber {
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// A channel to receive consensus messages.
-    rx_consensus: Receiver<ConsensusOutput<PublicKey>>,
+    rx_consensus: Receiver<ConsensusOutput>,
     /// A channel to send sync request to consensus for missed messages.
     tx_consensus: Sender<ConsensusSyncRequest>,
     /// A channel to the batch loader to download transaction's data.
-    tx_batch_loader: Sender<ConsensusOutput<PublicKey>>,
+    tx_batch_loader: Sender<ConsensusOutput>,
     /// A channel to send the complete and ordered list of consensus outputs to the executor. This
     /// channel is used once all transactions data are downloaded.
-    tx_executor: Sender<ConsensusOutput<PublicKey>>,
+    tx_executor: Sender<ConsensusOutput>,
     /// The index of the next expected consensus output.
     next_consensus_index: SequenceNumber,
 }
 
-impl<PublicKey: VerifyingKey> Subscriber<PublicKey> {
+impl Subscriber {
     /// Spawn a new subscriber in a new tokio task.
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_consensus: Receiver<ConsensusOutput<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_consensus: Receiver<ConsensusOutput>,
         tx_consensus: Sender<ConsensusSyncRequest>,
-        tx_batch_loader: Sender<ConsensusOutput<PublicKey>>,
-        tx_executor: Sender<ConsensusOutput<PublicKey>>,
+        tx_batch_loader: Sender<ConsensusOutput>,
+        tx_executor: Sender<ConsensusOutput>,
         next_consensus_index: SequenceNumber,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -83,7 +82,7 @@ impl<PublicKey: VerifyingKey> Subscriber<PublicKey> {
         &mut self,
         last_known_client_index: SequenceNumber,
         last_known_server_index: SequenceNumber,
-    ) -> SubscriberResult<Vec<ConsensusOutput<PublicKey>>> {
+    ) -> SubscriberResult<Vec<ConsensusOutput>> {
         // Send a sync request.
         let request = ConsensusSyncRequest {
             missing: (last_known_client_index + 1..=last_known_server_index),
@@ -128,8 +127,8 @@ impl<PublicKey: VerifyingKey> Subscriber<PublicKey> {
     /// we first sync every missing output and return them on the right order.
     async fn handle_consensus_message(
         &mut self,
-        message: &ConsensusOutput<PublicKey>,
-    ) -> SubscriberResult<Vec<ConsensusOutput<PublicKey>>> {
+        message: &ConsensusOutput,
+    ) -> SubscriberResult<Vec<ConsensusOutput>> {
         let consensus_index = message.consensus_index;
 
         // Check that the latest consensus index is as expected; otherwise synchronize.

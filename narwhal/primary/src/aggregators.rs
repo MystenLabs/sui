@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::{Committee, Stake};
-use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
+use crypto::{traits::EncodeDecodeBase64, PublicKey, Signature};
 use std::collections::HashSet;
 use types::{
     ensure,
@@ -12,13 +12,13 @@ use types::{
 };
 
 /// Aggregates votes for a particular header into a certificate.
-pub struct VotesAggregator<PublicKey: VerifyingKey> {
+pub struct VotesAggregator {
     weight: Stake,
-    votes: Vec<(PublicKey, PublicKey::Sig)>,
+    votes: Vec<(PublicKey, Signature)>,
     used: HashSet<PublicKey>,
 }
 
-impl<PublicKey: VerifyingKey> VotesAggregator<PublicKey> {
+impl VotesAggregator {
     pub fn new() -> Self {
         Self {
             weight: 0,
@@ -29,10 +29,10 @@ impl<PublicKey: VerifyingKey> VotesAggregator<PublicKey> {
 
     pub fn append(
         &mut self,
-        vote: Vote<PublicKey>,
-        committee: &Committee<PublicKey>,
-        header: &Header<PublicKey>,
-    ) -> DagResult<Option<Certificate<PublicKey>>> {
+        vote: Vote,
+        committee: &Committee,
+        header: &Header,
+    ) -> DagResult<Option<Certificate>> {
         let author = vote.author;
 
         // Ensure it is the first time this authority votes.
@@ -55,13 +55,13 @@ impl<PublicKey: VerifyingKey> VotesAggregator<PublicKey> {
 }
 
 /// Aggregate certificates and check if we reach a quorum.
-pub struct CertificatesAggregator<PublicKey: VerifyingKey> {
+pub struct CertificatesAggregator {
     weight: Stake,
-    certificates: Vec<Certificate<PublicKey>>,
+    certificates: Vec<Certificate>,
     used: HashSet<PublicKey>,
 }
 
-impl<PublicKey: VerifyingKey> CertificatesAggregator<PublicKey> {
+impl CertificatesAggregator {
     pub fn new() -> Self {
         Self {
             weight: 0,
@@ -72,9 +72,9 @@ impl<PublicKey: VerifyingKey> CertificatesAggregator<PublicKey> {
 
     pub fn append(
         &mut self,
-        certificate: Certificate<PublicKey>,
-        committee: &Committee<PublicKey>,
-    ) -> Option<Vec<Certificate<PublicKey>>> {
+        certificate: Certificate,
+        committee: &Committee,
+    ) -> Option<Vec<Certificate>> {
         let origin = certificate.origin();
 
         // Ensure it is the first time this authority votes.

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use config::{Committee, WorkerId};
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use network::WorkerNetwork;
 use store::Store;
 use tokio::{
@@ -21,15 +21,15 @@ use types::{BatchDigest, ReconfigureNotification, SerializedBatchMessage};
 pub mod helper_tests;
 
 /// A task dedicated to help other authorities by replying to their batch requests.
-pub struct Helper<PublicKey: VerifyingKey> {
+pub struct Helper {
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
     /// The persistent storage.
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input channel to receive batch requests from workers.
     rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
     /// Input channel to receive batch requests from workers.
@@ -38,12 +38,12 @@ pub struct Helper<PublicKey: VerifyingKey> {
     network: WorkerNetwork,
 }
 
-impl<PublicKey: VerifyingKey> Helper<PublicKey> {
+impl Helper {
     pub fn spawn(
         id: WorkerId,
-        committee: Committee<PublicKey>,
+        committee: Committee,
         store: Store<BatchDigest, SerializedBatchMessage>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
         rx_client_request: Receiver<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
     ) -> JoinHandle<()> {

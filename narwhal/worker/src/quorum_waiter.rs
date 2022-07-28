@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Committee, Stake, WorkerId};
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::{CancelOnDropHandler, MessageResult, WorkerNetwork};
 use tokio::{
@@ -21,15 +21,15 @@ use types::{
 pub mod quorum_waiter_tests;
 
 /// The QuorumWaiter waits for 2f authorities to acknowledge reception of a batch.
-pub struct QuorumWaiter<PublicKey: VerifyingKey> {
+pub struct QuorumWaiter {
     /// The public key of this authority.
     name: PublicKey,
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input Channel to receive commands.
     rx_message: Receiver<Batch>,
     /// Channel to deliver batches for which we have enough acknowledgments.
@@ -38,13 +38,13 @@ pub struct QuorumWaiter<PublicKey: VerifyingKey> {
     network: WorkerNetwork,
 }
 
-impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
+impl QuorumWaiter {
     /// Spawn a new QuorumWaiter.
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
-        committee: Committee<PublicKey>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        committee: Committee,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_message: Receiver<Batch>,
         tx_batch: Sender<Vec<u8>>,
     ) -> JoinHandle<()> {
@@ -82,7 +82,7 @@ impl<PublicKey: VerifyingKey> QuorumWaiter<PublicKey> {
                         .map(|(name, addresses)| (name, addresses.worker_to_worker))
                         .collect();
                     let (names, addresses): (Vec<_>, _) = workers_addresses.iter().cloned().unzip();
-                    let message = WorkerMessage::<PublicKey>::Batch(batch);
+                    let message = WorkerMessage::Batch(batch);
                     let serialized =
                         bincode::serialize(&message).expect("Failed to serialize our own batch");
                     let handlers = self.network.broadcast(addresses, &message).await;

@@ -8,7 +8,7 @@ use crate::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Parameters, SharedCommittee, WorkerId};
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use futures::{Stream, StreamExt};
 use multiaddr::{Multiaddr, Protocol};
 use primary::PrimaryWorkerMessage;
@@ -40,13 +40,13 @@ pub const CHANNEL_CAPACITY: usize = 1_000;
 use crate::metrics::{Metrics, WorkerMetrics};
 pub use types::WorkerMessage;
 
-pub struct Worker<PublicKey: VerifyingKey> {
+pub struct Worker {
     /// The public key of this authority.
     name: PublicKey,
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: SharedCommittee<PublicKey>,
+    committee: SharedCommittee,
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
@@ -55,11 +55,11 @@ pub struct Worker<PublicKey: VerifyingKey> {
 
 const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
-impl<PublicKey: VerifyingKey> Worker<PublicKey> {
+impl Worker {
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
-        committee: SharedCommittee<PublicKey>,
+        committee: SharedCommittee,
         parameters: Parameters,
         store: Store<BatchDigest, SerializedBatchMessage>,
         metrics: Metrics,
@@ -115,8 +115,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     /// Spawn all tasks responsible to handle messages from our primary.
     fn handle_primary_messages(
         &self,
-        tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
-        tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
+        tx_reconfigure: watch::Sender<ReconfigureNotification>,
+        tx_primary: Sender<WorkerPrimaryMessage>,
         node_metrics: Arc<WorkerMetrics>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_synchronizer, rx_synchronizer) = channel(CHANNEL_CAPACITY);
@@ -161,8 +161,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     /// Spawn all tasks responsible to handle clients transactions.
     fn handle_clients_transactions(
         &self,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification<PublicKey>>,
-        tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
+        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        tx_primary: Sender<WorkerPrimaryMessage>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel(CHANNEL_CAPACITY);
         let (tx_quorum_waiter, rx_quorum_waiter) = channel(CHANNEL_CAPACITY);
@@ -231,8 +231,8 @@ impl<PublicKey: VerifyingKey> Worker<PublicKey> {
     /// Spawn all tasks responsible to handle messages from other workers.
     fn handle_workers_messages(
         &self,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification<PublicKey>>,
-        tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
+        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        tx_primary: Sender<WorkerPrimaryMessage>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_worker_helper, rx_worker_helper) = channel(CHANNEL_CAPACITY);
         let (tx_client_helper, rx_client_helper) = channel(CHANNEL_CAPACITY);
@@ -296,9 +296,7 @@ struct TxReceiverHandler {
 }
 
 impl TxReceiverHandler {
-    async fn wait_for_shutdown<PublicKey: VerifyingKey>(
-        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-    ) {
+    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
         loop {
             let result = rx_reconfigure.changed().await;
             result.expect("Committee channel dropped");
@@ -309,10 +307,10 @@ impl TxReceiverHandler {
         }
     }
 
-    fn spawn<PublicKey: VerifyingKey>(
+    fn spawn(
         self,
         address: Multiaddr,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             tokio::select! {
@@ -366,16 +364,14 @@ impl Transactions for TxReceiverHandler {
 
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
-struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
+struct WorkerReceiverHandler {
     tx_worker_helper: Sender<(Vec<BatchDigest>, PublicKey)>,
     tx_client_helper: Sender<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
     tx_processor: Sender<SerializedBatchMessage>,
 }
 
-impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
-    async fn wait_for_shutdown(
-        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-    ) {
+impl WorkerReceiverHandler {
+    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
         loop {
             let result = rx_reconfigure.changed().await;
             result.expect("Committee channel dropped");
@@ -390,7 +386,7 @@ impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
         self,
         address: Multiaddr,
         max_concurrent_requests: usize,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut config = mysten_network::config::Config::new();
@@ -411,12 +407,12 @@ impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
 }
 
 #[async_trait]
-impl<PublicKey: VerifyingKey> WorkerToWorker for WorkerReceiverHandler<PublicKey> {
+impl WorkerToWorker for WorkerReceiverHandler {
     async fn send_message(
         &self,
         request: Request<BincodeEncodedPayload>,
     ) -> Result<Response<Empty>, Status> {
-        let message: WorkerMessage<PublicKey> = request
+        let message: WorkerMessage = request
             .get_ref()
             .deserialize()
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -476,14 +472,12 @@ impl<PublicKey: VerifyingKey> WorkerToWorker for WorkerReceiverHandler<PublicKey
 
 /// Defines how the network receiver handles incoming primary messages.
 #[derive(Clone)]
-struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
-    tx_synchronizer: Sender<PrimaryWorkerMessage<PublicKey>>,
+struct PrimaryReceiverHandler {
+    tx_synchronizer: Sender<PrimaryWorkerMessage>,
 }
 
-impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
-    async fn wait_for_shutdown(
-        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-    ) {
+impl PrimaryReceiverHandler {
+    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
         loop {
             let result = rx_reconfigure.changed().await;
             result.expect("Committee channel dropped");
@@ -497,7 +491,7 @@ impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
     fn spawn(
         self,
         address: Multiaddr,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             tokio::select! {
@@ -516,12 +510,12 @@ impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
 }
 
 #[async_trait]
-impl<PublicKey: VerifyingKey> PrimaryToWorker for PrimaryReceiverHandler<PublicKey> {
+impl PrimaryToWorker for PrimaryReceiverHandler {
     async fn send_message(
         &self,
         request: Request<BincodeEncodedPayload>,
     ) -> Result<Response<Empty>, Status> {
-        let message: PrimaryWorkerMessage<PublicKey> = request
+        let message: PrimaryWorkerMessage = request
             .into_inner()
             .deserialize()
             .map_err(|e| Status::invalid_argument(e.to_string()))?;

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::create_db_stores;
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use crypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{
     certificate, committee, fixture_batch_with_transactions, header, headers, keys, votes,
@@ -160,7 +160,7 @@ async fn process_header_missing_parent() {
 
     // Send a header to the core.
     let kp = keys(None).pop().unwrap();
-    let builder = types::HeaderBuilder::<Ed25519PublicKey>::default();
+    let builder = types::HeaderBuilder::default();
     let header = builder
         .author(name.clone())
         .round(1)
@@ -240,7 +240,7 @@ async fn process_header_missing_payload() {
     let keys = keys(None);
     let kp = keys.get(1).unwrap();
     let name = kp.public().clone();
-    let builder = types::HeaderBuilder::<Ed25519PublicKey>::default();
+    let builder = types::HeaderBuilder::default();
     let header = builder
         .author(name.clone())
         .round(1)

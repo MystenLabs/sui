@@ -17,7 +17,7 @@ use tokio::sync::mpsc::channel;
 use tokio::sync::watch;
 use types::{CertificateDigest, ReconfigureNotification};
 
-pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore<Ed25519PublicKey>> {
+pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore> {
     const LAST_COMMITTED_CF: &str = "last_committed";
     const SEQUENCE_CF: &str = "sequence";
 
@@ -34,14 +34,14 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore<
 
 pub fn make_certificate_store(
     store_path: &std::path::Path,
-) -> store::Store<CertificateDigest, Certificate<Ed25519PublicKey>> {
+) -> store::Store<CertificateDigest, Certificate> {
     const CERTIFICATES_CF: &str = "certificates";
 
     let rocksdb =
         rocks::open_cf(store_path, None, &[CERTIFICATES_CF]).expect("Failed creating database");
 
     let certificate_map = reopen!(&rocksdb,
-        CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>
+        CERTIFICATES_CF;<CertificateDigest, Certificate>
     );
 
     store::Store::new(certificate_map)

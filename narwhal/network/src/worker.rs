@@ -3,7 +3,6 @@
 use crate::{
     BoundedExecutor, CancelOnDropHandler, MessageResult, RetryConfig, MAX_TASK_CONCURRENCY,
 };
-use crypto::traits::VerifyingKey;
 use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
@@ -62,10 +61,10 @@ impl WorkerNetwork {
         WorkerToWorkerClient::new(channel)
     }
 
-    pub async fn send<T: VerifyingKey>(
+    pub async fn send(
         &mut self,
         address: Multiaddr,
-        message: &WorkerMessage<T>,
+        message: &WorkerMessage,
     ) -> CancelOnDropHandler<MessageResult> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
@@ -107,10 +106,10 @@ impl WorkerNetwork {
         CancelOnDropHandler(handle)
     }
 
-    pub async fn broadcast<T: VerifyingKey>(
+    pub async fn broadcast(
         &mut self,
         addresses: Vec<Multiaddr>,
-        message: &WorkerMessage<T>,
+        message: &WorkerMessage,
     ) -> Vec<CancelOnDropHandler<MessageResult>> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
@@ -122,10 +121,10 @@ impl WorkerNetwork {
         handlers
     }
 
-    pub async fn unreliable_send<T: VerifyingKey>(
+    pub async fn unreliable_send(
         &mut self,
         address: Multiaddr,
-        message: &WorkerMessage<T>,
+        message: &WorkerMessage,
     ) -> JoinHandle<()> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
@@ -150,10 +149,10 @@ impl WorkerNetwork {
 
     /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
     /// message only to them. This is useful to pick nodes with whom to sync.
-    pub async fn lucky_broadcast<T: VerifyingKey>(
+    pub async fn lucky_broadcast(
         &mut self,
         mut addresses: Vec<Multiaddr>,
-        message: &WorkerMessage<T>,
+        message: &WorkerMessage,
         nodes: usize,
     ) -> Vec<JoinHandle<()>> {
         addresses.shuffle(&mut self.rng);
@@ -205,10 +204,10 @@ impl WorkerToPrimaryNetwork {
     // Since this spawns an unbounded task, this should be called in a time-restricted fashion.
     // Here the callers are [`WorkerToPrimaryNetwork::send`].
     // See the TODO on spawn_with_retries for lifting this restriction.
-    pub async fn send<PublicKey: VerifyingKey>(
+    pub async fn send(
         &mut self,
         address: Multiaddr,
-        message: &WorkerPrimaryMessage<PublicKey>,
+        message: &WorkerPrimaryMessage,
     ) -> CancelOnDropHandler<MessageResult> {
         let new_client = match &self.address {
             None => true,

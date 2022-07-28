@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::worker::WorkerMessage;
-use crypto::{ed25519::Ed25519PublicKey, Hash};
+use crypto::Hash;
 use store::rocks;
 use test_utils::{batch, committee, temp_dir};
 use tokio::sync::mpsc::channel;
@@ -39,7 +39,7 @@ async fn hash_and_store() {
 
     // Send a batch to the `Processor`.
     let batch = batch();
-    let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch.clone());
+    let message = WorkerMessage::Batch(batch.clone());
     let serialized = bincode::serialize(&message).unwrap();
     tx_batch.send(serialized.clone()).await.unwrap();
 

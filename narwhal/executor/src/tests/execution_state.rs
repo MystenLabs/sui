@@ -4,7 +4,7 @@ use crate::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use async_trait::async_trait;
 use config::Committee;
 use consensus::ConsensusOutput;
-use crypto::ed25519::Ed25519PublicKey;
+
 use futures::executor::block_on;
 use std::path::Path;
 use store::{
@@ -39,17 +39,16 @@ impl Default for TestState {
 
 #[async_trait]
 impl ExecutionState for TestState {
-    type PubKey = Ed25519PublicKey;
     type Transaction = u64;
     type Error = TestStateError;
     type Outcome = Vec<u8>;
 
     async fn handle_consensus_transaction(
         &self,
-        _consensus_output: &ConsensusOutput<Ed25519PublicKey>,
+        _consensus_output: &ConsensusOutput,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<Committee<Ed25519PublicKey>>), Self::Error> {
+    ) -> Result<(Self::Outcome, Option<Committee>), Self::Error> {
         if transaction == MALFORMED_TRANSACTION {
             Err(Self::Error::ClientError)
         } else if transaction == KILLER_TRANSACTION {

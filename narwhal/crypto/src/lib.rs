@@ -14,13 +14,12 @@ use blake2::{digest::VariableOutput, VarBlake2b};
 use rand::{rngs::OsRng, CryptoRng, RngCore};
 use serde::{Deserialize, Serialize};
 
-pub use signature::{Signature, Verifier};
+pub use signature::{Signature as _, Verifier};
 use std::fmt;
 use tokio::sync::{
     mpsc::{channel, Sender},
     oneshot,
 };
-use traits::{Authenticator, KeyPair};
 
 #[cfg(test)]
 #[path = "tests/pubkey_bytes_tests.rs"]
@@ -44,15 +43,26 @@ pub mod bls12377;
 #[path = "tests/bls12381_tests.rs"]
 pub mod bls12381_tests;
 
+// Signing traits
+pub mod traits;
+// Key scheme implementations
 pub mod bls12381;
 pub mod ed25519;
+pub mod secp256k1;
+// Other tooling
 pub mod hkdf;
 pub mod pubkey_bytes;
 pub mod serde_helpers;
 
-pub mod secp256k1;
-
-pub mod traits;
+// Here we select the types that are used by default in the code base.
+// The whole code base should only:
+// - refer to those aliases and not use the individual scheme implementations
+// - not use the schemes in a way that break genericity (e.g. using their Struct impl functions)
+// - swap one of those aliases to point to another type if necessary
+pub type PublicKey = ed25519::Ed25519PublicKey;
+pub type Signature = ed25519::Ed25519Signature;
+pub type PrivateKey = ed25519::Ed25519PrivateKey;
+pub type KeyPair = ed25519::Ed25519KeyPair;
 
 pub const DIGEST_LEN: usize = 32;
 
@@ -110,11 +120,11 @@ pub trait Hash {
 // Generic Keypair
 ////////////////////////////////////////////////////////////////
 
-pub fn generate_production_keypair<K: KeyPair>() -> K {
+pub fn generate_production_keypair<K: traits::KeyPair>() -> K {
     generate_keypair::<K, _>(&mut OsRng)
 }
 
-pub fn generate_keypair<K: KeyPair, R>(csprng: &mut R) -> K
+pub fn generate_keypair<K: traits::KeyPair, R>(csprng: &mut R) -> K
 where
     R: CryptoRng + RngCore,
 {
@@ -124,11 +134,11 @@ where
 /// This service holds the node's private key. It takes digests as input and returns a signature
 /// over the digest (through a one-shot channel).
 #[derive(Clone)]
-pub struct SignatureService<Signature: Authenticator> {
+pub struct SignatureService<Signature: traits::Authenticator> {
     channel: Sender<(Digest, oneshot::Sender<Signature>)>,
 }
 
-impl<Signature: Authenticator> SignatureService<Signature> {
+impl<Signature: traits::Authenticator> SignatureService<Signature> {
     pub fn new<S>(signer: S) -> Self
     where
         S: signature::Signer<Signature> + Send + 'static,

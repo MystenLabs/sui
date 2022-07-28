@@ -2,7 +2,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::Committee;
-use crypto::traits::VerifyingKey;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
 use tokio::{
@@ -20,15 +19,15 @@ use types::{error::DagError, Batch, ReconfigureNotification, Transaction};
 pub mod batch_maker_tests;
 
 /// Assemble clients transactions into batches.
-pub struct BatchMaker<PublicKey: VerifyingKey> {
+pub struct BatchMaker {
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
     /// The preferred batch size (in bytes).
     batch_size: usize,
     /// The maximum delay after which to seal the batch.
     max_batch_delay: Duration,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Channel to receive transactions from the network.
     rx_transaction: Receiver<Transaction>,
     /// Output channel to deliver sealed batches to the `QuorumWaiter`.
@@ -39,12 +38,12 @@ pub struct BatchMaker<PublicKey: VerifyingKey> {
     current_batch_size: usize,
 }
 
-impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
+impl BatchMaker {
     pub fn spawn(
-        committee: Committee<PublicKey>,
+        committee: Committee,
         batch_size: usize,
         max_batch_delay: Duration,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_transaction: Receiver<Transaction>,
         tx_message: Sender<Batch>,
     ) -> JoinHandle<()> {
@@ -129,7 +128,7 @@ impl<PublicKey: VerifyingKey> BatchMaker<PublicKey> {
 
         #[cfg(feature = "benchmark")]
         {
-            let message = types::WorkerMessage::<PublicKey>::Batch(batch.clone());
+            let message = types::WorkerMessage::Batch(batch.clone());
             let serialized =
                 bincode::serialize(&message).expect("Failed to serialize our own batch");
 

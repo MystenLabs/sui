@@ -1,18 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{PrimaryAddresses, SharedCommittee};
-use crypto::traits::VerifyingKey;
+use crypto::{traits::ToFromBytes, PublicKey};
 use std::collections::BTreeMap;
 use tonic::{Request, Response, Status};
 use types::{Configuration, Empty, NewEpochRequest, NewNetworkInfoRequest, PublicKeyProto};
 
-pub struct NarwhalConfiguration<PublicKey: VerifyingKey> {
+pub struct NarwhalConfiguration {
     /// The committee
-    committee: SharedCommittee<PublicKey>,
+    committee: SharedCommittee,
 }
 
-impl<PublicKey: VerifyingKey> NarwhalConfiguration<PublicKey> {
-    pub fn new(committee: SharedCommittee<PublicKey>) -> Self {
+impl NarwhalConfiguration {
+    pub fn new(committee: SharedCommittee) -> Self {
         Self { committee }
     }
 
@@ -38,7 +38,7 @@ impl<PublicKey: VerifyingKey> NarwhalConfiguration<PublicKey> {
 }
 
 #[tonic::async_trait]
-impl<PublicKey: VerifyingKey> Configuration for NarwhalConfiguration<PublicKey> {
+impl Configuration for NarwhalConfiguration {
     async fn new_epoch(
         &self,
         request: Request<NewEpochRequest>,

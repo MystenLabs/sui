@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use arc_swap::ArcSwap;
 use config::{Committee, Epoch, Parameters};
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use crypto::traits::KeyPair;
 use futures::future::join_all;
 use network::{CancelOnDropHandler, WorkerToPrimaryNetwork};
 use node::NodeStorage;
@@ -337,8 +337,7 @@ async fn test_restart_with_new_committee_change() {
         .values()
         .map(|authority| authority.primary.worker_to_primary.clone())
         .collect();
-    let message =
-        WorkerPrimaryMessage::<Ed25519PublicKey>::Reconfigure(ReconfigureNotification::Shutdown);
+    let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::Shutdown);
     let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
     for address in addresses {
         _do_not_drop.push(
@@ -408,9 +407,7 @@ async fn test_restart_with_new_committee_change() {
             .values()
             .map(|authority| authority.primary.worker_to_primary.clone())
             .collect();
-        let message = WorkerPrimaryMessage::<Ed25519PublicKey>::Reconfigure(
-            ReconfigureNotification::Shutdown,
-        );
+        let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::Shutdown);
         let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
         for address in addresses {
             _do_not_drop.push(

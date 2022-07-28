@@ -7,7 +7,7 @@ use crate::{
         Secp256k1KeyPair, Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1PublicKeyBytes,
         Secp256k1Signature,
     },
-    traits::{EncodeDecodeBase64, ToFromBytes},
+    traits::{EncodeDecodeBase64, KeyPair, ToFromBytes},
 };
 
 use rand::{rngs::StdRng, SeedableRng as _};

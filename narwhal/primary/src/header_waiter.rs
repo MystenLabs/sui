@@ -6,7 +6,7 @@ use crate::{
     primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage},
 };
 use config::{Committee, WorkerId};
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -47,19 +47,19 @@ const TIMER_RESOLUTION: u64 = 1_000;
 
 /// The commands that can be sent to the `Waiter`.
 #[derive(Debug)]
-pub enum WaiterMessage<PublicKey: VerifyingKey> {
-    SyncBatches(HashMap<BatchDigest, WorkerId>, Header<PublicKey>),
-    SyncParents(Vec<CertificateDigest>, Header<PublicKey>),
+pub enum WaiterMessage {
+    SyncBatches(HashMap<BatchDigest, WorkerId>, Header),
+    SyncParents(Vec<CertificateDigest>, Header),
 }
 
 /// Waits for missing parent certificates and batches' digests.
-pub struct HeaderWaiter<PublicKey: VerifyingKey> {
+pub struct HeaderWaiter {
     /// The name of this authority.
     name: PublicKey,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
     /// The persistent storage for parent Certificates.
-    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate>,
     /// The persistent storage for payload markers from workers.
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// The current consensus round (used for cleanup).
@@ -72,11 +72,11 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     sync_retry_nodes: usize,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives sync commands from the `Synchronizer`.
-    rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
+    rx_synchronizer: Receiver<WaiterMessage>,
     /// Loops back to the core headers for which we got all parents and batches.
-    tx_core: Sender<Header<PublicKey>>,
+    tx_core: Sender<Header>,
 
     /// Network driver allowing to send messages.
     primary_network: PrimaryNetwork,
@@ -94,19 +94,19 @@ pub struct HeaderWaiter<PublicKey: VerifyingKey> {
     metrics: Arc<PrimaryMetrics>,
 }
 
-impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
+impl HeaderWaiter {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
-        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        committee: Committee,
+        certificate_store: Store<CertificateDigest, Certificate>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         consensus_round: Arc<AtomicU64>,
         gc_depth: Round,
         sync_retry_delay: Duration,
         sync_retry_nodes: usize,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_synchronizer: Receiver<WaiterMessage<PublicKey>>,
-        tx_core: Sender<Header<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_synchronizer: Receiver<WaiterMessage>,
+        tx_core: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -135,7 +135,7 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
     }
 
     /// Update the committee and cleanup internal state.
-    fn update_committee(&mut self, committee: Committee<PublicKey>) {
+    fn update_committee(&mut self, committee: Committee) {
         self.pending.clear();
         self.batch_requests.clear();
         self.parent_requests.clear();
@@ -149,9 +149,9 @@ impl<PublicKey: VerifyingKey> HeaderWaiter<PublicKey> {
     async fn waiter<T, V>(
         missing: Vec<T>,
         store: Store<T, V>,
-        deliver: Header<PublicKey>,
+        deliver: Header,
         handler: oneshot::Receiver<()>,
-    ) -> DagResult<Option<Header<PublicKey>>>
+    ) -> DagResult<Option<Header>>
     where
         T: Serialize + DeserializeOwned + Send + Clone,
         V: Serialize + DeserializeOwned + Send,

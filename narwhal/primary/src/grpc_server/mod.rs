@@ -9,7 +9,7 @@ use crate::{
 };
 use config::SharedCommittee;
 use consensus::dag::Dag;
-use crypto::traits::VerifyingKey;
+
 use multiaddr::Multiaddr;
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
@@ -21,24 +21,19 @@ pub mod metrics;
 mod proposer;
 mod validator;
 
-pub struct ConsensusAPIGrpc<
-    PublicKey: VerifyingKey,
-    SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static,
-> {
+pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static> {
     socket_addr: Multiaddr,
     tx_get_block_commands: Sender<BlockCommand>,
     tx_block_removal_commands: Sender<BlockRemoverCommand>,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
     block_synchronizer_handler: Arc<SynchronizerHandler>,
-    dag: Option<Arc<Dag<PublicKey>>>,
-    committee: SharedCommittee<PublicKey>,
+    dag: Option<Arc<Dag>>,
+    committee: SharedCommittee,
     endpoints_metrics: EndpointMetrics,
 }
 
-impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
-    ConsensusAPIGrpc<PublicKey, SynchronizerHandler>
-{
+impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<SynchronizerHandler> {
     pub fn spawn(
         socket_addr: Multiaddr,
         tx_get_block_commands: Sender<BlockCommand>,
@@ -46,8 +41,8 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
-        dag: Option<Arc<Dag<PublicKey>>>,
-        committee: SharedCommittee<PublicKey>,
+        dag: Option<Arc<Dag>>,
+        committee: SharedCommittee,
         endpoints_metrics: EndpointMetrics,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {

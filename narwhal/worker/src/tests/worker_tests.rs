@@ -4,7 +4,7 @@
 use super::*;
 
 use arc_swap::ArcSwap;
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use crypto::traits::KeyPair;
 use futures::StreamExt;
 use prometheus::Registry;
 use std::time::Duration;
@@ -55,11 +55,7 @@ async fn handle_clients_transactions() {
     let batch_digest = serialized_batch_digest(&serialized_batch).unwrap();
 
     let primary_address = committee.primary(&name).unwrap().worker_to_primary;
-    let expected = bincode::serialize(&WorkerPrimaryMessage::<Ed25519PublicKey>::OurBatch(
-        batch_digest,
-        id,
-    ))
-    .unwrap();
+    let expected = bincode::serialize(&WorkerPrimaryMessage::OurBatch(batch_digest, id)).unwrap();
     let mut handle = WorkerToPrimaryMockServer::spawn(primary_address);
 
     // Spawn enough workers' listeners to acknowledge our batches.

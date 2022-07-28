@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::WorkerId;
-use crypto::ed25519::Ed25519PublicKey;
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -22,14 +21,14 @@ pub fn test_batch<T: Serialize>(transactions: Vec<T>) -> (BatchDigest, Serialize
         .iter()
         .map(|x| bincode::serialize(x).unwrap())
         .collect();
-    let message = WorkerMessage::<Ed25519PublicKey>::Batch(Batch(batch));
+    let message = WorkerMessage::Batch(Batch(batch));
     let serialized = bincode::serialize(&message).unwrap();
     let digest = serialized_batch_digest(&serialized).unwrap();
     (digest, serialized)
 }
 
 /// A test certificate with a specific payload.
-pub fn test_certificate(payload: BTreeMap<BatchDigest, WorkerId>) -> Certificate<Ed25519PublicKey> {
+pub fn test_certificate(payload: BTreeMap<BatchDigest, WorkerId>) -> Certificate {
     Certificate {
         header: Header {
             payload,
@@ -53,10 +52,7 @@ pub fn test_u64_certificates(
     certificates: usize,
     batches_per_certificate: usize,
     transactions_per_batch: usize,
-) -> Vec<(
-    Certificate<Ed25519PublicKey>,
-    Vec<(BatchDigest, SerializedBatchMessage)>,
-)> {
+) -> Vec<(Certificate, Vec<(BatchDigest, SerializedBatchMessage)>)> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..certificates)
         .map(|_| {

@@ -7,7 +7,7 @@ use crate::{
         BLS12381PublicKeyBytes, BLS12381Signature,
     },
     hkdf::hkdf_generate_from_ikm,
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, ToFromBytes, VerifyingKey},
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey},
 };
 use rand::{rngs::StdRng, SeedableRng as _};
 use sha3::Sha3_256;

@@ -9,7 +9,7 @@ use crate::{
         Ed25519PublicKeyBytes, Ed25519Signature,
     },
     hkdf::hkdf_generate_from_ikm,
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, ToFromBytes, VerifyingKey},
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey},
 };
 
 use blake2::digest::Update;

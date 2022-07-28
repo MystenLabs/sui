@@ -7,7 +7,6 @@ use crate::{
     BlockRemoverCommand,
 };
 use consensus::dag::Dag;
-use crypto::traits::VerifyingKey;
 use tokio::{
     sync::{
         mpsc::{channel, Sender},
@@ -23,28 +22,23 @@ use types::{
     Validator,
 };
 
-pub struct NarwhalValidator<
-    PublicKey: VerifyingKey,
-    SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static,
-> {
+pub struct NarwhalValidator<SynchronizerHandler: Handler + Send + Sync + 'static> {
     tx_get_block_commands: Sender<BlockCommand>,
     tx_block_removal_commands: Sender<BlockRemoverCommand>,
     get_collections_timeout: Duration,
     remove_collections_timeout: Duration,
     block_synchronizer_handler: Arc<SynchronizerHandler>,
-    dag: Option<Arc<Dag<PublicKey>>>,
+    dag: Option<Arc<Dag>>,
 }
 
-impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
-    NarwhalValidator<PublicKey, SynchronizerHandler>
-{
+impl<SynchronizerHandler: Handler + Send + Sync + 'static> NarwhalValidator<SynchronizerHandler> {
     pub fn new(
         tx_get_block_commands: Sender<BlockCommand>,
         tx_block_removal_commands: Sender<BlockRemoverCommand>,
         get_collections_timeout: Duration,
         remove_collections_timeout: Duration,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
-        dag: Option<Arc<Dag<PublicKey>>>,
+        dag: Option<Arc<Dag>>,
     ) -> Self {
         Self {
             tx_get_block_commands,
@@ -58,8 +52,8 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
 }
 
 #[tonic::async_trait]
-impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
-    Validator for NarwhalValidator<PublicKey, SynchronizerHandler>
+impl<SynchronizerHandler: Handler + Send + Sync + 'static> Validator
+    for NarwhalValidator<SynchronizerHandler>
 {
     async fn read_causal(
         &self,

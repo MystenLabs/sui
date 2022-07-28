@@ -19,11 +19,11 @@ narwhal/node(main)» ruplacer --subvert 'DeleteBatches' 'RemoveBatches' --go    
 ./node/tests/staged/narwhal.yaml:70 - DeleteBatches:
 ./node/tests/staged/narwhal.yaml:70 + RemoveBatches:
 
-./node/src/generate_format.rs:102 - PrimaryWorkerMessage::<Ed25519PublicKey>::DeleteBatches(vec![BatchDigest([0u8; 32])]);
-./node/src/generate_format.rs:102 + PrimaryWorkerMessage::<Ed25519PublicKey>::RemoveBatches(vec![BatchDigest([0u8; 32])]);
+./node/src/generate_format.rs:102 - PrimaryWorkerMessage::DeleteBatches(vec![BatchDigest([0u8; 32])]);
+./node/src/generate_format.rs:102 + PrimaryWorkerMessage::RemoveBatches(vec![BatchDigest([0u8; 32])]);
 
-./worker/src/tests/synchronizer_tests.rs:201 - let message = PrimaryWorkerMessage::<Ed25519PublicKey>::DeleteBatches(batch_digests.clone());
-./worker/src/tests/synchronizer_tests.rs:201 + let message = PrimaryWorkerMessage::<Ed25519PublicKey>::RemoveBatches(batch_digests.clone());
+./worker/src/tests/synchronizer_tests.rs:201 - let message = PrimaryWorkerMessage::DeleteBatches(batch_digests.clone());
+./worker/src/tests/synchronizer_tests.rs:201 + let message = PrimaryWorkerMessage::RemoveBatches(batch_digests.clone());
 
 ./worker/src/synchronizer.rs:191 - PrimaryWorkerMessage::DeleteBatches(digests) => {
 ./worker/src/synchronizer.rs:191 + PrimaryWorkerMessage::RemoveBatches(digests) => {

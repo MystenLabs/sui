@@ -4,10 +4,7 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters};
 use consensus::ConsensusOutput;
-use crypto::{
-    ed25519::{Ed25519KeyPair, Ed25519PublicKey},
-    traits::{KeyPair, VerifyingKey},
-};
+use crypto::{ed25519::Ed25519KeyPair, traits::KeyPair, PublicKey};
 use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use futures::future::join_all;
 use network::{PrimaryToWorkerNetwork, WorkerToPrimaryNetwork};
@@ -28,15 +25,15 @@ use types::{ReconfigureNotification, TransactionProto, TransactionsClient, Worke
 /// A simple/dumb execution engine.
 struct SimpleExecutionState {
     index: usize,
-    committee: Arc<Mutex<Committee<Ed25519PublicKey>>>,
-    tx_reconfigure: Sender<(Ed25519KeyPair, Committee<Ed25519PublicKey>)>,
+    committee: Arc<Mutex<Committee>>,
+    tx_reconfigure: Sender<(Ed25519KeyPair, Committee)>,
 }
 
 impl SimpleExecutionState {
     pub fn new(
         index: usize,
-        committee: Committee<Ed25519PublicKey>,
-        tx_reconfigure: Sender<(Ed25519KeyPair, Committee<Ed25519PublicKey>)>,
+        committee: Committee,
+        tx_reconfigure: Sender<(Ed25519KeyPair, Committee)>,
     ) -> Self {
         Self {
             index,
@@ -48,17 +45,16 @@ impl SimpleExecutionState {
 
 #[async_trait::async_trait]
 impl ExecutionState for SimpleExecutionState {
-    type PubKey = Ed25519PublicKey;
     type Transaction = u64;
     type Error = SimpleExecutionError;
     type Outcome = u64;
 
     async fn handle_consensus_transaction(
         &self,
-        _consensus_output: &ConsensusOutput<Ed25519PublicKey>,
+        _consensus_output: &ConsensusOutput,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<Committee<Ed25519PublicKey>>), Self::Error> {
+    ) -> Result<(Self::Outcome, Option<Committee>), Self::Error> {
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
@@ -122,11 +118,7 @@ impl ExecutionStateError for SimpleExecutionError {
     }
 }
 
-async fn run_client<PublicKey: VerifyingKey>(
-    name: PublicKey,
-    committee: Committee<PublicKey>,
-    mut rx_reconfigure: Receiver<u64>,
-) {
+async fn run_client(name: PublicKey, committee: Committee, mut rx_reconfigure: Receiver<u64>) {
     let target = committee
         .worker(&name, /* id */ &0)
         .expect("Our key or worker id is not in the committee")

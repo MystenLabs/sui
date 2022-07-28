@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use arc_swap::ArcSwap;
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use crypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{
     batch, batch_digest, batches, committee, keys, open_batch_store, serialize_batch_message,
@@ -103,7 +103,7 @@ async fn test_successful_request_batch() {
     store.write(expected_digest, batch_serialised.clone()).await;
 
     // WHEN we send a message to retrieve the batch
-    let message = PrimaryWorkerMessage::<Ed25519PublicKey>::RequestBatch(expected_digest);
+    let message = PrimaryWorkerMessage::RequestBatch(expected_digest);
 
     tx_message
         .send(message)
@@ -162,7 +162,7 @@ async fn test_request_batch_not_found() {
     let expected_batch_id = BatchDigest::default();
 
     // WHEN we send a message to retrieve the batch that doesn't exist
-    let message = PrimaryWorkerMessage::<Ed25519PublicKey>::RequestBatch(expected_batch_id);
+    let message = PrimaryWorkerMessage::RequestBatch(expected_batch_id);
 
     tx_message
         .send(message)
@@ -233,7 +233,7 @@ async fn test_successful_batch_delete() {
     }
 
     // WHEN we send a message to delete batches
-    let message = PrimaryWorkerMessage::<Ed25519PublicKey>::DeleteBatches(batch_digests.clone());
+    let message = PrimaryWorkerMessage::DeleteBatches(batch_digests.clone());
 
     tx_message
         .send(message)

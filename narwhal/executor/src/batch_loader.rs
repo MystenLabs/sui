@@ -7,7 +7,6 @@ use crate::{
 
 use config::WorkerId;
 use consensus::ConsensusOutput;
-use crypto::traits::VerifyingKey;
 use futures::stream::StreamExt;
 use multiaddr::Multiaddr;
 use std::collections::{HashMap, HashSet};
@@ -26,25 +25,25 @@ use types::{
 };
 
 /// Download transactions data from the consensus workers and notifies the called when the job is done.
-pub struct BatchLoader<PublicKey: VerifyingKey> {
+pub struct BatchLoader {
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receive consensus outputs for which to download the associated transaction data.
-    rx_input: Receiver<ConsensusOutput<PublicKey>>,
+    rx_input: Receiver<ConsensusOutput>,
     /// The network addresses of the consensus workers.
     addresses: HashMap<WorkerId, Multiaddr>,
     /// A map of connections with the consensus workers.
     connections: HashMap<WorkerId, Sender<Vec<BatchDigest>>>,
 }
 
-impl<PublicKey: VerifyingKey> BatchLoader<PublicKey> {
+impl BatchLoader {
     /// Spawn a new batch loaded in a dedicated tokio task.
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_input: Receiver<ConsensusOutput<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_input: Receiver<ConsensusOutput>,
         addresses: HashMap<WorkerId, Multiaddr>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -83,7 +82,7 @@ impl<PublicKey: VerifyingKey> BatchLoader<PublicKey> {
 
                         let sender = self.connections.entry(worker_id).or_insert_with(|| {
                             let (sender, receiver) = channel(DEFAULT_CHANNEL_SIZE);
-                            SyncConnection::spawn::<PublicKey>(
+                            SyncConnection::spawn(
                                 address.clone(),
                                 self.store.clone(),
                                 receiver,
@@ -127,7 +126,7 @@ struct SyncConnection {
 
 impl SyncConnection {
     /// Spawn a new worker connection in a dedicated tokio task.
-    pub fn spawn<PublicKey: VerifyingKey>(
+    pub fn spawn(
         address: Multiaddr,
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_request: Receiver<Vec<BatchDigest>>,

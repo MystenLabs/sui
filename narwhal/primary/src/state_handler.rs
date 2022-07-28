@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::PrimaryWorkerMessage;
 use config::SharedCommittee;
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use network::PrimaryToWorkerNetwork;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
@@ -16,33 +16,33 @@ use tokio::{
 use types::{Certificate, ReconfigureNotification, Round};
 
 /// Receives the highest round reached by consensus and update it for all tasks.
-pub struct StateHandler<PublicKey: VerifyingKey> {
+pub struct StateHandler {
     /// The public key of this authority.
     name: PublicKey,
     /// The committee information.
-    committee: SharedCommittee<PublicKey>,
+    committee: SharedCommittee,
     /// The current consensus round (used for cleanup).
     consensus_round: Arc<AtomicU64>,
     /// Receives the ordered certificates from consensus.
-    rx_consensus: Receiver<Certificate<PublicKey>>,
+    rx_consensus: Receiver<Certificate>,
     /// Receives notifications to reconfigure the system.
-    rx_reconfigure: Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: Receiver<ReconfigureNotification>,
     /// Channel to signal committee changes.
-    tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
+    tx_reconfigure: watch::Sender<ReconfigureNotification>,
     /// The latest round committed by consensus.
     last_committed_round: Round,
     /// A network sender to notify our workers of cleanup events.
     worker_network: PrimaryToWorkerNetwork,
 }
 
-impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
+impl StateHandler {
     pub fn spawn(
         name: PublicKey,
-        committee: SharedCommittee<PublicKey>,
+        committee: SharedCommittee,
         consensus_round: Arc<AtomicU64>,
-        rx_consensus: Receiver<Certificate<PublicKey>>,
-        rx_reconfigure: Receiver<ReconfigureNotification<PublicKey>>,
-        tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
+        rx_consensus: Receiver<Certificate>,
+        rx_reconfigure: Receiver<ReconfigureNotification>,
+        tx_reconfigure: watch::Sender<ReconfigureNotification>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -60,7 +60,7 @@ impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
         })
     }
 
-    async fn handle_sequenced(&mut self, certificate: Certificate<PublicKey>) {
+    async fn handle_sequenced(&mut self, certificate: Certificate) {
         // TODO [issue #9]: Re-include batch digests that have not been sequenced into our next block.
 
         let round = certificate.round();
@@ -79,7 +79,7 @@ impl<PublicKey: VerifyingKey> StateHandler<PublicKey> {
                 .into_iter()
                 .map(|x| x.primary_to_worker)
                 .collect();
-            let message = PrimaryWorkerMessage::<PublicKey>::Cleanup(round);
+            let message = PrimaryWorkerMessage::Cleanup(round);
             self.worker_network
                 .unreliable_broadcast(addresses, &message)
                 .await;

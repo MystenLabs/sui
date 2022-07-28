@@ -25,7 +25,7 @@ use crate::{batch_loader::BatchLoader, core::Core, subscriber::Subscriber};
 use async_trait::async_trait;
 use config::{Committee, SharedCommittee};
 use consensus::{ConsensusOutput, ConsensusSyncRequest};
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use serde::de::DeserializeOwned;
 use std::{fmt::Debug, sync::Arc};
 use store::Store;
@@ -50,8 +50,6 @@ pub type SerializedTransactionDigest = u64;
 
 #[async_trait]
 pub trait ExecutionState {
-    type PubKey: VerifyingKey;
-
     /// The type of the transaction to process.
     type Transaction: DeserializeOwned + Send + Debug;
 
@@ -66,10 +64,10 @@ pub trait ExecutionState {
     /// also return a new committee to reconfigure the system.
     async fn handle_consensus_transaction(
         &self,
-        consensus_output: &ConsensusOutput<Self::PubKey>,
+        consensus_output: &ConsensusOutput,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<Committee<Self::PubKey>>), Self::Error>;
+    ) -> Result<(Self::Outcome, Option<Committee>), Self::Error>;
 
     /// Simple guardrail ensuring there is a single instance using the state
     /// to call `handle_consensus_transaction`. Many instances may read the state,
@@ -95,21 +93,20 @@ pub struct Executor;
 
 impl Executor {
     /// Spawn a new client subscriber.
-    pub async fn spawn<State, PublicKey>(
+    pub async fn spawn<State>(
         name: PublicKey,
-        committee: SharedCommittee<PublicKey>,
+        committee: SharedCommittee,
         store: Store<BatchDigest, SerializedBatchMessage>,
         execution_state: Arc<State>,
-        tx_reconfigure: &watch::Sender<ReconfigureNotification<PublicKey>>,
-        rx_consensus: Receiver<ConsensusOutput<PublicKey>>,
+        tx_reconfigure: &watch::Sender<ReconfigureNotification>,
+        rx_consensus: Receiver<ConsensusOutput>,
         tx_consensus: Sender<ConsensusSyncRequest>,
         tx_output: Sender<ExecutorOutput<State>>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
-        State: ExecutionState<PubKey = PublicKey> + Send + Sync + 'static,
+        State: ExecutionState + Send + Sync + 'static,
         State::Outcome: Send + 'static,
         State::Error: Debug,
-        PublicKey: VerifyingKey,
     {
         let (tx_batch_loader, rx_batch_loader) = channel(DEFAULT_CHANNEL_SIZE);
         let (tx_executor, rx_executor) = channel(DEFAULT_CHANNEL_SIZE);
@@ -125,7 +122,7 @@ impl Executor {
         let next_consensus_index = execution_indices.next_certificate_index;
 
         // Spawn the subscriber.
-        let subscriber_handle = Subscriber::<PublicKey>::spawn(
+        let subscriber_handle = Subscriber::spawn(
             store.clone(),
             tx_reconfigure.subscribe(),
             rx_consensus,
@@ -136,7 +133,7 @@ impl Executor {
         );
 
         // Spawn the executor's core.
-        let executor_handle = Core::<State, PublicKey>::spawn(
+        let executor_handle = Core::<State>::spawn(
             store.clone(),
             execution_state,
             tx_reconfigure.subscribe(),

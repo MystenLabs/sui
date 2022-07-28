@@ -227,7 +227,7 @@ async fn test_node_read_causal_signed_certificates() {
 
     // Make the data store.
     let primary_store_1 = NodeStorage::reopen(temp_dir());
-    let primary_store_2: NodeStorage<Ed25519PublicKey> = NodeStorage::reopen(temp_dir());
+    let primary_store_2: NodeStorage = NodeStorage::reopen(temp_dir());
 
     let mut collection_ids: Vec<CertificateDigest> = Vec::new();
 

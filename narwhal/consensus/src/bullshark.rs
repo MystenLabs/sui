@@ -6,10 +6,7 @@ use crate::{
     utils, ConsensusOutput,
 };
 use config::{Committee, Stake};
-use crypto::{
-    traits::{EncodeDecodeBase64, VerifyingKey},
-    Hash,
-};
+use crypto::{traits::EncodeDecodeBase64, Hash};
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumber, StoreResult};
@@ -18,22 +15,22 @@ use types::{Certificate, CertificateDigest, ConsensusStore, Round, SequenceNumbe
 #[path = "tests/bullshark_tests.rs"]
 pub mod bullshark_tests;
 
-pub struct Bullshark<PublicKey: VerifyingKey> {
+pub struct Bullshark {
     /// The committee information.
-    pub committee: Committee<PublicKey>,
+    pub committee: Committee,
     /// Persistent storage to safe ensure crash-recovery.
-    pub store: Arc<ConsensusStore<PublicKey>>,
+    pub store: Arc<ConsensusStore>,
     /// The depth of the garbage collector.
     pub gc_depth: Round,
 }
 
-impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Bullshark<PublicKey> {
+impl ConsensusProtocol for Bullshark {
     fn process_certificate(
         &mut self,
-        state: &mut ConsensusState<PublicKey>,
+        state: &mut ConsensusState,
         consensus_index: SequenceNumber,
-        certificate: Certificate<PublicKey>,
-    ) -> StoreResult<Vec<ConsensusOutput<PublicKey>>> {
+        certificate: Certificate,
+    ) -> StoreResult<Vec<ConsensusOutput>> {
         debug!("Processing {:?}", certificate);
         let round = certificate.round();
         let mut consensus_index = consensus_index;
@@ -127,19 +124,15 @@ impl<PublicKey: VerifyingKey> ConsensusProtocol<PublicKey> for Bullshark<PublicK
         Ok(sequence)
     }
 
-    fn update_committee(&mut self, new_committee: Committee<PublicKey>) -> StoreResult<()> {
+    fn update_committee(&mut self, new_committee: Committee) -> StoreResult<()> {
         self.committee = new_committee;
         self.store.clear()
     }
 }
 
-impl<PublicKey: VerifyingKey> Bullshark<PublicKey> {
+impl Bullshark {
     /// Create a new Bullshark consensus instance.
-    pub fn new(
-        committee: Committee<PublicKey>,
-        store: Arc<ConsensusStore<PublicKey>>,
-        gc_depth: Round,
-    ) -> Self {
+    pub fn new(committee: Committee, store: Arc<ConsensusStore>, gc_depth: Round) -> Self {
         Self {
             committee,
             store,
@@ -150,10 +143,10 @@ impl<PublicKey: VerifyingKey> Bullshark<PublicKey> {
     /// Returns the certificate (and the certificate's digest) originated by the leader of the
     /// specified round (if any).
     fn leader<'a>(
-        committee: &Committee<PublicKey>,
+        committee: &Committee,
         round: Round,
-        dag: &'a Dag<PublicKey>,
-    ) -> Option<&'a (CertificateDigest, Certificate<PublicKey>)> {
+        dag: &'a Dag,
+    ) -> Option<&'a (CertificateDigest, Certificate)> {
         #[cfg(test)]
         let seed = 0;
         #[cfg(not(test))]

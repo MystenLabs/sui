@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use config::{Authority, Committee, Epoch, PrimaryAddresses, WorkerAddresses};
 use crypto::{
-    ed25519::{Ed25519KeyPair, Ed25519PublicKey},
+    ed25519::Ed25519KeyPair,
     traits::{KeyPair, Signer},
     Digest, Hash,
 };
@@ -79,7 +79,7 @@ fn get_registry() -> Result<Registry> {
             .collect(),
     };
 
-    let certificates: Vec<Certificate<Ed25519PublicKey>> = Certificate::genesis(&committee);
+    let certificates: Vec<Certificate> = Certificate::genesis(&committee);
 
     // The values have to be "complete" in a data-centric sense, but not "correct" cryptographically.
     let mut header = Header {
@@ -104,11 +104,9 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &header)?;
     tracer.trace_value(&mut samples, &certificate)?;
 
-    let cleanup = PrimaryWorkerMessage::<Ed25519PublicKey>::Cleanup(1u64);
-    let request_batch =
-        PrimaryWorkerMessage::<Ed25519PublicKey>::RequestBatch(BatchDigest([0u8; 32]));
-    let delete_batch =
-        PrimaryWorkerMessage::<Ed25519PublicKey>::DeleteBatches(vec![BatchDigest([0u8; 32])]);
+    let cleanup = PrimaryWorkerMessage::Cleanup(1u64);
+    let request_batch = PrimaryWorkerMessage::RequestBatch(BatchDigest([0u8; 32]));
+    let delete_batch = PrimaryWorkerMessage::DeleteBatches(vec![BatchDigest([0u8; 32])]);
     let sync = PrimaryWorkerMessage::Synchronize(vec![BatchDigest([0u8; 32])], pk.clone());
     let reconfigure =
         PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewCommittee(committee));
@@ -137,7 +135,7 @@ fn get_registry() -> Result<Registry> {
     // tracer.trace_type::<PrimaryWorkerMessage<Ed25519PublicKey>>(&samples)?;
 
     // The final entry points that we must document
-    tracer.trace_type::<WorkerPrimaryMessage<Ed25519PublicKey>>(&samples)?;
+    tracer.trace_type::<WorkerPrimaryMessage>(&samples)?;
     tracer.trace_type::<WorkerPrimaryError>(&samples)?;
     tracer.registry()
 }

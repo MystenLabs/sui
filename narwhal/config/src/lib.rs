@@ -9,7 +9,7 @@
 )]
 
 use arc_swap::ArcSwap;
-use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
+use crypto::{traits::EncodeDecodeBase64, PublicKey};
 use multiaddr::Multiaddr;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
@@ -320,18 +320,17 @@ pub struct Authority {
     pub workers: HashMap<WorkerId, WorkerAddresses>,
 }
 
-pub type SharedCommittee<PK> = Arc<ArcSwap<Committee<PK>>>;
+pub type SharedCommittee = Arc<ArcSwap<Committee>>;
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
-pub struct Committee<PublicKey: VerifyingKey> {
+pub struct Committee {
     /// The authorities of epoch.
-    #[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
     pub authorities: BTreeMap<PublicKey, Authority>,
     /// The epoch number of this committee
     pub epoch: Epoch,
 }
 
-impl<PublicKey: VerifyingKey> std::fmt::Display for Committee<PublicKey> {
+impl std::fmt::Display for Committee {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
@@ -345,7 +344,7 @@ impl<PublicKey: VerifyingKey> std::fmt::Display for Committee<PublicKey> {
     }
 }
 
-impl<PublicKey: VerifyingKey> Committee<PublicKey> {
+impl Committee {
     /// Returns the number of authorities.
     pub fn epoch(&self) -> Epoch {
         self.epoch

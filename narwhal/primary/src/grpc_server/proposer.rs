@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use config::SharedCommittee;
 use consensus::dag::Dag;
-use crypto::traits::VerifyingKey;
+use crypto::{traits::ToFromBytes, PublicKey};
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 use types::{
@@ -10,16 +10,16 @@ use types::{
     RoundsResponse,
 };
 
-pub struct NarwhalProposer<PublicKey: VerifyingKey> {
+pub struct NarwhalProposer {
     /// The dag that holds the available certificates to propose
-    dag: Option<Arc<Dag<PublicKey>>>,
+    dag: Option<Arc<Dag>>,
 
     /// The committee
-    committee: SharedCommittee<PublicKey>,
+    committee: SharedCommittee,
 }
 
-impl<PublicKey: VerifyingKey> NarwhalProposer<PublicKey> {
-    pub fn new(dag: Option<Arc<Dag<PublicKey>>>, committee: SharedCommittee<PublicKey>) -> Self {
+impl NarwhalProposer {
+    pub fn new(dag: Option<Arc<Dag>>, committee: SharedCommittee) -> Self {
         Self { dag, committee }
     }
 
@@ -45,7 +45,7 @@ impl<PublicKey: VerifyingKey> NarwhalProposer<PublicKey> {
 }
 
 #[tonic::async_trait]
-impl<PublicKey: VerifyingKey> Proposer for NarwhalProposer<PublicKey> {
+impl Proposer for NarwhalProposer {
     /// Retrieves the min & max rounds that contain collections available for
     /// block proposal for the dictated validator.
     /// by the provided public key.

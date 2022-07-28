@@ -4,7 +4,6 @@
 use crate::{
     BoundedExecutor, CancelOnDropHandler, MessageResult, RetryConfig, MAX_TASK_CONCURRENCY,
 };
-use crypto::traits::VerifyingKey;
 use multiaddr::Multiaddr;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
@@ -64,10 +63,10 @@ impl PrimaryNetwork {
         PrimaryToPrimaryClient::new(channel)
     }
 
-    pub async fn send<T: VerifyingKey>(
+    pub async fn send(
         &mut self,
         address: Multiaddr,
-        message: &PrimaryMessage<T>,
+        message: &PrimaryMessage,
     ) -> CancelOnDropHandler<MessageResult> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
@@ -109,10 +108,10 @@ impl PrimaryNetwork {
         CancelOnDropHandler(handle)
     }
 
-    pub async fn broadcast<T: VerifyingKey>(
+    pub async fn broadcast(
         &mut self,
         addresses: Vec<Multiaddr>,
-        message: &PrimaryMessage<T>,
+        message: &PrimaryMessage,
     ) -> Vec<CancelOnDropHandler<MessageResult>> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
@@ -124,10 +123,10 @@ impl PrimaryNetwork {
         handlers
     }
 
-    pub async fn unreliable_send<T: VerifyingKey>(
+    pub async fn unreliable_send(
         &mut self,
         address: Multiaddr,
-        message: &PrimaryMessage<T>,
+        message: &PrimaryMessage,
     ) -> JoinHandle<()> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
@@ -143,10 +142,10 @@ impl PrimaryNetwork {
 
     /// Broadcasts a message to all `addresses` passed as an argument.
     /// The attempts to send individual messages are best effort and will not be retried.
-    pub async fn unreliable_broadcast<T: VerifyingKey>(
+    pub async fn unreliable_broadcast(
         &mut self,
         addresses: Vec<Multiaddr>,
-        message: &PrimaryMessage<T>,
+        message: &PrimaryMessage,
     ) -> Vec<JoinHandle<()>> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
@@ -170,10 +169,10 @@ impl PrimaryNetwork {
 
     /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
     /// message only to them. This is useful to pick nodes with whom to sync.
-    pub async fn lucky_broadcast<T: VerifyingKey>(
+    pub async fn lucky_broadcast(
         &mut self,
         mut addresses: Vec<Multiaddr>,
-        message: &PrimaryMessage<T>,
+        message: &PrimaryMessage,
         nodes: usize,
     ) -> Vec<JoinHandle<()>> {
         addresses.shuffle(&mut self.rng);
@@ -234,10 +233,10 @@ impl PrimaryToWorkerNetwork {
 
     /// Sends a message to an `address` passed as an argument.
     /// The attempt to send a message is best effort and will not be retried.
-    pub async fn unreliable_send<T: VerifyingKey>(
+    pub async fn unreliable_send(
         &mut self,
         address: Multiaddr,
-        message: &PrimaryWorkerMessage<T>,
+        message: &PrimaryWorkerMessage,
     ) -> JoinHandle<()> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
@@ -251,10 +250,10 @@ impl PrimaryToWorkerNetwork {
 
     /// Broadcasts a message to all `addresses` passed as an argument.
     /// The attempts to send individual messages are best effort and will not be retried.
-    pub async fn unreliable_broadcast<T: VerifyingKey>(
+    pub async fn unreliable_broadcast(
         &mut self,
         addresses: Vec<Multiaddr>,
-        message: &PrimaryWorkerMessage<T>,
+        message: &PrimaryWorkerMessage,
     ) -> Vec<JoinHandle<()>> {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");

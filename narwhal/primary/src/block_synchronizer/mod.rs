@@ -10,7 +10,7 @@ use crate::{
     utils, PayloadToken, CHANNEL_CAPACITY,
 };
 use config::{BlockSynchronizerParameters, Committee, WorkerId};
-use crypto::{traits::VerifyingKey, Hash};
+use crypto::{Hash, PublicKey};
 use futures::{
     future::{join_all, BoxFuture},
     stream::FuturesUnordered,
@@ -52,8 +52,8 @@ pub mod responses;
 const CERTIFICATE_RESPONSES_RATIO_THRESHOLD: f32 = 0.5;
 
 #[derive(Debug, Clone)]
-pub struct BlockHeader<PublicKey: VerifyingKey> {
-    pub certificate: Certificate<PublicKey>,
+pub struct BlockHeader {
+    pub certificate: Certificate,
     /// It designates whether the requested quantity (either the certificate
     /// or the payload) has been retrieved via the local storage. If true,
     /// the it used the storage. If false, then it has been fetched via
@@ -61,11 +61,11 @@ pub struct BlockHeader<PublicKey: VerifyingKey> {
     pub fetched_from_storage: bool,
 }
 
-type ResultSender<T> = Sender<BlockSynchronizeResult<BlockHeader<T>>>;
+type ResultSender = Sender<BlockSynchronizeResult<BlockHeader>>;
 pub type BlockSynchronizeResult<T> = Result<T, SyncError>;
 
 #[derive(Debug)]
-pub enum Command<PublicKey: VerifyingKey> {
+pub enum Command {
     #[allow(dead_code)]
     /// A request to synchronize and output the block headers
     /// This will not perform any attempt to fetch the header's
@@ -74,7 +74,7 @@ pub enum Command<PublicKey: VerifyingKey> {
     /// consumer's responsibility.
     SynchronizeBlockHeaders {
         block_ids: Vec<CertificateDigest>,
-        respond_to: ResultSender<PublicKey>,
+        respond_to: ResultSender,
     },
     /// A request to synchronize the payload (batches) of the
     /// provided certificates. The certificates are needed in
@@ -90,27 +90,28 @@ pub enum Command<PublicKey: VerifyingKey> {
     //  consumer's responsibility.
     #[allow(dead_code)]
     SynchronizeBlockPayload {
-        certificates: Vec<Certificate<PublicKey>>,
-        respond_to: ResultSender<PublicKey>,
+        certificates: Vec<Certificate>,
+        respond_to: ResultSender,
     },
 }
 
 // Those states are used for internal purposes only for the component.
 // We are implementing a very very naive state machine and go get from
 // one state to the other those commands are being used.
-enum State<PublicKey: VerifyingKey> {
+#[allow(clippy::large_enum_variant)]
+enum State {
     HeadersSynchronized {
         request_id: RequestID,
-        certificates: HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader<PublicKey>>>,
+        certificates: HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader>>,
     },
     PayloadAvailabilityReceived {
         request_id: RequestID,
-        certificates: HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader<PublicKey>>>,
-        peers: Peers<PublicKey, Certificate<PublicKey>>,
+        certificates: HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader>>,
+        peers: Peers<PublicKey, Certificate>,
     },
     PayloadSynchronized {
         request_id: RequestID,
-        result: BlockSynchronizeResult<BlockHeader<PublicKey>>,
+        result: BlockSynchronizeResult<BlockHeader>,
     },
 }
 
@@ -147,42 +148,42 @@ impl PendingIdentifier {
     }
 }
 
-pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
+pub struct BlockSynchronizer {
     /// The public key of this primary.
     name: PublicKey,
 
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
 
     /// Receive the commands for the synchronizer
-    rx_commands: Receiver<Command<PublicKey>>,
+    rx_commands: Receiver<Command>,
 
     /// Receive the requested list of certificates through this channel
-    rx_certificate_responses: Receiver<CertificatesResponse<PublicKey>>,
+    rx_certificate_responses: Receiver<CertificatesResponse>,
 
     /// Receive the availability for the requested certificates through this
     /// channel
-    rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse<PublicKey>>,
+    rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse>,
 
     /// Pending block requests either for header or payload type
-    pending_requests: HashMap<PendingIdentifier, Vec<ResultSender<PublicKey>>>,
+    pending_requests: HashMap<PendingIdentifier, Vec<ResultSender>>,
 
     /// Requests managers
-    map_certificate_responses_senders: HashMap<RequestID, Sender<CertificatesResponse<PublicKey>>>,
+    map_certificate_responses_senders: HashMap<RequestID, Sender<CertificatesResponse>>,
 
     /// Holds the senders to match a batch_availability responses
     map_payload_availability_responses_senders:
-        HashMap<RequestID, Sender<PayloadAvailabilityResponse<PublicKey>>>,
+        HashMap<RequestID, Sender<PayloadAvailabilityResponse>>,
 
     /// Send network requests
     primary_network: PrimaryNetwork,
     worker_network: PrimaryToWorkerNetwork,
 
     /// The store that holds the certificates
-    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate>,
 
     /// The persistent storage for payload markers from workers
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -197,17 +198,17 @@ pub struct BlockSynchronizer<PublicKey: VerifyingKey> {
     payload_availability_timeout: Duration,
 }
 
-impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
+impl BlockSynchronizer {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_commands: Receiver<Command<PublicKey>>,
-        rx_certificate_responses: Receiver<CertificatesResponse<PublicKey>>,
-        rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse<PublicKey>>,
+        committee: Committee,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_commands: Receiver<Command>,
+        rx_certificate_responses: Receiver<CertificatesResponse>,
+        rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse>,
         network: PrimaryNetwork,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        certificate_store: Store<CertificateDigest, Certificate>,
         parameters: BlockSynchronizerParameters,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -322,7 +323,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn notify_requestors_for_result(
         &mut self,
         request: PendingIdentifier,
-        result: BlockSynchronizeResult<BlockHeader<PublicKey>>,
+        result: BlockSynchronizeResult<BlockHeader>,
     ) {
         // remove the senders & broadcast result
         if let Some(respond_to) = self.pending_requests.remove(&request) {
@@ -341,7 +342,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     fn resolve_pending_request(
         &mut self,
         identifier: PendingIdentifier,
-        respond_to: ResultSender<PublicKey>,
+        respond_to: ResultSender,
     ) -> bool {
         // add our self anyways to a pending request, as we don't expect to
         // fail down the line of this method (unless crash)
@@ -362,9 +363,9 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     #[instrument(level="debug", skip_all, fields(num_certificates = certificates.len()))]
     async fn handle_synchronize_block_payload_command<'a>(
         &mut self,
-        certificates: Vec<Certificate<PublicKey>>,
-        respond_to: ResultSender<PublicKey>,
-    ) -> Option<BoxFuture<'a, State<PublicKey>>> {
+        certificates: Vec<Certificate>,
+        respond_to: ResultSender,
+    ) -> Option<BoxFuture<'a, State>> {
         let mut certificates_to_sync = Vec::new();
         let mut block_ids_to_sync = Vec::new();
 
@@ -393,7 +394,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
         let key = RequestID::from_iter(certificates_to_sync.iter());
 
-        let message = PrimaryMessage::<PublicKey>::PayloadAvailabilityRequest {
+        let message = PrimaryMessage::PayloadAvailabilityRequest {
             certificate_ids: block_ids_to_sync,
             requestor: self.name.clone(),
         };
@@ -433,8 +434,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn handle_synchronize_block_headers_command<'a>(
         &mut self,
         block_ids: Vec<CertificateDigest>,
-        respond_to: ResultSender<PublicKey>,
-    ) -> Option<BoxFuture<'a, State<PublicKey>>> {
+        respond_to: ResultSender,
+    ) -> Option<BoxFuture<'a, State>> {
         let mut to_sync = Vec::new();
 
         let missing_block_ids = self
@@ -458,7 +459,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
 
         let key = RequestID::from_iter(to_sync.iter());
 
-        let message = PrimaryMessage::<PublicKey>::CertificatesBatchRequest {
+        let message = PrimaryMessage::CertificatesBatchRequest {
             certificate_ids: to_sync.clone(),
             requestor: self.name.clone(),
         };
@@ -492,14 +493,14 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn reply_with_certificates_already_in_storage(
         &self,
         block_ids: Vec<CertificateDigest>,
-        respond_to: Sender<BlockSynchronizeResult<BlockHeader<PublicKey>>>,
+        respond_to: Sender<BlockSynchronizeResult<BlockHeader>>,
     ) -> HashSet<CertificateDigest> {
         // find the certificates that already exist in storage
         match self.certificate_store.read_all(block_ids.clone()).await {
             Ok(certificates) => {
                 let (found, missing): (
-                    Vec<(CertificateDigest, Option<Certificate<PublicKey>>)>,
-                    Vec<(CertificateDigest, Option<Certificate<PublicKey>>)>,
+                    Vec<(CertificateDigest, Option<Certificate>)>,
+                    Vec<(CertificateDigest, Option<Certificate>)>,
                 ) = block_ids
                     .into_iter()
                     .zip(certificates)
@@ -544,9 +545,9 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     #[instrument(level = "debug", skip_all)]
     async fn reply_with_payload_already_in_storage(
         &self,
-        certificates: Vec<Certificate<PublicKey>>,
-        respond_to: Sender<BlockSynchronizeResult<BlockHeader<PublicKey>>>,
-    ) -> Vec<Certificate<PublicKey>> {
+        certificates: Vec<Certificate>,
+        respond_to: Sender<BlockSynchronizeResult<BlockHeader>>,
+    ) -> Vec<Certificate> {
         let mut missing_payload_certs = Vec::new();
         let mut futures = Vec::new();
 
@@ -603,10 +604,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     // Broadcasts a message to all the other primary nodes.
     // It returns back the primary names to which we have sent the requests.
     #[instrument(level = "debug", skip_all)]
-    async fn broadcast_batch_request(
-        &mut self,
-        message: PrimaryMessage<PublicKey>,
-    ) -> Vec<PublicKey> {
+    async fn broadcast_batch_request(&mut self, message: PrimaryMessage) -> Vec<PublicKey> {
         // Naively now just broadcast the request to all the primaries
 
         let (primaries_names, primaries_addresses) = self
@@ -627,8 +625,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn handle_synchronize_block_payloads<'a>(
         &mut self,
         request_id: RequestID,
-        mut peers: Peers<PublicKey, Certificate<PublicKey>>,
-    ) -> Vec<BoxFuture<'a, State<PublicKey>>> {
+        mut peers: Peers<PublicKey, Certificate>,
+    ) -> Vec<BoxFuture<'a, State>> {
         // Important step to do that first, so we give the opportunity
         // to other future requests (with same set of ids) making a request.
         self.map_payload_availability_responses_senders
@@ -670,7 +668,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn send_synchronize_payload_requests(
         &mut self,
         primary_peer_name: PublicKey,
-        certificates: Vec<Certificate<PublicKey>>,
+        certificates: Vec<Certificate>,
     ) {
         let batches_by_worker = utils::map_certificate_batches_by_worker(certificates.as_slice());
 
@@ -698,8 +696,8 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         payload_synchronize_timeout: Duration,
         request_id: RequestID,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        certificate: Certificate<PublicKey>,
-    ) -> State<PublicKey> {
+        certificate: Certificate,
+    ) -> State {
         let futures = certificate
             .header
             .payload
@@ -735,7 +733,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     #[instrument(level = "debug", skip_all)]
     async fn handle_payload_availability_response(
         &mut self,
-        response: PayloadAvailabilityResponse<PublicKey>,
+        response: PayloadAvailabilityResponse,
     ) {
         let sender = self
             .map_payload_availability_responses_senders
@@ -756,7 +754,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     }
 
     #[instrument(level = "debug", skip_all)]
-    async fn handle_certificates_response(&mut self, response: CertificatesResponse<PublicKey>) {
+    async fn handle_certificates_response(&mut self, response: CertificatesResponse) {
         let sender = self
             .map_certificate_responses_senders
             .get(&response.request_id());
@@ -773,11 +771,11 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn wait_for_certificate_responses(
         fetch_certificates_timeout: Duration,
         request_id: RequestID,
-        committee: Committee<PublicKey>,
+        committee: Committee,
         block_ids: Vec<CertificateDigest>,
         primaries_sent_requests_to: Vec<PublicKey>,
-        mut receiver: Receiver<CertificatesResponse<PublicKey>>,
-    ) -> State<PublicKey> {
+        mut receiver: Receiver<CertificatesResponse>,
+    ) -> State {
         let total_expected_certificates = block_ids.len();
         let mut num_of_responses: u32 = 0;
         let num_of_requests_sent: u32 = primaries_sent_requests_to.len() as u32;
@@ -785,7 +783,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         let timer = sleep(fetch_certificates_timeout);
         tokio::pin!(timer);
 
-        let mut peers = Peers::<PublicKey, Certificate<PublicKey>>::new(SmallRng::from_entropy());
+        let mut peers = Peers::<PublicKey, Certificate>::new(SmallRng::from_entropy());
 
         loop {
             tokio::select! {
@@ -854,14 +852,14 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     async fn wait_for_payload_availability_responses(
         fetch_certificates_timeout: Duration,
         request_id: RequestID,
-        certificates: Vec<Certificate<PublicKey>>,
+        certificates: Vec<Certificate>,
         primaries_sent_requests_to: Vec<PublicKey>,
-        mut receiver: Receiver<PayloadAvailabilityResponse<PublicKey>>,
-    ) -> State<PublicKey> {
+        mut receiver: Receiver<PayloadAvailabilityResponse>,
+    ) -> State {
         let total_expected_block_ids = certificates.len();
         let mut num_of_responses: u32 = 0;
         let num_of_requests_sent: u32 = primaries_sent_requests_to.len() as u32;
-        let certificates_by_id: HashMap<CertificateDigest, Certificate<PublicKey>> = certificates
+        let certificates_by_id: HashMap<CertificateDigest, Certificate> = certificates
             .iter()
             .map(|c| (c.digest(), c.clone()))
             .collect();
@@ -873,7 +871,7 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
         let timer = sleep(fetch_certificates_timeout);
         tokio::pin!(timer);
 
-        let mut peers = Peers::<PublicKey, Certificate<PublicKey>>::new(SmallRng::from_entropy());
+        let mut peers = Peers::<PublicKey, Certificate>::new(SmallRng::from_entropy());
 
         loop {
             tokio::select! {
@@ -951,17 +949,17 @@ impl<PublicKey: VerifyingKey> BlockSynchronizer<PublicKey> {
     // communicate the result for each requested certificate (if found, then
     // certificate it self , or if error then the type of the error).
     fn resolve_block_synchronize_result(
-        peers: &Peers<PublicKey, Certificate<PublicKey>>,
+        peers: &Peers<PublicKey, Certificate>,
         block_ids: Vec<CertificateDigest>,
         timeout: bool,
-    ) -> HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader<PublicKey>>> {
-        let mut certificates_by_id: HashMap<CertificateDigest, Certificate<PublicKey>> = peers
+    ) -> HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader>> {
+        let mut certificates_by_id: HashMap<CertificateDigest, Certificate> = peers
             .unique_values()
             .into_iter()
             .map(|c| (c.digest(), c))
             .collect();
 
-        let mut result: HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader<PublicKey>>> =
+        let mut result: HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader>> =
             HashMap::new();
 
         for block_id in block_ids {

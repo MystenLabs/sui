@@ -21,8 +21,8 @@ use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, WorkerId};
 use consensus::dag::Dag;
 use crypto::{
-    traits::{EncodeDecodeBase64, Signer, VerifyingKey},
-    SignatureService,
+    traits::{EncodeDecodeBase64, Signer},
+    PublicKey, Signature, SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
@@ -66,20 +66,20 @@ pub struct Primary;
 impl Primary {
     const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
-    pub fn spawn<PublicKey: VerifyingKey, Signatory: Signer<PublicKey::Sig> + Send + 'static>(
+    pub fn spawn<Signatory: Signer<Signature> + Send + 'static>(
         name: PublicKey,
         signer: Signatory,
-        committee: SharedCommittee<PublicKey>,
+        committee: SharedCommittee,
         parameters: Parameters,
-        header_store: Store<HeaderDigest, Header<PublicKey>>,
-        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        header_store: Store<HeaderDigest, Header>,
+        certificate_store: Store<CertificateDigest, Certificate>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        tx_consensus: Sender<Certificate<PublicKey>>,
-        rx_consensus: Receiver<Certificate<PublicKey>>,
-        dag: Option<Arc<Dag<PublicKey>>>,
+        tx_consensus: Sender<Certificate>,
+        rx_consensus: Receiver<Certificate>,
+        dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
-        tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
-        tx_committed_certificates: Sender<Certificate<PublicKey>>,
+        tx_reconfigure: watch::Sender<ReconfigureNotification>,
+        tx_committed_certificates: Sender<Certificate>,
         registry: &Registry,
     ) -> Vec<JoinHandle<()>> {
         let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
@@ -381,17 +381,15 @@ impl Primary {
 
 /// Defines how the network receiver handles incoming primary messages.
 #[derive(Clone)]
-struct PrimaryReceiverHandler<PublicKey: VerifyingKey> {
-    tx_primary_messages: Sender<PrimaryMessage<PublicKey>>,
-    tx_helper_requests: Sender<PrimaryMessage<PublicKey>>,
-    tx_payload_availability_responses: Sender<PayloadAvailabilityResponse<PublicKey>>,
-    tx_certificate_responses: Sender<CertificatesResponse<PublicKey>>,
+struct PrimaryReceiverHandler {
+    tx_primary_messages: Sender<PrimaryMessage>,
+    tx_helper_requests: Sender<PrimaryMessage>,
+    tx_payload_availability_responses: Sender<PayloadAvailabilityResponse>,
+    tx_certificate_responses: Sender<CertificatesResponse>,
 }
 
-impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
-    async fn wait_for_shutdown(
-        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-    ) {
+impl PrimaryReceiverHandler {
+    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
         loop {
             let result = rx_reconfigure.changed().await;
             result.expect("Committee channel dropped");
@@ -406,7 +404,7 @@ impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
         self,
         address: Multiaddr,
         max_concurrent_requests: usize,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         primary_endpoint_metrics: PrimaryEndpointMetrics,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -428,12 +426,12 @@ impl<PublicKey: VerifyingKey> PrimaryReceiverHandler<PublicKey> {
 }
 
 #[async_trait]
-impl<PublicKey: VerifyingKey> PrimaryToPrimary for PrimaryReceiverHandler<PublicKey> {
+impl PrimaryToPrimary for PrimaryReceiverHandler {
     async fn send_message(
         &self,
         request: Request<BincodeEncodedPayload>,
     ) -> Result<Response<Empty>, Status> {
-        let message: PrimaryMessage<PublicKey> = request
+        let message: PrimaryMessage = request
             .into_inner()
             .deserialize()
             .map_err(|e| Status::invalid_argument(e.to_string()))?;
@@ -487,19 +485,17 @@ impl<PublicKey: VerifyingKey> PrimaryToPrimary for PrimaryReceiverHandler<Public
 
 /// Defines how the network receiver handles incoming workers messages.
 #[derive(Clone)]
-struct WorkerReceiverHandler<PublicKey: VerifyingKey> {
+struct WorkerReceiverHandler {
     tx_our_digests: Sender<(BatchDigest, WorkerId)>,
     tx_others_digests: Sender<(BatchDigest, WorkerId)>,
     tx_batches: Sender<BatchResult>,
     tx_batch_removal: Sender<DeleteBatchResult>,
-    tx_state_handler: Sender<ReconfigureNotification<PublicKey>>,
+    tx_state_handler: Sender<ReconfigureNotification>,
     metrics: Arc<PrimaryMetrics>,
 }
 
-impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
-    async fn wait_for_shutdown(
-        mut rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-    ) {
+impl WorkerReceiverHandler {
+    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
         loop {
             let result = rx_reconfigure.changed().await;
             result.expect("Committee channel dropped");
@@ -513,7 +509,7 @@ impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
     fn spawn(
         self,
         address: Multiaddr,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             tokio::select! {
@@ -532,12 +528,12 @@ impl<PublicKey: VerifyingKey> WorkerReceiverHandler<PublicKey> {
 }
 
 #[async_trait]
-impl<PublicKey: VerifyingKey> WorkerToPrimary for WorkerReceiverHandler<PublicKey> {
+impl WorkerToPrimary for WorkerReceiverHandler {
     async fn send_message(
         &self,
         request: Request<BincodeEncodedPayload>,
     ) -> Result<Response<Empty>, Status> {
-        let message: WorkerPrimaryMessage<_> = request
+        let message: WorkerPrimaryMessage = request
             .into_inner()
             .deserialize()
             .map_err(|e| Status::invalid_argument(e.to_string()))?;

@@ -3,7 +3,7 @@
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
-use crypto::{ed25519::Ed25519PublicKey, Hash};
+use crypto::Hash;
 use rand::Rng;
 use types::{serialized_batch_digest, Batch, WorkerMessage};
 
@@ -20,7 +20,7 @@ pub fn batch_digest(c: &mut Criterion) {
                 .collect::<Vec<u8>>()
         };
         let batch = Batch((0..size).map(|_| tx_gen()).collect::<Vec<_>>());
-        let message = WorkerMessage::<Ed25519PublicKey>::Batch(batch.clone());
+        let message = WorkerMessage::Batch(batch.clone());
         let serialized_batch = bincode::serialize(&message).unwrap();
 
         digest_group.throughput(Throughput::Bytes(512 * size as u64));

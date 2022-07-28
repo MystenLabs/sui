@@ -3,7 +3,7 @@
 use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage, PayloadToken};
 use bincode::Options;
 use config::WorkerId;
-use crypto::{ed25519::Ed25519PublicKey, Hash};
+use crypto::Hash;
 use itertools::Itertools;
 use std::{
     borrow::Borrow,
@@ -79,7 +79,7 @@ async fn test_process_certificates_stream_mode() {
             .await
             .unwrap()
             .unwrap();
-        let message: PrimaryMessage<Ed25519PublicKey> = received.deserialize().unwrap();
+        let message: PrimaryMessage = received.deserialize().unwrap();
         let cert = match message {
             PrimaryMessage::Certificate(certificate) => certificate,
             msg => {
@@ -161,7 +161,7 @@ async fn test_process_certificates_batch_mode() {
         .await
         .unwrap()
         .unwrap();
-    let message: PrimaryMessage<Ed25519PublicKey> = received.deserialize().unwrap();
+    let message: PrimaryMessage = received.deserialize().unwrap();
     let result_certificates = match message {
         PrimaryMessage::CertificatesBatchResponse { certificates, .. } => certificates,
         msg => {
@@ -261,7 +261,7 @@ async fn test_process_payload_availability_success() {
         .await
         .unwrap()
         .unwrap();
-    let message: PrimaryMessage<Ed25519PublicKey> = received.deserialize().unwrap();
+    let message: PrimaryMessage = received.deserialize().unwrap();
     let payload_availability = match message {
         PrimaryMessage::PayloadAvailabilityResponse {
             payload_availability,
@@ -305,11 +305,10 @@ async fn test_process_payload_availability_when_failures() {
         .expect("Failed creating database");
 
     let (certificate_map, payload_map) = reopen!(&rocksdb,
-        CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>,
+        CERTIFICATES_CF;<CertificateDigest, Certificate>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
-    let certificate_store: Store<CertificateDigest, Certificate<Ed25519PublicKey>> =
-        Store::new(certificate_map);
+    let certificate_store: Store<CertificateDigest, Certificate> = Store::new(certificate_map);
     let payload_store: Store<(types::BatchDigest, WorkerId), PayloadToken> =
         Store::new(payload_map);
 
@@ -383,7 +382,7 @@ async fn test_process_payload_availability_when_failures() {
         .await
         .unwrap()
         .unwrap();
-    let message: PrimaryMessage<Ed25519PublicKey> = received.deserialize().unwrap();
+    let message: PrimaryMessage = received.deserialize().unwrap();
     let payload_availability = match message {
         PrimaryMessage::PayloadAvailabilityResponse {
             payload_availability,

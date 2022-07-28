@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{CertificateDigest, Round};
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use std::{collections::HashMap, ops::RangeInclusive};
 use store::{
     rocks::{DBMap, TypedStoreError},
@@ -19,14 +19,14 @@ pub type ShutdownToken = mpsc::Sender<()>;
 pub type StoreResult<T> = Result<T, TypedStoreError>;
 
 /// The persistent storage of the sequencer.
-pub struct ConsensusStore<PublicKey: VerifyingKey> {
+pub struct ConsensusStore {
     /// The latest committed round of each validator.
     last_committed: DBMap<PublicKey, Round>,
     /// The global consensus sequence.
     sequence: DBMap<SequenceNumber, CertificateDigest>,
 }
 
-impl<PublicKey: VerifyingKey> ConsensusStore<PublicKey> {
+impl ConsensusStore {
     /// Create a new consensus store structure by using already loaded maps.
     pub fn new(
         last_committed: DBMap<PublicKey, Round>,

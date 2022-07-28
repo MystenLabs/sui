@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ConsensusOutput, ConsensusSyncRequest};
-use crypto::traits::VerifyingKey;
 use std::sync::Arc;
 use tokio::{
     sync::{
@@ -18,33 +17,33 @@ use types::{Certificate, CertificateDigest, ConsensusStore, ReconfigureNotificat
 pub mod subscriber_tests;
 
 /// Convenience alias indicating the persistent storage holding certificates.
-type CertificateStore<PublicKey> = store::Store<CertificateDigest, Certificate<PublicKey>>;
+type CertificateStore = store::Store<CertificateDigest, Certificate>;
 
 /// Pushes the consensus output to subscriber clients and helps them to remain up to date.
-pub struct SubscriberHandler<PublicKey: VerifyingKey> {
+pub struct SubscriberHandler {
     // The persistent store holding the consensus state.
-    consensus_store: Arc<ConsensusStore<PublicKey>>,
+    consensus_store: Arc<ConsensusStore>,
     // The persistent store holding the certificates.
-    certificate_store: CertificateStore<PublicKey>,
+    certificate_store: CertificateStore,
     /// Receive reconfiguration update.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     // Channel to receive the output of consensus.
-    rx_sequence: Receiver<ConsensusOutput<PublicKey>>,
+    rx_sequence: Receiver<ConsensusOutput>,
     /// Channel to receive sync requests from the client.
     rx_client: Receiver<ConsensusSyncRequest>,
     /// Channel to send new consensus outputs to the client.
-    tx_client: Sender<ConsensusOutput<PublicKey>>,
+    tx_client: Sender<ConsensusOutput>,
 }
 
-impl<PublicKey: VerifyingKey> SubscriberHandler<PublicKey> {
+impl SubscriberHandler {
     /// Spawn a new subscriber handler in a dedicated tokio task.
     pub fn spawn(
-        consensus_store: Arc<ConsensusStore<PublicKey>>,
-        certificate_store: CertificateStore<PublicKey>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_sequence: Receiver<ConsensusOutput<PublicKey>>,
+        consensus_store: Arc<ConsensusStore>,
+        certificate_store: CertificateStore,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_sequence: Receiver<ConsensusOutput>,
         rx_client: Receiver<ConsensusSyncRequest>,
-        tx_client: Sender<ConsensusOutput<PublicKey>>,
+        tx_client: Sender<ConsensusOutput>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {

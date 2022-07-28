@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::handler::Handler;
 use config::Committee;
-use crypto::{traits::VerifyingKey, Digest, Hash};
+use crypto::{Digest, Hash, PublicKey};
 use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -133,17 +133,17 @@ type RequestKey = Vec<u8>;
 /// struct BlockSynchronizerHandler;
 ///
 /// #[async_trait]
-/// impl<PublicKey: VerifyingKey> Handler<PublicKey> for BlockSynchronizerHandler {
+/// impl Handler for BlockSynchronizerHandler {
 ///
-///     async fn get_and_synchronize_block_headers(&self, block_ids: Vec<CertificateDigest>) -> Vec<Result<Certificate<PublicKey>, Error>> {
+///     async fn get_and_synchronize_block_headers(&self, block_ids: Vec<CertificateDigest>) -> Vec<Result<Certificate, Error>> {
 ///         vec![]
 ///     }
 ///
-///     async fn get_block_headers(&self, block_ids: Vec<CertificateDigest>) -> Vec<BlockSynchronizeResult<BlockHeader<PublicKey>>> {
+///     async fn get_block_headers(&self, block_ids: Vec<CertificateDigest>) -> Vec<BlockSynchronizeResult<BlockHeader>> {
 ///         vec![]
 ///     }
 ///
-///     async fn synchronize_block_payloads(&self, certificates: Vec<Certificate<PublicKey>>) -> Vec<Result<Certificate<PublicKey>, Error>> {
+///     async fn synchronize_block_payloads(&self, certificates: Vec<Certificate>) -> Vec<Result<Certificate, Error>> {
 ///         vec![]
 ///     }
 ///
@@ -160,7 +160,7 @@ type RequestKey = Vec<u8>;
 ///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
 ///
 ///     // A dummy certificate
-///     let certificate = Certificate::<Ed25519PublicKey>::default();
+///     let certificate = Certificate::default();
 ///
 ///     // Dummy - we expect the BlockSynchronizer to actually respond, here
 ///     // we are using a mock
@@ -196,15 +196,12 @@ type RequestKey = Vec<u8>;
 ///     }
 /// # }
 /// ```
-pub struct BlockWaiter<
-    PublicKey: VerifyingKey,
-    SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static,
-> {
+pub struct BlockWaiter<SynchronizerHandler: Handler + Send + Sync + 'static> {
     /// The public key of this primary.
     name: PublicKey,
 
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
 
     /// Receive all the requests to get a block
     rx_commands: Receiver<BlockCommand>,
@@ -214,13 +211,13 @@ pub struct BlockWaiter<
     /// we have a result back - or timeout - we expect to remove
     /// the digest from the map. The key is the block id, and
     /// the value is the corresponding certificate.
-    pending_get_block: HashMap<CertificateDigest, Certificate<PublicKey>>,
+    pending_get_block: HashMap<CertificateDigest, Certificate>,
 
     /// Network driver allowing to send messages.
     worker_network: PrimaryToWorkerNetwork,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
 
     /// The batch receive channel is listening for received
     /// messages for batches that have been requested
@@ -247,15 +244,13 @@ pub struct BlockWaiter<
     block_synchronizer_handler: Arc<SynchronizerHandler>,
 }
 
-impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + Sync + 'static>
-    BlockWaiter<PublicKey, SynchronizerHandler>
-{
+impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<SynchronizerHandler> {
     // Create a new waiter and start listening on incoming
     // commands to fetch a block
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+        committee: Committee,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_commands: Receiver<BlockCommand>,
         batch_receiver: Receiver<BatchResult>,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
@@ -409,7 +404,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
 
     /// Helper method to retrieve a single certificate.
     #[instrument(level = "debug", skip_all, fields(certificate_id = ?id))]
-    async fn get_certificate(&mut self, id: CertificateDigest) -> Option<Certificate<PublicKey>> {
+    async fn get_certificate(&mut self, id: CertificateDigest) -> Option<Certificate> {
         if let Some((_, c)) = self.get_certificates(vec![id]).await.first() {
             return c.to_owned();
         }
@@ -425,7 +420,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     async fn get_certificates(
         &mut self,
         ids: Vec<CertificateDigest>,
-    ) -> Vec<(CertificateDigest, Option<Certificate<PublicKey>>)> {
+    ) -> Vec<(CertificateDigest, Option<Certificate>)> {
         let mut results = Vec::new();
 
         let block_header_results = self
@@ -452,7 +447,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     /// will immediately be sent to the consumer.
     async fn get_blocks<'a>(
         &mut self,
-        certificates: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)>,
+        certificates: Vec<(CertificateDigest, Option<Certificate>)>,
     ) -> (
         Vec<BoxFuture<'a, BlockResult<GetBlockResponse>>>,
         BoxFuture<'a, BlocksResult>,
@@ -462,7 +457,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
         let mut ids = Vec::new();
 
         // ensure payloads are synchronized for the found certificates
-        let found_certificates: Vec<Certificate<PublicKey>> = certificates
+        let found_certificates: Vec<Certificate> = certificates
             .clone()
             .into_iter()
             .filter(|(_, c)| c.is_some())
@@ -569,7 +564,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     async fn get_block<'a>(
         &mut self,
         id: CertificateDigest,
-        certificate: Certificate<PublicKey>,
+        certificate: Certificate,
         sender: oneshot::Sender<BlockResult<GetBlockResponse>>,
     ) -> Option<BoxFuture<'a, BlockResult<GetBlockResponse>>> {
         // If similar request is already under processing, don't start a new one
@@ -612,7 +607,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     /// `true`: If the payload was already synchronized or the synchronization
     /// was successful
     /// `false`: When synchronization failed
-    async fn ensure_payload_is_synchronized(&self, certificate: Certificate<PublicKey>) -> bool {
+    async fn ensure_payload_is_synchronized(&self, certificate: Certificate) -> bool {
         let sync_result = self
             .block_synchronizer_handler
             .synchronize_block_payloads(vec![certificate.clone()])
@@ -686,7 +681,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
     // channel of the fetched batch.
     async fn send_batch_requests(
         &mut self,
-        header: Header<PublicKey>,
+        header: Header,
     ) -> Vec<(BatchDigest, oneshot::Receiver<BatchResult>)> {
         // Get the "now" time
         let now = SystemTime::now()
@@ -711,7 +706,7 @@ impl<PublicKey: VerifyingKey, SynchronizerHandler: Handler<PublicKey> + Send + S
                 .expect("Worker id not found")
                 .primary_to_worker;
 
-            let message = PrimaryWorkerMessage::<PublicKey>::RequestBatch(digest);
+            let message = PrimaryWorkerMessage::RequestBatch(digest);
 
             self.worker_network
                 .unreliable_send(worker_address, &message)

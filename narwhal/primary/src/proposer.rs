@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
-use crypto::{traits::VerifyingKey, Digest, Hash as _, SignatureService};
+use crypto::{Digest, Hash as _, PublicKey, Signature, SignatureService};
 use std::{cmp::Ordering, sync::Arc};
 use tokio::{
     sync::{
@@ -24,13 +24,13 @@ use types::{
 pub mod proposer_tests;
 
 /// The proposer creates new headers and send them to the core for broadcasting and further processing.
-pub struct Proposer<PublicKey: VerifyingKey> {
+pub struct Proposer {
     /// The public key of this primary.
     name: PublicKey,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
     /// Service to sign headers.
-    signature_service: SignatureService<PublicKey::Sig>,
+    signature_service: SignatureService<Signature>,
     /// The size of the headers' payload.
     header_size: usize,
     /// The maximum delay to wait for batches' digests.
@@ -39,20 +39,20 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     network_model: NetworkModel,
 
     /// Watch channel to reconfigure the committee.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives the parents to include in the next header (along with their round number).
-    rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
+    rx_core: Receiver<(Vec<Certificate>, Round, Epoch)>,
     /// Receives the batches' digests from our workers.
     rx_workers: Receiver<(BatchDigest, WorkerId)>,
     /// Sends newly created headers to the `Core`.
-    tx_core: Sender<Header<PublicKey>>,
+    tx_core: Sender<Header>,
 
     /// The current round of the dag.
     round: Round,
     /// Holds the certificates' ids waiting to be included in the next header.
-    last_parents: Vec<Certificate<PublicKey>>,
+    last_parents: Vec<Certificate>,
     /// Holds the certificate of the last leader (if any).
-    last_leader: Option<Certificate<PublicKey>>,
+    last_leader: Option<Certificate>,
     /// Holds the batches' digests waiting to be included in the next header.
     digests: Vec<(BatchDigest, WorkerId)>,
     /// Keeps track of the size (in bytes) of batches' digests that we received so far.
@@ -61,19 +61,19 @@ pub struct Proposer<PublicKey: VerifyingKey> {
     metrics: Arc<PrimaryMetrics>,
 }
 
-impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
+impl Proposer {
     #[allow(clippy::too_many_arguments)]
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
-        signature_service: SignatureService<PublicKey::Sig>,
+        committee: Committee,
+        signature_service: SignatureService<Signature>,
         header_size: usize,
         max_header_delay: Duration,
         network_model: NetworkModel,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_core: Receiver<(Vec<Certificate<PublicKey>>, Round, Epoch)>,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_core: Receiver<(Vec<Certificate>, Round, Epoch)>,
         rx_workers: Receiver<(BatchDigest, WorkerId)>,
-        tx_core: Sender<Header<PublicKey>>,
+        tx_core: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
     ) -> JoinHandle<()> {
         let genesis = Certificate::genesis(&committee);
@@ -128,7 +128,7 @@ impl<PublicKey: VerifyingKey> Proposer<PublicKey> {
     }
 
     /// Update the committee and cleanup internal state.
-    fn update_committee(&mut self, committee: Committee<PublicKey>) {
+    fn update_committee(&mut self, committee: Committee) {
         self.committee = committee;
         self.round = 0;
         self.last_parents = Certificate::genesis(&self.committee);

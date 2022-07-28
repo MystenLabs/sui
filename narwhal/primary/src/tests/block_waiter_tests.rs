@@ -8,7 +8,7 @@ use crate::{
     BlockCommand, BlockWaiter, PrimaryWorkerMessage,
 };
 use bincode::deserialize;
-use crypto::{ed25519::Ed25519PublicKey, traits::VerifyingKey, Hash};
+use crypto::Hash;
 use mockall::*;
 use network::PrimaryToWorkerNetwork;
 use std::{collections::HashMap, sync::Arc};
@@ -64,14 +64,14 @@ async fn test_successfully_retrieve_block() {
         .unwrap()
         .primary_to_worker;
 
-    let handle = worker_listener::<Ed25519PublicKey>(
+    let handle = worker_listener(
         worker_address,
         expected_batch_messages.clone(),
         tx_batch_messages,
     );
 
     // AND mock the response from the block synchronizer
-    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
@@ -222,21 +222,21 @@ async fn test_successfully_retrieve_multiple_blocks() {
         .unwrap()
         .primary_to_worker;
 
-    let handle = worker_listener::<Ed25519PublicKey>(
+    let handle = worker_listener(
         worker_address,
         expected_batch_messages.clone(),
         tx_batch_messages,
     );
 
     // AND mock the responses from the BlockSynchronizer
-    let mut expected_result: Vec<Result<Certificate<Ed25519PublicKey>, handler::Error>> =
+    let mut expected_result: Vec<Result<Certificate, handler::Error>> =
         certificates.clone().into_iter().map(Ok).collect();
 
     expected_result.push(Err(handler::Error::BlockNotFound {
         block_id: missing_block_id,
     }));
 
-    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(block_ids.clone()))
@@ -311,7 +311,7 @@ async fn test_one_pending_request_for_block_at_time() {
     };
 
     // AND mock the responses from the BlockSynchronizer
-    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
@@ -384,7 +384,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
     let (_, rx_batch_messages) = channel(1);
 
     // AND mock the responses of the BlockSynchronizer
-    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
@@ -454,7 +454,7 @@ async fn test_batch_timeout() {
     let (_, rx_batch_messages) = channel(10);
 
     // AND mock the responses of the BlockSynchronizer
-    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
@@ -510,7 +510,7 @@ async fn test_return_error_when_certificate_is_missing() {
     let (name, committee) = resolve_name_and_committee();
 
     // AND create a certificate but don't store it
-    let certificate = Certificate::<Ed25519PublicKey>::default();
+    let certificate = Certificate::default();
     let block_id = certificate.digest();
 
     // AND spawn a new blocks waiter
@@ -521,7 +521,7 @@ async fn test_return_error_when_certificate_is_missing() {
     let (_, rx_batch_messages) = channel(10);
 
     // AND mock the responses of the BlockSynchronizer
-    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
@@ -571,7 +571,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     let (name, committee) = resolve_name_and_committee();
 
     // AND create a certificate but don't store it
-    let certificate = Certificate::<Ed25519PublicKey>::default();
+    let certificate = Certificate::default();
     let block_id = certificate.digest();
 
     // AND spawn a new blocks waiter
@@ -582,7 +582,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     let (_, rx_batch_messages) = channel(10);
 
     // AND mock the responses of the BlockSynchronizer
-    let mut mock_handler = MockHandler::<Ed25519PublicKey>::new();
+    let mut mock_handler = MockHandler::new();
     mock_handler
         .expect_get_and_synchronize_block_headers()
         .with(predicate::eq(vec![block_id]))
@@ -636,7 +636,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
 
 // worker_listener listens to TCP requests. The worker responds to the
 // RequestBatch requests for the provided expected_batches.
-pub fn worker_listener<PublicKey: VerifyingKey>(
+pub fn worker_listener(
     address: multiaddr::Multiaddr,
     expected_batches: HashMap<BatchDigest, BatchMessage>,
     tx_batch_messages: Sender<BatchResult>,
@@ -650,7 +650,7 @@ pub fn worker_listener<PublicKey: VerifyingKey>(
                 .await
                 .expect("Failed to receive network message");
             match deserialize(&message.payload) {
-                Ok(PrimaryWorkerMessage::<PublicKey>::RequestBatch(id)) => {
+                Ok(PrimaryWorkerMessage::RequestBatch(id)) => {
                     if expected_batches.contains_key(&id) {
                         tx_batch_messages
                             .send(Ok(expected_batches.get(&id).cloned().unwrap()))

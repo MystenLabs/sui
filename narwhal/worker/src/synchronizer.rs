@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::WorkerMetrics;
 use config::{SharedCommittee, WorkerId};
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::WorkerNetwork;
 use primary::PrimaryWorkerMessage;
@@ -35,13 +35,13 @@ pub mod synchronizer_tests;
 const TIMER_RESOLUTION: u64 = 1_000;
 
 // The `Synchronizer` is responsible to keep the worker in sync with the others.
-pub struct Synchronizer<PublicKey: VerifyingKey> {
+pub struct Synchronizer {
     /// The public key of this authority.
     name: PublicKey,
     /// The id of this worker.
     id: WorkerId,
     /// The committee information.
-    committee: SharedCommittee<PublicKey>,
+    committee: SharedCommittee,
     // The persistent storage.
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// The depth of the garbage collection.
@@ -52,7 +52,7 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// are picked at random from the committee.
     sync_retry_nodes: usize,
     /// Input channel to receive the commands from the primary.
-    rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
+    rx_message: Receiver<PrimaryWorkerMessage>,
     /// A network sender to send requests to the other workers.
     network: WorkerNetwork,
     /// Loosely keep track of the primary's round number (only used for cleanup).
@@ -62,25 +62,25 @@ pub struct Synchronizer<PublicKey: VerifyingKey> {
     /// It also keeps the round number and a time stamp (`u128`) of each request we sent.
     pending: HashMap<BatchDigest, (Round, Sender<()>, u128)>,
     /// Send reconfiguration update to other tasks.
-    tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
+    tx_reconfigure: watch::Sender<ReconfigureNotification>,
     /// Output channel to send out the batch requests.
-    tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
+    tx_primary: Sender<WorkerPrimaryMessage>,
     /// Metrics handler
     metrics: Arc<WorkerMetrics>,
 }
 
-impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
+impl Synchronizer {
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,
-        committee: SharedCommittee<PublicKey>,
+        committee: SharedCommittee,
         store: Store<BatchDigest, SerializedBatchMessage>,
         gc_depth: Round,
         sync_retry_delay: Duration,
         sync_retry_nodes: usize,
-        rx_message: Receiver<PrimaryWorkerMessage<PublicKey>>,
-        tx_reconfigure: watch::Sender<ReconfigureNotification<PublicKey>>,
-        tx_primary: Sender<WorkerPrimaryMessage<PublicKey>>,
+        rx_message: Receiver<PrimaryWorkerMessage>,
+        tx_reconfigure: watch::Sender<ReconfigureNotification>,
+        tx_primary: Sender<WorkerPrimaryMessage>,
         metrics: Arc<WorkerMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -292,7 +292,7 @@ impl<PublicKey: VerifyingKey> Synchronizer<PublicKey> {
         let message = match self.store.read(digest).await {
             Ok(Some(batch_serialised)) => {
                 let batch = match bincode::deserialize(&batch_serialised).unwrap() {
-                    WorkerMessage::<PublicKey>::Batch(batch) => batch,
+                    WorkerMessage::Batch(batch) => batch,
                     _ => {
                         panic!("Wrong type has been stored!");
                     }

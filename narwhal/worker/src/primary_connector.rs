@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::Committee;
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
 use network::WorkerToPrimaryNetwork;
 use tokio::{
@@ -15,25 +15,25 @@ use types::{ReconfigureNotification, WorkerPrimaryMessage};
 pub const MAX_PENDING_DIGESTS: usize = 10_000;
 
 // Send batches' digests to the primary.
-pub struct PrimaryConnector<PublicKey: VerifyingKey> {
+pub struct PrimaryConnector {
     /// The public key of this authority.
     name: PublicKey,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
     /// Receive reconfiguration updates.
-    rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input channel to receive the messages to send to the primary.
-    rx_digest: Receiver<WorkerPrimaryMessage<PublicKey>>,
+    rx_digest: Receiver<WorkerPrimaryMessage>,
     /// A network sender to send the batches' digests to the primary.
     primary_client: WorkerToPrimaryNetwork,
 }
 
-impl<PublicKey: VerifyingKey> PrimaryConnector<PublicKey> {
+impl PrimaryConnector {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_digest: Receiver<WorkerPrimaryMessage<PublicKey>>,
+        committee: Committee,
+        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        rx_digest: Receiver<WorkerPrimaryMessage>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {

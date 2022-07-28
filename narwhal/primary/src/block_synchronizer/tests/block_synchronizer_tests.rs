@@ -11,7 +11,7 @@ use crate::{
 };
 use bincode::deserialize;
 use config::BlockSynchronizerParameters;
-use crypto::{ed25519::Ed25519PublicKey, Hash};
+use crypto::Hash;
 use futures::{future::try_join_all, stream::FuturesUnordered};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use serde::de::DeserializeOwned;
@@ -49,8 +49,7 @@ async fn test_successful_headers_synchronization() {
     let (_, rx_payload_availability_responses) = channel(10);
 
     // AND some blocks (certificates)
-    let mut certificates: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
-        HashMap::new();
+    let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
 
     let key = keys(None).pop().unwrap();
     let worker_id_0 = 0;
@@ -91,12 +90,12 @@ async fn test_successful_headers_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage<Ed25519PublicKey>>>> = committee
+    let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = committee
         .others_primaries(&name)
         .into_iter()
         .map(|primary| {
             println!("New primary added: {:?}", primary.1.primary_to_primary);
-            primary_listener::<PrimaryMessage<Ed25519PublicKey>>(1, primary.1.primary_to_primary)
+            primary_listener::<PrimaryMessage>(1, primary.1.primary_to_primary)
         })
         .collect();
 
@@ -125,21 +124,19 @@ async fn test_successful_headers_synchronization() {
                     certificate_ids,
                     requestor,
                 } => {
-                    let response_certificates: Vec<(
-                        CertificateDigest,
-                        Option<Certificate<Ed25519PublicKey>>,
-                    )> = certificate_ids
-                        .iter()
-                        .map(|id| {
-                            if let Some(certificate) = certificates.get(id) {
-                                (*id, Some(certificate.clone()))
-                            } else {
-                                panic!(
+                    let response_certificates: Vec<(CertificateDigest, Option<Certificate>)> =
+                        certificate_ids
+                            .iter()
+                            .map(|id| {
+                                if let Some(certificate) = certificates.get(id) {
+                                    (*id, Some(certificate.clone()))
+                                } else {
+                                    panic!(
                                     "Received certificate with id {id} not amongst the expected"
                                 );
-                            }
-                        })
-                        .collect();
+                                }
+                            })
+                            .collect();
 
                     debug!("{:?}", requestor);
 
@@ -208,8 +205,7 @@ async fn test_successful_payload_synchronization() {
     let (tx_payload_availability_responses, rx_payload_availability_responses) = channel(10);
 
     // AND some blocks (certificates)
-    let mut certificates: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
-        HashMap::new();
+    let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
 
     let key = keys(None).pop().unwrap();
     let worker_id_0: u32 = 0;
@@ -250,18 +246,14 @@ async fn test_successful_payload_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let handlers_primaries: FuturesUnordered<JoinHandle<Vec<PrimaryMessage<Ed25519PublicKey>>>> =
-        committee
-            .others_primaries(&name)
-            .into_iter()
-            .map(|primary| {
-                println!("New primary added: {:?}", primary.1.primary_to_primary);
-                primary_listener::<PrimaryMessage<Ed25519PublicKey>>(
-                    1,
-                    primary.1.primary_to_primary,
-                )
-            })
-            .collect();
+    let handlers_primaries: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = committee
+        .others_primaries(&name)
+        .into_iter()
+        .map(|primary| {
+            println!("New primary added: {:?}", primary.1.primary_to_primary);
+            primary_listener::<PrimaryMessage>(1, primary.1.primary_to_primary)
+        })
+        .collect();
 
     // AND spin up the corresponding worker nodes
     let mut workers = vec![
@@ -269,16 +261,11 @@ async fn test_successful_payload_synchronization() {
         (worker_id_1, committee.worker(&name, &worker_id_1).unwrap()),
     ];
 
-    let handlers_workers: FuturesUnordered<
-        JoinHandle<Vec<PrimaryWorkerMessage<Ed25519PublicKey>>>,
-    > = workers
+    let handlers_workers: FuturesUnordered<JoinHandle<Vec<PrimaryWorkerMessage>>> = workers
         .iter()
         .map(|worker| {
             println!("New worker added: {:?}", worker.1.primary_to_worker);
-            worker_listener::<PrimaryWorkerMessage<Ed25519PublicKey>>(
-                -1,
-                worker.1.primary_to_worker.clone(),
-            )
+            worker_listener::<PrimaryWorkerMessage>(-1, worker.1.primary_to_worker.clone())
         })
         .collect();
 
@@ -408,8 +395,7 @@ async fn test_multiple_overlapping_requests() {
     let (_, rx_payload_availability_responses) = channel(10);
 
     // AND some blocks (certificates)
-    let mut certificates: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
-        HashMap::new();
+    let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
 
     let key = keys(None).pop().unwrap();
 
@@ -637,8 +623,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         payload_availability_timeout: Default::default(),
     };
 
-    let mut certificates: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
-        HashMap::new();
+    let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
     let mut block_ids = Vec::new();
     const NUM_OF_MISSING_CERTIFICATES: u32 = 5;
 
@@ -732,8 +717,7 @@ async fn test_reply_with_payload_already_in_storage() {
         payload_availability_timeout: Default::default(),
     };
 
-    let mut certificates_map: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
-        HashMap::new();
+    let mut certificates_map: HashMap<CertificateDigest, Certificate> = HashMap::new();
     let mut certificates = Vec::new();
     const NUM_OF_CERTIFICATES_WITH_MISSING_PAYLOAD: u32 = 5;
 
@@ -746,7 +730,7 @@ async fn test_reply_with_payload_already_in_storage() {
             .build(&key)
             .unwrap();
 
-        let certificate: Certificate<Ed25519PublicKey> = certificate(&header);
+        let certificate: Certificate = certificate(&header);
 
         certificates.push(certificate.clone());
         certificates_map.insert(certificate.clone().digest(), certificate.clone());
@@ -835,15 +819,14 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         payload_availability_timeout: Default::default(),
     };
 
-    let mut certificates_map: HashMap<CertificateDigest, Certificate<Ed25519PublicKey>> =
-        HashMap::new();
+    let mut certificates_map: HashMap<CertificateDigest, Certificate> = HashMap::new();
     let mut certificates = Vec::new();
 
     // AND storing some certificates
     for _ in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let builder = types::HeaderBuilder::<Ed25519PublicKey>::default();
+        let builder = types::HeaderBuilder::default();
         let header = builder
             .author(name.clone())
             .round(1)
@@ -858,7 +841,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
             .build(&key)
             .unwrap();
 
-        let certificate: Certificate<Ed25519PublicKey> = certificate(&header);
+        let certificate: Certificate = certificate(&header);
 
         certificates.push(certificate.clone());
         certificates_map.insert(certificate.clone().digest(), certificate.clone());

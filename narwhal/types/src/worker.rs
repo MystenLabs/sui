@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use blake2::digest::Update;
-use crypto::traits::VerifyingKey;
+use crypto::PublicKey;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -10,8 +10,7 @@ use crate::{Batch, BatchDigest};
 
 /// The message exchanged between workers.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
-pub enum WorkerMessage<PublicKey: VerifyingKey> {
+pub enum WorkerMessage {
     /// Used by workers to send a new batch or to reply to a batch request.
     Batch(Batch),
     /// Used by workers to request batches.

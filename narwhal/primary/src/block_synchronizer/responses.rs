@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use blake2::digest::Update;
 use config::Committee;
-use crypto::{traits::VerifyingKey, Digest, Hash};
+use crypto::{Digest, Hash, PublicKey};
 use std::fmt::{Display, Formatter};
 use thiserror::Error;
 use tracing::{error, warn};
@@ -34,8 +34,8 @@ impl<'a> FromIterator<&'a CertificateDigest> for RequestID {
     }
 }
 
-impl<'a, PublicKey: VerifyingKey> FromIterator<&'a Certificate<PublicKey>> for RequestID {
-    fn from_iter<T: IntoIterator<Item = &'a Certificate<PublicKey>>>(certificates: T) -> Self {
+impl<'a> FromIterator<&'a Certificate> for RequestID {
+    fn from_iter<T: IntoIterator<Item = &'a Certificate>>(certificates: T) -> Self {
         let ids: Vec<CertificateDigest> = certificates.into_iter().map(|c| c.digest()).collect();
 
         ids.iter().collect()
@@ -49,12 +49,12 @@ impl Display for RequestID {
 }
 
 #[derive(Debug, Clone)]
-pub struct PayloadAvailabilityResponse<PublicKey: VerifyingKey> {
+pub struct PayloadAvailabilityResponse {
     pub block_ids: Vec<(CertificateDigest, bool)>,
     pub from: PublicKey,
 }
 
-impl<PublicKey: VerifyingKey> PayloadAvailabilityResponse<PublicKey> {
+impl PayloadAvailabilityResponse {
     pub fn request_id(&self) -> RequestID {
         let ids: Vec<CertificateDigest> = self.block_ids.iter().map(|entry| entry.0).collect();
 
@@ -70,12 +70,12 @@ impl<PublicKey: VerifyingKey> PayloadAvailabilityResponse<PublicKey> {
 }
 
 #[derive(Debug, Clone)]
-pub struct CertificatesResponse<PublicKey: VerifyingKey> {
-    pub certificates: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)>,
+pub struct CertificatesResponse {
+    pub certificates: Vec<(CertificateDigest, Option<Certificate>)>,
     pub from: PublicKey,
 }
 
-impl<PublicKey: VerifyingKey> CertificatesResponse<PublicKey> {
+impl CertificatesResponse {
     pub fn request_id(&self) -> RequestID {
         let ids: Vec<CertificateDigest> = self.certificates.iter().map(|entry| entry.0).collect();
 
@@ -89,9 +89,9 @@ impl<PublicKey: VerifyingKey> CertificatesResponse<PublicKey> {
     /// and Ok result is returned with (any) found certificates.
     pub fn validate_certificates(
         &self,
-        committee: &Committee<PublicKey>,
-    ) -> Result<Vec<Certificate<PublicKey>>, CertificatesResponseError<PublicKey>> {
-        let peer_found_certs: Vec<Certificate<PublicKey>> = self
+        committee: &Committee,
+    ) -> Result<Vec<Certificate>, CertificatesResponseError> {
+        let peer_found_certs: Vec<Certificate> = self
             .certificates
             .iter()
             .filter_map(|e| e.1.clone())
@@ -106,7 +106,7 @@ impl<PublicKey: VerifyingKey> CertificatesResponse<PublicKey> {
             return Ok(vec![]);
         }
 
-        let invalid_certificates: Vec<Certificate<PublicKey>> = peer_found_certs
+        let invalid_certificates: Vec<Certificate> = peer_found_certs
             .clone()
             .into_iter()
             .filter(|c| {
@@ -136,10 +136,10 @@ impl<PublicKey: VerifyingKey> CertificatesResponse<PublicKey> {
 }
 
 #[derive(Debug, Error, Clone, PartialEq)]
-pub enum CertificatesResponseError<PublicKey: VerifyingKey> {
+pub enum CertificatesResponseError {
     #[error("Found invalid certificates form peer {name} - potentially Byzantine.")]
     ValidationError {
         name: PublicKey,
-        invalid_certificates: Vec<Certificate<PublicKey>>,
+        invalid_certificates: Vec<Certificate>,
     },
 }

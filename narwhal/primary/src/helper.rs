@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{primary::PrimaryMessage, PayloadToken};
 use config::{Committee, WorkerId};
-use crypto::traits::{EncodeDecodeBase64, VerifyingKey};
+use crypto::{traits::EncodeDecodeBase64, PublicKey};
 use network::PrimaryNetwork;
 use store::{Store, StoreError};
 use thiserror::Error;
@@ -32,31 +32,31 @@ enum HelperError {
 
 /// A task dedicated to help other authorities by replying to their certificate &
 /// payload availability requests.
-pub struct Helper<PublicKey: VerifyingKey> {
+pub struct Helper {
     /// The node's name
     name: PublicKey,
     /// The committee information.
-    committee: Committee<PublicKey>,
+    committee: Committee,
     /// The certificate persistent storage.
-    certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+    certificate_store: Store<CertificateDigest, Certificate>,
     /// The payloads (batches) persistent storage.
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// Watch channel to reconfigure the committee.
-    rx_committee: watch::Receiver<ReconfigureNotification<PublicKey>>,
+    rx_committee: watch::Receiver<ReconfigureNotification>,
     /// Input channel to receive requests.
-    rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
+    rx_primaries: Receiver<PrimaryMessage>,
     /// A network sender to reply to the sync requests.
     primary_network: PrimaryNetwork,
 }
 
-impl<PublicKey: VerifyingKey> Helper<PublicKey> {
+impl Helper {
     pub fn spawn(
         name: PublicKey,
-        committee: Committee<PublicKey>,
-        certificate_store: Store<CertificateDigest, Certificate<PublicKey>>,
+        committee: Committee,
+        certificate_store: Store<CertificateDigest, Certificate>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        rx_committee: watch::Receiver<ReconfigureNotification<PublicKey>>,
-        rx_primaries: Receiver<PrimaryMessage<PublicKey>>,
+        rx_committee: watch::Receiver<ReconfigureNotification>,
+        rx_primaries: Receiver<PrimaryMessage>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -152,7 +152,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
                 // to communicate an error (so they could potentially retry).
                 result = digests.into_iter().map(|d| (d, false)).collect();
 
-                let message = PrimaryMessage::<PublicKey>::PayloadAvailabilityResponse {
+                let message = PrimaryMessage::PayloadAvailabilityResponse {
                     payload_availability: result,
                     from: self.name.clone(),
                 };
@@ -190,7 +190,7 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         }
 
         // now send the result back to the requestor
-        let message = PrimaryMessage::<PublicKey>::PayloadAvailabilityResponse {
+        let message = PrimaryMessage::PayloadAvailabilityResponse {
             payload_availability: result,
             from: self.name.clone(),
         };
@@ -239,12 +239,12 @@ impl<PublicKey: VerifyingKey> Helper<PublicKey> {
         // back to the consumer as separate messages one by one. If a certificate
         // has not been found, then no message will be sent.
         if batch_mode {
-            let response: Vec<(CertificateDigest, Option<Certificate<PublicKey>>)> =
-                if certificates.is_empty() {
-                    digests.into_iter().map(|c| (c, None)).collect()
-                } else {
-                    digests.into_iter().zip(certificates).collect()
-                };
+            let response: Vec<(CertificateDigest, Option<Certificate>)> = if certificates.is_empty()
+            {
+                digests.into_iter().map(|c| (c, None)).collect()
+            } else {
+                digests.into_iter().zip(certificates).collect()
+            };
 
             let message = PrimaryMessage::CertificatesBatchResponse {
                 certificates: response,

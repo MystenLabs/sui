@@ -6,7 +6,7 @@ use crate::{
     tusk::{tusk_tests::*, Tusk},
     Consensus, ConsensusOutput, ConsensusSyncRequest, SubscriberHandler,
 };
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair, Hash};
+use crypto::{traits::KeyPair, Hash};
 use futures::future::join_all;
 use prometheus::Registry;
 use std::collections::{BTreeSet, VecDeque};
@@ -14,7 +14,7 @@ use test_utils::{keys, make_consensus_store, mock_committee};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 
 /// Make enough certificates to commit a leader.
-pub fn commit_certificates() -> VecDeque<Certificate<Ed25519PublicKey>> {
+pub fn commit_certificates() -> VecDeque<Certificate> {
     // Make certificates for rounds 1 to 4.
     let keys: Vec<_> = keys(None)
         .into_iter()
@@ -36,13 +36,10 @@ pub fn commit_certificates() -> VecDeque<Certificate<Ed25519PublicKey>> {
 /// Spawn the consensus core and the subscriber handler. Also add to storage enough certificates to
 /// commit a leader (as if they were added by the Primary).
 pub async fn spawn_node(
-    rx_waiter: Receiver<Certificate<Ed25519PublicKey>>,
+    rx_waiter: Receiver<Certificate>,
     rx_client: Receiver<ConsensusSyncRequest>,
-    tx_client: Sender<ConsensusOutput<Ed25519PublicKey>>,
-) -> (
-    watch::Sender<ReconfigureNotification<Ed25519PublicKey>>,
-    Vec<JoinHandle<()>>,
-) {
+    tx_client: Sender<ConsensusOutput>,
+) -> (watch::Sender<ReconfigureNotification>, Vec<JoinHandle<()>>) {
     // Make enough certificates to commit a leader.
     let certificates = commit_certificates();
 
@@ -101,10 +98,10 @@ pub async fn spawn_node(
 
 /// Facility to read consensus outputs out of a stream and return them in the right order.
 pub async fn order_stream(
-    reader: &mut Receiver<ConsensusOutput<Ed25519PublicKey>>,
+    reader: &mut Receiver<ConsensusOutput>,
     last_known_client_index: u64,
     last_known_server_index: u64,
-) -> Vec<ConsensusOutput<Ed25519PublicKey>> {
+) -> Vec<ConsensusOutput> {
     let mut next_ordinary_sequence = last_known_server_index + 1;
     let mut next_catchup_sequence = last_known_client_index + 1;
     let mut buffer = Vec::new();

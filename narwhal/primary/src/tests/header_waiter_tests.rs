@@ -7,7 +7,7 @@ use crate::{
     PrimaryWorkerMessage,
 };
 use core::sync::atomic::AtomicU64;
-use crypto::{ed25519::Ed25519PublicKey, Hash};
+use crypto::Hash;
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
 use test_utils::{fixture_header_with_payload, resolve_name_and_committee};
@@ -70,7 +70,7 @@ async fn successfully_synchronize_batches() {
         .unwrap()
         .primary_to_worker;
 
-    let handle = worker_listener::<PrimaryWorkerMessage<Ed25519PublicKey>>(1, worker_address);
+    let handle = worker_listener::<PrimaryWorkerMessage>(1, worker_address);
 
     // THEN
     if let Ok(Ok(mut result)) = timeout(Duration::from_millis(4_000), handle).await {

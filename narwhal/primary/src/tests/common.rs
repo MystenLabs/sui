@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bincode::deserialize;
 use config::WorkerId;
-use crypto::ed25519::Ed25519PublicKey;
+
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 use store::{reopen, rocks, rocks::DBMap, Store};
@@ -13,8 +13,8 @@ use crate::PayloadToken;
 use tokio::{task::JoinHandle, time::timeout};
 
 pub fn create_db_stores() -> (
-    Store<HeaderDigest, Header<Ed25519PublicKey>>,
-    Store<CertificateDigest, Certificate<Ed25519PublicKey>>,
+    Store<HeaderDigest, Header>,
+    Store<CertificateDigest, Certificate>,
     Store<(BatchDigest, WorkerId), PayloadToken>,
 ) {
     // Create a new test store.
@@ -22,8 +22,8 @@ pub fn create_db_stores() -> (
         .expect("Failed creating database");
 
     let (header_map, certificate_map, payload_map) = reopen!(&rocksdb,
-        HEADERS_CF;<HeaderDigest, Header<Ed25519PublicKey>>,
-        CERTIFICATES_CF;<CertificateDigest, Certificate<Ed25519PublicKey>>,
+        HEADERS_CF;<HeaderDigest, Header>,
+        CERTIFICATES_CF;<CertificateDigest, Certificate>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     (
