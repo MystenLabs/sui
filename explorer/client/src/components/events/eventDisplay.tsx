@@ -72,6 +72,14 @@ function fieldsContent(fields: { [key: string]: any }) {
     });
 }
 
+function contentLine(label: string, value: string, monotypeClass: boolean = false) {
+    return {
+        label,
+        value,
+        monotypeClass,
+    }
+}
+
 export function moveEventDisplay(event: MoveEvent): EventDisplayData {
     return {
         top: {
@@ -83,11 +91,7 @@ export function moveEventDisplay(event: MoveEvent): EventDisplayData {
                     monotypeClass: true,
                 },
                 addressContent('Sender', event.sender as string),
-                {
-                    label: 'BCS',
-                    value: event.bcs,
-                    monotypeClass: true,
-                },
+                contentLine('BCS', event.bcs, true),
             ],
         },
         fields: {
@@ -103,11 +107,7 @@ export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
         top: {
             title: 'New Object',
             content: [
-                {
-                    label: 'Module',
-                    value: `${event.packageId}::${event.transactionModule}`,
-                    monotypeClass: true,
-                },
+                contentLine('Module', `${event.packageId}::${event.transactionModule}`, true),
                 [
                     addressContent('', event.sender),
                     addressContent('', getOwnerStr(event.recipient)),
@@ -124,17 +124,9 @@ export function transferObjectEventDisplay(
         top: {
             title: 'Transfer Object',
             content: [
-                {
-                    label: 'Type',
-                    value: event.type,
-                    monotypeClass: true,
-                },
+                contentLine('Type', event.type, true),
                 objectContent('Object ID', event.objectId),
-                {
-                    label: 'Version',
-                    value: event.version.toString(),
-                    monotypeClass: false,
-                },
+                contentLine('Version', event.version.toString()),
                 [
                     addressContent('', event.sender),
                     addressContent('', getOwnerStr(event.recipient)),
@@ -151,11 +143,7 @@ export function deleteObjectEventDisplay(
         top: {
             title: 'Delete Object',
             content: [
-                {
-                    label: 'Module',
-                    value: `${event.packageId}::${event.transactionModule}`,
-                    monotypeClass: true,
-                },
+                contentLine('Module', `${event.packageId}::${event.transactionModule}`, true),
                 objectContent('Object ID', event.objectId),
                 addressContent('Sender', event.sender),
             ],
@@ -169,11 +157,7 @@ export function publishEventDisplay(event: PublishEvent): EventDisplayData {
             title: 'Publish',
             content: [
                 addressContent('Sender', event.sender),
-                {
-                    label: 'Package',
-                    value: event.packageId,
-                    monotypeClass: true,
-                },
+                contentLine('Package', event.packageId, true),
             ],
         },
     };
@@ -188,11 +172,7 @@ export function bigintDisplay(
         top: {
             title: title,
             content: [
-                {
-                    label: label,
-                    value: value.toString(),
-                    monotypeClass: false,
-                },
+                contentLine(label, value.toString()),
             ],
         },
     };
