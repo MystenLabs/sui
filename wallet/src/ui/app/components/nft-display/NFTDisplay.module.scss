@@ -1,0 +1,12 @@
+.nftimage {
+    display: block;
+    width: 100%;
+    max-height: 160px;
+
+    img {
+        width: 100%;
+        object-fit: cover;
+        border-radius: 6px;
+        height: 100%;
+    }
+}
