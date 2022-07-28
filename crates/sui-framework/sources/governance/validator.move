@@ -78,7 +78,7 @@ module sui::validator {
     ): Validator {
         assert!(
             // TODO: These constants are arbitrary, will adjust once we know more.
-            vector::length(&net_address) <= 100 && vector::length(&name) <= 50 && vector::length(&pubkey_bytes) <= 128,
+            vector::length(&net_address) <= 128 && vector::length(&name) <= 128 && vector::length(&pubkey_bytes) <= 128,
             0
         );
         // Check that the name is human-readable.
