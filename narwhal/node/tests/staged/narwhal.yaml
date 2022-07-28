@@ -25,8 +25,8 @@ Certificate:
     - votes:
         SEQ:
           TUPLE:
-            - TYPENAME: PublicKey
-            - TYPENAME: Signature
+            - TYPENAME: Ed25519PublicKey
+            - TYPENAME: Ed25519Signature
 CertificateDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -37,18 +37,18 @@ Committee:
     - authorities:
         MAP:
           KEY:
-            TYPENAME: PublicKey
+            TYPENAME: Ed25519PublicKey
           VALUE:
             TYPENAME: Authority
     - epoch: U64
-PublicKey:
+Ed25519PublicKey:
   NEWTYPESTRUCT: STR
-Signature:
+Ed25519Signature:
   NEWTYPESTRUCT: BYTES
 Header:
   STRUCT:
     - author:
-        TYPENAME: PublicKey
+        TYPENAME: Ed25519PublicKey
     - round: U64
     - epoch: U64
     - payload:
@@ -62,7 +62,7 @@ Header:
     - id:
         TYPENAME: HeaderDigest
     - signature:
-        TYPENAME: Signature
+        TYPENAME: Ed25519Signature
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -79,7 +79,7 @@ PrimaryWorkerMessage:
         TUPLE:
           - SEQ:
               TYPENAME: BatchDigest
-          - TYPENAME: PublicKey
+          - TYPENAME: Ed25519PublicKey
     1:
       Cleanup:
         NEWTYPE: U64
