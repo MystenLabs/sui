@@ -2,6 +2,7 @@ import {
     isMoveEvent,
     isNewObjectEvent,
     isTransferObjectEvent,
+    isPublishEvent,
 } from '@mysten/sui.js';
 
 import { getOwnerStr } from '../../utils/objectUtils';
@@ -13,6 +14,7 @@ import type {
     SuiAddress,
     SuiEvent,
     TransferObjectEvent,
+    PublishEvent,
 } from '@mysten/sui.js';
 
 export function moveEventDisplay(event: MoveEvent) {
@@ -113,6 +115,19 @@ export function transferObjectEventDisplay(event: TransferObjectEvent) {
     };
 }
 
+export function publishEventDisplay(event: PublishEvent) {
+    return {
+        top: {
+            title: 'Publish',
+            content: [
+                addressContent('Sender', event.sender),
+                objectContent('Package', event.packageId),
+            ],
+        },
+        fields: null,
+    };
+}
+
 export function eventToDisplay(event: SuiEvent) {
     console.log('event to display', event);
 
@@ -127,6 +142,9 @@ export function eventToDisplay(event: SuiEvent) {
         isTransferObjectEvent(event.transferObject)
     )
         return transferObjectEventDisplay(event.transferObject);
+
+    if ('publish' in event && isPublishEvent(event.publish))
+        return publishEventDisplay(event.publish);
 
     return null;
 }
