@@ -22,13 +22,13 @@ import { findDataFromID } from '../../utils/static/searchUtil';
 import { type DataType } from './TransactionResultType';
 import TransactionView from './TransactionView';
 
-import type { SuiEvent } from '../../components/events/eventTypes';
 import type {
     CertifiedTransaction,
     TransactionEffectsResponse,
     ExecutionStatusType,
     TransactionEffects,
     SuiObjectRef,
+    SuiEvent
 } from '@mysten/sui.js';
 
 type TxnState = CertifiedTransaction & {

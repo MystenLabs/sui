@@ -21,7 +21,6 @@ import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 import TxResultHeader from './TxResultHeader';
 
-import type { SuiEvent } from '../../components/events/eventTypes';
 import type { DataType, Category } from './TransactionResultType';
 import type {
     CertifiedTransaction,
@@ -29,6 +28,7 @@ import type {
     ExecutionStatusType,
     SuiTransactionKind,
     SuiObjectRef,
+    SuiEvent
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
