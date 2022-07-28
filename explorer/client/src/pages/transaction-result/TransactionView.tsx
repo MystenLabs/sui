@@ -17,7 +17,9 @@ import cl from 'classnames';
 import { eventToDisplay } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
+import { type Link, TxAddresses } from '../../components/table/TableCard';
 import Tabs from '../../components/tabs/Tabs';
+import { truncate } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 import TxResultHeader from './TxResultHeader';
@@ -33,7 +35,6 @@ import type {
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
-import {type Link, TxAddresses } from '../../components/table/TableCard';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
@@ -166,21 +167,23 @@ function ItemView({ data }: { data: TxItemView }) {
             </div>
             <div className={styles.itemviewcontent}>
                 {data.content.map((item, index) => {
+                    // handle sender -> recipient display in one line
                     let links: Link[] = [];
                     if (Array.isArray(item)) {
                         links = item.map((content, ci) => {
                             return {
-                                url: '',
-                                name: content.value,
+                                url: content.value,
+                                name: truncate(content.value, 20),
                                 copy: false,
                                 category: 'addresses',
-                                isLink: true
-                            } as Link
+                                isLink: true,
+                            } as Link;
                         });
 
                         item.label = 'From -> To';
-                        console.log("links array display", item, links);
+                        console.log('links array display', item, links);
                     }
+
                     return (
                         <div
                             key={index}
@@ -202,7 +205,7 @@ function ItemView({ data }: { data: TxItemView }) {
                             >
                                 {Array.isArray(item) ? (
                                     <TxAddresses content={links}></TxAddresses>
-                                ): (
+                                ) : (
                                     <></>
                                 )}
                                 {item.link ? (
