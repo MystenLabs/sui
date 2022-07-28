@@ -21,7 +21,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
-use tracing::{debug, error, info, trace, warn};
+use tracing::{debug, error, info, warn};
 use typed_store::rocks::{DBBatch, DBMap};
 use typed_store::{reopen, traits::Map};
 
