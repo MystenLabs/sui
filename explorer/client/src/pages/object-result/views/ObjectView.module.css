@@ -53,16 +53,20 @@ table.description {
     @apply border-collapse mb-[3.75rem];
 }
 
+table.description td {
+    @apply text-start align-top text-[0.875rem] leading-[1.063rem];
+}
+
 table.description > tbody > tr > td:first-child {
-    @apply text-sui-grey-80 text-[0.875rem] leading-[1.063rem] font-medium pr-6;
+    @apply text-sui-grey-80  font-medium pr-6;
 }
 
 table.description > tbody > tr > td:nth-child(2) {
-    @apply font-mono;
+    @apply font-mono break-all;
 }
 
 table.description > tbody > tr:not(:last-child) > td {
-    @apply pb-2.5;
+    @apply pb-5 sm:pb-2.5;
 }
 
 /* Property Box CSS */
