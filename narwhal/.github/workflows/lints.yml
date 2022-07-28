@@ -32,6 +32,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Select file types to lint. Python and Rust linters are configured separately.
           VALIDATE_SHELL_SHFMT: true
-          VALIDATE_DOCKERFILE_HADOLINT: true
+          #
+          # disable hadolint 
+          # https://github.com/hadolint/hadolint/issues/821
+          # VALIDATE_DOCKERFILE_HADOLINT: true
+          # DOCKERFILE_HADOLINT_FILE_NAME: .github/config/.hadolint.yaml
+          #
           # Enable after fixing proto lint issues.
           # VALIDATE_PROTOBUF: true
