@@ -2,6 +2,7 @@ import {
     isMoveEvent,
     isNewObjectEvent,
     isTransferObjectEvent,
+    isDeleteObjectEvent,
     isPublishEvent,
 } from '@mysten/sui.js';
 
@@ -14,6 +15,7 @@ import type {
     SuiAddress,
     SuiEvent,
     TransferObjectEvent,
+    DeleteObjectEvent,
     PublishEvent,
 } from '@mysten/sui.js';
 
@@ -115,6 +117,24 @@ export function transferObjectEventDisplay(event: TransferObjectEvent) {
     };
 }
 
+export function deleteObjectEventDisplay(event: DeleteObjectEvent) {
+    return {
+        top: {
+            title: 'Delete Object',
+            content: [
+                {
+                    label: 'Module',
+                    value: `${event.packageId}::${event.transactionModule}`,
+                    monotypeClass: true,
+                },
+                objectContent('Object ID', event.objectId),
+                addressContent('Sender', event.sender),
+            ],
+        },
+        fields: null,
+    };
+}
+
 export function publishEventDisplay(event: PublishEvent) {
     return {
         top: {
@@ -142,6 +162,12 @@ export function eventToDisplay(event: SuiEvent) {
         isTransferObjectEvent(event.transferObject)
     )
         return transferObjectEventDisplay(event.transferObject);
+
+    if (
+        'deleteObject' in event &&
+        isDeleteObjectEvent(event.deleteObject)
+    )
+        return deleteObjectEventDisplay(event.deleteObject);
 
     if ('publish' in event && isPublishEvent(event.publish))
         return publishEventDisplay(event.publish);

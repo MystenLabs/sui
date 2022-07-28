@@ -1163,6 +1163,17 @@
                         }
                     },
                     {
+                        "deleteObject": {
+                            "objectId": "0x010669175cee34d61c4ab84a839895188ad8663d",
+                            "sender": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
+                            "recipient": {
+                                "AddressOwner": "0x15090b0b58e2cffdf41f82bb79aa61d101669511"
+                            },
+                            "packageId": "0x2",
+                            "transactionModule": "coin"
+                        }
+                    },
+                    {
                         "publish": {
                             "sender": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
                             "packageId": "0x2"
