@@ -163,10 +163,7 @@ export function eventToDisplay(event: SuiEvent) {
     )
         return transferObjectEventDisplay(event.transferObject);
 
-    if (
-        'deleteObject' in event &&
-        isDeleteObjectEvent(event.deleteObject)
-    )
+    if ('deleteObject' in event && isDeleteObjectEvent(event.deleteObject))
         return deleteObjectEventDisplay(event.deleteObject);
 
     if ('publish' in event && isPublishEvent(event.publish))
