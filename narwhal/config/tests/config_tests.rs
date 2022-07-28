@@ -1,15 +1,32 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// This file contains tests that detect changes in Narwhal configs and parameters.
+// If a PR breaks one or more tests here, the PR probably has a real impact
+// on a Narwhal configuration file. When test failure happens, the PR should
+// be marked as a breaking change and reviewers should be aware of this.
+//
+// Owners and operators of production configuration files can add themselves to
+// .github/CODEOWNERS for the corresponding snapshot tests, so they can get notified
+// of changes. PRs that modifies snapshot files should wait for reviews from
+// code owners (if any) before merging.
+//
+// To review snapshot changes, and fix snapshot differences,
+// 0. Install cargo-insta
+// 1. Run `cargo insta test --review` under `./config`.
+// 2. Review, accept or reject changes.
+
 use std::collections::BTreeMap;
 
 use config::{
-    Committee, ConsensusAPIGrpcParameters, Epoch, Parameters, PrimaryAddresses,
+    Committee, ConsensusAPIGrpcParameters, Epoch, Import, Parameters, PrimaryAddresses,
     PrometheusMetricsParameters, Stake,
 };
 use crypto::{traits::KeyPair as _, PublicKey};
 use insta::assert_json_snapshot;
 use rand::seq::SliceRandom;
+use std::{fs::File, io::Write};
+use tempfile::tempdir;
 use test_utils::make_authority_with_port_getter;
 
 #[test]
@@ -22,7 +39,7 @@ fn update_primary_network_info_test() {
     for err in res {
         assert!(matches!(
             err,
-            config::ComitteeUpdateError::MissingFromUpdate(_)
+            config::CommitteeUpdateError::MissingFromUpdate(_)
         ))
     }
 
@@ -40,8 +57,8 @@ fn update_primary_network_info_test() {
         // we'll get the two collections reporting missing from each other
         assert!(matches!(
             err,
-            config::ComitteeUpdateError::NotInCommittee(_)
-                | config::ComitteeUpdateError::MissingFromUpdate(_)
+            config::CommitteeUpdateError::NotInCommittee(_)
+                | config::CommitteeUpdateError::MissingFromUpdate(_)
         ))
     }
 
@@ -59,7 +76,7 @@ fn update_primary_network_info_test() {
     for err in res2 {
         assert!(matches!(
             err,
-            config::ComitteeUpdateError::DifferentStake(_)
+            config::CommitteeUpdateError::DifferentStake(_)
         ))
     }
 
@@ -139,4 +156,48 @@ fn commmittee_snapshot_matches() {
     let mut settings = insta::Settings::clone_current();
     settings.set_sort_maps(true);
     settings.bind(|| assert_json_snapshot!("committee", committee));
+}
+
+#[test]
+fn parameters_import_snapshot_matches() {
+    // GIVEN
+    let input = r#"{
+         "header_size": 1000,
+         "max_header_delay": "100ms",
+         "gc_depth": 50,
+         "sync_retry_delay": "5s",
+         "sync_retry_nodes": 3,
+         "batch_size": 500000,
+         "max_batch_delay": "100ms",
+         "block_synchronizer": {
+             "certificates_synchronize_timeout": "2s",
+             "payload_synchronize_timeout": "3_000ms",
+             "payload_availability_timeout": "4_000ms",
+             "handler_certificate_deliver_timeout": "1_000ms"
+         },
+         "consensus_api_grpc": {
+             "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
+             "get_collections_timeout": "5_000ms",
+             "remove_collections_timeout": "5_000ms"
+         },
+         "max_concurrent_requests": 500000,
+         "prometheus_metrics": {
+             "socket_addr": "127.0.0.1:0"
+         }
+      }"#;
+
+    // AND temporary file
+    let dir = tempdir().expect("Couldn't create tempdir");
+
+    let file_path = dir.path().join("temp-properties.json");
+    let mut file = File::create(file_path.clone()).expect("Couldn't create temp file");
+
+    // AND write the json context
+    writeln!(file, "{input}").expect("Couldn't write to file");
+
+    // WHEN
+    let params = Parameters::import(file_path.to_str().unwrap()).expect("Error raised");
+
+    // THEN
+    assert_json_snapshot!("parameters_import", params)
 }

@@ -18,11 +18,11 @@ on the Clippy repository. We make use of a cargo alias (defined in
 .cargo/config) which sets some project-wide lints. To run the linter locally
 you can use the following command:
 ```
-cargo xclippy 
+cargo xclippy
 ```
 
 ## Run the formatter
-To ensure that the codebase is following standard formatting properties, we use  
+To ensure that the codebase is following standard formatting properties, we use
 [Rustfmt](https://github.com/rust-lang/rustfmt). To run the formatter locally
 you can use the follow command:
 ```
@@ -39,11 +39,16 @@ The [derive_builder](https://crates.io/crates/derive_builder) crate has been use
 auto-generate builders (following the [builder design pattern](https://en.wikipedia.org/wiki/Builder_pattern)) for structs. Instead of having to write (lots) of boilerplate
 code to create a builder, this is offered by the derive_builder and is the recommended
 way to create builders for this repo. Examples can be found within the repo and on the
-crate docs as well. 
+crate docs as well.
+
+## Testing
+One thing to note is that Narwhal uses snapshot testing for configs. See the beginning of the file
+[config/tests/config_tests.rs](config/tests/config_tests.rs) for background and instructions if your PR breaks the test.
 
 ## Issues
 We use GitHub issues to track public bugs. Please ensure your description is
 clear and has sufficient instructions to be able to reproduce the issue.
+
 ## License
 By contributing to Narwhal and Tusk, you agree that your contributions will be licensed
 under the LICENSE file in the root directory of this source tree.

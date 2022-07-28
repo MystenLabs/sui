@@ -47,7 +47,7 @@ pub enum ConfigError {
 }
 
 #[derive(Error, Debug)]
-pub enum ComitteeUpdateError {
+pub enum CommitteeUpdateError {
     #[error("Node {0} is not in the committee")]
     NotInCommittee(String),
 
@@ -98,7 +98,7 @@ pub type WorkerId = u32;
 /// Holds all the node properties. An example is provided to
 /// showcase the usage and deserialization from a json file.
 /// To define a Duration on the property file can use either
-/// miliseconds or seconds (e.x 5s, 10ms , 2000ms).
+/// milliseconds or seconds (e.x 5s, 10ms , 2000ms).
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameters {
     /// The preferred header size. The primary creates a new header when it has enough parents and
@@ -458,7 +458,7 @@ impl Committee {
     pub fn update_primary_network_info(
         &mut self,
         mut new_info: BTreeMap<PublicKey, (Stake, PrimaryAddresses)>,
-    ) -> Result<(), Vec<ComitteeUpdateError>> {
+    ) -> Result<(), Vec<CommitteeUpdateError>> {
         let mut errors = None;
 
         let table = &self.authorities;
@@ -492,14 +492,14 @@ impl Committee {
                         // Stake does not match: create or append error
                         push_error_and_return(
                             acc,
-                            ComitteeUpdateError::DifferentStake(pk.to_string()),
+                            CommitteeUpdateError::DifferentStake(pk.to_string()),
                         )
                     }
                 } else {
                     // This key is absent from new information
                     push_error_and_return(
                         acc,
-                        ComitteeUpdateError::MissingFromUpdate(pk.to_string()),
+                        CommitteeUpdateError::MissingFromUpdate(pk.to_string()),
                     )
                 }
             });
@@ -507,7 +507,7 @@ impl Committee {
         // If there are elements left in new_info, they are not in the original table
         // If new_info is empty, this is a no-op.
         let res = new_info.iter().fold(res, |acc, (pk, _)| {
-            push_error_and_return(acc, ComitteeUpdateError::NotInCommittee(pk.to_string()))
+            push_error_and_return(acc, CommitteeUpdateError::NotInCommittee(pk.to_string()))
         });
 
         match res {
@@ -523,98 +523,8 @@ impl Committee {
 
 #[cfg(test)]
 mod tests {
-    use crate::{Import, Parameters};
-    use std::{fs::File, io::Write};
-    use tempfile::tempdir;
+    use crate::Parameters;
     use tracing_test::traced_test;
-
-    #[test]
-    #[traced_test]
-    fn parse_properties() {
-        // GIVEN
-        let input = r#"{
-             "header_size": 1000,
-             "max_header_delay": "100ms",
-             "gc_depth": 50,
-             "sync_retry_delay": "5s",
-             "sync_retry_nodes": 3,
-             "batch_size": 500000,
-             "max_batch_delay": "100ms",
-             "block_synchronizer": {
-                 "certificates_synchronize_timeout": "2s",
-                 "payload_synchronize_timeout": "3_000ms",
-                 "payload_availability_timeout": "4_000ms",
-                 "handler_certificate_deliver_timeout": "1_000ms"
-             },
-             "consensus_api_grpc": {
-                 "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-                 "get_collections_timeout": "5_000ms",
-                 "remove_collections_timeout": "5_000ms"
-             },
-             "max_concurrent_requests": 500000,
-             "prometheus_metrics": {
-                 "socket_addr": "127.0.0.1:0"
-             }
-          }"#;
-
-        // AND temporary file
-        let dir = tempdir().expect("Couldn't create tempdir");
-
-        let file_path = dir.path().join("temp-properties.json");
-        let mut file = File::create(file_path.clone()).expect("Couldn't create temp file");
-
-        // AND write the json context
-        writeln!(file, "{input}").expect("Couldn't write to file");
-
-        // WHEN
-        let params = Parameters::import(file_path.to_str().unwrap()).expect("Error raised");
-
-        // THEN
-        assert_eq!(params.sync_retry_delay.as_millis(), 5_000);
-        assert_eq!(
-            params
-                .block_synchronizer
-                .certificates_synchronize_timeout
-                .as_millis(),
-            2_000
-        );
-        assert_eq!(
-            params
-                .block_synchronizer
-                .payload_synchronize_timeout
-                .as_millis(),
-            3_000
-        );
-        assert_eq!(
-            params
-                .block_synchronizer
-                .payload_availability_timeout
-                .as_millis(),
-            4_000
-        );
-        assert_eq!(
-            params.consensus_api_grpc.socket_addr,
-            "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
-        );
-        assert_eq!(
-            params
-                .consensus_api_grpc
-                .get_collections_timeout
-                .as_millis(),
-            5_000
-        );
-        assert_eq!(
-            params
-                .consensus_api_grpc
-                .remove_collections_timeout
-                .as_millis(),
-            5_000
-        );
-        assert_eq!(
-            params.prometheus_metrics.socket_addr.to_string(),
-            "127.0.0.1:0",
-        );
-    }
 
     #[test]
     #[traced_test]
