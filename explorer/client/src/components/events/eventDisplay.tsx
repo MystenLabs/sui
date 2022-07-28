@@ -87,8 +87,8 @@ export function newObjectEventDisplay(event: NewObjectEvent) {
                     monotypeClass: true,
                 },
                 [
-                    addressContent('Sender', event.sender),
-                    addressContent('Recipient', getOwnerStr(event.recipient)),
+                    addressContent('', event.sender),
+                    addressContent('', getOwnerStr(event.recipient)),
                 ],
             ],
         },
@@ -112,8 +112,10 @@ export function transferObjectEventDisplay(event: TransferObjectEvent) {
                     value: event.version.toString(),
                     monotypeClass: false,
                 },
-                addressContent('Sender', event.sender),
-                addressContent('Recipient', getOwnerStr(event.recipient)),
+                [
+                    addressContent('', event.sender),
+                    addressContent('', getOwnerStr(event.recipient)),
+                ],
             ],
         },
         fields: null,

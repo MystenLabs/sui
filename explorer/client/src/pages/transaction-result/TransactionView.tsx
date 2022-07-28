@@ -180,7 +180,7 @@ function ItemView({ data }: { data: TxItemView }) {
                             } as Link;
                         });
 
-                        item.label = 'From -> To';
+                        item.label = 'Sender, Recipient';
                         console.log('links array display', item, links);
                     }
 
