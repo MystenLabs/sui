@@ -412,7 +412,25 @@ where
                 if errors.is_empty() {
                     // Parents have been executed, so this should now succeed.
                     debug!(?digest, "parents executed, re-attempting cert");
-                    self.state.handle_certificate(cert.clone()).await?;
+
+                    // Discussion:
+                    //
+                    // execute_cert_to_true_effects returns effects that have been attested to by
+                    // f+1 validators. This ensures that one honest validator has received the
+                    // consensus messages necessary to sequence the shared objects for the cert
+                    // (if any) correctly. So, even if this validator has been disconnected from
+                    // consensus, it has a trustworthy record of what the output of consensus was,
+                    // and can proceed.
+                    //
+                    // Additionally, there is no issue of circularity here: There is no possibility
+                    // that the first execution of the certificate anywhere on the network can occur
+                    // at this call site. This call produces TransactionEffects, but it also
+                    // requires as input TransactionEffects, so it cannot proceed unless the
+                    // certificate was originally executed via the handle_certificate path, which
+                    // produces but _does not require as input_ TransactionEffects.
+                    self.state
+                        .handle_node_sync_certificate(cert.clone(), effects)
+                        .await?;
                     Ok(())
                 } else {
                     Err(SuiError::ExecutionDriverError {
