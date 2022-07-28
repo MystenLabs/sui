@@ -7,6 +7,7 @@ import styles from './ObjHeader.module.css';
 type ObjHeaderData = {
     objId: string;
     objKind: 'Object' | 'Package';
+    objName?: string;
 };
 
 function ObjAddressHeader({ data }: { data: ObjHeaderData }) {
@@ -20,6 +21,9 @@ function ObjAddressHeader({ data }: { data: ObjHeaderData }) {
             <div className={styles.objaddress}>
                 <Longtext text={data.objId} category="objects" isLink={false} />
             </div>
+            {data.objName && (
+                <div className={styles.objname}>{data.objName}</div>
+            )}
         </div>
     );
 }

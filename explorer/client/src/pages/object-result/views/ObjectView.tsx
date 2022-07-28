@@ -7,6 +7,10 @@ import TokenView from './TokenView';
 import ObjHeader from './shared/ObjHeader';
 
 function ObjectView({ data }: { data: DataType }) {
+    const nameKeyValue = Object.entries(data.data?.contents)
+        .filter(([key, _]) => key === 'name')
+        .map(([_, value]) => value)[0];
+
     if (data.objType === 'Move Package') {
         return (
             <>
@@ -14,6 +18,7 @@ function ObjectView({ data }: { data: DataType }) {
                     data={{
                         objId: data.id,
                         objKind: 'Package',
+                        objName: nameKeyValue,
                     }}
                 />
                 <PkgView data={data} />
@@ -26,18 +31,13 @@ function ObjectView({ data }: { data: DataType }) {
                     data={{
                         objId: data.id,
                         objKind: 'Object',
+                        objName: nameKeyValue,
                     }}
                 />
                 <TokenView data={data} />
             </>
         );
     }
-
-    /*
-    const nameKeyValue = Object.entries(viewedData.data?.contents)
-        .filter(([key, _]) => key === 'name')
-        .map(([_, value]) => value);
-*/
 }
 
 export default ObjectView;
