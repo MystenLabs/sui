@@ -11,16 +11,11 @@ import {
     getMovePackageContent,
     getObjectId,
     getTransferSuiTransaction,
-    isMoveEvent,
-    isNewObjectEvent,
-    isTransferObjectEvent,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
 import {
-    moveEventDisplay,
-    newObjectEventDisplay,
-    transferObjectEventDisplay,
+    eventToDisplay,
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
@@ -207,24 +202,6 @@ function ItemView({ data }: { data: TxItemView }) {
             </div>
         </div>
     );
-}
-
-function eventToDisplay(event: SuiEvent) {
-    console.log('event to display', event);
-
-    if ('moveEvent' in event && isMoveEvent(event.moveEvent))
-        return moveEventDisplay(event.moveEvent);
-
-    if ('newObject' in event && isNewObjectEvent(event.newObject))
-        return newObjectEventDisplay(event.newObject);
-
-    if (
-        'transferObject' in event &&
-        isTransferObjectEvent(event.transferObject)
-    )
-        return transferObjectEventDisplay(event.transferObject);
-
-    return null;
 }
 
 function TransactionView({ txdata }: { txdata: DataType }) {
