@@ -131,7 +131,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
         ));
     }
 
-    if is_tx_context(view, &parameters[parameters.len() - 1]) {
+    if parameters.len() == 0 || is_tx_context(view, &parameters[parameters.len() - 1]) {
         Ok(())
     } else {
         Err(format!(
