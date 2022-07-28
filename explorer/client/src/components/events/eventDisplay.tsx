@@ -41,7 +41,7 @@ function addressContent(label: string, addr: SuiAddress) {
         link: true,
         category: 'addresses',
         monotypeClass: true,
-    }
+    };
 }
 
 function objectContent(label: string, id: ObjectId) {
@@ -51,7 +51,7 @@ function objectContent(label: string, id: ObjectId) {
         link: true,
         category: 'objects',
         monotypeClass: true,
-    }
+    };
 }
 
 function fieldsContent(fields: { [key: string]: any }) {
