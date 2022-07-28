@@ -36,3 +36,4 @@ sui-sdk = { path = "../sui-sdk" }
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 workspace-hack = { path = "../workspace-hack"}
+signature = "1.5.0"
