@@ -18,6 +18,7 @@ import type {
     DeleteObjectEvent,
     PublishEvent,
 } from '@mysten/sui.js';
+import { isBigIntOrNumber } from '../../utils/numberUtil';
 
 export function moveEventDisplay(event: MoveEvent) {
     return {
@@ -148,6 +149,22 @@ export function publishEventDisplay(event: PublishEvent) {
     };
 }
 
+export function bigintDisplay(title: string, label: string, value: bigint) {
+    return {
+        top: {
+            title: title,
+            content: [
+                {
+                    label: label,
+                    value: value.toString(),
+                    monotypeClass: false,
+                },
+            ],
+        },
+        fields: null,
+    };
+}
+
 export function eventToDisplay(event: SuiEvent) {
     console.log('event to display', event);
 
@@ -168,6 +185,13 @@ export function eventToDisplay(event: SuiEvent) {
 
     if ('publish' in event && isPublishEvent(event.publish))
         return publishEventDisplay(event.publish);
+
+    // TODO - once epoch and checkpoint pages exist, make these links
+    if ('epochChange' in event && isBigIntOrNumber(event.epochChange))
+        return bigintDisplay('Epoch Change', 'Epoch ID', event.epochChange);
+
+    if ('checkpoint' in event && isBigIntOrNumber(event.checkpoint))
+        return bigintDisplay('Checkpoint', 'Sequence #', event.checkpoint);
 
     return null;
 }
