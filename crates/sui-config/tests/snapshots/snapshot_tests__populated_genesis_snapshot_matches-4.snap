@@ -12,7 +12,7 @@ validators:
   quorum_stake_threshold: 1
   active_validators:
     - metadata:
-        sui_address: aab9ae3da3fc17b9f07fccef1657294f99590cd7
+        sui_address: 89dca66cd6a15bc3ebaa44ceecfb58c70a032485
         pubkey_bytes:
           - 32
           - 253
@@ -63,7 +63,7 @@ validators:
   pending_validators: []
   pending_removals: []
   next_epoch_validators:
-    - sui_address: aab9ae3da3fc17b9f07fccef1657294f99590cd7
+    - sui_address: 89dca66cd6a15bc3ebaa44ceecfb58c70a032485
       pubkey_bytes:
         - 32
         - 253

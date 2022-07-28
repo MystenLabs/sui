@@ -22,6 +22,8 @@ pub trait RpcGatewayApi {
         &self,
         /// transaction data bytes, as base-64 encoded string
         tx_bytes: Base64,
+        /// Flag of the signature scheme that is used.
+        flag: Base64,
         /// transaction signature, as base-64 encoded string
         signature: Base64,
         /// signer's public key, as base-64 encoded string

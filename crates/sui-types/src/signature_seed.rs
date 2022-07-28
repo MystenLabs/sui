@@ -3,16 +3,14 @@
 
 //! A secret seed value, useful for deterministic private key and SuiAddress generation.
 
-use narwhal_crypto::{
-    ed25519::Ed25519KeyPair, hkdf::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits,
-};
+use narwhal_crypto::{hkdf::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits};
 use rand::{CryptoRng, RngCore};
 use sha3::Sha3_256;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 use crate::base_types::SuiAddress;
-use crate::crypto::{KeyPair, Signable, Signature};
-use crate::error::{SuiError, SuiError::HkdfError};
+use crate::crypto::{Signable, Signature, SuiPublicKey};
+use crate::error::SuiError;
 
 #[cfg(test)]
 #[path = "unit_tests/signature_seed_tests.rs"]
@@ -129,6 +127,7 @@ impl SignatureSeed {
     /// ```
     /// use serde::{Deserialize, Serialize};
     /// use sui_types::signature_seed::SignatureSeed;
+    /// use sui_types::crypto::AccountKeyPair;
     ///
     /// # fn main() {
     ///     // In production this SHOULD be a secret seed value, here we pin it for demo purposes.
@@ -142,7 +141,7 @@ impl SignatureSeed {
     ///
     ///     // Get address for the provided `id`.
     ///     let sui_address = seed
-    ///         .new_deterministic_address(&id, Some(&domain))
+    ///         .new_deterministic_address::<AccountKeyPair>(&id, Some(&domain))
     ///         .unwrap();
     /// # }
     /// ```
@@ -155,12 +154,15 @@ impl SignatureSeed {
     /// # Returns
     ///
     /// A derived `SuiAddress`, generated deterministically from some `seed`, `id` and `domain`.
-    pub fn new_deterministic_address(
+    pub fn new_deterministic_address<K: KeypairTraits>(
         &self,
         id: &[u8],
         domain: Option<&[u8]>,
-    ) -> Result<SuiAddress, SuiError> {
-        let keypair = SignatureSeed::new_deterministic_keypair(self, id, domain)?;
+    ) -> Result<SuiAddress, SuiError>
+    where
+        <K as KeypairTraits>::PubKey: SuiPublicKey,
+    {
+        let keypair = SignatureSeed::new_deterministic_keypair::<K>(self, id, domain)?;
         Ok(keypair.public().into())
     }
 
@@ -171,6 +173,7 @@ impl SignatureSeed {
     /// ```
     /// use serde::{Deserialize, Serialize};
     /// use sui_types::signature_seed::SignatureSeed;
+    /// use sui_types::crypto::{SuiSignature, AccountKeyPair};
     /// use sui_types::crypto::bcs_signable_test::Foo;
     ///
     /// // The BcsSignable trait is implemented as a sealed trait, so this is equivalent to the
@@ -192,11 +195,11 @@ impl SignatureSeed {
     ///     // The msg to sign (note that we can only sign `Signable` objects.
     ///     let msg = Foo("some-signable-message".to_string());
     ///
-    ///     let signature = seed.sign(&id, Some(&domain), &msg).unwrap();
+    ///     let signature = seed.sign::<_, AccountKeyPair>(&id, Some(&domain), &msg).unwrap();
     ///
     ///     // Get address for the provided `id`.
     ///     let sui_address = seed
-    ///         .new_deterministic_address(&id, Some(&domain))
+    ///         .new_deterministic_address::<AccountKeyPair>(&id, Some(&domain))
     ///         .unwrap();
     ///     let verification = signature.verify(&msg, sui_address);
     ///     assert!(verification.is_ok());
@@ -213,7 +216,7 @@ impl SignatureSeed {
     ///
     /// A `Result` whose okay value is a `Signature` or whose error value
     /// is a `signature::Error` wrapping the internal error that occurred.
-    pub fn sign<T>(
+    pub fn sign<T, K: KeypairTraits + signature::Signer<Signature>>(
         &self,
         id: &[u8],
         domain: Option<&[u8]>,
@@ -222,19 +225,19 @@ impl SignatureSeed {
     where
         T: Signable<Vec<u8>>,
     {
-        let keypair = SignatureSeed::new_deterministic_keypair(self, id, domain)
+        let keypair: K = SignatureSeed::new_deterministic_keypair(self, id, domain)
             .map_err(|_| signature::Error::new())?;
         Ok(Signature::new(value, &keypair))
     }
 
     // Deterministically generate an ed25519 public key via HKDF.
-    fn new_deterministic_keypair(
+    pub fn new_deterministic_keypair<K: KeypairTraits>(
         &self,
         id: &[u8],
         domain: Option<&[u8]>,
-    ) -> Result<KeyPair, SuiError> {
-        hkdf_generate_from_ikm::<Sha3_256, Ed25519KeyPair>(self.as_bytes(), id, domain)
-            .map_err(|_| HkdfError("Deterministic keypair derivation failed".to_string()))
+    ) -> Result<K, SuiError> {
+        hkdf_generate_from_ikm::<Sha3_256, K>(&self.0, id, domain)
+            .map_err(|_| SuiError::HkdfError("Deterministic keypair derivation failed".to_string()))
     }
 }
 

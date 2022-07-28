@@ -8,7 +8,7 @@ use authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use move_binary_format::file_format;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use sui_types::{
-    crypto::{get_key_pair, Signature},
+    crypto::{get_key_pair, AccountKeyPair, Signature},
     messages::Transaction,
     object::Owner,
 };
@@ -17,8 +17,8 @@ use sui_types::{
 async fn test_batch_transaction_ok() -> anyhow::Result<()> {
     // This test tests a sucecssful normal batch transaction.
     // This batch transaction contains 100 transfers, and 100 Move calls.
-    let (sender, sender_key) = get_key_pair();
-    let (recipient, _) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, _): (_, AccountKeyPair) = get_key_pair();
     const N: usize = 100;
     const TOTAL: usize = N + 1;
     let all_ids = (0..TOTAL).map(|_| ObjectID::random()).collect::<Vec<_>>();
@@ -85,8 +85,8 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
 async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
     // This test tests the case where the last transaction in a batch transaction would fail to execute.
     // We make sure that the entire batch is rolled back, and only gas is charged.
-    let (sender, sender_key) = get_key_pair();
-    let (recipient, _) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, _): (_, AccountKeyPair) = get_key_pair();
     const N: usize = 100;
     const TOTAL: usize = N + 1;
     let all_ids = (0..TOTAL).map(|_| ObjectID::random()).collect::<Vec<_>>();
@@ -134,7 +134,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
 #[tokio::test]
 async fn test_batch_contains_publish() -> anyhow::Result<()> {
     // Test that a batch transaction containing publish will fail.
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let authority_state = init_state_with_ids([(sender, gas_object_id)]).await;
     let module = file_format::empty_module();
@@ -168,7 +168,7 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
 async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
     // This test creates 100 Move call transactions batch, each with a budget of 5000.
     // However we provide a gas coin with only 49999 balance.
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let authority_state = init_state_with_ids([]).await;
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_gas_for_testing(

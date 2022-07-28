@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::objects::{test_gas_objects, test_gas_objects_with_owners, test_shared_object};
-use crate::{test_committee, test_keys};
+use crate::{test_account_keys, test_committee, test_keys};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_package::BuildConfig;
@@ -10,14 +10,14 @@ use std::path::PathBuf;
 use sui_adapter::genesis;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::{AccountKeyPair, KeypairTraits};
+use sui_types::messages::CallArg;
 use sui_types::messages::{
     CertifiedTransaction, ObjectArg, SignatureAggregator, SignedTransaction, Transaction,
     TransactionData,
 };
 use sui_types::object::Object;
 use sui_types::{base_types::SuiAddress, crypto::Signature};
-use sui_types::{crypto::KeyPair, messages::CallArg};
 
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 10_000;
@@ -25,10 +25,10 @@ pub const MAX_GAS: u64 = 10_000;
 /// Make a few different single-writer test transactions owned by specific addresses.
 pub fn test_transactions<K>(keys: K) -> (Vec<Transaction>, Vec<Object>)
 where
-    K: Iterator<Item = KeyPair>,
+    K: Iterator<Item = AccountKeyPair>,
 {
     // The key pair of the recipient of the transaction.
-    let (recipient, _) = test_keys().pop().unwrap();
+    let (recipient, _) = test_account_keys().pop().unwrap();
 
     // The gas objects and the objects used in the transfer transactions. Ever two
     // consecutive objects must have the same owner for the transaction to be valid.
@@ -83,7 +83,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     }
 
     // The key pair of the sender of the transaction.
-    let (sender, keypair) = test_keys().pop().unwrap();
+    let (sender, keypair) = test_account_keys().pop().unwrap();
 
     // Make one transaction per gas object (all containing the same shared object).
     let mut transactions = Vec::new();
@@ -130,14 +130,16 @@ pub fn create_publish_move_package_transaction(gas_object: Object, path: PathBuf
         .collect();
 
     let gas_object_ref = gas_object.compute_object_reference();
-    let (sender, keypair) = test_keys().pop().unwrap();
+
+    let (sender, keypair) = test_account_keys().pop().unwrap();
+
     let data = TransactionData::new_module(sender, gas_object_ref, all_module_bytes, MAX_GAS);
     let signature = Signature::new(&data, &keypair);
     Transaction::new(data, signature)
 }
 
 pub fn make_transfer_sui_transaction(gas_object: Object, recipient: SuiAddress) -> Transaction {
-    let (sender, keypair) = test_keys().pop().unwrap();
+    let (sender, keypair) = test_account_keys().pop().unwrap();
     let data = TransactionData::new_transfer_sui(
         recipient,
         sender,
@@ -153,7 +155,7 @@ pub fn make_transfer_object_transaction(
     object_ref: ObjectRef,
     gas_object: ObjectRef,
     sender: SuiAddress,
-    keypair: &KeyPair,
+    keypair: &AccountKeyPair,
     recipient: SuiAddress,
 ) -> Transaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
@@ -162,7 +164,7 @@ pub fn make_transfer_object_transaction(
 }
 
 pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {
-    let (sender, keypair) = test_keys().pop().unwrap();
+    let (sender, keypair) = test_account_keys().pop().unwrap();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("../../sui_programmability/examples/basics");
     let build_config = BuildConfig::default();
@@ -184,7 +186,7 @@ pub fn make_counter_create_transaction(
     gas_object: ObjectRef,
     package_ref: ObjectRef,
 ) -> Transaction {
-    let (sender, keypair) = test_keys().pop().unwrap();
+    let (sender, keypair) = test_account_keys().pop().unwrap();
     let data = TransactionData::new_move_call(
         sender,
         package_ref,
@@ -204,7 +206,7 @@ pub fn make_counter_increment_transaction(
     package_ref: ObjectRef,
     counter_id: ObjectID,
 ) -> Transaction {
-    let (sender, keypair) = test_keys().pop().unwrap();
+    let (sender, keypair) = test_account_keys().pop().unwrap();
     let data = TransactionData::new_move_call(
         sender,
         package_ref,
@@ -228,7 +230,7 @@ pub fn move_transaction(
     arguments: Vec<CallArg>,
 ) -> Transaction {
     // The key pair of the sender of the transaction.
-    let (sender, keypair) = test_keys().pop().unwrap();
+    let (sender, keypair) = test_account_keys().pop().unwrap();
 
     // Make the transaction.
     let data = TransactionData::new_move_call(

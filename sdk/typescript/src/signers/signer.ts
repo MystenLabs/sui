@@ -11,6 +11,7 @@ import { Base64DataBuffer } from '../serialization/base64';
  * Pair of signature and corresponding public key
  */
 export type SignaturePubkeyPair = {
+  flag: Base64DataBuffer;
   signature: Base64DataBuffer;
   pubKey: PublicKey;
 };

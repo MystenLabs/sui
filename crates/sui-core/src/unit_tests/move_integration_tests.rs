@@ -9,8 +9,7 @@ use crate::authority::authority_tests::{
 
 use move_package::BuildConfig;
 use sui_types::{
-    crypto::KeyPair,
-    crypto::{get_key_pair, Signature},
+    crypto::{get_key_pair, AccountKeyPair, Signature},
     event::{Event, EventType, TransferType},
     messages::ExecutionStatus,
     object::OBJECT_START_VERSION,
@@ -23,7 +22,7 @@ const MAX_GAS: u64 = 10000;
 
 #[tokio::test]
 async fn test_object_wrapping_unwrapping() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
@@ -203,7 +202,7 @@ async fn test_object_wrapping_unwrapping() {
 
 #[tokio::test]
 async fn test_object_owning_another_object() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas = ObjectID::random();
     let authority = init_state_with_ids(vec![(sender, gas)]).await;
 
@@ -449,7 +448,7 @@ async fn test_object_owning_another_object() {
 pub async fn build_and_try_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
-    sender_key: &KeyPair,
+    sender_key: &AccountKeyPair,
     gas_object_id: &ObjectID,
     test_dir: &str,
     gas_budget: u64,
@@ -483,7 +482,7 @@ pub async fn build_and_try_publish_test_package(
 async fn build_and_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,
-    sender_key: &KeyPair,
+    sender_key: &AccountKeyPair,
     gas_object_id: &ObjectID,
     test_dir: &str,
 ) -> ObjectRef {

@@ -13,7 +13,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_key_pair, EncodeDecodeBase64, KeyPair, KeypairTraits, Signature};
+use sui_types::crypto::{
+    get_key_pair, AccountKeyPair, EncodeDecodeBase64, KeypairTraits, Signature,
+};
 
 #[derive(Serialize, Deserialize)]
 #[non_exhaustive]
@@ -25,7 +27,7 @@ pub enum KeystoreType {
 pub trait Keystore: Send + Sync {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
     fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error>;
-    fn add_key(&mut self, keypair: KeyPair) -> Result<(), anyhow::Error>;
+    fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error>;
 }
 
 impl KeystoreType {
@@ -51,7 +53,7 @@ impl Display for KeystoreType {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct SuiKeystore {
-    keys: BTreeMap<SuiAddress, KeyPair>,
+    keys: BTreeMap<SuiAddress, AccountKeyPair>,
     path: Option<PathBuf>,
 }
 
@@ -66,13 +68,13 @@ impl Keystore for SuiKeystore {
     }
 
     fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        let (address, keypair) = get_key_pair();
+        let (address, keypair): (_, AccountKeyPair) = get_key_pair();
         self.keys.insert(address, keypair);
         self.save()?;
         Ok(address)
     }
 
-    fn add_key(&mut self, keypair: KeyPair) -> Result<(), anyhow::Error> {
+    fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error> {
         let address: SuiAddress = keypair.public().into();
         self.keys.insert(address, keypair);
         self.save()?;
@@ -82,12 +84,12 @@ impl Keystore for SuiKeystore {
 
 impl SuiKeystore {
     pub fn load_or_create(path: &Path) -> Result<Self, anyhow::Error> {
-        let keys: Vec<KeyPair> = if path.exists() {
+        let keys: Vec<AccountKeyPair> = if path.exists() {
             let reader = BufReader::new(File::open(path)?);
             let kp_strings: Vec<String> = serde_json::from_reader(reader)?;
             kp_strings
                 .iter()
-                .map(|kpstr| KeyPair::decode_base64(kpstr))
+                .map(|kpstr| AccountKeyPair::decode_base64(kpstr))
                 .collect::<Result<Vec<_>, _>>()
                 .map_err(|_| anyhow::anyhow!("Invalid Keypair file"))?
         } else {
@@ -124,7 +126,11 @@ impl SuiKeystore {
         Ok(())
     }
 
-    pub fn add_key(&mut self, address: SuiAddress, keypair: KeyPair) -> Result<(), anyhow::Error> {
+    pub fn add_key(
+        &mut self,
+        address: SuiAddress,
+        keypair: AccountKeyPair,
+    ) -> Result<(), anyhow::Error> {
         self.keys.insert(address, keypair);
         Ok(())
     }
@@ -133,7 +139,7 @@ impl SuiKeystore {
         self.keys.keys().cloned().collect()
     }
 
-    pub fn key_pairs(&self) -> Vec<&KeyPair> {
+    pub fn key_pairs(&self) -> Vec<&AccountKeyPair> {
         self.keys.values().collect()
     }
 }

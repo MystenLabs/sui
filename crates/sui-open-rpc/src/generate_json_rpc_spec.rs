@@ -34,6 +34,7 @@ use sui_json_rpc_types::{
     TransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::crypto::SuiSignature;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::{start_rpc_test_network, TestNetwork};

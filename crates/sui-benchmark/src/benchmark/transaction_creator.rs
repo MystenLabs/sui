@@ -8,8 +8,8 @@ use sui_config::NetworkConfig;
 use sui_types::{
     base_types::*,
     crypto::{
-        get_key_pair, AuthoritySignature, KeyPair, KeypairTraits, PublicKeyBytes, Signature,
-        SuiAuthoritySignature,
+        get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits,
+        Signature, SuiAuthoritySignature,
     },
     messages::*,
     object::Object,
@@ -68,7 +68,7 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
             .get(i as usize)
             .unwrap()
             .key_pair();
-        let pubx: PublicKeyBytes = secx.public().into();
+        let pubx: AuthorityPublicKeyBytes = secx.public().into();
         let sig = AuthoritySignature::new(&tx.data, secx);
         sigs.push((pubx, sig));
     }
@@ -81,7 +81,7 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
 
 fn make_transactions(
     address: SuiAddress,
-    keypair: KeyPair,
+    keypair: AccountKeyPair,
     network_config: &NetworkConfig,
     account_gas_objects: &[(Vec<Object>, Object)],
     batch_size: usize,
@@ -92,7 +92,7 @@ fn make_transactions(
     account_gas_objects
         .par_iter()
         .map(|(objects, gas_obj)| {
-            let next_recipient: SuiAddress = get_key_pair().0;
+            let next_recipient: SuiAddress = get_key_pair::<AccountKeyPair>().0;
             let mut single_kinds = vec![];
             for object in objects {
                 single_kinds.push(make_transfer_transaction(
@@ -154,10 +154,10 @@ impl TransactionCreator {
         use_move: bool,
         chunk_size: usize,
         num_chunks: usize,
-        sender: Option<&KeyPair>,
+        sender: Option<&AccountKeyPair>,
         validator_preparer: &mut ValidatorPreparer,
     ) -> Vec<(Transaction, CertifiedTransaction)> {
-        let (address, keypair) = if let Some(a) = sender {
+        let (address, keypair): (_, AccountKeyPair) = if let Some(a) = sender {
             (a.public().into(), a.copy())
         } else {
             get_key_pair()
@@ -222,7 +222,7 @@ impl TransactionCreator {
     fn make_transactions(
         &mut self,
         address: SuiAddress,
-        key_pair: KeyPair,
+        key_pair: AccountKeyPair,
         chunk_size: usize,
         num_chunks: usize,
         conn: usize,

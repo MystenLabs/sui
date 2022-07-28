@@ -62,6 +62,7 @@ export abstract class SignerWithProvider implements Signer {
     const sig = await this.signData(txBytes);
     return await this.provider.executeTransaction(
       txBytes.toString(),
+      sig.flag.toString(),
       sig.signature.toString(),
       sig.pubKey.toString()
     );
