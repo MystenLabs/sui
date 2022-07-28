@@ -81,6 +81,9 @@ jobs:
       - name: Doctests
         run: |
           cargo test --doc --all-features
+      - name: cluster test
+        run: |
+          cargo run --bin sui-cluster-test -- new-local
       # Ensure there are no uncommitted changes in the repo after running tests
       - run: scripts/changed-files.sh
         shell: bash
