@@ -36,9 +36,7 @@ Select the **Sui Doc Bug** template, adjust fields, and describe the issue.
 
 ### Updates
 
-You may also make changes to the docs directly in GitHub right here using the **Source Code** link below.
-
-> **Important:** Make sure you are in the `main` rather than `devnet` branch in the URL.
+You may also make changes to the docs directly in GitHub right here using the **Source Code** link below. Make sure you are in the `main` rather than `devnet` branch by being on the [Latest build](https://docs.sui.io/learn) upstream view as described at the top of this page.
 
 Simply edit the file in question and generate a pull request. You may even use our [Sui doc templates](https://github.com/MystenLabs/sui/tree/main/doc/template) to create overviews and procedures (uses).
 
