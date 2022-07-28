@@ -19,8 +19,6 @@ function TokenView({ data }: { data: DataType }) {
         url: parseImageURL(data.data.contents),
     };
 
-    const detailsTitle = 'Properties';
-
     const checkIsPropertyType = (value: any) =>
         ['number', 'string'].includes(typeof value);
     const stdLibRe = /0x2::/;
@@ -126,15 +124,17 @@ function TokenView({ data }: { data: DataType }) {
                 </table>
                 {properties.length > 0 && (
                     <>
-                        <h2 className={styles.header}>{detailsTitle}</h2>
-                        <div className={styles.propertybox}>
-                            {properties.map(([key, value], index) => (
-                                <div key={`property-${index}`}>
-                                    <p>{key}</p>
-                                    <p>{value}</p>
-                                </div>
-                            ))}
-                        </div>
+                        <h2 className={styles.header}>Properties</h2>
+                        <table className={styles.properties}>
+                            <tbody>
+                                {properties.map(([key, value], index) => (
+                                    <tr key={`property-${index}`}>
+                                        <td>{key}</td>
+                                        <td>{value}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </>
                 )}
                 {structProperties.length > 0 &&

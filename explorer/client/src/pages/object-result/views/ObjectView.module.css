@@ -1,3 +1,27 @@
+@tailwind components;
+
+@layer components {
+    .textdetails {
+        @apply border-collapse mb-[3.75rem];
+    }
+
+    .textdetails td {
+        @apply text-start align-top text-[0.875rem] leading-[1.063rem];
+    }
+
+    .textdetails > tbody > tr > td:first-child {
+        @apply text-sui-grey-80  font-medium pr-6 w-[150px];
+    }
+
+    .textdetails > tbody > tr > td:nth-child(2) {
+        @apply break-all;
+    }
+
+    .textdetails > tbody > tr:not(:last-child) > td {
+        @apply pb-5 sm:pb-2.5;
+    }
+}
+
 .resultbox {
     @apply flex flex-wrap w-[100%];
 }
@@ -49,48 +73,21 @@ div.textbox > div > div > div.unconstrained {
 
 /* Description CSS */
 
-table.description {
-    @apply border-collapse mb-[3.75rem];
+table.description,
+table.properties {
+    @apply textdetails;
 }
 
-table.description td {
-    @apply text-start align-top text-[0.875rem] leading-[1.063rem];
+.description > tbody > tr > td:nth-child(2) {
+    @apply font-mono;
 }
 
-table.description > tbody > tr > td:first-child {
-    @apply text-sui-grey-80  font-medium pr-6;
-}
-
-table.description > tbody > tr > td:nth-child(2) {
-    @apply font-mono break-all;
-}
-
-table.description > tbody > tr:not(:last-child) > td {
-    @apply pb-5 sm:pb-2.5;
+.properties > tbody > tr > td:nth-child(2) {
+    @apply font-sans;
 }
 
 td.objectid {
     @apply text-sui-dark;
-}
-
-/* Property Box CSS */
-
-div.propertybox {
-    @apply flex flex-wrap font-mono;
-}
-
-div.propertybox > div {
-    @apply p-[0.5rem] mx-[1vw] my-[1vh] text-center border-solid rounded-xl bg-slate-200;
-
-    overflow-wrap: anywhere;
-}
-
-div.propertybox > div > p {
-    @apply m-0;
-}
-
-div.propertybox > div > p:first-child {
-    @apply font-sans font-semibold;
 }
 
 /* Clickable Header CSS */
