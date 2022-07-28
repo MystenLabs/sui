@@ -33,9 +33,9 @@ module fungible_tokens::basket {
     /// Needed to deposit a 1:1 ratio of SUI and MANAGED for minting, but deposited a different ratio
     const EBadDepositRatio: u64 = 0;
 
-    fun init(ctx: &mut TxContext) {
+    fun init(witness: BASKET, ctx: &mut TxContext) {
         // Get a treasury cap for the coin put it in the reserve
-        let total_supply = balance::create_supply<BASKET>(BASKET {});
+        let total_supply = balance::create_supply<BASKET>(witness);
 
         transfer::share_object(Reserve {
             info: object::new(ctx),
@@ -92,6 +92,6 @@ module fungible_tokens::basket {
 
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
-        init(ctx)
+        init(BASKET {}, ctx)
     }
 }
