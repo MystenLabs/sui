@@ -100,7 +100,6 @@ function columnsContent(columns: TableColumn[]) {
 
             // handle multiple links in one cell
             if (Array.isArray(content)) {
-                console.log('CONTENT IS ARRAY', content)
                 return <TxAddresses content={content} />;
             }
             // Special case for txTypes and status
