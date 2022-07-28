@@ -12,6 +12,9 @@ function NftsPage() {
 
     return (
         <ObjectsLayout totalItems={nfts.length} emptyMsg="No NFTs found">
+            <h4 className={st.title}>
+                NFT Collectibles <span>{nfts.length}</span>
+            </h4>
             <section className={st.nftGalleryContainer}>
                 <section className={st.nftGallery}>
                     {nfts.map((anNft, index) => (
