@@ -6,6 +6,7 @@ import {
     isPublishEvent,
 } from '@mysten/sui.js';
 
+import { isBigIntOrNumber } from '../../utils/numberUtil';
 import { getOwnerStr } from '../../utils/objectUtils';
 
 import type {
@@ -18,7 +19,6 @@ import type {
     DeleteObjectEvent,
     PublishEvent,
 } from '@mysten/sui.js';
-import { isBigIntOrNumber } from '../../utils/numberUtil';
 
 export function moveEventDisplay(event: MoveEvent) {
     return {
