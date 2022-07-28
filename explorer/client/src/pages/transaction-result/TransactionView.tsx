@@ -238,8 +238,11 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     const txEventData = txdata.events?.map(eventToDisplay);
     console.log('txdata', txdata, txEventData);
 
+    let eventTitles: string[] = [];
     const txEventDisplay = txEventData?.map((ed) => {
         if (!ed) return <div></div>;
+
+        eventTitles.push(ed.top.title);
         return (
             <div className={styles.txgridcomponent} key={ed.top.title}>
                 <ItemView data={ed.top as TxItemView} />
@@ -247,6 +250,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
             </div>
         );
     });
+
+    let eventTitlesDisplay = eventTitles.map(et => (
+        <div key={et} className={styles.eventtitle}>
+            <Longtext text={et} category={'unknown'} isCopyButton={false} isLink={false}/>
+        </div>
+    ));
 
     const transactionSignatureData = {
         title: 'Transaction Signatures',
@@ -395,9 +404,15 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                     </div>
                 </section>
                 <section title="Events">
-                    <div className={styles.txgridcomponent}>
-                        {txEventDisplay}
+                    <div className={styles.txevents}>
+                        <div className={styles.txeventsleft}>
+                            {eventTitlesDisplay}
+                        </div>
+                        <div className={styles.txeventsright}>
+                            {txEventDisplay}
+                        </div>
                     </div>
+
                 </section>
                 <section title="Signatures">
                     <div className={styles.txgridcomponent}>

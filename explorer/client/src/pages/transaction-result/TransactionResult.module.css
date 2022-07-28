@@ -6,6 +6,29 @@
     @apply block md:grid grid-cols-1 md:grid-cols-1 gap-0 md:gap-3;
 }
 
+.txevents {
+    @apply grid grid-cols-5;
+}
+
+.eventtitle {
+    @apply pl-2;
+}
+.eventtitle:hover {
+    @apply bg-blue-100;
+    border-radius: 6px;
+}
+
+.txeventsleft {
+    @apply col-span-1;
+    margin-top: 12.5%;
+    line-height: 200%;
+    margin-right: 5%;
+    border-right: 1px solid #f0f1f2;
+}
+.txeventsright {
+    @apply col-span-4;
+}
+
 .txcomponent {
     @apply pt-4 pb-4;
 }
