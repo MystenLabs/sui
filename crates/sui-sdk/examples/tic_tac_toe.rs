@@ -17,12 +17,13 @@ use sui_sdk::{
     types::{
         base_types::{ObjectID, SuiAddress},
         crypto::SignableBytes,
-        id::VersionedID,
+        id::Info,
         messages::TransactionData,
         sui_serde::Base64,
     },
     SuiClient,
 };
+use sui_types::crypto::SuiSignature;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -98,11 +99,17 @@ impl TicTacToe {
         let signature = self.keystore.sign(&player_x, &transaction_bytes)?;
         let signature_base64 = Base64::from_bytes(signature.signature_bytes());
         let pub_key = Base64::from_bytes(signature.public_key_bytes());
+        let flag_base64 = Base64::from_bytes(&[signature.flag_byte()]);
 
         // Execute the transaction.
         let response = self
             .client
-            .execute_transaction(create_game_call.tx_bytes, signature_base64, pub_key)
+            .execute_transaction(
+                create_game_call.tx_bytes,
+                flag_base64,
+                signature_base64,
+                pub_key,
+            )
             .await?;
 
         // We know `create_game` move function will create 1 object.
@@ -174,7 +181,7 @@ impl TicTacToe {
                     "place_mark".to_string(),
                     vec![],
                     vec![
-                        SuiJsonValue::from_str(&game_state.id.object_id().to_hex_literal())?,
+                        SuiJsonValue::from_str(&game_state.info.object_id().to_hex_literal())?,
                         SuiJsonValue::from_str(&row.to_string())?,
                         SuiJsonValue::from_str(&col.to_string())?,
                     ],
@@ -188,11 +195,17 @@ impl TicTacToe {
             let signature = self.keystore.sign(&my_identity, &transaction_bytes)?;
             let signature_base64 = Base64::from_bytes(signature.signature_bytes());
             let pub_key = Base64::from_bytes(signature.public_key_bytes());
+            let flag_base64 = Base64::from_bytes(&[signature.flag_byte()]);
 
             // Execute the transaction.
             let response = self
                 .client
-                .execute_transaction(place_mark_call.tx_bytes, signature_base64, pub_key)
+                .execute_transaction(
+                    place_mark_call.tx_bytes,
+                    flag_base64,
+                    signature_base64,
+                    pub_key,
+                )
                 .await?;
 
             // Print any execution error.
@@ -203,14 +216,14 @@ impl TicTacToe {
             // Proceed to next turn.
             self.next_turn(
                 my_identity,
-                self.fetch_game_state(*game_state.id.object_id()).await?,
+                self.fetch_game_state(*game_state.info.object_id()).await?,
             )
             .await?;
         } else {
             println!("Waiting for opponent...");
             // Sleep until my turn.
             while !self
-                .fetch_game_state(*game_state.id.object_id())
+                .fetch_game_state(*game_state.info.object_id())
                 .await?
                 .is_my_turn(my_identity)
             {
@@ -218,7 +231,7 @@ impl TicTacToe {
             }
             self.next_turn(
                 my_identity,
-                self.fetch_game_state(*game_state.id.object_id()).await?,
+                self.fetch_game_state(*game_state.info.object_id()).await?,
             )
             .await?;
         };
@@ -303,7 +316,7 @@ enum TicTacToeCommand {
 // Data structure mirroring move object `games::shared_tic_tac_toe::TicTacToe` for deserialization.
 #[derive(Deserialize, Debug)]
 struct TicTacToeState {
-    id: VersionedID,
+    info: Info,
     gameboard: Vec<Vec<u8>>,
     cur_turn: u8,
     game_status: u8,

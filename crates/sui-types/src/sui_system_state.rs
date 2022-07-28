@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     balance::{Balance, Supply},
-    id::VersionedID,
+    id::Info,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -71,7 +71,7 @@ pub struct ValidatorSet {
 /// Rust version of the Move sui::sui_system::SuiSystemState type
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 pub struct SuiSystemState {
-    pub id: VersionedID,
+    pub info: Info,
     pub epoch: u64,
     pub validators: ValidatorSet,
     pub treasury_cap: Supply,

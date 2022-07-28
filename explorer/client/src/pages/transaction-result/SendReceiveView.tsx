@@ -32,6 +32,7 @@ function SendRecieveView({ data }: { data: TxAddress }) {
                 <Longtext
                     text={data.sender}
                     category="addresses"
+                    isCopyButton={false}
                     isLink={true}
                 />
                 {data.recipient && (
@@ -42,6 +43,7 @@ function SendRecieveView({ data }: { data: TxAddress }) {
                                     text={add}
                                     category="addresses"
                                     isLink={true}
+                                    isCopyButton={false}
                                     alttext={add}
                                 />
                             </li>

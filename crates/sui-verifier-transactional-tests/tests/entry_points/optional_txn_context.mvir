@@ -14,8 +14,8 @@ module 0x0.m {
 //# publish
 module 0x0.m {
     import 0x2.tx_context;
-    import 0x2.id;
-    struct Obj has key { id: id.VersionedID }
+    import 0x2.object;
+    struct Obj has key { info: object.Info }
     public entry t(flag: bool, arg: &mut Self.Obj) {
         label l0:
         abort 0;

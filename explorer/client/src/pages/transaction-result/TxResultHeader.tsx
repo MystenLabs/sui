@@ -59,7 +59,7 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
                 <Icon /> {TxKindName}
             </div>
             <div className={styles.txid}>
-                <div>
+                <div className={styles.txaddress}>
                     <Longtext
                         text={data.txId}
                         category="addresses"
@@ -74,18 +74,18 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
                         {' '}
                         <TxResultStatus /> {statusName}
                     </div>
-                    {data.error && (
-                        <div
-                            className={cl([
-                                styles.txresulttype,
-                                styles.failed,
-                                styles.error,
-                            ])}
-                        >
-                            {data.error}
-                        </div>
-                    )}
                 </div>
+                {data.error && (
+                    <div
+                        className={cl([
+                            styles.txresulttype,
+                            styles.failed,
+                            styles.error,
+                        ])}
+                    >
+                        {data.error}
+                    </div>
+                )}
             </div>
         </div>
     );

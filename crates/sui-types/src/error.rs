@@ -79,6 +79,8 @@ pub enum SuiError {
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
+    #[error("Sender Signature must be verified separately from Authority Signature")]
+    SenderSigUnbatchable,
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
     #[error("Value was not signed by a known authority")]
@@ -197,6 +199,17 @@ pub enum SuiError {
     SubscriptionServiceClosed,
     #[error("Checkpointing error: {}", error)]
     CheckpointingError { error: String },
+    #[error(
+        "ExecutionDriver error for {:?}: {} - Caused by : {:#?}",
+        digest,
+        msg,
+        errors.iter().map(|e| ToString::to_string(&e)).collect::<Vec<String>>()
+    )]
+    ExecutionDriverError {
+        digest: TransactionDigest,
+        msg: String,
+        errors: Vec<SuiError>,
+    },
 
     // Move module publishing related errors
     #[error("Failed to load the Move module, reason: {error:?}.")]
@@ -351,6 +364,10 @@ pub enum SuiError {
     HkdfError(String),
     #[error("Signature key generation error: {0}")]
     SignatureKeyGenError(String),
+    #[error("Key Conversion Error: {0}")]
+    KeyConversionError(String),
+    #[error("Invalid Private Key provided")]
+    InvalidPrivateKey,
 
     // Epoch related errors.
     #[error("Validator temporarily stopped processing transactions due to epoch change")]

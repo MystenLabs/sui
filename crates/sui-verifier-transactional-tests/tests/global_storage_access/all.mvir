@@ -3,9 +3,9 @@
 
 //# publish
 module 0x0.m {
-    import 0x2.id;
-    struct R has key { id: id.VersionedID }
-    struct G<phantom T> has key { id: id.VersionedID }
+    import 0x2.object;
+    struct R has key { info: object.Info }
+    struct G<phantom T> has key { info: object.Info }
 
 
     no<T>(s: &signer, addr: address, r: Self.R, g: Self.G<T>) acquires R, G {

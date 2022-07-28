@@ -10,7 +10,7 @@ edition = "2021"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 rand = "0.7.3"
 tracing = "0.1.35"
-tokio = { version = "1.18.2", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 futures = "0.3.21"
 tempfile = "3.3.0"
 tonic-health = "0.6.0"
@@ -20,8 +20,8 @@ sui-config = { path = "../sui-config" }
 sui-node = { path = "../sui-node" }
 sui-types = { path = "../sui-types" }
 
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7e9b7568fc7184b4938976330122f3c8064e3236" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7e9b7568fc7184b4938976330122f3c8064e3236" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }

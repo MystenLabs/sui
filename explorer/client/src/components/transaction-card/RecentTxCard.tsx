@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import * as Sentry from '@sentry/react';
 import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -33,7 +34,7 @@ import type {
 import styles from './RecentTxCard.module.css';
 
 const TRUNCATE_LENGTH = 10;
-const NUMBER_OF_TX_PER_PAGE = 15;
+const NUMBER_OF_TX_PER_PAGE = 20;
 const DEFAULT_PAGI_TYPE = 'more button';
 
 type PaginationType = 'more button' | 'pagination' | 'none';
@@ -80,6 +81,21 @@ function generateStartEndRange(
     };
 }
 
+// Static data for development and testing
+const getRecentTransactionsStatic = (): Promise<TxnData[]> => {
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            const latestTx = getAllMockTransaction().map((tx) => ({
+                ...tx,
+                status: tx.status as ExecutionStatusType,
+                kind: tx.kind as TransactionKindName,
+            }));
+            resolve(latestTx as TxnData[]);
+        }, 500);
+    });
+};
+
+// TOD0: Optimize this method to use fewer API calls. Move the total tx count to this component.
 async function getRecentTransactions(
     network: Network | string,
     totalTx: number,
@@ -87,8 +103,11 @@ async function getRecentTransactions(
     pageNum?: number
 ): Promise<TxnData[]> {
     try {
+        // If static env, use static data
+        if (IS_STATIC_ENV) {
+            return getRecentTransactionsStatic();
+        }
         // Get the latest transactions
-
         // Instead of getRecentTransactions, use getTransactionCount
         // then use getTransactionDigestsInRange using the totalTx as the start totalTx sequence number - txNum as the end sequence number
         // Get the total number of transactions, then use as the start and end values for the getTransactionDigestsInRange
@@ -113,29 +132,17 @@ async function getRecentTransactions(
     }
 }
 
-// Pass Props txPerPage, truncateLength, paginationtype to the component so that this component can be used for both the Home Page and trnasaction page
-// TODO - rework this - gets confusing
-function LatestTxView({
-    results,
-}: {
-    results: {
-        loadState: string;
-        latestTx: TxnData[];
-        totalTxcount?: number;
-        txPerPage?: number;
-        truncateLength?: number;
-        paginationtype?: PaginationType;
-    };
-}) {
-    const totalCount = results.totalTxcount || 1;
-    const txPerPage = results.txPerPage || NUMBER_OF_TX_PER_PAGE;
-    const truncateLength = results.truncateLength || TRUNCATE_LENGTH;
-    const paginationtype = results.paginationtype || DEFAULT_PAGI_TYPE;
+type RecentTx = {
+    count?: number;
+    paginationtype?: PaginationType;
+    txPerPage?: number;
+    truncateLength?: number;
+};
 
-    //TODO update initial state and match the latestTx table data
-    const defaultActiveTab = 0;
-    const recentTx = {
-        data: results.latestTx.map((txn) => ({
+// Generate table data from the transaction data
+const recentTxTable = (results: TxnData[], truncateLength: number) => {
+    return {
+        data: results.map((txn) => ({
             date: `${timeAgo(txn.timestamp_ms, undefined, true)} ago`,
             transactionId: [
                 {
@@ -196,82 +203,40 @@ function LatestTxView({
             },
         ],
     };
-    const tabsFooter = {
-        stats: {
-            count: totalCount || 0,
-            stats_text: 'Total transactions',
-        },
-    };
-
-    return (
-        <div className={cl(styles.txlatestresults, styles[paginationtype])}>
-            <Tabs selected={defaultActiveTab}>
-                <div title="Transactions">
-                    <TableCard tabledata={recentTx} />
-                    <TabFooter stats={tabsFooter.stats}>
-                        {paginationtype !== 'none' ? (
-                            paginationtype === 'pagination' ? (
-                                <Pagination
-                                    totalTxCount={totalCount}
-                                    txNum={txPerPage}
-                                />
-                            ) : (
-                                <Link className={styles.moretxbtn} to={`/`}>
-                                    More Transactions{' '}
-                                    <ContentForwardArrowDark />
-                                </Link>
-                            )
-                        ) : (
-                            <></>
-                        )}
-                    </TabFooter>
-                </div>
-            </Tabs>
-        </div>
-    );
-}
-
-function LatestTxCardStatic() {
-    const latestTx = getAllMockTransaction().map((tx) => ({
-        ...tx,
-        status: tx.status as ExecutionStatusType,
-        kind: tx.kind as TransactionKindName,
-    }));
-
-    const results = {
-        loadState: 'loaded',
-        latestTx: latestTx,
-    };
-    return (
-        <>
-            <LatestTxView results={results} />
-        </>
-    );
-}
-
-type RecentTx = {
-    count?: number;
-    paginationtype?: PaginationType;
-    txPerPage?: number;
-    truncateLength?: number;
 };
 
-function LatestTxCardAPI({ ...data }: RecentTx) {
+function LatestTxCard({ ...data }: RecentTx) {
     const {
         count = 0,
-        txPerPage = NUMBER_OF_TX_PER_PAGE,
         truncateLength = TRUNCATE_LENGTH,
         paginationtype = DEFAULT_PAGI_TYPE,
     } = data;
+
+    const [txPerPage, setTxPerPage] = useState(
+        data.txPerPage || NUMBER_OF_TX_PER_PAGE
+    );
+
     const [isLoaded, setIsLoaded] = useState(false);
     const [results, setResults] = useState(initState);
     const [network] = useContext(NetworkContext);
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
 
+    const [pageIndex, setpageIndex] = useState(
+        parseInt(searchParams.get('p') || '1', 10) || 1
+    );
+
+    // update the page index when the user clicks on the pagination buttons
     useEffect(() => {
         let isMounted = true;
-        const pagedNum: number = parseInt(searchParams.get('p') || '1', 10);
-        getRecentTransactions(network, count, txPerPage, pagedNum)
+        // If pageIndex is greater than maxTxPage, set to maxTxPage
+        const maxTxPage = Math.ceil(count / txPerPage);
+        const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
+        setpageIndex(pg);
+        pageIndex > 1
+            ? setSearchParams({ p: pg.toString() })
+            : setSearchParams({});
+
+        getRecentTransactions(network, count, txPerPage, pg)
             .then(async (resp: any) => {
                 if (isMounted) {
                     setIsLoaded(true);
@@ -280,9 +245,6 @@ function LatestTxCardAPI({ ...data }: RecentTx) {
                     loadState: 'loaded',
                     latestTx: resp,
                     totalTxcount: count,
-                    txPerPage: txPerPage,
-                    truncateLength: truncateLength,
-                    paginationtype,
                 });
             })
             .catch((err) => {
@@ -295,19 +257,12 @@ function LatestTxCardAPI({ ...data }: RecentTx) {
                     'Encountered error when fetching recent transactions',
                     err
                 );
+                Sentry.captureException(err);
             });
-
         return () => {
             isMounted = false;
         };
-    }, [
-        count,
-        network,
-        paginationtype,
-        searchParams,
-        truncateLength,
-        txPerPage,
-    ]);
+    }, [count, network, pageIndex, setSearchParams, txPerPage]);
 
     if (results.loadState === 'pending') {
         return (
@@ -330,15 +285,43 @@ function LatestTxCardAPI({ ...data }: RecentTx) {
         return <ErrorResult id="" errorMsg="No Transactions Found" />;
     }
 
+    const defaultActiveTab = 0;
+    const recentTx = recentTxTable(results.latestTx, truncateLength);
+
+    const stats = {
+        count,
+        stats_text: 'Total transactions',
+    };
+
+    const PaginationWithStatsOrStatsWithLink =
+        paginationtype === 'pagination' ? (
+            <Pagination
+                totalItems={count}
+                itemsPerPage={txPerPage}
+                updateItemsPerPage={setTxPerPage}
+                onPagiChangeFn={setpageIndex}
+                currentPage={pageIndex}
+                stats={stats}
+            />
+        ) : (
+            <TabFooter stats={stats}>
+                <Link className={styles.moretxbtn} to={`/`}>
+                    More Transactions <ContentForwardArrowDark />
+                </Link>
+            </TabFooter>
+        );
+
     return (
-        <>
-            <LatestTxView results={results} />
-        </>
+        <div className={cl(styles.txlatestresults, styles[paginationtype])}>
+            <Tabs selected={defaultActiveTab}>
+                <div title="Transactions">
+                    <TableCard tabledata={recentTx} />
+                    {paginationtype !== 'none' &&
+                        PaginationWithStatsOrStatsWithLink}
+                </div>
+            </Tabs>
+        </div>
     );
 }
-
-// Provide option to show pagination or not, so we can reuse this component for both homepage and the transactions page
-const LatestTxCard = ({ ...data }: RecentTx) =>
-    IS_STATIC_ENV ? <LatestTxCardStatic /> : <LatestTxCardAPI {...data} />;
 
 export default LatestTxCard;

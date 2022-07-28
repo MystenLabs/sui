@@ -4,7 +4,7 @@
 module nfts::geniteam {
     use sui::bag::{Self, Bag};
     use sui::collection::{Self, Collection};
-    use sui::id::VersionedID;
+    use sui::object::{Self, Info};
     use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
@@ -25,7 +25,7 @@ module nfts::geniteam {
     const EInvalidCosmeticsSlot: u64 = 4;
 
     struct Player has key {
-        id: VersionedID,
+        info: Info,
         player_name: String,
         water_runes_count: u64,
         fire_runes_count: u64,
@@ -42,7 +42,7 @@ module nfts::geniteam {
     }
 
     struct Farm has key {
-        id: VersionedID,
+        info: Info,
         farm_name: String,
         farm_img_index: u64,
         level: u64,
@@ -60,7 +60,7 @@ module nfts::geniteam {
     }
 
     struct Monster has key, store {
-        id: VersionedID,
+        info: Info,
         monster_name: String,
         monster_img_index: u64,
         breed: u8,
@@ -81,13 +81,13 @@ module nfts::geniteam {
     }
 
     struct FarmCosmetic has key, store{
-        id: VersionedID,
+        info: Info,
         cosmetic_type: u8,
         display: String,
     }
 
     struct MonsterCosmetic has key, store {
-        id: VersionedID,
+        info: Info,
         cosmetic_type: u8,
         display: String,
     }
@@ -168,7 +168,7 @@ module nfts::geniteam {
 
         // Create the farm cosmetic object
         let farm_cosmetic = FarmCosmetic {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             cosmetic_type,
             display: ascii::string(display)
             };
@@ -190,7 +190,7 @@ module nfts::geniteam {
 
         // Create the farm cosmetic object
         let monster_cosmetic = MonsterCosmetic {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             cosmetic_type,
             display: ascii::string(display)
             };
@@ -297,17 +297,17 @@ module nfts::geniteam {
         player_name: vector<u8>, ctx: &mut TxContext
     ): Player {
         // Create a new id for player.
-        let id = tx_context::new_id(ctx);
+        let info = object::new(ctx);
 
         // Create inventory collection.
         let inventory = bag::new(ctx);
 
         // Transfer ownership of inventory to player.
         let inventory_id = typed_id::new(&inventory);
-        bag::transfer_to_object_id(inventory, &id);
+        bag::transfer_to_object_id(inventory, &info);
 
         let player = Player {
-            id,
+            info,
             player_name: ascii::string(player_name),
             water_runes_count: 0,
             fire_runes_count: 0,
@@ -326,18 +326,18 @@ module nfts::geniteam {
         ctx: &mut TxContext
     ): Farm {
         // Create a new id for farm.
-        let id = tx_context::new_id(ctx);
+        let info = object::new(ctx);
 
         // Create pet monsters collection.
         let pet_monsters = collection::new<Monster>(ctx);
 
         // Transfer ownership of pet monsters to farm.
         let pet_monsters_id = typed_id::new(&pet_monsters);
-        collection::transfer_to_object_id(pet_monsters, &id);
+        collection::transfer_to_object_id(pet_monsters, &info);
 
 
         let farm = Farm {
-            id,
+            info,
             farm_name: ascii::string(farm_name),
             total_monster_slots,
             farm_img_index,
@@ -364,7 +364,7 @@ module nfts::geniteam {
     ): Monster {
 
         Monster {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             monster_name: ascii::string(monster_name),
             monster_img_index,
             breed,

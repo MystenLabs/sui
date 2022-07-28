@@ -82,7 +82,13 @@ const initialState = objectsAdapter.getInitialState<SuiObjectsManualState>({
 const slice = createSlice({
     name: 'sui-objects',
     initialState: initialState,
-    reducers: {},
+    reducers: {
+        clearForNetworkSwitch: (state) => {
+            state.error = false;
+            state.lastSync = null;
+            objectsAdapter.removeAll(state);
+        },
+    },
     extraReducers: (builder) => {
         builder
             .addCase(fetchAllOwnedObjects.fulfilled, (state, action) => {
@@ -105,6 +111,8 @@ const slice = createSlice({
 });
 
 export default slice.reducer;
+
+export const { clearForNetworkSwitch } = slice.actions;
 
 export const suiObjectsAdapterSelectors = objectsAdapter.getSelectors(
     (state: RootState) => state.suiObjects

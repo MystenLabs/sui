@@ -1,9 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use ed25519_dalek::ed25519::signature;
-use ed25519_dalek::{ed25519, Signer};
 use serde::{Deserialize, Serialize};
+use signature::Signer;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -14,7 +13,9 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use sui_types::base_types::SuiAddress;
-use sui_types::crypto::{get_key_pair, KeyPair, Signature};
+use sui_types::crypto::{
+    get_key_pair, AccountKeyPair, EncodeDecodeBase64, KeypairTraits, Signature,
+};
 
 #[derive(Serialize, Deserialize)]
 #[non_exhaustive]
@@ -26,6 +27,7 @@ pub enum KeystoreType {
 pub trait Keystore: Send + Sync {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
     fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error>;
+    fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error>;
 }
 
 impl KeystoreType {
@@ -51,41 +53,52 @@ impl Display for KeystoreType {
 
 #[derive(Serialize, Deserialize, Default)]
 pub struct SuiKeystore {
-    keys: BTreeMap<SuiAddress, KeyPair>,
+    keys: BTreeMap<SuiAddress, AccountKeyPair>,
     path: Option<PathBuf>,
 }
 
 impl Keystore for SuiKeystore {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
-        Ok(self
-            .keys
+        self.keys
             .get(address)
             .ok_or_else(|| {
                 signature::Error::from_source(format!("Cannot find key for address: [{address}]"))
             })?
-            .sign(msg))
+            .try_sign(msg)
     }
 
     fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        let (address, keypair) = get_key_pair();
+        let (address, keypair): (_, AccountKeyPair) = get_key_pair();
         self.keys.insert(address, keypair);
         self.save()?;
         Ok(address)
+    }
+
+    fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error> {
+        let address: SuiAddress = keypair.public().into();
+        self.keys.insert(address, keypair);
+        self.save()?;
+        Ok(())
     }
 }
 
 impl SuiKeystore {
     pub fn load_or_create(path: &Path) -> Result<Self, anyhow::Error> {
-        let keys: Vec<KeyPair> = if path.exists() {
+        let keys: Vec<AccountKeyPair> = if path.exists() {
             let reader = BufReader::new(File::open(path)?);
-            serde_json::from_reader(reader)?
+            let kp_strings: Vec<String> = serde_json::from_reader(reader)?;
+            kp_strings
+                .iter()
+                .map(|kpstr| AccountKeyPair::decode_base64(kpstr))
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|_| anyhow::anyhow!("Invalid Keypair file"))?
         } else {
             Vec::new()
         };
 
         let keys = keys
             .into_iter()
-            .map(|key| (SuiAddress::from(key.public_key_bytes()), key))
+            .map(|key| (key.public().into(), key))
             .collect();
 
         Ok(Self {
@@ -100,14 +113,24 @@ impl SuiKeystore {
 
     pub fn save(&self) -> Result<(), anyhow::Error> {
         if let Some(path) = &self.path {
-            let store =
-                serde_json::to_string_pretty(&self.keys.values().collect::<Vec<_>>()).unwrap();
+            let store = serde_json::to_string_pretty(
+                &self
+                    .keys
+                    .values()
+                    .map(|k| k.encode_base64())
+                    .collect::<Vec<_>>(),
+            )
+            .unwrap();
             fs::write(path, store)?
         }
         Ok(())
     }
 
-    pub fn add_key(&mut self, address: SuiAddress, keypair: KeyPair) -> Result<(), anyhow::Error> {
+    pub fn add_key(
+        &mut self,
+        address: SuiAddress,
+        keypair: AccountKeyPair,
+    ) -> Result<(), anyhow::Error> {
         self.keys.insert(address, keypair);
         Ok(())
     }
@@ -116,7 +139,7 @@ impl SuiKeystore {
         self.keys.keys().cloned().collect()
     }
 
-    pub fn key_pairs(&self) -> Vec<&KeyPair> {
+    pub fn key_pairs(&self) -> Vec<&AccountKeyPair> {
         self.keys.values().collect()
     }
 }
@@ -136,11 +159,7 @@ impl SuiKeystoreSigner {
 }
 
 impl signature::Signer<Signature> for SuiKeystoreSigner {
-    fn try_sign(&self, msg: &[u8]) -> Result<Signature, ed25519::Error> {
-        self.keystore
-            .read()
-            .unwrap()
-            .sign(&self.address, msg)
-            .map_err(ed25519::Error::from_source)
+    fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
+        self.keystore.read().unwrap().sign(&self.address, msg)
     }
 }

@@ -12,7 +12,7 @@ use std::{
 
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
-    crypto::{get_key_pair, AuthoritySignature, Signature},
+    crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature},
     error::SuiError,
     gas::SuiGasStatus,
     messages::{InputObjects, SignatureAggregator, Transaction, TransactionData},
@@ -21,16 +21,17 @@ use sui_types::{
 };
 
 use crate::{
-    authority::TemporaryStore, authority_active::ActiveAuthority,
+    authority::TemporaryStore,
+    authority_active::ActiveAuthority,
     authority_aggregator::authority_aggregator_tests::init_local_authorities,
-    checkpoints::CheckpointLocals, epoch::reconfiguration::CHECKPOINT_COUNT_PER_EPOCH,
+    checkpoints::{CheckpointLocals, CHECKPOINT_COUNT_PER_EPOCH},
     execution_engine,
 };
 
 #[tokio::test]
 async fn test_start_epoch_change() {
     // Create a sender, owning an object and a gas object.
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
     let genesis_objects = vec![object.clone(), gas_object.clone()];
@@ -38,13 +39,14 @@ async fn test_start_epoch_change() {
     let (net, states) = init_local_authorities(4, genesis_objects.clone()).await;
     let state = states[0].clone();
     // Set the checkpoint number to be near the end of epoch.
+
     state
         .checkpoints
         .as_ref()
         .unwrap()
         .lock()
         .set_locals_for_testing(CheckpointLocals {
-            next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH - 1,
+            next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
             proposal_next_transaction: None,
             next_transaction_sequence: 0,
             no_more_fragments: true,
@@ -52,8 +54,7 @@ async fn test_start_epoch_change() {
         })
         .unwrap();
     // Create an active authority for the first authority state.
-    let active =
-        ActiveAuthority::new_with_ephemeral_follower_store(state.clone(), net.clone()).unwrap();
+    let active = ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone()).unwrap();
     // Make the high watermark differ from low watermark.
     let ticket = state.batch_notifier.ticket().unwrap();
 
@@ -66,7 +67,7 @@ async fn test_start_epoch_change() {
     });
     tokio::time::sleep(Duration::from_millis(100)).await;
     // Validator should now be halted, but epoch change hasn't finished.
-    assert!(state.halted.load(Ordering::SeqCst));
+    assert!(state.is_halted());
     assert!(!epoch_change_started.load(Ordering::SeqCst));
 
     // Drain ticket.
@@ -139,7 +140,7 @@ async fn test_start_epoch_change() {
         &state.move_vm,
         &state._native_functions,
         SuiGasStatus::new_with_budget(1000, 1, 1),
-        state.committee.load().epoch,
+        state.epoch(),
     );
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
@@ -159,9 +160,10 @@ async fn test_finish_epoch_change() {
     let actives: Vec<_> = states
         .iter()
         .map(|state| {
-            ActiveAuthority::new_with_ephemeral_follower_store(state.clone(), net.clone()).unwrap()
+            ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone()).unwrap()
         })
         .collect();
+
     let results: Vec<_> = states
         .iter()
         .zip(actives.iter())
@@ -169,7 +171,7 @@ async fn test_finish_epoch_change() {
             async {
                 // Set the checkpoint number to be near the end of epoch.
                 let mut locals = CheckpointLocals {
-                    next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH - 1,
+                    next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
                     proposal_next_transaction: None,
                     next_transaction_sequence: 0,
                     no_more_fragments: true,
@@ -202,20 +204,13 @@ async fn test_finish_epoch_change() {
 
     // Verify that epoch changed in every authority state.
     for active in actives {
-        assert_eq!(active.state.committee.load().epoch, 1);
+        assert_eq!(active.state.epoch(), 1);
         assert_eq!(active.net.load().committee.epoch, 1);
-        assert_eq!(
-            active
-                .state
-                .db()
-                .get_last_epoch_info()
-                .unwrap()
-                .committee
-                .epoch,
-            1
-        );
+        let latest_epoch = active.state.db().get_latest_authenticated_epoch().unwrap();
+        assert_eq!(latest_epoch.epoch(), 0);
+        assert_eq!(latest_epoch.epoch_info().next_epoch_committee().epoch, 1);
         // Verify that validator is no longer halted.
-        assert!(!active.state.halted.load(Ordering::SeqCst));
+        assert!(!active.state.is_halted());
         let system_state = active.state.get_sui_system_state_object().await.unwrap();
         assert_eq!(system_state.epoch, 1);
         let (_, tx_digest) = active

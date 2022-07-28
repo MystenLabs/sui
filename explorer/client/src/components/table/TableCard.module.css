@@ -1,5 +1,5 @@
 .content {
-    @apply container overflow-x-auto text-left text-[#4E555D];
+    @apply w-full overflow-x-auto text-left text-[#4E555D];
 }
 
 .table {
@@ -33,7 +33,7 @@ td:nth-child(1) {
 }
 
 .addresses svg {
-    @apply mr-1;
+    @apply mr-2;
 }
 
 .tablespacing {
@@ -42,4 +42,9 @@ td:nth-child(1) {
 
 td a {
     @apply font-mono text-[#4E555D];
+}
+
+.longtextwrapper {
+    display: flex;
+    align-items: center;
 }

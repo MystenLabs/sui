@@ -186,13 +186,14 @@ export class JsonRpcProvider extends Provider {
 
   async executeTransaction(
     txnBytes: string,
+    flag: string,
     signature: string,
     pubkey: string
   ): Promise<TransactionResponse> {
     try {
       const resp = await this.client.requestWithType(
         'sui_executeTransaction',
-        [txnBytes, signature, pubkey],
+        [txnBytes, flag, signature, pubkey],
         isTransactionResponse
       );
       return resp;

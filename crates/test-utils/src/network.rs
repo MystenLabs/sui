@@ -6,6 +6,7 @@ use jsonrpsee_http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::path::Path;
+use std::sync::Arc;
 use sui::{
     client_commands::{SuiClientCommands, WalletContext},
     config::{GatewayConfig, GatewayType, SuiClientConfig},
@@ -13,7 +14,9 @@ use sui::{
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};
+use sui_core::gateway_state::GatewayClient;
 use sui_gateway::create_client;
+use sui_gateway::rpc_gateway_client::RpcGatewayClient;
 use sui_json_rpc::api::RpcGatewayApiServer;
 use sui_json_rpc::api::RpcReadApiServer;
 use sui_json_rpc::api::RpcTransactionBuilderServer;
@@ -22,14 +25,24 @@ use sui_json_rpc::gateway_api::{
     GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
 };
 use sui_sdk::crypto::{KeystoreType, SuiKeystore};
-use sui_swarm::memory::Swarm;
+use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::SuiAddress;
+use sui_types::crypto::KeypairTraits;
 const NUM_VALIDAOTR: usize = 4;
 
 pub async fn start_test_network(
     genesis_config: Option<GenesisConfig>,
 ) -> Result<Swarm, anyhow::Error> {
-    let mut builder = Swarm::builder().committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap());
+    start_test_network_with_fullnodes(genesis_config, 0).await
+}
+
+pub async fn start_test_network_with_fullnodes(
+    genesis_config: Option<GenesisConfig>,
+    fullnode_count: usize,
+) -> Result<Swarm, anyhow::Error> {
+    let mut builder: SwarmBuilder = Swarm::builder()
+        .committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap())
+        .with_fullnode_count(fullnode_count);
     if let Some(genesis_config) = genesis_config {
         builder = builder.initial_accounts_config(genesis_config);
     }
@@ -41,9 +54,8 @@ pub async fn start_test_network(
         .config()
         .account_keys
         .iter()
-        .map(|key| SuiAddress::from(key.public_key_bytes()))
+        .map(|key| key.public().into())
         .collect::<Vec<_>>();
-
     let dir = swarm.dir();
 
     let network_path = dir.join(SUI_NETWORK_CONFIG);
@@ -55,7 +67,7 @@ pub async fn start_test_network(
     swarm.config().save(&network_path)?;
     let mut keystore = SuiKeystore::default();
     for key in &swarm.config().account_keys {
-        keystore.add_key(SuiAddress::from(key.public_key_bytes()), key.copy())?;
+        keystore.add_key(key.public().into(), key.copy())?;
     }
     keystore.set_path(&keystore_path);
     keystore.save()?;
@@ -125,7 +137,14 @@ async fn start_rpc_gateway(
 pub async fn start_rpc_test_network(
     genesis_config: Option<GenesisConfig>,
 ) -> Result<TestNetwork, anyhow::Error> {
-    let network = start_test_network(genesis_config).await?;
+    start_rpc_test_network_with_fullnode(genesis_config, 0).await
+}
+
+pub async fn start_rpc_test_network_with_fullnode(
+    genesis_config: Option<GenesisConfig>,
+    fullnode_count: usize,
+) -> Result<TestNetwork, anyhow::Error> {
+    let network = start_test_network_with_fullnodes(genesis_config, fullnode_count).await?;
     let working_dir = network.dir();
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
@@ -139,11 +158,13 @@ pub async fn start_rpc_test_network(
         .save()?;
 
     let http_client = HttpClientBuilder::default().build(rpc_url.clone())?;
+    let gateway_client = RpcGatewayClient::new(rpc_url.clone())?;
     Ok(TestNetwork {
         network,
         _rpc_server: rpc_server_handle,
         accounts,
         http_client,
+        gateway_client: Arc::new(gateway_client),
         rpc_url,
     })
 }
@@ -153,5 +174,6 @@ pub struct TestNetwork {
     _rpc_server: HttpServerHandle,
     pub accounts: Vec<SuiAddress>,
     pub http_client: HttpClient,
+    pub gateway_client: GatewayClient,
     pub rpc_url: String,
 }

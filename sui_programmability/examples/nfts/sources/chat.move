@@ -4,7 +4,7 @@
 module nfts::chat {
     use std::ascii::{Self, String};
     use std::option::{Self, Option, some};
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, Info};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::vector::length;
@@ -17,7 +17,7 @@ module nfts::chat {
 
     /// Sui Chat NFT (i.e., a post, retweet, like, chat message etc).
     struct Chat has key, store {
-        id: VersionedID,
+        info: Info,
         // The ID of the chat app.
         app_id: ID,
         // Post's text.
@@ -44,7 +44,7 @@ module nfts::chat {
     ) {
         assert!(length(&text) <= MAX_TEXT_LENGTH, ETextOverflow);
         let chat = Chat {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             app_id,
             text: ascii::string(text),
             ref_id,
@@ -60,7 +60,7 @@ module nfts::chat {
         metadata: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        post_internal(id::new(app_identifier), text, option::none(), metadata, ctx);
+        post_internal(object::id_from_address(app_identifier), text, option::none(), metadata, ctx);
     }
 
     /// Mint (post) a Chat object and reference another object (i.e., to simulate retweet, reply, like, attach).
@@ -73,12 +73,12 @@ module nfts::chat {
         metadata: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        post_internal(id::new(app_identifier), text, some(id::new(ref_identifier)), metadata, ctx);
+        post_internal(object::id_from_address(app_identifier), text, some(object::id_from_address(ref_identifier)), metadata, ctx);
     }
 
     /// Burn a Chat object.
     public entry fun burn(chat: Chat) {
-        let Chat { id, app_id: _, text: _, ref_id: _, metadata: _ } = chat;
-        id::delete(id);
+        let Chat { info, app_id: _, text: _, ref_id: _, metadata: _ } = chat;
+        object::delete(info);
     }
 }

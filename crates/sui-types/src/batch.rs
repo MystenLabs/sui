@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{AuthorityName, ExecutionDigests};
-use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable};
-use crate::error::SuiError;
+use crate::committee::{Committee, EpochId};
+use crate::crypto::{sha3_hash, AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
+use crate::error::{SuiError, SuiResult};
 use serde::{Deserialize, Serialize};
 
 pub type TxSequenceNumber = u64;
@@ -19,7 +20,6 @@ pub type BatchDigest = [u8; 32];
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct TransactionBatch(pub Vec<(TxSequenceNumber, ExecutionDigests)>);
-impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Debug, Serialize, Deserialize)]
 pub struct AuthorityBatch {
@@ -39,8 +39,6 @@ pub struct AuthorityBatch {
     /// The digest of all transactions digests in this batch
     pub transactions_digest: [u8; 32],
 }
-
-impl BcsSignable for AuthorityBatch {}
 
 impl AuthorityBatch {
     pub fn digest(&self) -> BatchDigest {
@@ -98,29 +96,39 @@ impl AuthorityBatch {
 }
 
 /// An transaction signed by a single authority
-#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct SignedBatch {
     pub batch: AuthorityBatch,
-    pub authority: AuthorityName,
-    pub signature: AuthoritySignature,
+    pub auth_signature: AuthoritySignInfo,
 }
 
 impl SignedBatch {
     pub fn new(
+        epoch: EpochId,
         batch: AuthorityBatch,
         secret: &dyn signature::Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> SignedBatch {
+        let signature = AuthoritySignature::new(&batch, secret);
         SignedBatch {
-            signature: AuthoritySignature::new(&batch, secret),
             batch,
-            authority,
+            auth_signature: AuthoritySignInfo {
+                epoch,
+                authority,
+                signature,
+            },
         }
     }
-}
 
-impl PartialEq for SignedBatch {
-    fn eq(&self, other: &Self) -> bool {
-        self.batch == other.batch && self.authority == other.authority
+    pub fn new_with_zero_epoch(
+        batch: AuthorityBatch,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+        authority: AuthorityName,
+    ) -> SignedBatch {
+        Self::new(0, batch, secret, authority)
+    }
+
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.auth_signature.verify(&self.batch, committee)
     }
 }

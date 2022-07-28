@@ -23,6 +23,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use tracing::warn;
 
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
@@ -435,9 +436,9 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let SuiMoveValue::Number(balance) = fields["balance"].clone() {
-                    if let SuiMoveValue::VersionedID { id, version } = fields["id"].clone() {
-                        return Ok(GasCoin::new(id, SequenceNumber::from(version), balance));
+                if let Some(SuiMoveValue::Number(balance)) = fields.get("balance") {
+                    if let Some(SuiMoveValue::Info { id, version }) = fields.get("info") {
+                        return Ok(GasCoin::new(*id, SequenceNumber::from(*version), *balance));
                     }
                 }
             }
@@ -573,7 +574,7 @@ pub enum SuiMoveValue {
     Vector(Vec<SuiMoveValue>),
     Bytearray(Base64),
     String(String),
-    VersionedID { id: ObjectID, version: u64 },
+    Info { id: ObjectID, version: u64 },
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
 }
@@ -601,7 +602,7 @@ impl Display for SuiMoveValue {
             SuiMoveValue::String(value) => {
                 write!(writer, "{}", value)?;
             }
-            SuiMoveValue::VersionedID { id, version } => {
+            SuiMoveValue::Info { id, version } => {
                 write!(writer, "{id}[{version}]")?;
             }
             SuiMoveValue::Struct(value) => {
@@ -755,7 +756,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
         "0x2::utf8::String" | "0x1::ascii::String" => {
-            if let SuiMoveValue::Bytearray(bytes) = fields["bytes"].clone() {
+            if let Some(SuiMoveValue::Bytearray(bytes)) = fields.get("bytes") {
                 if let Ok(bytes) = bytes.to_vec() {
                     if let Ok(s) = String::from_utf8(bytes) {
                         return Some(SuiMoveValue::String(s));
@@ -763,39 +764,42 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 }
             }
         }
-        "0x2::url::Url" => return Some(fields["url"].clone()),
-        "0x2::id::ID" => {
-            if let SuiMoveValue::Address(id) = fields["bytes"] {
-                return Some(SuiMoveValue::Address(id));
+        "0x2::url::Url" => {
+            if let Some(url) = fields.get("url") {
+                return Some(url.clone());
             }
         }
-        "0x2::id::UniqueID" => {
-            if let SuiMoveValue::Address(id) = fields["id"].clone() {
-                return Some(SuiMoveValue::Address(id));
+        "0x2::object::ID" => {
+            if let Some(SuiMoveValue::Address(id)) = fields.get("bytes") {
+                return Some(SuiMoveValue::Address(*id));
             }
         }
-        "0x2::id::VersionedID" => {
-            if let SuiMoveValue::Address(address) = fields["id"].clone() {
-                if let SuiMoveValue::Number(version) = fields["version"].clone() {
-                    return Some(SuiMoveValue::VersionedID {
-                        id: address.into(),
-                        version,
+        "0x2::object::Info" => {
+            if let Some(SuiMoveValue::Address(address)) = fields.get("id") {
+                if let Some(SuiMoveValue::Number(version)) = fields.get("version") {
+                    return Some(SuiMoveValue::Info {
+                        id: ObjectID::from(*address),
+                        version: *version,
                     });
                 }
             }
         }
         "0x2::balance::Balance" => {
-            if let SuiMoveValue::Number(value) = fields["value"].clone() {
-                return Some(SuiMoveValue::Number(value));
+            if let Some(SuiMoveValue::Number(value)) = fields.get("value") {
+                return Some(SuiMoveValue::Number(*value));
             }
         }
         "0x1::option::Option" => {
-            if let SuiMoveValue::Vector(values) = fields["vec"].clone() {
+            if let Some(SuiMoveValue::Vector(values)) = fields.get("vec") {
                 return Some(SuiMoveValue::Option(Box::new(values.first().cloned())));
             }
         }
-        _ => {}
+        _ => return None,
     }
+    warn!(
+        fields =? fields,
+        "Failed to convert {struct_name} to SuiMoveValue"
+    );
     None
 }
 
@@ -1120,7 +1124,6 @@ impl SuiTransactionEffects {
             events: effect
                 .events
                 .into_iter()
-                // TODO: figure out how to map the non-Move events
                 .map(|event| SuiEvent::try_from(event, resolver))
                 .collect::<Result<_, _>>()?,
             dependencies: effect.dependencies,
@@ -1269,7 +1272,8 @@ pub enum SuiEvent {
         transaction_module: String,
         sender: SuiAddress,
         type_: String,
-        fields: SuiMoveStruct,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fields: Option<SuiMoveStruct>,
         #[serde_as(as = "Base64")]
         #[schemars(with = "Base64")]
         bcs: Vec<u8>,
@@ -1325,9 +1329,20 @@ impl SuiEvent {
                 contents,
             } => {
                 let bcs = contents.to_vec();
-                let move_struct = Event::move_event_to_move_struct(&type_, &contents, resolver)?;
-                let (type_, fields) =
-                    SuiParsedMoveObject::try_type_and_fields_from_move_struct(&type_, move_struct)?;
+
+                // Resolver is not guaranteed to have knowledge of the event struct layout in the gateway server.
+                let (type_, fields) = if let Ok(move_struct) =
+                    Event::move_event_to_move_struct(&type_, &contents, resolver)
+                {
+                    let (type_, field) = SuiParsedMoveObject::try_type_and_fields_from_move_struct(
+                        &type_,
+                        move_struct,
+                    )?;
+                    (type_, Some(field))
+                } else {
+                    (type_.to_string(), None)
+                };
+
                 SuiEvent::MoveEvent {
                     package_id,
                     transaction_module: transaction_module.to_string(),
@@ -1560,8 +1575,11 @@ impl TryInto<EventFilter> for SuiEventFilter {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBytes {
+    /// transaction data bytes, as base-64 encoded string
     pub tx_bytes: Base64,
+    /// the gas object to be used
     pub gas: SuiObjectRef,
+    /// objects to be used in this transaction
     pub input_objects: Vec<SuiInputObjectKind>,
 }
 

@@ -38,6 +38,8 @@
             "_variables/*": ["./src/ui/styles/variables/*"],
             "_values": ["./src/ui/styles/values"],
             "_values/*": ["./src/ui/styles/values/*"],
+            "_utils": ["./src/ui/styles/utils"],
+            "_utils/*": ["./src/ui/styles/utils/*"],
             "_font-icons/*": ["./font-icons/*"]
         }
     },

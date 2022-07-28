@@ -13,6 +13,13 @@ export interface TransferObjectTransaction {
   recipient: SuiAddress;
 }
 
+export interface TransferSuiTransaction {
+  suiObjectId: ObjectId;
+  gasBudget: number;
+  recipient: SuiAddress;
+  amount?: number;
+}
+
 export interface MergeCoinTransaction {
   primaryCoin: ObjectId;
   coinToMerge: ObjectId;
@@ -53,6 +60,11 @@ export interface TxnDataSerializer {
   newTransferObject(
     signerAddress: SuiAddress,
     txn: TransferObjectTransaction
+  ): Promise<Base64DataBuffer>;
+
+  newTransferSui(
+    signerAddress: SuiAddress,
+    txn: TransferSuiTransaction
   ): Promise<Base64DataBuffer>;
 
   newMoveCall(

@@ -55,7 +55,7 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}'
 ```
 
-You can see an example of the discovery service in the [OpenRPC Playground](https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/189d61df846f7c3676c1215cc41fb970ee9e22b5/sui/open_rpc/spec/openrpc.json).
+You can see an example of the discovery service in the [OpenRPC Playground](https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json).
 
 ### sui_syncAccountState
 
@@ -193,7 +193,7 @@ be owned by the address represented by `{{owner_address}}`.
 
 #### 1, Execute a Move call transaction by calling the specified function in
 the module of a given package (smart contracts in Sui are written in
-the [Move](move.md#move) language):
+the [Move](move/index.md) language):
 
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
@@ -251,7 +251,7 @@ curl --location --request POST $SUI_RPC_HOST \
 ```
 
 This endpoint will perform proper verification and linking to make
-sure the package is valid. If some modules have [initializers](move.md#module-initializers), these initializers
+sure the package is valid. If some modules have [initializers](move/debug-publish.md#module-initializers), these initializers
 will also be executed in Move (which means new Move objects can be created in
 the process of publishing a Move package). Gas budget is required because of the
 need to execute module initializers.

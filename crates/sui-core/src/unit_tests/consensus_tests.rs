@@ -17,7 +17,7 @@ use sui_types::{
     },
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
-use test_utils::test_keys;
+use test_utils::test_account_keys;
 use tokio::sync::mpsc::channel;
 
 /// Fixture: a few test gas objects.
@@ -26,7 +26,7 @@ pub fn test_gas_objects() -> Vec<Object> {
         .map(|i| {
             let seed = format!("0x555555555555555{i}");
             let gas_object_id = ObjectID::from_hex_literal(&seed).unwrap();
-            let (sender, _) = test_keys().pop().unwrap();
+            let (sender, _) = test_account_keys().pop().unwrap();
             Object::with_id_owner_for_testing(gas_object_id, sender)
         })
         .collect()
@@ -43,7 +43,7 @@ pub fn test_shared_object() -> Object {
 
 /// Fixture: a few test certificates containing a shared object.
 pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTransaction> {
-    let (sender, keypair) = test_keys().pop().unwrap();
+    let (sender, keypair) = test_account_keys().pop().unwrap();
 
     let mut certificates = Vec::new();
     let shared_object_id = test_shared_object().id();
@@ -105,6 +105,11 @@ async fn listen_to_sequenced_transaction() {
     // Set the shared object locks.
     state
         .handle_consensus_transaction(
+            // TODO [2533]: use this once integrating Narwhal reconfiguration
+            &narwhal_consensus::ConsensusOutput {
+                certificate: narwhal_types::Certificate::default(),
+                consensus_index: narwhal_types::SequenceNumber::default(),
+            },
             ExecutionIndices::default(),
             ConsensusTransaction::UserTransaction(certificate),
         )
@@ -178,6 +183,11 @@ async fn submit_transaction_to_consensus() {
             // Set the shared object locks.
             state_guard
                 .handle_consensus_transaction(
+                    // TODO [2533]: use this once integrating Narwhal reconfiguration
+                    &narwhal_consensus::ConsensusOutput {
+                        certificate: narwhal_types::Certificate::default(),
+                        consensus_index: narwhal_types::SequenceNumber::default(),
+                    },
                     ExecutionIndices::default(),
                     ConsensusTransaction::UserTransaction(certificate.clone()),
                 )

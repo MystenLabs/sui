@@ -31,6 +31,7 @@ export class VoidProvider extends Provider {
 
   async executeTransaction(
     _txnBytes: string,
+    _flag: string,
     _signature: string,
     _pubkey: string
   ): Promise<TransactionResponse> {

@@ -4,6 +4,10 @@ import cl from 'classnames';
 import { useEffect, useState, useContext } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
+import {
+    TopValidatorsCardAPI,
+    TopValidatorsCardStatic,
+} from '../../components/top-validators-card/TopValidatorsCard';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
 import { NetworkContext } from '../../context';
 import {
@@ -15,7 +19,7 @@ import { IS_STATIC_ENV } from '../../utils/envUtil';
 import styles from './Home.module.css';
 
 const initState = { count: 0, loadState: 'pending' };
-
+const TXN_PER_PAGE = 15;
 // Moved this method to the Home.tsx file so getTotalTransactionNumber can be called once across the entire component.
 async function getTransactionCount(network: Network | string): Promise<number> {
     return rpc(network).getTotalTransactionNumber();
@@ -24,8 +28,17 @@ async function getTransactionCount(network: Network | string): Promise<number> {
 function HomeStatic() {
     const [count] = useState(500);
     return (
-        <div data-testid="home-page" id="home" className={styles.home}>
-            <LastestTxCard count={count} />
+        <div
+            data-testid="home-page"
+            id="home"
+            className={cl([styles.home, styles.container])}
+        >
+            <section className="left-item">
+                <LastestTxCard count={count} />
+            </section>
+            <section className="right-item">
+                <TopValidatorsCardStatic />
+            </section>
         </div>
     );
 }
@@ -78,9 +91,15 @@ function HomeAPI() {
             className={cl([styles.home, styles.container])}
         >
             <section className="left-item">
-                <LastestTxCard count={results.count} />
+                <LastestTxCard
+                    txPerPage={TXN_PER_PAGE}
+                    count={results.count}
+                    paginationtype="more button"
+                />
             </section>
-            <section className="right-item"></section>
+            <section className="right-item">
+                <TopValidatorsCardAPI />
+            </section>
         </div>
     );
 }

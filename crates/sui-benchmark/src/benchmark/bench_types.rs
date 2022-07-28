@@ -12,7 +12,7 @@ use std::default::Default;
 use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_types::base_types::ObjectID;
-use sui_types::crypto::{KeyPair, PublicKeyBytes};
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes};
 
 #[derive(Debug, Clone, Parser)]
 #[clap(
@@ -205,9 +205,9 @@ impl std::fmt::Display for MicroBenchmarkResult {
 pub struct RemoteLoadGenConfig {
     /// Keypairs of all the validators
     /// Ideally we wouldnt need this, but sometime we pre-sign certs
-    pub validator_keypairs: BTreeMap<PublicKeyBytes, KeyPair>,
+    pub validator_keypairs: BTreeMap<AuthorityPublicKeyBytes, AuthorityKeyPair>,
     /// Account keypair to use for transactions
-    pub account_keypair: KeyPair,
+    pub account_keypair: AccountKeyPair,
     /// ObjectID offset for transaction objects
     pub object_id_offset: ObjectID,
     /// Network config for accessing validators

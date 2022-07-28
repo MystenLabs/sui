@@ -16,6 +16,7 @@ use serde::Serialize;
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 
 use crate::base_types::{decode_bytes_hex, encode_bytes_hex};
+use crate::crypto::KeypairTraits;
 
 #[inline]
 fn to_custom_error<'de, D, E>(e: E) -> D::Error
@@ -109,24 +110,6 @@ where
     {
         if deserializer.is_human_readable() {
             E::deserialize_as(deserializer)
-        } else {
-            R::deserialize_as(deserializer)
-        }
-    }
-}
-/// DeserializeAs support for Signature
-impl<'de, R, E> DeserializeAs<'de, ed25519_dalek::Signature> for Readable<E, R>
-where
-    R: DeserializeAs<'de, ed25519_dalek::Signature>,
-    E: DeserializeAs<'de, Vec<u8>>,
-{
-    fn deserialize_as<D>(deserializer: D) -> Result<ed25519_dalek::Signature, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        if deserializer.is_human_readable() {
-            let value = E::deserialize_as(deserializer)?;
-            ed25519_dalek::Signature::from_bytes(&value).map_err(to_custom_error::<'de, D, _>)
         } else {
             R::deserialize_as(deserializer)
         }
@@ -279,5 +262,32 @@ where
         S: Serializer,
     {
         Self::encode(value).serialize(serializer)
+    }
+}
+
+pub struct KeyPairBase64 {}
+
+impl<T> SerializeAs<T> for KeyPairBase64
+where
+    T: KeypairTraits,
+{
+    fn serialize_as<S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        value.encode_base64().serialize(serializer)
+    }
+}
+
+impl<'de, T> DeserializeAs<'de, T> for KeyPairBase64
+where
+    T: KeypairTraits,
+{
+    fn deserialize_as<D>(deserializer: D) -> Result<T, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        T::decode_base64(&s).map_err(to_custom_error::<'de, D, _>)
     }
 }

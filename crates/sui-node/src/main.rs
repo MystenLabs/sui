@@ -4,9 +4,8 @@
 use anyhow::Result;
 use clap::Parser;
 use multiaddr::Multiaddr;
-use std::{path::PathBuf, time::Duration};
+use std::path::PathBuf;
 use sui_config::{Config, NodeConfig};
-use tracing::info;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -37,9 +36,10 @@ static GLOBAL: Jemalloc = Jemalloc;
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize logging
-    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
-        .with_env()
-        .init();
+    let (_guard, filter_handle) =
+        telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+            .with_env()
+            .init();
 
     let args = Args::parse();
 
@@ -52,6 +52,9 @@ async fn main() -> Result<()> {
     #[cfg(not(target_env = "msvc"))]
     {
         use jemalloc_ctl::config;
+        use std::time::Duration;
+        use tracing::info;
+
         let malloc_conf = config::malloc_conf::mib().unwrap();
         info!("Default Jemalloc conf: {}", malloc_conf.read().unwrap());
 
@@ -70,6 +73,8 @@ async fn main() -> Result<()> {
             }
         });
     }
+
+    sui_node::admin::start_admin_server(config.admin_interface_port, filter_handle);
 
     let node = sui_node::SuiNode::start(&config).await?;
     node.wait().await?;

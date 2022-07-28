@@ -3,9 +3,13 @@
 }
 
 .txback {
-    @apply w-full pb-2;
+    @apply w-full pb-2 px-0;
 
     border-bottom: 1px solid #f0f1f2;
+}
+
+.txback button {
+    @apply px-0;
 }
 
 .txback a {
@@ -17,7 +21,13 @@
 }
 
 .txid {
-    @apply text-offblack font-[600] text-lg md:text-2xl font-mono break-all block  items-center;
+    @apply text-offblack font-[600] text-lg md:text-2xl font-mono break-all block items-center;
+}
+
+.txaddress {
+    @apply block md:flex justify-start align-middle items-center;
+
+    box-sizing: border-box;
 }
 
 .txresulttype {
@@ -25,17 +35,23 @@
 }
 
 .success {
-    @apply bg-[#ECFBF7] capitalize text-sm font-sans text-[#008C65] font-normal p-0 pr-3 pl-3 rounded-[10px] inline-block m-0 md:ml-2 md:mr-2;
+    @apply bg-[#ECFBF7] capitalize text-sm font-sans text-[#008C65] font-normal p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1;
 }
 
 .failed {
-    @apply bg-[#EB5A291A] capitalize text-sm font-sans text-[#B94118] font-normal p-0 pr-3 pl-3 rounded-[10px] inline-block m-0 md:ml-2 md:mr-2;
+    @apply bg-[#EB5A291A] capitalize text-sm font-sans text-[#B94118] font-normal p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1;
+
+    box-sizing: border-box;
 }
 
 .longtext {
     @apply bg-transparent border-0 font-sans text-sm text-[#1F6493] font-[500] cursor-pointer hover:text-sui-grey-80;
+
+    box-sizing: border-box;
 }
 
 .error {
-    @apply w-full rounded-none m-0 text-sm p-1 pl-2 pr-2 font-normal mt-2 w-fit md:w-full;
+    @apply w-full rounded-none m-0 text-sm p-1 pl-2 pr-2 font-normal mt-2  w-full;
+
+    box-sizing: border-box;
 }

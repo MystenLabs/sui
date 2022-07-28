@@ -23,7 +23,7 @@ With Sui, we believe game developers should not be limited by the platform perfo
 
 ## How we did it
 
-Created by game development studio GenITeam, these prototypes use both the Unity SDK and Sui [APIs](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false).
+Created by game development studio GenITeam, these prototypes use both the Unity SDK and Sui [APIs](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false).
 
 GenITeam’s developers who worked on this collaboration are neither smart contract nor Move developers. Based on their input, we created a data model and shared simple APIs. With these APIs, geniteam was able to mint fully on-chain NFTs that are mutable, own other on-chain assets, and freely transfer to other applications.
 
@@ -92,7 +92,7 @@ GET /object_info?objectId={{monster_id}}
 
 ```
    struct Monster has key, store {
-        id: VersionedID,
+        info: Info,
         monster_name: String,
         monster_img_index: u64,
         breed: u8,
@@ -150,7 +150,7 @@ GET /object_info?objectId={{monster_id}}
     ): Monster {
 
         Monster {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             monster_name: ASCII::string(monster_name),
             monster_img_index,
             breed,
@@ -234,5 +234,5 @@ Gameplay:
 
 ## Further reading
 
-* Check out Sui [APIs](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false).
+* Check out Sui [APIs](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false).
 * Learn about Sui [objects](../build/objects.md).

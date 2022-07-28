@@ -57,7 +57,9 @@ impl AuthorityServerHandle {
     }
 
     pub async fn kill(self) -> Result<(), std::io::Error> {
-        self.tx_cancellation.send(()).unwrap();
+        self.tx_cancellation.send(()).map_err(|_e| {
+            std::io::Error::new(io::ErrorKind::Other, "could not send cancellation signal!")
+        })?;
         self.handle
             .await?
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
@@ -173,7 +175,7 @@ impl ValidatorService {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
-        let consensus_keypair = config.key_pair().make_narwhal_keypair();
+        let consensus_keypair = config.key_pair().copy();
         let consensus_name = consensus_keypair.public().clone();
         let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
         narwhal_node::Node::spawn_primary(

@@ -4,18 +4,22 @@
 use crate::{builder, genesis, utils, Config, NodeConfig, ValidatorInfo, FULL_NODE_DB_PATH};
 use rand::rngs::OsRng;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
+use sui_types::sui_serde::KeyPairBase64;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
 /// all validators
+#[serde_as]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct NetworkConfig {
     pub validator_configs: Vec<NodeConfig>,
-    pub account_keys: Vec<KeyPair>,
+    #[serde_as(as = "Vec<KeyPairBase64>")]
+    pub account_keys: Vec<AccountKeyPair>,
     pub genesis: genesis::Genesis,
 }
 
@@ -56,7 +60,7 @@ impl NetworkConfig {
     /// Generate a fullnode config based on this `NetworkConfig`. This is useful if you want to run
     /// a fullnode and have it connect to a network defined by this `NetworkConfig`.
     pub fn generate_fullnode_config(&self) -> NodeConfig {
-        let key_pair = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
+        let key_pair: Arc<AuthorityKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
         let validator_config = &self.validator_configs[0];
 
         let mut db_path = validator_config.db_path.clone();
@@ -67,6 +71,7 @@ impl NetworkConfig {
             db_path: db_path.join(FULL_NODE_DB_PATH),
             network_address: utils::new_network_address(),
             metrics_address: utils::available_local_socket_address(),
+            admin_interface_port: utils::get_available_port(),
             json_rpc_address: utils::available_local_socket_address(),
             websocket_address: Some(utils::available_local_socket_address()),
             consensus_config: None,

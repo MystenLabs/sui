@@ -83,6 +83,7 @@ allow = [
     "CC0-1.0",
     "LicenseRef-ring",
     "BSL-1.0",
+    "Unicode-DFS-2016",
     #"Apache-2.0 WITH LLVM-exception",
 ]
 # List of explictly disallowed licenses

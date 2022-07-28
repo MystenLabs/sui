@@ -65,7 +65,7 @@ fn get_object_id_from_event(event_type_byte: u64, val: &Value) -> Option<ObjectI
     } else {
         let event_type = EventType::try_from_primitive(event_type_byte as u8).unwrap();
         match event_type {
-            EventType::DeleteObjectID => get_nested_struct_field(val, &[0, 0, 0]).unwrap(),
+            EventType::DeleteObjectID => get_nested_struct_field(val, &[0, 0]).unwrap(),
             EventType::User => {
                 return None;
             }

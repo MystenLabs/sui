@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::SuiDataStore;
-use prometheus::IntCounter;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fmt::Debug;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
@@ -21,10 +21,9 @@ use tracing::instrument;
 pub async fn check_transaction_input<S, T>(
     store: &SuiDataStore<S>,
     transaction: &TransactionEnvelope<T>,
-    shared_obj_metric: &IntCounter,
 ) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let mut gas_status = check_gas(
         store,
@@ -38,8 +37,6 @@ where
     let input_objects = check_locks(store, &transaction.data).await?;
 
     if transaction.contains_shared_object() {
-        shared_obj_metric.inc();
-
         // It's important that we do this here to make sure there is enough
         // gas to cover shared objects, before we lock all objects.
         gas_status.charge_consensus()?;
@@ -61,7 +58,7 @@ async fn check_gas<S>(
     is_system_tx: bool,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     if is_system_tx {
         Ok(SuiGasStatus::new_unmetered())
@@ -91,7 +88,7 @@ async fn fetch_objects<S>(
     input_objects: &[InputObjectKind],
 ) -> Result<Vec<Option<Object>>, SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
     store.get_objects(&ids[..])
@@ -105,7 +102,7 @@ async fn check_locks<S>(
     transaction: &TransactionData,
 ) -> Result<InputObjects, SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let input_objects = transaction.input_objects()?;
     // These IDs act as authenticators that can own other objects.

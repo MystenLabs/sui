@@ -3,11 +3,13 @@
 
 import { useParams } from 'react-router-dom';
 
+import { ReactComponent as AddressIcon } from '../../assets/AddressIcon.svg';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transactions-for-id/TxForID';
-import theme from '../../styles/theme.module.css';
+
+import styles from './AddressResult.module.css';
 
 type DataType = {
     id: string;
@@ -28,9 +30,11 @@ function AddressResult() {
 
     if (addressID !== undefined) {
         return (
-            <div className={theme.textresults} id="textResults">
-                <div>
-                    <div>Address</div>
+            <div className={styles.results} id="textResults">
+                <div className={styles.addressid}>
+                    <span>
+                        <AddressIcon /> Address
+                    </span>
                     <div id="addressID">
                         <Longtext
                             text={addressID}
@@ -40,13 +44,13 @@ function AddressResult() {
                     </div>
                 </div>
                 <div>
-                    <div>Owned Objects</div>
+                    <h1>Owned Objects</h1>
                     <div>
                         {<OwnedObjects id={addressID} byAddress={true} />}
                     </div>
                 </div>
                 <div>
-                    <div>Transactions</div>
+                    <h1>Transactions</h1>
                     <TxForID id={addressID} category="address" />
                 </div>
             </div>

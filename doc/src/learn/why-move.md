@@ -2,7 +2,7 @@
 title: Why Move?
 ---
 
-This page links to key [Move](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) resources and compares the [Move](https://github.com/move-language/move/tree/main/language/documentation) and Solidity programming languages. For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
+In Sui, you write [Smart Contracts](../build/move.md) with the Move Programming language. This page links to key [Move](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) resources and compares the [Move](https://github.com/move-language/move/tree/main/language/documentation) and Solidity programming languages. For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
 
 ## Sui Move
 
@@ -15,7 +15,7 @@ First, note Move is based upon the well-supported [Rust](https://www.rust-lang.o
 
 ## Move resources
 
-This section aggregates links to external resources on the Move programming language. See also our [Smart Contracts with Move](../build/move.md) page and [Move Programming with Objects](../build/programming-with-objects/index.md) tutorial series for key Move resources in this site.
+This section aggregates links to external resources on the Move programming language. See also our [Smart Contracts with Move](../build/move/index.md) page and [Move Programming with Objects](../build/programming-with-objects/index.md) tutorial series for key Move resources in this site.
 
 * [Move & Sui podcast](https://zeroknowledge.fm/228-2/) on Zero Knowledge where programmable objects are described in detail.
 * Original [Move Book](https://move-book.com/index.html) written by a member of the Sui team.
