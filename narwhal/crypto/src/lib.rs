@@ -54,15 +54,23 @@ pub mod hkdf;
 pub mod pubkey_bytes;
 pub mod serde_helpers;
 
+////////////////////////////////////////////////////////////////////////
+/// Type aliases selecting the signature algorithm for the code base.
+////////////////////////////////////////////////////////////////////////
 // Here we select the types that are used by default in the code base.
 // The whole code base should only:
 // - refer to those aliases and not use the individual scheme implementations
 // - not use the schemes in a way that break genericity (e.g. using their Struct impl functions)
 // - swap one of those aliases to point to another type if necessary
+//
+// Beware: if you change those aliases to point to another scheme implementation, you will have
+// to change all four aliases to point to concrete types that work with each other. Failure to do
+// so will result in a ton of compilation errors, and worse: it will not make sense!
 pub type PublicKey = ed25519::Ed25519PublicKey;
 pub type Signature = ed25519::Ed25519Signature;
 pub type PrivateKey = ed25519::Ed25519PrivateKey;
 pub type KeyPair = ed25519::Ed25519KeyPair;
+////////////////////////////////////////////////////////////////////////
 
 pub const DIGEST_LEN: usize = 32;
 
