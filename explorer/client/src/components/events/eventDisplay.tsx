@@ -141,7 +141,7 @@ export function transferObjectEventDisplay(
 }
 
 export function getAddressesLinks(item: ContentItem[]): Link[] {
-    return item.map(content => {
+    return item.map((content) => {
         return {
             url: content.value,
             name: truncate(content.value, 20),

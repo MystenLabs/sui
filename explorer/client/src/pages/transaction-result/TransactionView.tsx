@@ -14,7 +14,10 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
-import { eventToDisplay, getAddressesLinks } from '../../components/events/eventDisplay';
+import {
+    eventToDisplay,
+    getAddressesLinks,
+} from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
 import { type Link, TxAddresses } from '../../components/table/TableCard';
