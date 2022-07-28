@@ -86,8 +86,10 @@ export function newObjectEventDisplay(event: NewObjectEvent) {
                     value: `${event.packageId}::${event.transactionModule}`,
                     monotypeClass: true,
                 },
-                addressContent('Sender', event.sender),
-                addressContent('Recipient', getOwnerStr(event.recipient)),
+                [
+                    addressContent('Sender', event.sender),
+                    addressContent('Recipient', getOwnerStr(event.recipient))
+                ],
             ],
         },
         fields: null,

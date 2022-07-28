@@ -23,7 +23,7 @@ type Category =
     | 'ethAddress'
     | 'unknown';
 
-type Link = {
+export type Link = {
     url: string;
     name?: string;
     copy?: boolean;
@@ -56,7 +56,7 @@ type TxType = {
         | TxStatus;
 };
 
-function TxAddresses({ content }: { content: Link[] }) {
+export function TxAddresses({ content }: { content: Link[] }) {
     return (
         <section className={styles.addresses}>
             {content.map((itm, idx) => (
@@ -100,6 +100,7 @@ function columnsContent(columns: TableColumn[]) {
 
             // handle multiple links in one cell
             if (Array.isArray(content)) {
+                console.log('CONTENT IS ARRAY', content)
                 return <TxAddresses content={content} />;
             }
             // Special case for txTypes and status

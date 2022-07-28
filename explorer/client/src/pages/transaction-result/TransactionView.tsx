@@ -33,6 +33,7 @@ import type {
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
+import {type Link, TxAddresses } from '../../components/table/TableCard';
 
 type TxDataProps = CertifiedTransaction & {
     status: ExecutionStatusType;
@@ -165,6 +166,21 @@ function ItemView({ data }: { data: TxItemView }) {
             </div>
             <div className={styles.itemviewcontent}>
                 {data.content.map((item, index) => {
+                    let links: Link[] = [];
+                    if (Array.isArray(item)) {
+                        links = item.map((content, ci) => {
+                            return {
+                                url: '',
+                                name: content.value,
+                                copy: false,
+                                category: 'addresses',
+                                isLink: true
+                            } as Link
+                        });
+
+                        item.label = 'From -> To';
+                        console.log("links array display", item, links);
+                    }
                     return (
                         <div
                             key={index}
@@ -184,6 +200,11 @@ function ItemView({ data }: { data: TxItemView }) {
                                     item.monotypeClass && styles.mono
                                 )}
                             >
+                                {Array.isArray(item) ? (
+                                    <TxAddresses content={links}></TxAddresses>
+                                ): (
+                                    <></>
+                                )}
                                 {item.link ? (
                                     <Longtext
                                         text={item.value as string}
