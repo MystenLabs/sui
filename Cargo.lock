@@ -6644,7 +6644,6 @@ dependencies = [
  "camino",
  "clap 3.1.18",
  "colored",
- "ed25519-dalek",
  "executor",
  "futures",
  "jemalloc-ctl",

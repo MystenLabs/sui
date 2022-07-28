@@ -12,7 +12,6 @@ serde = { version = "1.0.140", features = ["derive"] }
 serde_json = "1.0.80"
 signature = "1.5.0"
 camino = "1.0.9"
-ed25519-dalek = "1"
 base64ct = "1"
 tokio = { version = "1.20.1", features = ["full"] }
 async-trait = "0.1.53"
