@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 async-trait = "0.1.53"
-axum = "0.5.14"
+axum = "0.5.13"
 clap = { version = "3.1.17", features = ["derive"] }
 thiserror = "1.0.31"
 tokio = { version = "1.20.1", features = ["full"] }
