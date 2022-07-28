@@ -2,7 +2,6 @@ import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import Tabs from '../../../components/tabs/Tabs';
 import TxForID from '../../../components/transactions-for-id/TxForID';
-import theme from '../../../styles/theme.module.css';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
@@ -36,50 +35,44 @@ function PkgView({ data }: { data: DataType }) {
             <div className={`${styles.textbox} ${styles.noaccommodate}`}>
                 {viewedData.name && <h1>{viewedData.name}</h1>}{' '}
                 <Tabs selected={defaultactivetab}>
-                    <div
+                    <table
                         title="Details"
-                        className={theme.textresults}
+                        className={styles.description}
                         id="descriptionResults"
                     >
-                        <div>
-                            <div>Object ID</div>
-                            <div id="objectID">
-                                <Longtext
-                                    text={viewedData.id}
-                                    category="objects"
-                                    isLink={false}
-                                />
-                            </div>
-                        </div>
-                        {data.data?.tx_digest && !isPublisherGenesis && (
-                            <div>
-                                <div>Last Transaction ID</div>
-                                <div id="lasttxID">
+                        <tbody>
+                            <tr>
+                                <td>Object ID</td>
+                                <td id="objectID" className={styles.objectid}>
                                     <Longtext
-                                        text={data.data?.tx_digest}
-                                        category="transactions"
-                                        isLink={true}
+                                        text={viewedData.id}
+                                        category="objects"
+                                        isLink={false}
+                                        isCopyButton={false}
                                     />
-                                </div>
-                            </div>
-                        )}
-                        <div>
-                            <div>Version</div>
-                            <div>{viewedData.version}</div>
-                        </div>
-                        {viewedData?.publisherAddress && (
-                            <div>
-                                <div>Publisher</div>
-                                <div id="lasttxID">
-                                    <Longtext
-                                        text={viewedData.publisherAddress}
-                                        category="addresses"
-                                        isLink={!isPublisherGenesis}
-                                    />
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td>Version</td>
+                                <td>{viewedData.version}</td>
+                            </tr>
+
+                            {viewedData?.publisherAddress && (
+                                <tr>
+                                    <td>Publisher</td>
+                                    <td id="lasttxID">
+                                        <Longtext
+                                            text={viewedData.publisherAddress}
+                                            category="addresses"
+                                            isLink={!isPublisherGenesis}
+                                            isCopyButton={false}
+                                        />
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
                 </Tabs>
                 <ModulesWrapper
                     data={{

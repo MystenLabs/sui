@@ -69,6 +69,10 @@ table.description > tbody > tr:not(:last-child) > td {
     @apply pb-5 sm:pb-2.5;
 }
 
+td.objectid {
+    @apply text-sui-dark;
+}
+
 /* Property Box CSS */
 
 div.propertybox {

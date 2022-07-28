@@ -63,7 +63,7 @@ function TokenView({ data }: { data: DataType }) {
 
                         <tr>
                             <td>Object ID</td>
-                            <td id="objectID">
+                            <td id="objectID" className={styles.objectid}>
                                 <Longtext
                                     text={viewedData.id}
                                     category="objects"
