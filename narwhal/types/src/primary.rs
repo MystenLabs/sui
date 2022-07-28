@@ -254,7 +254,6 @@ impl PartialEq for Header {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))] // bump the bound to VerifyingKey as soon as you include a sig
 pub struct Vote {
     pub id: HeaderDigest,
     pub round: Round,
@@ -528,7 +527,6 @@ impl Affiliated for Certificate {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
 pub enum PrimaryMessage {
     Header(Header),
     Vote(Vote),
@@ -557,7 +555,6 @@ pub enum PrimaryMessage {
 
 /// Message to reconfigure worker tasks.
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
 pub enum ReconfigureNotification {
     /// Indicate the committee has been updated.
     NewCommittee(Committee),
@@ -567,7 +564,6 @@ pub enum ReconfigureNotification {
 
 /// The messages sent by the primary to its workers.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
 pub enum PrimaryWorkerMessage {
     /// The primary indicates that the worker need to sync the target missing batches.
     Synchronize(Vec<BatchDigest>, /* target */ PublicKey),
@@ -639,7 +635,6 @@ impl fmt::Display for BlockErrorKind {
 
 /// The messages sent by the workers to their primary.
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(bound(deserialize = "PublicKey: VerifyingKey"))]
 pub enum WorkerPrimaryMessage {
     /// The worker indicates it sealed a new batch.
     OurBatch(BatchDigest, WorkerId),
