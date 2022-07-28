@@ -16,8 +16,8 @@ import { ObjectId, SequenceNumber } from "./objects";
 
 // event types mirror those in "sui-json-rpc-types/lib.rs"
 export type MoveEvent = {
-    packageId?: ObjectId;
-    transactionModule?: string;
+    packageId: ObjectId;
+    transactionModule: string;
     sender: SuiAddress;
     type: string;
     fields: { [key: string]: any; }; // TODO - better type
