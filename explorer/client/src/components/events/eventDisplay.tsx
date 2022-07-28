@@ -3,6 +3,8 @@ import { getOwnerStr } from '../../utils/objectUtils';
 import type {
     MoveEvent,
     NewObjectEvent,
+    ObjectId,
+    SuiAddress,
     TransferObjectEvent,
 } from '@mysten/sui.js';
 
@@ -16,11 +18,7 @@ export function moveEventDisplay(event: MoveEvent) {
                     value: event.type,
                     monotypeClass: true,
                 },
-                {
-                    label: 'Sender',
-                    value: event.sender,
-                    monotypeClass: true,
-                },
+                addressContent('Sender', event.sender as string),
                 {
                     label: 'BCS',
                     value: event.bcs,
@@ -36,6 +34,36 @@ export function moveEventDisplay(event: MoveEvent) {
     };
 }
 
+function addressContent(label: string, addr: SuiAddress) {
+    return {
+        label: label,
+        value: addr,
+        link: true,
+        category: 'addresses',
+        monotypeClass: true,
+    }
+}
+
+function objectContent(label: string, id: ObjectId) {
+    return {
+        label: label,
+        value: id,
+        link: true,
+        category: 'objects',
+        monotypeClass: true,
+    }
+}
+
+function fieldsContent(fields: { [key: string]: any }) {
+    return Object.keys(fields).map((k) => {
+        return {
+            label: k,
+            value: fields[k].toString(),
+            monotypeClass: true,
+        };
+    });
+}
+
 export function newObjectEventDisplay(event: NewObjectEvent) {
     return {
         top: {
@@ -46,16 +74,8 @@ export function newObjectEventDisplay(event: NewObjectEvent) {
                     value: `${event.packageId}::${event.transactionModule}`,
                     monotypeClass: true,
                 },
-                {
-                    label: 'Sender',
-                    value: event.sender,
-                    monotypeClass: true,
-                },
-                {
-                    label: 'Recipient',
-                    value: getOwnerStr(event.recipient),
-                    monotypeClass: true,
-                },
+                addressContent('Sender', event.sender),
+                addressContent('Recipient', getOwnerStr(event.recipient)),
             ],
         },
         fields: null,
@@ -72,38 +92,16 @@ export function transferObjectEventDisplay(event: TransferObjectEvent) {
                     value: event.type,
                     monotypeClass: true,
                 },
-                {
-                    label: 'Object ID',
-                    value: event.objectId,
-                    monotypeClass: true,
-                },
+                objectContent('Object ID', event.objectId),
                 {
                     label: 'Version',
                     value: event.version.toString(),
                     monotypeClass: false,
                 },
-                {
-                    label: 'Sender',
-                    value: event.sender,
-                    monotypeClass: true,
-                },
-                {
-                    label: 'Recipient',
-                    value: getOwnerStr(event.recipient),
-                    monotypeClass: true,
-                },
+                addressContent('Sender', event.sender),
+                addressContent('Recipient', getOwnerStr(event.recipient)),
             ],
         },
         fields: null,
     };
-}
-
-function fieldsContent(fields: { [key: string]: any }) {
-    return Object.keys(fields).map((k) => {
-        return {
-            label: k,
-            value: fields[k].toString(),
-            monotypeClass: true,
-        };
-    });
 }
