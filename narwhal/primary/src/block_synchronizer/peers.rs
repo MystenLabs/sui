@@ -1,11 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::{traits::VerifyingKey, Hash};
+use crypto::{Hash, PublicKey};
 use rand::{prelude::SliceRandom as _, rngs::SmallRng};
 use std::collections::HashMap;
 
 #[derive(Clone)]
-pub struct Peer<PublicKey: VerifyingKey, Value: Hash + Clone> {
+pub struct Peer<Value: Hash + Clone> {
     pub name: PublicKey,
 
     /// Those are the values that we got from the peer and that is able
@@ -16,7 +16,7 @@ pub struct Peer<PublicKey: VerifyingKey, Value: Hash + Clone> {
     assigned_values: HashMap<<Value as Hash>::TypedDigest, Value>,
 }
 
-impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peer<PublicKey, Value> {
+impl<Value: Hash + Clone> Peer<Value> {
     pub fn new(name: PublicKey, values_able_to_serve: Vec<Value>) -> Self {
         let certs: HashMap<<Value as crypto::Hash>::TypedDigest, Value> = values_able_to_serve
             .into_iter()
@@ -46,9 +46,9 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peer<PublicKey, Value> {
 /// the re-balancing process is not guaranteed to be atomic and
 /// thread safe which could lead to potential issues if used in
 /// such environment.
-pub struct Peers<PublicKey: VerifyingKey, Value: Hash + Clone> {
+pub struct Peers<Value: Hash + Clone> {
     /// A map with all the peers assigned on this pool.
-    peers: HashMap<PublicKey, Peer<PublicKey, Value>>,
+    peers: HashMap<PublicKey, Peer<Value>>,
 
     /// When true, it means that the values have been assigned to peers and no
     /// more mutating operations can be applied
@@ -63,7 +63,7 @@ pub struct Peers<PublicKey: VerifyingKey, Value: Hash + Clone> {
     rng: SmallRng,
 }
 
-impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
+impl<Value: Hash + Clone> Peers<Value> {
     pub fn new(rng: SmallRng) -> Self {
         Self {
             peers: HashMap::new(),
@@ -73,7 +73,7 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
         }
     }
 
-    pub fn peers(&self) -> &HashMap<PublicKey, Peer<PublicKey, Value>> {
+    pub fn peers(&self) -> &HashMap<PublicKey, Peer<Value>> {
         &self.peers
     }
 
@@ -131,12 +131,9 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
     /// 1) Will filter only the peers that value dictated by the
     /// provided `value_id`
     /// 2) Will pick a peer in random to assign the value to
-    fn peer_to_assign_value(
-        &mut self,
-        value_id: <Value as Hash>::TypedDigest,
-    ) -> Peer<PublicKey, Value> {
+    fn peer_to_assign_value(&mut self, value_id: <Value as Hash>::TypedDigest) -> Peer<Value> {
         // step 1 - find the peers who have this id
-        let peers_with_value: Vec<Peer<PublicKey, Value>> = self
+        let peers_with_value: Vec<Peer<Value>> = self
             .peers
             .iter()
             .filter(|p| p.1.values_able_to_serve.contains_key(&value_id))
@@ -174,11 +171,7 @@ impl<PublicKey: VerifyingKey, Value: Hash + Clone> Peers<PublicKey, Value> {
 mod tests {
     use crate::block_synchronizer::peers::Peers;
     use blake2::{digest::Update, VarBlake2b};
-    use crypto::{
-        ed25519::{Ed25519KeyPair, Ed25519PublicKey},
-        traits::KeyPair,
-        Digest, Hash, DIGEST_LEN,
-    };
+    use crypto::{traits::KeyPair as _, Digest, Hash, KeyPair, DIGEST_LEN};
     use rand::{
         rngs::{SmallRng, StdRng},
         SeedableRng,
@@ -232,11 +225,10 @@ mod tests {
 
             let mut rng = StdRng::from_seed([0; 32]);
 
-            let mut peers =
-                Peers::<Ed25519PublicKey, MockCertificate>::new(SmallRng::from_entropy());
+            let mut peers = Peers::<MockCertificate>::new(SmallRng::from_entropy());
 
             for _ in 0..test.num_of_peers {
-                let key_pair = Ed25519KeyPair::generate(&mut rng);
+                let key_pair = KeyPair::generate(&mut rng);
                 peers.add_peer(key_pair.public().clone(), mock_certificates.clone());
             }
 
@@ -317,11 +309,10 @@ mod tests {
 
             let mut rng = StdRng::from_seed([0; 32]);
 
-            let mut peers =
-                Peers::<Ed25519PublicKey, MockCertificate>::new(SmallRng::from_entropy());
+            let mut peers = Peers::<MockCertificate>::new(SmallRng::from_entropy());
 
             for peer_index in 0..test.num_of_peers {
-                let key_pair = Ed25519KeyPair::generate(&mut rng);
+                let key_pair = KeyPair::generate(&mut rng);
                 let peer_name = key_pair.public().clone();
                 let mut mock_certificates = Vec::new();
 

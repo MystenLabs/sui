@@ -3,11 +3,7 @@ use arc_swap::ArcSwap;
 // SPDX-License-Identifier: Apache-2.0
 use config::{Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::{
-    ed25519::{Ed25519KeyPair, Ed25519PublicKey},
-    traits::KeyPair,
-    Hash,
-};
+use crypto::{traits::KeyPair as _, Hash, KeyPair, PublicKey};
 use node::NodeStorage;
 use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
@@ -652,7 +648,7 @@ async fn test_read_causal_unsigned_certificates() {
             .authorities
             .keys()
             .cloned()
-            .collect::<Vec<Ed25519PublicKey>>(),
+            .collect::<Vec<PublicKey>>(),
     );
 
     collection_ids.extend(
@@ -976,7 +972,7 @@ async fn test_get_collections_with_missing_certificates() {
 }
 
 async fn fixture_certificate(
-    key: &Ed25519KeyPair,
+    key: &KeyPair,
     header_store: Store<HeaderDigest, Header>,
     certificate_store: Store<CertificateDigest, Certificate>,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,

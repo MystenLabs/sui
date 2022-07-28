@@ -5,9 +5,8 @@ use bytes::Bytes;
 use config::{Epoch, Parameters};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::{
-    ed25519::Ed25519PublicKey,
-    traits::{KeyPair, ToFromBytes},
-    Hash,
+    traits::{KeyPair as _, ToFromBytes},
+    Hash, PublicKey,
 };
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
@@ -49,7 +48,7 @@ async fn test_rounds_errors() {
                     .to_string(),
         },
         TestCase {
-            public_key: Bytes::from(Ed25519PublicKey::default().as_bytes().to_vec()),
+            public_key: Bytes::from(PublicKey::default().as_bytes().to_vec()),
             test_case_name: "Valid public key, but authority not found in committee".to_string(),
             expected_error: "Invalid public key: unknown authority".to_string(),
         },

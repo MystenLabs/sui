@@ -107,7 +107,7 @@ enum State {
     PayloadAvailabilityReceived {
         request_id: RequestID,
         certificates: HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader>>,
-        peers: Peers<PublicKey, Certificate>,
+        peers: Peers<Certificate>,
     },
     PayloadSynchronized {
         request_id: RequestID,
@@ -625,7 +625,7 @@ impl BlockSynchronizer {
     async fn handle_synchronize_block_payloads<'a>(
         &mut self,
         request_id: RequestID,
-        mut peers: Peers<PublicKey, Certificate>,
+        mut peers: Peers<Certificate>,
     ) -> Vec<BoxFuture<'a, State>> {
         // Important step to do that first, so we give the opportunity
         // to other future requests (with same set of ids) making a request.
@@ -783,7 +783,7 @@ impl BlockSynchronizer {
         let timer = sleep(fetch_certificates_timeout);
         tokio::pin!(timer);
 
-        let mut peers = Peers::<PublicKey, Certificate>::new(SmallRng::from_entropy());
+        let mut peers = Peers::<Certificate>::new(SmallRng::from_entropy());
 
         loop {
             tokio::select! {
@@ -871,7 +871,7 @@ impl BlockSynchronizer {
         let timer = sleep(fetch_certificates_timeout);
         tokio::pin!(timer);
 
-        let mut peers = Peers::<PublicKey, Certificate>::new(SmallRng::from_entropy());
+        let mut peers = Peers::<Certificate>::new(SmallRng::from_entropy());
 
         loop {
             tokio::select! {
@@ -949,7 +949,7 @@ impl BlockSynchronizer {
     // communicate the result for each requested certificate (if found, then
     // certificate it self , or if error then the type of the error).
     fn resolve_block_synchronize_result(
-        peers: &Peers<PublicKey, Certificate>,
+        peers: &Peers<Certificate>,
         block_ids: Vec<CertificateDigest>,
         timeout: bool,
     ) -> HashMap<CertificateDigest, BlockSynchronizeResult<BlockHeader>> {

@@ -4,9 +4,9 @@
 use super::*;
 
 use crate::{metrics::ConsensusMetrics, Consensus};
-use crypto::ed25519::Ed25519PublicKey;
 #[allow(unused_imports)]
 use crypto::traits::KeyPair;
+use crypto::PublicKey;
 use prometheus::Registry;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};
@@ -25,7 +25,7 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
         .expect("Failed to create database");
 
     let (last_committed_map, sequence_map) = reopen!(&rocksdb,
-        LAST_COMMITTED_CF;<Ed25519PublicKey, Round>,
+        LAST_COMMITTED_CF;<PublicKey, Round>,
         SEQUENCE_CF;<SequenceNumber, CertificateDigest>
     );
 

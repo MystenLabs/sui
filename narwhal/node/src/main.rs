@@ -12,7 +12,7 @@ use anyhow::{Context, Result};
 use arc_swap::ArcSwap;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerId};
-use crypto::{ed25519::Ed25519KeyPair, generate_production_keypair, traits::KeyPair};
+use crypto::{generate_production_keypair, traits::KeyPair as _, KeyPair};
 use executor::{SerializedTransaction, SubscriberResult};
 use futures::future::join_all;
 use node::{
@@ -115,7 +115,7 @@ async fn main() -> Result<()> {
 
     match matches.subcommand() {
         ("generate_keys", Some(sub_matches)) => {
-            let kp = generate_production_keypair::<Ed25519KeyPair>();
+            let kp = generate_production_keypair::<KeyPair>();
             config::Export::export(&kp, sub_matches.value_of("filename").unwrap())
                 .context("Failed to generate key pair")?
         }
@@ -133,7 +133,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<()> {
     let store_path = matches.value_of("store").unwrap();
 
     // Read the committee and node's keypair from file.
-    let keypair = Ed25519KeyPair::import(key_file).context("Failed to load the node's keypair")?;
+    let keypair = KeyPair::import(key_file).context("Failed to load the node's keypair")?;
     let committee = Arc::new(ArcSwap::from_pointee(
         Committee::import(committee_file).context("Failed to load the committee information")?,
     ));

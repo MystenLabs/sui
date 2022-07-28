@@ -4,7 +4,7 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters};
 use consensus::ConsensusOutput;
-use crypto::{ed25519::Ed25519KeyPair, traits::KeyPair, PublicKey};
+use crypto::{traits::KeyPair as _, KeyPair, PublicKey};
 use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use futures::future::join_all;
 use network::{PrimaryToWorkerNetwork, WorkerToPrimaryNetwork};
@@ -26,14 +26,14 @@ use types::{ReconfigureNotification, TransactionProto, TransactionsClient, Worke
 struct SimpleExecutionState {
     index: usize,
     committee: Arc<Mutex<Committee>>,
-    tx_reconfigure: Sender<(Ed25519KeyPair, Committee)>,
+    tx_reconfigure: Sender<(KeyPair, Committee)>,
 }
 
 impl SimpleExecutionState {
     pub fn new(
         index: usize,
         committee: Committee,
-        tx_reconfigure: Sender<(Ed25519KeyPair, Committee)>,
+        tx_reconfigure: Sender<(KeyPair, Committee)>,
     ) -> Self {
         Self {
             index,

@@ -7,7 +7,7 @@ use config::{
     Committee, ConsensusAPIGrpcParameters, Epoch, Parameters, PrimaryAddresses,
     PrometheusMetricsParameters, Stake,
 };
-use crypto::{ed25519::Ed25519PublicKey, traits::KeyPair};
+use crypto::{traits::KeyPair as _, PublicKey};
 use insta::assert_json_snapshot;
 use rand::seq::SliceRandom;
 use test_utils::make_authority_with_port_getter;
@@ -79,7 +79,7 @@ fn update_primary_network_info_test() {
         .into_iter()
         .zip(addresses)
         .map(|((pk, stk), addr)| (pk, (stk, addr)))
-        .collect::<BTreeMap<Ed25519PublicKey, (Stake, PrimaryAddresses)>>();
+        .collect::<BTreeMap<PublicKey, (Stake, PrimaryAddresses)>>();
 
     let mut comm = committee;
     let res = comm.update_primary_network_info(new_info.clone());

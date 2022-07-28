@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use config::{Authority, Committee, Epoch, PrimaryAddresses, WorkerAddresses};
 use crypto::{
-    ed25519::Ed25519KeyPair,
-    traits::{KeyPair, Signer},
-    Digest, Hash,
+    traits::{KeyPair as _, Signer},
+    Digest, Hash, KeyPair,
 };
 use primary::PrimaryWorkerMessage;
 use rand::{prelude::StdRng, SeedableRng};
@@ -25,7 +24,7 @@ fn get_registry() -> Result<Registry> {
     // with all the base types contained in messages, especially the ones with custom serializers;
     // or involving generics (see [serde_reflection documentation](https://docs.rs/serde-reflection/latest/serde_reflection/)).
     let mut rng = StdRng::from_seed([0; 32]);
-    let kp = Ed25519KeyPair::generate(&mut rng);
+    let kp = KeyPair::generate(&mut rng);
     let pk = kp.public().clone();
 
     tracer.trace_value(&mut samples, &pk)?;
@@ -35,7 +34,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_value(&mut samples, &signature)?;
 
     // Trace the correspondng header
-    let keys: Vec<_> = (0..4).map(|_| Ed25519KeyPair::generate(&mut rng)).collect();
+    let keys: Vec<_> = (0..4).map(|_| KeyPair::generate(&mut rng)).collect();
     let committee = Committee {
         epoch: Epoch::default(),
         authorities: keys
