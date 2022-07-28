@@ -1,8 +1,8 @@
-import { ReactComponent as ObjIcon } from '../../assets/SVGIcons/Call.svg';
-import GoBack from '../../components/goback/GoBack';
-import Longtext from '../../components/longtext/Longtext';
+import { ReactComponent as ObjIcon } from '../../../../assets/SVGIcons/Call.svg';
+import GoBack from '../../../../components/goback/GoBack';
+import Longtext from '../../../../components/longtext/Longtext';
 
-import styles from './ObjectResultHeader.module.css';
+import styles from './ObjHeader.module.css';
 
 type ObjHeaderData = {
     objId: string;

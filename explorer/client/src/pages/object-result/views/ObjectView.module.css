@@ -69,12 +69,11 @@ div.propertybox > div > p:first-child {
 
 /* Clickable Header CSS */
 
-h2.clickableheader {
-    @apply hover:bg-slate-200 p-1 cursor-pointer
-    font-semibold text-2xl leading-6 mb-0;
+h2.header {
+    @apply p-1 font-semibold text-2xl leading-6 mb-0;
 }
 
-div.accommodate > h2.clickableheader {
+div.accommodate > h2.header {
     @apply lg:w-[50vw];
 }
 
