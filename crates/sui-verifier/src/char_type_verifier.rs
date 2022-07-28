@@ -73,7 +73,7 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
                     .map_err(verification_failure)?;
             } else {
                 // if there is no characteristic type candidate than the init function should have
-                // only one parameter of tx_context type
+                // only one parameter of TxContext type
                 verify_init_function_single_param(module, fn_handle)
                     .map_err(verification_failure)?;
             }
@@ -174,7 +174,7 @@ fn is_char_type(
     false
 }
 
-/// Checks if this module's `init` function has a single parameter of tx_context type only
+/// Checks if this module's `init` function has a single parameter of TxContext type only
 fn verify_init_function_single_param(
     module: &CompiledModule,
     fn_handle: &FunctionHandle,

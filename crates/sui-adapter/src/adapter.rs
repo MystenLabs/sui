@@ -264,15 +264,17 @@ pub fn store_package_and_init_modules<
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
-            let mut num_args = vec![];
-            module.function_defs.iter().find(|fdef| {
+            for fdef in &module.function_defs {
                 let fhandle = module.function_handle_at(fdef.function);
                 let fname = module.identifier_at(fhandle.name);
-                let sig = module.signature_at(fhandle.parameters);
-                num_args.push(sig.len());
-                fname == INIT_FN_NAME
-            })?;
-            Some((module.self_id(), num_args[0]))
+                if fname == INIT_FN_NAME {
+                    return Some((
+                        module.self_id(),
+                        module.signature_at(fhandle.parameters).len(),
+                    ));
+                }
+            }
+            None
         })
         .collect();
 
@@ -296,6 +298,9 @@ fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error 
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
     for (module_id, num_args) in module_ids_to_init {
         let mut args = vec![];
+        // an init function can have one or two arguments, with the last one always being of type
+        // &mut TxContext and the additional (first) one representing a characteristic type (see
+        // char_type verfier pass for additional explanation)
         if num_args == 2 {
             // characteristic type is a struct with a single bool filed which in bcs is encoded as
             // 0x01
