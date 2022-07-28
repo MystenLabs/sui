@@ -30,7 +30,7 @@ When you complete the setup steps, you can use the either use following script t
 
 ## Quick script
 If you prefer not to enter command step by step, or need to go though it multiple
-times for whatever reason (change some move source code ), this automated script
+times (such as when you change some Move source code), the following automated script
 may be useful to save some time.
 Run this script from the project repo root.
 ```sh
