@@ -88,7 +88,7 @@ export function newObjectEventDisplay(event: NewObjectEvent) {
                 },
                 [
                     addressContent('Sender', event.sender),
-                    addressContent('Recipient', getOwnerStr(event.recipient))
+                    addressContent('Recipient', getOwnerStr(event.recipient)),
                 ],
             ],
         },
