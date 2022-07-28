@@ -213,12 +213,8 @@ function eventToDisplay(event: SuiEvent) {
     if ('moveEvent' in event && isMoveEvent(event.moveEvent))
         return moveEventDisplay(event.moveEvent);
 
-    if ('newObject' in event) {
-        console.log('new obj evt', event.newObject);
-        if (isNewObjectEvent(event.newObject))
-            return newObjectEventDisplay(event.newObject);
-        else console.warn('WHY NOT IS NEW OBJECT?!?!');
-    }
+    if ('newObject' in event && isNewObjectEvent(event.newObject))
+        return newObjectEventDisplay(event.newObject);
 
     return {
         top: {
