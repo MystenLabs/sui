@@ -7,7 +7,12 @@ use crate::{
 };
 use base64ct::{Base64, Encoding};
 use once_cell::sync::OnceCell;
-use rust_secp256k1::{constants, rand::rngs::OsRng, Message, PublicKey, Secp256k1, SecretKey};
+use rust_secp256k1::{
+    constants,
+    ecdsa::{RecoverableSignature, RecoveryId},
+    rand::rngs::OsRng,
+    Message, PublicKey, Secp256k1, SecretKey,
+};
 use serde::{de, Deserialize, Serialize};
 use signature::{Signature, Signer, Verifier};
 use std::{
@@ -231,14 +236,19 @@ impl<'de> Deserialize<'de> for Secp256k1Signature {
 
 impl Signature for Secp256k1Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let recovery_id = rust_secp256k1::ecdsa::RecoveryId::from_i32(bytes[64] as i32).unwrap();
-        match rust_secp256k1::ecdsa::RecoverableSignature::from_compact(&bytes[..64], recovery_id) {
-            Ok(sig) => Ok(Secp256k1Signature {
-                sig,
-                bytes: OnceCell::new(),
-            }),
-            Err(_) => Err(signature::Error::new()),
+        if bytes.len() != 65 {
+            return Err(signature::Error::new());
         }
+        RecoveryId::from_i32(bytes[64] as i32)
+            .and_then(|rec_id| {
+                RecoverableSignature::from_compact(&bytes[..64], rec_id).map(|sig| {
+                    Secp256k1Signature {
+                        sig,
+                        bytes: OnceCell::new(),
+                    }
+                })
+            })
+            .map_err(|_| signature::Error::new())
     }
 }
 

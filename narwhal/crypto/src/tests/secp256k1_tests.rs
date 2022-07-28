@@ -80,6 +80,12 @@ fn test_public_key_recovery() {
 
 #[test]
 fn test_public_key_recovery_error() {
+    // incorrect length
+    assert!(<Secp256k1Signature as ToFromBytes>::from_bytes(&[0u8; 1]).is_err());
+
+    // invalid recovery id at index 65
+    assert!(<Secp256k1Signature as ToFromBytes>::from_bytes(&[4u8; 65]).is_err());
+
     let signature = <Secp256k1Signature as ToFromBytes>::from_bytes(&[0u8; 65]).unwrap();
     let message: &[u8] = b"Hello, world!";
     assert!(signature
