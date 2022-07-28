@@ -353,10 +353,11 @@ export function isMoveEvent(obj: any, _argumentName?: string): obj is MoveEvent 
             isTransactionDigest(obj.packageId) as boolean) &&
         (typeof obj.transactionModule === "undefined" ||
             isTransactionDigest(obj.transactionModule) as boolean) &&
-        (typeof obj.sender === "undefined" ||
-            isTransactionDigest(obj.sender) as boolean) &&
+        isTransactionDigest(obj.sender) as boolean &&
         isTransactionDigest(obj.type) as boolean &&
-        isEmptySignInfo(obj.fields) as boolean &&
+        (obj.fields !== null &&
+            typeof obj.fields === "object" ||
+            typeof obj.fields === "function") &&
         isTransactionDigest(obj.bcs) as boolean
     )
 }

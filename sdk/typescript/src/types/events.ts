@@ -18,9 +18,9 @@ import { ObjectId, SequenceNumber } from "./objects";
 export type MoveEvent = {
     packageId?: ObjectId;
     transactionModule?: string;
-    sender?: SuiAddress;
+    sender: SuiAddress;
     type: string;
-    fields: object; // TODO - better type
+    fields: { [key: string]: any; }; // TODO - better type
     bcs: string;
 };
 
