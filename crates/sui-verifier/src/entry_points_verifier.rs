@@ -123,15 +123,15 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
     }
 
     let parameters = &view.signature_at(fhandle.parameters).0;
-    if parameters.len() > 2 {
+    if parameters.is_empty() || parameters.len() > 2 {
         return Err(format!(
-            "Expected at most two parameters for {}::{}",
+            "Expected at least one and at most two parameters for {}::{}",
             module.self_id(),
             INIT_FN_NAME,
         ));
     }
 
-    if parameters.len() == 0 || is_tx_context(view, &parameters[parameters.len() - 1]) {
+    if is_tx_context(view, &parameters[parameters.len() - 1]) {
         Ok(())
     } else {
         Err(format!(
