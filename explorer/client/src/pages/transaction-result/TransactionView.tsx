@@ -248,8 +248,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     console.log('txdata', txdata, txEventData);
 
     const txEventDisplay = txEventData?.map((ed) => {
-        if (!ed)
-            return (<div></div>)
+        if (!ed) return <div></div>;
         return (
             <div className={styles.txgridcomponent} key={ed.top.title}>
                 <ItemView data={ed.top as TxItemView} />
