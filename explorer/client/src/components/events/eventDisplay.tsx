@@ -1,6 +1,6 @@
 import { getOwnerStr } from '../../utils/objectUtils';
 
-import type { MoveEvent, NewObjectEvent } from '@mysten/sui.js';
+import type { MoveEvent, NewObjectEvent, TransferObjectEvent } from '@mysten/sui.js';
 
 export function moveEventDisplay(event: MoveEvent) {
     return {
@@ -55,6 +55,42 @@ export function newObjectEventDisplay(event: NewObjectEvent) {
             ],
         },
         fields: null,
+    };
+}
+
+export function transferObjectEventDisplay(event: TransferObjectEvent) {
+    return {
+        top: {
+            title: 'Transfer Object',
+            content: [
+                {
+                    label: 'Type',
+                    value: event.type,
+                    monotypeClass: true,
+                },
+                {
+                    label: 'Object ID',
+                    value: event.objectId,
+                    monotypeClass: true,
+                },
+                {
+                    label: 'Version',
+                    value: event.version.toString(),
+                    monotypeClass: false,
+                },
+                {
+                    label: 'Sender',
+                    value: event.sender,
+                    monotypeClass: true,
+                },
+                {
+                    label: 'Recipient',
+                    value: getOwnerStr(event.recipient),
+                    monotypeClass: true,
+                },
+            ],
+        },
+        fields: null
     };
 }
 

@@ -13,12 +13,14 @@ import {
     getTransferSuiTransaction,
     isMoveEvent,
     isNewObjectEvent,
+    isTransferObjectEvent,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
 import {
     moveEventDisplay,
     newObjectEventDisplay,
+    transferObjectEventDisplay,
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
@@ -215,6 +217,9 @@ function eventToDisplay(event: SuiEvent) {
 
     if ('newObject' in event && isNewObjectEvent(event.newObject))
         return newObjectEventDisplay(event.newObject);
+
+    if ('transferObject' in event && isTransferObjectEvent(event.transferObject))
+        return transferObjectEventDisplay(event.transferObject);
 
     return {
         top: {
@@ -415,7 +420,11 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                         <ItemView data={GasStorageFees} />
                     </div>
                 </section>
-                <section title="Events">{txEventDisplay}</section>
+                <section title="Events">
+                    <div className={styles.txgridcomponent}>
+                        {txEventDisplay}
+                    </div>
+                </section>
                 <section title="Signatures">
                     <div className={styles.txgridcomponent}>
                         <ItemView data={transactionSignatureData} />
