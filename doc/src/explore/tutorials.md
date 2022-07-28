@@ -40,27 +40,40 @@ Run this script from the project repo root.
 
 # assign address
 CLIENT_ADDRESS=$(sui client addresses | tail -n +2)
-echo $CLIENT_ADDRESS
-ADMIN=$CLIENT_ADDRESS | head -n 1
-PLAYER_X=$CLIENT_ADDRESS | head -n 2
-PLAYER_Y=$CLIENT_ADDRESS | head -n 3
-
+ADMIN=`echo "${CLIENT_ADDRESS}" | head -n 1`
+PLAYER_X=`echo "${CLIENT_ADDRESS}" | sed -n 2p`
+PLAYER_O=`echo "${CLIENT_ADDRESS}" | sed -n 3p`
 # gas id
 IFS='|'
-ADMIN_GAS=$(sui client gas --address $ADMIN | sed -n 3p)
-read -a tmparr <<< "$ADMIN_GAS"
+ADMIN_GAS_INFO=$(sui client gas --address $ADMIN | sed -n 3p)
+read -a tmparr <<< "$ADMIN_GAS_INFO"
 ADMIN_GAS_ID=`echo ${tmparr[0]} | xargs`
 
-X_GAS=$(sui client gas --address $PLAYER_X | sed -n 3p)
-read -a tmparr <<< "$X_GAS"
+X_GAS_INFO=$(sui client gas --address $PLAYER_X | sed -n 3p)
+read -a tmparr <<< "$X_GAS_INFO"
 X_GAS_ID=`echo ${tmparr[0]} | xargs`
 
-Y_GAS=$(sui client gas --address $PLAYER_Y | sed -n 3p)
-read -a tmparr <<< "$Y_GAS"
-Y_GAS_ID=`echo ${tmparr[0]} | xargs`
+O_GAS_INFO=$(sui client gas --address $PLAYER_O | sed -n 3p)
+read -a tmparr <<< "$O_GAS_INFO"
+O_GAS_ID=`echo ${tmparr[0]} | xargs`
 
 # publish games
-sui client publish --path ./sui_programmability/examples/games --gas $ADMIN_GAS_ID --gas-budget 30000
+certificate=$(sui client publish --path ./sui_programmability/examples/games --gas $ADMIN_GAS_ID --gas-budget 30000)
+
+package_id_identifier="The newly published package object ID:"
+res=$(echo $certificate | awk -v s="$package_id_identifier" 'index($0, s) == 1')
+IFS=':'
+read -a resarr <<< "$res"
+echo ${resarr[1]}
+PACKAGE_ID=`echo ${resarr[1]} | xargs`
+
+echo "package id: $PACKAGE_ID"
+# Playing TicTacToe
+
+# create a game
+sui client call --package $PACKAGE_ID --module tic_tac_toe --function create_game --args $PLAYER_X $PLAYER_O --gas $ADMIN_GAS_ID --gas-budget 1000
+
+# start playing the game ...
 ```
 
 ## Gather accounts and gas objects
