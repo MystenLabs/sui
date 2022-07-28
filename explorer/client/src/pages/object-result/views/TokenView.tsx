@@ -20,7 +20,6 @@ function TokenView({ data }: { data: DataType }) {
         url: parseImageURL(data.data.contents),
     };
 
-    const descriptionTitle = 'Description';
     const detailsTitle = 'Properties';
 
     const checkIsPropertyType = (value: any) =>
@@ -55,7 +54,7 @@ function TokenView({ data }: { data: DataType }) {
                 }`}
             >
                 {viewedData.name && <h1>{viewedData.name}</h1>}{' '}
-                <h2 className={styles.header}>{descriptionTitle}</h2>
+                <h2 className={styles.header}>Description</h2>
                 <div className={theme.textresults} id="descriptionResults">
                     <div>
                         <div>Object ID</div>

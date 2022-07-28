@@ -70,7 +70,7 @@ div.propertybox > div > p:first-child {
 /* Clickable Header CSS */
 
 h2.header {
-    @apply p-1 font-semibold text-2xl leading-6 mb-0;
+    @apply text-sui-grey-100 font-semibold text-[1.125rem] leading-[1.125rem] mb-5;
 }
 
 div.accommodate > h2.header {
