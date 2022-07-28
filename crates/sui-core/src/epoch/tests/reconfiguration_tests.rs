@@ -115,7 +115,7 @@ async fn test_start_epoch_change() {
         cert = sigs
             .append(
                 state.name,
-                AuthoritySignature::new(&transaction.data, &*state.secret),
+                AuthoritySignature::new(&transaction.signed_data, &*state.secret),
             )
             .unwrap();
     }
@@ -135,6 +135,7 @@ async fn test_start_epoch_change() {
         state.database.clone(),
         InputObjects::new(
             transaction
+                .signed_data
                 .data
                 .input_objects()
                 .unwrap()
@@ -147,7 +148,7 @@ async fn test_start_epoch_change() {
     let (inner_temporary_store, effects, _) = execution_engine::execute_transaction_to_effects(
         vec![],
         temporary_store,
-        transaction.data.clone(),
+        transaction.signed_data.data.clone(),
         tx_digest,
         BTreeSet::new(),
         &state.move_vm,

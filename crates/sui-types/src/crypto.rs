@@ -239,7 +239,7 @@ where
 
 // Enums for Signatures
 #[enum_dispatch]
-#[derive(Clone, JsonSchema)]
+#[derive(Clone, JsonSchema, PartialEq, Eq, Hash)]
 pub enum Signature {
     Ed25519SuiSignature,
 }
@@ -327,7 +327,7 @@ impl std::fmt::Debug for Signature {
 //
 
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 pub struct Ed25519SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -374,7 +374,7 @@ impl signature::Signer<Signature> for Ed25519KeyPair {
 // Secp256k1 Sui Signature port
 //
 #[serde_as]
-#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq, Hash)]
 pub struct Secp256k1SuiSignature(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
@@ -424,7 +424,7 @@ impl signature::Signature for Secp256k1SuiSignature {
 //
 // This struct exists due to the limitations of the `enum_dispatch` library.
 //
-pub trait SuiSignatureInner: Sized + signature::Signature {
+pub trait SuiSignatureInner: Sized + signature::Signature + PartialEq + Eq + Hash {
     type Sig: Authenticator<PubKey = Self::PubKey> + ToObligationSignature;
     type PubKey: VerifyingKey<Sig = Self::Sig> + SuiPublicKey;
     type KeyPair: KeypairTraits<PubKey = Self::PubKey, Sig = Self::Sig>;
@@ -860,6 +860,7 @@ mod bcs_signable {
     impl BcsSignable for crate::messages_checkpoint::CheckpointProposalSummary {}
     impl BcsSignable for crate::messages::TransactionEffects {}
     impl BcsSignable for crate::messages::TransactionData {}
+    impl BcsSignable for crate::messages::SenderSignedData {}
     impl BcsSignable for crate::messages::EpochInfo {}
     impl BcsSignable for crate::object::Object {}
 

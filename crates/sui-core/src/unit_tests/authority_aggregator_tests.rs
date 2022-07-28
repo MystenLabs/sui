@@ -276,7 +276,7 @@ where
                 signed.auth_sign_info.signature.clone(),
             ));
             if let Some(inner_transaction) = transaction {
-                assert!(inner_transaction.data == signed.data);
+                assert!(inner_transaction.signed_data.data == signed.signed_data.data);
             }
             transaction = Some(signed);
         }
