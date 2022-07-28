@@ -19,8 +19,60 @@ import type {
     DeleteObjectEvent,
     PublishEvent,
 } from '@mysten/sui.js';
+import type { Category } from '../../pages/transaction-result/TransactionResultType';
 
-export function moveEventDisplay(event: MoveEvent) {
+export type ContentItem = {
+    label: string,
+    value: string,
+    monotypeClass: boolean,
+    link?: boolean,
+    category?: Category,
+}
+
+export type EventDisplayData = {
+    top: {
+        title: string,
+        content: (ContentItem | ContentItem[])[],
+    },
+    fields?: {
+        title: string,
+        // css class name to apply to the 'Fields' sub-header
+        titleStyle?: string,
+        content: (ContentItem | ContentItem[])[],
+    }
+}
+
+function addressContent(label: string, addr: SuiAddress) {
+    return {
+        label: label,
+        value: addr,
+        link: true,
+        category: 'addresses' as Category,
+        monotypeClass: true,
+    };
+}
+
+function objectContent(label: string, id: ObjectId) {
+    return {
+        label: label,
+        value: id,
+        link: true,
+        category: 'objects' as Category,
+        monotypeClass: true,
+    };
+}
+
+function fieldsContent(fields: { [key: string]: any }) {
+    return Object.keys(fields).map((k) => {
+        return {
+            label: k,
+            value: fields[k].toString(),
+            monotypeClass: true,
+        };
+    });
+}
+
+export function moveEventDisplay(event: MoveEvent): EventDisplayData {
     return {
         top: {
             title: 'Move Event',
@@ -46,37 +98,7 @@ export function moveEventDisplay(event: MoveEvent) {
     };
 }
 
-function addressContent(label: string, addr: SuiAddress) {
-    return {
-        label: label,
-        value: addr,
-        link: true,
-        category: 'addresses',
-        monotypeClass: true,
-    };
-}
-
-function objectContent(label: string, id: ObjectId) {
-    return {
-        label: label,
-        value: id,
-        link: true,
-        category: 'objects',
-        monotypeClass: true,
-    };
-}
-
-function fieldsContent(fields: { [key: string]: any }) {
-    return Object.keys(fields).map((k) => {
-        return {
-            label: k,
-            value: fields[k].toString(),
-            monotypeClass: true,
-        };
-    });
-}
-
-export function newObjectEventDisplay(event: NewObjectEvent) {
+export function newObjectEventDisplay(event: NewObjectEvent): EventDisplayData {
     return {
         top: {
             title: 'New Object',
@@ -92,11 +114,10 @@ export function newObjectEventDisplay(event: NewObjectEvent) {
                 ],
             ],
         },
-        fields: null,
     };
 }
 
-export function transferObjectEventDisplay(event: TransferObjectEvent) {
+export function transferObjectEventDisplay(event: TransferObjectEvent): EventDisplayData {
     return {
         top: {
             title: 'Transfer Object',
@@ -118,11 +139,10 @@ export function transferObjectEventDisplay(event: TransferObjectEvent) {
                 ],
             ],
         },
-        fields: null,
     };
 }
 
-export function deleteObjectEventDisplay(event: DeleteObjectEvent) {
+export function deleteObjectEventDisplay(event: DeleteObjectEvent): EventDisplayData {
     return {
         top: {
             title: 'Delete Object',
@@ -136,11 +156,10 @@ export function deleteObjectEventDisplay(event: DeleteObjectEvent) {
                 addressContent('Sender', event.sender),
             ],
         },
-        fields: null,
     };
 }
 
-export function publishEventDisplay(event: PublishEvent) {
+export function publishEventDisplay(event: PublishEvent): EventDisplayData {
     return {
         top: {
             title: 'Publish',
@@ -149,11 +168,10 @@ export function publishEventDisplay(event: PublishEvent) {
                 objectContent('Package', event.packageId),
             ],
         },
-        fields: null,
     };
 }
 
-export function bigintDisplay(title: string, label: string, value: bigint) {
+export function bigintDisplay(title: string, label: string, value: bigint): EventDisplayData {
     return {
         top: {
             title: title,
@@ -165,7 +183,6 @@ export function bigintDisplay(title: string, label: string, value: bigint) {
                 },
             ],
         },
-        fields: null,
     };
 }
 
