@@ -1,0 +1,20 @@
+.moretxbtn {
+    @apply text-left bg-transparent cursor-pointer border-0 pl-0 pr-0 text-[#636870] hover:text-gray-400 transition-colors duration-200 ease-in-out font-normal text-sm;
+}
+
+.moretxbtn::after {
+    margin: 5px;
+    content: '';
+    background-image: url('../../assets/SVGIcons/chevron-down.svg');
+    @apply text-sm;
+
+    width: 12px;
+    height: 12px;
+    position: absolute;
+    margin-top: 4px;
+    transform: rotate(0deg);
+}
+
+.viewless::after {
+    transform: rotate(180deg);
+}

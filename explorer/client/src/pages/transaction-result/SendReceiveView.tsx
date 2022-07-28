@@ -3,6 +3,7 @@
 import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
+import ViewMore from '../../components/view-more/ViewMore';
 
 import styles from './SendReceiveView.module.css';
 
@@ -37,17 +38,19 @@ function SendRecieveView({ data }: { data: TxAddress }) {
                 />
                 {data.recipient && (
                     <ul className={styles.txrecipents}>
-                        {data.recipient.map((add: string, idx: number) => (
-                            <li key={idx}>
-                                <Longtext
-                                    text={add}
-                                    category="addresses"
-                                    isLink={true}
-                                    isCopyButton={false}
-                                    alttext={add}
-                                />
-                            </li>
-                        ))}
+                        <ViewMore>
+                            {data.recipient.map((add: string, idx: number) => (
+                                <li key={idx}>
+                                    <Longtext
+                                        text={add}
+                                        category="addresses"
+                                        isLink={true}
+                                        isCopyButton={false}
+                                        alttext={add}
+                                    />
+                                </li>
+                            ))}
+                        </ViewMore>
                     </ul>
                 )}
             </div>
