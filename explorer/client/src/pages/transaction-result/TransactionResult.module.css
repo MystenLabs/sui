@@ -16,6 +16,7 @@
 
 .eventtitle:hover {
     @apply bg-blue-100 cursor-pointer;
+
     border-radius: 6px;
 }
 
@@ -30,7 +31,8 @@
 
 .txeventsright {
     @apply col-span-5 md:col-span-4 overflow-y-scroll;
-    height:100vh;   /* enables scrolling list independtly of page */
+
+    height: 100vh; /* enables scrolling list independtly of page */
 }
 
 .txcomponent {
