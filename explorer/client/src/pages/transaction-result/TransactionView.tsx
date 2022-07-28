@@ -12,9 +12,14 @@ import {
     getObjectId,
     getTransferSuiTransaction,
     isMoveEvent,
+    isNewObjectEvent,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
+import {
+    moveEventDisplay,
+    newObjectEventDisplay,
+} from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
 import Tabs from '../../components/tabs/Tabs';
@@ -30,7 +35,6 @@ import type {
     SuiTransactionKind,
     SuiObjectRef,
     SuiEvent,
-    MoveEvent,
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
@@ -203,47 +207,18 @@ function ItemView({ data }: { data: TxItemView }) {
     );
 }
 
-function moveEventDisplay(event: MoveEvent) {
-    return {
-        top: {
-            title: 'MoveEvent',
-            content: [
-                {
-                    label: 'Type',
-                    value: event.type,
-                    monotypeClass: true,
-                },
-                {
-                    label: 'Sender',
-                    value: event.sender,
-                    monotypeClass: true,
-                },
-                {
-                    label: 'BCS',
-                    value: event.bcs,
-                    monotypeClass: true,
-                },
-            ],
-        },
-        fields: {
-            title: 'Fields',
-            titleStyle: 'itemfieldstitle',
-            content: Object.keys(event.fields).map((k) => {
-                return {
-                    label: k,
-                    value: event.fields[k].toString(),
-                    monotypeClass: true,
-                };
-            }),
-        },
-    };
-}
-
 function eventToDisplay(event: SuiEvent) {
     console.log('event to display', event);
 
     if ('moveEvent' in event && isMoveEvent(event.moveEvent))
         return moveEventDisplay(event.moveEvent);
+
+    if ('newObject' in event) {
+        console.log('new obj evt', event.newObject);
+        if (isNewObjectEvent(event.newObject))
+            return newObjectEventDisplay(event.newObject);
+        else console.warn('WHY NOT IS NEW OBJECT?!?!');
+    }
 
     return {
         top: {
@@ -293,7 +268,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         return (
             <div className={styles.txgridcomponent} key={ed.top.title}>
                 <ItemView data={ed.top as TxItemView} />
-                <ItemView data={ed.fields as TxItemView} />
+                {ed.fields && <ItemView data={ed.fields as TxItemView} />}
             </div>
         );
     });
