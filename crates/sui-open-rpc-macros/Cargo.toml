@@ -13,7 +13,7 @@ proc-macro = true
 [dependencies]
 syn = { version = "1.0", features = ["full", "extra-traits"] }
 quote = "1.0"
-proc-macro2 = "1.0"
+proc-macro2 = "1.0.42"
 itertools = "0.10.3"
 derive-syn-parse = "0.1.5"
 workspace-hack = { path = "../workspace-hack"}
