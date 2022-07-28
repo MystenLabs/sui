@@ -5,7 +5,7 @@ import type {
     CertifiedTransaction,
     ExecutionStatusType,
     SuiObjectRef,
-    SuiEvent
+    SuiEvent,
 } from '@mysten/sui.js';
 
 export type DataType = CertifiedTransaction & {

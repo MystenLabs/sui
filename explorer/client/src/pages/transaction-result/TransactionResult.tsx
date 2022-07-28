@@ -28,7 +28,7 @@ import type {
     ExecutionStatusType,
     TransactionEffects,
     SuiObjectRef,
-    SuiEvent
+    SuiEvent,
 } from '@mysten/sui.js';
 
 type TxnState = CertifiedTransaction & {

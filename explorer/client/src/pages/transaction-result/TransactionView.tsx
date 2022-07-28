@@ -28,7 +28,7 @@ import type {
     ExecutionStatusType,
     SuiTransactionKind,
     SuiObjectRef,
-    SuiEvent
+    SuiEvent,
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
