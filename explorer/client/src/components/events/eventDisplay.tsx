@@ -33,7 +33,6 @@ export function moveEventDisplay(event: MoveEvent) {
 }
 
 export function newObjectEventDisplay(event: NewObjectEvent) {
-    console.log('NEW OBJECT EVENT');
     return {
         top: {
             title: 'New Object',
