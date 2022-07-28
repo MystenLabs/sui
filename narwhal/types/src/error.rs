@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{HeaderDigest, Round};
 use config::Epoch;
-use crypto::{CryptoError, Digest};
+use crypto::Digest;
 use store::StoreError;
 use thiserror::Error;
 
@@ -28,7 +28,7 @@ pub type DagResult<T> = Result<T, DagError>;
 #[derive(Debug, Error)]
 pub enum DagError {
     #[error("Invalid signature")]
-    InvalidSignature(#[from] CryptoError),
+    InvalidSignature(#[from] signature::Error),
 
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),

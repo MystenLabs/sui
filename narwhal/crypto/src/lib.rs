@@ -54,8 +54,6 @@ pub mod secp256k1;
 
 pub mod traits;
 
-pub type CryptoError = ed25519_dalek::ed25519::Error;
-
 pub const DIGEST_LEN: usize = 32;
 
 pub fn blake2b_256<F: Fn(&mut blake2::VarBlake2b)>(closure: F) -> [u8; DIGEST_LEN] {
