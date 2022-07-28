@@ -22,14 +22,12 @@ procedure {:inline 1} $2_transfer_freeze_object{{S}}(obj: {{T}});
 
 {%- endfor %}
 
-procedure {:inline 1} $2_transfer_delete_child_object_internal(child: int, child_id: $2_id_VersionedID);
-
 // ==================================================================================
-// Native id
+// Native object
 
-procedure {:inline 1} $2_id_bytes_to_address(bytes: Vec (int)) returns (res: int);
+procedure {:inline 1} $2_object_bytes_to_address(bytes: Vec (int)) returns (res: int);
 
-{%- for instance in id_instances %}
+{%- for instance in object_instances %}
 {%- set S = "'" ~ instance.suffix ~ "'" -%}
 {%- set T = instance.name -%}
 
@@ -37,9 +35,9 @@ procedure {:inline 1} $2_id_bytes_to_address(bytes: Vec (int)) returns (res: int
 // Native id implementation for object type `{{instance.suffix}}`
 
 
-procedure {:inline 1} $2_id_get_versioned_id{{S}}(obj: {{T}}) returns (res: $2_id_VersionedID);
+procedure {:inline 1} $2_object_get_info{{S}}(obj: {{T}}) returns (res: $2_object_Info);
 
-procedure {:inline 1} $2_id_delete_id{{S}}(id: {{T}});
+procedure {:inline 1} $2_object_delete_impl{{S}}(info: {{T}});
 
 {%- endfor %}
 

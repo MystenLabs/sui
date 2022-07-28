@@ -1,0 +1,10 @@
+---
+source: crates/sui-config/tests/snapshot_tests.rs
+expression: genesis.committee().unwrap()
+---
+epoch: 0
+voting_rights:
+  - - IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ/LRIhon3oUQ=
+    - 1
+total_votes: 1
+

@@ -10,6 +10,6 @@ describe('Test framework classes', () => {
   it('Test coin utils', () => {
     const data = mockObjectData['coin'] as GetObjectDataResponse;
     expect(Coin.isCoin(data)).toBeTruthy();
-    expect(Coin.getBalance(data)).toEqual(new BN.BN('100000'));
+    expect(Coin.getBalance(data)).toEqual(new BN.BN('100000000'));
   });
 });

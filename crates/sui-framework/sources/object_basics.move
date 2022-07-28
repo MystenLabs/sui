@@ -4,17 +4,17 @@
 /// Test CTURD object basics (create, transfer, update, read, delete)
 module sui::object_basics {
     use sui::event;
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, Info};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
     struct Object has key, store {
-        id: VersionedID,
+        info: Info,
         value: u64,
     }
 
     struct Wrapper has key {
-        id: VersionedID,
+        info: Info,
         o: Object
     }
 
@@ -24,7 +24,7 @@ module sui::object_basics {
 
     public entry fun create(value: u64, recipient: address, ctx: &mut TxContext) {
         transfer::transfer(
-            Object { id: tx_context::new_id(ctx), value },
+            Object { info: object::new(ctx), value },
             recipient
         )
     }
@@ -49,17 +49,17 @@ module sui::object_basics {
     }
 
     public entry fun delete(o: Object) {
-        let Object { id, value: _ } = o;
-        id::delete(id);
+        let Object { info, value: _ } = o;
+        object::delete(info);
     }
 
     public entry fun wrap(o: Object, ctx: &mut TxContext) {
-        transfer::transfer(Wrapper { id: tx_context::new_id(ctx), o }, tx_context::sender(ctx))
+        transfer::transfer(Wrapper { info: object::new(ctx), o }, tx_context::sender(ctx))
     }
 
     public entry fun unwrap(w: Wrapper, ctx: &mut TxContext) {
-        let Wrapper { id, o } = w;
-        id::delete(id);
+        let Wrapper { info, o } = w;
+        object::delete(info);
         transfer::transfer(o, tx_context::sender(ctx))
     }
 }

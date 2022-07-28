@@ -4,6 +4,8 @@ title: Contributing to Sui
 
 This page describes how to add to Sui. If you merely need to get the Sui binaries, follow [Install Sui](../build/install.md).
 
+This site is available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for contributing to the Sui blockchain as described on this page. Always check and submit fixes to the `main` branch.
+
 Find answers to common questions in our [FAQ](../contribute/faq.md). Read other sub-pages in this section for ways to contribute to Sui.
 
 ## See our roadmap
@@ -20,29 +22,32 @@ To connect with the Sui community, join our [Discord](https://discord.gg/sui).
 Report bugs and make feature requests in the [Sui GitHub](https://github.com/MystenLabs/sui/issues) repository
 using the [Template for Reporting Issues](https://github.com/MystenLabs/sui/blob/main/ISSUES.md).
 
-## Provide docs feedback
+## Help docs
 
+### Ideas
 Send ideas to:
 doc@mystenlabs.com
 
+Or report them in the [#docs](https://discord.com/channels/916379725201563759/1001562806862233701) channel of Discord.
+
+### Issues
 And file documentation fixes or requests for improvement at:
 https://github.com/MystenLabs/sui/issues/new/choose
 
 Select the **Sui Doc Bug** template, adjust fields, and describe the issue.
 
-You may also make changes to the docs directly in GitHub right here using the **Source Code** link below.
+### Updates
 
-> **Important:** Make sure you are in the `main` rather than `devnet` branch in the URL.
+You may also make changes to the docs directly in GitHub right here using the **Source Code** link below. Make sure you are in the `main` rather than `devnet` branch by being on the [Latest build](https://docs.sui.io/learn) upstream view as described at the top of this page.
 
-Simply edit the file in question and generate a pull request. We will get back to you shortly.
+Simply edit the file in question and generate a pull request. You may even use our [Sui doc templates](https://github.com/MystenLabs/sui/tree/main/doc/template) to create overviews and procedures (uses).
+
+Then send your work our way. We will get back to you shortly.
 
 ## Download Sui
 
 In order to obtain the Sui source code, follow the steps to download (`git clone`) the `sui` repository
 at [Install Sui](../build/install.md#source-code).
-
-> **Tip:** The install docs recommend use of the `devnet` branch as the last stable release. To instead
-> contribute changes to Sui, use the `main` branch.
 
 And see the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
 * https://mystenlabs.github.io/sui/ - the Sui blockchain

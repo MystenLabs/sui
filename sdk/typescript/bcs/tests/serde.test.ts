@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { BCS as bcs } from './../src/index';
+import { bcs } from './../src/index';
 
 describe('serde', () => {
     test('it should serialize primitives in both directions', () => {

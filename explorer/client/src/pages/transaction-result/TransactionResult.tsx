@@ -6,6 +6,7 @@ import {
     getTotalGasUsed,
     getExecutionStatusError,
 } from '@mysten/sui.js';
+import * as Sentry from '@sentry/react';
 import { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
 
@@ -54,7 +55,7 @@ const initState: TxnState = {
     txSignature: '',
     authSignInfo: {
         epoch: 0,
-        signatures: [],
+        signature: [],
     },
     status: 'success',
     gasFee: 0,
@@ -164,6 +165,7 @@ const TransactionResultStatic = ({ id }: { id: string }) => {
         );
     } catch (error) {
         console.error(error);
+        Sentry.captureException(error);
         return <FailedToGetTxResults id={id} />;
     }
 };

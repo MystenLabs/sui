@@ -8,14 +8,14 @@
 module sui::devnet_nft {
     use sui::url::{Self, Url};
     use sui::utf8;
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, Info};
     use sui::event;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// An example NFT that can be minted by anybody
     struct DevNetNFT has key, store {
-        id: VersionedID,
+        info: Info,
         /// Name for the token
         name: utf8::String,
         /// Description of the token
@@ -42,14 +42,14 @@ module sui::devnet_nft {
         ctx: &mut TxContext
     ) {
         let nft = DevNetNFT {
-            id: tx_context::new_id(ctx),
+            info: object::new(ctx),
             name: utf8::string_unsafe(name),
             description: utf8::string_unsafe(description),
             url: url::new_unsafe_from_bytes(url)
         };
         let sender = tx_context::sender(ctx);
         event::emit(MintNFTEvent {
-            object_id: *id::inner(&nft.id),
+            object_id: *object::info_id(&nft.info),
             creator: sender,
             name: nft.name,
         });
@@ -74,8 +74,8 @@ module sui::devnet_nft {
 
     /// Permanently delete `nft`
     public entry fun burn(nft: DevNetNFT, _: &mut TxContext) {
-        let DevNetNFT { id, name: _, description: _, url: _ } = nft;
-        id::delete(id)
+        let DevNetNFT { info, name: _, description: _, url: _ } = nft;
+        object::delete(info)
     }
 
     /// Get the NFT's `name`

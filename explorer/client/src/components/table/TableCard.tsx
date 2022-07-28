@@ -60,7 +60,7 @@ function TxAddresses({ content }: { content: Link[] }) {
     return (
         <section className={styles.addresses}>
             {content.map((itm, idx) => (
-                <div key={idx + itm.url}>
+                <div key={idx + itm.url} className={styles.longtextwrapper}>
                     <Longtext
                         text={itm.url}
                         alttext={itm.name}
@@ -140,9 +140,9 @@ function TableCard({
         <div className={styles.content}>
             <table className={styles.table}>
                 <thead>
-                    {table.getHeaderGroups().map((headerGroup) => (
+                    {table.getHeaderGroups().map((headerGroup: any) => (
                         <tr key={headerGroup.id}>
-                            {headerGroup.headers.map((header) => (
+                            {headerGroup.headers.map((header: any) => (
                                 <th
                                     key={header.id}
                                     colSpan={header.colSpan}
@@ -160,9 +160,9 @@ function TableCard({
                     ))}
                 </thead>
                 <tbody>
-                    {table.getRowModel().rows.map((row) => (
+                    {table.getRowModel().rows.map((row: any) => (
                         <tr key={row.id}>
-                            {row.getVisibleCells().map((cell) => (
+                            {row.getVisibleCells().map((cell: any) => (
                                 <td
                                     key={cell.id}
                                     className={styles.tablespacing}

@@ -34,6 +34,7 @@ use sui_json_rpc_types::{
     TransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::crypto::SuiSignature;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::{start_rpc_test_network, TestNetwork};
@@ -142,6 +143,7 @@ async fn create_response_sample() -> Result<
     let (move_package, publish) = create_package_object_response(&mut context).await?;
     let (hero_package, hero) = create_hero_response(&mut context, &coins).await?;
     let transfer = create_transfer_response(&mut context, address, &coins).await?;
+    let transfer_sui = create_transfer_sui_response(&mut context, address, &coins).await?;
     let coin_split = create_coin_split_response(&mut context, &coins).await?;
     let error = create_error_response(address, hero_package, context, &network).await?;
 
@@ -166,6 +168,7 @@ async fn create_response_sample() -> Result<
     let txs = TransactionResponseSample {
         move_call: example_nft_tx,
         transfer,
+        transfer_sui,
         coin_split,
         publish,
         error,
@@ -216,6 +219,32 @@ async fn create_transfer_response(
     .execute(context)
     .await?;
     if let SuiClientCommandResult::Transfer(_, certificate, effects) = response {
+        Ok(TransactionResponse::EffectResponse(
+            TransactionEffectsResponse {
+                certificate,
+                effects,
+                timestamp_ms: None,
+            },
+        ))
+    } else {
+        panic!()
+    }
+}
+
+async fn create_transfer_sui_response(
+    context: &mut WalletContext,
+    address: SuiAddress,
+    coins: &[SuiObjectInfo],
+) -> Result<TransactionResponse, anyhow::Error> {
+    let response = SuiClientCommands::TransferSui {
+        to: address,
+        sui_coin_object_id: coins.first().unwrap().object_id,
+        gas_budget: 1000,
+        amount: Some(10),
+    }
+    .execute(context)
+    .await?;
+    if let SuiClientCommandResult::TransferSui(certificate, effects) = response {
         Ok(TransactionResponse::EffectResponse(
             TransactionEffectsResponse {
                 certificate,
@@ -402,6 +431,7 @@ struct ObjectResponseSample {
 struct TransactionResponseSample {
     pub move_call: TransactionResponse,
     pub transfer: TransactionResponse,
+    pub transfer_sui: TransactionResponse,
     pub coin_split: TransactionResponse,
     pub publish: TransactionResponse,
     pub error: Value,

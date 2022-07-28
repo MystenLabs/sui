@@ -4,7 +4,6 @@
 use crate::client_commands::{SuiClientCommands, WalletContext};
 use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
 use crate::console::start_console;
-use crate::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
 use crate::sui_move::{self, execute_move_command};
@@ -24,7 +23,7 @@ use sui_config::{
 use sui_sdk::crypto::{KeystoreType, SuiKeystore};
 use sui_sdk::SuiClient;
 use sui_swarm::memory::Swarm;
-use sui_types::base_types::SuiAddress;
+use sui_types::crypto::KeypairTraits;
 use tracing::info;
 
 #[derive(Parser)]
@@ -106,16 +105,6 @@ pub enum SuiCommand {
         /// Subcommands.
         #[clap(subcommand)]
         cmd: sui_move::Command,
-    },
-
-    /// Tool to read validator & gateway db.
-    #[clap(name = "db-tool")]
-    DbTool {
-        /// Path of the DB to read
-        #[clap(long = "db_path")]
-        db_path: String,
-        #[clap(subcommand)]
-        cmd: Option<DbToolCommand>,
     },
 }
 
@@ -257,7 +246,7 @@ impl SuiCommand {
                 let mut keystore = SuiKeystore::default();
 
                 for key in &network_config.account_keys {
-                    let address = SuiAddress::from(key.public_key_bytes());
+                    let address = key.public().into();
                     accounts.push(address);
                     keystore.add_key(address, key.copy())?;
                 }
@@ -364,13 +353,6 @@ impl SuiCommand {
                 build_config,
                 cmd,
             } => execute_move_command(package_path, build_config, cmd),
-            SuiCommand::DbTool { db_path, cmd } => {
-                let path = PathBuf::from(db_path);
-                match cmd {
-                    Some(c) => execute_db_tool_command(path, c),
-                    None => print_db_all_tables(path),
-                }
-            }
         }
     }
 }
@@ -390,21 +372,31 @@ async fn sync_accounts(context: &mut WalletContext) -> Result<(), anyhow::Error>
 fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
     // Prompt user for connect to gateway if config not exists.
     if !wallet_conf_path.exists() {
-        print!(
-            "Config file [{:?}] doesn't exist, do you want to connect to a Sui RPC server [yN]?",
-            wallet_conf_path
-        );
-        if matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y") {
-            print!("Sui RPC server Url (Default to Sui DevNet if not specified) : ");
-            let url = read_line()?;
-            let url = if url.trim().is_empty() {
-                SUI_DEV_NET_URL
-            } else {
-                &url
-            };
+        let url = match std::env::var_os("SUI_CONFIG_WITH_RPC_URL") {
+            Some(v) => Some(v.into_string().unwrap()),
+            None => {
+                print!(
+                    "Config file [{:?}] doesn't exist, do you want to connect to a Sui RPC server [yN]?",
+                    wallet_conf_path
+                );
+                if matches!(read_line(), Ok(line) if line.trim().to_lowercase() == "y") {
+                    print!("Sui RPC server Url (Default to Sui DevNet if not specified) : ");
+                    let url = read_line()?;
+                    let url = if url.trim().is_empty() {
+                        SUI_DEV_NET_URL
+                    } else {
+                        &url
+                    };
+                    Some(String::from(url))
+                } else {
+                    None
+                }
+            }
+        };
 
+        if let Some(url) = url {
             // Check url is valid
-            SuiClient::new_http_client(url)?;
+            SuiClient::new_http_client(&url)?;
             let keystore_path = wallet_conf_path
                 .parent()
                 .unwrap_or(&sui_config_dir()?)
@@ -414,7 +406,7 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
             SuiClientConfig {
                 accounts: vec![new_address],
                 keystore,
-                gateway: GatewayType::RPC(url.to_string()),
+                gateway: GatewayType::RPC(url),
                 active_address: Some(new_address),
             }
             .persisted(wallet_conf_path)

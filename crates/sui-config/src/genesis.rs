@@ -9,7 +9,7 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::{fs, path::Path};
 use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
@@ -17,7 +17,7 @@ use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::TemporaryStore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes};
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
@@ -60,16 +60,14 @@ impl Genesis {
         )
     }
 
-    pub fn narwhal_committee(
-        &self,
-    ) -> narwhal_config::SharedCommittee<narwhal_crypto::ed25519::Ed25519PublicKey> {
+    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee<AuthorityPublicKey> {
         let narwhal_committee = self
             .validator_set
             .iter()
             .map(|validator| {
                 let name = validator
                     .public_key()
-                    .make_narwhal_public_key()
+                    .try_into()
                     .expect("Can't get narwhal public key");
                 let primary = narwhal_config::PrimaryAddresses {
                     primary_to_primary: validator.narwhal_primary_to_primary.clone(),
@@ -203,7 +201,7 @@ impl<'de> Deserialize<'de> for Genesis {
 
 pub struct Builder {
     objects: BTreeMap<ObjectID, Object>,
-    validators: BTreeMap<PublicKeyBytes, ValidatorInfo>,
+    validators: BTreeMap<AuthorityPublicKeyBytes, ValidatorInfo>,
 }
 
 impl Default for Builder {
@@ -274,7 +272,7 @@ impl Builder {
                 onchain_validator.metadata.sui_address.to_vec(),
             );
             assert_eq!(
-                validator.public_key().to_vec(),
+                validator.public_key().as_ref().to_vec(),
                 onchain_validator.metadata.pubkey_bytes,
             );
             assert_eq!(validator.name().as_bytes(), onchain_validator.metadata.name);
@@ -412,6 +410,7 @@ fn process_package(
     // that don't exist on-chain because they are yet to be published.
     #[cfg(debug_assertions)]
     {
+        use std::collections::HashSet;
         let to_be_published_addresses: HashSet<_> = modules
             .iter()
             .map(|module| *module.self_id().address())
@@ -514,7 +513,8 @@ const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
-    use sui_types::crypto::get_key_pair_from_rng;
+    use narwhal_crypto::traits::KeyPair;
+    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
 
     #[test]
     fn roundtrip() {
@@ -534,12 +534,10 @@ mod test {
             .generate_accounts(&mut rand::rngs::OsRng)
             .unwrap();
 
-        let mut builder = Builder::new().add_objects(objects);
-
-        let key = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
-            public_key: *key.public_key_bytes(),
+            public_key: key.public().into(),
             stake: 1,
             delegation: 0,
             network_address: utils::new_network_address(),
@@ -550,8 +548,7 @@ mod test {
             narwhal_consensus_address: utils::new_network_address(),
         };
 
-        builder = builder.add_validator(validator);
-
+        let builder = Builder::new().add_objects(objects).add_validator(validator);
         builder.save(dir.path()).unwrap();
         Builder::load(dir.path()).unwrap();
     }

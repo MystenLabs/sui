@@ -18,7 +18,7 @@ use sui_adapter::genesis;
 use sui_types::base_types::*;
 use sui_types::batch::{AuthorityBatch, SignedBatch, UpdateItem};
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
+use sui_types::crypto::{get_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
@@ -62,7 +62,11 @@ pub struct ConfigurableBatchActionClient {
 
 impl ConfigurableBatchActionClient {
     #[cfg(test)]
-    pub async fn new(committee: Committee, address: PublicKeyBytes, secret: KeyPair) -> Self {
+    pub async fn new(
+        committee: Committee,
+        address: AuthorityPublicKeyBytes,
+        secret: AuthorityKeyPair,
+    ) -> Self {
         // Random directory
         let dir = env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
@@ -149,7 +153,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         let name = self.state.name;
         let mut items: Vec<Result<BatchInfoResponseItem, SuiError>> = Vec::new();
         let mut seq = 0;
-        let zero_batch = SignedBatch::new(AuthorityBatch::initial(), &*secret, name);
+        let zero_batch = SignedBatch::new(
+            self.state.epoch(),
+            AuthorityBatch::initial(),
+            &*secret,
+            name,
+        );
         items.push(Ok(BatchInfoResponseItem(UpdateItem::Batch(zero_batch))));
         let _ = actions.iter().for_each(|action| {
             match action {
@@ -167,7 +176,12 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
                     let new_batch = AuthorityBatch::make_next(&last_batch, &transactions).unwrap();
                     last_batch = new_batch;
                     items.push({
-                        let item = SignedBatch::new(last_batch.clone(), &*secret, name);
+                        let item = SignedBatch::new(
+                            self.state.epoch(),
+                            last_batch.clone(),
+                            &*secret,
+                            name,
+                        );
                         Ok(BatchInfoResponseItem(UpdateItem::Batch(item)))
                     });
                 }
@@ -201,8 +215,11 @@ pub async fn init_configurable_authorities(
     Vec<Arc<AuthorityState>>,
     Vec<ExecutionDigests>,
 ) {
+    use narwhal_crypto::traits::KeyPair;
+    use sui_types::crypto::AccountKeyPair;
+
     let authority_count = 4;
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let mut gas_objects = Vec::new();
     for _i in 0..authority_action.len() {
         gas_objects.push(Object::with_owner_for_testing(addr1));
@@ -218,8 +235,8 @@ pub async fn init_configurable_authorities(
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..authority_count {
-        let (_, key_pair) = get_key_pair();
-        let authority_name = *key_pair.public_key_bytes();
+        let (_, key_pair): (_, AuthorityKeyPair) = get_key_pair();
+        let authority_name = key_pair.public().into();
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
     }

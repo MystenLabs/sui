@@ -8,20 +8,24 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
-tokio = { version = "1.18.2", features = ["full"] }
+tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.35"
 clap = { version = "3.1.17", features = ["derive"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7e9b7568fc7184b4938976330122f3c8064e3236" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7e9b7568fc7184b4938976330122f3c8064e3236" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+textwrap = "0.15"
+futures = "0.3.21"
+rocksdb = "0.18.0"
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
+tempfile = "3.3.0"
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "executor" }
+serde_with = { version = "1.14.0", features = ["hex"] }
+sui-storage = { path = "../sui-storage" }
+serde = { version = "1.0.140", features = ["derive"] }
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 
-rustyline = "9.1.2"
-rustyline-derive = "0.6.0"
 colored = "2.0.0"
-unescape = "0.1.0"
-shell-words = "1.1.0"
-
 workspace-hack = { path = "../workspace-hack"}

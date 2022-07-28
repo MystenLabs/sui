@@ -12,12 +12,12 @@ struct Color {
 }
 ```
 The above `struct` defines a data structure that can represent RGB color. `struct`s like this can be used to organize data with complicated semantics. However, instances of `struct`s like `Color` are not Sui objects yet.
-To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `VersionedID` from the [ID library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move):
+To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `Info` from the [object library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move):
 ```rust
-use sui::id::VersionedID;
+use sui::object::Info;
 
 struct ColorObject has key {
-    id: VersionedID,
+    info: Info,
     red: u8,
     green: u8,
     blue: u8,
@@ -26,19 +26,22 @@ struct ColorObject has key {
 Now `ColorObject` represents a Sui object type and can be used to create Sui objects that can be eventually stored on the Sui chain.
 > :books: In both core Move and Sui Move, the [key ability](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key) denotes a type that can appear as a key in global storage. However, the structure of global storage is a bit different: core Move uses a (type, `address`)-indexed map, whereas Sui Move uses a map keyed by object IDs.
 
-> :bulb: The `VersionedID` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the unique `ID` of the object and the version of the object. Each time a mutable object is used in a transaction, its version will increase by 1.
+> :bulb: The `Info` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the unique `ID` of the object and the version of the object. Each time a mutable object is used in a transaction, its version will increase by 1.
 
 ### Create Sui object
-Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `id`. The only way to create a new unique `VersionedID` for a Sui object is to call `tx_context::new_id`. The `new_id` function takes the current transaction context as an argument to generate unique IDs. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
+Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `info`. The only way to create a new unique `Info` for a Sui object is to call `object::new`. The `new` function takes the current transaction context as an argument to generate unique IDs. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move/index.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
 ```rust
-/// tx_context::Self represents the TxContext module, which allows us call
-/// functions in the module, such as the `new_id` function.
-/// tx_context::TxContext represents the TxContext struct in TxContext module.
-use sui::tx_context::{Self, TxContext};
+// object represents the object module, which allows us call
+// functions in the module, such as the `new` function, without fully
+// qualifying, e.g. `sui::object::new`.
+use sui::object;
+// tx_context::TxContext represents the TxContext struct in tx_context module.
+use sui::tx_context::TxContext;
+
 
 fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
     ColorObject {
-        id: tx_context::new_id(ctx),
+        info: object::new(ctx),
         red,
         green,
         blue,
@@ -90,7 +93,7 @@ sui move build
 ### Writing unit tests
 After defining the `create` function, we want to test this function in Move using unit tests, without having to go all the way through sending Sui transactions. Since [Sui manages global storage separately outside of Move](../../learn/sui-move-diffs.md#object-centric-global-storage), there is no direct way to retrieve objects from global storage within Move. This poses a question: after calling the `create` function, how do we check that the object is properly transferred?
 
-To assist easy testing in Move, we provide a comprehensive testing framework in the [test_scenario](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test_scenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move.md#sui-specific-testing).
+To assist easy testing in Move, we provide a comprehensive testing framework in the [test_scenario](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/test_scenario.move) module that allows us to interact with objects put into the global storage. This allows us to test the behavior of any function directly in Move unit tests. A lot of this is also covered in our [Move testing doc](../move/build-test.md#sui-specific-testing).
 
 The idea of `test_scenario` is to emulate a series of Sui transactions, each sent from a particular address. A developer writing a test starts the first transaction using the `test_scenario::begin` function that takes the address of the user sending this transaction as an argument and returns an instance of the `Scenario` struct representing a test scenario.
 
@@ -169,7 +172,7 @@ $ export PACKAGE=0x57258f32746fd1443f2a077c0c6ec03282087c19
 ```
 Next we can call the function to create a color object:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "create" --args 0 255 0
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "create" --args 0 255 0
 ```
 In the **Transaction Effects** portion of the output, you will see an object showing up in the list of **Created Objects**, like this:
 

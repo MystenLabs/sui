@@ -6,7 +6,7 @@ written: object(102)
 
 task 2 'view-object'. lines 25-25:
 Owner: Account Address ( _ )
-Contents: Test::M1::Object {id: sui::id::VersionedID {id: sui::id::UniqueID {id: sui::id::ID {bytes: fake(104)}}, version: 1u64}, value: 42u64}
+Contents: Test::M1::Object {info: sui::object::Info {id: sui::object::ID {bytes: fake(104)}, version: 1u64}, value: 42u64}
 
 task 3 'view-object'. lines 27-27:
 103::M1

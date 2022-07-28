@@ -1,4 +1,5 @@
 FROM rust:1.62.0 AS chef
+ARG PROFILE=release
 WORKDIR sui
 RUN apt-get update && apt-get install -y cmake clang
 
@@ -22,10 +23,11 @@ RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
 # and run `cargo build` in order to create a caching Docker layer
 # with all dependencies built.
 FROM chef AS builder 
+ARG PROFILE=release
 COPY --from=planner /sui/Cargo.toml Cargo.toml
 COPY --from=planner /sui/Cargo.lock Cargo.lock
 COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
-RUN cargo build --release
+RUN cargo build --profile $PROFILE
 
 # Build application
 #
@@ -34,12 +36,13 @@ RUN cargo build --release
 # built as they were built and cached by the previous layer.
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
-RUN cargo build --release --bin sui-node
+RUN cargo build --profile $PROFILE --bin sui-node
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
+ARG PROFILE=release
 WORKDIR sui
-COPY --from=builder /sui/target/release/sui-node /usr/local/bin
+COPY --from=builder "/sui/target/$PROFILE/sui-node" /usr/local/bin
 
 ARG BUILD_DATE
 ARG GIT_REVISION

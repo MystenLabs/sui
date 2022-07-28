@@ -47,6 +47,7 @@ pub trait TxGuard<'a>: Drop {
 #[async_trait]
 pub trait WriteAheadLog<'a, C> {
     type Guard: TxGuard<'a>;
+    type LockGuard;
 
     /// Begin a confirmation transaction identified by its digest, with the associated cert.
     ///
@@ -68,6 +69,9 @@ pub trait WriteAheadLog<'a, C> {
         tx: &'b TransactionDigest,
         cert: &'b C,
     ) -> SuiResult<Option<Self::Guard>>;
+
+    #[must_use]
+    async fn acquire_lock(&'a self, tx: &TransactionDigest) -> Self::LockGuard;
 
     /// Recoverable TXes are TXes that we find in the log at start up (which indicates we crashed
     /// while processing them) or implicitly dropped TXes (which can happen because we errored
@@ -258,6 +262,7 @@ where
     C: Serialize + DeserializeOwned + std::marker::Send + std::marker::Sync,
 {
     type Guard = DBTxGuard<'a, C>;
+    type LockGuard = LockGuard<'a>;
 
     #[must_use]
     #[instrument(level = "debug", name = "begin_tx", skip_all)]
@@ -283,6 +288,13 @@ where
         self.log.insert(tx, cert)?;
 
         Ok(Some(DBTxGuard::new(tx, mutex_guard, self)))
+    }
+
+    #[must_use]
+    async fn acquire_lock(&'a self, tx: &TransactionDigest) -> Self::LockGuard {
+        let res = self.mutex_table.acquire_lock(tx).await;
+        trace!(digest = ?tx, "acquired tx lock");
+        res
     }
 
     #[must_use]

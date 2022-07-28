@@ -7,8 +7,9 @@
         "link": "explore/devnet"
       },
       {
-        "label": "Examples",
-        "link": "explore/examples"
+        "label": "examples.sui.io",
+        "link": "https://examples.sui.io/",
+        "external": true
       },
       {
         "label": "Prototypes",
@@ -26,10 +27,6 @@
           {
             "label": "Sui Glossary",
             "fileName": "learn/sui-glossary"
-          },
-          {
-            "label": "Sui Compared to Other Blockchains",
-            "fileName": "learn/sui-compared"
           },
           {
             "label": "Why Move?",
@@ -56,6 +53,10 @@
         "title": "How Sui Works",
         "items": [
           {
+            "label": "Sui Compared to Other Blockchains",
+            "fileName": "learn/sui-compared"
+          },
+          {
             "label": "Manage Objects",
             "fileName": "build/objects"
           },
@@ -64,11 +65,15 @@
             "fileName": "build/transactions"
           },
           {
+            "label": "Create Single-Writer Apps",
+            "fileName": "learn/single-writer-apps"
+          },
+          {
             "label": "Understand Validators",
             "fileName": "learn/architecture/validators"
           },
           {
-            "label": "Sui Consensus Engine",
+            "label": "Employ Consensus Engine",
             "fileName": "learn/architecture/consensus"
           }
         ]
@@ -108,8 +113,27 @@
         "fileName": "build/install"
       },
       {
-        "label": "Write Smart Contracts with Move",
-        "fileName": "build/move"
+        "label": "Create Smart Contracts with Move",
+        "fileName": "build/move/index",
+        "title": "Create Smart Contracts with Move",
+        "items": [
+          {
+            "label": "Write Move Packages",
+            "fileName": "build/move/write-package"
+          },
+          {
+            "label": "Build and Test Move Packages",
+            "fileName": "build/move/build-test"
+          },
+          {
+            "label": "Debug and Publish Move Packages",
+            "fileName": "build/move/debug-publish"
+          },
+          {
+            "label": "Use Sui Move Library",
+            "fileName": "build/move/sui-move-library"
+          }
+        ]
       },
       {
         "label": "Use Sui CLI",

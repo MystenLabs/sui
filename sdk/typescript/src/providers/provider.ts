@@ -51,6 +51,7 @@ export abstract class Provider {
 
   abstract executeTransaction(
     txnBytes: string,
+    flag: string,
     signature: string,
     pubkey: string
   ): Promise<TransactionResponse>;

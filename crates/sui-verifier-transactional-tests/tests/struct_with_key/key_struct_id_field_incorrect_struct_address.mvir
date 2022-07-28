@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //# publish
-module 0x0.id {
-    import 0x2.id;
-    struct VersionedID has store { flag: bool }
+module 0x0.object {
+    import 0x2.object;
+    struct Info has store { flag: bool }
     struct S has key {
-        id: Self.VersionedID
+        info: Self.Info
     }
 }

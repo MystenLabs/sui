@@ -7,7 +7,7 @@ This page summarizes how Sui compares with existing blockchains and is intended 
 Here are Sui's key features:
 
 * [Causal order vs. total order](#causal-order-vs-total-order) enables massively parallel execution
-* [Sui's variant of Move](../build/move.md) and its object-centric data model make composable objects/NFTs possible
+* [Sui's variant of Move](../build/move/index.md) and its object-centric data model make composable objects/NFTs possible
 * The blockchain-oriented [Move programming language](https://github.com/MystenLabs/awesome-move) eases the developer experience
 
 ## Traditional blockchains
@@ -22,7 +22,7 @@ Yet it is inherently sequential: increments to the chain are added one at a time
 
 A lot of transactions do not have complex interdependencies with other, arbitrary parts of the state of the blockchain. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's account. Hence Sui takes the approach of only taking a lock - or "stopping the world" - for the relevant piece of data rather than the whole chain -- in this case, the account of the sender, which can only send one transaction at a time.
 
-Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model](../build/objects.md) and leveraging [Move](../build/move.md)'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
+Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model](../build/objects.md) and leveraging [Move](../build/move/index.md)'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
 
 This doesn't mean that Sui as a platform never orders transactions with respect to each other, or that it allows owners to only affect their owned microcosm of objects. Sui will also process transactions that have an effect on some shared state, in a rigorous, consensus-ordered manner. They're just not the default use case.
 

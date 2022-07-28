@@ -1,0 +1,38 @@
+@use '_values/colors';
+
+.container {
+    display: flex;
+    flex-flow: row nowrap;
+    max-width: 100%;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    outline: none;
+    border: none;
+    cursor: pointer;
+    text-transform: capitalize;
+
+    &.neutral {
+        background: colors.$gray-45;
+        color: colors.$gray-85;
+    }
+
+    &.primary {
+        background: colors.$cta-blue;
+        color: colors.$white;
+    }
+
+    &.small {
+        font-weight: 500;
+        font-size: 13px;
+        padding: 4px 8px;
+        border-radius: 14px;
+    }
+
+    &.large {
+        font-weight: 600;
+        font-size: 14px;
+        padding: 12px 20px;
+        border-radius: 10px;
+    }
+}

@@ -1,0 +1,79 @@
+pre {
+    text-align: left;
+    margin: 1em 0;
+    padding: 0.5em;
+    overflow: scroll;
+}
+
+section .codeview {
+    border-color: transparent !important;
+    max-height: 450px !important;
+    @apply font-mono text-sm pl-0 pr-0;
+}
+
+.moduletitle {
+    @apply text-sm font-semibold pt-2 pb-2;
+}
+
+.module {
+    @apply grid grid-cols-1 md:grid-cols-3 gap-0 pt-2 md:pb-2;
+}
+
+.module section {
+    border-top: 1px solid #f0f1f2;
+    border-bottom: 1px solid #f0f1f2;
+    @apply md:p-3 pb-0;
+}
+
+.module section:first-child {
+    @apply pl-0;
+}
+
+.itemviewtitle,
+.title {
+    @apply text-sui-grey-100 font-[500] text-lg  mt-5 mb-0;
+}
+
+section .codeview pre {
+    @apply m-0 p-0;
+
+    background: transparent;
+}
+
+.viewless::after {
+    transform: rotate(180deg);
+}
+
+.viewmore {
+    @apply flex justify-end w-full font-normal text-sm;
+}
+
+.modulewrapper {
+    @apply p-0 pb-2;
+}
+@media (min-width: 40em) {
+    section .modulewrapper {
+        border-right: 1px solid #f0f1f2;
+    }
+
+    section .modulewrapper:last-child,
+    section .modulewrapper:nth-child(3n) {
+        border-right: none;
+    }
+}
+
+.codeline {
+    display: table-row;
+}
+
+.codelinenumbers {
+    display: table-cell;
+    text-align: left;
+    padding-right: 1em;
+    user-select: none;
+    opacity: 0.5;
+}
+
+.modulewraper nav ul {
+    @apply mt-3 md:mt-1 mx-0 px-0 justify-start;
+}
