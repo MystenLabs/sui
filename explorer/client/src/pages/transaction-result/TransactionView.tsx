@@ -224,28 +224,7 @@ function eventToDisplay(event: SuiEvent) {
     )
         return transferObjectEventDisplay(event.transferObject);
 
-    return {
-        top: {
-            title: 'FIX TITLE',
-            content: [
-                {
-                    label: '',
-                    value: 'none (FIX ME)',
-                    monotypeClass: false,
-                },
-            ],
-        },
-        fields: {
-            title: 'Fields',
-            content: [
-                {
-                    label: '',
-                    value: 'none (FIX ME)',
-                    monotypeClass: false,
-                },
-            ],
-        },
-    };
+    return null;
 }
 
 function TransactionView({ txdata }: { txdata: DataType }) {
@@ -269,6 +248,8 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     console.log('txdata', txdata, txEventData);
 
     const txEventDisplay = txEventData?.map((ed) => {
+        if (!ed)
+            return (<div></div>)
         return (
             <div className={styles.txgridcomponent} key={ed.top.title}>
                 <ItemView data={ed.top as TxItemView} />
