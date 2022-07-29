@@ -567,6 +567,16 @@ impl Hash for AuthoritySignInfo {
     }
 }
 
+impl Display for AuthoritySignInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "AuthoritySignInfo {{ epoch: {:?}, authority: {} }}",
+            self.epoch, self.authority,
+        )
+    }
+}
+
 impl PartialEq for AuthoritySignInfo {
     fn eq(&self, other: &Self) -> bool {
         // We do not compare the signature, because there can be multiple
