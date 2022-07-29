@@ -1,7 +1,6 @@
-import ReactJson from 'react-json-view';
-
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import Longtext from '../../../components/longtext/Longtext';
+import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../../components/transactions-for-id/TxForID';
 import { getOwnerStr, parseImageURL } from '../../../utils/objectUtils';
@@ -35,7 +34,9 @@ function TokenView({ data }: { data: DataType }) {
 
     let structPropertiesDisplay: any[] = [];
     if (structProperties.length > 0) {
-        structPropertiesDisplay = Object.values(structProperties);
+        structPropertiesDisplay = Object.values(structProperties).map(
+            ([x, y]) => [x, JSON.stringify(y, null, 2)]
+        );
     }
 
     return (
@@ -137,25 +138,14 @@ function TokenView({ data }: { data: DataType }) {
                         </table>
                     </>
                 )}
-                {structProperties.length > 0 &&
-                    structPropertiesDisplay.map((itm, index) => (
-                        <div key={index}>
-                            <div className={styles.propertybox}>
-                                <div>
-                                    <p>{itm[0]}</p>
-                                </div>
-                            </div>
-                            <div className={styles.jsondata}>
-                                <div>
-                                    <ReactJson
-                                        src={itm[1]}
-                                        collapsed={2}
-                                        name={false}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    ))}
+                {structProperties.length > 0 && (
+                    <ModulesWrapper
+                        data={{
+                            title: '',
+                            content: structPropertiesDisplay,
+                        }}
+                    />
+                )}
                 <h2 className={styles.header}>Child Objects</h2>
                 <OwnedObjects id={viewedData.id} byAddress={false} />
                 <h2 className={styles.header}>Transactions </h2>
