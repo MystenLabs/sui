@@ -62,11 +62,9 @@ module sui::validator_set {
         validators
     }
 
-    /// Get the total number of candidates that might become validators in the next epoch.
-    public(friend) fun total_validator_candidate_count(self: &ValidatorSet): u64 {
-        vector::length(&self.active_validators)
-            + vector::length(&self.pending_validators)
-            - vector::length(&self.pending_removals)
+    /// Get the total number of validators in the next epoch.
+    public(friend) fun next_epoch_validator_count(self: &ValidatorSet): u64 {
+        vector::length(&self.next_epoch_validators)
     }
 
     /// Called by `SuiSystem`, add a new validator to `pending_validators`, which will be
@@ -447,6 +445,15 @@ module sui::validator_set {
             );
             vector::push_back(&mut result, *metadata);
             active_count = active_count - 1;
+        };
+        let i = 0;
+        let pending_count = vector::length(&self.pending_validators);
+        while (i < pending_count) {
+            let metadata = validator::metadata(
+                vector::borrow(&self.pending_validators, i),
+            );
+            vector::push_back(&mut result, *metadata);
+            i = i + 1;
         };
         result
     }

@@ -100,7 +100,7 @@ module sui::sui_system {
         ctx: &mut TxContext,
     ) {
         assert!(
-            validator_set::total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
+            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_candidate_count,
             0
         );
         let stake_amount = coin::value(&stake);
@@ -226,7 +226,7 @@ module sui::sui_system {
         delegation::undelegate(delegation, self.epoch, ctx)
     }
 
-    // Switch delegation from the current validator to a new one. 
+    // Switch delegation from the current validator to a new one.
     public entry fun request_switch_delegation(
         self: &mut SuiSystemState,
         delegation: &mut Delegation,
@@ -316,17 +316,17 @@ module sui::sui_system {
         self.epoch
     }
 
-    /// Returns the amount of stake delegated to `validator_addr`. 
+    /// Returns the amount of stake delegated to `validator_addr`.
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_delegate_amount(self: &SuiSystemState, validator_addr: address): u64 {
         validator_set::validator_delegate_amount(&self.validators, validator_addr)
-    } 
+    }
 
-    /// Returns the amount of delegators who have delegated to `validator_addr`. 
+    /// Returns the amount of delegators who have delegated to `validator_addr`.
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_delegator_count(self: &SuiSystemState, validator_addr: address): u64 {
         validator_set::validator_delegator_count(&self.validators, validator_addr)
-    } 
+    }
 
     #[test_only]
     public fun set_epoch_for_testing(self: &mut SuiSystemState, epoch_num: u64) {
