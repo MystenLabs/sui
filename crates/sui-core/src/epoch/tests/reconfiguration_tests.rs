@@ -126,7 +126,7 @@ async fn test_start_epoch_change() {
     // Test that for certificates that have finished execution and is about to write effects,
     // they will also fail to get a ticket for the commit.
     let tx_digest = *transaction.digest();
-    let mut temporary_store = TemporaryStore::new(
+    let temporary_store = TemporaryStore::new(
         state.database.clone(),
         InputObjects::new(
             transaction
@@ -139,9 +139,9 @@ async fn test_start_epoch_change() {
         ),
         tx_digest,
     );
-    let (effects, _) = execution_engine::execute_transaction_to_effects(
+    let (inner_temporary_store, effects, _) = execution_engine::execute_transaction_to_effects(
         vec![],
-        &mut temporary_store,
+        temporary_store,
         transaction.data.clone(),
         tx_digest,
         BTreeSet::new(),
@@ -153,7 +153,7 @@ async fn test_start_epoch_change() {
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
     assert_eq!(
         state
-            .commit_certificate(temporary_store, &certificate, &signed_effects)
+            .commit_certificate(inner_temporary_store, &certificate, &signed_effects)
             .await
             .unwrap_err(),
         SuiError::ValidatorHaltedAtEpochEnd

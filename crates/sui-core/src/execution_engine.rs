@@ -4,6 +4,8 @@
 use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use std::{collections::BTreeSet, sync::Arc};
+use sui_adapter::temporary_store::InnerTemporaryStore;
+use sui_types::storage::ParentSync;
 
 use crate::authority::TemporaryStore;
 use move_core_types::language_storage::ModuleId;
@@ -31,9 +33,9 @@ use sui_types::{
 use tracing::{debug, instrument, trace};
 
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
-pub fn execute_transaction_to_effects<S: BackingPackageStore>(
+pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync>(
     shared_object_refs: Vec<ObjectRef>,
-    temporary_store: &mut TemporaryStore<S>,
+    mut temporary_store: TemporaryStore<S>,
     transaction_data: TransactionData,
     transaction_digest: TransactionDigest,
     mut transaction_dependencies: BTreeSet<TransactionDigest>,
@@ -41,12 +43,16 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     native_functions: &NativeFunctionTable,
     gas_status: SuiGasStatus,
     epoch: EpochId,
-) -> (TransactionEffects, Option<ExecutionError>) {
+) -> (
+    InnerTemporaryStore,
+    TransactionEffects,
+    Option<ExecutionError>,
+) {
     let mut tx_ctx = TxContext::new(&transaction_data.signer(), &transaction_digest, epoch);
 
     let gas_object_ref = *transaction_data.gas_payment_object_ref();
     let (gas_cost_summary, execution_result) = execute_transaction(
-        temporary_store,
+        &mut temporary_store,
         transaction_data,
         gas_object_ref.0,
         &mut tx_ctx,
@@ -73,7 +79,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
     // Remove from dependencies the generic hash
     transaction_dependencies.remove(&TransactionDigest::genesis());
 
-    let effects = temporary_store.to_effects(
+    let (inner, effects) = temporary_store.to_effects(
         shared_object_refs,
         &transaction_digest,
         transaction_dependencies.into_iter().collect(),
@@ -81,7 +87,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore>(
         status,
         gas_object_ref,
     );
-    (effects, execution_error)
+    (inner, effects, execution_error)
 }
 
 fn charge_gas_for_object_read<S>(
@@ -100,7 +106,7 @@ fn charge_gas_for_object_read<S>(
 }
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
-fn execute_transaction<S: BackingPackageStore>(
+fn execute_transaction<S: BackingPackageStore + ParentSync>(
     temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     gas_object_id: ObjectID,
