@@ -18,7 +18,7 @@ use crate::{
     BlockRemover, CertificatesResponse, DeleteBatchMessage, PayloadAvailabilityResponse,
 };
 use async_trait::async_trait;
-use config::{Parameters, SharedCommittee, WorkerId};
+use config::{Parameters, SharedCommittee, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
 use crypto::{
     traits::{EncodeDecodeBase64, Signer},
@@ -28,6 +28,7 @@ use multiaddr::{Multiaddr, Protocol};
 use network::{metrics::Metrics, PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{
+    collections::HashMap,
     net::Ipv4Addr,
     sync::{atomic::AtomicU64, Arc},
     time::Duration,
@@ -45,8 +46,8 @@ use tracing::{info, log::error};
 use types::{
     error::DagError, BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate,
     CertificateDigest, Empty, Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer,
-    ReconfigureNotification, WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary,
-    WorkerToPrimaryServer,
+    ReconfigureNotification, WorkerInfoResponse, WorkerPrimaryError, WorkerPrimaryMessage,
+    WorkerToPrimary, WorkerToPrimaryServer,
 };
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
@@ -190,6 +191,14 @@ impl Primary {
         // used for cleanup. The only task that write into this variable is `GarbageCollector`.
         let consensus_round = Arc::new(AtomicU64::new(0));
 
+        let our_workers = committee
+            .load()
+            .authorities
+            .get(&name)
+            .expect("Our public key or worker id is not in the committee")
+            .workers
+            .clone();
+
         // Spawn the network receiver listening to messages from the other primaries.
         let address = committee
             .load()
@@ -232,6 +241,7 @@ impl Primary {
             tx_batches,
             tx_batch_removal,
             tx_state_handler,
+            our_workers,
             metrics: node_metrics.clone(),
         }
         .spawn(address.clone(), tx_reconfigure.subscribe());
@@ -599,6 +609,7 @@ struct WorkerReceiverHandler {
     tx_batches: Sender<BatchResult>,
     tx_batch_removal: Sender<DeleteBatchResult>,
     tx_state_handler: Sender<ReconfigureNotification>,
+    our_workers: HashMap<WorkerId, WorkerInfo>,
     metrics: Arc<PrimaryMetrics>,
 }
 
@@ -702,5 +713,19 @@ impl WorkerToPrimary for WorkerReceiverHandler {
         .map_err(|e| Status::not_found(e.to_string()))?;
 
         Ok(Response::new(Empty {}))
+    }
+
+    async fn worker_info(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<BincodeEncodedPayload>, Status> {
+        let workers = WorkerInfoResponse {
+            workers: self.our_workers.clone(),
+        };
+
+        let response = BincodeEncodedPayload::try_from(&workers)
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(response))
     }
 }

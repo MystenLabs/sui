@@ -300,7 +300,7 @@ pub struct PrimaryAddresses {
 }
 
 #[derive(Clone, Serialize, Deserialize, Eq, Hash, PartialEq, Debug)]
-pub struct WorkerAddresses {
+pub struct WorkerInfo {
     /// Address to receive client transactions (WAN).
     pub transactions: Multiaddr,
     /// Address to receive messages from other workers (WAN).
@@ -316,7 +316,7 @@ pub struct Authority {
     /// The network addresses of the primary.
     pub primary: PrimaryAddresses,
     /// Map of workers' id and their network addresses.
-    pub workers: HashMap<WorkerId, WorkerAddresses>,
+    pub workers: HashMap<WorkerId, WorkerInfo>,
 }
 
 pub type SharedCommittee = Arc<ArcSwap<Committee>>;
@@ -402,7 +402,7 @@ impl Committee {
     }
 
     /// Returns the addresses of a specific worker (`id`) of a specific authority (`to`).
-    pub fn worker(&self, to: &PublicKey, id: &WorkerId) -> Result<WorkerAddresses, ConfigError> {
+    pub fn worker(&self, to: &PublicKey, id: &WorkerId) -> Result<WorkerInfo, ConfigError> {
         self.authorities
             .iter()
             .find(|(name, _)| *name == to)
@@ -417,7 +417,7 @@ impl Committee {
             .ok_or_else(|| ConfigError::NotInCommittee((*to).encode_base64()))
     }
     /// Returns the addresses of all our workers.
-    pub fn our_workers(&self, myself: &PublicKey) -> Result<Vec<WorkerAddresses>, ConfigError> {
+    pub fn our_workers(&self, myself: &PublicKey) -> Result<Vec<WorkerInfo>, ConfigError> {
         let res = self
             .authorities
             .iter()
@@ -437,7 +437,7 @@ impl Committee {
         &self,
         myself: &PublicKey,
         id: &WorkerId,
-    ) -> Vec<(PublicKey, WorkerAddresses)> {
+    ) -> Vec<(PublicKey, WorkerInfo)> {
         self.authorities
             .iter()
             .filter(|(name, _)| *name != myself)

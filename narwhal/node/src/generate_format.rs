@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Authority, Committee, Epoch, PrimaryAddresses, WorkerAddresses};
+use config::{Authority, Committee, Epoch, PrimaryAddresses, WorkerInfo};
 use crypto::{
     traits::{KeyPair as _, Signer},
     Digest, Hash, KeyPair,
@@ -52,7 +52,7 @@ fn get_registry() -> Result<Registry> {
                 };
                 let workers = vec![(
                     0,
-                    WorkerAddresses {
+                    WorkerInfo {
                         primary_to_worker: format!("/ip4/127.0.0.1/tcp/{}/http", 300 + i)
                             .parse()
                             .unwrap(),

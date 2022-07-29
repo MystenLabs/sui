@@ -184,6 +184,8 @@ service WorkerToWorker {
 service WorkerToPrimary {
     // Sends a message
     rpc SendMessage(BincodeEncodedPayload) returns (Empty) {}
+
+    rpc WorkerInfo(Empty) returns (BincodeEncodedPayload) {}
 }
 
 // The primary-to-worker interface
