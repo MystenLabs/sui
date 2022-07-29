@@ -16,7 +16,6 @@ tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.35"
 parking_lot = "0.12.1"
 futures = "0.3.21"
-jsonrpsee = { version = "0.15.0", features = ["full"] }
 
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
