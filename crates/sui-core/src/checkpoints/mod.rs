@@ -11,6 +11,7 @@ pub(crate) mod checkpoint_tests;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::{collections::HashSet, path::Path, sync::Arc};
 use sui_storage::default_db_options;
 use sui_types::messages_checkpoint::CheckpointProposal;
@@ -508,15 +509,12 @@ impl CheckpointStore {
             });
         }
 
-        let locals = self.get_locals();
-        if !locals.no_more_fragments {
-            // Send to consensus for sequencing.
-            if let Some(sender) = &self.sender {
-                debug!("Send fragment: {} -- {}", self.name, other_name);
-                sender.send_to_consensus(fragment.clone())?;
-            } else {
-                return Err(SuiError::from("No consensus sender configured"));
-            }
+        // Send to consensus for sequencing.
+        if let Some(sender) = &self.sender {
+            debug!("Send fragment: {} -- {}", self.name, other_name);
+            sender.send_to_consensus(fragment.clone())?;
+        } else {
+            return Err(SuiError::from("No consensus sender configured"));
         }
 
         // NOTE: we should charge the node that sends this into consensus
@@ -540,7 +538,7 @@ impl CheckpointStore {
         debug!(
             execution_index=?seq,
             cp_seq=?fragment_seq,
-            "Fragment received from consensus. Proposal: {}, other: {}",
+            "Fragment received from consensus. Proposer: {}, Other: {}",
             fragment.proposer.authority(),
             fragment.other.authority(),
         );
@@ -819,6 +817,10 @@ impl CheckpointStore {
     pub fn is_ready_to_finish_epoch_change(&mut self) -> bool {
         let next_seq = self.next_checkpoint();
         next_seq % CHECKPOINT_COUNT_PER_EPOCH == 1 && next_seq != 1
+    }
+
+    pub fn validators_already_fragmented_with(&mut self) -> BTreeSet<AuthorityName> {
+        self.local_fragments.iter().map(|(name, _)| name).collect()
     }
 
     // Helper write functions
