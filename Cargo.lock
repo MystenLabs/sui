@@ -6895,6 +6895,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "linked-hash-map",
  "move-binary-format",
  "move-cli",
  "move-core-types",
