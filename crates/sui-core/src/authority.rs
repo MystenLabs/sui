@@ -1164,12 +1164,19 @@ impl AuthorityState {
         new_committee: Committee,
         next_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult {
+        // TODO: It's likely safer to do the following operations atomically, in case this function
+        // gets called from different threads. It cannot happen today, but worth the caution.
+        fp_ensure!(
+            self.epoch() + 1 == new_committee.epoch,
+            SuiError::from("Invalid new epoch to sign and update")
+        );
         self.database.sign_new_epoch(
             new_committee.clone(),
             self.name,
             &*self.secret,
             next_checkpoint,
         )?;
+        // TODO: Do we want to make it possible to subscribe to committee changes?
         self.committee.swap(Arc::new(new_committee));
         Ok(())
     }

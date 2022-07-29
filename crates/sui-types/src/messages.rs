@@ -1868,18 +1868,23 @@ impl SignedEpoch {
         }
     }
 
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
+    /// Verify the signature of this signed epoch. The committee to verify this must be the
+    /// committee from the previous epoch, as this is signed by a validator from the previous epoch.
+    pub fn verify(&self, prev_epoch_committee: &Committee) -> SuiResult {
         let epoch = self.epoch_info.epoch();
         fp_ensure!(
             epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
             SuiError::from("Epoch number in the committee inconsistent with signature")
         );
-        self.auth_sign_info.verify(&self.epoch_info, committee)?;
+        self.auth_sign_info
+            .verify(&self.epoch_info, prev_epoch_committee)?;
         Ok(())
     }
 }
 
 impl CertifiedEpoch {
+    /// Verify the signature of this certified epoch. The committee to verify this must be the
+    /// committee from the previous epoch, as this is signed by a quorum from the previous epoch.
     pub fn verify(&self, committee: &Committee) -> SuiResult {
         let epoch = self.epoch_info.epoch();
         fp_ensure!(

@@ -1320,9 +1320,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub fn init_genesis_epoch(&self, genesis_committee: Committee) -> SuiResult {
         assert_eq!(genesis_committee.epoch, 0);
         let epoch_data = AuthenticatedEpoch::Genesis(GenesisEpoch::new(genesis_committee));
-        let mut writer = self.tables.epochs.batch();
-        writer = writer.insert_batch(&self.tables.epochs, iter::once((0, epoch_data)))?;
-        writer.write()?;
+        self.tables.epochs.insert(&0, &epoch_data)?;
         Ok(())
     }
 
@@ -1344,13 +1342,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         );
 
         let signed_epoch = SignedEpoch::new(new_committee, authority, secret, next_checkpoint);
-
-        let mut writer = self.tables.epochs.batch();
-        writer = writer.insert_batch(
-            &self.tables.epochs,
-            iter::once((cur_epoch, AuthenticatedEpoch::Signed(signed_epoch))),
-        )?;
-        writer.write()?;
+        self.tables
+            .epochs
+            .insert(&cur_epoch, &AuthenticatedEpoch::Signed(signed_epoch))?;
         Ok(())
     }
 
