@@ -31,8 +31,8 @@ function PkgView({ data }: { data: DataType }) {
     const defaultactivetab = 0;
 
     return (
-        <div className={styles.resultbox}>
-            <div className={`${styles.textbox} ${styles.noaccommodate}`}>
+        <div>
+            <div>
                 {viewedData.name && <h1>{viewedData.name}</h1>}{' '}
                 <Tabs selected={defaultactivetab}>
                     <table

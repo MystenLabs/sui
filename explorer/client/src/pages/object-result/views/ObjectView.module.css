@@ -22,42 +22,11 @@
     }
 }
 
-.resultbox {
-    @apply flex flex-wrap w-[100%];
-}
-
 h1.title {
     @apply font-semibold text-3xl leading-6;
 }
 
-/* Display Box CSS */
-
-.display {
-    @apply mt-[1vh]
-    w-[100%] lg:w-[40%] min-h-[88vw] lg:min-h-[35vw];
-}
-
-.display > div > img {
-    @apply border-solid border-stone-300 rounded-lg p-[1vw];
-}
-
-.display > div > div {
-    @apply p-1 pt-10;
-}
-
 /* Text Box CSS */
-
-div.textbox {
-    @apply mb-[10vh] w-[100%];
-}
-
-div.textbox.accommodate {
-    @apply lg:w-[50%] lg:ml-[10%];
-}
-
-div.textbox.noaccommodate {
-    @apply w-[100%];
-}
 
 div.mutable {
     @apply h-[1.5rem] p-2 border-none bg-blue-300;
@@ -65,10 +34,6 @@ div.mutable {
 
 div.immutable {
     @apply h-[1.5rem] p-2 border-none bg-gray-300;
-}
-
-div.textbox > div > div > div.unconstrained {
-    @apply h-fit break-normal min-h-[1.5rem];
 }
 
 /* Description CSS */
