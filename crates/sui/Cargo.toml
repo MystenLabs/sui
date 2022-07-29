@@ -58,7 +58,7 @@ jemalloc-ctl = "^0.5"
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.21"
-jsonrpsee = { version = "0.15.0", features = ["full"] }
+jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee", features = ["full"] , rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa"}
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
