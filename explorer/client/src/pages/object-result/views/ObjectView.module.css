@@ -2,7 +2,7 @@
 
 @layer components {
     .textdetails {
-        @apply border-collapse mb-[3.75rem];
+        @apply border-collapse;
     }
 
     .textdetails td {
@@ -34,6 +34,33 @@ div.mutable {
 
 div.immutable {
     @apply h-[1.5rem] p-2 border-none bg-gray-300;
+}
+
+/* Description / Image CSS */
+
+div.descimagecontainer {
+    @apply flex flex-wrap inline-block mb-[3.75rem];
+}
+
+div.displaycontainer {
+    @apply w-[533px] flex;
+}
+
+div.metadata {
+    @apply ml-5;
+}
+
+div.metadata > h2 {
+    @apply my-0;
+}
+
+div.display div,
+div.display img {
+    @apply max-h-[120px] max-w-[120px] ml-auto;
+}
+
+table.description {
+    @apply w-[866px] mb-[3.75rem] 2xl:mb-0;
 }
 
 /* Description CSS */

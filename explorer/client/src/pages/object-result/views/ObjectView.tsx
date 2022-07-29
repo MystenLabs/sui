@@ -34,7 +34,7 @@ function ObjectView({ data }: { data: DataType }) {
                         objName: nameKeyValue,
                     }}
                 />
-                <TokenView data={data} />
+                <TokenView data={data} name={nameKeyValue} />
             </>
         );
     }
