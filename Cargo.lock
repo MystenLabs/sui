@@ -6729,7 +6729,6 @@ dependencies = [
  "strum_macros",
  "sui-config",
  "sui-core",
- "sui-gateway",
  "sui-node",
  "sui-quorum-driver",
  "sui-sdk",

@@ -243,14 +243,14 @@ impl GatewayState<NetworkAuthorityClient> {
         )?))
     }
 
-    fn make_committee(config: &GatewayConfig) -> SuiResult<Committee> {
+    pub fn make_committee(config: &GatewayConfig) -> SuiResult<Committee> {
         Committee::new(
             config.epoch,
             ValidatorInfo::voting_rights(&config.validator_set),
         )
     }
 
-    fn make_authority_clients(
+    pub fn make_authority_clients(
         config: &GatewayConfig,
     ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
         let mut authority_clients = BTreeMap::new();

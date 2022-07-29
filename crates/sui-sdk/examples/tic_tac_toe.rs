@@ -92,7 +92,6 @@ impl TicTacToe {
 
         // Sign the transaction
         let signature = Signature::new(&create_game_call, &signer);
-        let flag_base64 = Base64::from_bytes(&[signature.flag_byte()]);
 
         // Execute the transaction.
         let response = self
@@ -183,7 +182,6 @@ impl TicTacToe {
 
             // Sign the transaction
             let signature = Signature::new(&place_mark_call, &signer);
-            let flag_base64 = Base64::from_bytes(&[signature.flag_byte()]);
 
             // Execute the transaction.
             let response = self

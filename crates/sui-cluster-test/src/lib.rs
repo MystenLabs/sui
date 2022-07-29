@@ -8,7 +8,6 @@ use config::ClusterTestOpt;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
 
-use crate::faucet::{FaucetClient, FaucetClientFactory};
 use sui_json_rpc_types::TransactionResponse;
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;

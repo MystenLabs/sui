@@ -34,7 +34,6 @@ bcs = "0.1.3"
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
-sui-gateway = { path = "../sui-gateway" }
 sui-sdk = { path = "../sui-sdk" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
