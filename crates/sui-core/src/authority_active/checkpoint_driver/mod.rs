@@ -88,6 +88,8 @@ impl Default for CheckpointProcessControl {
             long_pause_between_checkpoints: Duration::from_secs(120),
             timeout_until_quorum: Duration::from_secs(60),
             extra_time_after_quorum: Duration::from_millis(200),
+            // TODO: Optimize this.
+            // https://github.com/MystenLabs/sui/issues/3619.
             consensus_delay_estimate: Duration::from_secs(2),
             per_other_authority_delay: Duration::from_secs(30),
             epoch_change_retry_delay: Duration::from_millis(100),
@@ -681,6 +683,7 @@ where
     let mut available_authorities = committee.shuffle_by_stake(None, None);
     // Remove ourselves and all validators that we have already diffed with.
     let already_fragmented = checkpoint_db.lock().validators_already_fragmented_with();
+    // TODO: We can also use AuthorityHealth to pick healthy authorities first.
     available_authorities
         .retain(|name| name != &active_authority.state.name && !already_fragmented.contains(name));
     debug!(
@@ -690,7 +693,7 @@ where
     );
 
     let next_checkpoint_sequence_number = checkpoint_db.lock().next_checkpoint();
-    let mut num_fragments_sent = 0;
+    let mut index = 0;
 
     loop {
         // Always try to construct checkpoint first. This gives a chance to construct checkpoint
@@ -704,7 +707,7 @@ where
                 // We likely don't have enough fragments. Fall through to send more fragments.
                 debug!(
                     ?next_checkpoint_sequence_number,
-                    ?num_fragments_sent,
+                    num_proposals_processed=?index,
                     "Failed to construct checkpoint: {:?}",
                     err
                 );
@@ -721,11 +724,12 @@ where
         }
 
         // We have ran out of authorities?
-        if available_authorities.is_empty() {
+        if index == available_authorities.len() {
             // We have created as many fragments as possible, so exit.
             break;
         }
-        let authority = available_authorities.pop().unwrap();
+        let authority = available_authorities[index];
+        index += 1;
 
         // Get a client
         let client = active_authority.net.load().authority_clients[&authority].clone();
@@ -789,8 +793,9 @@ where
                             // TODO: here we should really wait until the fragment is sequenced, otherwise
                             //       we would be going ahead and sequencing more fragments that may not be
                             //       needed. For the moment we just rely on linearly back-off.
-                            num_fragments_sent += 1;
-                            tokio::time::sleep(num_fragments_sent * consensus_delay_estimate).await;
+                            // https://github.com/MystenLabs/sui/issues/3619.
+                            tokio::time::sleep(consensus_delay_estimate.mul_f64(index as f64))
+                                .await;
                         }
                         Err(err) => {
                             warn!("Error augmenting the fragment: {err:?}");
