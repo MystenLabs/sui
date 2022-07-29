@@ -1,18 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::*;
+use crate::{test_utils::cert_bytes_to_spki_bytes, *};
 use rcgen::generate_simple_self_signed;
 use rustls::{client::ServerCertVerifier, server::ClientCertVerifier};
-use x509_parser::traits::FromDer;
-
-fn cert_bytes_to_spki_bytes(cert_bytes: &[u8]) -> Vec<u8> {
-    let cert_parsed = X509Certificate::from_der(cert_bytes)
-        .map_err(|_| rustls::Error::InvalidCertificateEncoding)
-        .unwrap();
-    let spki = cert_parsed.1.public_key().clone();
-    spki.raw.to_vec()
-}
 
 #[test]
 fn serde_round_trip() {

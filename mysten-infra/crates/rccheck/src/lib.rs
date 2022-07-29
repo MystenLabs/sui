@@ -23,12 +23,17 @@ use serde::{
     de::{Error, Visitor},
     Deserialize, Deserializer, Serialize,
 };
+use std::collections::BTreeSet;
 use x509_parser::certificate::X509Certificate;
 use x509_parser::{traits::FromDer, x509::SubjectPublicKeyInfo};
 
 #[cfg(test)]
 #[path = "tests/psk_tests.rs"]
 mod psk_tests;
+
+#[cfg(test)]
+#[path = "tests/psk_set_tests.rs"]
+mod psk_set_tests;
 
 #[cfg(test)]
 #[path = "tests/test_utils.rs"]
@@ -55,6 +60,118 @@ pub trait Certifiable {
 
     /// This generates X.509 `SubjectPublicKeyInfo` (SPKI) bytes (in DER format) from the provided public key
     fn public_key_to_spki(public_key: &Self::PublicKey) -> Vec<u8>;
+}
+
+/// A collection of X.509 `SubjectPublicKeyInfo` (SPKI)
+///
+/// Implements the traits ClientCertVerifier and ServerCertVerifier, enabling the verification
+/// of X.509 certificates signed by a keypair in the set of Pre-Shared Keys (PSKs).
+///
+/// Example
+/// ```
+/// use rccheck::*;
+/// let mut rng = rand::thread_rng();
+/// let keypairs: Vec<_> = (0..10).into_iter().map(|_| ed25519_dalek::Keypair::generate(&mut rng)).collect();
+/// let spkis = keypairs.iter().map(|kp| ed25519_certgen::Ed25519::public_key_to_spki(&kp.public)).collect::<Vec<_>>();
+/// let pskset = PskSet::from_der(&spkis.iter().map(|spki| &spki[..]).collect::<Vec<_>>()[..]).unwrap();
+/// ```
+///
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct PskSet {
+    pub spki_set: BTreeSet<Psk>,
+}
+
+impl PskSet {
+    /// This creates a new `PskSet` from a set of X.509 `SubjectPublicKeyInfo` (SPKI) bytes (in DER format)
+    pub fn from_der(bytes_array: &[&[u8]]) -> Result<PskSet, anyhow::Error> {
+        let set = bytes_array
+            .iter()
+            .map(|&bytes| {
+                let psk = Psk::from_der(bytes)?;
+                Ok(psk)
+            })
+            .collect::<Result<BTreeSet<Psk>, anyhow::Error>>()?;
+        Ok(PskSet { spki_set: set })
+    }
+}
+
+/// A `ClientCertVerifier` that will ensure that every client provides a valid, expected
+/// certificate, without any name checking.
+impl ClientCertVerifier for PskSet {
+    fn offer_client_auth(&self) -> bool {
+        true
+    }
+
+    fn client_auth_mandatory(&self) -> Option<bool> {
+        Some(true)
+    }
+
+    fn client_auth_root_subjects(&self) -> Option<rustls::DistinguishedNames> {
+        // We can't guarantee subjects before having seen the cert. This should not be None for compatiblity reasons
+        Some(rustls::DistinguishedNames::new())
+    }
+
+    // Verifies this is a valid certificate self-signed by a public key we expect(in PSK)
+    // 1. We check if the key exists in the set of expected keys.
+    // 2. Verify the key against expected key.
+    fn verify_client_cert(
+        &self,
+        end_entity: &rustls::Certificate,
+        intermediates: &[rustls::Certificate],
+        now: SystemTime,
+    ) -> Result<ClientCertVerified, rustls::Error> {
+        // 1. Check if the key exists in the set of expected keys.
+        let cert = X509Certificate::from_der(&end_entity.0[..])
+            .map_err(|_| rustls::Error::InvalidCertificateEncoding)?;
+        let pk_bytes = cert.1.public_key().raw.to_vec();
+        let spki = Psk::from_der(&pk_bytes).unwrap();
+
+        if !self.spki_set.contains(&spki) {
+            return Err(rustls::Error::InvalidCertificateData(
+                "invalid peer certificate: Provided public key is not in the set of accepted public keys".to_string()
+            ));
+        }
+
+        verify_client_cert_internal(end_entity, intermediates, now)
+    }
+}
+
+impl ServerCertVerifier for PskSet {
+    // Verifies this is a valid certificate self-signed by the public key we expect(in PSK)
+    // 1. we check the equality of the certificate's public key with the key we expect
+    // 2. we prepare arguments for webpki's certificate verification (following the rustls implementation)
+    //    placing the public key at the root of the certificate chain (as it should be for a self-signed certificate)
+    // 3. we call webpki's certificate verification
+    fn verify_server_cert(
+        &self,
+        end_entity: &rustls::Certificate,
+        intermediates: &[rustls::Certificate],
+        server_name: &rustls::ServerName,
+        scts: &mut dyn Iterator<Item = &[u8]>,
+        ocsp_response: &[u8],
+        now: std::time::SystemTime,
+    ) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+        // 1. Check if the key exists in the set of expected keys.
+        let cert = X509Certificate::from_der(&end_entity.0[..])
+            .map_err(|_| rustls::Error::InvalidCertificateEncoding)?;
+        let pk_bytes = cert.1.public_key().raw.to_vec();
+        let spki = Psk::from_der(&pk_bytes).unwrap();
+
+        if !self.spki_set.contains(&spki) {
+            return Err(rustls::Error::InvalidCertificateData(
+                "invalid peer certificate: Provided public key is not in the set of accepted public keys".to_string()
+            ));
+        }
+
+        verify_server_cert_internal(
+            end_entity,
+            intermediates,
+            server_name,
+            scts,
+            ocsp_response,
+            now,
+        )
+    }
 }
 
 /// X.509 `SubjectPublicKeyInfo` (SPKI) as defined in [RFC 5280 Section 4.1.2.7].
@@ -163,6 +280,18 @@ impl<'de> Deserialize<'de> for Psk {
 /// end Ser/de
 ////////////////////////////////////////////////////////////////
 
+impl PartialOrd<Self> for Psk {
+    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
+        Some(self.borrow_key_bytes().cmp(other.borrow_key_bytes()))
+    }
+}
+
+impl Ord for Psk {
+    fn cmp(&self, other: &Self) -> core::cmp::Ordering {
+        self.partial_cmp(other).unwrap()
+    }
+}
+
 /// A `ClientCertVerifier` that will ensure that every client provides a valid, expected
 /// certificate, without any name checking.
 impl ClientCertVerifier for Psk {
@@ -202,20 +331,7 @@ impl ClientCertVerifier for Psk {
             )));
         }
 
-        // We now check we're receiving correctly signed data with the expected key
-        // Step 2: prepare arguments
-        let (cert, chain, trustroots) = prepare_for_self_signed(end_entity, intermediates)?;
-        let now = webpki::Time::try_from(now).map_err(|_| rustls::Error::FailedToGetCurrentTime)?;
-
-        // Step 3: call verification from webpki
-        cert.verify_is_valid_tls_client_cert(
-            SUPPORTED_SIG_ALGS,
-            &webpki::TlsClientTrustAnchors(&trustroots),
-            &chain,
-            now,
-        )
-        .map_err(pki_error)
-        .map(|_| ClientCertVerified::assertion())
+        verify_client_cert_internal(end_entity, intermediates, now)
     }
 }
 
@@ -246,46 +362,93 @@ impl ServerCertVerifier for Psk {
             )));
         }
 
-        // Then we check this is actually a valid self-signed certificate with matching name
-        // Step 2: prepare arguments
-        let (cert, chain, trustroots) = prepare_for_self_signed(end_entity, intermediates)?;
-        let webpki_now =
-            webpki::Time::try_from(now).map_err(|_| rustls::Error::FailedToGetCurrentTime)?;
-
-        let dns_nameref = match server_name {
-            rustls::ServerName::DnsName(dns_name) => {
-                webpki::DnsNameRef::try_from_ascii_str(dns_name.as_ref())
-                    .map_err(|_| rustls::Error::UnsupportedNameType)?
-            }
-            _ => return Err(rustls::Error::UnsupportedNameType),
-        };
-
-        // Step 3: call verification from webpki
-        let cert = cert
-            .verify_is_valid_tls_server_cert(
-                SUPPORTED_SIG_ALGS,
-                &webpki::TlsServerTrustAnchors(&trustroots),
-                &chain,
-                webpki_now,
-            )
-            .map_err(pki_error)
-            .map(|_| cert)?;
-
-        // log additional certificate transaparency info (which is pointless in our self-signed context) and return
-        let mut peekable = scts.peekable();
-        if peekable.peek().is_none() {
-            tracing::trace!("Met unvalidated certificate transparency data");
-        }
-
-        if !ocsp_response.is_empty() {
-            tracing::trace!("Unvalidated OCSP response: {:?}", ocsp_response.to_vec());
-        }
-
-        cert.verify_is_valid_for_dns_name(dns_nameref)
-            .map_err(pki_error)
-            .map(|_| ServerCertVerified::assertion())
+        verify_server_cert_internal(
+            end_entity,
+            intermediates,
+            server_name,
+            scts,
+            ocsp_response,
+            now,
+        )
     }
 }
+
+////////////////////////////////////////////////////////////////
+/// Certificate Verification Helpers
+////////////////////////////////////////////////////////////////
+
+fn verify_client_cert_internal(
+    end_entity: &rustls::Certificate,
+    intermediates: &[rustls::Certificate],
+    now: SystemTime,
+) -> Result<ClientCertVerified, rustls::Error> {
+    // We now check we're receiving correctly signed data with the expected key
+    // Step 2: prepare arguments
+    let (cert, chain, trustroots) = prepare_for_self_signed(end_entity, intermediates)?;
+    let now = webpki::Time::try_from(now).map_err(|_| rustls::Error::FailedToGetCurrentTime)?;
+
+    // Step 3: call verification from webpki
+    cert.verify_is_valid_tls_client_cert(
+        SUPPORTED_SIG_ALGS,
+        &webpki::TlsClientTrustAnchors(&trustroots),
+        &chain,
+        now,
+    )
+    .map_err(pki_error)
+    .map(|_| ClientCertVerified::assertion())
+}
+
+fn verify_server_cert_internal(
+    end_entity: &rustls::Certificate,
+    intermediates: &[rustls::Certificate],
+    server_name: &rustls::ServerName,
+    scts: &mut dyn Iterator<Item = &[u8]>,
+    ocsp_response: &[u8],
+    now: std::time::SystemTime,
+) -> Result<rustls::client::ServerCertVerified, rustls::Error> {
+    // Then we check this is actually a valid self-signed certificate with matching name
+    // Step 2: prepare arguments
+    let (cert, chain, trustroots) = prepare_for_self_signed(end_entity, intermediates)?;
+    let webpki_now =
+        webpki::Time::try_from(now).map_err(|_| rustls::Error::FailedToGetCurrentTime)?;
+
+    let dns_nameref = match server_name {
+        rustls::ServerName::DnsName(dns_name) => {
+            webpki::DnsNameRef::try_from_ascii_str(dns_name.as_ref())
+                .map_err(|_| rustls::Error::UnsupportedNameType)?
+        }
+        _ => return Err(rustls::Error::UnsupportedNameType),
+    };
+
+    // Step 3: call verification from webpki
+    let cert = cert
+        .verify_is_valid_tls_server_cert(
+            SUPPORTED_SIG_ALGS,
+            &webpki::TlsServerTrustAnchors(&trustroots),
+            &chain,
+            webpki_now,
+        )
+        .map_err(pki_error)
+        .map(|_| cert)?;
+
+    // log additional certificate transaparency info (which is pointless in our self-signed context) and return
+    let mut peekable = scts.peekable();
+    if peekable.peek().is_none() {
+        tracing::trace!("Met unvalidated certificate transparency data");
+    }
+
+    if !ocsp_response.is_empty() {
+        tracing::trace!("Unvalidated OCSP response: {:?}", ocsp_response.to_vec());
+    }
+
+    cert.verify_is_valid_for_dns_name(dns_nameref)
+        .map_err(pki_error)
+        .map(|_| ServerCertVerified::assertion())
+}
+
+////////////////////////////////////////////////////////////////
+/// End Certificate Verification Helpers
+////////////////////////////////////////////////////////////////
 
 type CertChainAndRoots<'a> = (
     webpki::EndEntityCert<'a>,
