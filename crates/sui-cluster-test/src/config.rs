@@ -23,3 +23,14 @@ pub struct ClusterTestOpt {
     #[clap(long)]
     pub fullnode_address: Option<String>,
 }
+
+impl ClusterTestOpt {
+    pub fn new_local() -> Self {
+        Self {
+            env: Env::NewLocal,
+            gateway_address: None,
+            faucet_address: None,
+            fullnode_address: None,
+        }
+    }
+}
