@@ -517,10 +517,7 @@ where
     /// Make sure all objects in the input exist in the gateway store.
     /// If any object does not exist in the store, give it a chance
     /// to download from authorities.
-    async fn sync_input_objects_with_authorities(
-        &self,
-        transaction: &Transaction,
-    ) -> Result<(), anyhow::Error> {
+    async fn sync_input_objects_with_authorities(&self, transaction: &Transaction) -> SuiResult {
         let input_objects = transaction.data.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
@@ -602,16 +599,15 @@ where
         Ok((new_certificate, effects))
     }
 
-    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
-    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
-    async fn execute_transaction_impl(
+    /// Checks the transaction input and set locks.
+    /// If success, returns the input objects and owned objects in the input.
+    async fn prepare_transaction(
         &self,
-        transaction: Transaction,
-        is_last_retry: bool,
-    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+        transaction: &Transaction,
+    ) -> SuiResult<(InputObjects, Vec<ObjectRef>)> {
         transaction.verify()?;
 
-        self.sync_input_objects_with_authorities(&transaction)
+        self.sync_input_objects_with_authorities(transaction)
             .await?;
 
         // Getting the latest system state for gas information
@@ -621,7 +617,7 @@ where
             .await?;
 
         let (_gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.store, &transaction).await?;
+            transaction_input_checker::check_transaction_input(&self.store, transaction).await?;
 
         let owned_objects = input_objects.filter_owned_objects();
         if let Err(err) = self
@@ -650,10 +646,26 @@ where
                         .await?;
                 }
                 _ => {
-                    return Err(err.into());
+                    return Err(err);
                 }
             }
         }
+        Ok((input_objects, owned_objects))
+    }
+
+    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
+    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
+    async fn execute_transaction_impl(
+        &self,
+        transaction: Transaction,
+        is_last_retry: bool,
+    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+        let (input_objects, owned_objects) =
+            self.prepare_transaction(&transaction)
+                .await
+                .map_err(|err| SuiError::GatewayTransactionPrepError {
+                    error: ToString::to_string(&err),
+                })?;
 
         let exec_result = self
             .execute_transaction_impl_inner(input_objects, transaction)
