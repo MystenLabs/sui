@@ -64,6 +64,14 @@ Data:
       Package:
         NEWTYPE:
           TYPENAME: MovePackage
+DeleteKind:
+  ENUM:
+    0:
+      Normal: UNIT
+    1:
+      UnwrapThenDelete: UNIT
+    2:
+      Wrap: UNIT
 Ed25519KeyPair:
   STRUCT:
     - type: STR
@@ -151,23 +159,41 @@ ExecutionFailureStatus:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
     16:
-      PublishErrorEmptyPackage: UNIT
+      TooManyChildObjects:
+        STRUCT:
+          - object:
+              TYPENAME: ObjectID
     17:
-      PublishErrorNonZeroAddress: UNIT
+      InvalidParentDeletion:
+        STRUCT:
+          - parent:
+              TYPENAME: ObjectID
+          - kind:
+              OPTION:
+                TYPENAME: DeleteKind
     18:
-      PublishErrorDuplicateModule: UNIT
+      InvalidParentFreezing:
+        STRUCT:
+          - parent:
+              TYPENAME: ObjectID
     19:
-      SuiMoveVerificationError: UNIT
+      PublishErrorEmptyPackage: UNIT
     20:
-      MovePrimitiveRuntimeError: UNIT
+      PublishErrorNonZeroAddress: UNIT
     21:
+      PublishErrorDuplicateModule: UNIT
+    22:
+      SuiMoveVerificationError: UNIT
+    23:
+      MovePrimitiveRuntimeError: UNIT
+    24:
       MoveAbort:
         TUPLE:
           - TYPENAME: ModuleId
           - U64
-    22:
+    25:
       VMVerificationOrDeserializationError: UNIT
-    23:
+    26:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
@@ -236,6 +262,8 @@ MoveObject:
     - has_public_transfer: BOOL
     - version:
         TYPENAME: SequenceNumber
+    - child_count:
+        OPTION: U32
     - contents: BYTES
 MovePackage:
   STRUCT:

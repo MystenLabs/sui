@@ -26,7 +26,7 @@ module sui::transfer {
     /// module. The object's module can expose a function that returns a reference to the object's
     /// UID, `&UID`. Which can then be used with this function.
     /// The child object is specified in `obj`, and the parent object id is specified in `owner_id`.
-    public fun transfer_to_object_id<T: key>(obj: T, owner_id: &UID) {
+    public fun transfer_to_object_id<T: key>(obj: T, owner_id: &mut UID) {
         transfer_internal(obj, object::uid_to_address(owner_id), true);
     }
 

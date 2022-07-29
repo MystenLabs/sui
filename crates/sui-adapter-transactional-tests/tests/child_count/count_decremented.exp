@@ -1,0 +1,152 @@
+processed 32 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'publish'. lines 8-62:
+created: object(105)
+written: object(104)
+
+task 2 'run'. lines 64-64:
+created: object(107), object(108)
+written: object(106)
+
+task 3 'view-object'. lines 66-66:
+Owner: Account Address ( A )
+Version: 1
+Child Count: Some(1)
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
+
+task 4 'run'. lines 68-68:
+written: object(107), object(108), object(109)
+
+task 5 'view-object'. lines 70-74:
+Owner: Account Address ( A )
+Version: 2
+Child Count: None
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}}
+
+task 6 'run'. lines 76-76:
+created: object(111), object(112)
+written: object(110)
+
+task 7 'view-object'. lines 78-78:
+Owner: Account Address ( A )
+Version: 1
+Child Count: Some(1)
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}}
+
+task 8 'run'. lines 80-80:
+written: object(111), object(112), object(113)
+
+task 9 'view-object'. lines 82-86:
+Owner: Account Address ( A )
+Version: 2
+Child Count: None
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}}
+
+task 10 'run'. lines 88-88:
+created: object(115), object(116)
+written: object(114)
+
+task 11 'view-object'. lines 90-90:
+Owner: Account Address ( A )
+Version: 1
+Child Count: Some(1)
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(115)}}}
+
+task 12 'run'. lines 92-92:
+written: object(115), object(116), object(117)
+
+task 13 'view-object'. lines 94-98:
+Owner: Account Address ( A )
+Version: 2
+Child Count: None
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(115)}}}
+
+task 14 'run'. lines 100-100:
+created: object(119), object(120)
+written: object(118)
+
+task 15 'run'. lines 102-102:
+created: object(122), object(123)
+written: object(121)
+
+task 16 'view-object'. lines 104-104:
+Owner: Account Address ( A )
+Version: 1
+Child Count: Some(1)
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(120)}}}
+
+task 17 'run'. lines 106-106:
+written: object(119), object(120), object(123), object(124)
+
+task 18 'view-object'. lines 108-112:
+Owner: Account Address ( A )
+Version: 2
+Child Count: None
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(120)}}}
+
+task 19 'run'. lines 114-114:
+created: object(126), object(127)
+written: object(125)
+
+task 20 'run'. lines 116-116:
+created: object(129), object(130)
+written: object(128)
+
+task 21 'view-object'. lines 118-118:
+Owner: Account Address ( A )
+Version: 1
+Child Count: Some(1)
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(127)}}}
+
+task 22 'run'. lines 120-120:
+written: object(126), object(127), object(130), object(131)
+
+task 23 'view-object'. lines 122-126:
+Owner: Account Address ( A )
+Version: 2
+Child Count: None
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(127)}}}
+
+task 24 'run'. lines 128-128:
+created: object(133), object(134)
+written: object(132)
+
+task 25 'view-object'. lines 130-130:
+Owner: Account Address ( A )
+Version: 1
+Child Count: Some(1)
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(134)}}}
+
+task 26 'run'. lines 132-132:
+written: object(134), object(135)
+deleted: object(133)
+
+task 27 'view-object'. lines 134-138:
+Owner: Account Address ( A )
+Version: 2
+Child Count: None
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(134)}}}
+
+task 28 'run'. lines 140-140:
+created: object(137), object(138)
+written: object(136)
+
+task 29 'view-object'. lines 142-142:
+Owner: Account Address ( A )
+Version: 1
+Child Count: Some(1)
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(137)}}}
+
+task 30 'run'. lines 144-144:
+created: object(140)
+written: object(137), object(139)
+deleted: object(138)
+
+task 31 'view-object'. lines 146-146:
+Owner: Account Address ( A )
+Version: 2
+Child Count: None
+Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(137)}}}

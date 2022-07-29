@@ -1,16 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
-
 use crate::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
     event::Event,
     object::Object,
 };
+use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, BTreeSet};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum DeleteKind {
     /// An object is provided in the call input, and gets deleted.
     Normal,
@@ -29,14 +29,24 @@ pub trait Storage {
 
     // Specify the list of object IDs created during the transaction.
     // This is needed to determine unwrapped objects at the end.
-    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>);
+    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>);
 
     fn write_object(&mut self, object: Object);
 
     /// Record an event that happened during execution
     fn log_event(&mut self, event: Event);
 
-    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind);
+    fn delete_object(
+        &mut self,
+        id: &ObjectID,
+        version: SequenceNumber,
+        child_count: Option<u32>,
+        kind: DeleteKind,
+    );
+
+    fn change_child_counts(&mut self, deltas: BTreeMap<ObjectID, i64>) -> Result<(), ObjectID>;
+
+    fn deleted_objects_child_count(&mut self) -> Vec<(ObjectID, Option<u32>, DeleteKind)>;
 }
 
 pub trait BackingPackageStore {

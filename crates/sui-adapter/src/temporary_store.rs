@@ -4,14 +4,14 @@
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::fp_bail;
 use sui_types::messages::{ExecutionStatus, InputObjects, TransactionEffects};
-use sui_types::object::{Data, Object};
+use sui_types::object::{Data, MoveObject, Object};
 use sui_types::storage::{BackingPackageStore, DeleteKind, ParentSync, Storage};
 use sui_types::{
     event::Event,
@@ -41,13 +41,19 @@ pub struct TemporaryStore<S> {
     // into _written directly.
     _written: BTreeMap<ObjectID, Object>, // Objects written
     /// Objects actively deleted.
-    /// Child count is Some for Normal/UnwrapThenDelete events, and is None for wraps
-    deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
+    deleted: BTreeMap<
+        ObjectID,
+        (
+            SequenceNumber,
+            /* child count */ Option<u32>,
+            DeleteKind,
+        ),
+    >,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     // New object IDs created during the transaction, needed for
     // telling apart unwrapped objects.
-    created_object_ids: HashSet<ObjectID>,
+    created_object_ids: BTreeSet<ObjectID>,
 }
 
 impl<S> TemporaryStore<S> {
@@ -64,7 +70,7 @@ impl<S> TemporaryStore<S> {
             _written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
-            created_object_ids: HashSet::new(),
+            created_object_ids: BTreeSet::new(),
         }
     }
 
@@ -73,7 +79,7 @@ impl<S> TemporaryStore<S> {
         &self.input_objects
     }
 
-    pub fn deleted(&self) -> &BTreeMap<ObjectID, (SequenceNumber, DeleteKind)> {
+    pub fn deleted(&self) -> &BTreeMap<ObjectID, (SequenceNumber, Option<u32>, DeleteKind)> {
         &self.deleted
     }
 
@@ -231,7 +237,7 @@ impl<S> TemporaryStore<S> {
 
         let mut deleted = vec![];
         let mut wrapped = vec![];
-        for (id, (version, kind)) in &self.deleted {
+        for (id, (version, _child_count, kind)) in &self.deleted {
             match kind {
                 DeleteKind::Normal | DeleteKind::UnwrapThenDelete => {
                     deleted.push((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
@@ -321,7 +327,7 @@ impl<S> Storage for TemporaryStore<S> {
         self._written.get(id).or_else(|| self.input_objects.get(id))
     }
 
-    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
+    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>) {
         self.created_object_ids = ids;
     }
 
@@ -348,7 +354,13 @@ impl<S> Storage for TemporaryStore<S> {
         self._written.insert(object.id(), object);
     }
 
-    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
+    fn delete_object(
+        &mut self,
+        id: &ObjectID,
+        version: SequenceNumber,
+        child_count: Option<u32>,
+        kind: DeleteKind,
+    ) {
         // there should be no deletion after write
         debug_assert!(self._written.get(id) == None);
         // Check it is not read-only
@@ -363,11 +375,55 @@ impl<S> Storage for TemporaryStore<S> {
 
         // For object deletion, we increment their version so that they will
         // eventually show up in the parent_sync table with an updated version.
-        self.deleted.insert(*id, (version.increment(), kind));
+        self.deleted
+            .insert(*id, (version.increment(), child_count, kind));
     }
 
     fn log_event(&mut self, event: Event) {
         self.events.push(event)
+    }
+
+    fn change_child_counts(&mut self, deltas: BTreeMap<ObjectID, i64>) -> Result<(), ObjectID> {
+        let deltas = deltas
+            .into_iter()
+            .filter(|(_, delta)| *delta != 0)
+            .collect::<BTreeMap<_, _>>();
+        for id in deltas.keys() {
+            if !(self.written.contains_key(id) || self.deleted.contains_key(id)) {
+                let mut object = self.objects[id].clone();
+                // Active input object must be Move object.
+                object.data.try_as_move_mut().unwrap().increment_version();
+                self.written.insert(*id, object);
+            }
+        }
+        for (id, delta) in deltas {
+            match (self.written.get_mut(&id), self.deleted.get_mut(&id)) {
+                (None, None) => debug_assert!(false, "Invalid state, manually written above"),
+                (Some(_), Some(_)) => {
+                    debug_assert!(
+                        false,
+                        "Invalid state, parent is in both written/deleted set"
+                    )
+                }
+                (Some(written), None) => written
+                    .data
+                    .try_as_move_mut()
+                    .unwrap()
+                    .change_child_count(delta)
+                    .map_err(|_| id)?,
+                (None, Some((_version, child_count, _kind))) => {
+                    MoveObject::apply_child_count_delta(child_count, delta).map_err(|_| id)?
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn deleted_objects_child_count(&mut self) -> Vec<(ObjectID, Option<u32>, DeleteKind)> {
+        self.deleted
+            .iter()
+            .map(|(id, (_, child_count, kind))| (*id, *child_count, *kind))
+            .collect()
     }
 }
 

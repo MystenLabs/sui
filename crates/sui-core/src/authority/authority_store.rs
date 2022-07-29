@@ -651,10 +651,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             temporary_store.write_object(object);
         }
         for obj_ref in &effects.effects.deleted {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, None, DeleteKind::Normal);
         }
         for obj_ref in &effects.effects.wrapped {
-            temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
+            temporary_store.delete_object(&obj_ref.0, obj_ref.1, None, DeleteKind::Wrap);
         }
 
         let mut write_batch = self.tables.certificates.batch();

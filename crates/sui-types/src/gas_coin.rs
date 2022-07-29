@@ -64,8 +64,8 @@ impl GasCoin {
         bcs::to_bytes(&self).unwrap()
     }
 
-    pub fn to_object(&self, version: SequenceNumber) -> MoveObject {
-        MoveObject::new_gas_coin(version, self.to_bcs_bytes())
+    pub fn to_object(&self, version: SequenceNumber, child_count: Option<u32>) -> MoveObject {
+        MoveObject::new_gas_coin(version, child_count, self.to_bcs_bytes())
     }
 
     pub fn layout() -> MoveStructLayout {

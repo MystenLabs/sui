@@ -308,6 +308,7 @@ fn transfer_sui<S>(
         let new_object = Object::new_move(
             MoveObject::new_gas_coin(
                 OBJECT_START_VERSION,
+                None,
                 bcs::to_bytes(&GasCoin::new(tx_ctx.fresh_id(), amount))
                     .expect("Serializing gas object cannot fail"),
             ),
