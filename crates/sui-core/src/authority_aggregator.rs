@@ -278,7 +278,7 @@ where
                     processed_certificates.insert(cert_digest);
                     continue;
                 }
-                Err(SuiError::LockErrors { .. }) => {}
+                Err(SuiError::ObjectErrors { .. }) => {}
                 Err(e) => return Err(e),
             }
 
@@ -1429,7 +1429,7 @@ where
                         // LockErrors indicate the authority may be out-of-date.
                         // We only attempt to update authority and retry if we are seeing LockErrors.
                         // For any other error, we stop here and return.
-                        if !matches!(res, Err(SuiError::LockErrors { .. })) {
+                        if !matches!(res, Err(SuiError::ObjectErrors { .. })) {
                             debug!(
                                 tx_digest = ?tx_digest,
                                 ?name,

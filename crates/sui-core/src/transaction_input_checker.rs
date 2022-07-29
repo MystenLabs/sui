@@ -34,7 +34,7 @@ where
     )
     .await?;
 
-    let input_objects = check_locks(store, &transaction.data).await?;
+    let input_objects = check_objects(store, &transaction.data).await?;
 
     if transaction.contains_shared_object() {
         // It's important that we do this here to make sure there is enough
@@ -97,7 +97,7 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_locks<S>(
+async fn check_objects<S>(
     store: &SuiDataStore<S>,
     transaction: &TransactionData,
 ) -> Result<InputObjects, SuiError>
@@ -161,7 +161,7 @@ where
         }
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_lock(
+        match check_one_object(
             &transaction.signer(),
             object_kind,
             &object,
@@ -176,7 +176,7 @@ where
     // If any errors with the locks were detected, we return all errors to give the client
     // a chance to update the authority if possible.
     if !errors.is_empty() {
-        return Err(SuiError::LockErrors { errors });
+        return Err(SuiError::ObjectErrors { errors });
     }
     fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
 
@@ -185,7 +185,7 @@ where
 
 /// The logic to check one object against a reference, and return the object if all is well
 /// or an error if not.
-fn check_one_lock(
+fn check_one_object(
     sender: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
