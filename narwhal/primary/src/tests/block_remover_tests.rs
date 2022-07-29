@@ -78,7 +78,7 @@ async fn test_successful_blocks_delete() {
     let worker_id_1 = 1;
 
     // AND generate headers with distributed batches between 2 workers (0 and 1)
-    for headers in 0..5 {
+    for _headers in 0..5 {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
@@ -204,7 +204,7 @@ async fn test_timeout() {
     let (tx_commands, rx_commands) = channel(10);
     let (tx_remove_block, mut rx_remove_block) = channel(1);
     let (_tx_consensus, rx_consensus) = channel(1);
-    let (tx_delete_batches, rx_delete_batches) = channel(10);
+    let (_tx_delete_batches, rx_delete_batches) = channel(10);
     let (tx_removed_certificates, _rx_removed_certificates) = channel(10);
 
     // AND the necessary keys
@@ -241,7 +241,7 @@ async fn test_timeout() {
     let worker_id_3 = 3;
 
     // AND generate headers with distributed batches between 2 workers (2 and 3)
-    for headers in 0..5 {
+    for _headers in 0..5 {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
@@ -339,9 +339,9 @@ async fn test_timeout() {
 async fn test_unlocking_pending_requests() {
     // GIVEN
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_commands, rx_commands) = channel(10);
+    let (_tx_commands, rx_commands) = channel(10);
     let (_tx_consensus, rx_consensus) = channel(1);
-    let (tx_delete_batches, rx_delete_batches) = channel(10);
+    let (_tx_delete_batches, rx_delete_batches) = channel(10);
     let (tx_removed_certificates, _rx_removed_certificates) = channel(10);
 
     // AND the necessary keys
