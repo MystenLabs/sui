@@ -25,7 +25,7 @@
 
 .ownedcoins,
 .ownedobjects {
-    @apply w-[100%] min-h-[420px] lg:min-h-[240px] lg:flex lg:flex-wrap lg:justify-between;
+    @apply w-[100%] lg:min-h-[240px] lg:flex lg:flex-wrap lg:justify-between;
 }
 
 .objectbox {
