@@ -1,5 +1,12 @@
 .nft-gallery-container {
-    max-height: 480px;
+    margin-top: 20px;
+    padding-bottom: 50px;
+    flex-grow: 1;
+    padding-left: 25px;
+    padding-right: 25px;
+    margin-left: -25px;
+    margin-right: -25px;
+    height: 450px;
     overflow-y: scroll;
 
     .nft-gallery {
@@ -7,6 +14,10 @@
         grid-template-columns: 1fr 1fr 1fr;
         grid-gap: 8px;
         grid-template-rows: 96px;
+
+        img {
+            height: 96px;
+        }
     }
 }
 
@@ -20,4 +31,11 @@
         color: #767a81;
         font-size: 12px;
     }
+}
+
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    overflow-x: visible;
+    height: 100%;
 }

@@ -7,7 +7,8 @@ import { useMediaUrl } from '_hooks';
 import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
 
 import st from './NFTDisplay.module.scss';
-type SuiObjectProps = {
+
+export type SuiObjectProps = {
     nftobj: SuiObjectType;
 };
 
