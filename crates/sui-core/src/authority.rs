@@ -1031,11 +1031,16 @@ impl AuthorityState {
                 .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
                 .await
                 .expect("Cannot bulk insert genesis objects");
+            store
+                .init_genesis_epoch(genesis_committee.clone())
+                .expect("Init genesis epoch data must not fail");
             genesis_committee
-        } else if let Some(latest_epoch) = store.get_latest_authenticated_epoch() {
-            latest_epoch.epoch_info().next_epoch_committee().clone()
         } else {
-            genesis_committee
+            store
+                .get_latest_authenticated_epoch()
+                .epoch_info()
+                .committee()
+                .clone()
         };
 
         let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
@@ -1156,17 +1161,23 @@ impl AuthorityState {
 
     pub(crate) fn sign_new_epoch_and_update_committee(
         &self,
-        next_epoch_committee: Committee,
-        last_checkpoint: CheckpointSequenceNumber,
+        new_committee: Committee,
+        next_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult {
+        // TODO: It's likely safer to do the following operations atomically, in case this function
+        // gets called from different threads. It cannot happen today, but worth the caution.
+        fp_ensure!(
+            self.epoch() + 1 == new_committee.epoch,
+            SuiError::from("Invalid new epoch to sign and update")
+        );
         self.database.sign_new_epoch(
-            self.epoch(),
-            next_epoch_committee.clone(),
+            new_committee.clone(),
             self.name,
             &*self.secret,
-            last_checkpoint,
+            next_checkpoint,
         )?;
-        self.committee.swap(Arc::new(next_epoch_committee));
+        // TODO: Do we want to make it possible to subscribe to committee changes?
+        self.committee.swap(Arc::new(new_committee));
         Ok(())
     }
 
