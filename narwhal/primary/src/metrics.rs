@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::EndpointMetrics;
 use mysten_network::metrics::MetricsCallbackProvider;
+use network::{metrics, metrics::PrimaryNetworkMetrics};
 use prometheus::{
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
     register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
@@ -14,11 +15,10 @@ pub(crate) struct Metrics {
     pub(crate) endpoint_metrics: Option<EndpointMetrics>,
     pub(crate) primary_endpoint_metrics: Option<PrimaryEndpointMetrics>,
     pub(crate) node_metrics: Option<PrimaryMetrics>,
+    pub(crate) network_metrics: Option<PrimaryNetworkMetrics>,
 }
 
-/// Initialises the metrics. Should be called only once when the primary
-/// node is initialised, otherwise it will lead to erroneously creating
-/// multiple registries.
+/// Initialises the metrics
 pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     // The metrics used for the gRPC primary node endpoints we expose to the external consensus
     let endpoint_metrics = EndpointMetrics::new(metrics_registry);
@@ -29,10 +29,14 @@ pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     // Essential/core metrics across the primary node
     let node_metrics = PrimaryMetrics::new(metrics_registry);
 
+    // Network metrics for the primary to primary comms
+    let network_metrics = metrics::PrimaryNetworkMetrics::new(metrics_registry);
+
     Metrics {
         node_metrics: Some(node_metrics),
         endpoint_metrics: Some(endpoint_metrics),
         primary_endpoint_metrics: Some(primary_endpoint_metrics),
+        network_metrics: Some(network_metrics),
     }
 }
 

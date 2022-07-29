@@ -11,6 +11,7 @@ use config::{Parameters, SharedCommittee, WorkerId};
 use crypto::PublicKey;
 use futures::{Stream, StreamExt};
 use multiaddr::{Multiaddr, Protocol};
+use network::{metrics::WorkerNetworkMetrics, WorkerNetwork};
 use primary::PrimaryWorkerMessage;
 use std::{net::Ipv4Addr, pin::Pin, sync::Arc};
 use store::Store;
@@ -75,6 +76,7 @@ impl Worker {
 
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
+        let network_metrics = Arc::new(metrics.network_metrics.unwrap());
 
         // Spawn all worker tasks.
         let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY);
@@ -88,11 +90,19 @@ impl Worker {
             &tx_reconfigure,
             tx_primary.clone(),
             endpoint_metrics,
+            network_metrics.clone(),
         );
-        let worker_flow_handles =
-            worker.handle_workers_messages(&tx_reconfigure, tx_primary.clone());
-        let primary_flow_handles =
-            worker.handle_primary_messages(tx_reconfigure, tx_primary, node_metrics);
+        let worker_flow_handles = worker.handle_workers_messages(
+            &tx_reconfigure,
+            tx_primary.clone(),
+            network_metrics.clone(),
+        );
+        let primary_flow_handles = worker.handle_primary_messages(
+            tx_reconfigure,
+            tx_primary,
+            node_metrics,
+            network_metrics,
+        );
 
         // The `PrimaryConnector` allows the worker to send messages to its primary.
         let handle = PrimaryConnector::spawn(name, initial_committee, rx_reconfigure, rx_primary);
@@ -122,6 +132,7 @@ impl Worker {
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         node_metrics: Arc<WorkerMetrics>,
+        network_metrics: Arc<WorkerNetworkMetrics>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_synchronizer, rx_synchronizer) = channel(CHANNEL_CAPACITY);
 
@@ -140,6 +151,10 @@ impl Worker {
 
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
+        let worker_network = WorkerNetwork::new(network::metrics::Metrics::new(
+            network_metrics,
+            "synchronizer".to_string(),
+        ));
         let handle = Synchronizer::spawn(
             self.name.clone(),
             self.id,
@@ -152,6 +167,7 @@ impl Worker {
             tx_reconfigure,
             tx_primary,
             node_metrics,
+            worker_network,
         );
 
         info!(
@@ -168,6 +184,7 @@ impl Worker {
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         endpoint_metrics: WorkerEndpointMetrics,
+        network_metrics: Arc<WorkerNetworkMetrics>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel(CHANNEL_CAPACITY);
         let (tx_quorum_waiter, rx_quorum_waiter) = channel(CHANNEL_CAPACITY);
@@ -203,6 +220,10 @@ impl Worker {
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
         // the batch to the `Processor`.
+        let worker_network = WorkerNetwork::new(network::metrics::Metrics::new(
+            network_metrics,
+            "quorum_waiter".to_string(),
+        ));
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.name.clone(),
             self.id,
@@ -210,6 +231,7 @@ impl Worker {
             tx_reconfigure.subscribe(),
             /* rx_message */ rx_quorum_waiter,
             /* tx_batch */ tx_processor,
+            worker_network,
         );
 
         // The `Processor` hashes and stores the batch. It then forwards the batch's digest to the `PrimaryConnector`
@@ -241,6 +263,7 @@ impl Worker {
         &self,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
+        network_metrics: Arc<WorkerNetworkMetrics>,
     ) -> Vec<JoinHandle<()>> {
         let (tx_worker_helper, rx_worker_helper) = channel(CHANNEL_CAPACITY);
         let (tx_client_helper, rx_client_helper) = channel(CHANNEL_CAPACITY);
@@ -268,6 +291,10 @@ impl Worker {
         );
 
         // The `Helper` is dedicated to reply to batch requests from other workers.
+        let worker_network = WorkerNetwork::new(network::metrics::Metrics::new(
+            network_metrics,
+            "worker_helper".to_string(),
+        ));
         let helper_handle = Helper::spawn(
             self.id,
             (*(*(*self.committee).load()).clone()).clone(),
@@ -275,6 +302,7 @@ impl Worker {
             tx_reconfigure.subscribe(),
             /* rx_worker_request */ rx_worker_helper,
             /* rx_client_request */ rx_client_helper,
+            worker_network,
         );
 
         // This `Processor` hashes and stores the batches we receive from the other workers. It then forwards the

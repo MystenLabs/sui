@@ -44,6 +44,7 @@ async fn synchronize() {
         tx_reconfiguration,
         tx_primary,
         metrics,
+        WorkerNetwork::default(),
     );
 
     // Spawn a listener to receive our batch requests.
@@ -94,6 +95,7 @@ async fn test_successful_request_batch() {
         tx_reconfiguration,
         tx_primary,
         metrics,
+        WorkerNetwork::default(),
     );
 
     // Create a dummy batch and store
@@ -156,6 +158,7 @@ async fn test_request_batch_not_found() {
         tx_reconfiguration,
         tx_primary,
         metrics,
+        WorkerNetwork::default(),
     );
 
     // The non existing batch id
@@ -217,6 +220,7 @@ async fn test_successful_batch_delete() {
         tx_reconfiguration,
         tx_primary,
         metrics,
+        WorkerNetwork::default(),
     );
 
     // Create dummy batches and store them

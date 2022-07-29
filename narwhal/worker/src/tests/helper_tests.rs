@@ -44,6 +44,7 @@ async fn worker_batch_reply() {
         rx_reconfiguration,
         rx_worker_request,
         rx_client_request,
+        WorkerNetwork::default(),
     );
 
     // Spawn a listener to receive the batch reply.
@@ -91,6 +92,7 @@ async fn client_batch_reply() {
         rx_reconfiguration,
         rx_worker_request,
         rx_client_request,
+        WorkerNetwork::default(),
     );
 
     // Send batch request.

@@ -91,6 +91,7 @@ async fn test_successfully_retrieve_block() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
+        PrimaryToWorkerNetwork::default(),
     );
 
     // WHEN we send a request to get a block
@@ -256,6 +257,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
+        PrimaryToWorkerNetwork::default(),
     );
 
     // WHEN we send a request to get a block
@@ -474,6 +476,7 @@ async fn test_batch_timeout() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
+        PrimaryToWorkerNetwork::default(),
     );
 
     // WHEN we send a request to get a block
@@ -535,6 +538,7 @@ async fn test_return_error_when_certificate_is_missing() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
+        PrimaryToWorkerNetwork::default(),
     );
 
     // WHEN we send a request to get a block
@@ -604,6 +608,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
+        PrimaryToWorkerNetwork::default(),
     );
 
     // WHEN we send a request to get a block

@@ -57,6 +57,7 @@ impl Helper {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_committee: watch::Receiver<ReconfigureNotification>,
         rx_primaries: Receiver<PrimaryMessage>,
+        primary_network: PrimaryNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -66,7 +67,7 @@ impl Helper {
                 payload_store,
                 rx_committee,
                 rx_primaries,
-                primary_network: PrimaryNetwork::default(),
+                primary_network,
             }
             .run()
             .await;

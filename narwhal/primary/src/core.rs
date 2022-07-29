@@ -110,6 +110,7 @@ impl Core {
         tx_consensus: Sender<Certificate>,
         tx_proposer: Sender<(Vec<Certificate>, Round, Epoch)>,
         metrics: Arc<PrimaryMetrics>,
+        primary_network: PrimaryNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -134,7 +135,7 @@ impl Core {
                 current_header: Header::default(),
                 votes_aggregator: VotesAggregator::new(),
                 certificates_aggregators: HashMap::with_capacity(2 * gc_depth as usize),
-                network: Default::default(),
+                network: primary_network,
                 cancel_handlers: HashMap::with_capacity(2 * gc_depth as usize),
                 metrics,
             }

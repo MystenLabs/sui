@@ -25,7 +25,7 @@ use crypto::{
     PublicKey, Signature, SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
-use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
+use network::{metrics::Metrics, PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{
     net::Ipv4Addr,
@@ -111,6 +111,7 @@ impl Primary {
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
         let primary_endpoint_metrics = metrics.primary_endpoint_metrics.unwrap();
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
+        let network_metrics = Arc::new(metrics.network_metrics.unwrap());
 
         // Atomic variable use to synchronize all tasks with the latest consensus round. This is only
         // used for cleanup. The only task that write into this variable is `GarbageCollector`.
@@ -182,6 +183,10 @@ impl Primary {
         let signature_service = SignatureService::new(signer);
 
         // The `Core` receives and handles headers, votes, and certificates from the other primaries.
+        let core_primary_network = PrimaryNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            "primary_core".to_string(),
+        ));
         let core_handle = Core::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -199,6 +204,7 @@ impl Primary {
             tx_consensus,
             /* tx_proposer */ tx_parents,
             node_metrics.clone(),
+            core_primary_network,
         );
 
         // Receives batch digests from other workers. They are only used to validate headers.
@@ -218,6 +224,10 @@ impl Primary {
 
         // Retrieves a block's data by contacting the worker nodes that contain the
         // underlying batches and their transactions.
+        let block_waiter_primary_network = PrimaryToWorkerNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            "block_waiter".to_string(),
+        ));
         let block_waiter_handle = BlockWaiter::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -225,12 +235,17 @@ impl Primary {
             rx_get_block_commands,
             rx_batches,
             block_synchronizer_handler.clone(),
+            block_waiter_primary_network,
         );
 
         // Indicator variable for the gRPC server
         let internal_consensus = dag.is_none();
 
         // Orchestrates the removal of blocks across the primary and worker nodes.
+        let block_remover_primary_network = PrimaryToWorkerNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            "block_remover".to_string(),
+        ));
         let block_remover_handle = BlockRemover::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -238,7 +253,7 @@ impl Primary {
             header_store,
             payload_store.clone(),
             dag.clone(),
-            PrimaryToWorkerNetwork::default(),
+            block_remover_primary_network,
             tx_reconfigure.subscribe(),
             rx_block_removal_commands,
             rx_batch_removal,
@@ -247,6 +262,10 @@ impl Primary {
 
         // Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
+        let block_synchronizer_network = PrimaryNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            "block_synchronizer_handler".to_string(),
+        ));
         let block_synchronizer_handle = BlockSynchronizer::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -254,7 +273,7 @@ impl Primary {
             rx_block_synchronizer_commands,
             rx_certificate_responses,
             rx_payload_availability_responses,
-            PrimaryNetwork::default(),
+            block_synchronizer_network,
             payload_store.clone(),
             certificate_store.clone(),
             parameters.block_synchronizer,
@@ -263,6 +282,14 @@ impl Primary {
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
         // batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and
         // re-schedule execution of the header once we have all missing data.
+        let header_waiter_primary_network = PrimaryNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            "header_waiter".to_string(),
+        ));
+        let header_waiter_worker_network = PrimaryToWorkerNetwork::new(Metrics::new(
+            network_metrics.clone(),
+            "header_waiter".to_string(),
+        ));
         let header_waiter_handle = HeaderWaiter::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -276,6 +303,8 @@ impl Primary {
             /* rx_synchronizer */ rx_sync_headers,
             /* tx_core */ tx_headers_loopback,
             node_metrics.clone(),
+            header_waiter_primary_network,
+            header_waiter_worker_network,
         );
 
         // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
@@ -309,6 +338,8 @@ impl Primary {
 
         // The `Helper` is dedicated to reply to certificates & payload availability requests
         // from other primaries.
+        let helper_primary_network =
+            PrimaryNetwork::new(Metrics::new(network_metrics, "primary_helper".to_string()));
         let helper_handle = Helper::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -316,6 +347,7 @@ impl Primary {
             payload_store,
             tx_reconfigure.subscribe(),
             rx_helper_requests,
+            helper_primary_network,
         );
 
         // Keeps track of the latest consensus round and allows other tasks to clean up their their internal state

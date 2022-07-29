@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    metrics::{Metrics, PrimaryNetworkMetrics},
     traits::{BaseNetwork, LuckyNetwork, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, MessageResult, RetryConfig, MAX_TASK_CONCURRENCY,
 };
@@ -11,6 +12,7 @@ use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
 use tokio::{runtime::Handle, task::JoinHandle};
 use tonic::transport::Channel;
+use tracing::warn;
 use types::{
     BincodeEncodedPayload, PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient,
     PrimaryWorkerMessage,
@@ -24,6 +26,7 @@ pub struct PrimaryNetwork {
     rng: SmallRng,
     // One bounded executor per address
     executors: HashMap<Multiaddr, BoundedExecutor>,
+    metrics: Option<Metrics<PrimaryNetworkMetrics>>,
 }
 
 fn default_executor() -> BoundedExecutor {
@@ -44,6 +47,30 @@ impl Default for PrimaryNetwork {
             retry_config,
             rng: SmallRng::from_entropy(),
             executors: HashMap::new(),
+            metrics: None,
+        }
+    }
+}
+
+impl PrimaryNetwork {
+    pub fn new(metrics: Metrics<PrimaryNetworkMetrics>) -> Self {
+        Self {
+            metrics: Some(Metrics::from(metrics, "primary".to_string())),
+            ..Default::default()
+        }
+    }
+
+    fn update_metrics(&self) {
+        if let Some(m) = &self.metrics {
+            for (addr, executor) in &self.executors {
+                let available = executor.available_capacity();
+
+                m.set_network_available_tasks(available as i64, Some(addr.to_string()));
+
+                if available == 0 {
+                    warn!("Executor in network:{} and module:{} available tasks is 0 for client address: {}", m.network_type(), m.module_tag(), addr);
+                }
+            }
         }
     }
 }
@@ -75,13 +102,18 @@ impl UnreliableNetwork for PrimaryNetwork {
         message: BincodeEncodedPayload,
     ) -> JoinHandle<()> {
         let mut client = self.client(address.clone());
-        self.executors
+        let handle = self
+            .executors
             .entry(address)
             .or_insert_with(default_executor)
             .spawn(async move {
                 let _ = client.send_message(message).await;
             })
-            .await
+            .await;
+
+        self.update_metrics();
+
+        handle
     }
 }
 
@@ -126,6 +158,8 @@ impl ReliableNetwork for PrimaryNetwork {
             .or_insert_with(default_executor)
             .spawn_with_retries(self.retry_config, message_send);
 
+        self.update_metrics();
+
         CancelOnDropHandler(handle)
     }
 }
@@ -133,6 +167,22 @@ pub struct PrimaryToWorkerNetwork {
     clients: HashMap<Multiaddr, PrimaryToWorkerClient<Channel>>,
     config: mysten_network::config::Config,
     executor: BoundedExecutor,
+    metrics: Option<Metrics<PrimaryNetworkMetrics>>,
+}
+
+impl PrimaryToWorkerNetwork {
+    pub fn new(metrics: Metrics<PrimaryNetworkMetrics>) -> Self {
+        Self {
+            metrics: Some(Metrics::from(metrics, "primary_to_worker".to_string())),
+            ..Default::default()
+        }
+    }
+
+    fn update_metrics(&self) {
+        if let Some(m) = &self.metrics {
+            m.set_network_available_tasks(self.executor.available_capacity() as i64, None);
+        }
+    }
 }
 
 impl Default for PrimaryToWorkerNetwork {
@@ -141,6 +191,7 @@ impl Default for PrimaryToWorkerNetwork {
             clients: Default::default(),
             config: Default::default(),
             executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
+            metrics: None,
         }
     }
 }
@@ -174,10 +225,15 @@ impl UnreliableNetwork for PrimaryToWorkerNetwork {
         message: BincodeEncodedPayload,
     ) -> JoinHandle<()> {
         let mut client = self.client(address.clone());
-        self.executor
+        let handler = self
+            .executor
             .spawn(async move {
                 let _ = client.send_message(message).await;
             })
-            .await
+            .await;
+
+        self.update_metrics();
+
+        handler
     }
 }

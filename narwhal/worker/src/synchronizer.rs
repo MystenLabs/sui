@@ -82,6 +82,7 @@ impl Synchronizer {
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         metrics: Arc<WorkerMetrics>,
+        network: WorkerNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -93,7 +94,7 @@ impl Synchronizer {
                 sync_retry_delay,
                 sync_retry_nodes,
                 rx_message,
-                network: WorkerNetwork::default(),
+                network,
                 round: Round::default(),
                 pending: HashMap::new(),
                 tx_reconfigure,

@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    metrics::{Metrics, WorkerNetworkMetrics},
     traits::{BaseNetwork, LuckyNetwork, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, MessageResult, RetryConfig, MAX_TASK_CONCURRENCY,
 };
@@ -10,6 +11,7 @@ use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
 use tokio::{runtime::Handle, task::JoinHandle};
 use tonic::transport::Channel;
+use tracing::warn;
 use types::{
     BincodeEncodedPayload, WorkerMessage, WorkerPrimaryMessage, WorkerToPrimaryClient,
     WorkerToWorkerClient,
@@ -22,6 +24,7 @@ pub struct WorkerNetwork {
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
     executors: HashMap<Multiaddr, BoundedExecutor>,
+    metrics: Option<Metrics<WorkerNetworkMetrics>>,
 }
 
 fn default_executor() -> BoundedExecutor {
@@ -42,6 +45,33 @@ impl Default for WorkerNetwork {
             retry_config,
             rng: SmallRng::from_entropy(),
             executors: HashMap::new(),
+            metrics: None,
+        }
+    }
+}
+
+impl WorkerNetwork {
+    pub fn new(metrics: Metrics<WorkerNetworkMetrics>) -> Self {
+        Self {
+            metrics: Some(Metrics::from(metrics, "worker".to_string())),
+            ..Default::default()
+        }
+    }
+
+    fn update_metrics(&self) {
+        if let Some(m) = &self.metrics {
+            for (addr, executor) in &self.executors {
+                let available = executor.available_capacity();
+
+                m.set_network_available_tasks(
+                    executor.available_capacity() as i64,
+                    Some(addr.to_string()),
+                );
+
+                if available == 0 {
+                    warn!("Executor in network:{} and module:{} available tasks is 0 for client address: {}", m.network_type(), m.module_tag(), addr);
+                }
+            }
         }
     }
 }
@@ -75,13 +105,17 @@ impl UnreliableNetwork for WorkerNetwork {
         message: BincodeEncodedPayload,
     ) -> JoinHandle<()> {
         let mut client = self.client(address.clone());
-        self.executors
+        let handler = self
+            .executors
             .entry(address)
             .or_insert_with(default_executor)
             .spawn(async move {
                 let _ = client.send_message(message).await;
             })
-            .await
+            .await;
+        self.update_metrics();
+
+        handler
     }
 }
 
@@ -125,6 +159,8 @@ impl ReliableNetwork for WorkerNetwork {
             .entry(address)
             .or_insert_with(default_executor)
             .spawn_with_retries(self.retry_config, message_send);
+
+        self.update_metrics();
 
         CancelOnDropHandler(handle)
     }

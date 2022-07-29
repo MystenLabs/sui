@@ -8,6 +8,7 @@ use crate::{
 };
 use core::sync::atomic::AtomicU64;
 use crypto::Hash;
+use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
 use test_utils::{fixture_header_with_payload, resolve_name_and_committee};
@@ -43,6 +44,8 @@ async fn successfully_synchronize_batches() {
         rx_synchronizer,
         tx_core,
         metrics,
+        PrimaryNetwork::default(),
+        PrimaryToWorkerNetwork::default(),
     );
 
     // AND a header

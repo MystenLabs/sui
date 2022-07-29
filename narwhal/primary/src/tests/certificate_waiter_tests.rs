@@ -10,6 +10,7 @@ use crate::{
 };
 use core::sync::atomic::AtomicU64;
 use crypto::{traits::KeyPair, Hash, SignatureService};
+use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{
     collections::BTreeSet,
@@ -78,6 +79,8 @@ async fn process_certificate_missing_parents_in_reverse() {
         rx_sync_headers,
         tx_headers_loopback,
         metrics.clone(),
+        PrimaryNetwork::default(),
+        PrimaryToWorkerNetwork::default(),
     );
 
     // Make a certificate waiter
@@ -110,6 +113,7 @@ async fn process_certificate_missing_parents_in_reverse() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
+        PrimaryNetwork::default(),
     );
 
     // Generate headers in successive rounds
@@ -216,6 +220,8 @@ async fn process_certificate_check_gc_fires() {
         rx_sync_headers,
         tx_headers_loopback,
         metrics.clone(),
+        PrimaryNetwork::default(),
+        PrimaryToWorkerNetwork::default(),
     );
 
     // Make a certificate waiter
@@ -248,6 +254,7 @@ async fn process_certificate_check_gc_fires() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
+        PrimaryNetwork::default(),
     );
 
     // Generate headers in successive rounds

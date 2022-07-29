@@ -25,6 +25,7 @@ async fn wait_for_quorum() {
         rx_reconfiguration,
         rx_message,
         tx_batch,
+        WorkerNetwork::default(),
     );
 
     // Make a batch.

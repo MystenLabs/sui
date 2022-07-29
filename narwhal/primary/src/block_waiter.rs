@@ -128,6 +128,7 @@ type RequestKey = Vec<u8>;
 /// # use crypto::traits::VerifyingKey;
 /// # use async_trait::async_trait;
 /// # use std::sync::Arc;
+/// # use network::PrimaryToWorkerNetwork;
 ///
 /// # // A mock implementation of the BlockSynchronizerHandler
 /// struct BlockSynchronizerHandler;
@@ -171,6 +172,7 @@ type RequestKey = Vec<u8>;
 ///         rx_commands,
 ///         rx_batches,
 ///         Arc::new(BlockSynchronizerHandler{}),
+///         PrimaryToWorkerNetwork::default()
 ///     );
 ///
 ///     // Send a command to receive a block
@@ -254,6 +256,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
         rx_commands: Receiver<BlockCommand>,
         batch_receiver: Receiver<BatchResult>,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
+        worker_network: PrimaryToWorkerNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -261,7 +264,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
                 committee,
                 rx_commands,
                 pending_get_block: HashMap::new(),
-                worker_network: PrimaryToWorkerNetwork::default(),
+                worker_network,
                 rx_reconfigure,
                 rx_batch_receiver: batch_receiver,
                 tx_pending_batch: HashMap::new(),

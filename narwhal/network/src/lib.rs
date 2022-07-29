@@ -10,6 +10,7 @@
 #![allow(clippy::async_yields_async)]
 
 mod bounded_executor;
+pub mod metrics;
 mod primary;
 mod retry;
 mod traits;

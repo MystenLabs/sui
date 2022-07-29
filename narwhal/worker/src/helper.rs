@@ -46,6 +46,7 @@ impl Helper {
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
         rx_client_request: Receiver<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
+        network: WorkerNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -55,7 +56,7 @@ impl Helper {
                 rx_reconfigure,
                 rx_worker_request,
                 rx_client_request,
-                network: WorkerNetwork::default(),
+                network,
             }
             .run()
             .await;

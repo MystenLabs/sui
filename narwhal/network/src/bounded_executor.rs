@@ -16,7 +16,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use tracing::info;
+use tracing::debug;
 
 use thiserror::Error;
 
@@ -66,10 +66,15 @@ impl BoundedExecutor {
         match semaphore.clone().try_acquire_owned() {
             Ok(p) => p,
             Err(_) => {
-                info!("concurrent task limit reached, waiting...");
+                debug!("concurrent task limit reached, waiting...");
                 semaphore.acquire_owned().await.unwrap()
             }
         }
+    }
+
+    /// Returns the executor available capacity for running tasks.
+    pub fn available_capacity(&self) -> usize {
+        self.semaphore.available_permits()
     }
 
     /// Spawn a [`Future`] on the `BoundedExecutor`. This function is async and
@@ -231,12 +236,16 @@ mod test {
         let (tx2, rx2) = oneshot::channel();
 
         // executor has a free slot, spawn should succeed
+        assert_eq!(executor.available_capacity(), 1);
 
         let f1 = executor.try_spawn(rx1).unwrap();
 
         // executor is full, try_spawn should return err and give back the task
         // we attempted to spawn
         let BoundedExecutionError::Full(rx2) = executor.try_spawn(rx2).unwrap_err();
+
+        // currently running tasks is updated
+        assert_eq!(executor.available_capacity(), 0);
 
         // complete f1 future, should open a free slot in executor
 
@@ -250,6 +259,9 @@ mod test {
 
         tx2.send(()).unwrap();
         block_on(f2).unwrap().unwrap();
+
+        //ensure current running goes back to one
+        assert_eq!(executor.available_capacity(), 1);
     }
 
     // ensure tasks spawned with retries do not hog the semaphore
