@@ -15,13 +15,17 @@
 //! - its definition does not involve type parameters
 //! - its only instance in existence is passed as an argument to the module initializer
 //! - it is never instantiated anywhere in its defining module
+//!
+//! A characteristic type is one way of implementing a one-time witness pattern, where we want to
+//! restrict the number of times a given type (instance) is used. Another way could be to have a set
+//! data structure that can store types and use it to guarantee uniqueness.
 
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
     file_format::{
         Ability, AbilitySet, Bytecode, CompiledModule, FunctionDefinition, FunctionHandle,
-        SignatureToken, StructDefinition, StructHandle, TypeSignature,
+        SignatureToken, StructDefinition, StructHandle,
     },
 };
 use move_core_types::{ident_str, language_storage::ModuleId};
@@ -47,12 +51,11 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     let mod_name = view.identifier_at(mod_handle.name).as_str();
     let struct_defs = &module.struct_defs;
     let mut char_type_candidate = None;
+    // find structs that can potentially represent a characteristic type
     for def in struct_defs {
         let struct_handle = module.struct_handle_at(def.struct_handle);
         let struct_name = view.identifier_at(struct_handle.name).as_str();
-        if struct_name.to_ascii_uppercase() == struct_name
-            && mod_name.to_ascii_uppercase() == struct_name
-        {
+        if mod_name.to_ascii_uppercase() == struct_name {
             verify_char_type(module, struct_name, struct_handle, def)
                 .map_err(verification_failure)?;
             // if we reached this point, it means we have a legitimate characteristic type candidate
@@ -98,7 +101,7 @@ fn verify_char_type(
     struct_def: &StructDefinition,
 ) -> Result<(), String> {
     // must have only one ability: drop
-    let drop_set = AbilitySet::from_u8(Ability::Drop as u8).unwrap();
+    let drop_set = AbilitySet::EMPTY | Ability::Drop;
     let abilities = struct_handle.abilities;
     if !(abilities.has_drop() && (abilities.union(drop_set)) == drop_set) {
         return Err(format!(
@@ -117,9 +120,7 @@ fn verify_char_type(
 
     // unwrap below is safe as it will always be successful if declared_field_count call above is
     // successful
-    if field_count != 1
-        || struct_def.field(0).unwrap().signature != TypeSignature(SignatureToken::Bool)
-    {
+    if field_count != 1 || struct_def.field(0).unwrap().signature.0 != SignatureToken::Bool {
         return Err(format!(
             "characteristic type candidate {}::{} must have a single bool field only (or no fields)",
             module.self_id(),
@@ -203,25 +204,28 @@ fn verify_no_instantiations(
     struct_def: &StructDefinition,
 ) -> Result<(), String> {
     let view = &BinaryIndexedView::Module(module);
-    if let Some(code) = &fn_def.code {
-        for bcode in &code.code {
-            if let Bytecode::Pack(struct_def_idx) = bcode {
-                // unwrap is safe below since we know we are getting a struct out of a module (see
-                // definition of struct_def_at)
-                if view.struct_def_at(*struct_def_idx).unwrap() == struct_def {
-                    let fn_handle = module.function_handle_at(fn_def.function);
-                    let fn_name = module.identifier_at(fn_handle.name);
-                    return Err(format!(
+    if fn_def.code.is_none() {
+        return Ok(());
+    }
+    for bcode in &fn_def.code.as_ref().unwrap().code {
+        let struct_def_idx = match bcode {
+            Bytecode::Pack(idx) => idx,
+            _ => continue,
+        };
+        // unwrap is safe below since we know we are getting a struct out of a module (see
+        // definition of struct_def_at)
+        if view.struct_def_at(*struct_def_idx).unwrap() == struct_def {
+            let fn_handle = module.function_handle_at(fn_def.function);
+            let fn_name = module.identifier_at(fn_handle.name);
+            return Err(format!(
                         "characteristic type {}::{} is instantiated in the {}::{} function and must never be",
                         module.self_id(),
                         struct_name,
                         module.self_id(),
                         fn_name,
                     ));
-                }
-            }
         }
-    };
+    }
 
     Ok(())
 }
