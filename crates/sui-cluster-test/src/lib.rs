@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::faucet::{FaucetClient, FaucetClientFactory};
 use async_trait::async_trait;
 use clap::*;
 use cluster::{Cluster, ClusterFactory};
@@ -7,13 +8,15 @@ use config::ClusterTestOpt;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_core::gateway_state::GatewayClient;
-
-use crate::faucet::{FaucetClient, FaucetClientFactory};
 use sui_json_rpc_types::TransactionResponse;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::SuiAddress,
     messages::{Transaction, TransactionData},
+};
+use test_case::{
+    call_contract_test::CallContractTest, coin_merge_split_test::CoinMergeSplitTest,
+    native_transfer_test::NativeTransferTest, shared_object_test::SharedCounterTest,
 };
 use tokio::time::{sleep, Duration};
 use tracing::{error, info};
@@ -132,4 +135,36 @@ pub trait TestCaseImpl {
     fn name(&self) -> &'static str;
     fn description(&self) -> &'static str;
     async fn run(&self, ctx: &mut TestContext) -> Result<(), anyhow::Error>;
+}
+
+pub struct ClusterTest;
+
+impl ClusterTest {
+    pub async fn run(options: ClusterTestOpt) {
+        let mut ctx = TestContext::setup(options)
+            .await
+            .unwrap_or_else(|e| panic!("Failed to set up TestContext, e: {e}"));
+
+        // TODO: collect tests from each test_case file instead.
+        let tests = vec![
+            TestCase::new(NativeTransferTest {}),
+            TestCase::new(CoinMergeSplitTest {}),
+            TestCase::new(CallContractTest {}),
+            TestCase::new(SharedCounterTest {}),
+        ];
+
+        // TODO: improve the runner parallelism for efficiency
+        // For now we run tests serially
+        let mut success_cnt = 0;
+        let total_cnt = tests.len() as i32;
+        for t in tests {
+            let is_sucess = t.run(&mut ctx).await as i32;
+            success_cnt += is_sucess;
+        }
+        if success_cnt < total_cnt {
+            // If any test failed, panic to bubble up the signal
+            panic!("{success_cnt} of {total_cnt} tests passed.");
+        }
+        info!("{success_cnt} of {total_cnt} tests passed.");
+    }
 }
