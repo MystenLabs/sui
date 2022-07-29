@@ -47,8 +47,9 @@
 }
 
 .itemviewcontentvalue {
-    @apply text-sm pt-2 pb-2 text-gray-800 contents md:block;
+    @apply text-sm pt-2 pb-2 text-gray-800 inline-flex content-center items-baseline md:block;
 
+    line-break: anywhere;
     box-sizing: border-box;
 }
 
