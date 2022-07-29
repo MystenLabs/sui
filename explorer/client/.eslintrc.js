@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module.exports = {
+    plugins: ['header'],
     extends: ['react-app', 'react-app/jest', 'prettier'],
     rules: {
         'react/jsx-no-bind': ['error'],
@@ -34,5 +35,13 @@ module.exports = {
             },
         ],
         'react/jsx-key': ['error', {}],
+        'header/header': [
+            2,
+            'line',
+            [
+                ' Copyright (c) 2022, Mysten Labs, Inc.',
+                ' SPDX-License-Identifier: Apache-2.0',
+            ],
+        ],
     },
 };
