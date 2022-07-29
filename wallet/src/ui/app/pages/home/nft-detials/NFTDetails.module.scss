@@ -94,3 +94,25 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
 }
+
+.angled-arrow {
+    transform: rotate(-45deg);
+    color: #9c9fa4;
+    font-weight: 300;
+    margin: 0;
+    margin-right: 10px;
+}
+
+.external-link {
+    font-weight: 600;
+    font-size: 14px;
+    padding: 12px 20px;
+    border-radius: 10px;
+
+    text-decoration: none;
+    display: flex;
+    flex-flow: row nowrap;
+    max-width: 100%;
+    align-items: center;
+    justify-content: center;
+}
