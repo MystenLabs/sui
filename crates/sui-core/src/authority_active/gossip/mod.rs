@@ -330,6 +330,11 @@ where
         let aggregator = follower.aggregator.clone();
         let name = follower.peer_name;
         Ok(Box::pin(async move {
+            state
+                .database
+                .tables
+                .tally_record
+                .add_record(digest, name)?;
             if !state.database.effects_exists(&digest.transaction)? {
                 // Download the certificate
                 let response = client

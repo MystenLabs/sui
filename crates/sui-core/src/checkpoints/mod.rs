@@ -359,7 +359,7 @@ impl CheckpointStore {
         candidate_contents: &CheckpointContents,
         previous_digest: Option<CheckpointDigest>,
         effects_store: impl CausalOrder + PendCertificateForExecution,
-    ) -> SuiResult {
+    ) -> SuiResult<CheckpointContents> {
         // The checkpoint content is constructed using all fragments received.
         // When receiving the fragments, we have verified that all certs are valid.
         // However, we did not verify that all transactions have not been checkpointed.
@@ -392,7 +392,8 @@ impl CheckpointStore {
         let checkpoint = AuthenticatedCheckpoint::Signed(
             SignedCheckpointSummary::new_from_summary(summary, self.name, &*self.secret),
         );
-        self.handle_internal_set_checkpoint(&checkpoint, &ordered_contents, effects_store)
+        self.handle_internal_set_checkpoint(&checkpoint, &ordered_contents, effects_store)?;
+        Ok(ordered_contents)
     }
 
     /// Call this function internally to update the latest checkpoint.
@@ -612,7 +613,7 @@ impl CheckpointStore {
         &mut self,
         effects_store: impl CausalOrder + PendCertificateForExecution,
         committee: &Committee,
-    ) -> SuiResult {
+    ) -> SuiResult<CheckpointContents> {
         // We have a proposal so lets try to re-construct the checkpoint.
         let next_sequence_number = self.next_checkpoint();
         let locals = self.get_locals();

@@ -110,6 +110,8 @@ impl ToFromBytes for AuthorityPublicKeyBytes {
 }
 
 impl AuthorityPublicKeyBytes {
+    pub const ZERO: Self = Self([0u8; AuthorityPublicKey::LENGTH]);
+
     /// This ensures it's impossible to construct an instance with other than registered lengths
     pub fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
 where {

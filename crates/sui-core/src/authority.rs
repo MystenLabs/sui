@@ -78,6 +78,8 @@ pub use sui_adapter::temporary_store::TemporaryStore;
 
 pub mod authority_store_tables;
 
+pub mod tally_rule;
+
 mod authority_store;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,

@@ -5,6 +5,7 @@ use super::{
     authority_store::{AuthenticatedEpoch, InternalSequenceNumber, ObjectKey},
     *,
 };
+use crate::authority::tally_rule::TallyRecord;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -111,6 +112,8 @@ pub struct StoreTables<S> {
     /// Map from each epoch ID to the epoch information. The epoch is either signed by this node,
     /// or is certified (signed by a quorum).
     pub(crate) epochs: DBMap<EpochId, AuthenticatedEpoch>,
+
+    pub(crate) tally_record: TallyRecord,
 }
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> StoreTables<S> {
     /// If with_secondary_path is set, the DB is opened in read only mode with the path specified
@@ -124,7 +127,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> StoreTables<S> {
         let db = {
             let path = &path;
             let db_options = Some(options.clone());
-            let opt_cfs: &[(&str, &rocksdb::Options)] = &[
+            let mut opt_cfs = vec![
                 (OBJECTS_TABLE_NAME, &point_lookup),
                 (TX_TABLE_NAME, &point_lookup),
                 (OWNER_INDEX_TABLE_NAME, &options),
@@ -140,10 +143,11 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> StoreTables<S> {
                 (LAST_CONSENSUS_TABLE_NAME, &options),
                 (EPOCH_TABLE_NAME, &point_lookup),
             ];
+            opt_cfs.extend(TallyRecord::get_tables_options(&options, &point_lookup));
             if let Some(p) = with_secondary_path {
-                typed_store::rocks::open_cf_opts_secondary(path, Some(&p), db_options, opt_cfs)
+                typed_store::rocks::open_cf_opts_secondary(path, Some(&p), db_options, &opt_cfs)
             } else {
-                typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
+                typed_store::rocks::open_cf_opts(path, db_options, &opt_cfs)
             }
         }
         .expect("Cannot open DB.");
@@ -197,6 +201,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> StoreTables<S> {
             batches,
             last_consensus_index,
             epochs,
+            tally_record: TallyRecord::new(&db),
         }
     }
 
@@ -328,6 +333,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> StoreTables<S> {
                     .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
                     .collect::<BTreeMap<_, _>>()
             }
+
+            _ if TallyRecord::is_table(table_name) => self.tally_record.dump(table_name)?,
+
             _ => anyhow::bail!("No such table name: {}", table_name),
         })
     }

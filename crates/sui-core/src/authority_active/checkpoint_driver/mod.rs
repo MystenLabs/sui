@@ -787,11 +787,22 @@ where
                         tokio::time::sleep(fragments_num * consensus_delay_estimate).await;
                         continue;
                     }
-                    Ok(()) => {
+                    Ok(contents) => {
                         // A new checkpoint has been made.
                         metrics
                             .checkpoint_num_fragments_sent
                             .observe(fragments_num as f64);
+                        if let Err(err) = active_authority
+                            .state
+                            .database
+                            .tables
+                            .tally_record
+                            .update_score(contents.iter())
+                        {
+                            // Failure in updating the tally score should not block checkpoint
+                            // process.
+                            error!("Failed to update tally score: {:?}", err);
+                        }
                         return true;
                     }
                 }
