@@ -11,7 +11,7 @@
 }
 
 .eventtitle {
-    @apply pl-2;
+    @apply pl-2 text-gray-600;
 }
 
 .eventtitle:hover {
