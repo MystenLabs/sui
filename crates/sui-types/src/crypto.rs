@@ -301,7 +301,7 @@ impl AsRef<[u8]> for Signature {
 
 impl signature::Signature for Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        match bytes.get(0).ok_or_else(signature::Error::new)? {
+        match bytes.first().ok_or_else(signature::Error::new)? {
             x if x == &Ed25519SuiSignature::FLAG => {
                 Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)
                     .map_err(|_| signature::Error::new())?
