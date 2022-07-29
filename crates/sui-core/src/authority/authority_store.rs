@@ -16,12 +16,12 @@ use sui_storage::{
     write_ahead_log::{DBWriteAheadLog, WriteAheadLog},
     LockService,
 };
-use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::messages::AuthenticatedEpoch;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::{Owner, OBJECT_START_VERSION};
+use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, trace};
@@ -585,9 +585,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ///
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes locks, objects, certificates, parents atomically.
-    pub async fn update_state<BackingPackageStore>(
+    pub async fn update_state(
         &self,
-        temporary_store: TemporaryStore<BackingPackageStore>,
+        inner_temporary_store: InnerTemporaryStore,
         certificate: &CertifiedTransaction,
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
@@ -606,7 +606,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         self.sequence_tx(
             write_batch,
-            temporary_store,
+            inner_temporary_store,
             transaction_digest,
             proposed_seq,
             effects,
@@ -621,16 +621,16 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Persist temporary storage to DB for genesis modules
-    pub async fn update_objects_state_for_genesis<BackingPackageStore>(
+    pub async fn update_objects_state_for_genesis(
         &self,
-        temporary_store: TemporaryStore<BackingPackageStore>,
+        inner_temporary_store: InnerTemporaryStore,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.tables.certificates.batch();
         self.batch_update_objects(
             write_batch,
-            temporary_store,
+            inner_temporary_store,
             transaction_digest,
             UpdateType::Genesis,
         )
@@ -671,9 +671,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             std::iter::once((transaction_digest, &certificate)),
         )?;
 
+        let inner_temporary_store = temporary_store.into_inner();
         self.sequence_tx(
             write_batch,
-            temporary_store,
+            inner_temporary_store,
             transaction_digest,
             proposed_seq,
             &effects,
@@ -682,10 +683,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         .await
     }
 
-    async fn sequence_tx<BackingPackageStore>(
+    async fn sequence_tx(
         &self,
         write_batch: DBBatch,
-        temporary_store: TemporaryStore<BackingPackageStore>,
+        inner_temporary_store: InnerTemporaryStore,
         transaction_digest: &TransactionDigest,
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
@@ -695,7 +696,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let assigned_seq = self
             .batch_update_objects(
                 write_batch,
-                temporary_store,
+                inner_temporary_store,
                 *transaction_digest,
                 UpdateType::Transaction(proposed_seq, *effects_digest),
             )
@@ -731,14 +732,19 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Helper function for updating the objects in the state
-    async fn batch_update_objects<BackingPackageStore>(
+    async fn batch_update_objects(
         &self,
         mut write_batch: DBBatch,
-        temporary_store: TemporaryStore<BackingPackageStore>,
+        inner_temporary_store: InnerTemporaryStore,
         transaction_digest: TransactionDigest,
         update_type: UpdateType,
     ) -> SuiResult<Option<TxSequenceNumber>> {
-        let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
+        let InnerTemporaryStore {
+            objects,
+            mutable_inputs: active_inputs,
+            written,
+            deleted,
+        } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
 
@@ -1394,6 +1400,14 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
             );
         }
         Ok(package)
+    }
+}
+
+impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> ParentSync for SuiDataStore<S> {
+    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+        Ok(self
+            .get_latest_parent_entry(object_id)?
+            .map(|(obj_ref, _)| obj_ref))
     }
 }
 

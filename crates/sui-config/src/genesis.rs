@@ -14,7 +14,7 @@ use std::{fs, path::Path};
 use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
 use sui_adapter::in_memory_storage::InMemoryStorage;
-use sui_adapter::temporary_store::TemporaryStore;
+use sui_adapter::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes};
@@ -432,7 +432,7 @@ fn process_package(
 
     debug_assert!(ctx.digest() == TransactionDigest::genesis());
     let mut temporary_store =
-        TemporaryStore::new(&store, InputObjects::new(filtered), ctx.digest());
+        TemporaryStore::new(&*store, InputObjects::new(filtered), ctx.digest());
     let package_id = ObjectID::from(*modules[0].self_id().address());
     let natives = native_functions.clone();
     let mut gas_status = SuiGasStatus::new_unmetered();
@@ -451,7 +451,9 @@ fn process_package(
         &mut gas_status,
     )?;
 
-    let (_objects, _mutable_inputs, written, deleted, _events) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -466,7 +468,7 @@ pub fn generate_genesis_system_object(
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
     let mut temporary_store =
-        TemporaryStore::new(&store, InputObjects::new(vec![]), genesis_digest);
+        TemporaryStore::new(&*store, InputObjects::new(vec![]), genesis_digest);
 
     let mut pubkeys = Vec::new();
     let mut sui_addresses = Vec::new();
@@ -499,7 +501,9 @@ pub fn generate_genesis_system_object(
         genesis_ctx,
     )?;
 
-    let (_objects, _mutable_inputs, written, deleted, _events) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 

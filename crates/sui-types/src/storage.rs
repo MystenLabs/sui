@@ -4,7 +4,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    base_types::{ObjectID, SequenceNumber},
+    base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::SuiResult,
     event::Event,
     object::Object,
@@ -52,5 +52,33 @@ impl<S: BackingPackageStore> BackingPackageStore for std::sync::Arc<S> {
 impl<S: BackingPackageStore> BackingPackageStore for &S {
     fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
         BackingPackageStore::get_package(*self, package_id)
+    }
+}
+
+impl<S: BackingPackageStore> BackingPackageStore for &mut S {
+    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
+        BackingPackageStore::get_package(*self, package_id)
+    }
+}
+
+pub trait ParentSync {
+    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>>;
+}
+
+impl<S: ParentSync> ParentSync for std::sync::Arc<S> {
+    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+        ParentSync::get_latest_parent_entry_ref(self.as_ref(), object_id)
+    }
+}
+
+impl<S: ParentSync> ParentSync for &S {
+    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+        ParentSync::get_latest_parent_entry_ref(*self, object_id)
+    }
+}
+
+impl<S: ParentSync> ParentSync for &mut S {
+    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+        ParentSync::get_latest_parent_entry_ref(*self, object_id)
     }
 }

@@ -34,6 +34,7 @@ use std::{
     },
 };
 use sui_adapter::adapter;
+use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
@@ -583,7 +584,7 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (temporary_store, signed_effects) =
+        let (inner_temporary_store, signed_effects) =
             match self.prepare_certificate(certificate, digest).await {
                 Err(e) => {
                     debug!(name = ?self.name, ?digest, "Error preparing transaction: {}", e);
@@ -593,12 +594,12 @@ impl AuthorityState {
                 Ok(res) => res,
             };
 
-        let input_object_count = temporary_store.objects().len();
+        let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = signed_effects.effects.shared_objects.len();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        self.commit_certificate(temporary_store, certificate, &signed_effects)
+        self.commit_certificate(inner_temporary_store, certificate, &signed_effects)
             .await
             .tap_err(|e| error!(?digest, "commit_certificate failed: {}", e))?;
 
@@ -644,10 +645,7 @@ impl AuthorityState {
         &self,
         certificate: &CertifiedTransaction,
         transaction_digest: TransactionDigest,
-    ) -> SuiResult<(
-        TemporaryStore<Arc<AuthorityStore>>,
-        SignedTransactionEffects,
-    )> {
+    ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
         let (gas_status, input_objects) =
             transaction_input_checker::check_transaction_input(&self.database, certificate).await?;
 
@@ -670,24 +668,25 @@ impl AuthorityState {
         );
 
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let mut temporary_store =
+        let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let (effects, _execution_error) = execution_engine::execute_transaction_to_effects(
-            shared_object_refs,
-            &mut temporary_store,
-            certificate.data.clone(),
-            transaction_digest,
-            transaction_dependencies,
-            &self.move_vm,
-            &self._native_functions,
-            gas_status,
-            self.epoch(),
-        );
+        let (inner_temp_store, effects, _execution_error) =
+            execution_engine::execute_transaction_to_effects(
+                shared_object_refs,
+                temporary_store,
+                certificate.data.clone(),
+                transaction_digest,
+                transaction_dependencies,
+                &self.move_vm,
+                &self._native_functions,
+                gas_status,
+                self.epoch(),
+            );
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
         let signed_effects = effects.to_sign_effects(self.epoch(), &self.name, &*self.secret);
 
-        Ok((temporary_store, signed_effects))
+        Ok((inner_temp_store, signed_effects))
     }
 
     pub async fn check_tx_already_executed(
@@ -1411,7 +1410,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn commit_certificate(
         &self,
-        temporary_store: TemporaryStore<Arc<AuthorityStore>>,
+        inner_temporary_store: InnerTemporaryStore,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
@@ -1428,7 +1427,7 @@ impl AuthorityState {
         let effects_digest = &signed_effects.digest();
         self.database
             .update_state(
-                temporary_store,
+                inner_temporary_store,
                 certificate,
                 seq,
                 signed_effects,
