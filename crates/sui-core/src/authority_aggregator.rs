@@ -1182,24 +1182,11 @@ where
             .await
     }
 
-    /// Takes a transaction, brings all authorities up to date with the versions of the
-    /// objects needed, and then submits the transaction to make a certificate.
+    /// Submits the transaction to a quorum of validators to make a certificate.
     pub async fn process_transaction(
         &self,
         transaction: Transaction,
     ) -> Result<CertifiedTransaction, SuiError> {
-        // Find out which objects are required by this transaction and
-        // ensure they are synced on authorities.
-        let required_ids: Vec<ObjectID> = transaction
-            .data
-            .input_objects()?
-            .iter()
-            .map(|o| o.object_id())
-            .collect();
-
-        let (_active_objects, _deleted_objects) =
-            self.sync_all_given_objects(&required_ids).await?;
-
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
