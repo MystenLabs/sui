@@ -147,7 +147,7 @@ impl Cluster for LocalNewCluster {
         // Let the faucet account hold 1000 gas objects on genesis
         let genesis_config = GenesisConfig::custom_genesis(4, 1, 1000);
 
-        let mut test_network = start_rpc_test_network_with_fullnode(Some(genesis_config), 1, None)
+        let mut test_network = start_rpc_test_network_with_fullnode(Some(genesis_config), 1, None, None)
             .await
             .unwrap_or_else(|e| panic!("Failed to start a local network, e: {e}"));
 
