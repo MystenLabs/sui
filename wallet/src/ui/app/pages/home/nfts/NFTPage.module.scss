@@ -11,26 +11,18 @@
 
     .nft-gallery {
         display: grid;
-        grid-template-columns: 1fr 1fr 1fr;
-        grid-gap: 8px;
-        grid-template-rows: 96px;
+        grid-template-columns: 1fr 1fr;
+        grid-gap: 30px 10px;
 
-        img {
-            height: 96px;
+        a {
+            text-decoration: none;
+            text-transform: capitalize;
         }
     }
 }
 
-.title {
-    font-weight: 800;
-    font-size: 18px;
-    line-height: 18px;
-    color: #182435;
-
-    span {
-        color: #767a81;
-        font-size: 12px;
-    }
+.page-title {
+    justify-content: center;
 }
 
 .container {

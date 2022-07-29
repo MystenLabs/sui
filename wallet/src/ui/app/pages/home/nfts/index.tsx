@@ -6,21 +6,18 @@ import { Link } from 'react-router-dom';
 import { Content } from '_app/shared/bottom-menu-layout';
 import PageTitle from '_app/shared/page-title';
 import NFTdisplay from '_components/nft-display';
-import { useAppDispatch, useAppSelector } from '_hooks';
+import { useAppSelector } from '_hooks';
 import { accountNftsSelector } from '_redux/slices/account';
-import { setNavVisibility } from '_redux/slices/app';
 
 import st from './NFTPage.module.scss';
 
 function NftsPage() {
     const nfts = useAppSelector(accountNftsSelector);
-    //const dispatch = useAppDispatch();
-    // dispatch(setNavVisibility(false));
-    console.log(nfts);
+
     return (
         <div className={st.container}>
             <PageTitle
-                title="NFT Collectibles"
+                title="NFTs"
                 stats={`${nfts.length}`}
                 className={st.pageTitle}
             />
@@ -31,12 +28,12 @@ function NftsPage() {
                             .filter((nft) => hasPublicTransfer(nft))
                             .map((nft, index) => (
                                 <Link
-                                    to={`/send-nft?${new URLSearchParams(
-                                        nft.reference.objectId
-                                    ).toString()}`}
+                                    to={`/nft-details?${new URLSearchParams({
+                                        objectId: nft.reference.objectId,
+                                    }).toString()}`}
                                     key={index}
                                 >
-                                    <NFTdisplay nftobj={nft} />
+                                    <NFTdisplay nftobj={nft} showlabel={true} />
                                 </Link>
                             ))}
                     </section>

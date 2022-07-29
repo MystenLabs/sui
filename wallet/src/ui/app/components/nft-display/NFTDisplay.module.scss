@@ -1,12 +1,38 @@
 .nftimage {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     width: 100%;
-    max-height: 160px;
 
     img {
         width: 100%;
         object-fit: cover;
         border-radius: 6px;
         height: 100%;
+    }
+
+    .small {
+        height: 98px;
+        width: 98px;
+    }
+
+    .medium {
+        height: 150px;
+        width: 150px;
+    }
+
+    .large {
+        height: 180px;
+        width: 180px;
+    }
+
+    .nftfields {
+        line-height: 12px;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 13px;
+        padding-top: 5px;
+        color: #182435;
+        width: 100%;
     }
 }
