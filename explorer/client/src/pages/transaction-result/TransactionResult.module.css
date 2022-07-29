@@ -58,8 +58,6 @@
     @apply break-all font-mono text-sm text-sui-dark;
 }
 
-
-
 @media (min-width: 40em) {
     .itemviewcontent .itemviewcontentitem {
         grid-template-columns: 1fr 5fr;
