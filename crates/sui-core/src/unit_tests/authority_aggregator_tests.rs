@@ -696,52 +696,6 @@ async fn test_sync_all_owned_objects() {
     );
 }
 
-#[tokio::test]
-async fn test_process_transaction1() {
-    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
-    let gas_object1 = Object::with_owner_for_testing(addr1);
-    let gas_object2 = Object::with_owner_for_testing(addr1);
-    let (authorities, _) =
-        init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
-    let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
-
-    let framework_obj_ref = genesis::get_framework_object_ref();
-
-    // Make a schedule of transactions
-    let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let create1 =
-        crate_object_move_transaction(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
-
-    do_transaction(authority_clients[0], &create1).await;
-    do_transaction(authority_clients[1], &create1).await;
-    do_transaction(authority_clients[2], &create1).await;
-
-    // Get a cert
-    let cert1 = extract_cert(&authority_clients, &authorities.committee, create1.digest()).await;
-
-    // Submit the cert to 1 authority.
-    let new_ref_1 = do_cert(authority_clients[0], &cert1).await.created[0].0;
-
-    // Make a schedule of transactions
-    let gas_ref_set = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let create2 =
-        set_object_move_transaction(addr1, &key1, new_ref_1, 100, framework_obj_ref, gas_ref_set);
-
-    // Test 1: When we call process transaction on the second transaction, the process_transaction
-    // updates all authorities with latest objects, and then the transaction goes through
-    // on all of them. Note that one authority has processed cert 1, and none cert2,
-    // and auth 3 has no seen either.
-    authorities
-        .process_transaction(create2.clone())
-        .await
-        .unwrap();
-
-    // Check which authorities has successfully processed the cert.
-    // (NOTE: this method gets the TxInfoResponse from each authority, then reconstructs the cert)
-    let cert2 = extract_cert(&authority_clients, &authorities.committee, create2.digest()).await;
-    assert_eq!(3, cert2.auth_sign_info.len());
-}
-
 async fn get_owned_objects(
     authorities: &AuthorityAggregator<LocalAuthorityClient>,
     addr: SuiAddress,
