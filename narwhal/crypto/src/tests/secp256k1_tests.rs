@@ -148,9 +148,11 @@ fn verify_invalid_signature() {
     let message: &[u8] = b"Hello, world!";
     let digest = message.digest();
 
+    // Verify the signature against good digest passes.
     let signature = kp.sign(&digest.0);
+    assert!(kp.public().verify(&digest.0, &signature).is_ok());
 
-    // Verify the signature.
+    // Verify the signature against bad digest fails.
     let bad_message: &[u8] = b"Bad message!";
     let digest = bad_message.digest();
 
@@ -192,6 +194,20 @@ proptest::proptest! {
         let key_pair_copied_2 = key_pair.copy();
         let signature: Secp256k1Signature = key_pair.sign(message);
         assert!(key_pair.public().verify(message, &signature).is_ok());
+
+        // construct a signature with r, s, v where v is flipped from the original signature.
+        let bytes = ToFromBytes::as_bytes(&signature);
+        let mut flipped_bytes = [0u8; 65];
+        flipped_bytes[..64].copy_from_slice(&bytes[..64]);
+        if bytes[64] == 0 {
+            flipped_bytes[64] = 1;
+        } else {
+            flipped_bytes[64] = 0;
+        }
+        let malleated_signature: Secp256k1Signature = <Secp256k1Signature as signature::Signature>::from_bytes(&flipped_bytes).unwrap();
+
+        // malleated signature with opposite sign fails to verify
+        assert!(key_pair.public().verify(message, &malleated_signature).is_err());
 
         // use k256 to construct private key with the same bytes and signs the same message
         let priv_key_1 = k256::ecdsa::SigningKey::from_bytes(&r).unwrap();

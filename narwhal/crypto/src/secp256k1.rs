@@ -90,9 +90,12 @@ impl Verifier<Secp256k1Signature> for Secp256k1PublicKey {
         #[cfg(not(test))]
         let message = Message::from_hashed_data::<rust_secp256k1::hashes::sha256::Hash>(msg);
 
-        let vrfy = Secp256k1::verification_only();
-        vrfy.verify_ecdsa(&message, &signature.sig.to_standard(), &self.pubkey)
-            .map_err(|_e| signature::Error::new())
+        // If pubkey recovered from signature matches original pubkey, verifies signature.
+        // To ensure non-malleability, signature.verify_ecdsa() is not used since it will verify [r, s, v] and [r, s, -v].
+        match signature.sig.recover(&message) {
+            Ok(recovered_key) if self.as_bytes() == recovered_key.serialize().as_slice() => Ok(()),
+            _ => Err(signature::Error::new()),
+        }
     }
 }
 
@@ -376,6 +379,8 @@ impl Signer<Secp256k1Signature> for Secp256k1KeyPair {
         #[cfg(not(test))]
         let message = Message::from_hashed_data::<rust_secp256k1::hashes::sha256::Hash>(msg);
 
+        // Creates a 65-bytes sigature of shape [r, s, v] where v can be 0 or 1.
+        // Pseudo-random deterministic nonce generation is used according to RFC6979.
         Ok(Secp256k1Signature {
             sig: secp.sign_ecdsa_recoverable(&message, &self.secret.privkey),
             bytes: OnceCell::new(),
