@@ -7,14 +7,15 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::Object,
-    storage::{BackingPackageStore, DeleteKind},
+    storage::{BackingPackageStore, DeleteKind, ParentSync},
 };
 
 // TODO: We should use AuthorityTemporaryStore instead.
 // Keeping this functionally identical to AuthorityTemporaryStore is a pain.
-#[derive(Default, Debug)]
+#[derive(Debug, Default)]
 pub struct InMemoryStorage {
     persistent: BTreeMap<ObjectID, Object>,
+    last_entry_for_deleted: BTreeMap<ObjectID, ObjectRef>,
 }
 
 impl BackingPackageStore for InMemoryStorage {
@@ -23,9 +24,10 @@ impl BackingPackageStore for InMemoryStorage {
     }
 }
 
-impl BackingPackageStore for &mut InMemoryStorage {
-    fn get_package(&self, package_id: &ObjectID) -> SuiResult<Option<Object>> {
-        (**self).get_package(package_id)
+impl ParentSync for InMemoryStorage {
+    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+        debug_assert!(!self.persistent.contains_key(&object_id));
+        Ok(self.last_entry_for_deleted.get(&object_id).copied())
     }
 }
 
@@ -61,7 +63,10 @@ impl InMemoryStorage {
         for o in objects {
             persistent.insert(o.id(), o);
         }
-        Self { persistent }
+        Self {
+            persistent,
+            last_entry_for_deleted: BTreeMap::new(),
+        }
     }
 
     pub fn get_object(&self, id: &ObjectID) -> Option<&Object> {
@@ -77,7 +82,9 @@ impl InMemoryStorage {
     }
 
     pub fn insert_object(&mut self, object: Object) {
-        self.persistent.insert(object.id(), object);
+        let id = object.id();
+        self.last_entry_for_deleted.remove(&id);
+        self.persistent.insert(id, object);
     }
 
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
@@ -99,8 +106,9 @@ impl InMemoryStorage {
             self.insert_object(new_object);
         }
         for (id, _) in deleted {
-            let obj_opt = self.persistent.remove(&id);
-            assert!(obj_opt.is_some())
+            let obj = self.persistent.remove(&id).unwrap();
+            self.last_entry_for_deleted
+                .insert(id, obj.compute_object_reference());
         }
     }
 }
