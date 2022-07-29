@@ -5,7 +5,7 @@ use crate::metrics::WorkerMetrics;
 use config::{SharedCommittee, WorkerId};
 use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use network::WorkerNetwork;
+use network::{LuckyNetwork, UnreliableNetwork, WorkerNetwork};
 use primary::PrimaryWorkerMessage;
 use std::{
     collections::HashMap,

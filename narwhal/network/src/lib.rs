@@ -7,16 +7,19 @@
     rust_2018_idioms,
     rust_2021_compatibility
 )]
+#![allow(clippy::async_yields_async)]
 
 mod bounded_executor;
 mod primary;
 mod retry;
+mod traits;
 mod worker;
 
 pub use crate::{
     bounded_executor::BoundedExecutor,
     primary::{PrimaryNetwork, PrimaryToWorkerNetwork},
     retry::RetryConfig,
+    traits::{LuckyNetwork, ReliableNetwork, UnreliableNetwork},
     worker::{WorkerNetwork, WorkerToPrimaryNetwork},
 };
 

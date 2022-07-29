@@ -1,10 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
+    traits::{BaseNetwork, LuckyNetwork, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, MessageResult, RetryConfig, MAX_TASK_CONCURRENCY,
 };
+use async_trait::async_trait;
 use multiaddr::Multiaddr;
-use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
+use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
 use tokio::{runtime::Handle, task::JoinHandle};
 use tonic::transport::Channel;
@@ -44,7 +46,10 @@ impl Default for WorkerNetwork {
     }
 }
 
-impl WorkerNetwork {
+impl BaseNetwork for WorkerNetwork {
+    type Client = WorkerToWorkerClient<Channel>;
+    type Message = WorkerMessage;
+
     fn client(&mut self, address: Multiaddr) -> WorkerToWorkerClient<Channel> {
         self.clients
             .entry(address.clone())
@@ -60,17 +65,35 @@ impl WorkerNetwork {
         let channel = config.connect_lazy(&address).unwrap();
         WorkerToWorkerClient::new(channel)
     }
+}
 
-    pub async fn send(
+#[async_trait]
+impl UnreliableNetwork for WorkerNetwork {
+    async fn unreliable_send_message(
         &mut self,
         address: Multiaddr,
-        message: &WorkerMessage,
-    ) -> CancelOnDropHandler<MessageResult> {
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        self.send_message(address, message).await
+        message: BincodeEncodedPayload,
+    ) -> JoinHandle<()> {
+        let mut client = self.client(address.clone());
+        self.executors
+            .entry(address)
+            .or_insert_with(default_executor)
+            .spawn(async move {
+                let _ = client.send_message(message).await;
+            })
+            .await
     }
+}
 
+#[async_trait]
+impl LuckyNetwork for WorkerNetwork {
+    fn rng(&mut self) -> &mut SmallRng {
+        &mut self.rng
+    }
+}
+
+#[async_trait]
+impl ReliableNetwork for WorkerNetwork {
     // Safety
     // Since this spawns an unbounded task, this should be called in a time-restricted fashion.
     // Here the callers are [`WorkerNetwork::broadcast`] and [`WorkerNetwork::send`],
@@ -105,70 +128,6 @@ impl WorkerNetwork {
 
         CancelOnDropHandler(handle)
     }
-
-    pub async fn broadcast(
-        &mut self,
-        addresses: Vec<Multiaddr>,
-        message: &WorkerMessage,
-    ) -> Vec<CancelOnDropHandler<MessageResult>> {
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut handlers = Vec::new();
-        for address in addresses {
-            let handle = self.send_message(address, message.clone()).await;
-            handlers.push(handle);
-        }
-        handlers
-    }
-
-    pub async fn unreliable_send(
-        &mut self,
-        address: Multiaddr,
-        message: &WorkerMessage,
-    ) -> JoinHandle<()> {
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        self.unreliable_send_message(address, message).await
-    }
-
-    pub async fn unreliable_send_message<T: Into<BincodeEncodedPayload>>(
-        &mut self,
-        address: Multiaddr,
-        message: T,
-    ) -> JoinHandle<()> {
-        let message = message.into();
-        let mut client = self.client(address.clone());
-        self.executors
-            .entry(address)
-            .or_insert_with(default_executor)
-            .spawn(async move {
-                let _ = client.send_message(message).await;
-            })
-            .await
-    }
-
-    /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
-    /// message only to them. This is useful to pick nodes with whom to sync.
-    pub async fn lucky_broadcast(
-        &mut self,
-        mut addresses: Vec<Multiaddr>,
-        message: &WorkerMessage,
-        nodes: usize,
-    ) -> Vec<JoinHandle<()>> {
-        addresses.shuffle(&mut self.rng);
-        addresses.truncate(nodes);
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut handlers = Vec::new();
-        for address in addresses {
-            let handle = {
-                let message = message.clone();
-                self.unreliable_send_message(address, message).await
-            };
-            handlers.push(handle);
-        }
-        handlers
-    }
 }
 
 pub struct WorkerToPrimaryNetwork {
@@ -199,31 +158,41 @@ impl Default for WorkerToPrimaryNetwork {
     }
 }
 
-impl WorkerToPrimaryNetwork {
+impl BaseNetwork for WorkerToPrimaryNetwork {
+    type Client = WorkerToPrimaryClient<Channel>;
+    type Message = WorkerPrimaryMessage;
+
+    fn client(&mut self, address: Multiaddr) -> Self::Client {
+        match (self.address.as_ref(), self.client.as_ref()) {
+            (Some(addr), Some(client)) if *addr == address => client.clone(),
+            (_, _) => {
+                let client = Self::create_client(&self.config, address.clone());
+                self.client = Some(client.clone());
+                self.address = Some(address);
+                client
+            }
+        }
+    }
+
+    fn create_client(config: &mysten_network::config::Config, address: Multiaddr) -> Self::Client {
+        //TODO don't panic here if address isn't supported
+        let channel = config.connect_lazy(&address).unwrap();
+        WorkerToPrimaryClient::new(channel)
+    }
+}
+
+#[async_trait]
+impl ReliableNetwork for WorkerToPrimaryNetwork {
     // Safety
     // Since this spawns an unbounded task, this should be called in a time-restricted fashion.
     // Here the callers are [`WorkerToPrimaryNetwork::send`].
     // See the TODO on spawn_with_retries for lifting this restriction.
-    pub async fn send(
+    async fn send_message(
         &mut self,
         address: Multiaddr,
-        message: &WorkerPrimaryMessage,
+        message: BincodeEncodedPayload,
     ) -> CancelOnDropHandler<MessageResult> {
-        let new_client = match &self.address {
-            None => true,
-            Some(x) if x != &address => true,
-            _ => false,
-        };
-        if new_client {
-            let channel = self.config.connect_lazy(&address).unwrap();
-            self.client = Some(WorkerToPrimaryClient::new(channel));
-            self.address = Some(address);
-        }
-
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let client = self.client.as_mut().unwrap().clone();
-
+        let client = self.client(address);
         let message_send = move || {
             let mut client = client.clone();
             let message = message.clone();

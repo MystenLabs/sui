@@ -6,7 +6,7 @@ use config::{Committee, Parameters};
 use crypto::{traits::KeyPair as _, KeyPair};
 use executor::{ExecutionState, ExecutorOutput};
 use futures::future::join_all;
-use network::{PrimaryToWorkerNetwork, WorkerToPrimaryNetwork};
+use network::{PrimaryToWorkerNetwork, ReliableNetwork, UnreliableNetwork, WorkerToPrimaryNetwork};
 use prometheus::Registry;
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::{Receiver, Sender};

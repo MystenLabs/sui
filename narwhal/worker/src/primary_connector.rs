@@ -4,7 +4,7 @@
 use config::Committee;
 use crypto::PublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
-use network::WorkerToPrimaryNetwork;
+use network::{ReliableNetwork, WorkerToPrimaryNetwork};
 use tokio::{
     sync::{mpsc::Receiver, watch},
     task::JoinHandle,

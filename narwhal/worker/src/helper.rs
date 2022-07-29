@@ -4,7 +4,7 @@
 use bytes::Bytes;
 use config::{Committee, WorkerId};
 use crypto::PublicKey;
-use network::WorkerNetwork;
+use network::{UnreliableNetwork, WorkerNetwork};
 use store::Store;
 use tokio::{
     sync::{
@@ -81,7 +81,7 @@ impl Helper {
                     for digest in digests {
                         match self.store.read(digest).await {
                             Ok(Some(data)) => {
-                                let _ = self.network.unreliable_send_message(address.clone(), Bytes::from(data)).await;
+                                let _ = self.network.unreliable_send_message(address.clone(), Bytes::from(data).into()).await;
                             }
                             Ok(None) => {
                                 trace!("No Batches found for requested digests {:?}", digest);

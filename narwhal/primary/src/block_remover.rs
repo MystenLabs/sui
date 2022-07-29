@@ -1,8 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-#![allow(dead_code)]
-#![allow(unused_variables)]
-
 use crate::{utils, PayloadToken};
 use config::{Committee, WorkerId};
 use consensus::dag::{Dag, ValidatorDagError};
@@ -13,7 +10,7 @@ use futures::{
     FutureExt,
 };
 use itertools::Either;
-use network::PrimaryToWorkerNetwork;
+use network::{PrimaryToWorkerNetwork, UnreliableNetwork};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use store::{rocks::TypedStoreError, Store};
 use tokio::{
@@ -330,7 +327,7 @@ impl BlockRemover {
                         if result.is_ok() {
                             self.cleanup_internal_state(certificates, batches_by_worker)
                                 .await
-                                .map_err(|err| ())
+                                .map_err(|_err| ())
                         } else {
                             Ok(())
                         }
@@ -468,12 +465,14 @@ impl BlockRemover {
                                 .clone()
                                 .into_iter()
                                 .zip(ids.clone())
-                                .filter(|(c, digest)| c.is_none())
+                                .filter(|(c, _digest)| c.is_none())
                                 .collect();
 
                         if !non_found_certificates.is_empty() {
-                            let c: Vec<CertificateDigest> =
-                                non_found_certificates.into_iter().map(|(c, d)| d).collect();
+                            let c: Vec<CertificateDigest> = non_found_certificates
+                                .into_iter()
+                                .map(|(_c, d)| d)
+                                .collect();
                             warn!("Some certificates are missing, will ignore them {:?}", c);
                         }
 

@@ -4,7 +4,7 @@
 use crate::primary::PrimaryWorkerMessage;
 use config::SharedCommittee;
 use crypto::PublicKey;
-use network::PrimaryToWorkerNetwork;
+use network::{PrimaryToWorkerNetwork, UnreliableNetwork};
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc,

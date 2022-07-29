@@ -4,7 +4,7 @@
 use config::{Committee, Stake, WorkerId};
 use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use network::{CancelOnDropHandler, MessageResult, WorkerNetwork};
+use network::{CancelOnDropHandler, MessageResult, ReliableNetwork, WorkerNetwork};
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},

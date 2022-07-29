@@ -4,7 +4,7 @@
 use crate::{primary::PrimaryMessage, PayloadToken};
 use config::{Committee, WorkerId};
 use crypto::{traits::EncodeDecodeBase64, PublicKey};
-use network::PrimaryNetwork;
+use network::{PrimaryNetwork, UnreliableNetwork};
 use store::{Store, StoreError};
 use thiserror::Error;
 use tokio::{

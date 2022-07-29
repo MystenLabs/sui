@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
+    traits::{BaseNetwork, LuckyNetwork, ReliableNetwork, UnreliableNetwork},
     BoundedExecutor, CancelOnDropHandler, MessageResult, RetryConfig, MAX_TASK_CONCURRENCY,
 };
+use async_trait::async_trait;
 use multiaddr::Multiaddr;
-use rand::{prelude::SliceRandom as _, rngs::SmallRng, SeedableRng as _};
+use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
 use tokio::{runtime::Handle, task::JoinHandle};
 use tonic::transport::Channel;
@@ -46,33 +48,52 @@ impl Default for PrimaryNetwork {
     }
 }
 
-impl PrimaryNetwork {
-    fn client(&mut self, address: Multiaddr) -> PrimaryToPrimaryClient<Channel> {
+impl BaseNetwork for PrimaryNetwork {
+    type Client = PrimaryToPrimaryClient<Channel>;
+
+    type Message = PrimaryMessage;
+
+    fn client(&mut self, address: Multiaddr) -> Self::Client {
         self.clients
             .entry(address.clone())
             .or_insert_with(|| Self::create_client(&self.config, address))
             .clone()
     }
 
-    fn create_client(
-        config: &mysten_network::config::Config,
-        address: Multiaddr,
-    ) -> PrimaryToPrimaryClient<Channel> {
+    fn create_client(config: &mysten_network::config::Config, address: Multiaddr) -> Self::Client {
         //TODO don't panic here if address isn't supported
         let channel = config.connect_lazy(&address).unwrap();
         PrimaryToPrimaryClient::new(channel)
     }
+}
 
-    pub async fn send(
+#[async_trait]
+impl UnreliableNetwork for PrimaryNetwork {
+    async fn unreliable_send_message(
         &mut self,
         address: Multiaddr,
-        message: &PrimaryMessage,
-    ) -> CancelOnDropHandler<MessageResult> {
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        self.send_message(address, message).await
+        message: BincodeEncodedPayload,
+    ) -> JoinHandle<()> {
+        let mut client = self.client(address.clone());
+        self.executors
+            .entry(address)
+            .or_insert_with(default_executor)
+            .spawn(async move {
+                let _ = client.send_message(message).await;
+            })
+            .await
     }
+}
 
+#[async_trait]
+impl LuckyNetwork for PrimaryNetwork {
+    fn rng(&mut self) -> &mut SmallRng {
+        &mut self.rng
+    }
+}
+
+#[async_trait]
+impl ReliableNetwork for PrimaryNetwork {
     // Safety
     // Since this spawns an unbounded task, this should be called in a time-restricted fashion.
     // Here the callers are [`PrimaryNetwork::broadcast`] and [`PrimaryNetwork::send`],
@@ -107,97 +128,7 @@ impl PrimaryNetwork {
 
         CancelOnDropHandler(handle)
     }
-
-    pub async fn broadcast(
-        &mut self,
-        addresses: Vec<Multiaddr>,
-        message: &PrimaryMessage,
-    ) -> Vec<CancelOnDropHandler<MessageResult>> {
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut handlers = Vec::new();
-        for address in addresses {
-            let handle = self.send_message(address, message.clone()).await;
-            handlers.push(handle);
-        }
-        handlers
-    }
-
-    pub async fn unreliable_send(
-        &mut self,
-        address: Multiaddr,
-        message: &PrimaryMessage,
-    ) -> JoinHandle<()> {
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut client = self.client(address.clone());
-        self.executors
-            .entry(address)
-            .or_insert_with(default_executor)
-            .spawn(async move {
-                let _ = client.send_message(message).await;
-            })
-            .await
-    }
-
-    /// Broadcasts a message to all `addresses` passed as an argument.
-    /// The attempts to send individual messages are best effort and will not be retried.
-    pub async fn unreliable_broadcast(
-        &mut self,
-        addresses: Vec<Multiaddr>,
-        message: &PrimaryMessage,
-    ) -> Vec<JoinHandle<()>> {
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut handlers = Vec::new();
-        for address in addresses {
-            let handle = {
-                let mut client = self.client(address.clone());
-                let message = message.clone();
-                self.executors
-                    .entry(address)
-                    .or_insert_with(default_executor)
-                    .spawn(async move {
-                        let _ = client.send_message(message).await;
-                    })
-                    .await
-            };
-            handlers.push(handle);
-        }
-        handlers
-    }
-
-    /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
-    /// message only to them. This is useful to pick nodes with whom to sync.
-    pub async fn lucky_broadcast(
-        &mut self,
-        mut addresses: Vec<Multiaddr>,
-        message: &PrimaryMessage,
-        nodes: usize,
-    ) -> Vec<JoinHandle<()>> {
-        addresses.shuffle(&mut self.rng);
-        addresses.truncate(nodes);
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut handlers = Vec::new();
-        for address in addresses {
-            let handle = {
-                let mut client = self.client(address.clone());
-                let message = message.clone();
-                self.executors
-                    .entry(address)
-                    .or_insert_with(default_executor)
-                    .spawn(async move {
-                        let _ = client.send_message(message).await;
-                    })
-                    .await
-            };
-            handlers.push(handle);
-        }
-        handlers
-    }
 }
-
 pub struct PrimaryToWorkerNetwork {
     clients: HashMap<Multiaddr, PrimaryToWorkerClient<Channel>>,
     config: mysten_network::config::Config,
@@ -214,7 +145,10 @@ impl Default for PrimaryToWorkerNetwork {
     }
 }
 
-impl PrimaryToWorkerNetwork {
+impl BaseNetwork for PrimaryToWorkerNetwork {
+    type Client = PrimaryToWorkerClient<Channel>;
+    type Message = PrimaryWorkerMessage;
+
     fn client(&mut self, address: Multiaddr) -> PrimaryToWorkerClient<Channel> {
         self.clients
             .entry(address.clone())
@@ -230,46 +164,20 @@ impl PrimaryToWorkerNetwork {
         let channel = config.connect_lazy(&address).unwrap();
         PrimaryToWorkerClient::new(channel)
     }
+}
 
-    /// Sends a message to an `address` passed as an argument.
-    /// The attempt to send a message is best effort and will not be retried.
-    pub async fn unreliable_send(
+#[async_trait]
+impl UnreliableNetwork for PrimaryToWorkerNetwork {
+    async fn unreliable_send_message(
         &mut self,
         address: Multiaddr,
-        message: &PrimaryWorkerMessage,
+        message: BincodeEncodedPayload,
     ) -> JoinHandle<()> {
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut client = self.client(address);
+        let mut client = self.client(address.clone());
         self.executor
             .spawn(async move {
                 let _ = client.send_message(message).await;
             })
             .await
-    }
-
-    /// Broadcasts a message to all `addresses` passed as an argument.
-    /// The attempts to send individual messages are best effort and will not be retried.
-    pub async fn unreliable_broadcast(
-        &mut self,
-        addresses: Vec<Multiaddr>,
-        message: &PrimaryWorkerMessage,
-    ) -> Vec<JoinHandle<()>> {
-        let message =
-            BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut handlers = Vec::new();
-        for address in addresses {
-            let handle = {
-                let mut client = self.client(address);
-                let message = message.clone();
-                self.executor
-                    .spawn(async move {
-                        let _ = client.send_message(message).await;
-                    })
-                    .await
-            };
-            handlers.push(handle);
-        }
-        handlers
     }
 }

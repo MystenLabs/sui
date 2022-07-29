@@ -11,7 +11,7 @@ use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
-use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
+use network::{LuckyNetwork, PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNetwork};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::HashMap,
