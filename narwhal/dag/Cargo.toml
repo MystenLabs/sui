@@ -16,6 +16,7 @@ thiserror = "1.0.31"
 arc-swap = "1.5.0"
 once_cell = "1.13.0"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+rayon = "1.5.3"
 
 [dev-dependencies]
 hex = "0.4.3"
