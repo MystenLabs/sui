@@ -36,9 +36,9 @@ use std::{
     path::Path,
     sync::Arc,
 };
-use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::TemporaryStore;
 use sui_adapter::{adapter::new_move_vm, genesis};
+use sui_adapter::{in_memory_storage::InMemoryStorage, temporary_store::InnerTemporaryStore};
 use sui_core::execution_engine;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
@@ -376,8 +376,10 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         let move_struct =
                             MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
                         self.stabilize_str(format!(
-                            "Owner: {}\nContents: {}",
-                            &obj.owner, move_struct
+                            "Owner: {}\nVersion: {}\nContents: {}",
+                            &obj.owner,
+                            obj.version().value(),
+                            move_struct
                         ))
                     }
                     object::Data::Package(package) => {
@@ -473,9 +475,10 @@ impl<'a> SuiTestAdapter<'a> {
         let input_objects = InputObjects::new(objects_by_kind);
         let transaction_dependencies = input_objects.transaction_dependencies();
         let shared_object_refs: Vec<_> = input_objects.filter_shared_objects();
-        let mut temporary_store =
+        let temporary_store =
             TemporaryStore::new(self.storage.clone(), input_objects, transaction_digest);
         let (
+            inner,
             TransactionEffects {
                 status,
                 events,
@@ -492,7 +495,7 @@ impl<'a> SuiTestAdapter<'a> {
             execution_error,
         ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
-            &mut temporary_store,
+            temporary_store,
             transaction.data,
             transaction_digest,
             transaction_dependencies,
@@ -502,7 +505,9 @@ impl<'a> SuiTestAdapter<'a> {
             // TODO: Support different epochs in transactional tests.
             0,
         );
-        let (_objects, _active_inputs, written, deleted, _events) = temporary_store.into_inner();
+        let InnerTemporaryStore {
+            written, deleted, ..
+        } = inner;
         let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
         let mut created_ids: Vec<_> = created_set.iter().copied().collect();
         let mut written_ids: Vec<_> = written

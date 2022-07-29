@@ -14,7 +14,7 @@ use std::{fs, path::Path};
 use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
 use sui_adapter::in_memory_storage::InMemoryStorage;
-use sui_adapter::temporary_store::TemporaryStore;
+use sui_adapter::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
 use sui_types::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes};
@@ -451,7 +451,9 @@ fn process_package(
         &mut gas_status,
     )?;
 
-    let (_objects, _mutable_inputs, written, deleted, _events) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -499,7 +501,9 @@ pub fn generate_genesis_system_object(
         genesis_ctx,
     )?;
 
-    let (_objects, _mutable_inputs, written, deleted, _events) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
