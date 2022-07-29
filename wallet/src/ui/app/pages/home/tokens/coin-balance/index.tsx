@@ -7,7 +7,7 @@ import { useIntl } from 'react-intl';
 import { Link } from 'react-router-dom';
 
 import { useMiddleEllipsis } from '_hooks';
-import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { Coin } from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
 import st from './CoinBalance.module.scss';
@@ -39,7 +39,9 @@ function CoinBalance({
         () => `/stake?${new URLSearchParams({ type }).toString()}`,
         [type]
     );
-    const showStake = !hideStake && GAS_TYPE_ARG === type;
+    // TODO: turn stake feature back on when fix is ready on next release.
+    // const showStake = !hideStake && GAS_TYPE_ARG === type;
+    const showStake = false;
     const shortenType = useMiddleEllipsis(type, 30);
     return (
         <div className={cl(st.container, st[mode])}>
