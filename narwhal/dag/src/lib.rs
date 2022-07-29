@@ -4,6 +4,7 @@
 use arc_swap::ArcSwap;
 use itertools::Itertools;
 use once_cell::sync::OnceCell;
+use rayon::prelude::*;
 use std::{
     ops::Deref,
     sync::{Arc, Weak},
@@ -243,29 +244,32 @@ impl<T: Sync + Send + std::fmt::Debug> Node<T> {
             return self.raw_parents_snapshot();
         }
 
-        // create set of initial compressible and incompressible nodes
-        let (mut compressible, mut incompressible): (Vec<NodeRef<T>>, Vec<NodeRef<T>>) = self
+        let mut res: Vec<NodeRef<T>> = Vec::new();
+        // Do the path compression.
+        let (compressibles, incompressibles): (Vec<NodeRef<T>>, Vec<NodeRef<T>>) = self
             .raw_parents_snapshot()
             .into_iter()
             .partition(|p| p.is_compressible());
 
-        while !compressible.is_empty() {
-            let curr = compressible.pop().unwrap();
-            let (curr_compressible, curr_incompressible): (Vec<NodeRef<T>>, Vec<NodeRef<T>>) = curr
-                .raw_parents_snapshot()
-                .into_iter()
-                .partition(|p| p.is_compressible());
-            compressible.extend(curr_compressible);
-            incompressible.extend(curr_incompressible);
-            // deduplicate
-            incompressible = incompressible
-                .into_iter()
-                .unique_by(|arc| Arc::as_ptr(arc))
-                .collect();
-        }
+        res.extend(incompressibles);
+        // First, compress the path from the parent to some incompressible nodes. After this step, the parents of the
+        // parent node should be incompressible.
+        let new_parents: Vec<_> = compressibles
+            .par_iter()
+            .flat_map_iter(|parent| {
+                // there are no cycles!
+                let these_new_parents: Vec<NodeRef<T>> = { parent.parents() };
 
-        // save compressed set
-        self.parents.store(Arc::new(incompressible));
+                // parent is compressed: it's now trivial
+                debug_assert!(parent.is_trivial(), "{:?} is not trivial!", parent);
+                // we report its parents to the final parents result, enacting the path compression
+                these_new_parents
+            })
+            .collect();
+        res.extend(new_parents);
+
+        let res: Vec<NodeRef<T>> = res.into_iter().unique_by(|arc| Arc::as_ptr(arc)).collect();
+        self.parents.store(Arc::new(res));
         debug_assert!(self.is_trivial());
         self.raw_parents_snapshot()
     }
