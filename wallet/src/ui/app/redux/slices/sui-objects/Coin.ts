@@ -76,6 +76,7 @@ export class Coin {
         amount: bigint,
         recipient: SuiAddress
     ): Promise<TransactionResponse> {
+        await signer.syncAccountState();
         const coin = await Coin.selectCoin(signer, coins, amount);
         return await signer.transferObject({
             objectId: coin,
@@ -98,6 +99,7 @@ export class Coin {
         amount: bigint,
         recipient: SuiAddress
     ): Promise<TransactionResponse> {
+        await signer.syncAccountState();
         const coin = await Coin.prepareCoinWithEnoughBalance(
             signer,
             coins,
@@ -127,6 +129,7 @@ export class Coin {
         validator: SuiAddress
     ): Promise<TransactionResponse> {
         const coin = await Coin.selectCoin(signer, coins, amount);
+        await signer.syncAccountState();
         return await signer.executeMoveCall({
             packageObjectId: '0x2',
             module: 'sui_system',
