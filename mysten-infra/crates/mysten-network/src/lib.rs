@@ -4,5 +4,5 @@ pub mod client;
 pub mod codec;
 pub mod config;
 pub mod metrics;
-mod multiaddr;
+pub mod multiaddr;
 pub mod server;
