@@ -22,7 +22,7 @@ async fn propose_empty() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the proposer.
-    Proposer::spawn(
+    let _proposer_handle = Proposer::spawn(
         name,
         committee(None),
         signature_service,
@@ -58,7 +58,7 @@ async fn propose_payload() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the proposer.
-    Proposer::spawn(
+    let _proposer_handle = Proposer::spawn(
         name.clone(),
         committee(None),
         signature_service,

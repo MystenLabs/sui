@@ -37,6 +37,7 @@ pub struct SubscriberHandler {
 
 impl SubscriberHandler {
     /// Spawn a new subscriber handler in a dedicated tokio task.
+    #[must_use]
     pub fn spawn(
         consensus_store: Arc<ConsensusStore>,
         certificate_store: CertificateStore,

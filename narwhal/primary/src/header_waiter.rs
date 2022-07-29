@@ -95,6 +95,7 @@ pub struct HeaderWaiter {
 }
 
 impl HeaderWaiter {
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         committee: Committee,

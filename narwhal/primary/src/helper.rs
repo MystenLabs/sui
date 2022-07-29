@@ -50,6 +50,7 @@ pub struct Helper {
 }
 
 impl Helper {
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         committee: Committee,

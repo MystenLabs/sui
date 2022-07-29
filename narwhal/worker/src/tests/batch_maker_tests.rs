@@ -14,7 +14,7 @@ async fn make_batch() {
     let (tx_message, mut rx_message) = channel(1);
 
     // Spawn a `BatchMaker` instance.
-    BatchMaker::spawn(
+    let _batch_maker_handle = BatchMaker::spawn(
         committee,
         /* max_batch_size */ 200,
         /* max_batch_delay */
@@ -44,7 +44,7 @@ async fn batch_timeout() {
     let (tx_message, mut rx_message) = channel(1);
 
     // Spawn a `BatchMaker` instance.
-    BatchMaker::spawn(
+    let _batch_maker_handle = BatchMaker::spawn(
         committee,
         /* max_batch_size */ 200,
         /* max_batch_delay */

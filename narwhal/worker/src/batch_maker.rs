@@ -39,6 +39,7 @@ pub struct BatchMaker {
 }
 
 impl BatchMaker {
+    #[must_use]
     pub fn spawn(
         committee: Committee,
         batch_size: usize,

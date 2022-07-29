@@ -37,6 +37,7 @@ pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static
 }
 
 impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<SynchronizerHandler> {
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         socket_address: Multiaddr,

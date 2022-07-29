@@ -249,6 +249,7 @@ pub struct BlockWaiter<SynchronizerHandler: Handler + Send + Sync + 'static> {
 impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<SynchronizerHandler> {
     // Create a new waiter and start listening on incoming
     // commands to fetch a block
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         committee: Committee,

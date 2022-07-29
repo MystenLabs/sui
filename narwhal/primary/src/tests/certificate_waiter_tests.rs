@@ -66,7 +66,7 @@ async fn process_certificate_missing_parents_in_reverse() {
     let gc_depth: Round = 50;
 
     // Make a headerWaiter
-    HeaderWaiter::spawn(
+    let _header_waiter_handle = HeaderWaiter::spawn(
         name.clone(),
         committee(None),
         certificates_store.clone(),
@@ -84,7 +84,7 @@ async fn process_certificate_missing_parents_in_reverse() {
     );
 
     // Make a certificate waiter
-    CertificateWaiter::spawn(
+    let _certificate_waiter_handle = CertificateWaiter::spawn(
         committee(None),
         certificates_store.clone(),
         consensus_round.clone(),
@@ -96,7 +96,7 @@ async fn process_certificate_missing_parents_in_reverse() {
     );
 
     // Spawn the core.
-    Core::spawn(
+    let _core_handle = Core::spawn(
         name.clone(),
         committee(None),
         header_store.clone(),
@@ -207,7 +207,7 @@ async fn process_certificate_check_gc_fires() {
     let gc_depth: Round = 50;
 
     // Make a headerWaiter
-    HeaderWaiter::spawn(
+    let _header_waiter_handle = HeaderWaiter::spawn(
         name.clone(),
         committee(None),
         certificates_store.clone(),
@@ -225,7 +225,7 @@ async fn process_certificate_check_gc_fires() {
     );
 
     // Make a certificate waiter
-    CertificateWaiter::spawn(
+    let _certficate_waiter_handle = CertificateWaiter::spawn(
         committee(None),
         certificates_store.clone(),
         consensus_round.clone(),
@@ -237,7 +237,7 @@ async fn process_certificate_check_gc_fires() {
     );
 
     // Spawn the core.
-    Core::spawn(
+    let _core_handle = Core::spawn(
         name.clone(),
         committee(None),
         header_store.clone(),

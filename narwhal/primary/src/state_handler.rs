@@ -36,6 +36,7 @@ pub struct StateHandler {
 }
 
 impl StateHandler {
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         committee: SharedCommittee,

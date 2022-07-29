@@ -25,6 +25,7 @@ pub mod processor_tests;
 pub struct Processor;
 
 impl Processor {
+    #[must_use]
     pub fn spawn(
         // Our worker's id.
         id: WorkerId,

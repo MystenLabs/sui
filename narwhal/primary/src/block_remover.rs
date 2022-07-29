@@ -225,6 +225,7 @@ pub struct BlockRemover {
 }
 
 impl BlockRemover {
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         committee: Committee,

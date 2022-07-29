@@ -33,6 +33,7 @@ pub fn create_db_stores() -> (
     )
 }
 
+#[must_use]
 pub fn worker_listener<T>(
     num_of_expected_responses: i32,
     address: multiaddr::Multiaddr,

@@ -40,6 +40,7 @@ pub struct BatchLoader {
 
 impl BatchLoader {
     /// Spawn a new batch loaded in a dedicated tokio task.
+    #[must_use]
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,

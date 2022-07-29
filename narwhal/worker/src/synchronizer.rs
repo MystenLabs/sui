@@ -70,6 +70,7 @@ pub struct Synchronizer {
 }
 
 impl Synchronizer {
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,

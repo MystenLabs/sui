@@ -57,6 +57,7 @@ where
     State::Error: Debug,
 {
     /// Spawn a new executor in a dedicated tokio task.
+    #[must_use]
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
         execution_state: Arc<State>,

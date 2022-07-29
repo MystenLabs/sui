@@ -83,7 +83,7 @@ async fn commit_one() {
     let gc_depth = 50;
     let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    Consensus::spawn(
+    let _consensus_handle = Consensus::spawn(
         committee,
         store,
         cert_store,
@@ -147,7 +147,7 @@ async fn dead_node() {
     let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-    Consensus::spawn(
+    let _consensus_handle = Consensus::spawn(
         committee,
         store,
         cert_store,
@@ -257,7 +257,7 @@ async fn not_enough_support() {
     let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-    Consensus::spawn(
+    let _consensus_handle = Consensus::spawn(
         committee,
         store,
         cert_store,
@@ -341,7 +341,7 @@ async fn missing_leader() {
     let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-    Consensus::spawn(
+    let _consensus_handle = Consensus::spawn(
         committee,
         store,
         cert_store,
@@ -401,7 +401,7 @@ async fn epoch_change() {
     let gc_depth = 50;
     let bullshark = Bullshark::new(committee.clone(), store.clone(), gc_depth);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-    Consensus::spawn(
+    let _consensus_handle = Consensus::spawn(
         committee.clone(),
         store,
         cert_store,

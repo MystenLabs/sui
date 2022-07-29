@@ -107,6 +107,7 @@ impl BoundedExecutor {
         }
     }
 
+    #[must_use]
     fn spawn_with_permit<F>(
         &self,
         f: F,
@@ -148,6 +149,7 @@ impl BoundedExecutor {
     /// TODO: this still spawns one task, unconditionally, per call.
     /// We would instead like to have one central task that drives all retries
     /// for the whole executor.
+    #[must_use]
     pub(crate) fn spawn_with_retries<F, Fut, T, E>(
         &self,
         retry_config: crate::RetryConfig,

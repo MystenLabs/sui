@@ -210,6 +210,7 @@ impl<Protocol> Consensus<Protocol>
 where
     Protocol: ConsensusProtocol + Send + 'static,
 {
+    #[must_use]
     pub fn spawn(
         committee: Committee,
         store: Arc<ConsensusStore>,

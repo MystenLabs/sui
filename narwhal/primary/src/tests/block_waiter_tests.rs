@@ -84,7 +84,7 @@ async fn test_successfully_retrieve_block() {
         .times(1)
         .return_const(vec![Ok(certificate)]);
 
-    BlockWaiter::spawn(
+    let _waiter_handler = BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
         rx_reconfigure,
@@ -250,7 +250,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         .times(1)
         .return_const(expected_result);
 
-    BlockWaiter::spawn(
+    let _waiter_handler = BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
         rx_reconfigure,
@@ -469,7 +469,7 @@ async fn test_batch_timeout() {
         .times(1)
         .return_const(vec![Ok(certificate)]);
 
-    BlockWaiter::spawn(
+    let _waiter_handle = BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
         rx_reconfigure,
@@ -531,7 +531,7 @@ async fn test_return_error_when_certificate_is_missing() {
         .times(1)
         .return_const(vec![Err(handler::Error::BlockDeliveryTimeout { block_id })]);
 
-    BlockWaiter::spawn(
+    let _waiter_handle = BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
         rx_reconfigure,
@@ -601,7 +601,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
         .times(1)
         .return_const(vec![]);
 
-    BlockWaiter::spawn(
+    let _waiter_handle = BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
         rx_reconfigure,
@@ -641,6 +641,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
 
 // worker_listener listens to TCP requests. The worker responds to the
 // RequestBatch requests for the provided expected_batches.
+#[must_use]
 pub fn worker_listener(
     address: multiaddr::Multiaddr,
     expected_batches: HashMap<BatchDigest, BatchMessage>,

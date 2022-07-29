@@ -29,6 +29,7 @@ pub struct PrimaryConnector {
 }
 
 impl PrimaryConnector {
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         committee: Committee,

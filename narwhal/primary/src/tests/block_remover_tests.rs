@@ -52,7 +52,7 @@ async fn test_successful_blocks_delete() {
     let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
-    BlockRemover::spawn(
+    let _remover_handler = BlockRemover::spawn(
         name.clone(),
         committee.clone(),
         certificate_store.clone(),
@@ -216,7 +216,7 @@ async fn test_timeout() {
     let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
-    BlockRemover::spawn(
+    let _remover_handler = BlockRemover::spawn(
         name.clone(),
         committee.clone(),
         certificate_store.clone(),
@@ -452,6 +452,7 @@ async fn test_unlocking_pending_requests() {
     assert!(remover.map_tx_removal_results.is_empty());
 }
 
+#[must_use]
 pub fn worker_listener(
     address: multiaddr::Multiaddr,
     expected_batch_ids: Vec<BatchDigest>,

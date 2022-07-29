@@ -31,7 +31,7 @@ async fn synchronize() {
     let metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
     // Spawn a `Synchronizer` instance.
-    Synchronizer::spawn(
+    let _synchronizer_handle = Synchronizer::spawn(
         name.clone(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
@@ -82,7 +82,7 @@ async fn test_successful_request_batch() {
     let metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
     // Spawn a `Synchronizer` instance.
-    Synchronizer::spawn(
+    let _synchronizer_handle = Synchronizer::spawn(
         name.clone(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
@@ -145,7 +145,7 @@ async fn test_request_batch_not_found() {
     let metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
     // Spawn a `Synchronizer` instance.
-    Synchronizer::spawn(
+    let _synchronizer_handle = Synchronizer::spawn(
         name.clone(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
@@ -207,7 +207,7 @@ async fn test_successful_batch_delete() {
     let metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
     // Spawn a `Synchronizer` instance.
-    Synchronizer::spawn(
+    let _synchronizer_handle = Synchronizer::spawn(
         name.clone(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),

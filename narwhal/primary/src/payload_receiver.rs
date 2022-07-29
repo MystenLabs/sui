@@ -17,6 +17,7 @@ pub struct PayloadReceiver {
 }
 
 impl PayloadReceiver {
+    #[must_use]
     pub fn spawn(
         store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_workers: Receiver<(BatchDigest, WorkerId)>,

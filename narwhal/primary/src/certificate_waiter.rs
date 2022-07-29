@@ -63,6 +63,7 @@ pub struct CertificateWaiter {
 }
 
 impl CertificateWaiter {
+    #[must_use]
     pub fn spawn(
         committee: Committee,
         store: Store<CertificateDigest, Certificate>,

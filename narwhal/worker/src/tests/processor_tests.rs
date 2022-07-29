@@ -28,7 +28,7 @@ async fn hash_and_store() {
 
     // Spawn a new `Processor` instance.
     let id = 0;
-    Processor::spawn(
+    let _processor_handler = Processor::spawn(
         id,
         store.clone(),
         rx_reconfiguration,

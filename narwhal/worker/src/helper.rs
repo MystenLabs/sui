@@ -39,6 +39,7 @@ pub struct Helper {
 }
 
 impl Helper {
+    #[must_use]
     pub fn spawn(
         id: WorkerId,
         committee: Committee,

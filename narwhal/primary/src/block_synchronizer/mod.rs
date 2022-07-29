@@ -199,6 +199,7 @@ pub struct BlockSynchronizer {
 }
 
 impl BlockSynchronizer {
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         committee: Committee,

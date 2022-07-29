@@ -37,7 +37,7 @@ async fn worker_batch_reply() {
     store.write(batch_digest, serialized_batch.clone()).await;
 
     // Spawn an `Helper` instance.
-    Helper::spawn(
+    let _helper_handle = Helper::spawn(
         id,
         committee.clone(),
         store,
@@ -85,7 +85,7 @@ async fn client_batch_reply() {
     store.write(batch_digest, serialized_batch.clone()).await;
 
     // Spawn an `Helper` instance.
-    Helper::spawn(
+    let _helper_handler = Helper::spawn(
         id,
         committee.clone(),
         store,

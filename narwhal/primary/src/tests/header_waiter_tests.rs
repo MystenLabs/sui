@@ -31,7 +31,7 @@ async fn successfully_synchronize_batches() {
     let (tx_core, mut rx_core) = channel(10);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
-    HeaderWaiter::spawn(
+    let _header_waiter_handle = HeaderWaiter::spawn(
         name.clone(),
         committee.clone(),
         certificate_store,

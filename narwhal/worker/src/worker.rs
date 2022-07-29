@@ -343,6 +343,7 @@ impl TxReceiverHandler {
         }
     }
 
+    #[must_use]
     fn spawn(
         self,
         address: Multiaddr,
@@ -419,6 +420,7 @@ impl WorkerReceiverHandler {
         }
     }
 
+    #[must_use]
     fn spawn(
         self,
         address: Multiaddr,
@@ -525,6 +527,7 @@ impl PrimaryReceiverHandler {
         }
     }
 
+    #[must_use]
     fn spawn(
         self,
         address: Multiaddr,

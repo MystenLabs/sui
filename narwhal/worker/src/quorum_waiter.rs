@@ -40,6 +40,7 @@ pub struct QuorumWaiter {
 
 impl QuorumWaiter {
     /// Spawn a new QuorumWaiter.
+    #[must_use]
     pub fn spawn(
         name: PublicKey,
         id: WorkerId,

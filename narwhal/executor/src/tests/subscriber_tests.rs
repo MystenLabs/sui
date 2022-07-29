@@ -31,7 +31,7 @@ async fn spawn_consensus_and_subscriber(
     // Spawn a test subscriber.
     let store = test_store();
     let next_consensus_index = SequenceNumber::default();
-    Subscriber::spawn(
+    let _subsscriber_handle = Subscriber::spawn(
         store.clone(),
         rx_reconfigure,
         rx_consensus_to_client,
@@ -126,7 +126,7 @@ async fn synchronize() {
     // Spawn a subscriber.
     let store = test_store();
     let next_consensus_index = SequenceNumber::default();
-    Subscriber::spawn(
+    let _subscriber_handle = Subscriber::spawn(
         store.clone(),
         rx_reconfigure,
         rx_consensus_to_client,

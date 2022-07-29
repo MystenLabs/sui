@@ -49,6 +49,7 @@ pub struct Subscriber {
 
 impl Subscriber {
     /// Spawn a new subscriber in a new tokio task.
+    #[must_use]
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,

@@ -35,7 +35,7 @@ async fn test_process_certificates_stream_mode() {
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
-    Helper::spawn(
+    let _helper_handle = Helper::spawn(
         name.clone(),
         committee.clone(),
         certificate_store.clone(),
@@ -111,7 +111,7 @@ async fn test_process_certificates_batch_mode() {
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
-    Helper::spawn(
+    let _helper_handle = Helper::spawn(
         name.clone(),
         committee.clone(),
         certificate_store.clone(),
@@ -208,7 +208,7 @@ async fn test_process_payload_availability_success() {
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
-    Helper::spawn(
+    let _helper_handle = Helper::spawn(
         name.clone(),
         committee.clone(),
         certificate_store.clone(),
@@ -324,7 +324,7 @@ async fn test_process_payload_availability_when_failures() {
     let (tx_primaries, rx_primaries) = channel(10);
 
     // AND a helper
-    Helper::spawn(
+    let _helper_handle = Helper::spawn(
         name.clone(),
         committee.clone(),
         certificate_store.clone(),

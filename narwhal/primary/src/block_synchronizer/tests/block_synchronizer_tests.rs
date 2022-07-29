@@ -72,7 +72,7 @@ async fn test_successful_headers_synchronization() {
     }
 
     // AND create the synchronizer
-    BlockSynchronizer::spawn(
+    let _synchronizer_handle = BlockSynchronizer::spawn(
         name.clone(),
         committee.clone(),
         rx_reconfigure,
@@ -228,7 +228,7 @@ async fn test_successful_payload_synchronization() {
     }
 
     // AND create the synchronizer
-    BlockSynchronizer::spawn(
+    let _synchronizer_handle = BlockSynchronizer::spawn(
         name.clone(),
         committee.clone(),
         rx_reconfigure,
@@ -527,7 +527,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         .collect();
 
     // AND create the synchronizer
-    BlockSynchronizer::spawn(
+    let _synchronizer_handle = BlockSynchronizer::spawn(
         name.clone(),
         committee.clone(),
         rx_reconfigure,
@@ -882,6 +882,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     }
 }
 
+#[must_use]
 pub fn primary_listener<T>(
     num_of_expected_responses: i32,
     address: multiaddr::Multiaddr,

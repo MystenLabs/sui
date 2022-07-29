@@ -60,7 +60,7 @@ async fn process_header() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the core.
-    Core::spawn(
+    let _core_handle = Core::spawn(
         name,
         committee.clone(),
         header_store.clone(),
@@ -140,7 +140,7 @@ async fn process_header_missing_parent() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the core.
-    Core::spawn(
+    let _core_handle = Core::spawn(
         name.clone(),
         committee(None),
         header_store.clone(),
@@ -216,7 +216,7 @@ async fn process_header_missing_payload() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the core.
-    Core::spawn(
+    let _core_handle = Core::spawn(
         name.clone(),
         committee(None),
         header_store.clone(),
@@ -304,7 +304,7 @@ async fn process_votes() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the core.
-    Core::spawn(
+    let _core_handle = Core::spawn(
         name.clone(),
         committee.clone(),
         header_store.clone(),
@@ -397,7 +397,7 @@ async fn process_certificates() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
     // Spawn the core.
-    Core::spawn(
+    let _core_handle = Core::spawn(
         name,
         committee(None),
         header_store.clone(),
@@ -576,7 +576,7 @@ async fn reconfigure_core() {
     );
 
     // Spawn the core.
-    Core::spawn(
+    let _core_handle = Core::spawn(
         name,
         committee.clone(),
         header_store.clone(),

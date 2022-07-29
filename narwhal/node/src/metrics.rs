@@ -28,6 +28,7 @@ pub fn worker_metrics_registry(worker_id: WorkerId, name: PublicKey) -> Registry
     Registry::new_custom(Some(WORKER_METRICS_PREFIX.to_string()), Some(labels)).unwrap()
 }
 
+#[must_use]
 pub fn start_prometheus_server(addr: Multiaddr, registry: &Registry) -> JoinHandle<()> {
     let app = Router::new()
         .route(METRICS_ROUTE, get(metrics))
