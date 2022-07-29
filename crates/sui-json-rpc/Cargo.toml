@@ -7,9 +7,9 @@ publish = false
 edition = "2021"
 
 [dependencies]
-jsonrpsee = { version = "0.15.0", features = ["full"] }
-jsonrpsee-core = "0.15.0"
-jsonrpsee-proc-macros = "0.15.0"
+jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee", features = ["full"] , rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa"}
+jsonrpsee-core = { git = "https://github.com/patrickkuo/jsonrpsee" , rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa"}
+jsonrpsee-proc-macros = { git = "https://github.com/patrickkuo/jsonrpsee" , rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa"}
 prometheus = "0.13.1"
 anyhow = "1.0.58"
 tracing = "0.1.35"
@@ -24,5 +24,5 @@ sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-open-rpc = { path = "../sui-open-rpc" }
 sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
-sui-json-rpc-types= { path = "../sui-json-rpc-types" }
-workspace-hack = { path = "../workspace-hack"}
+sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+workspace-hack = { path = "../workspace-hack" }

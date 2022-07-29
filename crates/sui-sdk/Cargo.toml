@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.58"
 async-trait = "0.1.56"
-jsonrpsee = { version = "0.15.0", features = ["full"] }
+jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee", features = ["full"] , rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa"}
 serde = { version = "1.0.140", features = ["derive"] }
 serde_json = "1.0.80"
 futures-core = "0.3.21"
