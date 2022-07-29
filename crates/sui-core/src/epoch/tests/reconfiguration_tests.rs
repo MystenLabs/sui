@@ -15,7 +15,9 @@ use sui_types::{
     crypto::{get_key_pair, AccountKeyPair, AuthoritySignature, Signature, SuiAuthoritySignature},
     error::SuiError,
     gas::SuiGasStatus,
-    messages::{InputObjects, SignatureAggregator, Transaction, TransactionData},
+    messages::{
+        AuthenticatedEpoch, InputObjects, SignatureAggregator, Transaction, TransactionData,
+    },
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -38,6 +40,12 @@ async fn test_start_epoch_change() {
     // Create authority_aggregator and authority states.
     let (net, states) = init_local_authorities(4, genesis_objects.clone()).await;
     let state = states[0].clone();
+
+    // Check that we initialized the genesis epoch.
+    let init_epoch = state.database.get_latest_authenticated_epoch();
+    assert!(matches!(init_epoch, AuthenticatedEpoch::Genesis(..)));
+    assert_eq!(init_epoch.epoch(), 0);
+
     // Set the checkpoint number to be near the end of epoch.
 
     state
@@ -206,9 +214,10 @@ async fn test_finish_epoch_change() {
     for active in actives {
         assert_eq!(active.state.epoch(), 1);
         assert_eq!(active.net.load().committee.epoch, 1);
-        let latest_epoch = active.state.db().get_latest_authenticated_epoch().unwrap();
-        assert_eq!(latest_epoch.epoch(), 0);
-        assert_eq!(latest_epoch.epoch_info().next_epoch_committee().epoch, 1);
+        let latest_epoch = active.state.db().get_latest_authenticated_epoch();
+        assert_eq!(latest_epoch.epoch(), 1);
+        assert!(matches!(latest_epoch, AuthenticatedEpoch::Signed(..)));
+        assert_eq!(latest_epoch.epoch_info().epoch(), 1);
         // Verify that validator is no longer halted.
         assert!(!active.state.is_halted());
         let system_state = active.state.get_sui_system_state_object().await.unwrap();

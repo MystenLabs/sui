@@ -1798,59 +1798,30 @@ pub enum ExecuteTransactionResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EpochInfo {
-    /// The epoch number of this epoch info.
-    /// Although we could derive it from the epoch number of `next_epoch_committee`, a potential
-    /// byzantine node may set next_epoch_committee.epoch as 0, which will make it very
-    /// inconvenient to obtain the epoch number.
-    epoch: EpochId,
-    /// The committee of the NEXT epoch. The committee of the epoch identified by the `epoch`
-    /// field is not part of this data structure. Instead, it will always be in the previous epoch
-    /// data structure. The committee for the very first epoch would be the genesis committee, which
-    /// is not in any epoch data structure, but in the genesis blob.
-    /// It's important that we commit to the next epoch committee in the current epoch, so that we
-    /// know what committee to use when verifying the next epoch data structure.
-    next_epoch_committee: Committee,
-    /// The last checkpoint included in this epoch. The first checkpoint can always be derived
-    /// from the previous epoch. The first checkpoint of the first epoch would be 0.
-    last_checkpoint: CheckpointSequenceNumber,
+    /// The committee of this epoch.
+    committee: Committee,
+    /// The first checkpoint included in this epoch.
+    first_checkpoint: CheckpointSequenceNumber,
 }
 
 impl EpochInfo {
-    pub fn new(
-        epoch: EpochId,
-        next_epoch_committee: Committee,
-        last_checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult<Self> {
-        fp_ensure!(
-            epoch < EpochId::MAX && epoch + 1 == next_epoch_committee.epoch,
-            SuiError::from("Current epoch number and next epoch number are inconsistent")
-        );
-        Ok(Self {
-            epoch,
-            next_epoch_committee,
-            last_checkpoint,
-        })
+    pub fn new(committee: Committee, first_checkpoint: CheckpointSequenceNumber) -> Self {
+        Self {
+            committee,
+            first_checkpoint,
+        }
     }
 
     pub fn epoch(&self) -> EpochId {
-        self.epoch
+        self.committee.epoch
     }
 
-    pub fn next_epoch_committee(&self) -> &Committee {
-        &self.next_epoch_committee
+    pub fn committee(&self) -> &Committee {
+        &self.committee
     }
 
-    pub fn last_checkpoint(&self) -> &CheckpointSequenceNumber {
-        &self.last_checkpoint
-    }
-
-    pub fn verify(&self) -> SuiResult {
-        let next_epoch = self.next_epoch_committee.epoch;
-        fp_ensure!(
-            next_epoch > 0 && next_epoch - 1 == self.epoch,
-            SuiError::from("Epoch number mismatch in epoch info")
-        );
-        Ok(())
+    pub fn first_checkpoint(&self) -> &CheckpointSequenceNumber {
+        &self.first_checkpoint
     }
 }
 
@@ -1860,40 +1831,100 @@ pub struct EpochEnvelop<S> {
     pub auth_sign_info: S,
 }
 
+pub type GenesisEpoch = EpochEnvelop<EmptySignInfo>;
 pub type SignedEpoch = EpochEnvelop<AuthoritySignInfo>;
 pub type CertifiedEpoch = EpochEnvelop<AuthorityStrongQuorumSignInfo>;
 
+impl GenesisEpoch {
+    pub fn new(committee: Committee) -> Self {
+        Self {
+            epoch_info: EpochInfo::new(committee, 0),
+            auth_sign_info: EmptySignInfo {},
+        }
+    }
+}
+
 impl SignedEpoch {
     pub fn new(
-        epoch: EpochId,
-        next_epoch_committee: Committee,
+        committee: Committee,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
-        last_checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult<Self> {
-        let epoch_info = EpochInfo::new(epoch, next_epoch_committee, last_checkpoint)?;
+        first_checkpoint: CheckpointSequenceNumber,
+    ) -> Self {
+        let epoch = committee.epoch;
+        let epoch_info = EpochInfo::new(committee, first_checkpoint);
         let signature = AuthoritySignature::new(&epoch_info, secret);
-        Ok(Self {
+        Self {
             epoch_info,
             auth_sign_info: AuthoritySignInfo {
-                epoch,
+                // A epoch is always authenticated by validators from the previous epoch.
+                // This is critical: we won't be able to use the same committee to verify itself,
+                // hence we rely on the committee from the previous epoch to verify the current
+                // epoch data structure.
+                epoch: epoch - 1,
                 authority,
                 signature,
             },
-        })
+        }
     }
 
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.epoch_info.verify()?;
-        self.auth_sign_info.verify(&self.epoch_info, committee)?;
+    /// Verify the signature of this signed epoch. The committee to verify this must be the
+    /// committee from the previous epoch, as this is signed by a validator from the previous epoch.
+    pub fn verify(&self, prev_epoch_committee: &Committee) -> SuiResult {
+        let epoch = self.epoch_info.epoch();
+        fp_ensure!(
+            epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
+            SuiError::from("Epoch number in the committee inconsistent with signature")
+        );
+        self.auth_sign_info
+            .verify(&self.epoch_info, prev_epoch_committee)?;
         Ok(())
     }
 }
 
 impl CertifiedEpoch {
+    /// Verify the signature of this certified epoch. The committee to verify this must be the
+    /// committee from the previous epoch, as this is signed by a quorum from the previous epoch.
     pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.epoch_info.verify()?;
+        let epoch = self.epoch_info.epoch();
+        fp_ensure!(
+            epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
+            SuiError::from("Epoch number in the committee inconsistent with signature")
+        );
         self.auth_sign_info.verify(&self.epoch_info, committee)?;
         Ok(())
+    }
+}
+
+/// An AuthenticatedEpoch is an epoch data structure that's verifiable.
+/// The genesis epoch is the only one that doesn't require a committee to verify it, as there is
+/// only one genesis trusted from start. For a Signed or Certified epoch, it can be verified by
+/// the committee from the previous epoch.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum AuthenticatedEpoch {
+    Genesis(GenesisEpoch),
+    Signed(SignedEpoch),
+    Certified(CertifiedEpoch),
+}
+
+impl AuthenticatedEpoch {
+    pub fn epoch(&self) -> EpochId {
+        match self {
+            Self::Signed(s) => s.epoch_info.epoch(),
+            Self::Certified(c) => c.epoch_info.epoch(),
+            Self::Genesis(g) => {
+                let epoch = g.epoch_info.epoch();
+                debug_assert_eq!(epoch, 0);
+                epoch
+            }
+        }
+    }
+
+    pub fn epoch_info(&self) -> &EpochInfo {
+        match self {
+            Self::Signed(s) => &s.epoch_info,
+            Self::Certified(c) => &c.epoch_info,
+            Self::Genesis(g) => &g.epoch_info,
+        }
     }
 }
