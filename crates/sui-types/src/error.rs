@@ -46,8 +46,8 @@ macro_rules! exit_main {
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
-    #[error("Error acquiring lock for object(s): {:?}", errors)]
-    LockErrors { errors: Vec<SuiError> },
+    #[error("Error checking transaction input objects: {:?}", errors)]
+    ObjectErrors { errors: Vec<SuiError> },
     #[error("Attempt to transfer an object that's not owned.")]
     TransferUnownedError,
     #[error("Attempt to transfer an object that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
@@ -340,6 +340,8 @@ pub enum SuiError {
     InconsistentGatewayResult { error: String },
     #[error("Invalid transaction range query to the gateway: {:?}", error)]
     GatewayInvalidTxRangeQuery { error: String },
+    #[error("Gateway checking transaction validity failed: {:?}", error)]
+    GatewayTransactionPrepError { error: String },
 
     // Errors related to the authority-consensus interface.
     #[error("Authority state can be modified by a single consensus client at the time")]

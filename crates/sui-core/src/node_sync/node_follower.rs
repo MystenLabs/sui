@@ -391,7 +391,7 @@ where
 
         match self.state.handle_certificate(cert.clone()).await {
             Ok(_) => Ok(()),
-            Err(SuiError::LockErrors { .. }) => {
+            Err(SuiError::ObjectErrors { .. }) => {
                 debug!(?digest, "cert execution failed due to missing parents");
 
                 let effects = self.aggregator.execute_cert_to_true_effects(&cert).await?;
