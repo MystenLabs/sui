@@ -108,11 +108,15 @@
     font-size: 14px;
     padding: 12px 20px;
     border-radius: 10px;
-
+    background: colors.$cta-blue;
+    color: colors.$white;
     text-decoration: none;
     display: flex;
     flex-flow: row nowrap;
     max-width: 100%;
     align-items: center;
-    justify-content: center;
+
+    i {
+        margin-right: 10px;
+    }
 }

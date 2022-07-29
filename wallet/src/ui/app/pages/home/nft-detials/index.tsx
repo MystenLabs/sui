@@ -4,7 +4,7 @@
 import { isSuiMoveObject } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
-import { Navigate, useSearchParams, Link } from 'react-router-dom';
+import { Navigate, useSearchParams } from 'react-router-dom';
 
 //useNavigate,
 import BottomMenuLayout, {
@@ -14,8 +14,8 @@ import BottomMenuLayout, {
 import Button from '_app/shared/button';
 import PageTitle from '_app/shared/page-title';
 import ExplorerLink from '_components/explorer-link';
-import ExternalLink from '_components/external-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
+import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
 import NFTdisplay from '_components/nft-display';
 import { useAppSelector } from '_hooks';
@@ -53,9 +53,8 @@ function NFTDetialsPage() {
 
     const NFTDetails = nftFields && (
         <div className={st.nftDetails}>
-            <div>Object ID</div>{' '}
+            <div>Object ID</div>
             <div>
-                {' '}
                 <ExplorerLink
                     type={ExplorerLinkType.address}
                     address={nftFields.info.id}
@@ -97,7 +96,7 @@ function NFTDetialsPage() {
                             className={cl(st.action, st.externalLink)}
                         >
                             <Icon
-                                icon={SuiIcons.NftImage}
+                                icon={SuiIcons.Nfts}
                                 className={st.arrowActionIcon}
                             />
                             View Image
