@@ -275,6 +275,33 @@ module sui::test_scenarioTests {
     }
 
     #[test]
+    fun test_get_last_created_owned_object() {
+        let sender = @0x0;
+        let scenario = &mut test_scenario::begin(&sender);
+		create_and_transfer_object(scenario, 1);
+		test_scenario::next_tx(scenario, &sender);
+		{
+			let obj = test_scenario::take_last_created_owned<Object>(scenario);
+			assert!(obj.value == 1, VALUE_MISMATCH);
+			test_scenario::return_owned(scenario, obj);
+		};
+		create_and_transfer_object(scenario, 2);
+		test_scenario::next_tx(scenario, &sender);
+		{
+			let obj = test_scenario::take_last_created_owned<Object>(scenario);
+			assert!(obj.value == 2, VALUE_MISMATCH);
+			test_scenario::return_owned(scenario, obj);
+		};
+		create_and_transfer_object(scenario, 3);
+		test_scenario::next_tx(scenario, &sender);
+		{
+			let obj = test_scenario::take_last_created_owned<Object>(scenario);
+			assert!(obj.value == 3, VALUE_MISMATCH);
+			test_scenario::return_owned(scenario, obj);
+		};
+    }
+
+    #[test]
     fun test_take_child_object() {
         let sender = @0x0;
         let scenario = test_scenario::begin(&sender);
@@ -369,5 +396,14 @@ module sui::test_scenarioTests {
             child: child_id,
         };
         transfer::transfer(parent, test_scenario::sender(scenario));
+    }
+
+    /// Create an object and transfer it to the sender of `scenario`.
+    fun create_and_transfer_object(scenario: &mut Scenario, value: u64) {
+        let object = Object {
+            info: test_scenario::new_object(scenario),
+            value,
+        };
+        transfer::transfer(object, test_scenario::sender(scenario));
     }
 }
