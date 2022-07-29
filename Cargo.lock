@@ -7398,6 +7398,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-test-validator"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "camino",
+ "clap 3.1.18",
+ "hyper",
+ "move-package",
+ "nexlint",
+ "nexlint-lints",
+ "pretty_assertions",
+ "schemars",
+ "serde 1.0.141",
+ "serde_json",
+ "sui",
+ "sui-config",
+ "sui-json",
+ "sui-json-rpc",
+ "sui-json-rpc-types",
+ "sui-types",
+ "test-utils",
+ "tokio",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
 name = "sui-tool"
 version = "0.6.2"
 dependencies = [
