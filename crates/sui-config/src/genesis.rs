@@ -432,7 +432,7 @@ fn process_package(
 
     debug_assert!(ctx.digest() == TransactionDigest::genesis());
     let mut temporary_store =
-        TemporaryStore::new(&store, InputObjects::new(filtered), ctx.digest());
+        TemporaryStore::new(&*store, InputObjects::new(filtered), ctx.digest());
     let package_id = ObjectID::from(*modules[0].self_id().address());
     let natives = native_functions.clone();
     let mut gas_status = SuiGasStatus::new_unmetered();
@@ -468,7 +468,7 @@ pub fn generate_genesis_system_object(
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
     let mut temporary_store =
-        TemporaryStore::new(&store, InputObjects::new(vec![]), genesis_digest);
+        TemporaryStore::new(&*store, InputObjects::new(vec![]), genesis_digest);
 
     let mut pubkeys = Vec::new();
     let mut sui_addresses = Vec::new();

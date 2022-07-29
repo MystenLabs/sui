@@ -376,10 +376,8 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                         let move_struct =
                             MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
                         self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {}",
-                            &obj.owner,
-                            obj.version().value(),
-                            move_struct
+                            "Owner: {}\nContents: {}",
+                            &obj.owner, move_struct
                         ))
                     }
                     object::Data::Package(package) => {
