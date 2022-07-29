@@ -125,6 +125,10 @@ message NewEpochRequest {
     repeated ValidatorData validators = 2;
 }
 
+message GetPrimaryAddressResponse {
+    MultiAddr primary_address = 1;
+}
+
 // A bincode encoded payload. This is intended to be used in the short-term
 // while we don't have good protobuf definitions for Narwhal types
 message BincodeEncodedPayload {
@@ -158,6 +162,8 @@ service Configuration {
     rpc NewEpoch(NewEpochRequest) returns (Empty);
     // Signals a change in networking info
     rpc NewNetworkInfo(NewNetworkInfoRequest) returns (Empty);
+    // Retrieve multiaddr of narwhal primary
+    rpc GetPrimaryAddress(Empty) returns (GetPrimaryAddressResponse);
 }
 
 // The primary-to-primary interface

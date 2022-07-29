@@ -151,6 +151,11 @@ pub struct NewEpochRequest {
     #[prost(message, repeated, tag="2")]
     pub validators: ::prost::alloc::vec::Vec<ValidatorData>,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetPrimaryAddressResponse {
+    #[prost(message, optional, tag="1")]
+    pub primary_address: ::core::option::Option<MultiAddr>,
+}
 /// A bincode encoded payload. This is intended to be used in the short-term
 /// while we don't have good protobuf definitions for Narwhal types
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -503,6 +508,26 @@ pub mod configuration_client {
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
                 "/narwhal.Configuration/NewNetworkInfo",
+            );
+            self.inner.unary(request.into_request(), path, codec).await
+        }
+        /// Retrieve multiaddr of narwhal primary
+        pub async fn get_primary_address(
+            &mut self,
+            request: impl tonic::IntoRequest<super::Empty>,
+        ) -> Result<tonic::Response<super::GetPrimaryAddressResponse>, tonic::Status> {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::new(
+                        tonic::Code::Unknown,
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/narwhal.Configuration/GetPrimaryAddress",
             );
             self.inner.unary(request.into_request(), path, codec).await
         }
@@ -1414,6 +1439,11 @@ pub mod configuration_server {
             &self,
             request: tonic::Request<super::NewNetworkInfoRequest>,
         ) -> Result<tonic::Response<super::Empty>, tonic::Status>;
+        /// Retrieve multiaddr of narwhal primary
+        async fn get_primary_address(
+            &self,
+            request: tonic::Request<super::Empty>,
+        ) -> Result<tonic::Response<super::GetPrimaryAddressResponse>, tonic::Status>;
     }
     #[derive(Debug)]
     pub struct ConfigurationServer<T: Configuration> {
@@ -1529,6 +1559,44 @@ pub mod configuration_server {
                     let fut = async move {
                         let inner = inner.0;
                         let method = NewNetworkInfoSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/narwhal.Configuration/GetPrimaryAddress" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetPrimaryAddressSvc<T: Configuration>(pub Arc<T>);
+                    impl<T: Configuration> tonic::server::UnaryService<super::Empty>
+                    for GetPrimaryAddressSvc<T> {
+                        type Response = super::GetPrimaryAddressResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::Empty>,
+                        ) -> Self::Future {
+                            let inner = self.0.clone();
+                            let fut = async move {
+                                (*inner).get_primary_address(request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let inner = inner.0;
+                        let method = GetPrimaryAddressSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

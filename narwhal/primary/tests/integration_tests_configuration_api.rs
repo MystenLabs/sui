@@ -1,66 +1,26 @@
-use arc_swap::ArcSwap;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::Parameters;
-use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::traits::KeyPair;
-use node::NodeStorage;
-use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
-use prometheus::Registry;
-use std::{sync::Arc, time::Duration};
-use test_utils::{committee, keys, temp_dir};
-use tokio::sync::{mpsc::channel, watch};
-use tonic::transport::Channel;
+use std::time::Duration;
+use test_utils::cluster::Cluster;
 use types::{
-    ConfigurationClient, Empty, MultiAddrProto, NewEpochRequest, NewNetworkInfoRequest,
-    PrimaryAddressesProto, PublicKeyProto, ReconfigureNotification, ValidatorData,
+    Empty, MultiAddrProto, NewEpochRequest, NewNetworkInfoRequest, PrimaryAddressesProto,
+    PublicKeyProto, ValidatorData,
 };
 
 #[tokio::test]
 async fn test_new_epoch() {
-    let parameters = Parameters {
-        batch_size: 200, // Two transactions.
-        ..Parameters::default()
-    };
-    let keypair = keys(None).pop().unwrap();
-    let name = keypair.public().clone();
-    let signer = keypair;
-    let committee = committee(None);
+    let mut cluster = Cluster::new(None, None, false);
 
-    // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    // start the cluster will all the possible nodes
+    cluster.start(Some(2), Some(1), None).await;
 
-    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
-
-    Primary::spawn(
-        name.clone(),
-        signer,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
-        parameters.clone(),
-        store.header_store.clone(),
-        store.certificate_store.clone(),
-        store.payload_store.clone(),
-        /* tx_consensus */ tx_new_certificates,
-        /* rx_consensus */ rx_feedback,
-        /* dag */
-        Some(Arc::new(
-            Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
-        )),
-        NetworkModel::Asynchronous,
-        tx_reconfigure,
-        tx_feedback,
-        &Registry::new(),
-    );
-
-    // Wait for tasks to start
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    // give some time for nodes to boostrap
+    tokio::time::sleep(Duration::from_secs(2)).await;
+    let authority = cluster.authority(0);
+    let name = authority.name.clone();
 
     // Test gRPC server with client call
-    let mut client = connect_to_configuration_client(parameters.clone());
+    let mut client = authority.new_configuration_client().await;
 
     let public_key = PublicKeyProto::from(name);
     let stake_weight = 1;
@@ -93,51 +53,21 @@ async fn test_new_epoch() {
 
 #[tokio::test]
 async fn test_new_network_info() {
-    let parameters = Parameters {
-        batch_size: 200, // Two transactions.
-        ..Parameters::default()
-    };
-    let keypair = keys(None).pop().unwrap();
-    let name = keypair.public().clone();
-    let signer = keypair;
-    let committee = committee(None);
+    let mut cluster = Cluster::new(None, None, false);
 
-    // Make the data store.
-    let store = NodeStorage::reopen(temp_dir());
+    // start the cluster will all the possible nodes
+    cluster.start(Some(2), Some(1), None).await;
 
-    let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
-    let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
-    let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
-    let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
+    // give some time for nodes to boostrap
+    tokio::time::sleep(Duration::from_secs(2)).await;
 
-    Primary::spawn(
-        name.clone(),
-        signer,
-        Arc::new(ArcSwap::from_pointee(committee.clone())),
-        parameters.clone(),
-        store.header_store.clone(),
-        store.certificate_store.clone(),
-        store.payload_store.clone(),
-        /* tx_consensus */ tx_new_certificates,
-        /* rx_consensus */ rx_feedback,
-        /* dag */
-        Some(Arc::new(
-            Dag::new(&committee, rx_new_certificates, consensus_metrics).1,
-        )),
-        NetworkModel::Asynchronous,
-        tx_reconfigure,
-        /* tx_committed_certificates */ tx_feedback,
-        &Registry::new(),
-    );
-
-    // Wait for tasks to start
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    let committee = cluster.committee_shared.clone();
+    let authority = cluster.authority(0);
 
     // Test gRPC server with client call
-    let mut client = connect_to_configuration_client(parameters.clone());
+    let mut client = authority.new_configuration_client().await;
 
-    let public_keys: Vec<_> = committee.authorities.keys().cloned().collect();
+    let public_keys: Vec<_> = committee.load().authorities.keys().cloned().collect();
 
     let mut validators = Vec::new();
     for public_key in public_keys.iter() {
@@ -181,10 +111,35 @@ async fn test_new_network_info() {
     assert_eq!(Empty {}, actual_result);
 }
 
-fn connect_to_configuration_client(parameters: Parameters) -> ConfigurationClient<Channel> {
-    let config = mysten_network::config::Config::new();
-    let channel = config
-        .connect_lazy(&parameters.consensus_api_grpc.socket_addr)
-        .unwrap();
-    ConfigurationClient::new(channel)
+#[tokio::test]
+async fn test_get_primary_address() {
+    let mut cluster = Cluster::new(None, None, false);
+
+    // start the cluster will all the possible nodes
+    cluster.start(Some(2), Some(1), None).await;
+
+    // give some time for nodes to boostrap
+    tokio::time::sleep(Duration::from_secs(2)).await;
+
+    let committee = cluster.committee_shared.clone();
+    let authority = cluster.authority(0);
+    let name = authority.name.clone();
+
+    // Test gRPC server with client call
+    let mut client = authority.new_configuration_client().await;
+
+    let request = tonic::Request::new(Empty {});
+
+    let response = client.get_primary_address(request).await.unwrap();
+    let actual_result = response.into_inner();
+
+    assert_eq!(
+        actual_result.primary_address.unwrap().address,
+        committee
+            .load()
+            .primary(&name)
+            .expect("Our public key or worker id is not in the committee")
+            .primary_to_primary
+            .to_string()
+    )
 }

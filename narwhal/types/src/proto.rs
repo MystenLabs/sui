@@ -35,10 +35,11 @@ pub use narwhal::{
     Batch as BatchProto, BatchDigest as BatchDigestProto, BatchMessage as BatchMessageProto,
     BincodeEncodedPayload, CertificateDigest as CertificateDigestProto, CollectionError,
     CollectionErrorType, CollectionRetrievalResult, Empty, GetCollectionsRequest,
-    GetCollectionsResponse, MultiAddr as MultiAddrProto, NewEpochRequest, NewNetworkInfoRequest,
-    NodeReadCausalRequest, NodeReadCausalResponse, PrimaryAddresses as PrimaryAddressesProto,
-    PublicKey as PublicKeyProto, ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest,
-    RoundsRequest, RoundsResponse, Transaction as TransactionProto, ValidatorData,
+    GetCollectionsResponse, GetPrimaryAddressResponse, MultiAddr as MultiAddrProto,
+    NewEpochRequest, NewNetworkInfoRequest, NodeReadCausalRequest, NodeReadCausalResponse,
+    PrimaryAddresses as PrimaryAddressesProto, PublicKey as PublicKeyProto, ReadCausalRequest,
+    ReadCausalResponse, RemoveCollectionsRequest, RoundsRequest, RoundsResponse,
+    Transaction as TransactionProto, ValidatorData,
 };
 
 impl From<PublicKey> for PublicKeyProto {

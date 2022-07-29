@@ -10,6 +10,7 @@ use crate::{
 use config::SharedCommittee;
 use consensus::dag::Dag;
 
+use crypto::PublicKey;
 use multiaddr::Multiaddr;
 use std::{sync::Arc, time::Duration};
 use tokio::{sync::mpsc::Sender, task::JoinHandle};
@@ -22,7 +23,9 @@ mod proposer;
 mod validator;
 
 pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static> {
-    socket_addr: Multiaddr,
+    name: PublicKey,
+    // Multiaddr of gRPC server
+    socket_address: Multiaddr,
     tx_get_block_commands: Sender<BlockCommand>,
     tx_block_removal_commands: Sender<BlockRemoverCommand>,
     get_collections_timeout: Duration,
@@ -35,7 +38,8 @@ pub struct ConsensusAPIGrpc<SynchronizerHandler: Handler + Send + Sync + 'static
 
 impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<SynchronizerHandler> {
     pub fn spawn(
-        socket_addr: Multiaddr,
+        name: PublicKey,
+        socket_address: Multiaddr,
         tx_get_block_commands: Sender<BlockCommand>,
         tx_block_removal_commands: Sender<BlockRemoverCommand>,
         get_collections_timeout: Duration,
@@ -47,7 +51,8 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let _ = Self {
-                socket_addr,
+                name,
+                socket_address,
                 tx_get_block_commands,
                 tx_block_removal_commands,
                 get_collections_timeout,
@@ -74,7 +79,14 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
         );
 
         let narwhal_proposer = NarwhalProposer::new(self.dag.clone(), Arc::clone(&self.committee));
-        let narwhal_configuration = NarwhalConfiguration::new(Arc::clone(&self.committee));
+        let narwhal_configuration = NarwhalConfiguration::new(
+            self.committee
+                .load()
+                .primary(&self.name)
+                .expect("Our public key is not in the committee")
+                .primary_to_primary,
+            Arc::clone(&self.committee),
+        );
 
         let config = mysten_network::config::Config::default();
         let server = config
@@ -82,7 +94,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> ConsensusAPIGrpc<Sync
             .add_service(ValidatorServer::new(narwhal_validator))
             .add_service(ConfigurationServer::new(narwhal_configuration))
             .add_service(ProposerServer::new(narwhal_proposer))
-            .bind(&self.socket_addr)
+            .bind(&self.socket_address)
             .await?;
         let local_addr = server.local_addr();
         info!("Consensus API gRPC Server listening on {local_addr}");

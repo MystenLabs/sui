@@ -2,18 +2,26 @@
 // SPDX-License-Identifier: Apache-2.0
 use config::{PrimaryAddresses, SharedCommittee};
 use crypto::{traits::ToFromBytes, PublicKey};
+use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
 use tonic::{Request, Response, Status};
-use types::{Configuration, Empty, NewEpochRequest, NewNetworkInfoRequest, PublicKeyProto};
+use types::{
+    Configuration, Empty, GetPrimaryAddressResponse, MultiAddrProto, NewEpochRequest,
+    NewNetworkInfoRequest, PublicKeyProto,
+};
 
 pub struct NarwhalConfiguration {
+    primary_address: Multiaddr,
     /// The committee
     committee: SharedCommittee,
 }
 
 impl NarwhalConfiguration {
-    pub fn new(committee: SharedCommittee) -> Self {
-        Self { committee }
+    pub fn new(primary_address: Multiaddr, committee: SharedCommittee) -> Self {
+        Self {
+            primary_address,
+            committee,
+        }
     }
 
     /// Extracts and verifies the public key provided from the RoundsRequest.
@@ -145,5 +153,16 @@ impl Configuration for NarwhalConfiguration {
         res.map_err(|err| Status::internal(format!("Could not update network info: {:?}", err)))?;
 
         Ok(Response::new(Empty {}))
+    }
+
+    async fn get_primary_address(
+        &self,
+        _request: Request<Empty>,
+    ) -> Result<Response<GetPrimaryAddressResponse>, Status> {
+        Ok(Response::new(GetPrimaryAddressResponse {
+            primary_address: Some(MultiAddrProto {
+                address: self.primary_address.to_string(),
+            }),
+        }))
     }
 }
