@@ -41,9 +41,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [[bench]]
 name = "crypto"
 harness = false
-# This doesn't seem to work with criterion, cf. https://github.com/bheisler/criterion.rs/issues/344
-# For now, we have to bench by doing `cargo bench --features="batch"`.
-# required-features = ["batch"]
+required-features = ["celo"]
 
 [features]
 default = []
