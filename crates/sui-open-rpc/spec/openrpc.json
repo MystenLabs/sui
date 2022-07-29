@@ -2581,17 +2581,11 @@
           {
             "type": "object",
             "required": [
-              "id",
-              "version"
+              "id"
             ],
             "properties": {
               "id": {
                 "$ref": "#/components/schemas/ObjectID"
-              },
-              "version": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
               }
             }
           },

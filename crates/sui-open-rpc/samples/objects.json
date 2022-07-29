@@ -8,23 +8,22 @@
         "has_public_transfer": true,
         "fields": {
           "description": "An NFT created by the Sui Command Line Tool",
-          "info": {
-            "id": "0x854fe785af73a11143a8fb77ed2f27375be2fc4b",
-            "version": 1
+          "id": {
+            "id": "0x7fe06d5bbd377e3153bb0667a545cf0220a67994"
           },
           "name": "Example NFT",
           "url": "ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty"
         }
       },
       "owner": {
-        "AddressOwner": "0x89bcfb0ce968fa17f233855d4864ed0b3dfe84d8"
+        "AddressOwner": "0x414d288898f6a7505a91368c95a6b5104f1916ff"
       },
-      "previousTransaction": "jbhiCvnUouH3gT/xyOleikiEandTaqCHTVhwzjx6k5k=",
+      "previousTransaction": "0ep/9CahteW8DELEVp4aYzR+bW+Qe/7oRjv/5RWrp0A=",
       "storageRebate": 25,
       "reference": {
-        "objectId": "0x854fe785af73a11143a8fb77ed2f27375be2fc4b",
+        "objectId": "0x7fe06d5bbd377e3153bb0667a545cf0220a67994",
         "version": 1,
-        "digest": "Sgo65Uq8vPwArvG0u68p+vfGMIlAT2sI8omqAggvliI="
+        "digest": "puOHhl8sw/KQ8g5uSSWoCB9LveBcOj60XBUrNOGfQQc="
       }
     }
   },
@@ -37,21 +36,20 @@
         "has_public_transfer": true,
         "fields": {
           "balance": 100000000,
-          "info": {
-            "id": "0x076df594e9929aa038d3bb2f210ac92d3c1113de",
-            "version": 0
+          "id": {
+            "id": "0x01ff51ba34b6def0580062c9aa725b15865f9312"
           }
         }
       },
       "owner": {
-        "AddressOwner": "0x89bcfb0ce968fa17f233855d4864ed0b3dfe84d8"
+        "AddressOwner": "0x414d288898f6a7505a91368c95a6b5104f1916ff"
       },
       "previousTransaction": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
       "storageRebate": 0,
       "reference": {
-        "objectId": "0x076df594e9929aa038d3bb2f210ac92d3c1113de",
+        "objectId": "0x01ff51ba34b6def0580062c9aa725b15865f9312",
         "version": 0,
-        "digest": "FSHJhC5XAgLQcCIjn2mAtcHs/Q6C6wfahS6EXOIfw8c="
+        "digest": "8RalW8RMbjLP+5fyLeh01Fw2vO7zUZdtfPs1Lw5dLfo="
       }
     }
   },
@@ -61,16 +59,16 @@
       "data": {
         "dataType": "package",
         "disassembled": {
-          "m1": "// Move bytecode v5\nmodule d1f083132db934d33b9cfdb6a94d4790d62e2e18.m1 {\nstruct Forge has store, key {\n\tinfo: Info,\n\tswords_created: u64\n}\nstruct Sword has store, key {\n\tinfo: Info,\n\tmagic: u64,\n\tstrength: u64\n}\n\ninit(Arg0: &mut TxContext) {\nB0:\n\t0: CopyLoc[0](Arg0: &mut TxContext)\n\t1: Call[6](new(&mut TxContext): Info)\n\t2: LdU64(0)\n\t3: Pack[0](Forge)\n\t4: StLoc[1](loc0: Forge)\n\t5: MoveLoc[1](loc0: Forge)\n\t6: MoveLoc[0](Arg0: &mut TxContext)\n\t7: FreezeRef\n\t8: Call[7](sender(&TxContext): address)\n\t9: Call[0](transfer<Forge>(Forge, address))\n\t10: Ret\n}\npublic magic(Arg0: &Sword): u64 {\nB0:\n\t0: MoveLoc[0](Arg0: &Sword)\n\t1: ImmBorrowField[0](Sword.magic: u64)\n\t2: ReadRef\n\t3: Ret\n}\npublic strength(Arg0: &Sword): u64 {\nB0:\n\t0: MoveLoc[0](Arg0: &Sword)\n\t1: ImmBorrowField[1](Sword.strength: u64)\n\t2: ReadRef\n\t3: Ret\n}\nentry public sword_create(Arg0: &mut Forge, Arg1: u64, Arg2: u64, Arg3: address, Arg4: &mut TxContext) {\nB0:\n\t0: MoveLoc[4](Arg4: &mut TxContext)\n\t1: Call[6](new(&mut TxContext): Info)\n\t2: MoveLoc[1](Arg1: u64)\n\t3: MoveLoc[2](Arg2: u64)\n\t4: Pack[1](Sword)\n\t5: StLoc[5](loc0: Sword)\n\t6: MoveLoc[5](loc0: Sword)\n\t7: MoveLoc[3](Arg3: address)\n\t8: Call[1](transfer<Sword>(Sword, address))\n\t9: CopyLoc[0](Arg0: &mut Forge)\n\t10: ImmBorrowField[2](Forge.swords_created: u64)\n\t11: ReadRef\n\t12: LdU64(1)\n\t13: Add\n\t14: MoveLoc[0](Arg0: &mut Forge)\n\t15: MutBorrowField[2](Forge.swords_created: u64)\n\t16: WriteRef\n\t17: Ret\n}\nentry public sword_transfer(Arg0: Sword, Arg1: address) {\nB0:\n\t0: MoveLoc[0](Arg0: Sword)\n\t1: MoveLoc[1](Arg1: address)\n\t2: Call[1](transfer<Sword>(Sword, address))\n\t3: Ret\n}\npublic swords_created(Arg0: &Forge): u64 {\nB0:\n\t0: MoveLoc[0](Arg0: &Forge)\n\t1: ImmBorrowField[2](Forge.swords_created: u64)\n\t2: ReadRef\n\t3: Ret\n}\n}"
+          "m1": "// Move bytecode v5\nmodule da3e701031f5c991eddc6d5fa6a8d6b959f5380e.m1 {\nstruct Forge has store, key {\n\tid: UID,\n\tswords_created: u64\n}\nstruct Sword has store, key {\n\tid: UID,\n\tmagic: u64,\n\tstrength: u64\n}\n\ninit(Arg0: &mut TxContext) {\nB0:\n\t0: CopyLoc[0](Arg0: &mut TxContext)\n\t1: Call[6](new(&mut TxContext): UID)\n\t2: LdU64(0)\n\t3: Pack[0](Forge)\n\t4: StLoc[1](loc0: Forge)\n\t5: MoveLoc[1](loc0: Forge)\n\t6: MoveLoc[0](Arg0: &mut TxContext)\n\t7: FreezeRef\n\t8: Call[7](sender(&TxContext): address)\n\t9: Call[0](transfer<Forge>(Forge, address))\n\t10: Ret\n}\npublic magic(Arg0: &Sword): u64 {\nB0:\n\t0: MoveLoc[0](Arg0: &Sword)\n\t1: ImmBorrowField[0](Sword.magic: u64)\n\t2: ReadRef\n\t3: Ret\n}\npublic strength(Arg0: &Sword): u64 {\nB0:\n\t0: MoveLoc[0](Arg0: &Sword)\n\t1: ImmBorrowField[1](Sword.strength: u64)\n\t2: ReadRef\n\t3: Ret\n}\nentry public sword_create(Arg0: &mut Forge, Arg1: u64, Arg2: u64, Arg3: address, Arg4: &mut TxContext) {\nB0:\n\t0: MoveLoc[4](Arg4: &mut TxContext)\n\t1: Call[6](new(&mut TxContext): UID)\n\t2: MoveLoc[1](Arg1: u64)\n\t3: MoveLoc[2](Arg2: u64)\n\t4: Pack[1](Sword)\n\t5: StLoc[5](loc0: Sword)\n\t6: MoveLoc[5](loc0: Sword)\n\t7: MoveLoc[3](Arg3: address)\n\t8: Call[1](transfer<Sword>(Sword, address))\n\t9: CopyLoc[0](Arg0: &mut Forge)\n\t10: ImmBorrowField[2](Forge.swords_created: u64)\n\t11: ReadRef\n\t12: LdU64(1)\n\t13: Add\n\t14: MoveLoc[0](Arg0: &mut Forge)\n\t15: MutBorrowField[2](Forge.swords_created: u64)\n\t16: WriteRef\n\t17: Ret\n}\nentry public sword_transfer(Arg0: Sword, Arg1: address) {\nB0:\n\t0: MoveLoc[0](Arg0: Sword)\n\t1: MoveLoc[1](Arg1: address)\n\t2: Call[1](transfer<Sword>(Sword, address))\n\t3: Ret\n}\npublic swords_created(Arg0: &Forge): u64 {\nB0:\n\t0: MoveLoc[0](Arg0: &Forge)\n\t1: ImmBorrowField[2](Forge.swords_created: u64)\n\t2: ReadRef\n\t3: Ret\n}\n}"
         }
       },
       "owner": "Immutable",
-      "previousTransaction": "aY6+gdaj6WmxrQibQnCNC0YpWKzmMXGyHa5JjN+D+I0=",
+      "previousTransaction": "J8FarG0V6xoM31TfyTnPwwHV35Lr8iZQX7j2GDZ02R4=",
       "storageRebate": 0,
       "reference": {
-        "objectId": "0xd1f083132db934d33b9cfdb6a94d4790d62e2e18",
+        "objectId": "0xda3e701031f5c991eddc6d5fa6a8d6b959f5380e",
         "version": 1,
-        "digest": "bCwzFx9TEJsjXmHH2qrRDafbBN0Gt3//Jybl8Sl3/kU="
+        "digest": "VhiGgVsZ6N4b4j+37BlGKUpfw9i8Vn4SnqM1VEcNIuQ="
       }
     }
   },
@@ -79,23 +77,21 @@
     "details": {
       "data": {
         "dataType": "moveObject",
-        "type": "0x205baac11264648ec9938472b19c80a61d92ea68::hero::Hero",
+        "type": "0x4f89d807efe50d3a687eac2e7525484c34a2248b::hero::Hero",
         "has_public_transfer": true,
         "fields": {
           "experience": 0,
-          "game_id": "0x634b6a680d4c92e85732eb14d927fc8d20305d9d",
+          "game_id": "0x840d7a79d2f09ee445167a1342cbeabd8ea90966",
           "hp": 100,
-          "info": {
-            "id": "0x7896b7ed80eb9ad6b6abd874244d292aa718c4c8",
-            "version": 1
+          "id": {
+            "id": "0x512a55d834eec7f877c5a2b546953ce356862df6"
           },
           "sword": {
-            "type": "0x205baac11264648ec9938472b19c80a61d92ea68::hero::Sword",
+            "type": "0x4f89d807efe50d3a687eac2e7525484c34a2248b::hero::Sword",
             "fields": {
-              "game_id": "0x634b6a680d4c92e85732eb14d927fc8d20305d9d",
-              "info": {
-                "id": "0x5dd27938d9adf046d746c21fccc8ff99c6b94962",
-                "version": 0
+              "game_id": "0x840d7a79d2f09ee445167a1342cbeabd8ea90966",
+              "id": {
+                "id": "0xa6a8593d0f38d85d10f4abbed73ae062535d2f65"
               },
               "magic": 10,
               "strength": 1
@@ -104,14 +100,14 @@
         }
       },
       "owner": {
-        "AddressOwner": "0x89bcfb0ce968fa17f233855d4864ed0b3dfe84d8"
+        "AddressOwner": "0x414d288898f6a7505a91368c95a6b5104f1916ff"
       },
-      "previousTransaction": "mRBGhxBwYTQYQspbU/f/SDKwpJdOs+qO62//iMyWuvE=",
-      "storageRebate": 22,
+      "previousTransaction": "1hFT1QP/ej3HUv0rAcq5ZAGe/PoCF7kmLxs5LOlGeQo=",
+      "storageRebate": 21,
       "reference": {
-        "objectId": "0x7896b7ed80eb9ad6b6abd874244d292aa718c4c8",
+        "objectId": "0x512a55d834eec7f877c5a2b546953ce356862df6",
         "version": 1,
-        "digest": "aOnnE7aqOpkADUaKuIE+KBcGjQmM5ysTAMI7WKr1akk="
+        "digest": "0yyzEZp7Qm6+OI1fEmkbS8liFoR8TpWK7B9vXPFidS0="
       }
     }
   }

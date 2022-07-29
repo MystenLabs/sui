@@ -80,7 +80,7 @@ module games::tic_tac_toe {
         // TODO: Validate sender address, only GameAdmin can create games.
 
         let id = object::new(ctx);
-        let game_id = *object::info_id(&id);
+        let game_id = object::uid_to_inner(&id);
         let gameboard = vector[
             vector[option::none(), option::none(), option::none()],
             vector[option::none(), option::none(), option::none()],
@@ -126,7 +126,7 @@ module games::tic_tac_toe {
         // The game server will then call `place_mark` to place this mark.
         event::emit(MarkSentEvent {
             game_id: *&cap.game_id,
-            mark_id: *object::info_id(&mark.id),
+            mark_id: object::id(&mark),
         });
         transfer::transfer(mark, game_address);
     }
@@ -152,7 +152,7 @@ module games::tic_tac_toe {
 
         if (game.game_status != IN_PROGRESS) {
             // Notify the server that the game ended so that it can delete the game.
-            event::emit(GameEndEvent { game_id: *object::info_id(&game.id) });
+            event::emit(GameEndEvent { game_id: object::id(game) });
             if (game.game_status == X_WIN) {
                 transfer::transfer( Trophy { id: object::new(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {

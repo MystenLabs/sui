@@ -205,7 +205,8 @@ impl MoveObject {
         let seriealized_type_tag =
             bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
         // + 1 for 'has_public_transfer'
-        self.contents.len() + seriealized_type_tag.len() + 1
+        // + 8 for `version`
+        self.contents.len() + seriealized_type_tag.len() + 1 + 8
     }
 }
 

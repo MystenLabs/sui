@@ -128,7 +128,7 @@ module games::hero {
     fun create(ctx: &mut TxContext) {
         let sender = tx_context::sender(ctx);
         let id = object::new(ctx);
-        let game_id = *object::info_id(&id);
+        let game_id = object::uid_to_inner(&id);
 
         transfer::freeze_object(GameInfo {
             id,
@@ -180,8 +180,8 @@ module games::hero {
         // let the world know about the hero's triumph by emitting an event!
         event::emit(BoarSlainEvent {
             slayer_address: tx_context::sender(ctx),
-            hero: *object::info_id(&hero.id),
-            boar: *object::info_id(&boar_id),
+            hero: object::uid_to_inner(&hero.id),
+            boar: object::uid_to_inner(&boar_id),
             game_id: id(game)
         });
         object::delete(boar_id);
@@ -330,7 +330,7 @@ module games::hero {
     }
 
     public fun id(game_info: &GameInfo): ID {
-        *object::info_id(&game_info.id)
+        object::id(game_info)
     }
 
     // --- Testing functions ---
