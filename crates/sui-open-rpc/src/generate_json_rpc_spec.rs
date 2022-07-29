@@ -334,7 +334,6 @@ async fn create_error_response(
     let signature = context
         .keystore
         .sign(&address, &response.tx_bytes.to_vec()?)?;
-    let flag_bytes = Base64::encode(&[signature.flag_byte()]);
     let signature_byte = Base64::encode(signature.signature_bytes());
     let pub_key = Base64::encode(signature.public_key_bytes());
     let tx_data = response.tx_bytes.encoded();
@@ -345,9 +344,8 @@ async fn create_error_response(
         .method(Method::POST)
         .header("Content-Type", "application/json")
         .body(Body::from(format!(
-            "{{ \"jsonrpc\": \"2.0\",\"method\": \"sui_executeTransaction\",\"params\": [\"{}\", \"{}\", \"{}\", \"{}\"],\"id\": 1 }}",
+            "{{ \"jsonrpc\": \"2.0\",\"method\": \"sui_executeTransaction\",\"params\": [\"{}\", \"{}\", \"{}\"],\"id\": 1 }}",
             tx_data,
-            flag_bytes,
             signature_byte,
             pub_key
         )))?;

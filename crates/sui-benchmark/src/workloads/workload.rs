@@ -22,7 +22,6 @@ use sui_types::{
         Transaction,
     },
 };
-
 use test_utils::messages::make_transfer_sui_transaction;
 use tracing::log::error;
 
@@ -31,12 +30,6 @@ use tracing::log::error;
 pub const MAX_GAS_FOR_TESTING: u64 = 1_000_000_000;
 
 pub type Gas = (ObjectRef, Owner);
-
-pub trait Payload: Send + Sync {
-    fn make_new_payload(&self, new_object: ObjectRef, new_gas: ObjectRef) -> Box<dyn Payload>;
-    fn make_transaction(&self) -> TransactionEnvelope<EmptySignInfo>;
-    fn get_object_id(&self) -> ObjectID;
-}
 
 pub type UpdatedAndNewlyMinted = (ObjectRef, ObjectRef);
 
@@ -119,10 +112,29 @@ pub async fn submit_transaction(
     }
 }
 
+pub trait Payload: Send + Sync {
+    fn make_new_payload(
+        self: Box<Self>,
+        new_object: ObjectRef,
+        new_gas: ObjectRef,
+    ) -> Box<dyn Payload>;
+    fn make_transaction(&self) -> TransactionEnvelope<EmptySignInfo>;
+    fn get_object_id(&self) -> ObjectID;
+    fn get_workload_type(&self) -> WorkloadType;
+}
+
+#[derive(Copy, Clone, Hash, PartialEq, Eq)]
+pub enum WorkloadType {
+    SharedCounter,
+    TransferObject,
+}
+
 #[async_trait]
-pub trait StressTestCtx<T: Payload + ?Sized>: Send + Sync {
+pub trait Workload<T: Payload + ?Sized>: Send + Sync {
+    async fn init(&mut self, aggregator: &AuthorityAggregator<NetworkAuthorityClient>);
     async fn make_test_payloads(
         &self,
+        count: u64,
         client: &AuthorityAggregator<NetworkAuthorityClient>,
     ) -> Vec<Box<T>>;
 }
