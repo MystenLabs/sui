@@ -35,8 +35,10 @@ async fn handle_clients_transactions() {
     )
     .unwrap();
     let store = Store::new(db);
+    let registry = Registry::new();
     let metrics = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry)),
+        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
     };
 
     // Spawn a `Worker` instance.
@@ -111,8 +113,10 @@ async fn handle_client_batch_request() {
         )
         .await;
 
+    let registry = Registry::new();
     let metrics = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry)),
+        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
     };
 
     // Spawn a `Worker` instance.

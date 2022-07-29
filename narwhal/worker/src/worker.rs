@@ -37,7 +37,7 @@ pub mod worker_tests;
 /// The default channel capacity for each channel of the worker.
 pub const CHANNEL_CAPACITY: usize = 1_000;
 
-use crate::metrics::{Metrics, WorkerMetrics};
+use crate::metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics};
 pub use types::WorkerMessage;
 
 pub struct Worker {
@@ -74,6 +74,7 @@ impl Worker {
         };
 
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
+        let endpoint_metrics = metrics.endpoint_metrics.unwrap();
 
         // Spawn all worker tasks.
         let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY);
@@ -83,8 +84,11 @@ impl Worker {
             ReconfigureNotification::NewCommittee(initial_committee.clone()),
         );
 
-        let client_flow_handles =
-            worker.handle_clients_transactions(&tx_reconfigure, tx_primary.clone());
+        let client_flow_handles = worker.handle_clients_transactions(
+            &tx_reconfigure,
+            tx_primary.clone(),
+            endpoint_metrics,
+        );
         let worker_flow_handles =
             worker.handle_workers_messages(&tx_reconfigure, tx_primary.clone());
         let primary_flow_handles =
@@ -163,6 +167,7 @@ impl Worker {
         &self,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
+        endpoint_metrics: WorkerEndpointMetrics,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) = channel(CHANNEL_CAPACITY);
         let (tx_quorum_waiter, rx_quorum_waiter) = channel(CHANNEL_CAPACITY);
@@ -178,8 +183,11 @@ impl Worker {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
             .unwrap();
-        let tx_receiver_handle =
-            TxReceiverHandler { tx_batch_maker }.spawn(address.clone(), tx_reconfigure.subscribe());
+        let tx_receiver_handle = TxReceiverHandler { tx_batch_maker }.spawn(
+            address.clone(),
+            tx_reconfigure.subscribe(),
+            endpoint_metrics,
+        );
 
         // The transactions are sent to the `BatchMaker` that assembles them into batches. It then broadcasts
         // (in a reliable manner) the batches to all other workers that share the same `id` as us. Finally, it
@@ -311,11 +319,12 @@ impl TxReceiverHandler {
         self,
         address: Multiaddr,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
+        endpoint_metrics: WorkerEndpointMetrics,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             tokio::select! {
                 _result =  mysten_network::config::Config::new()
-                    .server_builder()
+                    .server_builder_with_metrics(endpoint_metrics)
                     .add_service(TransactionsServer::new(self))
                     .bind(&address)
                     .await

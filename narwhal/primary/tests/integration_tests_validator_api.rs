@@ -27,7 +27,7 @@ use types::{
     SerializedBatchMessage, ValidatorClient,
 };
 use worker::{
-    metrics::{Metrics, WorkerMetrics},
+    metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics},
     Worker, WorkerMessage,
 };
 
@@ -124,8 +124,10 @@ async fn test_get_collections() {
         &Registry::new(),
     );
 
+    let registry = Registry::new();
     let metrics = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry)),
+        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
     };
 
     // Spawn a `Worker` instance.
@@ -328,8 +330,10 @@ async fn test_remove_collections() {
         "Certificate should still exist"
     );
 
+    let registry = Registry::new();
     let metrics = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry)),
+        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
     };
 
     // Spawn a `Worker` instance.
@@ -874,8 +878,10 @@ async fn test_get_collections_with_missing_certificates() {
         &Registry::new(),
     );
 
+    let registry = Registry::new();
     let metrics_1 = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry)),
+        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
     };
 
     // Spawn a `Worker` instance for primary 1.
@@ -912,8 +918,10 @@ async fn test_get_collections_with_missing_certificates() {
         &Registry::new(),
     );
 
+    let registry = Registry::new();
     let metrics_2 = Metrics {
-        worker_metrics: Some(WorkerMetrics::new(&Registry::new())),
+        worker_metrics: Some(WorkerMetrics::new(&registry)),
+        endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
     };
 
     // Spawn a `Worker` instance for primary 2.
