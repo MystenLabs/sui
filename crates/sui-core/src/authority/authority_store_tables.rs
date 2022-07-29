@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    authority_store::{AuthenticatedEpoch, InternalSequenceNumber, ObjectKey},
+    authority_store::{InternalSequenceNumber, ObjectKey},
     *,
 };
 use narwhal_executor::ExecutionIndices;

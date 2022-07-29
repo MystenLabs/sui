@@ -66,7 +66,7 @@ where
     pub async fn finish_epoch_change(&self) -> SuiResult {
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Finishing epoch change");
-        let last_checkpoint = if let Some(checkpoints) = &self.state.checkpoints {
+        let next_checkpoint = if let Some(checkpoints) = &self.state.checkpoints {
             let mut checkpoints = checkpoints.lock();
             assert!(
                 checkpoints.is_ready_to_finish_epoch_change(),
@@ -85,7 +85,7 @@ where
 
             self.state.database.remove_all_pending_certificates()?;
 
-            checkpoints.next_checkpoint() - 1
+            checkpoints.next_checkpoint()
 
             // drop checkpoints lock
         } else {
@@ -111,7 +111,7 @@ where
             "New committee for the next epoch: {:?}", new_committee
         );
         self.state
-            .sign_new_epoch_and_update_committee(new_committee.clone(), last_checkpoint)?;
+            .sign_new_epoch_and_update_committee(new_committee.clone(), next_checkpoint)?;
 
         // Reconnect the network if we have an type of AuthorityClient that has a network.
         if A::needs_network_recreation() {
