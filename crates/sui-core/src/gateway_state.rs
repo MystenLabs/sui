@@ -46,12 +46,14 @@ use crate::{
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
-    PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
-    SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
-    TransactionResponse, TransferObjectParams,
+    PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiMoveStruct,
+    SuiObject, SuiObjectInfo, SuiParsedMoveObject, SuiTransactionEffects, SuiTypeTag,
+    TransactionEffectsResponse, TransactionResponse, TransferObjectParams,
 };
 use sui_types::error::SuiError::ConflictingTransaction;
 
+use sui_types::committee::EpochId;
+use sui_types::sui_system_state::SuiSystemState;
 use tap::TapFallible;
 
 #[cfg(test)]
@@ -166,6 +168,7 @@ pub struct GatewayState<A> {
     next_tx_seq_number: AtomicU64,
     metrics: GatewayMetrics,
     module_cache: SyncModuleCache<ResolverWrapper<GatewayStore>>,
+    epoch: EpochId,
 }
 
 impl<A> GatewayState<A> {
@@ -198,6 +201,7 @@ impl<A> GatewayState<A> {
             next_tx_seq_number,
             metrics,
             module_cache: SyncModuleCache::new(ResolverWrapper(store)),
+            epoch: 0,
         })
     }
 
@@ -1056,6 +1060,33 @@ where
             type_arguments,
             arguments: args,
         }))
+    }
+
+    pub async fn reconfigure(&mut self) -> Result<(), SuiError> {
+        let sui_system_object = self
+            .get_object(SUI_SYSTEM_STATE_OBJECT_ID)
+            .await
+            .map_err(|e| SuiError::GenericStorageError(e.to_string()))?;
+        let system_state = match sui_system_object {
+            GetObjectDataResponse::Exists(s) => {
+                let move_object = s
+                    .data
+                    .try_as_move()
+                    .expect("Sui System State object must be a Move object");
+            }
+            GetObjectDataResponse::NotExists(_) => {
+                return Err(SuiError::GenericAuthorityError {
+                    error: "System State object not found".to_string(),
+                });
+            }
+            GetObjectDataResponse::Deleted(_) => {
+                return Err(SuiError::GenericAuthorityError {
+                    error: "System State object not found".to_string(),
+                });
+            }
+        };
+
+        todo!();
     }
 
     #[cfg(test)]
