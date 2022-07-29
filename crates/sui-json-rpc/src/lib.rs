@@ -1,9 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use jsonrpsee::http_server::{AccessControlBuilder, HttpServerBuilder, HttpServerHandle};
-use jsonrpsee::ws_server::{WsServerBuilder, WsServerHandle};
+use jsonrpsee_core::server::access_control::AccessControlBuilder;
 use jsonrpsee_core::server::rpc_module::RpcModule;
+
+use crate::http_server::{HttpServerBuilder, HttpServerHandle};
+use crate::ws_server::{WsServerBuilder, WsServerHandle};
 
 use jsonrpsee::types::Params;
 use jsonrpsee_core::middleware::{Headers, HttpMiddleware, MethodKind, WsMiddleware};
@@ -16,6 +18,9 @@ use std::net::SocketAddr;
 use std::time::Instant;
 use sui_open_rpc::{Module, Project};
 use tracing::info;
+
+pub use jsonrpsee::http_server;
+pub use jsonrpsee::ws_server;
 
 pub mod api;
 pub mod bcs_api;
