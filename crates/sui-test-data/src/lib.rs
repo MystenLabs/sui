@@ -24,7 +24,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::SuiSignature;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use test_utils::network::{TestNetwork};
+use test_utils::network::TestNetwork;
 
 #[derive(Serialize)]
 pub struct ObjectResponseSample {
@@ -44,8 +44,9 @@ pub struct TransactionResponseSample {
     pub error: Value,
 }
 
-
-pub async fn create_test_data(network: &TestNetwork) -> Result<
+pub async fn create_test_data(
+    network: &TestNetwork,
+) -> Result<
     (
         ObjectResponseSample,
         TransactionResponseSample,
@@ -77,7 +78,7 @@ pub async fn create_test_data(network: &TestNetwork) -> Result<
     let transfer = create_transfer_response(&mut context, address, &coins).await?;
     let transfer_sui = create_transfer_sui_response(&mut context, address, &coins).await?;
     let coin_split = create_coin_split_response(&mut context, &coins).await?;
-    let error = create_error_response(address, hero_package, context, &network).await?;
+    let error = create_error_response(address, hero_package, context, network).await?;
 
     // address and owned objects
     let mut owned_objects = BTreeMap::new();
@@ -87,7 +88,7 @@ pub async fn create_test_data(network: &TestNetwork) -> Result<
             .http_client
             .get_objects_owned_by_address(*account)
             .await?;
-        owned_objects.insert(account.clone(), objects);
+        owned_objects.insert(*account, objects);
     }
 
     let objects = ObjectResponseSample {

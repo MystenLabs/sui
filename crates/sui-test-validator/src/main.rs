@@ -50,11 +50,7 @@ async fn main() -> Result<()> {
 }
 
 async fn create_network(args: &Args) -> Result<TestNetwork, anyhow::Error> {
-    let config_dir = if let Some(path) = &args.config {
-        Some(path.as_path())
-    } else {
-        None
-    };
+    let config_dir = args.config.as_deref();
 
     let network = start_rpc_test_network_with_fullnode(
         Some(GenesisConfig::for_local_testing()),
