@@ -12,6 +12,10 @@ use crate::Certifiable;
 #[path = "tests/ed25519_certgen_tests.rs"]
 mod ed25519_certgen_tests;
 
+#[cfg(test)]
+#[path = "tests/ed25519_external_trust_anchor.rs"]
+mod ed25519_external_trust_anchor;
+
 fn dalek_to_keypair_bytes(dalek_kp: ed25519_dalek::Keypair) -> ed25519::KeypairBytes {
     let private = dalek_kp.secret;
     let _public = dalek_kp.public;
@@ -50,6 +54,30 @@ fn gen_certificate(
     );
     let cert_bytes = cert.serialize_der()?;
     Ok(rustls::Certificate(cert_bytes))
+}
+
+/// Signs a CertificateSigningRequest (CSR) and produces a X.509 Certificate.
+fn sign_certificate_signing_request(
+    csr_der: &[u8], // DER-serialized CSR
+    key_pair: (&[u8], &'static SignatureAlgorithm),
+) -> Result<rustls::Certificate, eyre::Report> {
+    let kp = KeyPair::from_der_and_sign_algo(key_pair.0, key_pair.1)?;
+
+    let csr = rcgen::CertificateSigningRequest::from_der(csr_der).map_err(eyre::Report::new)?;
+
+    let mut cert_params = CertificateParams::new(vec!["localhost".to_string()]);
+    cert_params.key_pair = Some(kp);
+    cert_params.distinguished_name = rcgen::DistinguishedName::new();
+    cert_params.alg = key_pair.1;
+
+    let cert = rcgen::Certificate::from_params(cert_params).expect(
+        "unreachable! from_params should only fail if the key is incompatible with params.algo",
+    );
+
+    let signed_cert = csr
+        .serialize_der_with_signer(&cert)
+        .map_err(eyre::Report::new)?;
+    Ok(rustls::Certificate(signed_cert))
 }
 
 // Token struct to peg this purely functional impl on
@@ -116,5 +144,36 @@ impl Certifiable for Ed25519 {
         key_info
             .to_vec()
             .expect("Dalek public key should be valid!")
+    }
+
+    fn sign_certificate_request(
+        certificate_request_der: &[u8],
+        kp: Self::KeyPair,
+    ) -> Result<rustls::Certificate, eyre::Report> {
+        let keypair_bytes = dalek_to_keypair_bytes(kp);
+        let (pkcs_bytes, alg) =
+            keypair_bytes_to_pkcs8_n_algo(keypair_bytes).map_err(eyre::Report::new)?;
+
+        sign_certificate_signing_request(certificate_request_der, (pkcs_bytes.as_bytes(), alg))
+    }
+
+    fn keypair_to_der_certificate_request(
+        subject_names: impl Into<Vec<String>>,
+        kp: Self::KeyPair,
+    ) -> Result<Vec<u8>, eyre::Report> {
+        let keypair_bytes = dalek_to_keypair_bytes(kp);
+        let (pkcs_bytes, alg) =
+            keypair_bytes_to_pkcs8_n_algo(keypair_bytes).map_err(eyre::Report::new)?;
+        let kp = KeyPair::from_der_and_sign_algo(pkcs_bytes.as_bytes(), alg)?;
+
+        let mut cert_params = CertificateParams::new(subject_names.into());
+        cert_params.key_pair = Some(kp);
+        cert_params.distinguished_name = rcgen::DistinguishedName::new();
+        cert_params.alg = alg;
+
+        let cert = rcgen::Certificate::from_params(cert_params).expect(
+            "unreachable! from_params should only fail if the key is incompatible with params.algo",
+        );
+        Ok(cert.serialize_request_der()?)
     }
 }
