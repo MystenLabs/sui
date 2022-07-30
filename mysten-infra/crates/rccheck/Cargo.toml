@@ -14,7 +14,7 @@ ed25519-dalek = "1.0.1"
 eyre = "0.6.8"
 ouroboros = "0.15.1"
 pkcs8 = { version = "0.9.0", features = ["std"] }
-rcgen = "0.9.3"
+rcgen = { version = "0.9.3", features = ["x509-parser"] }
 rustls = { version = "0.20.6", default-features = false, features = ["logging", "dangerous_configuration"] }
 serde = { version = "1.0.140", features = ["derive"] }
 tracing = "0.1.36"
@@ -25,3 +25,6 @@ x509-parser = "0.13.0"
 bincode = "1.3.3"
 proptest = "1.0.0"
 rand = "0.7.3"
+
+[env]
+COMMON_DISTINGUISHED_NAME = "NARWHAL"
