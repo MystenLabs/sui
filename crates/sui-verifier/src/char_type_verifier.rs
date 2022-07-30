@@ -69,10 +69,10 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
         let fn_handle = module.function_handle_at(fn_def.function);
         let fn_name = module.identifier_at(fn_handle.name);
         if fn_name == INIT_FN_NAME {
-            if let Some((struct_name, struct_handle, _)) = char_type_candidate {
+            if let Some((candidate_name, candidate_handle, _)) = char_type_candidate {
                 // only verify if init function conforms to characteristic types requirements if we
                 // have a characteristic type candidate
-                verify_init_function_char_type(module, fn_handle, struct_name, struct_handle)
+                verify_init_function_char_type(module, fn_handle, candidate_name, candidate_handle)
                     .map_err(verification_failure)?;
             } else {
                 // if there is no characteristic type candidate than the init function should have
@@ -81,10 +81,10 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
                     .map_err(verification_failure)?;
             }
         }
-        if let Some((struct_name, _, def)) = char_type_candidate {
+        if let Some((candidate_name, _, def)) = char_type_candidate {
             // only verify lack of characteristic types instantiations if we have a
             // characteristic type candidate
-            verify_no_instantiations(module, fn_def, struct_name, def)
+            verify_no_instantiations(module, fn_def, candidate_name, def)
                 .map_err(verification_failure)?;
         }
     }
@@ -103,7 +103,7 @@ fn verify_char_type(
     // must have only one ability: drop
     let drop_set = AbilitySet::EMPTY | Ability::Drop;
     let abilities = struct_handle.abilities;
-    if !(abilities.has_drop() && (abilities.union(drop_set)) == drop_set) {
+    if abilities != drop_set {
         return Err(format!(
             "characteristic type candidate {}::{} must have a single ability: drop",
             module.self_id(),
