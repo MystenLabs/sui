@@ -27,6 +27,7 @@ fn rc_gen_self_client() {
     let cert_bytes: Vec<u8> = cert.serialize_der().unwrap();
     let spki = cert_bytes_to_spki_bytes(&cert_bytes);
     let psk = Psk::from_der(&spki).unwrap();
+
     let now = SystemTime::now();
     let rstls_cert = rustls::Certificate(cert_bytes);
 
