@@ -9,10 +9,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
-tokio = { version = "1.20.0", features = ["sync", "macros", "rt", "rt-multi-thread"] }
-tracing = "0.1.35"
+tokio = { version = "1.20.1", features = ["sync", "macros", "rt", "rt-multi-thread"] }
+tracing = "0.1.36"
 tracing-appender = "0.2.2"
-tracing-subscriber = { version = "0.3.14", features = ["std", "time", "registry", "env-filter"] }
+tracing-subscriber = { version = "0.3.15", features = ["std", "time", "registry", "env-filter"] }
 tracing-bunyan-formatter = "0.3.3"
 tracing-opentelemetry = { version = "0.17.4", optional = true }
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"], optional = true }
