@@ -11,7 +11,7 @@ module nfts::auction_lib {
     use sui::coin;
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::object::{Self, ID, UID};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self,TxContext};
 
@@ -38,10 +38,6 @@ module nfts::auction_lib {
         owner: address,
         /// Data representing the highest bid (starts with no bid)
         bid_data: Option<BidData>,
-    }
-
-    public(friend) fun auction_id<T: key + store>(auction: &Auction<T>): &ID {
-        object::info_id(&auction.id)
     }
 
     public(friend) fun auction_owner<T: key + store>(auction: &Auction<T>): address {
@@ -167,7 +163,7 @@ module nfts::auction_lib {
     /// exposes transfer::transfer_to_object_id
     public fun transfer_to_object_id<T: key + store>(
         obj: Auction<T>,
-        owner_id: &id,
+        owner_id: &UID,
     ) {
         transfer::transfer_to_object_id(obj, owner_id)
     }

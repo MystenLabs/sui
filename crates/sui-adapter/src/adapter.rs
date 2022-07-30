@@ -31,7 +31,9 @@ use sui_types::{
     event::{Event, TransferType},
     gas::SuiGasStatus,
     id::UID,
-    messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
+    messages::{
+        CallArg, EntryArgumentErrorKind, ExecutionFailureStatus, InputObjectKind, ObjectArg,
+    },
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
     storage::{DeleteKind, ParentSync, Storage},
     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -535,7 +537,12 @@ fn process_successful_execution<
                             let previous_version =
                                 match state_view.get_latest_parent_entry_ref(*obj_id) {
                                     Ok(Some((_, previous_version, _))) => previous_version,
-                                    _ => todo!(),
+                                    _ => {
+                                        return Err(ExecutionError::new_with_source(
+                                            ExecutionErrorKind::InvariantViolation,
+                                            missing_unwrapped_msg(obj_id),
+                                        ));
+                                    }
                                 };
                             state_view.delete_object(
                                 obj_id,
@@ -611,7 +618,12 @@ fn handle_transfer<
         // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
         None if is_unwrapped => match state_view.get_latest_parent_entry_ref(id) {
             Ok(Some((_, last_version, _))) => last_version,
-            _ => todo!(),
+            _ => {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvariantViolation,
+                    missing_unwrapped_msg(&id),
+                ));
+            }
         },
         None => SequenceNumber::new(),
     };
@@ -1215,4 +1227,11 @@ fn struct_tag_equals_struct_inst(
                 )
             },
         )
+}
+
+fn missing_unwrapped_msg(id: &ObjectID) -> String {
+    format!(
+        "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
+        id
+    )
 }

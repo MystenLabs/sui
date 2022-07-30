@@ -94,7 +94,7 @@ module nfts::auction {
         auction: &mut Auction<T>, bid: Bid, ctx: &mut TxContext
     ) {
         let Bid { id, bidder, auction_id, bid: balance } = bid;
-        assert!(auction_lib::auction_id(auction) == &auction_id, EWrongAuction);
+        assert!(object::borrow_id(auction) == &auction_id, EWrongAuction);
         auction_lib::update_auction(auction, bidder, balance, ctx);
 
         object::delete(id);

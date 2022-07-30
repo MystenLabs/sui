@@ -4,7 +4,7 @@
 module nfts::chat {
     use std::ascii::{Self, String};
     use std::option::{Self, Option, some};
-    use sui::object::{Self, ID, UID};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::vector::length;
@@ -19,12 +19,12 @@ module nfts::chat {
     struct Chat has key, store {
         id: UID,
         // The ID of the chat app.
-        app_id: ID,
+        app_id: address,
         // Post's text.
         text: String,
         // Set if referencing an another object (i.e., due to a Like, Retweet, Reply etc).
         // We allow referencing any object type, not ony Chat NFTs.
-        ref_id: Option<ID>,
+        ref_id: Option<address>,
         // app-specific metadata. We do not enforce a metadata format and delegate this to app layer.
         metadata: vector<u8>,
     }
@@ -36,9 +36,9 @@ module nfts::chat {
 
     /// Mint (post) a Chat object.
     fun post_internal(
-        app_id: ID,
+        app_id: address,
         text: vector<u8>,
-        ref_id: Option<ID>,
+        ref_id: Option<address>,
         metadata: vector<u8>,
         ctx: &mut TxContext,
     ) {
@@ -60,7 +60,7 @@ module nfts::chat {
         metadata: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        post_internal(object::id_from_address(app_identifier), text, option::none(), metadata, ctx);
+        post_internal(app_identifier, text, option::none(), metadata, ctx);
     }
 
     /// Mint (post) a Chat object and reference another object (i.e., to simulate retweet, reply, like, attach).
@@ -73,7 +73,7 @@ module nfts::chat {
         metadata: vector<u8>,
         ctx: &mut TxContext,
     ) {
-        post_internal(object::id_from_address(app_identifier), text, some(object::id_from_address(ref_identifier)), metadata, ctx);
+        post_internal(app_identifier, text, some(ref_identifier), metadata, ctx);
     }
 
     /// Burn a Chat object.
