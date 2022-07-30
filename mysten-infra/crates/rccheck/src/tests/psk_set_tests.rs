@@ -3,7 +3,6 @@
 
 use crate::{ed25519_certgen::Ed25519, test_utils::cert_bytes_to_spki_bytes, *};
 use rcgen::generate_simple_self_signed;
-use rustls::{client::ServerCertVerifier, server::ClientCertVerifier};
 
 #[test]
 fn serde_round_trip_psk_set() {
@@ -39,12 +38,13 @@ fn rc_gen_self_signed_dalek() {
     let cert = Ed25519::keypair_to_certificate(subject_alt_names, kp).unwrap();
 
     // this passes client verification
-    psk_set.verify_client_cert(&cert, &[], now).unwrap();
+    psk_set.verify_client_cert(&spki, &cert, &[], now).unwrap();
 
     // this passes server verification
     let mut empty = std::iter::empty();
     psk_set
         .verify_server_cert(
+            &spki,
             &cert,
             &[],
             &rustls::ServerName::try_from("localhost").unwrap(),
@@ -74,7 +74,7 @@ fn rc_gen_not_self_signed_dalek() {
 
     // this does not pass client verification
     assert!(psk_set
-        .verify_client_cert(&invalid_cert, &[], now)
+        .verify_client_cert(&spki, &invalid_cert, &[], now)
         .err()
         .unwrap()
         .to_string()
@@ -84,6 +84,7 @@ fn rc_gen_not_self_signed_dalek() {
     let mut empty = std::iter::empty();
     assert!(psk_set
         .verify_server_cert(
+            &spki,
             &invalid_cert,
             &[],
             &rustls::ServerName::try_from("localhost").unwrap(),
