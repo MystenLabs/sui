@@ -23,8 +23,6 @@ sui-adapter = { path = "../sui-adapter" }
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
-sui-gateway = { path = "../sui-gateway" }
-sui-json = { path = "../sui-json" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-node = { path = "../sui-node" }

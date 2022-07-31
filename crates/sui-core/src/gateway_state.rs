@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +23,8 @@ use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
+use sui_config::gateway::GatewayConfig;
+use sui_config::ValidatorInfo;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Data, ObjectFormatOptions, Owner};
 use sui_types::{
@@ -38,6 +40,7 @@ use sui_types::{
 
 use crate::authority::ResolverWrapper;
 use crate::authority_aggregator::AuthAggMetrics;
+use crate::authority_client::NetworkAuthorityClient;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -171,7 +174,7 @@ pub struct GatewayState<A> {
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
     pub fn new(
-        path: PathBuf,
+        path: &Path,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         prometheus_registry: &Registry,
@@ -186,7 +189,7 @@ impl<A> GatewayState<A> {
     }
 
     pub fn new_with_authorities(
-        path: PathBuf,
+        path: &Path,
         authorities: AuthorityAggregator<A>,
         metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
@@ -220,6 +223,48 @@ impl<A> GatewayState<A> {
     #[cfg(test)]
     pub fn store(&self) -> &Arc<GatewayStore> {
         &self.store
+    }
+}
+
+impl GatewayState<NetworkAuthorityClient> {
+    pub fn create_client(
+        config: &GatewayConfig,
+        prometheus_registry: Option<&Registry>,
+    ) -> Result<GatewayClient, anyhow::Error> {
+        let committee = Self::make_committee(config)?;
+        let authority_clients = Self::make_authority_clients(config);
+        let default_registry = Registry::new();
+        let prometheus_registry = prometheus_registry.unwrap_or(&default_registry);
+        Ok(Arc::new(GatewayState::new(
+            &config.db_folder_path,
+            committee,
+            authority_clients,
+            prometheus_registry,
+        )?))
+    }
+
+    pub fn make_committee(config: &GatewayConfig) -> SuiResult<Committee> {
+        Committee::new(
+            config.epoch,
+            ValidatorInfo::voting_rights(&config.validator_set),
+        )
+    }
+
+    pub fn make_authority_clients(
+        config: &GatewayConfig,
+    ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
+        let mut authority_clients = BTreeMap::new();
+        let mut network_config = mysten_network::config::Config::new();
+        network_config.connect_timeout = Some(config.send_timeout);
+        network_config.request_timeout = Some(config.recv_timeout);
+        for authority in &config.validator_set {
+            let channel = network_config
+                .connect_lazy(authority.network_address())
+                .unwrap();
+            let client = NetworkAuthorityClient::new(channel);
+            authority_clients.insert(authority.public_key(), client);
+        }
+        authority_clients
     }
 }
 

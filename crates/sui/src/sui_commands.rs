@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::client_commands::{SuiClientCommands, WalletContext};
-use crate::config::{GatewayConfig, GatewayType, SuiClientConfig};
+use crate::config::SuiClientConfig;
 use crate::console::start_console;
 use crate::genesis_ceremony::{run, Ceremony};
 use crate::keytool::KeyToolCommand;
@@ -14,6 +14,7 @@ use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+use sui_config::gateway::GatewayConfig;
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_DEV_NET_URL, SUI_KEYSTORE_FILENAME};
 use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
 use sui_config::{
@@ -21,7 +22,7 @@ use sui_config::{
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
 use sui_sdk::crypto::{KeystoreType, SuiKeystore};
-use sui_sdk::SuiClient;
+use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::Swarm;
 use sui_types::crypto::KeypairTraits;
 use tracing::info;
@@ -286,7 +287,7 @@ impl SuiCommand {
                 let wallet_config = SuiClientConfig {
                     accounts,
                     keystore: KeystoreType::File(keystore_path),
-                    gateway: GatewayType::Embedded(wallet_gateway_config),
+                    gateway: ClientType::Embedded(wallet_gateway_config),
                     active_address,
                 };
 
@@ -319,14 +320,14 @@ impl SuiCommand {
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config)?;
-                let mut context = WalletContext::new(&config)?;
+                let mut context = WalletContext::new(&config).await?;
                 sync_accounts(&mut context).await?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client { config, cmd, json } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
                 prompt_if_no_config(&config)?;
-                let mut context = WalletContext::new(&config)?;
+                let mut context = WalletContext::new(&config).await?;
 
                 if let Some(cmd) = cmd {
                     // Do not sync if command is a gateway switch, as the current gateway might be unreachable and causes sync to panic.
@@ -406,7 +407,7 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
             SuiClientConfig {
                 accounts: vec![new_address],
                 keystore,
-                gateway: GatewayType::RPC(url),
+                gateway: ClientType::RPC(url),
                 active_address: Some(new_address),
             }
             .persisted(wallet_conf_path)

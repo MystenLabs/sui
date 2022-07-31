@@ -155,7 +155,7 @@ impl SimpleFaucet {
 
         let data = context
             .gateway
-            .public_transfer_object(signer, coin_id, Some(gas_object_id), budget, recipient)
+            .transfer_object(signer, coin_id, Some(gas_object_id), budget, recipient)
             .await?;
         let signature = context.keystore.sign(&signer, &data.to_bytes())?;
 
