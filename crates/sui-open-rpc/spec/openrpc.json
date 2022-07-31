@@ -1349,7 +1349,7 @@
         },
         {
           "name": "amount",
-          "description": "the amount to be split out from the Sui coin object and transferred to the recipient",
+          "description": "the amount to be split out and transferred",
           "schema": {
             "type": "integer",
             "format": "uint64",
