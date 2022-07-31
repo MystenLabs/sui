@@ -9,13 +9,13 @@ import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
 
 import st from './NFTDisplay.module.scss';
 
-export type SuiObjectProps = {
+export type NFTsProps = {
     nftobj: SuiObjectType;
     showlabel?: boolean;
     size?: 'small' | 'medium' | 'large';
 };
 
-function NFTdisplay({ nftobj, showlabel, size = 'medium' }: SuiObjectProps) {
+function NFTDisplayCard({ nftobj, showlabel, size = 'medium' }: NFTsProps) {
     const imgUrl = useMediaUrl(nftobj.data);
     const nftFields = isSuiMoveObject(nftobj.data) ? nftobj.data.fields : null;
 
@@ -31,4 +31,4 @@ function NFTdisplay({ nftobj, showlabel, size = 'medium' }: SuiObjectProps) {
     );
 }
 
-export default NFTdisplay;
+export default NFTDisplayCard;

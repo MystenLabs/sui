@@ -34,6 +34,15 @@ $main-extra-space: sizing.$main-bottom-space;
     text-overflow: ellipsis;
 }
 
+@mixin angled-arrow($color: colors.$gray-65) {
+    transform: rotate(135deg);
+    font-weight: 300;
+    margin: 0;
+    margin-right: 10px;
+    font-size: 14px;
+    color: $color;
+}
+
 @mixin typography($type) {
     @if $type == 'stat/col-header' {
         font-style: normal;
@@ -88,5 +97,15 @@ $main-extra-space: sizing.$main-bottom-space;
         font-size: 14px;
         line-height: 17px;
         color: colors.$gray-100;
+    } @else if $type == 'text-primary-sm' {
+        font-style: normal;
+        font-weight: 500;
+        font-size: 14px;
+        line-height: 13px;
+    } @else if $type == 'text-primary-sm' {
+        font-style: normal;
+        font-weight: 500;
+        font-size: 14px;
+        line-height: 13px;
     }
 }

@@ -12,7 +12,7 @@ import { accountNftsSelector } from '_redux/slices/account';
 import st from './NFTPage.module.scss';
 
 function NftsPage() {
-    const nfts = useAppSelector(accountNftsSelector);
+    const nfts = useAppSelector(accountNftsSelector) || [];
 
     return (
         <div className={st.container}>

@@ -1,16 +1,53 @@
+@use '_values/colors';
+
 .container {
     display: flex;
     flex-flow: column nowrap;
-    flex: 1;
-    align-self: stretch;
+    overflow-x: visible;
+    height: 100%;
+}
+
+.shadow {
+    box-shadow: 0 0 44px rgb(0 0 0 / 15%);
+}
+
+.arrow-action-icon {
+    font-size: 10px;
+    color: #adcadd;
+    margin-left: 12px;
+}
+
+.send-nft {
+    margin-top: 20px;
 }
 
 .group {
     display: flex;
-    flex-flow: column nowrap;
+    width: 100%;
 
-    & + & {
-        margin-top: 8px;
+    .input-group-append,
+    .input {
+        padding: 12px;
+        border: 1px solid colors.$gray-50;
+        box-shadow: 0 1px 2px #1018280d;
+        border-radius: 10px;
+    }
+
+    .input {
+        width: 90%;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+    }
+
+    .input-group-append {
+        padding: 0 20px;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        border-left: 0;
+        background-color: colors.$gray-40;
+        display: flex;
+        justify-content: center;
+        align-items: center;
     }
 }
 
@@ -32,8 +69,4 @@
     font-weight: 400;
     color: #666;
     margin-top: 1px;
-}
-
-.input {
-    padding: 12px;
 }

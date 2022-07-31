@@ -14,6 +14,7 @@ import HomePage, {
     TokensPage,
     TransactionDetailsPage,
     TransactionsPage,
+    TransferNFTPage,
     TransferCoinPage,
     NFTDetialsPage,
 } from '_pages/home';
@@ -27,7 +28,7 @@ import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
 import { setNavVisibility } from '_redux/slices/app';
 
-const HIDDEN_MENU_PATHS = ['/stake-new', '/nft-details'];
+const HIDDEN_MENU_PATHS = ['/stake-new', '/nft-details', '/send-nft'];
 
 const App = () => {
     const dispatch = useAppDispatch();
@@ -56,6 +57,7 @@ const App = () => {
                 <Route path="nfts" element={<NftsPage />} />
                 <Route path="nft-details" element={<NFTDetialsPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
+                <Route path="send-nft" element={<TransferNFTPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="stake" element={<StakePage />} />
                 {process.env.NODE_ENV === 'development' ? (

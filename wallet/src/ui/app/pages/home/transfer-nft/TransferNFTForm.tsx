@@ -41,12 +41,14 @@ function TransferNFTForm({
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
             <div className={st.group}>
-                <label className={st.label}>To:</label>
                 <Field
                     component={AddressInput}
                     name="to"
                     className={st.input}
                 />
+                <div className={st.inputGroupAppend}>s</div>
+            </div>
+            <div className={st.error}>
                 <div className={st.muted}>The recipient&apos;s address</div>
                 <ErrorMessage className={st.error} name="to" component="div" />
             </div>

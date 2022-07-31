@@ -7,6 +7,15 @@
     flex-flow: column nowrap;
     overflow-x: visible;
     height: 100%;
+
+    .send-nft-btn {
+        @include utils.typography('text-primary-sm');
+
+        background-color: colors.$gray-45;
+        border-radius: 10px;
+        display: flex;
+        justify-content: center;
+    }
 }
 
 .page-title {
@@ -50,12 +59,6 @@
     font-size: 10px;
 }
 
-.staked-container {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-
 .action {
     flex-grow: 1;
     flex-basis: 0;
@@ -91,22 +94,38 @@
     background-position: bottom;
     background-repeat: no-repeat;
     width: 100%;
-    display: grid;
-    grid-template-columns: 1fr 1fr;
+
+    .nft-item-detail {
+        display: flex;
+        flex-flow: row nowrap;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 10px;
+
+        @include utils.typography('text-primary-sm');
+
+        .label {
+            color: colors.$gray-80;
+        }
+    }
+
+    .explorer-link {
+        @include utils.typography('text-primary-sm');
+
+        text-decoration: none;
+        font-family: 'Space Mono', ui-monospace, monospace;
+        color: colors.$sui-dark-blue;
+    }
 }
 
 .angled-arrow {
-    transform: rotate(-45deg);
-    color: #9c9fa4;
-    font-weight: 300;
-    margin: 0;
-    margin-right: 10px;
+    @include utils.angled-arrow;
 }
 
 .external-link {
     font-weight: 600;
     font-size: 14px;
-    padding: 12px 20px;
+    padding: 13px 20px;
     border-radius: 10px;
     background: colors.$cta-blue;
     color: colors.$white;

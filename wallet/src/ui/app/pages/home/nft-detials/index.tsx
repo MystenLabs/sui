@@ -4,21 +4,23 @@
 import { isSuiMoveObject } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo } from 'react';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams, Link } from 'react-router-dom';
 
-//useNavigate,
 import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
-import Button from '_app/shared/button';
 import PageTitle from '_app/shared/page-title';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
-import NFTdisplay from '_components/nft-display';
-import { useAppSelector } from '_hooks';
+import NFTDisplayCard from '_components/nft-display';
+import {
+    useAppSelector,
+    useFileExtentionType,
+    useMiddleEllipsis,
+} from '_hooks';
 import { accountNftsSelector } from '_redux/slices/account';
 
 import st from './NFTDetails.module.scss';
@@ -30,7 +32,6 @@ function NFTDetialsPage() {
         [searchParams]
     );
 
-    //, useMiddleEllipsis
     let selectedNFT;
     let nftFields;
     const nftCollections = useAppSelector(accountNftsSelector);
@@ -45,7 +46,9 @@ function NFTDetialsPage() {
             ? selectedNFT.data.fields
             : null;
     }
-    console.log(nftFields);
+
+    const shortAddress = useMiddleEllipsis(nftFields?.info.id || '', 10);
+    const fileExtentionType = useFileExtentionType(nftFields?.url || '');
 
     if (!objectId || !selectedNFT) {
         return <Navigate to="/nfts" replace={true} />;
@@ -53,16 +56,23 @@ function NFTDetialsPage() {
 
     const NFTDetails = nftFields && (
         <div className={st.nftDetails}>
-            <div>Object ID</div>
-            <div>
-                <ExplorerLink
-                    type={ExplorerLinkType.address}
-                    address={nftFields.info.id}
-                    title="View on Sui Explorer"
-                    className={st.explorerLink}
-                >
-                    {nftFields.info.id}
-                </ExplorerLink>
+            <div className={st.nftItemDetail}>
+                <div className={st.label}>Object ID</div>
+                <div className={st.value}>
+                    <ExplorerLink
+                        type={ExplorerLinkType.address}
+                        address={nftFields.info.id}
+                        title="View on Sui Explorer"
+                        className={st.explorerLink}
+                        showIcon={false}
+                    >
+                        {shortAddress}
+                    </ExplorerLink>
+                </div>
+            </div>
+            <div className={st.nftItemDetail}>
+                <div className={st.label}>Media Type</div>
+                <div className={st.value}>{fileExtentionType}</div>
             </div>
         </div>
     );
@@ -77,18 +87,28 @@ function NFTDetialsPage() {
             <BottomMenuLayout>
                 <Content>
                     <section className={st.nftDetail}>
-                        <NFTdisplay nftobj={selectedNFT} size="large" />
+                        <NFTDisplayCard nftobj={selectedNFT} size="large" />
                         {NFTDetails}
                     </section>
                 </Content>
                 <Menu stuckClass={st.shadow} className={st.shadow}>
-                    <Button size="large" mode="neutral" className={st.action}>
+                    <Link
+                        to={`/send-nft?${new URLSearchParams({
+                            objectId: selectedNFT.reference.objectId,
+                        }).toString()}`}
+                        className={cl(
+                            'btn',
+                            st.action,
+                            st.sendNftBtn,
+                            'neutral'
+                        )}
+                    >
                         <Icon
-                            icon={SuiIcons.ArrowRight}
+                            icon={SuiIcons.ArrowLeft}
                             className={cl(st.arrowActionIcon, st.angledArrow)}
                         />
                         Send NFT
-                    </Button>
+                    </Link>
                     {nftFields?.url && (
                         <ExternalLink
                             href={nftFields.url}

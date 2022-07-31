@@ -7,6 +7,13 @@ import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
 import TransferNFTForm from './TransferNFTForm';
 import { createValidationSchema } from './validation';
+import BottomMenuLayout, {
+    Content,
+    Menu,
+} from '_app/shared/bottom-menu-layout';
+import Button from '_app/shared/button';
+import PageTitle from '_app/shared/page-title';
+import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import SuiObject from '_components/sui-object';
 import { useAppSelector, useAppDispatch } from '_hooks';
@@ -22,6 +29,8 @@ import {
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
+
+import st from './TransferNFTForm.module.scss';
 
 const initialValues = {
     to: '',
@@ -103,25 +112,45 @@ function TransferNFTPage() {
     }
 
     return (
-        <>
-            <h3>Send This NFT</h3>
-            <SuiObject obj={selectedNFT} />
-            <br />
-            <Loading loading={loadingBalance}>
-                <Formik
-                    initialValues={initialValues}
-                    validateOnMount={true}
-                    validationSchema={validationSchema}
-                    onSubmit={onHandleSubmit}
-                >
-                    <TransferNFTForm
-                        submitError={sendError}
-                        gasBalance={gasAggregateBalance.toString()}
-                        onClearSubmitError={handleOnClearSubmitError}
-                    />
-                </Formik>
-            </Loading>
-        </>
+        <div className={st.container}>
+            <PageTitle
+                title="Send NFT"
+                backLink="/nfts"
+                className={st.pageTitle}
+            />
+            <BottomMenuLayout>
+                <Content>
+                    <div className={st.sendNft}>
+                        <Loading loading={loadingBalance}>
+                            <Formik
+                                initialValues={initialValues}
+                                validateOnMount={true}
+                                validationSchema={validationSchema}
+                                onSubmit={onHandleSubmit}
+                            >
+                                <TransferNFTForm
+                                    submitError={sendError}
+                                    gasBalance={gasAggregateBalance.toString()}
+                                    onClearSubmitError={
+                                        handleOnClearSubmitError
+                                    }
+                                />
+                            </Formik>
+                            <SuiObject obj={selectedNFT} />
+                        </Loading>
+                    </div>
+                </Content>
+                <Menu stuckClass={st.shadow} className={st.shadow}>
+                    <Button size="large" mode="primary" className={st.action}>
+                        Stake Coins
+                        <Icon
+                            icon={SuiIcons.ArrowRight}
+                            className={st.arrowActionIcon}
+                        />
+                    </Button>
+                </Menu>
+            </BottomMenuLayout>
+        </div>
     );
 }
 

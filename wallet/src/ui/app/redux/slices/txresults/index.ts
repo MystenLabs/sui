@@ -34,11 +34,13 @@ interface TransactionManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };
     latestTx: TxResultState[];
+    recentAddresses: string[];
 }
 
 const initialState: TransactionManualState = {
     loading: true,
     latestTx: [],
+    recentAddresses: [],
     error: false,
 };
 type TxResultByAddress = TxResultState[];
@@ -117,6 +119,7 @@ export const getTransactionsByAddress = createAsyncThunk<
         return resp as TxResultByAddress;
     }
 );
+
 const txSlice = createSlice({
     name: 'txresult',
     initialState,
@@ -127,10 +130,15 @@ const txSlice = createSlice({
                 state.loading = false;
                 state.error = false;
                 state.latestTx = action.payload;
+                // Add recent addresses to the list
+                state.recentAddresses = action.payload
+                    .filter((tx) => tx.To)
+                    .map((tx) => tx.To || '');
             })
             .addCase(getTransactionsByAddress.pending, (state, action) => {
                 state.loading = true;
                 state.latestTx = [];
+                state.recentAddresses = [];
             })
             .addCase(
                 getTransactionsByAddress.rejected,
@@ -138,6 +146,7 @@ const txSlice = createSlice({
                     state.loading = false;
                     state.error = { code, message, name };
                     state.latestTx = [];
+                    state.recentAddresses = [];
                 }
             );
     },
