@@ -124,7 +124,7 @@ async fn create_response_sample() -> Result<
     let working_dir = network.network.dir();
     let config = working_dir.join(SUI_CLIENT_CONFIG);
 
-    let mut context = WalletContext::new(&config)?;
+    let mut context = WalletContext::new(&config).await?;
     let address = context.config.accounts.first().cloned().unwrap();
 
     context.gateway.sync_account_state(address).await?;

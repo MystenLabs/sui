@@ -17,12 +17,13 @@ use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
 use sui_benchmark::workloads::workload::get_latest;
 use sui_benchmark::workloads::workload::Payload;
 use sui_benchmark::workloads::workload::Workload;
+use sui_config::gateway::GatewayConfig;
 use sui_config::Config;
 use sui_config::PersistedConfig;
 use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_gateway::config::GatewayConfig;
+use sui_core::gateway_state::GatewayState;
 use sui_node::SuiNode;
 use sui_quorum_driver::QuorumDriverHandler;
 use sui_sdk::crypto::SuiKeystore;
@@ -458,8 +459,8 @@ async fn main() -> Result<()> {
                 ))
             })?;
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
-        let committee = config.make_committee()?;
-        let authority_clients = config.make_authority_clients();
+        let committee = GatewayState::make_committee(&config)?;
+        let authority_clients = GatewayState::make_authority_clients(&config);
         let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
         let aggregator = AuthorityAggregator::new(committee, authority_clients, metrics);
         let primary_gas_id = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
@@ -509,8 +510,8 @@ async fn main() -> Result<()> {
         .unwrap();
     let handle: JoinHandle<()> = std::thread::spawn(move || {
         client_runtime.block_on(async move {
-            let committee = gateway_config.make_committee().unwrap();
-            let authority_clients = gateway_config.make_authority_clients();
+            let committee = GatewayState::make_committee(&gateway_config).unwrap();
+            let authority_clients = GatewayState::make_authority_clients(&gateway_config);
             let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
             let aggregator = AuthorityAggregator::new(committee, authority_clients, metrics);
             let mut workload = make_workload(primary_gas_id, owner, keypair, &opts);
