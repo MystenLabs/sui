@@ -428,7 +428,7 @@ impl Core {
             let before = self.cancel_handlers.len();
             if certificate.round() > 0 {
                 self.cancel_handlers
-                    .retain(|k, _| *k >= certificate.round());
+                    .retain(|k, _| *k >= certificate.round()-1);
             }
             debug!(
                 "Pruned {} messages from obsolete rounds.",
