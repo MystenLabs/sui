@@ -182,7 +182,10 @@ async fn test_transfer_sui_insufficient_gas() {
         .unwrap()
         .effects;
     // We expect this to fail due to insufficient gas.
-    assert!(effects.status.is_err());
+    assert_eq!(
+        effects.status,
+        ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas)
+    );
     // Ensure that the owner of the object did not change if the transfer failed.
     assert_eq!(effects.mutated[0].1, sender);
 }
