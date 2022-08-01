@@ -16,7 +16,7 @@ tracing = { version = "0.1.35", features = ["log"] }
 clap = { version = "3.1.14", features = ["derive"] }
 reqwest = { version = "0.11.11", features = ["blocking", "json"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
-async-trait = "0.1.53"
+async-trait = "0.1.57"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
 

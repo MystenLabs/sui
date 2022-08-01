@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.53"
+async-trait = "0.1.57"
 anyhow = "1.0.58"
 schemars = { version = "0.8.10", features = ["either"] }
 serde = { version = "1.0.140", features = ["derive"] }
