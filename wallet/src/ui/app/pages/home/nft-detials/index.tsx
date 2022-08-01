@@ -47,7 +47,7 @@ function NFTDetialsPage() {
             : null;
     }
 
-    const shortAddress = useMiddleEllipsis(nftFields?.info.id || '', 10);
+    const shortAddress = useMiddleEllipsis(nftFields?.info.id, 10, 6);
     const fileExtentionType = useFileExtentionType(nftFields?.url || '');
 
     if (!objectId || !selectedNFT) {
@@ -87,7 +87,11 @@ function NFTDetialsPage() {
             <BottomMenuLayout>
                 <Content>
                     <section className={st.nftDetail}>
-                        <NFTDisplayCard nftobj={selectedNFT} size="large" />
+                        <NFTDisplayCard
+                            nftobj={selectedNFT}
+                            size="large"
+                            expandable={true}
+                        />
                         {NFTDetails}
                     </section>
                 </Content>

@@ -9,7 +9,7 @@
     height: 100%;
 
     .send-nft-btn {
-        @include utils.typography('text-primary-sm');
+        @include utils.typography('table/text-lg');
 
         background-color: colors.$gray-45;
         border-radius: 10px;
@@ -102,7 +102,7 @@
         justify-content: space-between;
         margin-bottom: 10px;
 
-        @include utils.typography('text-primary-sm');
+        @include utils.typography('table/text-lg');
 
         .label {
             color: colors.$gray-80;
@@ -110,7 +110,7 @@
     }
 
     .explorer-link {
-        @include utils.typography('text-primary-sm');
+        @include utils.typography('table/text-lg');
 
         text-decoration: none;
         font-family: 'Space Mono', ui-monospace, monospace;

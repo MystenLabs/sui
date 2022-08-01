@@ -97,15 +97,5 @@ $main-extra-space: sizing.$main-bottom-space;
         font-size: 14px;
         line-height: 17px;
         color: colors.$gray-100;
-    } @else if $type == 'text-primary-sm' {
-        font-style: normal;
-        font-weight: 500;
-        font-size: 14px;
-        line-height: 13px;
-    } @else if $type == 'text-primary-sm' {
-        font-style: normal;
-        font-weight: 500;
-        font-size: 14px;
-        line-height: 13px;
     }
 }

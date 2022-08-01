@@ -131,9 +131,14 @@ const txSlice = createSlice({
                 state.error = false;
                 state.latestTx = action.payload;
                 // Add recent addresses to the list
-                state.recentAddresses = action.payload
-                    .filter((tx) => tx.To)
-                    .map((tx) => tx.To || '');
+                const recentAddresses = action.payload.map((tx) => [
+                    tx?.To as string,
+                    tx.From as string,
+                ]);
+                // Remove duplicates
+                state.recentAddresses = [
+                    ...new Set(recentAddresses.flat().filter((itm) => itm)),
+                ];
             })
             .addCase(getTransactionsByAddress.pending, (state, action) => {
                 state.loading = true;

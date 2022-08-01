@@ -3,7 +3,7 @@
 import { isSuiMoveObject } from '@mysten/sui.js';
 import cl from 'classnames';
 
-import { useMediaUrl } from '_hooks';
+import { useFileExtentionType, useMediaUrl } from '_hooks';
 
 import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
 
@@ -13,17 +13,26 @@ export type NFTsProps = {
     nftobj: SuiObjectType;
     showlabel?: boolean;
     size?: 'small' | 'medium' | 'large';
+    expandable?: boolean;
+    showNTFType?: boolean;
 };
 
-function NFTDisplayCard({ nftobj, showlabel, size = 'medium' }: NFTsProps) {
+function NFTDisplayCard({
+    nftobj,
+    showlabel,
+    size = 'medium',
+    expandable,
+}: NFTsProps) {
     const imgUrl = useMediaUrl(nftobj.data);
     const nftFields = isSuiMoveObject(nftobj.data) ? nftobj.data.fields : null;
+    const fileExtentionType = useFileExtentionType(nftFields?.url || '');
 
     return (
-        <div className={cl(st.nftimage)}>
+        <div className={cl(st.nftimage, st.showNTFType)}>
             {imgUrl ? (
                 <img className={cl(st.img, st[size])} src={imgUrl} alt="NFT" />
             ) : null}
+            {expandable && <div className={st.expandable}>View Image</div>}
             {showlabel && nftFields?.name && (
                 <div className={st.nftfields}>{nftFields.name}</div>
             )}
