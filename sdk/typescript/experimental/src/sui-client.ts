@@ -26,7 +26,7 @@ export type KeyPair = { publicKey: Uint8Array; secretKey: Uint8Array };
  * Represents a signed transaction which can be sent directly to
  * the Gateway service to the `sui_executeTransaction` method.
  */
-export type SignedTx = [string, string, string];
+export type SignedTx = [string, string, string, string];
 
 /**
  * Handy data manager and a tx sender. Collects all the data ever received
@@ -257,6 +257,7 @@ export class SuiClient {
 
     return [
       toB64(toSign),
+      toB64(new Uint8Array([0])),
       toB64(nacl.sign.detached(toSign, pair.secretKey)),
       toB64(pair.publicKey),
     ];
@@ -267,5 +268,5 @@ export class SuiClient {
  * Get the Sui address from a keypair using a `sha3_256` hash substring.
  */
 export function getAddress(publicKey: Uint8Array): string {
-  return sha3_256(publicKey).slice(0, 40);
+  return sha3_256([0, ...Array.from(publicKey)]).slice(0, 40);
 }
