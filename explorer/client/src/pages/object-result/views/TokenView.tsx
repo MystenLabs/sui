@@ -5,7 +5,11 @@ import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../../components/transactions-for-id/TxForID';
-import { getOwnerStr, parseImageURL } from '../../../utils/objectUtils';
+import {
+    getOwnerStr,
+    parseImageURL,
+    checkIsPropertyType,
+} from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
@@ -20,19 +24,13 @@ function TokenView({ data, name }: { data: DataType; name?: string }) {
         url: parseImageURL(data.data.contents),
     };
 
-    const checkIsPropertyType = (value: any) =>
-        ['number', 'string'].includes(typeof value);
-    const stdLibRe = /0x2::/;
-    const prepObjTypeValue = (typeString: string) =>
-        typeString.replace(stdLibRe, '');
-
     const properties = Object.entries(viewedData.data?.contents).filter(
         ([key, value]) => key !== 'name' && checkIsPropertyType(value)
     );
 
-    const structProperties = Object.entries(viewedData.data?.contents)
-        .filter(([_, value]) => typeof value == 'object')
-        .filter(([key, _]) => key !== 'id');
+    const structProperties = Object.entries(viewedData.data?.contents).filter(
+        ([key, value]) => typeof value == 'object' && key !== 'id'
+    );
 
     let structPropertiesDisplay: any[] = [];
     if (structProperties.length > 0) {
@@ -50,7 +48,7 @@ function TokenView({ data, name }: { data: DataType; name?: string }) {
                         <tbody>
                             <tr>
                                 <td>Type</td>
-                                <td>{prepObjTypeValue(viewedData.objType)}</td>
+                                <td>{trimStdLibPrefix(viewedData.objType)}</td>
                             </tr>
 
                             <tr>
