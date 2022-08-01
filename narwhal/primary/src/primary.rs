@@ -30,6 +30,7 @@ use prometheus::Registry;
 use std::{
     net::Ipv4Addr,
     sync::{atomic::AtomicU64, Arc},
+    time::Duration,
 };
 use store::Store;
 use tokio::{
@@ -40,7 +41,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tonic::{Request, Response, Status};
-use tracing::info;
+use tracing::{info, log::error};
 use types::{
     error::DagError, BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate,
     CertificateDigest, Empty, Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer,
@@ -102,6 +103,59 @@ impl Primary {
         let (tx_payload_availability_responses, rx_payload_availability_responses) =
             channel(CHANNEL_CAPACITY);
         let (tx_state_handler, rx_state_handler) = channel(CHANNEL_CAPACITY);
+
+        // Monitor of channel capacity
+        let mon_tx_others_digests = tx_others_digests.clone();
+        let mon_tx_our_digests = tx_our_digests.clone();
+        let mon_tx_parents = tx_parents.clone();
+        let mon_tx_headers = tx_headers.clone();
+        let mon_tx_sync_headers = tx_sync_headers.clone();
+        let mon_tx_sync_certificates = tx_sync_certificates.clone();
+        let mon_tx_headers_loopback = tx_headers_loopback.clone();
+        let mon_tx_certificates_loopback = tx_certificates_loopback.clone();
+        let mon_tx_primary_messages = tx_primary_messages.clone();
+        let mon_tx_helper_requests = tx_helper_requests.clone();
+        let mon_tx_get_block_commands = tx_get_block_commands.clone();
+        let mon_tx_batches = tx_batches.clone();
+        let mon_tx_block_removal_commands = tx_block_removal_commands.clone();
+        let mon_tx_batch_removal = tx_batch_removal.clone();
+        let mon_tx_block_synchronizer_commands = tx_block_synchronizer_commands.clone();
+        let mon_tx_certificate_responses = tx_certificate_responses.clone();
+        let mon_tx_payload_availability_responses = tx_payload_availability_responses.clone();
+        let mon_tx_state_handler = tx_state_handler.clone();
+
+        tokio::task::spawn(async move {
+            loop {
+                // Dump channel capacities every 5 seconds
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                let capacities = vec![
+                    mon_tx_others_digests.capacity(),
+                    mon_tx_our_digests.capacity(),
+                    mon_tx_parents.capacity(),
+                    mon_tx_headers.capacity(),
+                    mon_tx_sync_headers.capacity(),
+                    mon_tx_sync_certificates.capacity(),
+                    mon_tx_headers_loopback.capacity(),
+                    mon_tx_certificates_loopback.capacity(),
+                    mon_tx_primary_messages.capacity(),
+                    mon_tx_helper_requests.capacity(),
+                    mon_tx_get_block_commands.capacity(),
+                    mon_tx_batches.capacity(),
+                    mon_tx_block_removal_commands.capacity(),
+                    mon_tx_batch_removal.capacity(),
+                    mon_tx_block_synchronizer_commands.capacity(),
+                    mon_tx_certificate_responses.capacity(),
+                    mon_tx_payload_availability_responses.capacity(),
+                    mon_tx_state_handler.capacity(),
+                ];
+
+                if capacities.iter().any(|c| *c == 0) {
+                    error!("Primary Channel Capacities: {:?}", capacities);
+                } else {
+                    info!("Primary Channel Capacities: {:?}", capacities);
+                }
+            }
+        });
 
         // Write the parameters to the logs.
         parameters.tracing();
