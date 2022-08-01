@@ -1315,6 +1315,7 @@
         },
         {
           "name": "sui_object_id",
+          "description": "the Sui coin object to be used in this transaction",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -1332,6 +1333,7 @@
         },
         {
           "name": "recipient",
+          "description": "the recipient's Sui address",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/SuiAddress"
@@ -1339,7 +1341,7 @@
         },
         {
           "name": "amount",
-          "description": "gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided",
+          "description": "the amount to be split out and transferred",
           "schema": {
             "type": "integer",
             "format": "uint64",
