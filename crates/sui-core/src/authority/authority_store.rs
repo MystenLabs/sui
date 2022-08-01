@@ -1458,7 +1458,7 @@ impl ObjectKey {
 
 impl From<ObjectRef> for ObjectKey {
     fn from(object_ref: ObjectRef) -> Self {
-        (&object_ref).into()
+        ObjectKey::from(&object_ref)
     }
 }
 

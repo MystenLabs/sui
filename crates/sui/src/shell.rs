@@ -306,12 +306,9 @@ impl CommandStructure {
     }
 
     fn get_child(&self, name: &str) -> Option<&CommandStructure> {
-        for subcommand in self.children.iter() {
-            if subcommand.name == name {
-                return Some(subcommand);
-            }
-        }
-        None
+        self.children
+            .iter()
+            .find(|&subcommand| subcommand.name == name)
     }
 }
 

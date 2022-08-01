@@ -126,10 +126,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
             local_active = Arc::new(active_authority.clone());
             committee = local_active.state.committee.load().deref().clone();
             target_num_tasks = usize::min(committee.num_members() - 1, degree);
-            peer_names = peer_names
-                .into_iter()
-                .filter(|name| committee.authority_exists(name))
-                .collect();
+            peer_names.retain(|name| committee.authority_exists(name));
         }
         let mut k = 0;
         while gossip_tasks.len() < target_num_tasks {

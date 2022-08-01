@@ -145,8 +145,7 @@ impl SuiAddress {
         S: serde::ser::Serializer,
     {
         serializer.serialize_str(
-            &*key
-                .map(|addr| encode_bytes_hex(&addr))
+            &key.map(|addr| encode_bytes_hex(&addr))
                 .unwrap_or_else(|| "".to_string()),
         )
     }
