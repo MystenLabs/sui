@@ -193,7 +193,6 @@ impl<A> ActiveAuthority<A> {
             lock.iter().map(|(name, h)| (*name, h.no_contact_before)),
             // At least one honest node is at or above it.
             self.net.load().committee.quorum_threshold(),
-            false,
         );
         instant
     }
