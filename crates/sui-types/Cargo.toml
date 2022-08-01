@@ -16,7 +16,7 @@ serde = { version = "1.0.140", features = ["derive"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde"] }
 serde-name = "0.2.1"
 sha2 = "0.9.9"
-sha3 = "0.10.1"
+sha3 = "0.10.2"
 thiserror = "1.0.31"
 tracing = "0.1"
 hex = "0.4.3"
