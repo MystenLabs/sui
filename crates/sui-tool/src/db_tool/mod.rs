@@ -22,12 +22,24 @@ pub struct Dump {
     /// The name of the table to dump
     #[clap(long = "table_name")]
     table_name: String,
+    /// The size of page to dump. This is a u16
+    #[clap(long = "page_size")]
+    page_size: u16,
+    /// The page number to dump
+    #[clap(long = "page_num")]
+    page_number: usize,
 }
 
 pub fn execute_db_tool_command(db_path: PathBuf, cmd: DbToolCommand) -> anyhow::Result<()> {
     match cmd {
         DbToolCommand::ListTables => print_db_all_tables(db_path),
-        DbToolCommand::Dump(d) => print_all_entries(d.gateway, db_path, &d.table_name),
+        DbToolCommand::Dump(d) => print_all_entries(
+            d.gateway,
+            db_path,
+            &d.table_name,
+            d.page_size,
+            d.page_number,
+        ),
     }
 }
 
@@ -36,8 +48,14 @@ pub fn print_db_all_tables(db_path: PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn print_all_entries(gateway: bool, path: PathBuf, table_name: &str) -> anyhow::Result<()> {
-    for (k, v) in dump_table(gateway, path, table_name)? {
+pub fn print_all_entries(
+    gateway: bool,
+    path: PathBuf,
+    table_name: &str,
+    page_size: u16,
+    page_number: usize,
+) -> anyhow::Result<()> {
+    for (k, v) in dump_table(gateway, path, table_name, page_size, page_number)? {
         println!("{:>100?}: {:?}", k, v);
     }
     Ok(())

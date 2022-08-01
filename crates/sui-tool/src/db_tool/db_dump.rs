@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use sui_core::authority::authority_store_tables::StoreTables;
 use sui_storage::default_db_options;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
+use typed_store::traits::DBMapTableUtil;
 
 pub fn list_tables(path: PathBuf) -> anyhow::Result<Vec<String>> {
     rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&default_db_options(None, None).0, &path)
@@ -29,17 +30,20 @@ pub fn dump_table(
     gateway: bool,
     path: PathBuf,
     table_name: &str,
+    page_size: u16,
+    page_number: usize,
 ) -> anyhow::Result<BTreeMap<String, String>> {
     let temp_dir = tempfile::tempdir()?.into_path();
 
     // TODO: Combine these lines in future using Box and dyn skills
     if gateway {
-        let store: StoreTables<EmptySignInfo> = StoreTables::open_read_only(path, temp_dir, None);
-        store.dump(table_name)
+        let store: StoreTables<EmptySignInfo> =
+            StoreTables::open_tables_read_only(path, Some(temp_dir), None);
+        store.dump(table_name, page_size, page_number)
     } else {
         let store: StoreTables<AuthoritySignInfo> =
-            StoreTables::open_read_only(path, temp_dir, None);
-        store.dump(table_name)
+            StoreTables::open_tables_read_only(path, Some(temp_dir), None);
+        store.dump(table_name, page_size, page_number)
     }
 }
 
@@ -47,6 +51,7 @@ pub fn dump_table(
 mod test {
     use sui_core::authority::authority_store_tables::StoreTables;
     use sui_types::crypto::AuthoritySignInfo;
+    use typed_store::traits::DBMapTableUtil;
 
     use crate::db_tool::db_dump::{dump_table, list_tables};
 
@@ -56,7 +61,7 @@ mod test {
 
         // Open the DB for writing
         let _: StoreTables<AuthoritySignInfo> =
-            StoreTables::open_read_write(primary_path.clone(), None);
+            StoreTables::open_tables_read_write(primary_path.clone(), None);
 
         // Get all the tables
         let tables = list_tables(primary_path.clone()).unwrap();
@@ -64,7 +69,7 @@ mod test {
         let mut missing_tables = vec![];
         for t in tables {
             println!("{}", t);
-            if dump_table(false, primary_path.clone(), &t).is_err() {
+            if dump_table(false, primary_path.clone(), &t, 0, 0).is_err() {
                 missing_tables.push(t);
             }
         }
