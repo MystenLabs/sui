@@ -238,6 +238,11 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
         let cost_summary = gas_status.summary(result.is_ok());
         let gas_used = cost_summary.gas_used();
         let gas_rebate = cost_summary.storage_rebate;
+        // We must re-fetch the gas object from the temporary store, as it may have been reset
+        // previously in the case of error.
+        // TODO: It might be cleaner and less error-prone if we put gas object id into
+        // temporary store and move much of the gas logic there.
+        gas_object = temporary_store.read_object(&gas_object_id).unwrap().clone();
         gas::deduct_gas(&mut gas_object, gas_used, gas_rebate);
         trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
         temporary_store.write_object(gas_object);
