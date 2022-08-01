@@ -2,7 +2,7 @@
     // see https://www.typescriptlang.org/tsconfig to better understand tsconfigs
     "include": ["src/**/*", "types"],
     "compilerOptions": {
-      "module": "es2015",
+      "module": "NodeNext",
       "target": "ES5",
       "lib": ["dom", "es2015"],
       "importHelpers": true,
@@ -32,7 +32,7 @@
       "forceConsistentCasingInFileNames": true,
       // `tsdx build` ignores this option, but it is commonly used when type-checking separately with `tsc`
       "noEmit": false,
-      "resolveJsonModule": true,
+      "resolveJsonModule": false,
       "outDir": "dist"
     }
   }
