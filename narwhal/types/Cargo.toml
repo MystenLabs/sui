@@ -34,7 +34,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 [dev-dependencies]
 hex = "0.4.3"
 prost-build = "0.10.4"
-serde_test = "1.0.140"
+serde_test = "1.0.141"
 tonic-build = { version = "0.7.2", features = [ "prost", "transport" ] }
 criterion = "0.3.6"
 
