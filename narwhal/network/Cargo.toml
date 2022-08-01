@@ -20,7 +20,7 @@ crypto = { path = "../crypto" }
 tonic = { version = "0.7.2", features = ["tls"] }
 backoff = { version = "0.4.0", features = ["tokio"] }
 multiaddr = "0.14.0"
-anyhow = "1.0.58"
+anyhow = "1.0.59"
 prometheus = "0.13.1"
 
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
