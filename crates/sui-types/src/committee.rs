@@ -203,7 +203,8 @@ impl Committee {
 
     /// Given a sequence of (AuthorityName, value) for values, provide the
     /// value at the particular threshold by stake. This orders all provided values
-    /// in ascending order and pick the appropriate value that has under it threshold
+    /// in descending order if prefer_larger_value is true or ascending order otherwise.
+    /// It then picks the appropriate value that has under it threshold
     /// stake. You may use the function `validity_threshold` or `quorum_threshold` to
     /// pick the f+1 (1/3 stake) or 2f+1 (2/3 stake) thresholds respectively.
     ///
@@ -218,6 +219,7 @@ impl Committee {
         &self,
         items: impl Iterator<Item = (A, V)>,
         threshold: StakeUnit,
+        prefer_larger_value: bool,
     ) -> (AuthorityName, V)
     where
         A: Borrow<AuthorityName> + Ord,
@@ -227,11 +229,17 @@ impl Committee {
 
         let items = items
             .map(|(a, v)| (v, self.weight(a.borrow()), *a.borrow()))
-            .sorted();
+            .sorted_by(|a, b| {
+                if prefer_larger_value {
+                    Ord::cmp(&b.0, &a.0)
+                } else {
+                    Ord::cmp(&a.0, &b.0)
+                }
+            });
         let mut total = 0;
         for (v, s, a) in items {
             total += s;
-            if threshold < total {
+            if threshold <= total {
                 return (a, v);
             }
         }
@@ -322,5 +330,33 @@ mod test {
 
         let res = committee.shuffle_by_stake(None, Some(&BTreeSet::new()));
         assert_eq!(0, res.len());
+    }
+
+    #[test]
+    fn test_robust_value() {
+        let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec4): (_, AuthorityKeyPair) = get_key_pair();
+        let a1: AuthorityName = sec1.public().into();
+        let a2: AuthorityName = sec2.public().into();
+        let a3: AuthorityName = sec3.public().into();
+        let a4: AuthorityName = sec4.public().into();
+
+        let mut authorities = BTreeMap::new();
+        authorities.insert(a1, 1);
+        authorities.insert(a2, 1);
+        authorities.insert(a3, 1);
+        authorities.insert(a4, 1);
+        let committee = Committee::new(0, authorities).unwrap();
+        let items = vec![(a1, 666), (a2, 1), (a3, 2), (a4, 0)];
+        let (_, value) =
+            committee.robust_value(items.into_iter(), committee.quorum_threshold(), false);
+        assert_eq!(value, 2);
+
+        let items = vec![(a1, "a"), (a2, "b"), (a3, "c"), (a4, "d")];
+        let (_, value) =
+            committee.robust_value(items.into_iter(), committee.quorum_threshold(), true);
+        assert_eq!(value, "b");
     }
 }

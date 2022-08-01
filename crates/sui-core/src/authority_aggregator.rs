@@ -20,7 +20,7 @@ use sui_types::{
         CheckpointContents, CheckpointRequest, CheckpointResponse,
     },
 };
-use tracing::{debug, info, instrument, trace, Instrument};
+use tracing::{debug, error, info, instrument, trace, Instrument};
 
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
@@ -1606,7 +1606,12 @@ where
                     if effects.effects.is_object_mutated_here(obj_ref) {
                         is_ok = true;
                     } else {
-                        // TODO: Report a byzantine fault here
+                        // TODO: Throw a byzantine fault here
+                        error!(
+                            ?object_id,
+                            ?tx_digest,
+                            "get_object_info_execute. Byzantine failure!"
+                        );
                         continue;
                     }
                 }
