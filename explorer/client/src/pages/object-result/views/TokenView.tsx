@@ -132,7 +132,7 @@ function TokenView({ data, name }: { data: DataType; name?: string }) {
                     <table className={styles.properties}>
                         <tbody>
                             {properties.map(([key, value], index) => (
-                                <tr key={`property-${index}`}>
+                                <tr key={index}>
                                     <td>{key}</td>
                                     <td>{value}</td>
                                 </tr>
