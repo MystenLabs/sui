@@ -1,0 +1,27 @@
+[package]
+name = "typed-store-macros"
+version = "0.0.0"
+license = "Apache-2.0"
+authors = ["Ade A. <ade@mystenlabs.com>"]
+description = "macros for typed store"
+repository = "https://github.com/mystenlabs/mysten-infra"
+edition = "2021"
+publish = false
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.64", features = ["derive"] }
+quote = "1.0.9"
+proc-macro2 = "1.0.24"
+anyhow = { version = "1.0.58", features = ["backtrace"] }
+typed-store = {path = "../typed-store"}
+tokio = { version = "1.20.0", features = ["sync", "macros", "rt"] }
+tempfile = "3.3.0"
+rocksdb = { version = "0.18.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
+fdlimit = "0.2.1"
+pre = "0.2.0"
+
+[dev-dependencies]
+anyhow = "1.0.52"
