@@ -19,6 +19,8 @@ tokio = { version = "1.20.0", features = ["sync", "macros", "rt"] }
 thiserror = "1.0.31"
 collectable = "0.0.2"
 fdlimit = "0.2.1"
+anyhow = { version = "1.0.58", features = ["backtrace"] }
+pre = "0.2.0"
 
 [dev-dependencies]
 tempfile = "3.3.0"
