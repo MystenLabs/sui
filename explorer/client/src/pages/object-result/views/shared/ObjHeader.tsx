@@ -13,12 +13,11 @@ type ObjHeaderData = {
 };
 
 function ObjAddressHeader({ data }: { data: ObjHeaderData }) {
-    const ObjectKindName = data.objKind;
     return (
         <div className={styles.objheader}>
             <GoBack />
             <div className={styles.objtypes}>
-                <ObjIcon /> {ObjectKindName}
+                <ObjIcon /> {data.objKind}
             </div>
             <div className={styles.objaddress}>
                 <Longtext text={data.objId} category="objects" isLink={false} />
