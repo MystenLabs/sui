@@ -125,7 +125,7 @@ module defi::shared_escrow_tests {
         };
     }
 
-    fun exchange(scenario: &mut Scenario, bob: &address, item_b_verioned_id: id) {
+    fun exchange(scenario: &mut Scenario, bob: &address, item_b_verioned_id: UID) {
         test_scenario::next_tx(scenario, bob);
         {
             let escrow_wrapper = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
@@ -151,7 +151,7 @@ module defi::shared_escrow_tests {
         test_scenario::next_tx(scenario, &bob);
         let ctx = test_scenario::ctx(scenario);
         let item_b_versioned_id = object::new(ctx);
-        let item_b_id = *object::info_id(&item_b_versioned_id);
+        let item_b_id = object::uid_to_inner(&item_b_versioned_id);
 
         // Alice creates the escrow
         test_scenario::next_tx(scenario, &alice);

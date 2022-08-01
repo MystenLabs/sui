@@ -107,8 +107,8 @@ module defi::escrow_tests {
         let ctx = test_scenario::ctx(scenario);
         let item_b_versioned_id = object::new(ctx);
 
-        let item_a_id = *object::info_id(&item_a_versioned_id);
-        let item_b_id = *object::info_id(&item_b_versioned_id);
+        let item_a_id = object::uid_to_inner(&item_a_versioned_id);
+        let item_b_id = object::uid_to_inner(&item_b_versioned_id);
         if (override_exchange_for) {
             item_b_id = object::id_from_address(RANDOM_ADDRESS);
         };

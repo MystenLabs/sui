@@ -75,8 +75,8 @@ module defi::escrow {
         assert!(&sender1 == &recipient2, EMismatchedSenderRecipient);
         assert!(&sender2 == &recipient1, EMismatchedSenderRecipient);
         // check object ID compatibility
-        assert!(object::id(&escrowed1) == &exchange_for2, EMismatchedExchangeObject);
-        assert!(object::id(&escrowed2) == &exchange_for1, EMismatchedExchangeObject);
+        assert!(object::id(&escrowed1) == exchange_for2, EMismatchedExchangeObject);
+        assert!(object::id(&escrowed2) == exchange_for1, EMismatchedExchangeObject);
         // everything matches. do the swap!
         transfer::transfer(escrowed1, sender2);
         transfer::transfer(escrowed2, sender1)

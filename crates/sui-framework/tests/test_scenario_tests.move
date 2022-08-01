@@ -401,7 +401,7 @@ module sui::test_scenarioTests {
     /// Create an object and transfer it to the sender of `scenario`.
     fun create_and_transfer_object(scenario: &mut Scenario, value: u64) {
         let object = Object {
-            info: test_scenario::new_object(scenario),
+            id: test_scenario::new_object(scenario),
             value,
         };
         transfer::transfer(object, test_scenario::sender(scenario));

@@ -58,7 +58,7 @@ module defi::shared_escrow {
         assert!(option::is_some(&escrow.escrowed), EAlreadyExchangedOrCancelled);
         let escrowed_item = option::extract<T>(&mut escrow.escrowed);
         assert!(&tx_context::sender(ctx) == &escrow.recipient, EWrongRecipient);
-        assert!(object::id(&obj) == &escrow.exchange_for, EWrongExchangeObject);
+        assert!(object::borrow_id(&obj) == &escrow.exchange_for, EWrongExchangeObject);
         // everything matches. do the swap!
         transfer::transfer(escrowed_item, tx_context::sender(ctx));
         transfer::transfer(obj, escrow.creator);

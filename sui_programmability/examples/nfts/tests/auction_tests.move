@@ -65,7 +65,7 @@ module nfts::auction_tests {
         // auction_id is used - otherwise id would still be considered
         // borrowed and could not be passed argument to a function
         // consuming it
-        let auction_id = *object::info_id(&id);
+        let auction_id = object::uid_to_inner(&id);
         auction::create_auction(to_sell, id, auctioneer, ctx);
 
         // a transaction by the first bidder to create and put a bid

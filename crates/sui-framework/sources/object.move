@@ -127,6 +127,15 @@ module sui::object {
     /// restrictable in the object's module.
     native fun borrow_uid<T: key>(obj: &T): &UID;
 
+    // === test functions ===
+
+    #[test_only]
+    /// Test only helper to create a specific ID.
+    /// This is limited to tests to ensure that IDs are generated from objects
+    public fun id_from_address(bytes: address): ID {
+        ID { bytes }
+    }
+
     // === internal functions ===
 
     // helper for delete

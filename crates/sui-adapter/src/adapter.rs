@@ -31,9 +31,7 @@ use sui_types::{
     event::{Event, TransferType},
     gas::SuiGasStatus,
     id::UID,
-    messages::{
-        CallArg, EntryArgumentErrorKind, ExecutionFailureStatus, InputObjectKind, ObjectArg,
-    },
+    messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
     storage::{DeleteKind, ParentSync, Storage},
     SUI_SYSTEM_STATE_OBJECT_ID,
