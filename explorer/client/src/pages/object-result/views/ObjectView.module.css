@@ -58,8 +58,7 @@ div.metadata > h2 {
     @apply my-0;
 }
 
-div.display div,
-div.display img {
+div.display > div > img {
     @apply max-h-[120px] max-w-[120px] ml-auto;
 }
 
