@@ -206,13 +206,8 @@ module sui::coin {
         burn(c, coin);
     }
 
-    /// Merge two coins together.
-    public entry fun merge<T>(c1: &mut Coin<T>, c2: Coin<T>) {
-        join(c1, c2)
-    }
-
     /// Merge two coins and transfer the result to `recipient`
-    public entry fun merge_and_transfer<T>(
+    public entry fun join_and_transfer<T>(
         c1: Coin<T>, c2: Coin<T>, recipient: address
     ) {
         join(&mut c1, c2);
