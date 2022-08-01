@@ -27,7 +27,7 @@ tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = "0.7.2"
 tower = "0.4.13"
-tracing = "0.1.35"
+tracing = "0.1.36"
 dhat = { version = "0.3.0", optional = true }
 
 consensus = { path = "../consensus" }
@@ -54,7 +54,7 @@ worker = { path = "../worker" }
 async-trait = "0.1.56"
 executor = { path = "../executor" }
 thiserror = "1.0.31"
-tracing = "0.1.35"
+tracing = "0.1.36"
 telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
 [features]

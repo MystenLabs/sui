@@ -14,7 +14,7 @@ rand = { version = "0.7.3", features = ["small_rng"] }
 thiserror = "1.0.31"
 tokio = { version = "1.20.1", features = ["rt", "net", "sync", "macros", "time"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
-tracing = "0.1.35"
+tracing = "0.1.36"
 types = { path = "../types" }
 crypto = { path = "../crypto" }
 tonic = { version = "0.7.2", features = ["tls"] }
