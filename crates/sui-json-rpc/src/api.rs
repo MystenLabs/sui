@@ -175,11 +175,13 @@ pub trait RpcTransactionBuilder {
         &self,
         /// the transaction signer's Sui address
         signer: SuiAddress,
+        /// the Sui coin object to be used in this transaction
         sui_object_id: ObjectID,
         /// the gas budget, the transaction will fail if the gas cost exceed the budget
         gas_budget: u64,
+        /// the recipient's Sui address
         recipient: SuiAddress,
-        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
+        /// the amount to be split out and transferred
         amount: Option<u64>,
     ) -> RpcResult<TransactionBytes>;
 
