@@ -5,7 +5,7 @@
         @apply border-collapse;
     }
 
-    .textdetails td {
+    .textdetails > tbody > tr > td {
         @apply block sm:table-cell text-start align-top text-[0.875rem] leading-[1.063rem];
     }
 
