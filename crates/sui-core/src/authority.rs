@@ -46,7 +46,6 @@ use sui_types::{
     batch::{TxSequenceNumber, UpdateItem},
     committee::Committee,
     crypto::AuthoritySignature,
-    crypto::PublicKey,
     error::{SuiError, SuiResult},
     fp_ensure,
     messages::*,
@@ -1507,7 +1506,6 @@ impl AuthorityState {
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
-    type PubKey = PublicKey;
     type Transaction = ConsensusTransaction;
     type Error = SuiError;
     type Outcome = Vec<u8>;
@@ -1517,10 +1515,10 @@ impl ExecutionState for AuthorityState {
     async fn handle_consensus_transaction(
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
-        _consensus_output: &narwhal_consensus::ConsensusOutput<Self::PubKey>,
+        _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<narwhal_config::Committee<PublicKey>>), Self::Error> {
+    ) -> Result<(Self::Outcome, Option<narwhal_config::Committee>), Self::Error> {
         self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
