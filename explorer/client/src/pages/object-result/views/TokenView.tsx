@@ -26,9 +26,9 @@ function TokenView({ data, name }: { data: DataType; name?: string }) {
     const prepObjTypeValue = (typeString: string) =>
         typeString.replace(stdLibRe, '');
 
-    const properties = Object.entries(viewedData.data?.contents)
-        .filter(([key, _]) => key !== 'name')
-        .filter(([_, value]) => checkIsPropertyType(value));
+    const properties = Object.entries(viewedData.data?.contents).filter(
+        ([key, value]) => key !== 'name' && checkIsPropertyType(value)
+    );
 
     const structProperties = Object.entries(viewedData.data?.contents)
         .filter(([_, value]) => typeof value == 'object')
