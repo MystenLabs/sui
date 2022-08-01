@@ -5,6 +5,7 @@ use super::*;
 
 use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use super::move_integration_tests::build_and_try_publish_test_package;
+use crate::authority::authority_tests::init_state;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use sui_adapter::genesis;
@@ -154,6 +155,39 @@ async fn test_native_transfer_gas_price_is_used() {
             )
         }
     );
+}
+
+#[tokio::test]
+async fn test_transfer_sui_insufficient_gas() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_gas_for_testing(gas_object_id, sender, 50);
+    let gas_object_ref = gas_object.compute_object_reference();
+    let authority_state = init_state().await;
+    authority_state.insert_genesis_object(gas_object).await;
+
+    let kind = TransactionKind::Single(SingleTransactionKind::TransferSui(TransferSui {
+        recipient,
+        amount: None,
+    }));
+    let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 50, 1);
+    let signature = Signature::new(&data, &sender_key);
+    let tx = Transaction::new(data, signature);
+
+    let effects = send_and_confirm_transaction(&authority_state, tx)
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects;
+    // We expect this to fail due to insufficient gas.
+    assert_eq!(
+        effects.status,
+        ExecutionStatus::new_failure(ExecutionFailureStatus::InsufficientGas)
+    );
+    // Ensure that the owner of the object did not change if the transfer failed.
+    assert_eq!(effects.mutated[0].1, sender);
 }
 
 #[tokio::test]
