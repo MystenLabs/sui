@@ -21,7 +21,7 @@ tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
 parking_lot = "0.12.1"
 async-trait = "0.1.57"
 tempfile = "3.3.0"
-tracing = "0.1.35"
+tracing = "0.1.36"
 signature = "1.5.0"
 bincode = "1.3.3"
 multiaddr = "0.14.0"

@@ -16,7 +16,7 @@ serde_with = { version = "1.14.0", features = ["hex"] }
 colored = "2.0.0"
 either = "1.7.0"
 itertools = "0.10.3"
-tracing = "0.1.35"
+tracing = "0.1.36"
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
