@@ -351,7 +351,7 @@ parking_lot_core-c38e5c1d305a1b54 = { package = "parking_lot_core", version = "0
 parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0.9", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
 percent-encoding = { version = "2", default-features = false }
-pest = { version = "2", default-features = false }
+pest = { version = "2", features = ["std", "thiserror"] }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5", features = ["graphmap", "matrix_graph", "stable_graph"] }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", features = ["graphmap", "matrix_graph", "stable_graph"] }
 phf = { version = "0.11", default-features = false, features = ["uncased"] }
@@ -859,7 +859,6 @@ lock_api-468e82937335b1c9 = { package = "lock_api", version = "0.3", default-fea
 lock_api-9fbad63c4bcf4a8f = { package = "lock_api", version = "0.4", default-features = false }
 log = { version = "0.4", default-features = false, features = ["serde", "std"] }
 lru = { version = "0.7", features = ["hashbrown"] }
-maplit = { version = "1", default-features = false }
 match_opt = { version = "0.1", default-features = false }
 matchers = { version = "0.1", default-features = false }
 matches = { version = "0.1", default-features = false }
@@ -961,7 +960,7 @@ paste = { version = "1", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
 peeking_take_while = { version = "0.1", default-features = false }
 percent-encoding = { version = "2", default-features = false }
-pest = { version = "2", default-features = false }
+pest = { version = "2", features = ["std", "thiserror"] }
 pest_derive = { version = "2", default-features = false }
 pest_generator = { version = "2", default-features = false }
 pest_meta = { version = "2", default-features = false }
