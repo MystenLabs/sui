@@ -48,14 +48,11 @@ export class JsonRpcClient {
           const text = await res.text();
           const result = JSON.stringify(
             LosslessJSON.parse(text, (key: string, value: any) => {
-              if (value == null) {
-                return value;
-              }
               if (key === 'balance') return value.toString();
               try {
-                if (value.isLosslessNumber) return value.valueOf();
+                if (value !== null && value.isLosslessNumber) return value.valueOf();
               } catch {
-                return value.toString();
+                return value ? value.toString() : key;
               }
               return value;
             })
