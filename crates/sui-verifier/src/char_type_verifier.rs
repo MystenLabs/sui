@@ -96,43 +96,43 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
 // the same as the name of a
 fn verify_char_type(
     module: &CompiledModule,
-    struct_name: &str,
-    struct_handle: &StructHandle,
-    struct_def: &StructDefinition,
+    candidate_name: &str,
+    candidate_handle: &StructHandle,
+    candidate_def: &StructDefinition,
 ) -> Result<(), String> {
     // must have only one ability: drop
     let drop_set = AbilitySet::EMPTY | Ability::Drop;
-    let abilities = struct_handle.abilities;
+    let abilities = candidate_handle.abilities;
     if abilities != drop_set {
         return Err(format!(
             "characteristic type candidate {}::{} must have a single ability: drop",
             module.self_id(),
-            struct_name,
+            candidate_name,
         ));
     }
-    let field_count = struct_def.declared_field_count().map_err(|_| {
+    let field_count = candidate_def.declared_field_count().map_err(|_| {
         format!(
             "characteristic type candidate {}::{} cannot be a native structure",
             module.self_id(),
-            struct_name
+            candidate_name
         )
     })?;
 
     // unwrap below is safe as it will always be successful if declared_field_count call above is
     // successful
-    if field_count != 1 || struct_def.field(0).unwrap().signature.0 != SignatureToken::Bool {
+    if field_count != 1 || candidate_def.field(0).unwrap().signature.0 != SignatureToken::Bool {
         return Err(format!(
             "characteristic type candidate {}::{} must have a single bool field only (or no fields)",
             module.self_id(),
-            struct_name,
+            candidate_name,
         ));
     }
 
-    if !struct_handle.type_parameters.is_empty() {
+    if !candidate_handle.type_parameters.is_empty() {
         return Err(format!(
             "characteristic type candidate {}::{} cannot have type parameters",
             module.self_id(),
-            struct_name,
+            candidate_name,
         ));
     }
     Ok(())
@@ -142,18 +142,18 @@ fn verify_char_type(
 fn verify_init_function_char_type(
     module: &CompiledModule,
     fn_handle: &FunctionHandle,
-    struct_name: &str,
-    struct_handle: &StructHandle,
+    candidate_name: &str,
+    candidate_handle: &StructHandle,
 ) -> Result<(), String> {
     let view = &BinaryIndexedView::Module(module);
     let fn_sig = view.signature_at(fn_handle.parameters);
-    if fn_sig.len() != 2 || !is_char_type(view, &fn_sig.0[0], struct_handle) {
+    if fn_sig.len() != 2 || !is_char_type(view, &fn_sig.0[0], candidate_handle) {
         // check only the first parameter - the other one is checked in entry_points verification
         // pass
         return Err(format!(
             "init function of a module containing characteristic type candidate must have {}::{} as the first parameter",
             module.self_id(),
-            struct_name,
+            candidate_name,
         ));
     }
 
@@ -164,15 +164,9 @@ fn verify_init_function_char_type(
 fn is_char_type(
     view: &BinaryIndexedView,
     tok: &SignatureToken,
-    struct_handle: &StructHandle,
+    candidate_handle: &StructHandle,
 ) -> bool {
-    if let SignatureToken::Struct(idx) = tok {
-        if view.struct_handle_at(*idx) == struct_handle {
-            return true;
-        }
-    }
-
-    false
+    matches!(tok, SignatureToken::Struct(idx) if view.struct_handle_at(*idx) == candidate_handle)
 }
 
 /// Checks if this module's `init` function has a single parameter of TxContext type only
@@ -218,12 +212,13 @@ fn verify_no_instantiations(
             let fn_handle = module.function_handle_at(fn_def.function);
             let fn_name = module.identifier_at(fn_handle.name);
             return Err(format!(
-                        "characteristic type {}::{} is instantiated in the {}::{} function and must never be",
-                        module.self_id(),
-                        struct_name,
-                        module.self_id(),
-                        fn_name,
-                    ));
+                "characteristic type {}::{} is instantiated \
+                         in the {}::{} function and must never be",
+                module.self_id(),
+                struct_name,
+                module.self_id(),
+                fn_name,
+            ));
         }
     }
 
