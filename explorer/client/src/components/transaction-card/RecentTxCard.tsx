@@ -225,10 +225,13 @@ function LatestTxCard({ ...data }: RecentTx) {
         parseInt(searchParams.get('p') || '1', 10) || 1
     );
 
-    const handlePageChange = useCallback((newPage: number) => {
-        setPageIndex(newPage);
-        setSearchParams({ p: newPage.toString() })
-    }, [setSearchParams]);
+    const handlePageChange = useCallback(
+        (newPage: number) => {
+            setPageIndex(newPage);
+            setSearchParams({ p: newPage.toString() });
+        },
+        [setSearchParams]
+    );
 
     // update the page index when the user clicks on the pagination buttons
     useEffect(() => {
