@@ -67,7 +67,80 @@
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Create unsigned batch transaction data.",
+          "params": [
+            {
+              "name": "signer",
+              "value": "0x76a04053bda0a88bda5177b86a15c3b29f559873"
+            },
+            {
+              "name": "single_transaction_params",
+              "value": [
+                {
+                  "moveCallRequestParams": {
+                    "arguments": [
+                      "Example NFT",
+                      "An NFT created by the Sui Command Line Tool",
+                      "ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty"
+                    ],
+                    "function": "mint",
+                    "module": "devnet_nft",
+                    "packageObjectId": "0x0000000000000000000000000000000000000002",
+                    "typeArguments": []
+                  }
+                },
+                {
+                  "transferObjectRequestParams": {
+                    "objectId": "0x1f6de831e52bfb76e51cca8b4e9016838657edfa",
+                    "recipient": "0xcb481232299cd5743151ac4b2d63ae198e7bb0a9"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "gas",
+              "value": "0x011f28e473c95f4013d7d53ec5fbc3b42df8ed10"
+            },
+            {
+              "name": "gas_budget",
+              "value": 1000
+            }
+          ],
+          "result": {
+            "name": "Create unsigned batch transaction data. Result",
+            "value": {
+              "gas": {
+                "digest": "Ge17DLulcl4D5fC34w2za234KsFR9mj1+ApeKpysfGQ=",
+                "objectId": "0x011f28e473c95f4013d7d53ec5fbc3b42df8ed10",
+                "version": 1
+              },
+              "inputObjects": [
+                {
+                  "MovePackage": "0x0000000000000000000000000000000000000002"
+                },
+                {
+                  "ImmOrOwnedMoveObject": {
+                    "digest": "7aFVmctds9uHC+pa7PNTFhw8tSiwxdmAUMRXC/yULYs=",
+                    "objectId": "0x1f6de831e52bfb76e51cca8b4e9016838657edfa",
+                    "version": 1
+                  }
+                },
+                {
+                  "ImmOrOwnedMoveObject": {
+                    "digest": "Ge17DLulcl4D5fC34w2za234KsFR9mj1+ApeKpysfGQ=",
+                    "objectId": "0x011f28e473c95f4013d7d53ec5fbc3b42df8ed10",
+                    "version": 1
+                  }
+                }
+              ],
+              "txBytes": "VHJhbnNhY3Rpb25EYXRhOjoBAgIAAAAAAAAAAAAAAAAAAAAAAAAAAgEAAAAAAAAAIOCcuaceshkCXEyHpnxKqobyCsCqeSvBIe5C4sMmEnBhCmRldm5ldF9uZnQEbWludAADAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5AMtIEjIpnNV0MVGsSy1jrhmOe7CpH23oMeUr+3blHMqLTpAWg4ZX7foBAAAAAAAAACDtoVWZy12z24cL6lrs81MWHDy1KLDF2YBQxFcL/JQti3agQFO9oKiL2lF3uGoVw7KfVZhzAR8o5HPJX0AT19U+xfvDtC347RABAAAAAAAAACAZ7XsMu6VyXgPl8LfjDbNrbfgqwVH2aPX4Cl4qnKx8ZAEAAAAAAAAA6AMAAAAAAAA="
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_executeTransaction",
@@ -117,7 +190,120 @@
         "schema": {
           "$ref": "#/components/schemas/TransactionResponse"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Execute transaction",
+          "params": [
+            {
+              "name": "tx_bytes",
+              "value": "VHJhbnNhY3Rpb25EYXRhOjoAABdY7bkmDSqGyDbvwF8X5cWVJeQExGwtZKelsdk7LYZGgF2NKhIvzNsCAAAAAAAAACA7x9yXWrdfyGV5NTb2bmQYkFA2D2I9yIq7gwAYDN0Kj9BnwzQmQaTOqrLB29rQESsuPkj4xqk9BRZR/i5O764oE0klaDiQqUICAAAAAAAAACD2POST9RLwss+3xCoHzpEwy20FmjiNiGFTbLnFuBqajQEAAAAAAAAA6AMAAAAAAAA="
+            },
+            {
+              "name": "flag",
+              "value": "AA=="
+            },
+            {
+              "name": "signature",
+              "value": "ToDZxUmWfPg6oBlS+ZwhYfOlWzwYkymaQ15TANLjNmkWViWdxJF9lAsj7LflLslRYGN4mNCU4o/tUowJy7b+Aw=="
+            },
+            {
+              "name": "pub_key",
+              "value": "qmWfSqQCF9fGPsDsTjVFDrwGYEcuh21OWNSzokiS75E="
+            }
+          ],
+          "result": {
+            "name": "Execute transaction Result",
+            "value": {
+              "EffectResponse": {
+                "certificate": {
+                  "authSignInfo": {
+                    "epoch": 0,
+                    "signature": [],
+                    "signers_map": [
+                      58,
+                      48,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ]
+                  },
+                  "data": {
+                    "gasBudget": 1000,
+                    "gasPayment": {
+                      "digest": "9jzkk/US8LLPt8QqB86RMMttBZo4jYhhU2y5xbgamo0=",
+                      "objectId": "0xc6a93d051651fe2e4eefae28134925683890a942",
+                      "version": 2
+                    },
+                    "sender": "0xd067c3342641a4ceaab2c1dbdad0112b2e3e48f8",
+                    "transactions": [
+                      {
+                        "TransferObject": {
+                          "objectRef": {
+                            "digest": "O8fcl1q3X8hleTU29m5kGJBQNg9iPciKu4MAGAzdCo8=",
+                            "objectId": "0xc46c2d64a7a5b1d93b2d8646805d8d2a122fccdb",
+                            "version": 2
+                          },
+                          "recipient": "0x1758edb9260d2a86c836efc05f17e5c59525e404"
+                        }
+                      }
+                    ]
+                  },
+                  "transactionDigest": "M9fSFZs98pa0bdZL7Fdgmj8vtK2LRuL9TJ8l1EMo3VA=",
+                  "txSignature": "AE6A2cVJlnz4OqAZUvmcIWHzpVs8GJMpmkNeUwDS4zZpFlYlncSRfZQLI+y35S7JUWBjeJjQlOKP7VKMCcu2/gOqZZ9KpAIX18Y+wOxONUUOvAZgRy6HbU5Y1LOiSJLvkQ=="
+                },
+                "effects": {
+                  "gasObject": {
+                    "owner": {
+                      "ObjectOwner": "0xd067c3342641a4ceaab2c1dbdad0112b2e3e48f8"
+                    },
+                    "reference": {
+                      "digest": "9jzkk/US8LLPt8QqB86RMMttBZo4jYhhU2y5xbgamo0=",
+                      "objectId": "0xc6a93d051651fe2e4eefae28134925683890a942",
+                      "version": 2
+                    }
+                  },
+                  "gasUsed": {
+                    "computationCost": 100,
+                    "storageCost": 100,
+                    "storageRebate": 10
+                  },
+                  "mutated": [
+                    {
+                      "owner": {
+                        "AddressOwner": "0xd067c3342641a4ceaab2c1dbdad0112b2e3e48f8"
+                      },
+                      "reference": {
+                        "digest": "9jzkk/US8LLPt8QqB86RMMttBZo4jYhhU2y5xbgamo0=",
+                        "objectId": "0xc6a93d051651fe2e4eefae28134925683890a942",
+                        "version": 2
+                      }
+                    },
+                    {
+                      "owner": {
+                        "AddressOwner": "0x1758edb9260d2a86c836efc05f17e5c59525e404"
+                      },
+                      "reference": {
+                        "digest": "O8fcl1q3X8hleTU29m5kGJBQNg9iPciKu4MAGAzdCo8=",
+                        "objectId": "0xc46c2d64a7a5b1d93b2d8646805d8d2a122fccdb",
+                        "version": 2
+                      }
+                    }
+                  ],
+                  "status": {
+                    "status": "success"
+                  },
+                  "transactionDigest": "zlFNt7v1DvUYwZWnBTdj0Kjf2ra5Ru6fOVRUkxmsfcY="
+                },
+                "timestamp_ms": null
+              }
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_getEventsByEventType",
@@ -475,7 +661,48 @@
         "schema": {
           "$ref": "#/components/schemas/ObjectRead"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get Object",
+          "params": [
+            {
+              "name": "object_id",
+              "value": "0xbac203232876b27b541433fb2f1438289799049b"
+            }
+          ],
+          "result": {
+            "name": "Get Object Result",
+            "value": {
+              "details": {
+                "data": {
+                  "dataType": "moveObject",
+                  "fields": {
+                    "balance": 10000,
+                    "info": {
+                      "id": "0xbac203232876b27b541433fb2f1438289799049b",
+                      "version": 1
+                    }
+                  },
+                  "has_public_transfer": true,
+                  "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>"
+                },
+                "owner": {
+                  "AddressOwner": "0x349f7a2c205d3a97f66ef42800baa3cb78fb3313"
+                },
+                "previousTransaction": "AYF3X7JqYmMCNr2LxkSjZWSJ0TW6GLEYRgKakYPUNFk=",
+                "reference": {
+                  "digest": "PLvB4DpPjbpAz2z6B7oEPIP2pIiHNkwjMZGkuZr/Hps=",
+                  "objectId": "0xbac203232876b27b541433fb2f1438289799049b",
+                  "version": 1
+                },
+                "storageRebate": 100
+              },
+              "status": "Exists"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_getObjectsOwnedByAddress",
@@ -504,7 +731,63 @@
             "$ref": "#/components/schemas/ObjectInfo"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get objects owned by an address",
+          "params": [
+            {
+              "name": "address",
+              "value": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+            }
+          ],
+          "result": {
+            "name": "Get objects owned by an address Result",
+            "value": [
+              {
+                "digest": "hAUX3IoL5ldXEQRx3y4Mg2RATmMPGKaIKWdw1ullPXA=",
+                "object_id": "0x7d348990b99e55fee2a4bc79b29b27f2f9720e96",
+                "owner": {
+                  "AddressOwner": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+                },
+                "previous_transaction": "k3TpQ4yaBB9zYnjbZVnLfx3gQ4HYIljcgPqeEo2eRLw=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "f4n4BIxgceZGB5K5L/4HgkenfnOrxSl8Q25nFk7I6gM=",
+                "object_id": "0x4748768277b694cee503ea339ebb53fc221a6fc0",
+                "owner": {
+                  "AddressOwner": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+                },
+                "previous_transaction": "Pdy2w4InAYTLHA5wRLJyugsjgtIbBpZt1f8A9fo22+8=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "RlRT5wnT1G2KroN2EHgVFK4bDuZ321+lAV1pYdLQAQc=",
+                "object_id": "0x1abe62cb97d5716d5d05da6e72c49bf2791775d0",
+                "owner": {
+                  "AddressOwner": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+                },
+                "previous_transaction": "0vCxMjueJyE/iwA/eKXN0IEAe9EfCbfm+iMrCj3Od0c=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "3ITAbnlT5fHHae+Kk9y+s5BG0FWAgrZ/FCwx4Iv8pSU=",
+                "object_id": "0xa12ad1e8a8d6521a26daafda96dacf7f582cb1db",
+                "owner": {
+                  "AddressOwner": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+                },
+                "previous_transaction": "w0+opZ68swDnJYYiXWE+sK8yzoCw6VKfxKyiroCjk1A=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getObjectsOwnedByObject",

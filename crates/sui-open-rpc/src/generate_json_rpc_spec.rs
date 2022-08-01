@@ -14,6 +14,7 @@ use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
+use crate::examples::RpcExampleProvider;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_config::genesis_config::GenesisConfig;
@@ -38,6 +39,8 @@ use sui_types::crypto::SuiSignature;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::{start_rpc_test_network, TestNetwork};
+
+mod examples;
 
 #[derive(Debug, Parser, Clone, Copy, ArgEnum)]
 enum Action {
@@ -79,6 +82,8 @@ async fn main() {
     open_rpc.add_module(EventStreamingApiOpenRpc::module_doc());
     open_rpc.add_module(EventReadApiOpenRpc::module_doc());
     open_rpc.add_module(GatewayWalletSyncApiImpl::rpc_doc_module());
+
+    open_rpc.add_examples(RpcExampleProvider::new().examples());
 
     match options.action {
         Action::Print => {
