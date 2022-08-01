@@ -290,10 +290,11 @@ pub enum SuiError {
     AuthorityInformationUnavailable,
     #[error("Failed to update authority.")]
     AuthorityUpdateFailure,
-    #[error(
-        "We have received cryptographic level of evidence that authority {authority:?} is faulty in a Byzantine manner."
-    )]
-    ByzantineAuthoritySuspicion { authority: AuthorityName },
+    #[error("Validator {authority:?} is faulty in a Byzantine manner: {reason:?}")]
+    ByzantineAuthoritySuspicion {
+        authority: AuthorityName,
+        reason: String,
+    },
     #[error(
         "Sync from authority failed. From {xsource:?} to {destination:?}, digest {tx_digest:?}: {error:?}",
     )]
