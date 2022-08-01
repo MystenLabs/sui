@@ -6,7 +6,7 @@ use proc_macro2::Ident;
 use quote::quote;
 use syn::Type::{self};
 use syn::{
-    parse_macro_input, AngleBracketedGenericArguments, Attribute, ItemStruct, Lit, Meta,
+    parse_macro_input, AngleBracketedGenericArguments, Attribute, Generics, ItemStruct, Lit, Meta,
     NestedMeta, PathArguments,
 };
 
@@ -95,6 +95,8 @@ impl Default for TableOptions {
 pub fn derive_dbmap_utils(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as ItemStruct);
     let name = &input.ident;
+    let generics = &input.generics;
+    let generics_names = extract_generics_names(generics);
 
     let (field_names, _field_types, inner_types, derived_table_options) =
         extract_struct_info(input.clone());
@@ -105,9 +107,16 @@ pub fn derive_dbmap_utils(input: TokenStream) -> TokenStream {
 
     let precondition_str = "#[pre(\"Must be called only after `open_tables_read_only`\")]";
     let _precondition_str_tok: proc_macro2::TokenStream = precondition_str.parse().unwrap();
+    let generics_bounds =
+        "std::fmt::Debug + serde::Serialize + for<'de> serde::de::Deserialize<'de>";
+    let generics_bounds_token: proc_macro2::TokenStream = generics_bounds.parse().unwrap();
 
     TokenStream::from(quote! {
-        impl DBMapTableUtil for #name {
+        impl <
+                #(
+                    #generics_names: #generics_bounds_token,
+                )*
+            > DBMapTableUtil for #name #generics{
             /// Opens a set of tables in read-write mode
             /// Only one process is allowed to do this at a time
             fn open_tables_read_write(
@@ -160,11 +169,11 @@ pub fn derive_dbmap_utils(input: TokenStream) -> TokenStream {
 
                 let (
                         #(
-                            #field_names,
-                        )*
+                            #field_names
+                        ),*
                 ) = (#(
                         DBMap::#inner_types::reopen(&db, Some(stringify!(#field_names))).expect(&format!("Cannot open {} CF.", stringify!(#field_names))[..])
-                    ), *);
+                    ),*);
 
                 Self {
                     #(
@@ -231,7 +240,7 @@ fn extract_struct_info(
             .filter(|a| a.path.is_ident(DB_OPTIONS_ATTR_NAME))
             .collect();
 
-        let options = if f.attrs.is_empty() {
+        let options = if attrs.is_empty() {
             TableOptions::default()
         } else {
             get_options(attrs.get(0).unwrap()).unwrap()
@@ -362,4 +371,15 @@ fn get_options(attr: &Attribute) -> syn::Result<TableOptions> {
         point_lookup: point_lookup.is_some(),
         cache_capacity: cache_capacity.unwrap_or(DEFAULT_CACHE_CAPACITY),
     })
+}
+
+fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
+    generics
+        .params
+        .iter()
+        .map(|g| match g {
+            syn::GenericParam::Type(t) => t.ident.clone(),
+            _ => panic!("Unspoorted generic type"),
+        })
+        .collect()
 }
