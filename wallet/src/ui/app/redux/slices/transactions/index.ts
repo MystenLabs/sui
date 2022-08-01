@@ -48,12 +48,20 @@ export const sendTokens = createAsyncThunk<
                     isSuiMoveObject(anObj.data) && anObj.data.type === coinType
             )
             .map(({ data }) => data as SuiMoveObject);
-        const response = await Coin.transferCoin(
-            api.getSignerInstance(keypairVault.getKeyPair()),
-            coins,
-            amount,
-            recipientAddress
-        );
+        const response =
+            Coin.getCoinSymbol(tokenTypeArg) === 'SUI'
+                ? await Coin.transferSui(
+                      api.getSignerInstance(keypairVault.getKeyPair()),
+                      coins,
+                      amount,
+                      recipientAddress
+                  )
+                : await Coin.transferCoin(
+                      api.getSignerInstance(keypairVault.getKeyPair()),
+                      coins,
+                      amount,
+                      recipientAddress
+                  );
 
         // TODO: better way to sync latest objects
         dispatch(fetchAllOwnedObjects());
