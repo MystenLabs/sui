@@ -12,8 +12,8 @@ export default function GoBack() {
     const previousPage = useCallback(() => navigate(-1), [navigate]);
 
     return (
-        <div className={styles.txback}>
-            <button className={styles.longtext} onClick={previousPage}>
+        <div className={styles.container}>
+            <button className={styles.text} onClick={previousPage}>
                 <ContentBackArrowDark /> Go Back
             </button>
         </div>
