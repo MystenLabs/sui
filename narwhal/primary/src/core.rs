@@ -425,10 +425,11 @@ impl Core {
                 .await
                 .map_err(|_| DagError::ShuttingDown)?;
             
-            debug!("Cancel Handlers len: {}", self.cancel_handlers.len());
-            if certificate.round() > 0 {
-                self.cancel_handlers.retain(|k, _| *k > certificate.round()-1);
-            }
+                let before = self.cancel_handlers.len();
+                if certificate.round() > 0 {
+                    self.cancel_handlers.retain(|k, _| *k >= certificate.round());
+                }
+                debug!("Pruned {} messages from obsolete rounds.", self.cancel_handlers.len() - before);
         }
 
         // Send it to the consensus layer.
