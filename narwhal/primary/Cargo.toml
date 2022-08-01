@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 async-recursion = "1.0.0"
-async-trait = "0.1.56"
+async-trait = "0.1.57"
 base64 = "0.13.0"
 bincode = "1.3.3"
 blake2 = "0.9"
@@ -51,7 +51,7 @@ tempfile = "3.3.0"
 test_utils = { path = "../test_utils" }
 tracing-test = "0.2.3"
 worker = { path = "../worker" }
-async-trait = "0.1.56"
+async-trait = "0.1.57"
 executor = { path = "../executor" }
 thiserror = "1.0.31"
 tracing = "0.1.36"

@@ -6,7 +6,7 @@ license = "Apache-2.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 
 [dependencies]
-async-trait = "0.1.56"
+async-trait = "0.1.57"
 bincode = "1.3.3"
 blake2 = "0.9"
 bytes = "1.2.1"

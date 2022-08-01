@@ -7,7 +7,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-async-trait = "0.1.56"
+async-trait = "0.1.57"
 bytes = "1.2.1"
 futures = "0.3.21"
 rand = { version = "0.7.3", features = ["small_rng"] }
