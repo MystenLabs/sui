@@ -424,6 +424,11 @@ impl Core {
                 .send((parents, certificate.round(), certificate.epoch()))
                 .await
                 .map_err(|_| DagError::ShuttingDown)?;
+            
+            debug!("Cancel Handlers len: {}", self.cancel_handlers.len());
+            if certificate.round() > 0 {
+                self.cancel_handlers.retain(|k, _| *k > certificate.round()-1);
+            }
         }
 
         // Send it to the consensus layer.
