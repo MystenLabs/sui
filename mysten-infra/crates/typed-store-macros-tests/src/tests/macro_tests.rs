@@ -1,8 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::Deserialize;
+use serde::Serialize;
 use std::collections::HashSet;
-
+use std::fmt::Debug;
 use typed_store::rocks::DBMap;
 use typed_store::traits::DBMapTableUtil;
 use typed_store::traits::Map;
@@ -16,10 +18,12 @@ fn temp_dir() -> std::path::PathBuf {
 /// This struct is used to illustrate how the utility works
 #[derive(DBMapUtils)]
 struct Tables {
+    /// A comment
     #[options(optimization = "point_lookup", cache_capacity = 100000)]
     table1: DBMap<String, String>,
     #[options(optimization = "point_lookup")]
     table2: DBMap<i32, String>,
+    /// A comment
     table3: DBMap<i32, String>,
     #[options()]
     table4: DBMap<i32, String>,
@@ -35,6 +39,33 @@ struct Tables2 {
     table3: DBMap<i32, String>,
     #[options()]
     table4: DBMap<i32, String>,
+}
+
+// Check that generics work
+#[derive(DBMapUtils)]
+struct Tables3<Q, W> {
+    table1: DBMap<String, String>,
+    table2: DBMap<u32, Generic<Q, W>>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct Generic<T, V> {
+    field1: T,
+    field2: V,
+}
+
+impl<
+        T: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
+        V: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
+    > Generic<T, V>
+{
+}
+
+/// This struct shows that single elem structs work
+#[derive(DBMapUtils)]
+struct TablesSingle {
+    #[options(optimization = "point_lookup", cache_capacity = 100000)]
+    table1: DBMap<String, String>,
 }
 
 #[tokio::test]
