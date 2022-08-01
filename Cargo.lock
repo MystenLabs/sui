@@ -3091,7 +3091,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "sha2 0.10.2",
- "sha3 0.10.1",
+ "sha3 0.10.2",
 ]
 
 [[package]]
@@ -6172,9 +6172,9 @@ dependencies = [
 
 [[package]]
 name = "sha3"
-version = "0.10.1"
+version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "881bf8156c87b6301fc5ca6b27f11eeb2761224c7081e69b409d5a1951a70c86"
+checksum = "0a31480366ec990f395a61b7c08122d99bd40544fdb5abcfc1b06bb29994312c"
 dependencies = [
  "digest 0.10.3",
  "keccak",
@@ -7212,7 +7212,7 @@ dependencies = [
  "serde_json",
  "serde_with 1.14.0",
  "sha2 0.9.9",
- "sha3 0.10.1",
+ "sha3 0.10.2",
  "signature",
  "static_assertions",
  "strum",
@@ -9229,7 +9229,7 @@ dependencies = [
  "sha-1 0.9.8",
  "sha2 0.10.2",
  "sha2 0.9.9",
- "sha3 0.10.1",
+ "sha3 0.10.2",
  "sha3 0.9.1",
  "sharded-slab",
  "shell-words",
@@ -9685,7 +9685,7 @@ dependencies = [
  "serde_yaml",
  "sha2 0.10.2",
  "sha2 0.9.9",
- "sha3 0.10.1",
+ "sha3 0.10.2",
  "sharded-slab",
  "shlex",
  "signature",
