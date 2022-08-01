@@ -14,12 +14,12 @@ use std::fmt::{Display, Formatter};
 use sui_config::gateway::GatewayConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_json::SuiJsonValue;
-use sui_json_rpc::api::{EventStreamingApiClient, RpcGatewayApiClient};
 use sui_json_rpc::api::RpcBcsApiClient;
 use sui_json_rpc::api::RpcFullNodeReadApiClient;
 use sui_json_rpc::api::RpcReadApiClient;
 use sui_json_rpc::api::RpcTransactionBuilderClient;
 use sui_json_rpc::api::WalletSyncApiClient;
+use sui_json_rpc::api::{EventStreamingApiClient, RpcGatewayApiClient};
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse,
     RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo, SuiTypeTag,
