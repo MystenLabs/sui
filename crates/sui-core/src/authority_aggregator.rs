@@ -1616,9 +1616,10 @@ where
             let mut is_ok = false;
             if stake >= self.committee.validity_threshold() {
                 // If we have f+1 stake telling us of the latest version of the object, we just accept it.
+                debug!(?object_id, ?tx_digest, "get_object_info_execute. enough stake");
                 is_ok = true;
             } else if cert_map.contains_key(&tx_digest) {
-                debug!(?object_id, ?tx_digest, "get_object_info_execute. found digest in cert_map");
+                debug!(?object_id, ?tx_digest, "get_object_info_execute. found digest in cert_map, trying to process_certificate");
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
                 if let Ok(effects) = self.process_certificate(cert_map[&tx_digest].clone()).await {

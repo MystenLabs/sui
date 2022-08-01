@@ -702,7 +702,7 @@ where
                 self.store.insert_object_direct(*obj_ref, object).await?;
             }
         }
-        debug!("Downloaded object from authorities: {}", result);
+        debug!(?object_id, "Downloaded object from authorities: {}", result);
 
         Ok(result)
     }
