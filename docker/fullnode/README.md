@@ -32,6 +32,8 @@ Get the latest version of the Sui DevNet genesis [genesis.blob](https://github.c
 
 ## Start the fullnode
 
+> **Important:** This document reflects Docker Compose V1. If you are using [Docker Compose V2](https://docs.docker.com/compose/#compose-v2-and-the-new-docker-compose-command), replace the hyphen (-) in the `docker-compose` commands below with a space, like so: `docker compose` 
+
 To start the fullnode using Docker, run:
 
 ```shell
