@@ -226,7 +226,6 @@ function LatestTxCard({ ...data }: RecentTx) {
     );
 
     const handlePageChange = useCallback((newPage: number) => {
-        console.log('HANDLING PAGE CHANGE');
         setPageIndex(newPage);
         setSearchParams({ p: newPage.toString() })
     }, [setSearchParams]);
