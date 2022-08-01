@@ -11,7 +11,7 @@ crypto  = { path = "../crypto" }
 dashmap = "5.3.4"
 either = "1.7.0"
 itertools = "0.10.3"
-serde = "1.0.140"
+serde = "1.0.141"
 thiserror = "1.0.31"
 arc-swap = "1.5.0"
 once_cell = "1.13.0"

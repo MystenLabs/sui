@@ -13,7 +13,7 @@ ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 eyre = "0.6.8"
 hex = "0.4.3"
 rand = { version = "0.7.3", features = ["std"] }
-serde = { version = "1.0.140", features = ["derive"] }
+serde = { version = "1.0.141", features = ["derive"] }
 zeroize = "1.5.7"
 signature = "1.5.0"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }

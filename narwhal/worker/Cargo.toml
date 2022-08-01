@@ -13,7 +13,7 @@ blake2 = "0.9"
 bytes = "1.2.1"
 ed25519-dalek = "1.0.1"
 futures = "0.3.21"
-serde = { version = "1.0.140", features = ["derive"] }
+serde = { version = "1.0.141", features = ["derive"] }
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tracing = "0.1.36"
