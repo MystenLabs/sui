@@ -10,5 +10,5 @@ edition = "2021"
 serde = { version = "1.0.139", features = ["derive"] }
 reqwest = { version = "0.11.10", features = ["json"] }
 tokio = { version = "1.17.0", features = ["full", "tracing"] }
-tracing = "0.1.35"
+tracing = "0.1.36"
 workspace-hack = { path = "../workspace-hack"}

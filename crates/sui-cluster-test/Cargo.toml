@@ -12,7 +12,7 @@ futures = "0.3.21"
 serde_json = "1.0.80"
 tempfile = "3.3.0"
 tokio = { version = "1.20.1", features = ["full"] }
-tracing = { version = "0.1.35", features = ["log"] }
+tracing = { version = "0.1.36", features = ["log"] }
 clap = { version = "3.1.14", features = ["derive"] }
 reqwest = { version = "0.11.11", features = ["blocking", "json"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
