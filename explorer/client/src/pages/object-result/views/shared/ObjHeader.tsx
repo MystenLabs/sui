@@ -1,3 +1,5 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
 import { ReactComponent as ObjIcon } from '../../../../assets/SVGIcons/Call.svg';
 import GoBack from '../../../../components/goback/GoBack';
 import Longtext from '../../../../components/longtext/Longtext';
