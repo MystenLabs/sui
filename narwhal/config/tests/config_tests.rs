@@ -106,6 +106,12 @@ fn update_primary_network_info_test() {
     }
 }
 
+// If one or both of the parameters_xx_matches() tests are broken by a change, the following additional places are
+// highly likely needed to be updated as well:
+// 1. Docker/validators/parameters.json for starting Narwhal cluster with Docker Compose.
+// 2. benchmark/fabfile.py for benchmarking a Narwhal cluster locally.
+// 3. Sui configurations & snapshot tests when upgrading Narwhal in Sui to include the change.
+
 #[test]
 fn parameters_snapshot_matches() {
     // This configuration is load-bearing in the NW benchmarks,
@@ -118,7 +124,7 @@ fn parameters_snapshot_matches() {
         ..ConsensusAPIGrpcParameters::default()
     };
     let prometheus_metrics_parameters = PrometheusMetricsParameters {
-        socket_addr: "127.0.0.1:8081".parse().unwrap(),
+        socket_addr: "/ip4/127.0.0.1/tcp/8081/http".parse().unwrap(),
     };
 
     let parameters = Parameters {
@@ -127,6 +133,51 @@ fn parameters_snapshot_matches() {
         ..Parameters::default()
     };
     assert_json_snapshot!("parameters", parameters)
+}
+
+#[test]
+fn parameters_import_snapshot_matches() {
+    // GIVEN
+    let input = r#"{
+         "header_size": 1000,
+         "max_header_delay": "100ms",
+         "gc_depth": 50,
+         "sync_retry_delay": "5s",
+         "sync_retry_nodes": 3,
+         "batch_size": 500000,
+         "max_batch_delay": "100ms",
+         "block_synchronizer": {
+             "certificates_synchronize_timeout": "2s",
+             "payload_synchronize_timeout": "3_000ms",
+             "payload_availability_timeout": "4_000ms",
+             "handler_certificate_deliver_timeout": "1_000ms"
+         },
+         "consensus_api_grpc": {
+             "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
+             "get_collections_timeout": "5_000ms",
+             "remove_collections_timeout": "5_000ms"
+         },
+         "max_concurrent_requests": 500000,
+         "prometheus_metrics": {
+            "socket_addr": "/ip4/127.0.0.1/tcp/0/http"
+         }
+      }"#;
+
+    // AND temporary file
+    let dir = tempdir().expect("Couldn't create tempdir");
+
+    let file_path = dir.path().join("temp-properties.json");
+    let mut file = File::create(file_path.clone()).expect("Couldn't create temp file");
+
+    // AND write the json context
+    writeln!(file, "{input}").expect("Couldn't write to file");
+
+    // WHEN
+    let params = Parameters::import(file_path.to_str().unwrap())
+        .expect("Failed to import given Parameters json");
+
+    // THEN
+    assert_json_snapshot!("parameters_import", params)
 }
 
 #[test]
@@ -156,48 +207,4 @@ fn commmittee_snapshot_matches() {
     let mut settings = insta::Settings::clone_current();
     settings.set_sort_maps(true);
     settings.bind(|| assert_json_snapshot!("committee", committee));
-}
-
-#[test]
-fn parameters_import_snapshot_matches() {
-    // GIVEN
-    let input = r#"{
-         "header_size": 1000,
-         "max_header_delay": "100ms",
-         "gc_depth": 50,
-         "sync_retry_delay": "5s",
-         "sync_retry_nodes": 3,
-         "batch_size": 500000,
-         "max_batch_delay": "100ms",
-         "block_synchronizer": {
-             "certificates_synchronize_timeout": "2s",
-             "payload_synchronize_timeout": "3_000ms",
-             "payload_availability_timeout": "4_000ms",
-             "handler_certificate_deliver_timeout": "1_000ms"
-         },
-         "consensus_api_grpc": {
-             "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
-             "get_collections_timeout": "5_000ms",
-             "remove_collections_timeout": "5_000ms"
-         },
-         "max_concurrent_requests": 500000,
-         "prometheus_metrics": {
-             "socket_addr": "127.0.0.1:0"
-         }
-      }"#;
-
-    // AND temporary file
-    let dir = tempdir().expect("Couldn't create tempdir");
-
-    let file_path = dir.path().join("temp-properties.json");
-    let mut file = File::create(file_path.clone()).expect("Couldn't create temp file");
-
-    // AND write the json context
-    writeln!(file, "{input}").expect("Couldn't write to file");
-
-    // WHEN
-    let params = Parameters::import(file_path.to_str().unwrap()).expect("Error raised");
-
-    // THEN
-    assert_json_snapshot!("parameters_import", params)
 }

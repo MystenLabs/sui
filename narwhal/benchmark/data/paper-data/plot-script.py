@@ -73,7 +73,7 @@ class Result:
         self.std_latency = std_latency
 
     def __str__(self):
-        return(
+        return (
             f' TPS: {self.mean_tps} +/- {self.std_tps} tx/s\n'
             f' Latency: {self.mean_latency} +/- {self.std_latency} ms\n'
         )

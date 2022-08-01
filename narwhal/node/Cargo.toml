@@ -14,6 +14,8 @@ bytes = "1.2.0"
 cfg-if = "1.0.0"
 clap = "2.34"
 futures = "0.3.21"
+multiaddr = "0.14.0"
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "20ef52a00135114eb361e28673cfaa9bf4560f6f" }
 rand = "0.7.3"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 thiserror = "1.0.31"
@@ -47,16 +49,15 @@ serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 structopt = "0.3.26"
 test_utils = { path = "../test_utils" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67" }
 
 [features]
 benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
 dhat-heap = ["dhat"]    # if you are doing heap profiling
 
-[[bin]]         
-name = "benchmark_client"   
-path = "src/benchmark_client.rs" 
-required-features = ["benchmark"] 
+[[bin]]
+name = "benchmark_client"
+path = "src/benchmark_client.rs"
+required-features = ["benchmark"]
 
 [[example]]
 name = "generate-format"

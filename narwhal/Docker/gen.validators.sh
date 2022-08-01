@@ -98,32 +98,7 @@ do
     ${node} generate_keys --filename ${val}/key.json
 done
 
-cat > ${target}/parameters.json <<EOF
-{
-    "batch_size": 500000,
-    "block_synchronizer": {
-        "certificates_synchronize_timeout": "2_000ms",
-        "handler_certificate_deliver_timeout": "2_000ms",
-        "payload_availability_timeout": "2_000ms",
-        "payload_synchronize_timeout": "2_000ms"
-    },
-    "consensus_api_grpc": {
-        "get_collections_timeout": "5_000ms",
-        "remove_collections_timeout": "5_000ms",
-        "socket_addr": "/ip4/0.0.0.0/tcp/8000/http"
-    },
-    "gc_depth": 50,
-    "header_size": 1000,
-    "max_batch_delay": "200ms",
-    "max_concurrent_requests": 500000,
-    "max_header_delay": "2000ms",
-    "sync_retry_delay": "10_000ms",
-    "sync_retry_nodes": 3,
-    "prometheus_metrics": {
-        "socket_addr": "0.0.0.0:8010"
-    }
-}
-EOF
+cp validators/parameters.json ${target}/parameters.json
 
 ./scripts/gen.committee.py -n ${num} -d ${target} > ${target}/committee.json
 

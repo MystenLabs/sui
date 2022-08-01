@@ -16,7 +16,6 @@ use std::{
     collections::{BTreeMap, HashMap},
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
-    net::SocketAddr,
     ops::Deref,
     sync::Arc,
     time::Duration,
@@ -136,13 +135,13 @@ pub struct Parameters {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct PrometheusMetricsParameters {
     /// Socket address the server should be listening to.
-    pub socket_addr: SocketAddr,
+    pub socket_addr: Multiaddr,
 }
 
 impl Default for PrometheusMetricsParameters {
     fn default() -> Self {
         Self {
-            socket_addr: format!("127.0.0.1:{}", get_available_port())
+            socket_addr: format!("/ip4/127.0.0.1/tcp/{}/http", get_available_port())
                 .parse()
                 .unwrap(),
         }
@@ -562,7 +561,7 @@ mod tests {
         assert!(logs_contain("Remove collections timeout set to 5000 ms"));
         assert!(logs_contain("Max concurrent requests set to 500000"));
         assert!(logs_contain(
-            "Prometheus metrics server will run on 127.0.0.1"
+            "Prometheus metrics server will run on /ip4/127.0.0.1/tcp"
         ));
     }
 }
