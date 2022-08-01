@@ -43,9 +43,9 @@ let scenario = &mut test_scenario::begin(&owner);
 let (id1, id2) = {
     let ctx = test_scenario::ctx(scenario);
     color_object::create(255, 255, 255, ctx);
-    let id1 = tx_context::last_created_object_id(ctx);
+    let id1 = object::id_from_address(tx_context::last_created_object_id(ctx));
     color_object::create(0, 0, 0, ctx);
-    let id2 = tx_context::last_created_object_id(ctx);
+    let id2 = object::id_from_address(tx_context::last_created_object_id(ctx));
     (id1, id2)
 };
 ```
@@ -85,18 +85,18 @@ There are two ways we can deal with a pass-by-value Sui object in Move:
 #### Option 1. Delete the object
 If the intention is to actually delete the object, we can unpack the object. This can be done only in the module that defined the struct type, due to Move's [privileged struct operations rules](https://github.com/move-language/move/blob/main/language/documentation/book/src/structs-and-resources.md#privileged-struct-operations). Upon unpacking, if any field is also of struct type, recursive unpacking and deletion will be required.
 
-However, the `id` field of a Sui object requires special handling. We must call the following API in the [object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
+However, the `info` field of a Sui object requires special handling. We must call the following API in the [object](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) module to signal Sui that we intend to delete this object:
 ```rust
 public fun delete(info: Info);
 ```
 Let's define a function in the `ColorObject` module that allows us to delete the object:
 ```rust
     public entry fun delete(object: ColorObject) {
-        let ColorObject { id, red: _, green: _, blue: _ } = object;
-        id::delete(id);
+        let ColorObject { info, red: _, green: _, blue: _ } = object;
+        object::delete(info);
     }
 ```
-As we can see, the object is unpacked, generating individual fields. The u8 values are primitive types and can all be dropped. However the `id` cannot be dropped and must be explicitly deleted through the `id::delete` API. At the end of this call, the object will no longer be stored on-chain.
+As we can see, the object is unpacked, generating individual fields. The u8 values are primitive types and can all be dropped. However the `info` cannot be dropped and must be explicitly deleted through the `object::delete` API. At the end of this call, the object will no longer be stored on-chain.
 
 We can add a unit test for it, as well:
 ```rust
@@ -174,7 +174,7 @@ $ export RECIPIENT=0x1416f3d5af469905b0580b9af843ec82d02efd30
 ```
 Now let's transfer the object to this address:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "transfer" --args \"0x$OBJECT\" \"0x$RECIPIENT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "transfer" --args \"0x$OBJECT\" \"0x$RECIPIENT\"
 ```
 Now let's see what objects the `RECIPIENT` owns:
 ```
@@ -184,7 +184,7 @@ We should be able to see that one of the objects in the list is the new `ColorOb
 
 Let's also try to delete this object:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "delete" --args \"0x$OBJECT\"
 ```
 Oops. It will error out and complain that the account address is unable to lock the object, which is a valid error because we have already transferred the object away from the original owner.
 
@@ -194,7 +194,7 @@ $ sui client switch --address $RECIPIENT
 ```
 And try the deletion again:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "ColorObject" --function "delete" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "delete" --args \"0x$OBJECT\"
 ```
 In the output, you will see in the `Transaction Effects` section a list of deleted objects.
 This shows that the object was successfully deleted. If we run this again:

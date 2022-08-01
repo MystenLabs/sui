@@ -15,8 +15,8 @@ use syn::{
     parse, parse_macro_input, Attribute, GenericArgument, LitStr, PatType, Path, PathArguments,
     Token, TraitItem, Type,
 };
+use unescape::unescape;
 
-#[proc_macro_attribute]
 /// Add a <service name>OpenRpc struct and implementation providing access to Open RPC doc builder.
 /// This proc macro must be use in conjunction with `jsonrpsee_proc_macro::rpc`
 ///
@@ -25,6 +25,7 @@ use syn::{
 /// to provide access to the method is a workaround.
 ///
 /// TODO: consider contributing the open rpc doc macro to jsonrpsee to simplify the logics.
+#[proc_macro_attribute]
 pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
     let attr: OpenRpcAttributes = parse_macro_input!(attr);
 
@@ -43,10 +44,16 @@ pub fn open_rpc(attr: TokenStream, item: TokenStream) -> TokenStream {
         let name = method.name;
         let doc = method.doc;
         let mut inputs = Vec::new();
-        for (name, ty) in method.params {
+        for (name, ty, description) in method.params {
             let (ty, required) = extract_type_from_option(ty);
+            let description = if let Some(description) = description {
+                quote! {Some(#description.to_string())}
+            } else {
+                quote! {None}
+            };
+
             inputs.push(quote! {
-                let des = builder.create_content_descriptor::<#ty>(#name, None, None, #required);
+                let des = builder.create_content_descriptor::<#ty>(#name, None, #description, #required);
                 inputs.push(des);
             })
         }
@@ -116,7 +123,7 @@ struct RpcDefinition {
 }
 struct Method {
     name: String,
-    params: Vec<(String, Type)>,
+    params: Vec<(String, Type, Option<String>)>,
     returns: Option<Type>,
     doc: String,
     is_pubsub: bool,
@@ -152,21 +159,32 @@ fn parse_rpc_method(trait_data: &mut syn::ItemTrait) -> Result<RpcDefinition, sy
                 .sig
                 .inputs
                 .iter_mut()
-                .filter_map(|arg| match arg {
-                    syn::FnArg::Receiver(_) => None,
-                    syn::FnArg::Typed(arg) => match *arg.pat.clone() {
-                        syn::Pat::Ident(name) => {
-                            Some(get_type(arg).map(|ty| (name.ident.to_string(), ty)))
-                        }
-                        syn::Pat::Wild(wild) => Some(Err(syn::Error::new(
-                            wild.underscore_token.span(),
-                            "Method argument names must be valid Rust identifiers; got `_` instead",
-                        ))),
-                        _ => Some(Err(syn::Error::new(
-                            arg.span(),
-                            format!("Unexpected method signature input; got {:?} ", *arg.pat),
-                        ))),
-                    },
+                .filter_map(|arg| {
+                    match arg {
+                        syn::FnArg::Receiver(_) => None,
+                        syn::FnArg::Typed(arg) => {
+                            let description = if let Some(description) = arg.attrs.iter().position(|a|a.path.is_ident("doc")){
+                                let doc = extract_doc_comments(&arg.attrs);
+                                arg.attrs.remove(description);
+                                Some(doc)
+                            }else{
+                                None
+                            };
+                            match *arg.pat.clone() {
+                                syn::Pat::Ident(name) => {
+                                    Some(get_type(arg).map(|ty| (name.ident.to_string(), ty, description)))
+                                }
+                                syn::Pat::Wild(wild) => Some(Err(syn::Error::new(
+                                    wild.underscore_token.span(),
+                                    "Method argument names must be valid Rust identifiers; got `_` instead",
+                                ))),
+                                _ => Some(Err(syn::Error::new(
+                                    arg.span(),
+                                    format!("Unexpected method signature input; got {:?} ", *arg.pat),
+                                ))),
+                            }
+                        },
+                    }
                 })
                 .collect::<Result<_, _>>()?;
 
@@ -251,7 +269,7 @@ fn respan_token_stream(stream: TokenStream2, span: Span) -> TokenStream2 {
 }
 
 fn extract_doc_comments(attrs: &[syn::Attribute]) -> String {
-    attrs
+    let s = attrs
         .iter()
         .filter(|attr| {
             attr.path.is_ident("doc")
@@ -264,7 +282,8 @@ fn extract_doc_comments(attrs: &[syn::Attribute]) -> String {
             let s = attr.tokens.to_string();
             s[4..s.len() - 1].to_string()
         })
-        .join(" ")
+        .join(" ");
+    unescape(&s).unwrap_or_else(|| panic!("Cannot unescape doc comments : [{s}]"))
 }
 
 #[derive(Parse, Debug)]

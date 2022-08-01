@@ -64,7 +64,7 @@ div.propertybox > div > p {
 }
 
 div.propertybox > div > p:first-child {
-    @apply font-sans font-semibold uppercase;
+    @apply font-sans font-semibold;
 }
 
 /* Clickable Header CSS */

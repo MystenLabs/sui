@@ -4,6 +4,7 @@
 use crate::authority::SuiDataStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fmt::Debug;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
@@ -22,7 +23,7 @@ pub async fn check_transaction_input<S, T>(
     transaction: &TransactionEnvelope<T>,
 ) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let mut gas_status = check_gas(
         store,
@@ -33,7 +34,7 @@ where
     )
     .await?;
 
-    let input_objects = check_locks(store, &transaction.data).await?;
+    let input_objects = check_objects(store, &transaction.data).await?;
 
     if transaction.contains_shared_object() {
         // It's important that we do this here to make sure there is enough
@@ -57,7 +58,7 @@ async fn check_gas<S>(
     is_system_tx: bool,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     if is_system_tx {
         Ok(SuiGasStatus::new_unmetered())
@@ -87,7 +88,7 @@ async fn fetch_objects<S>(
     input_objects: &[InputObjectKind],
 ) -> Result<Vec<Option<Object>>, SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
     store.get_objects(&ids[..])
@@ -96,12 +97,12 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_locks<S>(
+async fn check_objects<S>(
     store: &SuiDataStore<S>,
     transaction: &TransactionData,
 ) -> Result<InputObjects, SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let input_objects = transaction.input_objects()?;
     // These IDs act as authenticators that can own other objects.
@@ -160,7 +161,7 @@ where
         }
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_lock(
+        match check_one_object(
             &transaction.signer(),
             object_kind,
             &object,
@@ -175,7 +176,7 @@ where
     // If any errors with the locks were detected, we return all errors to give the client
     // a chance to update the authority if possible.
     if !errors.is_empty() {
-        return Err(SuiError::LockErrors { errors });
+        return Err(SuiError::ObjectErrors { errors });
     }
     fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
 
@@ -184,7 +185,7 @@ where
 
 /// The logic to check one object against a reference, and return the object if all is well
 /// or an error if not.
-fn check_one_lock(
+fn check_one_object(
     sender: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,

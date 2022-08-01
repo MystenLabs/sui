@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_network::tonic;
 use sui_types::committee::Committee;
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::SignedTransaction;
 use sui_types::sui_system_state::SuiSystemState;
@@ -66,7 +66,7 @@ where
     pub async fn finish_epoch_change(&self) -> SuiResult {
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Finishing epoch change");
-        let last_checkpoint = if let Some(checkpoints) = &self.state.checkpoints {
+        let next_checkpoint = if let Some(checkpoints) = &self.state.checkpoints {
             let mut checkpoints = checkpoints.lock();
             assert!(
                 checkpoints.is_ready_to_finish_epoch_change(),
@@ -85,7 +85,7 @@ where
 
             self.state.database.remove_all_pending_certificates()?;
 
-            checkpoints.next_checkpoint() - 1
+            checkpoints.next_checkpoint()
 
             // drop checkpoints lock
         } else {
@@ -99,7 +99,7 @@ where
             .iter()
             .map(|metadata| {
                 (
-                    PublicKeyBytes::from_bytes(metadata.pubkey_bytes.as_ref())
+                    AuthorityPublicKeyBytes::from_bytes(metadata.pubkey_bytes.as_ref())
                         .expect("Validity of public key bytes should be verified on-chain"),
                     metadata.next_epoch_stake + metadata.next_epoch_delegation,
                 )
@@ -111,7 +111,7 @@ where
             "New committee for the next epoch: {:?}", new_committee
         );
         self.state
-            .sign_new_epoch_and_update_committee(new_committee.clone(), last_checkpoint)?;
+            .sign_new_epoch_and_update_committee(new_committee.clone(), next_checkpoint)?;
 
         // Reconnect the network if we have an type of AuthorityClient that has a network.
         if A::needs_network_recreation() {
@@ -192,29 +192,27 @@ where
         net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
 
         for validator in next_epoch_validators {
-            let net_addr: &[u8] = &validator.net_address.clone();
-            let str_addr =
-                std::str::from_utf8(net_addr).map_err(|e| SuiError::GenericAuthorityError {
+            let address = Multiaddr::try_from(validator.net_address).map_err(|e| {
+                SuiError::GenericAuthorityError {
                     error: e.to_string(),
-                });
-            let address: Multiaddr = str_addr
-                .unwrap()
-                .parse()
-                .map_err(|e: multiaddr::Error| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                })
-                .unwrap();
+                }
+            })?; //TODO: handle what happens if a validator registers with a faulty address
 
-            let channel = net_config
-                .connect_lazy(&address)
-                .map_err(|e| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                })
-                .unwrap();
+            let channel =
+                net_config
+                    .connect_lazy(&address)
+                    .map_err(|e| SuiError::GenericAuthorityError {
+                        error: e.to_string(),
+                    })?;
             let client: A = A::recreate(channel);
-            let name: &[u8] = &validator.name;
-            let public_key_bytes = PublicKeyBytes::from_bytes(name)
-                .map_err(|e| SuiError::KeyConversionError(e.to_string()))?;
+
+            let pub_key_raw: &[u8] = &validator.pubkey_bytes;
+            let public_key_bytes =
+                AuthorityPublicKeyBytes::from_bytes(pub_key_raw).map_err(|e| {
+                    SuiError::GenericAuthorityError {
+                        error: e.to_string(),
+                    }
+                })?;
             new_clients.insert(public_key_bytes, client);
         }
 

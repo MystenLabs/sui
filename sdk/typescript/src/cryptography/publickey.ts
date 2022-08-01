@@ -25,6 +25,7 @@ export type PublicKeyData = {
 };
 
 export const PUBLIC_KEY_SIZE = 32;
+export const TYPE_BYTE = 0x00;
 
 function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
   return (value as PublicKeyData)._bn !== undefined;
@@ -108,7 +109,10 @@ export class PublicKey {
    * Return the Sui address associated with this public key
    */
   toSuiAddress(): string {
-    const hexHash = sha3_256(this.toBytes());
+    let tmp = new Uint8Array(PUBLIC_KEY_SIZE + 1);
+    tmp.set([TYPE_BYTE]);
+    tmp.set(this.toBytes(), 1);
+    const hexHash = sha3_256(tmp);
     const publicKeyBytes = new BN(hexHash, 16).toArray(undefined, 32);
     // Only take the first 20 bytes
     const addressBytes = publicKeyBytes.slice(0, 20);

@@ -34,13 +34,14 @@ use std::{
     },
 };
 use sui_adapter::adapter;
+use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
-
+use sui_types::crypto::AuthorityPublicKey;
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -76,6 +77,8 @@ mod gas_tests;
 
 pub use sui_adapter::temporary_store::TemporaryStore;
 
+pub mod authority_store_tables;
+
 mod authority_store;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
@@ -108,6 +111,8 @@ pub struct AuthorityMetrics {
     num_input_objs: Histogram,
     num_shared_objects: Histogram,
     batch_size: Histogram,
+
+    total_consensus_txns: IntCounter,
 
     pub follower_items_streamed: IntCounter,
     pub follower_items_loaded: IntCounter,
@@ -195,6 +200,12 @@ impl AuthorityMetrics {
                 "batch_size",
                 "Distribution of size of transaction batch",
                 POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_consensus_txns: register_int_counter_with_registry!(
+                "total_consensus_txns",
+                "Total number of consensus transactions received from narwhal",
                 registry,
             )
             .unwrap(),
@@ -288,7 +299,7 @@ pub struct AuthorityState {
     pub event_handler: Option<Arc<EventHandler>>,
 
     /// The checkpoint store
-    pub(crate) checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
+    pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -532,7 +543,7 @@ impl AuthorityState {
             lock_errors.is_empty(),
             // NOTE: the error message here will say 'Error acquiring lock' but what it means is
             // 'error checking lock'.
-            SuiError::LockErrors {
+            SuiError::ObjectErrors {
                 errors: lock_errors
             }
         );
@@ -573,7 +584,7 @@ impl AuthorityState {
         // non-transient (transaction input is invalid, move vm errors). However, all errors from
         // this function occur before we have written anything to the db, so we commit the tx
         // guard and rely on the client to retry the tx (if it was transient).
-        let (temporary_store, signed_effects) =
+        let (inner_temporary_store, signed_effects) =
             match self.prepare_certificate(certificate, digest).await {
                 Err(e) => {
                     debug!(name = ?self.name, ?digest, "Error preparing transaction: {}", e);
@@ -583,12 +594,12 @@ impl AuthorityState {
                 Ok(res) => res,
             };
 
-        let input_object_count = temporary_store.objects().len();
+        let input_object_count = inner_temporary_store.objects.len();
         let shared_object_count = signed_effects.effects.shared_objects.len();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
-        self.commit_certificate(temporary_store, certificate, &signed_effects)
+        self.commit_certificate(inner_temporary_store, certificate, &signed_effects)
             .await
             .tap_err(|e| error!(?digest, "commit_certificate failed: {}", e))?;
 
@@ -634,10 +645,7 @@ impl AuthorityState {
         &self,
         certificate: &CertifiedTransaction,
         transaction_digest: TransactionDigest,
-    ) -> SuiResult<(
-        TemporaryStore<Arc<AuthorityStore>>,
-        SignedTransactionEffects,
-    )> {
+    ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
         let (gas_status, input_objects) =
             transaction_input_checker::check_transaction_input(&self.database, certificate).await?;
 
@@ -660,24 +668,25 @@ impl AuthorityState {
         );
 
         let transaction_dependencies = input_objects.transaction_dependencies();
-        let mut temporary_store =
+        let temporary_store =
             TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
-        let (effects, _execution_error) = execution_engine::execute_transaction_to_effects(
-            shared_object_refs,
-            &mut temporary_store,
-            certificate.data.clone(),
-            transaction_digest,
-            transaction_dependencies,
-            &self.move_vm,
-            &self._native_functions,
-            gas_status,
-            self.epoch(),
-        );
+        let (inner_temp_store, effects, _execution_error) =
+            execution_engine::execute_transaction_to_effects(
+                shared_object_refs,
+                temporary_store,
+                certificate.data.clone(),
+                transaction_digest,
+                transaction_dependencies,
+                &self.move_vm,
+                &self._native_functions,
+                gas_status,
+                self.epoch(),
+            );
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
         let signed_effects = effects.to_sign_effects(self.epoch(), &self.name, &*self.secret);
 
-        Ok((temporary_store, signed_effects))
+        Ok((inner_temp_store, signed_effects))
     }
 
     pub async fn check_tx_already_executed(
@@ -982,11 +991,11 @@ impl AuthorityState {
             })?
             .lock();
         match &request.request_type {
-            CheckpointRequestType::LatestCheckpointProposal => {
-                checkpoint_store.handle_latest_proposal(request)
+            CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
+                checkpoint_store.handle_authenticated_checkpoint(seq, request.detail)
             }
-            CheckpointRequestType::PastCheckpoint(seq) => {
-                checkpoint_store.handle_past_checkpoint(request.detail, *seq)
+            CheckpointRequestType::CheckpointProposal => {
+                checkpoint_store.handle_proposal(request.detail)
             }
         }
     }
@@ -1021,11 +1030,16 @@ impl AuthorityState {
                 .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
                 .await
                 .expect("Cannot bulk insert genesis objects");
+            store
+                .init_genesis_epoch(genesis_committee.clone())
+                .expect("Init genesis epoch data must not fail");
             genesis_committee
-        } else if let Some(latest_epoch) = store.get_latest_authenticated_epoch() {
-            latest_epoch.epoch_info().next_epoch_committee().clone()
         } else {
-            genesis_committee
+            store
+                .get_latest_authenticated_epoch()
+                .epoch_info()
+                .committee()
+                .clone()
         };
 
         let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
@@ -1073,6 +1087,7 @@ impl AuthorityState {
             // Get all unprocessed checkpoints
             for (_seq, batch) in state
                 .database
+                .tables
                 .batches
                 .iter()
                 .skip_to(&next_expected_tx)
@@ -1080,6 +1095,7 @@ impl AuthorityState {
             {
                 let transactions: Vec<(TxSequenceNumber, ExecutionDigests)> = state
                     .database
+                    .tables
                     .executed_sequence
                     .iter()
                     .skip_to(&batch.batch.initial_sequence_number)
@@ -1144,17 +1160,23 @@ impl AuthorityState {
 
     pub(crate) fn sign_new_epoch_and_update_committee(
         &self,
-        next_epoch_committee: Committee,
-        last_checkpoint: CheckpointSequenceNumber,
+        new_committee: Committee,
+        next_checkpoint: CheckpointSequenceNumber,
     ) -> SuiResult {
+        // TODO: It's likely safer to do the following operations atomically, in case this function
+        // gets called from different threads. It cannot happen today, but worth the caution.
+        fp_ensure!(
+            self.epoch() + 1 == new_committee.epoch,
+            SuiError::from("Invalid new epoch to sign and update")
+        );
         self.database.sign_new_epoch(
-            self.epoch(),
-            next_epoch_committee.clone(),
+            new_committee.clone(),
             self.name,
             &*self.secret,
-            last_checkpoint,
+            next_checkpoint,
         )?;
-        self.committee.swap(Arc::new(next_epoch_committee));
+        // TODO: Do we want to make it possible to subscribe to committee changes?
+        self.committee.swap(Arc::new(new_committee));
         Ok(())
     }
 
@@ -1247,7 +1269,7 @@ impl AuthorityState {
         &self,
         digest: TransactionDigest,
     ) -> Result<(CertifiedTransaction, TransactionEffects), anyhow::Error> {
-        QueryHelpers::get_transaction(&self.database, digest)
+        QueryHelpers::get_transaction(&self.database, &digest)
     }
 
     fn get_indexes(&self) -> SuiResult<Arc<IndexStore>> {
@@ -1388,7 +1410,7 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub(crate) async fn commit_certificate(
         &self,
-        temporary_store: TemporaryStore<Arc<AuthorityStore>>,
+        inner_temporary_store: InnerTemporaryStore,
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
@@ -1401,23 +1423,20 @@ impl AuthorityState {
         let notifier_ticket = self.batch_notifier.ticket()?;
         let seq = notifier_ticket.seq();
 
+        let digest = certificate.digest();
         let effects_digest = &signed_effects.digest();
-        let res = self
-            .database
+        self.database
             .update_state(
-                temporary_store,
+                inner_temporary_store,
                 certificate,
                 seq,
                 signed_effects,
                 effects_digest,
             )
-            .await;
-
-        let digest = certificate.digest();
-
-        debug!(?digest, ?effects_digest, "commit_certificate finished");
-
-        res
+            .await
+            .tap_ok(|_| {
+                debug!(?digest, ?effects_digest, ?self.name, "commit_certificate finished");
+            })
 
         // implicitly we drop the ticket here and that notifies the batch manager
     }
@@ -1488,16 +1507,27 @@ impl AuthorityState {
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
+    type PubKey = AuthorityPublicKey;
     type Transaction = ConsensusTransaction;
     type Error = SuiError;
+    type Outcome = Vec<u8>;
 
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
     #[instrument(level = "trace", skip_all)]
     async fn handle_consensus_transaction(
         &self,
+        // TODO [2533]: use this once integrating Narwhal reconfiguration
+        _consensus_output: &narwhal_consensus::ConsensusOutput<Self::PubKey>,
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<Vec<u8>, Self::Error> {
+    ) -> Result<
+        (
+            Self::Outcome,
+            Option<narwhal_config::Committee<Self::PubKey>>,
+        ),
+        Self::Error,
+    > {
+        self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
                 // Ensure the input is a shared object certificate. Remember that Byzantine authorities
@@ -1511,14 +1541,15 @@ impl ExecutionState for AuthorityState {
                 // consensus.
                 certificate.verify(&self.committee.load())?;
 
-                debug!(digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
+                debug!(tx_digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
 
                 self.database
                     .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
                     .await?;
 
                 // TODO: This return time is not ideal.
-                Ok(Vec::default())
+                // TODO [2533]: edit once integrating Narwhal reconfiguration
+                Ok((Vec::default(), None))
             }
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
@@ -1546,7 +1577,8 @@ impl ExecutionState for AuthorityState {
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
                 // is not expecting any reply.
-                Ok(Vec::default())
+                // TODO [2533]: edit once integrating Narwhal reconfiguration
+                Ok((Vec::default(), None))
             }
         }
     }

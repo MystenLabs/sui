@@ -182,6 +182,7 @@ impl EffectsStore for Arc<AuthorityStore> {
         transactions: impl Iterator<Item = &'a ExecutionDigests>,
     ) -> SuiResult<Vec<Option<TransactionEffects>>> {
         Ok(self
+            .tables
             .effects
             .multi_get(transactions.map(|d| d.transaction))?
             .into_iter()
@@ -360,7 +361,6 @@ mod tests {
 
         // Test4
         // Many dependencies
-        println!("Test 4");
 
         // Make some transactions
         let tx = TransactionDigest::random();

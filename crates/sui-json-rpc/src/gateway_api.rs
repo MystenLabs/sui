@@ -71,13 +71,15 @@ impl RpcGatewayApiServer for RpcGatewayImpl {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
+        flag: Base64,
         signature: Base64,
         pub_key: Base64,
     ) -> RpcResult<TransactionResponse> {
         let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
-        let signature =
-            crypto::Signature::from_bytes(&[&*signature.to_vec()?, &*pub_key.to_vec()?].concat())
-                .map_err(|e| anyhow!(e))?;
+        let signature = crypto::Signature::from_bytes(
+            &[&*flag.to_vec()?, &*signature.to_vec()?, &pub_key.to_vec()?].concat(),
+        )
+        .map_err(|e| anyhow!(e))?;
         let result = self
             .client
             .execute_transaction(Transaction::new(data, signature))

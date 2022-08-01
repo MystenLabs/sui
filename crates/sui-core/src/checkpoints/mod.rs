@@ -11,6 +11,7 @@ pub(crate) mod checkpoint_tests;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::{collections::HashSet, path::Path, sync::Arc};
 use sui_storage::default_db_options;
 use sui_types::messages_checkpoint::CheckpointProposal;
@@ -22,11 +23,11 @@ use sui_types::{
     fp_ensure,
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
-        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
-        CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
+        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointResponse,
+        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
-use tracing::{debug, info};
+use tracing::{debug, error, info};
 use typed_store::{
     reopen,
     rocks::{open_cf_opts, DBBatch, DBMap},
@@ -208,7 +209,6 @@ impl CheckpointStore {
         Ok(())
     }
 
-    #[cfg(test)]
     pub fn set_locals_for_testing(&mut self, locals: CheckpointLocals) -> Result<(), SuiError> {
         self.set_locals(Arc::new(locals.clone()), locals)
     }
@@ -291,65 +291,65 @@ impl CheckpointStore {
 
     // Define handlers for request
 
-    pub fn handle_latest_proposal(
-        &mut self,
-        request: &CheckpointRequest,
-    ) -> Result<CheckpointResponse, SuiError> {
-        // Try to load any latest proposal
+    pub fn handle_proposal(&mut self, detail: bool) -> Result<CheckpointResponse, SuiError> {
         let locals = self.get_locals();
         let latest_checkpoint_proposal = &locals.current_proposal;
 
-        // Load the latest checkpoint from the database
-        let previous_checkpoint = self
-            .checkpoints
-            .iter()
-            .skip_to_last()
-            .next()
-            .map(|(_, c)| c);
-
-        // Get the current proposal if there is one.
-        let current = latest_checkpoint_proposal
+        let signed_proposal = latest_checkpoint_proposal
             .as_ref()
             .map(|proposal| proposal.signed_summary.clone());
 
-        // If requested include either the transactions in the latest checkpoint proposal
-        // or the unprocessed transactions that block the generation of a proposal.
-        let detail = if request.detail {
-            latest_checkpoint_proposal
-                .as_ref()
-                // If the checkpoint exist return its contents.
-                .map(|proposal| proposal.transactions.clone())
-        } else {
-            None
+        let contents = match (detail, &latest_checkpoint_proposal) {
+            (true, Some(proposal)) => Some(proposal.transactions.clone()),
+            _ => None,
         };
 
-        // Make the response
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Proposal {
-                current,
-                previous: previous_checkpoint,
-            },
-            detail,
-        })
-    }
-
-    pub fn handle_past_checkpoint(
-        &self,
-        detail: bool,
-        seq: CheckpointSequenceNumber,
-    ) -> Result<CheckpointResponse, SuiError> {
-        // Get the checkpoint with a given sequence number
-        let checkpoint = self.checkpoints.get(&seq)?;
-
-        // If a checkpoint is found, and if requested, return the list of transaction digest in it.
-        let content = match (detail, &checkpoint) {
-            (true, Some(_)) => self.checkpoint_contents.get(&seq)?,
+        let prev_cert = match &signed_proposal {
+            Some(proposal) if proposal.summary.sequence_number > 0 => {
+                let seq = proposal.summary.sequence_number;
+                let checkpoint = self.checkpoints.get(&(seq - 1))?;
+                match checkpoint {
+                    Some(AuthenticatedCheckpoint::Signed(_)) | None => {
+                        error!(
+                            "Invariant violation detected: Validator is making a proposal for checkpoint {:?}, but no certificate exists for checkpoint {:?}",
+                            seq,
+                            seq - 1,
+                        );
+                        return Err(SuiError::from(
+                            "Checkpoint proposal sequence number inconsistent with latest cert",
+                        ));
+                    }
+                    Some(AuthenticatedCheckpoint::Certified(c)) => Some(c),
+                }
+            }
             _ => None,
         };
 
         Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Past(checkpoint),
-            detail: content,
+            info: AuthorityCheckpointInfo::CheckpointProposal {
+                proposal: signed_proposal,
+                prev_cert,
+            },
+            detail: contents,
+        })
+    }
+
+    pub fn handle_authenticated_checkpoint(
+        &mut self,
+        seq: &Option<CheckpointSequenceNumber>,
+        detail: bool,
+    ) -> SuiResult<CheckpointResponse> {
+        let checkpoint = match seq {
+            Some(s) => self.checkpoints.get(s)?,
+            None => self.latest_stored_checkpoint(),
+        };
+        let contents = match (&checkpoint, detail) {
+            (Some(c), true) => self.checkpoint_contents.get(&c.summary().sequence_number)?,
+            _ => None,
+        };
+        Ok(CheckpointResponse {
+            info: AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint),
+            detail: contents,
         })
     }
 
@@ -471,7 +471,7 @@ impl CheckpointStore {
         &mut self,
         fragment: &CheckpointFragment,
         committee: &Committee,
-    ) -> Result<CheckpointResponse, SuiError> {
+    ) -> SuiResult {
         // Check structure is correct and signatures verify
         fragment.verify(committee)?;
 
@@ -509,24 +509,19 @@ impl CheckpointStore {
             });
         }
 
-        let locals = self.get_locals();
-        if !locals.no_more_fragments {
-            // Send to consensus for sequencing.
-            if let Some(sender) = &self.sender {
-                sender.send_to_consensus(fragment.clone())?;
-            } else {
-                return Err(SuiError::from("No consensus sender configured"));
-            }
+        // Send to consensus for sequencing.
+        if let Some(sender) = &self.sender {
+            debug!("Send fragment: {} -- {}", self.name, other_name);
+            sender.send_to_consensus(fragment.clone())?;
+        } else {
+            return Err(SuiError::from("No consensus sender configured"));
         }
 
         // NOTE: we should charge the node that sends this into consensus
         //       according to the byte length of the fragment, to create
         //       incentives for nodes to submit smaller fragments.
 
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Success,
-            detail: None,
-        })
+        Ok(())
     }
 
     /// This function should be called by the consensus output, it is idempotent,
@@ -539,6 +534,14 @@ impl CheckpointStore {
         committee: &Committee,
         handle_pending_cert: impl PendCertificateForExecution,
     ) -> Result<(), FragmentInternalError> {
+        let fragment_seq = fragment.proposer.summary.sequence_number;
+        debug!(
+            execution_index=?seq,
+            cp_seq=?fragment_seq,
+            "Fragment received from consensus. Proposer: {}, Other: {}",
+            fragment.proposer.authority(),
+            fragment.other.authority(),
+        );
         // Ensure we have not already processed this fragment.
         if let Some((last_seq, _)) = self.fragments.iter().skip_to_last().next() {
             if seq <= last_seq {
@@ -553,6 +556,7 @@ impl CheckpointStore {
             .map_err(FragmentInternalError::Error)?;
 
         // Schedule for execution all the certificates that are included here.
+        // TODO: We should not schedule a cert if it has already been executed.
         handle_pending_cert
             .add_pending_certificates(
                 fragment
@@ -717,6 +721,7 @@ impl CheckpointStore {
         let locals = self.get_locals();
         let mut new_locals = locals.as_ref().clone();
         new_locals.no_more_fragments = true;
+        debug!("no_more_fragments is set");
         self.set_locals(locals, new_locals)?;
 
         Err(SuiError::from(
@@ -732,13 +737,14 @@ impl CheckpointStore {
     ) -> SuiResult {
         checkpoint.verify(committee, None)?;
         debug_assert!(matches!(
-            self.latest_stored_checkpoint()?,
+            self.latest_stored_checkpoint(),
             Some(AuthenticatedCheckpoint::Signed(_))
         ));
         let seq = checkpoint.summary.sequence_number();
         self.checkpoints
             .insert(seq, &AuthenticatedCheckpoint::Certified(checkpoint.clone()))?;
         metrics.checkpoint_sequence_number.set(*seq as i64);
+        self.clear_proposal(*seq + 1)?;
         Ok(())
     }
 
@@ -764,7 +770,22 @@ impl CheckpointStore {
             effects_store,
         )?;
         metrics.checkpoint_sequence_number.set(*seq as i64);
+        self.clear_proposal(*seq + 1)?;
         Ok(())
+    }
+
+    fn clear_proposal(
+        &mut self,
+        new_expected_next_checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let locals = self.get_locals();
+
+        let mut new_locals = locals.as_ref().clone();
+        new_locals.current_proposal = None;
+        new_locals.proposal_next_transaction = None;
+        new_locals.no_more_fragments = false;
+        new_locals.next_checkpoint = new_expected_next_checkpoint;
+        self.set_locals(locals, new_locals)
     }
 
     // Helper read functions
@@ -780,15 +801,12 @@ impl CheckpointStore {
     }
 
     /// Get the latest stored checkpoint if there is one
-    pub fn latest_stored_checkpoint(
-        &mut self,
-    ) -> Result<Option<AuthenticatedCheckpoint>, SuiError> {
-        Ok(self
-            .checkpoints
+    pub fn latest_stored_checkpoint(&mut self) -> Option<AuthenticatedCheckpoint> {
+        self.checkpoints
             .iter()
             .skip_to_last()
             .next()
-            .map(|(_, ckp)| ckp))
+            .map(|(_, ckp)| ckp)
     }
 
     pub fn is_ready_to_start_epoch_change(&mut self) -> bool {
@@ -799,6 +817,10 @@ impl CheckpointStore {
     pub fn is_ready_to_finish_epoch_change(&mut self) -> bool {
         let next_seq = self.next_checkpoint();
         next_seq % CHECKPOINT_COUNT_PER_EPOCH == 1 && next_seq != 1
+    }
+
+    pub fn validators_already_fragmented_with(&mut self) -> BTreeSet<AuthorityName> {
+        self.local_fragments.iter().map(|(name, _)| name).collect()
     }
 
     // Helper write functions
@@ -825,6 +847,7 @@ impl CheckpointStore {
         };
 
         let transactions = CheckpointContents::new(self.extra_transactions.keys());
+        let size = transactions.transactions.len();
         let checkpoint_proposal = CheckpointProposal::new(
             epoch,
             checkpoint_sequence,
@@ -839,7 +862,7 @@ impl CheckpointStore {
         new_locals.proposal_next_transaction = Some(next_local_tx_sequence);
         self.set_locals(locals, new_locals)?;
 
-        info!(cp_seq=?checkpoint_sequence, "A new checkpoint proposal is created");
+        info!(cp_seq=?checkpoint_sequence, ?size, "A new checkpoint proposal is created");
         Ok(checkpoint_proposal)
     }
 
@@ -946,16 +969,6 @@ impl CheckpointStore {
 
         // Write to the database.
         batch.write()?;
-
-        // Clean up our proposal if any
-        let locals = self.get_locals();
-
-        let mut new_locals = locals.as_ref().clone();
-        new_locals.current_proposal = None;
-        new_locals.proposal_next_transaction = None;
-        new_locals.no_more_fragments = false;
-        new_locals.next_checkpoint = expected_seq + 1;
-        self.set_locals(locals, new_locals)?;
 
         Ok(())
     }

@@ -15,10 +15,10 @@ import {
 import cl from 'classnames';
 
 import Longtext from '../../components/longtext/Longtext';
+import ModulesWrapper from '../../components/module/ModulesWrapper';
 import Tabs from '../../components/tabs/Tabs';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
-import TxModulesWrapper from './TxModulesWrapper';
 import TxResultHeader from './TxResultHeader';
 
 import type { DataType, Category } from './TransactionResultType';
@@ -345,7 +345,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     styles.txgridcolspan3,
                                 ])}
                             >
-                                <TxModulesWrapper data={modules} />
+                                <ModulesWrapper data={modules} />
                             </section>
                         )}
                     </div>

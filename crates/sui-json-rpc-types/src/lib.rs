@@ -1124,7 +1124,6 @@ impl SuiTransactionEffects {
             events: effect
                 .events
                 .into_iter()
-                // TODO: figure out how to map the non-Move events
                 .map(|event| SuiEvent::try_from(event, resolver))
                 .collect::<Result<_, _>>()?,
             dependencies: effect.dependencies,
@@ -1576,8 +1575,11 @@ impl TryInto<EventFilter> for SuiEventFilter {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBytes {
+    /// transaction data bytes, as base-64 encoded string
     pub tx_bytes: Base64,
+    /// the gas object to be used
     pub gas: SuiObjectRef,
+    /// objects to be used in this transaction
     pub input_objects: Vec<SuiInputObjectKind>,
 }
 

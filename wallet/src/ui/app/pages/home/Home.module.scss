@@ -47,3 +47,8 @@
 .logo {
     color: v.use(v.$colors-text-on-background);
 }
+
+.logo-link {
+    text-decoration: none;
+    color: inherit;
+}

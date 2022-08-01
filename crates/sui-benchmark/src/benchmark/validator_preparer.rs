@@ -22,7 +22,7 @@ use sui_core::authority::*;
 use sui_types::{
     base_types::{SuiAddress, *},
     committee::*,
-    crypto::{KeyPair, KeypairTraits, PublicKeyBytes},
+    crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes, KeypairTraits},
     gas_coin::GasCoin,
     object::Object,
 };
@@ -260,8 +260,8 @@ fn make_authority_state(
     store_path: &Path,
     db_cpus: i32,
     committee: &Committee,
-    pubx: &PublicKeyBytes,
-    secx: KeyPair,
+    pubx: &AuthorityPublicKeyBytes,
+    secx: AuthorityKeyPair,
 ) -> (AuthorityState, Arc<AuthorityStore>) {
     fs::create_dir(&store_path).unwrap();
     info!("Open database on path: {:?}", store_path.as_os_str());

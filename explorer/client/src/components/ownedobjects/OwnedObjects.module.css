@@ -2,7 +2,7 @@
     @apply border-collapse;
 }
 
-.groupview tr:not(:first-of-type) {
+.groupview tbody tr {
     @apply cursor-pointer hover:bg-[#6FBCF01A] h-[33px];
 }
 
@@ -25,7 +25,7 @@
 
 .ownedcoins,
 .ownedobjects {
-    @apply w-[100%] min-h-[420px] lg:min-h-[240px] lg:flex lg:flex-wrap lg:justify-between;
+    @apply w-[100%] lg:min-h-[240px] lg:flex lg:flex-wrap lg:justify-between;
 }
 
 .objectbox {

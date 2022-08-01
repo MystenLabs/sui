@@ -10,20 +10,22 @@ programming language, you should familiarize yourself with it and use this conte
 
 For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper. Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
 
-> **Important:** This site is built from the upstream `main` branch and therefore will contain updates not yet found in `devnet`.
+> **Important:** This site is available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
+
+built from the upstream `main` branch and therefore will contain updates not yet found in `devnet`.
 
 ## See what's new
 
 Find the latest updates to these contents in this section:
 
+* This site is now available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for  [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
+* Sui now supports development using [Microsoft Windows 11, macOS, and Linux](../build/install.md#supported-oses). See [install Sui](../build/install.md#prerequisites) for the prerequisites of each operating system.
+* `sui::id` is now `sui::object` and `VersionedID` is now `Info`. Use the [Object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) that has [replaced the former ID.move.](https://github.com/MystenLabs/sui/pull/3241)
 * Find a list of [single-writer apps](../learn/single-writer-apps.md) that would benefit from Sui's advantages in handling [simple transactions](../learn/how-sui-works.md#simple-transactions).
 * Sui [version 0.6.1](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.1) released to DevNet. See the [#sui-release-notes](https://discord.com/channels/916379725201563759/974444055259910174) channel in Discord for details on this and prior releases.
 * Install the [Sui Wallet Browser Extension](../explore/wallet-browser.md) to create NFTs, transfer coins, and carry out common transactions in a Chrome tab.
 * [Sui Move is feature complete](https://sui.io/resources-move/why-we-created-sui-move/) and ready for you to write safe and efficient smart contracts. See https://examples.sui.io/ to learn Sui Move by example.
 * If your application is written in JavaScript or TypeScript, follow the [TypeScript SDK documentation](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
-* Employ the enhanced [Move Visual Studio Code (VSCode) plugin](https://marketplace.visualstudio.com/items?itemName=move.move-analyzer) as described in the [related announcement](https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin).
-* Get ready to participate in [Sui Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/)!
-* The former `wallet` binary has been replaced with the [Sui CLI client](../build/cli-client.md) and combined with related functions.
 
 For a complete view of all changes in the Sui `devnet` branch, see:
 https://github.com/MystenLabs/sui/commits/devnet
@@ -41,7 +43,7 @@ Go to the [Move Quick Start](../build/move/index.md) for installation, defining 
 ### Start the Sui network with Sui CLI client
 See the [Sui CLI client Quick Start](../build/cli-client.md) for installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
 
-### Take end-to-end tutorial
+### Take the tic-tac-toe tutorial
 Proceed to the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.
 
 ### Program with Objects

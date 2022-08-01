@@ -5,27 +5,31 @@
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use futures::StreamExt;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointRequest, CheckpointRequestType,
-    CheckpointResponse, CheckpointSequenceNumber,
+    AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointContents, CheckpointRequest,
+    CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tracing::info;
+use tracing::{info, warn};
 
 #[derive(Clone)]
 pub struct SafeClient<C> {
     authority_client: C,
     committee: Committee,
-    address: PublicKeyBytes,
+    address: AuthorityPublicKeyBytes,
 }
 
 impl<C> SafeClient<C> {
-    pub fn new(authority_client: C, committee: Committee, address: PublicKeyBytes) -> Self {
+    pub fn new(
+        authority_client: C,
+        committee: Committee,
+        address: AuthorityPublicKeyBytes,
+    ) -> Self {
         Self {
             authority_client,
             committee,
@@ -367,16 +371,18 @@ where
     /// Handle Transaction + Effects information requests for this account.
     pub async fn handle_transaction_and_effects_info_request(
         &self,
-        digest: &TransactionDigest,
-        effects_digest: Option<&TransactionEffectsDigest>,
+        digests: &ExecutionDigests,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_info = self
             .authority_client
-            .handle_transaction_info_request((*digest).into())
+            .handle_transaction_info_request(digests.transaction.into())
             .await?;
 
-        if let Err(err) = self.check_transaction_response(digest, effects_digest, &transaction_info)
-        {
+        if let Err(err) = self.check_transaction_response(
+            &digests.transaction,
+            Some(&digests.effects),
+            &transaction_info,
+        ) {
             self.report_client_error(err.clone());
             return Err(err);
         }
@@ -393,61 +399,86 @@ where
         if let (Some(e), Some(o)) = (expected_seq, observed_seq) {
             fp_ensure!(
                 e == o,
-                SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                }
+                SuiError::from("Expected checkpoint number doesn't match with returned")
             );
         }
         Ok(())
+    }
+
+    fn verify_contents_exist<T>(
+        &self,
+        request_content: bool,
+        checkpoint: &Option<T>,
+        contents: &Option<CheckpointContents>,
+    ) -> SuiResult {
+        match (request_content, checkpoint, contents) {
+            // If content is requested, checkpoint is not None, but we are not getting any content,
+            // it's an error.
+            // If content is not requested, or checkpoint is None, yet we are still getting content,
+            // it's an error.
+            (true, Some(_), None) | (false, _, Some(_)) | (_, None, Some(_)) => Err(
+                SuiError::from("Checkpoint contents inconsistent with request"),
+            ),
+            _ => Ok(()),
+        }
+    }
+
+    fn verify_checkpoint_response(
+        &self,
+        request: &CheckpointRequest,
+        response: &CheckpointResponse,
+    ) -> SuiResult {
+        // Verify signatures
+        response.verify(&self.committee)?;
+
+        // Verify response data was correct for request
+        match &request.request_type {
+            CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
+                if let AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint) = &response.info
+                {
+                    // Checks that the sequence number is correct.
+                    self.verify_checkpoint_sequence(*seq, checkpoint)?;
+                    self.verify_contents_exist(request.detail, checkpoint, &response.detail)
+                } else {
+                    Err(SuiError::from(
+                        "Invalid AuthorityCheckpointInfo type in the response",
+                    ))
+                }
+            }
+            CheckpointRequestType::CheckpointProposal => {
+                if let AuthorityCheckpointInfo::CheckpointProposal {
+                    proposal,
+                    prev_cert: _,
+                } = &response.info
+                {
+                    self.verify_contents_exist(request.detail, proposal, &response.detail)
+                } else {
+                    Err(SuiError::from(
+                        "Invalid AuthorityCheckpointInfo type in the response",
+                    ))
+                }
+            }
+        }
     }
 
     pub async fn handle_checkpoint(
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        let detail = request.detail;
-        let req_type = request.request_type.clone();
-
-        let resp = self.authority_client.handle_checkpoint(request).await?;
-
-        // Verify signatures
-        resp.verify(&self.committee)?;
-
-        // Verify response data was correct for request
-        match &req_type {
-            CheckpointRequestType::LatestCheckpointProposal => match &resp.info {
-                AuthorityCheckpointInfo::Proposal { previous, .. } => {
-                    self.verify_checkpoint_sequence(None, previous)?;
-                    Ok(resp)
-                }
-                _ => Err(SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address,
-                }),
-            },
-            CheckpointRequestType::PastCheckpoint(seq) => {
-                if let AuthorityCheckpointInfo::Past(past) = &resp.info {
-                    match past {
-                        Some(_) => {
-                            if detail && resp.detail.is_none() {
-                                // peer has the checkpoint, but refused to give us the contents.
-                                // (For AuthorityCheckpointInfo::Proposal, contents are not
-                                // guaranteed to exist yet).
-                                return Err(SuiError::ByzantineAuthoritySuspicion {
-                                    authority: self.address,
-                                });
-                            }
-                        }
-                        // Checkpoint wasn't found, so detail is obviously not required.
-                        None => (),
-                    }
-                    self.verify_checkpoint_sequence(Some(*seq), past)?;
-                    Ok(resp)
-                } else {
-                    Err(SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address,
-                    })
-                }
-            }
+        let resp = self
+            .authority_client
+            .handle_checkpoint(request.clone())
+            .await?;
+        if let Err(err) = self.verify_checkpoint_response(&request, &resp) {
+            warn!(
+                "Potential byzantine validator {} due to: {:?}",
+                self.address, err
+            );
+            Err(SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+            })
+        } else {
+            Ok(resp)
         }
     }
 

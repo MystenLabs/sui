@@ -12,6 +12,8 @@ use futures::{stream, StreamExt};
 
 use super::ActiveAuthority;
 
+use tap::TapFallible;
+
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -84,10 +86,17 @@ where
     let executed = sync_handle
         // map to extract digest
         .handle_execution_request(pending_transactions.iter().map(|(_, digest)| *digest))
+        .await?
         // zip results back together with seq
         .zip(stream::iter(pending_transactions.iter()))
         // filter out errors
-        .filter_map(|(result, (seq, _))| async move { result.ok().map(|_| seq) })
+        .filter_map(|(result, (seq, digest))| async move {
+            result
+                .tap_err(|e| info!(?seq, ?digest, "certificate execution failed: {}", e))
+                .tap_ok(|_| debug!(?seq, ?digest, "certificate execution complete"))
+                .ok()
+                .map(|_| seq)
+        })
         .collect()
         .await;
 

@@ -65,8 +65,8 @@ module examples::donuts {
 
     /// Consume donut and get nothing...
     public entry fun eat_donut(d: Donut) {
-        let Donut { id } = d;
-        object::delete(id);
+        let Donut { info } = d;
+        object::delete(info);
     }
 
     /// Take coin from `DonutShop` and transfer it to tx sender.

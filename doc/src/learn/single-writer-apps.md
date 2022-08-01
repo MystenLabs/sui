@@ -21,6 +21,7 @@ final step and not for every action, such as voting and lotteries and DeFi Oracl
 1. Personal GitHub, Overleaf LaTex editor, wish/shopping lists, etc.
 1. Personal password manager.
 1. Non-interactive games (i.e., advertise/evolve your SimCity, FarmVille state etc.).
+1. Human vs. Computer games (i.e., chess AI that is programmed into the smart contract. The AI automatically plays back in the same transaction of user's chess move).
 1. Coupons and tickets. See a [full dApp demo and installation instructions on how to build a mass-minting coupon platform with Sui](https://github.com/MystenLabs/sui/blob/sui-coupon-v0/examples/coupons/README.md).
 1. Mass minting of game assets.
 1. Optimistic decentralized lottery: a new variant which needs only shared objects to declare winner but not to buy tickets; thus only one out of the million flows needs consensus.

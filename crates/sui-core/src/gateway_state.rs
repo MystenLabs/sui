@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +23,8 @@ use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
+use sui_config::gateway::GatewayConfig;
+use sui_config::ValidatorInfo;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Data, ObjectFormatOptions, Owner};
 use sui_types::{
@@ -38,6 +40,7 @@ use sui_types::{
 
 use crate::authority::ResolverWrapper;
 use crate::authority_aggregator::AuthAggMetrics;
+use crate::authority_client::NetworkAuthorityClient;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -171,7 +174,7 @@ pub struct GatewayState<A> {
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
     pub fn new(
-        path: PathBuf,
+        path: &Path,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         prometheus_registry: &Registry,
@@ -186,7 +189,7 @@ impl<A> GatewayState<A> {
     }
 
     pub fn new_with_authorities(
-        path: PathBuf,
+        path: &Path,
         authorities: AuthorityAggregator<A>,
         metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
@@ -220,6 +223,48 @@ impl<A> GatewayState<A> {
     #[cfg(test)]
     pub fn store(&self) -> &Arc<GatewayStore> {
         &self.store
+    }
+}
+
+impl GatewayState<NetworkAuthorityClient> {
+    pub fn create_client(
+        config: &GatewayConfig,
+        prometheus_registry: Option<&Registry>,
+    ) -> Result<GatewayClient, anyhow::Error> {
+        let committee = Self::make_committee(config)?;
+        let authority_clients = Self::make_authority_clients(config);
+        let default_registry = Registry::new();
+        let prometheus_registry = prometheus_registry.unwrap_or(&default_registry);
+        Ok(Arc::new(GatewayState::new(
+            &config.db_folder_path,
+            committee,
+            authority_clients,
+            prometheus_registry,
+        )?))
+    }
+
+    pub fn make_committee(config: &GatewayConfig) -> SuiResult<Committee> {
+        Committee::new(
+            config.epoch,
+            ValidatorInfo::voting_rights(&config.validator_set),
+        )
+    }
+
+    pub fn make_authority_clients(
+        config: &GatewayConfig,
+    ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
+        let mut authority_clients = BTreeMap::new();
+        let mut network_config = mysten_network::config::Config::new();
+        network_config.connect_timeout = Some(config.send_timeout);
+        network_config.request_timeout = Some(config.recv_timeout);
+        for authority in &config.validator_set {
+            let channel = network_config
+                .connect_lazy(authority.network_address())
+                .unwrap();
+            let client = NetworkAuthorityClient::new(channel);
+            authority_clients.insert(authority.public_key(), client);
+        }
+        authority_clients
     }
 }
 
@@ -383,6 +428,13 @@ where
     /// And when it's out-of-dated in the rare case, we need to be able to understand the error
     /// returned from validators and update the object locally so that the wallet can retry.
     async fn get_object_internal(&self, object_id: &ObjectID) -> SuiResult<Object> {
+        if let Ok(Some(o)) = self.store.get_object(object_id) {
+            if o.is_immutable() {
+                // If an object is immutable, it can never be mutated and hence is guaranteed to
+                // be up-to-date. No need to download from validators.
+                return Ok(o);
+            }
+        }
         let object = self
             .download_object_from_authorities(*object_id)
             .await?
@@ -510,10 +562,7 @@ where
     /// Make sure all objects in the input exist in the gateway store.
     /// If any object does not exist in the store, give it a chance
     /// to download from authorities.
-    async fn sync_input_objects_with_authorities(
-        &self,
-        transaction: &Transaction,
-    ) -> Result<(), anyhow::Error> {
+    async fn sync_input_objects_with_authorities(&self, transaction: &Transaction) -> SuiResult {
         let input_objects = transaction.data.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
@@ -547,7 +596,7 @@ where
         let tx_digest = transaction.digest();
         let span = tracing::debug_span!(
             "execute_transaction",
-            digest = ?tx_digest,
+            tx_digest = ?tx_digest,
             tx_kind = transaction.data.kind_as_str()
         );
         let exec_result = self
@@ -564,7 +613,7 @@ where
         let (new_certificate, effects) = exec_result?;
 
         debug!(
-            digest = ?tx_digest,
+            tx_digest = ?tx_digest,
             ?effects.effects,
             "Transaction completed successfully"
         );
@@ -595,16 +644,15 @@ where
         Ok((new_certificate, effects))
     }
 
-    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
-    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
-    async fn execute_transaction_impl(
+    /// Checks the transaction input and set locks.
+    /// If success, returns the input objects and owned objects in the input.
+    async fn prepare_transaction(
         &self,
-        transaction: Transaction,
-        is_last_retry: bool,
-    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+        transaction: &Transaction,
+    ) -> SuiResult<(InputObjects, Vec<ObjectRef>)> {
         transaction.verify()?;
 
-        self.sync_input_objects_with_authorities(&transaction)
+        self.sync_input_objects_with_authorities(transaction)
             .await?;
 
         // Getting the latest system state for gas information
@@ -614,7 +662,7 @@ where
             .await?;
 
         let (_gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.store, &transaction).await?;
+            transaction_input_checker::check_transaction_input(&self.store, transaction).await?;
 
         let owned_objects = input_objects.filter_owned_objects();
         if let Err(err) = self
@@ -631,7 +679,11 @@ where
                     pending_transaction,
                 } => {
                     debug!(tx_digest=?pending_transaction, "Objects locked by a previous transaction, re-executing the previous transaction");
-                    if self.retry_pending_tx(pending_transaction).await.is_err() {
+                    if let Err(err) = self.retry_pending_tx(pending_transaction).await {
+                        debug!(
+                            "Retrying pending tx failed: {:?}. Resetting the transaction lock",
+                            err
+                        );
                         self.store.reset_transaction_lock(&owned_objects).await?;
                     }
                     self.set_transaction_lock(&owned_objects, transaction.clone())
@@ -639,10 +691,26 @@ where
                         .await?;
                 }
                 _ => {
-                    return Err(err.into());
+                    return Err(err);
                 }
             }
         }
+        Ok((input_objects, owned_objects))
+    }
+
+    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
+    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
+    async fn execute_transaction_impl(
+        &self,
+        transaction: Transaction,
+        is_last_retry: bool,
+    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+        let (input_objects, owned_objects) =
+            self.prepare_transaction(&transaction)
+                .await
+                .map_err(|err| SuiError::GatewayTransactionPrepError {
+                    error: ToString::to_string(&err),
+                })?;
 
         let exec_result = self
             .execute_transaction_impl_inner(input_objects, transaction)
@@ -663,12 +731,21 @@ where
     }
 
     async fn retry_pending_tx(&self, digest: TransactionDigest) -> Result<(), anyhow::Error> {
-        let tx = self
-            .store
-            .get_transaction(&digest)?
-            .ok_or(SuiError::TransactionNotFound { digest })?;
-        self.execute_transaction(tx).await?;
-        Ok(())
+        let tx = self.store.get_transaction(&digest)?;
+        match tx {
+            Some(tx) => {
+                self.execute_transaction(tx).await?;
+                Ok(())
+            }
+            None => {
+                // It's possible that the tx has been executed already.
+                if self.store.get_certified_transaction(&digest)?.is_some() {
+                    Ok(())
+                } else {
+                    Err(SuiError::TransactionNotFound { digest }.into())
+                }
+            }
+        }
     }
 
     async fn download_object_from_authorities(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
@@ -676,7 +753,8 @@ where
         if let ObjectRead::Exists(obj_ref, object, _) = &result {
             let local_object = self.store.get_object(&object_id)?;
             if local_object.is_none()
-                || &local_object.unwrap().compute_object_reference() != obj_ref
+                // We only update local object if the validator version is newer.
+                || local_object.unwrap().version() < obj_ref.1
             {
                 self.store.insert_object_direct(*obj_ref, object).await?;
             }
@@ -785,7 +863,7 @@ where
             ?package,
             ?created_objects,
             ?updated_gas,
-            digest = ?certificate.digest(),
+            tx_digest = ?certificate.digest(),
             "Created Publish response"
         );
 
@@ -1066,55 +1144,63 @@ where
         let tx_kind = tx.data.kind.clone();
         let tx_digest = tx.digest();
 
-        debug!(digest = ?tx_digest, "Received execute_transaction request");
+        debug!(tx_digest = ?tx_digest, "Received execute_transaction request");
 
-        let span = tracing::debug_span!(
-            "gateway_execute_transaction",
-            ?tx_digest,
-            tx_kind = tx.data.kind_as_str()
-        );
-
-        // Use start_coarse_time() if the below turns out to have a perf impact
-        let timer = self.metrics.transaction_latency.start_timer();
-        let mut res = self
-            .execute_transaction_impl(tx.clone(), false)
-            .instrument(span.clone())
-            .await;
-        // NOTE: below only records latency if this completes.
-        timer.stop_and_record();
-
-        let mut remaining_retries = MAX_NUM_TX_RETRIES;
-        while res.is_err() {
-            if remaining_retries == 0 {
-                error!(
-                    num_retries = MAX_NUM_TX_RETRIES,
+        // Ensure idempotency.
+        let (certificate, effects) = match QueryHelpers::get_transaction(&self.store, tx_digest) {
+            Ok((cert, effects)) => (cert, effects),
+            _ => {
+                let span = tracing::debug_span!(
+                    "gateway_execute_transaction",
                     ?tx_digest,
-                    "All transaction retries failed"
+                    tx_kind = tx.data.kind_as_str()
                 );
-                // Okay to unwrap since we checked that this is an error
-                return Err(res.unwrap_err());
+
+                // Use start_coarse_time() if the below turns out to have a perf impact
+                let timer = self.metrics.transaction_latency.start_timer();
+                let mut res = self
+                    .execute_transaction_impl(tx.clone(), false)
+                    .instrument(span.clone())
+                    .await;
+                // NOTE: below only records latency if this completes.
+                timer.stop_and_record();
+
+                let mut remaining_retries = MAX_NUM_TX_RETRIES;
+                while res.is_err() {
+                    if remaining_retries == 0 {
+                        error!(
+                            num_retries = MAX_NUM_TX_RETRIES,
+                            ?tx_digest,
+                            "All transaction retries failed"
+                        );
+                        // Okay to unwrap since we checked that this is an error
+                        return Err(res.unwrap_err());
+                    }
+                    remaining_retries -= 1;
+                    self.metrics.total_tx_retries.inc();
+
+                    debug!(
+                        remaining_retries,
+                        ?tx_digest,
+                        ?res,
+                        "Retrying failed transaction"
+                    );
+
+                    res = self
+                        .execute_transaction_impl(tx.clone(), remaining_retries == 0)
+                        .instrument(span.clone())
+                        .await;
+                }
+
+                // Okay to unwrap() since we checked that this is Ok
+                let (certificate, effects) = res.unwrap();
+                let effects = effects.effects;
+
+                debug!(?tx_digest, "Transaction succeeded");
+                (certificate, effects)
             }
-            remaining_retries -= 1;
-            self.metrics.total_tx_retries.inc();
+        };
 
-            debug!(
-                remaining_retries,
-                ?tx_digest,
-                ?res,
-                "Retrying failed transaction"
-            );
-
-            res = self
-                .execute_transaction_impl(tx.clone(), remaining_retries == 0)
-                .instrument(span.clone())
-                .await;
-        }
-
-        // Okay to unwrap() since we checked that this is Ok
-        let (certificate, effects) = res.unwrap();
-        let effects = effects.effects;
-
-        debug!(digest = ?tx_digest, "Transaction succeeded");
         // Create custom response base on the request type
         if let TransactionKind::Single(tx_kind) = tx_kind {
             match tx_kind {
@@ -1230,6 +1316,11 @@ where
     // TODO: Get rid of the sync API.
     // https://github.com/MystenLabs/sui/issues/1045
     async fn sync_account_state(&self, account_addr: SuiAddress) -> Result<(), anyhow::Error> {
+        debug!(
+            ?account_addr,
+            "Syncing account states from validators starts."
+        );
+
         let (active_object_certs, _deleted_refs_certs) = self
             .authorities
             .sync_all_owned_objects(account_addr, Duration::from_secs(60))
@@ -1239,7 +1330,7 @@ where
             ?active_object_certs,
             deletec = ?_deleted_refs_certs,
             ?account_addr,
-            "Syncing account states"
+            "Syncing account states from validators ends."
         );
 
         for (object, _option_layout, _option_cert) in active_object_certs {
@@ -1247,6 +1338,7 @@ where
                 .insert_object_direct(object.compute_object_reference(), &object)
                 .await?;
         }
+        debug!(?account_addr, "Syncing account states ends.");
 
         Ok(())
     }
@@ -1430,7 +1522,7 @@ where
         &self,
         digest: TransactionDigest,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
-        let (cert, effect) = QueryHelpers::get_transaction(&self.store, digest)?;
+        let (cert, effect) = QueryHelpers::get_transaction(&self.store, &digest)?;
 
         Ok(TransactionEffectsResponse {
             certificate: cert.try_into()?,

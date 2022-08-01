@@ -3,8 +3,6 @@
 
 use anyhow::Result;
 use futures::TryFutureExt;
-use jsonrpsee::http_server::HttpServerHandle;
-use jsonrpsee::ws_server::WsServerHandle;
 use multiaddr::Multiaddr;
 use parking_lot::Mutex;
 use prometheus::Registry;
@@ -23,7 +21,6 @@ use sui_core::{
     checkpoints::CheckpointStore,
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
-use sui_json_rpc::JsonRpcServerBuilder;
 use sui_network::api::ValidatorServer;
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
@@ -35,9 +32,12 @@ use sui_types::crypto::ToFromBytes;
 
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
+use sui_json_rpc::http_server::HttpServerHandle;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_types::crypto::{KeypairTraits, PublicKeyBytes};
+use sui_json_rpc::ws_server::WsServerHandle;
+use sui_json_rpc::JsonRpcServerBuilder;
+use sui_types::crypto::{AuthorityPublicKeyBytes, KeypairTraits};
 
 pub mod admin;
 pub mod metrics;
@@ -52,6 +52,7 @@ pub struct SuiNode {
     _execute_driver_handle: Option<tokio::task::JoinHandle<()>>,
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
+    active: Option<Arc<ActiveAuthority<NetworkAuthorityClient>>>,
 }
 
 impl SuiNode {
@@ -124,6 +125,8 @@ impl SuiNode {
 
         let should_start_follower = is_node || config.enable_gossip;
 
+        let mut active = None;
+
         let (gossip_handle, execute_driver_handle, checkpoint_process_handle) =
             if should_start_follower {
                 let mut net_config = mysten_network::config::Config::new();
@@ -140,14 +143,11 @@ impl SuiNode {
                     let epoch_validators = &sui_system_state.validators.active_validators;
 
                     for validator in epoch_validators {
-                        let net_addr: &[u8] = &validator.metadata.net_address.clone();
-                        let str_addr = std::str::from_utf8(net_addr)?;
-                        let address: Multiaddr = str_addr.parse()?;
-                        //let address = Multiaddr::try_from(net_addr)?;
+                        let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
                         let channel = net_config.connect_lazy(&address)?;
                         let client = NetworkAuthorityClient::new(channel);
                         let name: &[u8] = &validator.metadata.name;
-                        let public_key_bytes = PublicKeyBytes::from_bytes(name)?;
+                        let public_key_bytes = AuthorityPublicKeyBytes::from_bytes(name)?;
                         authority_clients.insert(public_key_bytes, client);
                     }
                 } else {
@@ -175,6 +175,7 @@ impl SuiNode {
                     follower_store,
                     net,
                 )?);
+                active = Some(Arc::clone(&active_authority));
 
                 if is_validator {
                     // TODO: get degree from config file.
@@ -192,8 +193,9 @@ impl SuiNode {
                         ),
                     )
                 } else {
-                    let metrics = CheckpointMetrics::new(&prometheus_registry);
-                    active_authority.sync_to_latest_checkpoint(&metrics).await?;
+                    // TODO: enable checkpoint sync on fullnode
+                    // let metrics = CheckpointMetrics::new(&prometheus_registry);
+                    // active_authority.sync_to_latest_checkpoint(&metrics).await?;
                     (
                         Some(active_authority.spawn_node_sync_process().await),
                         None,
@@ -261,6 +263,7 @@ impl SuiNode {
             _batch_subsystem_handle: batch_subsystem_handle,
             _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,
+            active,
         };
 
         info!("SuiNode started!");
@@ -270,6 +273,10 @@ impl SuiNode {
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.state.clone()
+    }
+
+    pub fn active(&self) -> Option<Arc<ActiveAuthority<NetworkAuthorityClient>>> {
+        self.active.clone()
     }
 
     //TODO watch/wait on all the components

@@ -11,9 +11,10 @@ module sui::event {
     // Cost calibration functions
     #[test_only]
     public fun calibrate_emit<T: copy + drop>(obj: T) {
-        emit(obj)
+        emit(obj);
     }
     #[test_only]
-    public fun calibrate_emit_nop<T: copy + drop>(_obj: T) {
+    public fun calibrate_emit_nop<T: copy + drop>(obj: T) {
+        let _ = obj;
     }
 }
