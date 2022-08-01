@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.59", features = ["backtrace"] }
 futures = "0.3.21"
 rand = "0.7.3"
 tempfile = "3.3.0"

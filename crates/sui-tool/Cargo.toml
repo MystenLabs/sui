@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.59", features = ["backtrace"] }
 tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.36"
 clap = { version = "3.1.17", features = ["derive"] }
@@ -21,7 +21,7 @@ tempfile = "3.3.0"
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "executor" }
 serde_with = { version = "1.14.0", features = ["hex"] }
 sui-storage = { path = "../sui-storage" }
-serde = { version = "1.0.140", features = ["derive"] }
+serde = { version = "1.0.141", features = ["derive"] }
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
