@@ -112,12 +112,12 @@ export class RpcClient {
   /**
    * Request callback for the FullNode.
    */
-  protected req: (method: string, params: any[]) => any;
+  public req: (method: string, params: any[]) => any;
 
   /**
    * Request callback for the Gateway (to send TXs).
    */
-  protected reqTx: (method: string, params: any[]) => any;
+  public reqTx: (method: string, params: any[]) => any;
 
   constructor(gatewayUrl: string, fullNodeUrl: string) {
     this.reqTx = setupClient(gatewayUrl);
