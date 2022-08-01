@@ -392,7 +392,7 @@ export class bcs {
   static readonly ADDRESS: string = 'address';
   static readonly STRING: string = 'string';
 
-  private static types: Map<string, TypeInterface> = new Map();
+  public static types: Map<string, TypeInterface> = new Map();
 
   /**
    * Serialize data into bcs.
