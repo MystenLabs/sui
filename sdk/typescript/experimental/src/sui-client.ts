@@ -67,7 +67,7 @@ export class SuiClient {
   /**
    * An RPC client to use.
    */
-  protected rpc: RpcClient;
+  public rpc: RpcClient;
 
   constructor(
     /**
