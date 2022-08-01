@@ -49,35 +49,33 @@ pub async fn transfer_sui_for_testing(
     );
     let quorum_driver_handler = QuorumDriverHandler::new(client.clone());
     let qd = quorum_driver_handler.clone_quorum_driver();
-    let new_object = qd
-        .execute_transaction(ExecuteTransactionRequest {
-            transaction: tx.clone(),
-            request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
-        })
-        .map(move |res| match res {
-            Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
-                let (_, effects) = *result;
-                let minted = effects.effects.created.get(0).unwrap().0;
-                let updated = effects
-                    .effects
-                    .mutated
-                    .iter()
-                    .find(|(k, _)| k.0 == gas.0 .0)
-                    .unwrap()
-                    .0;
-                Some((updated, minted))
-            }
-            Ok(resp) => {
-                error!("Unexpected response while transferring sui: {:?}", resp);
-                None
-            }
-            Err(err) => {
-                error!("Error while transferring sui: {:?}", err);
-                None
-            }
-        })
-        .await;
-    new_object
+    qd.execute_transaction(ExecuteTransactionRequest {
+        transaction: tx.clone(),
+        request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+    })
+    .map(move |res| match res {
+        Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
+            let (_, effects) = *result;
+            let minted = effects.effects.created.get(0).unwrap().0;
+            let updated = effects
+                .effects
+                .mutated
+                .iter()
+                .find(|(k, _)| k.0 == gas.0 .0)
+                .unwrap()
+                .0;
+            Some((updated, minted))
+        }
+        Ok(resp) => {
+            error!("Unexpected response while transferring sui: {:?}", resp);
+            None
+        }
+        Err(err) => {
+            error!("Error while transferring sui: {:?}", err);
+            None
+        }
+    })
+    .await
 }
 
 pub async fn get_latest(
