@@ -24,6 +24,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::ConsensusTransaction,
 };
+use tap::prelude::*;
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -167,19 +168,15 @@ impl ConsensusAdapter {
 
         // Check if this authority submits the transaction to consensus.
         if Self::should_submit(certificate) {
-            let res = self
+            self
                 .consensus_client
                 .clone()
                 .submit_transaction(TransactionProto { transaction: bytes })
                 .await
-                .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)));
-
-            // Record an internal error
-            if let Err(e) = &res {
-                error!("Submit transaction failed with: {:?}", e);
-            }
-
-            res?;
+                .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+                .tap_err(|r| {
+                    error!("Submit transaction failed with: {:?}", r);
+                })?;
         }
 
         // Wait for the consensus to sequence the certificate and assign locks to shared objects.
