@@ -123,36 +123,55 @@ impl Primary {
         let mon_tx_certificate_responses = tx_certificate_responses.clone();
         let mon_tx_payload_availability_responses = tx_payload_availability_responses.clone();
         let mon_tx_state_handler = tx_state_handler.clone();
+        let mut mon_rx_reconfigure = tx_reconfigure.subscribe();
 
-        tokio::task::spawn(async move {
+        let channel_stats_handle = tokio::task::spawn(async move {
             loop {
-                // Dump channel capacities every 5 seconds
-                tokio::time::sleep(Duration::from_secs(5)).await;
-                let capacities = vec![
-                    mon_tx_others_digests.capacity(),
-                    mon_tx_our_digests.capacity(),
-                    mon_tx_parents.capacity(),
-                    mon_tx_headers.capacity(),
-                    mon_tx_sync_headers.capacity(),
-                    mon_tx_sync_certificates.capacity(),
-                    mon_tx_headers_loopback.capacity(),
-                    mon_tx_certificates_loopback.capacity(),
-                    mon_tx_primary_messages.capacity(),
-                    mon_tx_helper_requests.capacity(),
-                    mon_tx_get_block_commands.capacity(),
-                    mon_tx_batches.capacity(),
-                    mon_tx_block_removal_commands.capacity(),
-                    mon_tx_batch_removal.capacity(),
-                    mon_tx_block_synchronizer_commands.capacity(),
-                    mon_tx_certificate_responses.capacity(),
-                    mon_tx_payload_availability_responses.capacity(),
-                    mon_tx_state_handler.capacity(),
-                ];
+                let timer = tokio::time::sleep(Duration::from_secs(5));
+                tokio::pin!(timer);
 
-                if capacities.iter().any(|c| *c == 0) {
-                    error!("Primary Channel Capacities: {:?}", capacities);
-                } else {
-                    info!("Primary Channel Capacities: {:?}", capacities);
+                tokio::select! {
+                        () = &mut timer => {
+                            // Dump channel capacities every 5 seconds
+                            let capacities = vec![
+                                mon_tx_others_digests.capacity(),
+                                mon_tx_our_digests.capacity(),
+                                mon_tx_parents.capacity(),
+                                mon_tx_headers.capacity(),
+                                mon_tx_sync_headers.capacity(),
+                                mon_tx_sync_certificates.capacity(),
+                                mon_tx_headers_loopback.capacity(),
+                                mon_tx_certificates_loopback.capacity(),
+                                mon_tx_primary_messages.capacity(),
+                                mon_tx_helper_requests.capacity(),
+                                mon_tx_get_block_commands.capacity(),
+                                mon_tx_batches.capacity(),
+                                mon_tx_block_removal_commands.capacity(),
+                                mon_tx_batch_removal.capacity(),
+                                mon_tx_block_synchronizer_commands.capacity(),
+                                mon_tx_certificate_responses.capacity(),
+                                mon_tx_payload_availability_responses.capacity(),
+                                mon_tx_state_handler.capacity(),
+                            ];
+
+                            if capacities.iter().any(|c| *c == 0) {
+                                error!("Primary Channel Capacities: {:?}", capacities);
+                            } else {
+                                info!("Primary Channel Capacities: {:?}", capacities);
+                            }
+                        },
+
+                        // Check whether the committee changed.
+                    result = mon_rx_reconfigure.changed() => {
+                        result.expect("Committee channel dropped");
+                        let message = mon_rx_reconfigure.borrow().clone();
+                        match message {
+                            ReconfigureNotification::NewCommittee(_new_committee) => {
+                                // noop
+                            },
+                            ReconfigureNotification::Shutdown => return
+                        }
+                    }
                 }
             }
         });
@@ -444,6 +463,7 @@ impl Primary {
         );
 
         let mut handles = vec![
+            channel_stats_handle,
             primary_receiver_handle,
             worker_receiver_handle,
             core_handle,
