@@ -38,7 +38,7 @@ use sui_types::{
 };
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tracing::info;
+use tracing::{debug, info};
 
 use crate::{
     authority::AuthorityState,
@@ -67,6 +67,7 @@ const DELAY_FOR_1_RETRY_MS: u64 = 2_000;
 const EXPONENTIAL_DELAY_BASIS: u64 = 2;
 pub const MAX_RETRY_DELAY_MS: u64 = 30_000;
 
+#[derive(Debug)]
 pub struct AuthorityHealth {
     // Records the number of retries
     pub retries: u32,
@@ -175,6 +176,19 @@ impl<A> ActiveAuthority<A> {
     /// even if we have a few connections.
     pub async fn minimum_wait_for_majority_honest_available(&self) -> Instant {
         let lock = self.health.lock().await;
+
+        let health_overview: Vec<_> = lock
+            .iter()
+            .map(|(name, h)| {
+                (
+                    *name,
+                    h.retries,
+                    h.no_contact_before - tokio::time::Instant::now(),
+                )
+            })
+            .collect();
+        debug!(health_overview = ?health_overview, "Current validator health metrics");
+
         let (_, instant) = self.net.load().committee.robust_value(
             lock.iter().map(|(name, h)| (*name, h.no_contact_before)),
             // At least one honest node is at or above it.

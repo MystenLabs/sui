@@ -231,7 +231,7 @@ impl Committee {
         let mut total = 0;
         for (v, s, a) in items {
             total += s;
-            if threshold < total {
+            if threshold <= total {
                 return (a, v);
             }
         }
@@ -322,5 +322,35 @@ mod test {
 
         let res = committee.shuffle_by_stake(None, Some(&BTreeSet::new()));
         assert_eq!(0, res.len());
+    }
+
+    #[test]
+    fn test_robust_value() {
+        let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec4): (_, AuthorityKeyPair) = get_key_pair();
+        let a1: AuthorityName = sec1.public().into();
+        let a2: AuthorityName = sec2.public().into();
+        let a3: AuthorityName = sec3.public().into();
+        let a4: AuthorityName = sec4.public().into();
+
+        let mut authorities = BTreeMap::new();
+        authorities.insert(a1, 1);
+        authorities.insert(a2, 1);
+        authorities.insert(a3, 1);
+        authorities.insert(a4, 1);
+        let committee = Committee::new(0, authorities).unwrap();
+        let items = vec![(a1, 666), (a2, 1), (a3, 2), (a4, 0)];
+        assert_eq!(
+            committee.robust_value(items.into_iter(), committee.quorum_threshold()),
+            (a3, 2)
+        );
+
+        let items = vec![(a1, "a"), (a2, "b"), (a3, "c"), (a4, "d")];
+        assert_eq!(
+            committee.robust_value(items.into_iter(), committee.quorum_threshold()),
+            (a3, "c")
+        );
     }
 }
