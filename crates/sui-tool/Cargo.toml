@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 tokio = { version = "1.20.1", features = ["full"] }
-tracing = "0.1.35"
+tracing = "0.1.36"
 clap = { version = "3.1.17", features = ["derive"] }
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
