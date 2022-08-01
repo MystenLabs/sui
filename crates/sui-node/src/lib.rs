@@ -35,9 +35,9 @@ use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::http_server::HttpServerHandle;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_types::crypto::{KeypairTraits, PublicKeyBytes};
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
+use sui_types::crypto::{KeypairTraits, PublicKeyBytes};
 
 pub mod admin;
 pub mod metrics;

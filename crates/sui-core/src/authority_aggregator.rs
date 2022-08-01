@@ -20,7 +20,7 @@ use sui_types::{
         CheckpointContents, CheckpointRequest, CheckpointResponse,
     },
 };
-use tracing::{debug, info, instrument, trace, Instrument, error};
+use tracing::{debug, error, info, instrument, trace, Instrument};
 
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
@@ -1602,7 +1602,10 @@ where
         let (object_map, cert_map) = self.get_object_by_id(object_id).await?;
         let obj_refs: Vec<_> = object_map.keys().cloned().collect();
         let tx_digests: Vec<_> = cert_map.keys().cloned().collect();
-        debug!(?object_id, "get_object_info_execute. obj_refs: {:?}, tx_digests: {:?}", obj_refs, tx_digests);
+        debug!(
+            ?object_id,
+            "get_object_info_execute. obj_refs: {:?}, tx_digests: {:?}", obj_refs, tx_digests
+        );
         let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
         while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
@@ -1616,7 +1619,11 @@ where
             let mut is_ok = false;
             if stake >= self.committee.validity_threshold() {
                 // If we have f+1 stake telling us of the latest version of the object, we just accept it.
-                debug!(?object_id, ?tx_digest, "get_object_info_execute. enough stake");
+                debug!(
+                    ?object_id,
+                    ?tx_digest,
+                    "get_object_info_execute. enough stake"
+                );
                 is_ok = true;
             } else if cert_map.contains_key(&tx_digest) {
                 debug!(?object_id, ?tx_digest, "get_object_info_execute. found digest in cert_map, trying to process_certificate");
@@ -1627,7 +1634,11 @@ where
                         is_ok = true;
                     } else {
                         // TODO: Report a byzantine fault here
-                        error!(?object_id, ?tx_digest, "get_object_info_execute. Byzantine failure!");
+                        error!(
+                            ?object_id,
+                            ?tx_digest,
+                            "get_object_info_execute. Byzantine failure!"
+                        );
                         continue;
                     }
                 }
