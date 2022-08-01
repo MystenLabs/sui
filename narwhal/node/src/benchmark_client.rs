@@ -20,10 +20,18 @@ async fn main() -> Result<()> {
     let matches = App::new(crate_name!())
         .version(crate_version!())
         .about("Benchmark client for Narwhal and Tusk.")
-        .args_from_usage("<ADDR> 'The network address of the node where to send txs'")
+        .long_about("To run the benchmark client following are required:\n\
+        * the size of the transactions via the --size property\n\
+        * the worker address <ADDR> to send the transactions to. A url format is expected ex http://127.0.0.1:7000\n\
+        * the rate of sending transactions via the --rate parameter\n\
+        \n\
+        Optionally the --nodes parameter can be passed where a list (comma separated string) of worker addresses\n\
+        should be passed. The benchmarking client will first try to connect to all of those nodes before start sending\n\
+        any transactions. That confirms the system is up and running and ready to start processing the transactions.")
+        .args_from_usage("<ADDR> 'The network address of the node where to send txs. A url format is expected ex http://127.0.0.1:7000'")
         .args_from_usage("--size=<INT> 'The size of each transaction in bytes'")
         .args_from_usage("--rate=<INT> 'The rate (txs/s) at which to send the transactions'")
-        .args_from_usage("--nodes=[ADDR]... 'Network addresses that must be reachable before starting the benchmark.'")
+        .args_from_usage("--nodes=[ADDR]... 'Network addresses, comma separated, that must be reachable before starting the benchmark.'")
         .setting(AppSettings::ArgRequiredElseHelp)
         .get_matches();
 
@@ -44,9 +52,11 @@ async fn main() -> Result<()> {
     set_global_default(subscriber).expect("Failed to set subscriber");
 
     let target_str = matches.value_of("ADDR").unwrap();
-    let target = target_str
-        .parse::<Url>()
-        .with_context(|| format!("Invalid url format {target_str}"))?;
+    let target = target_str.parse::<Url>().with_context(|| {
+        format!(
+            "Invalid url format {target_str}. Should provide something like http://127.0.0.1:7000"
+        )
+    })?;
     let size = matches
         .value_of("size")
         .unwrap()
@@ -96,8 +106,24 @@ struct Client {
 
 impl Client {
     pub async fn send(&self) -> Result<()> {
-        const PRECISION: u64 = 20; // Sample precision.
+        // We are distributing the transactions that need to be sent
+        // within a second to sub-buckets. The precision here represents
+        // the number of such buckets within the period of 1 second.
+        const PRECISION: u64 = 20;
+        // The BURST_DURATION represents the period for each bucket we
+        // have split. For example if precision is 20 the 1 second (1000ms)
+        // will be split in 20 buckets where each one will be 50ms apart.
+        // Basically we are looking to send a list of transactions every 50ms.
         const BURST_DURATION: u64 = 1000 / PRECISION;
+
+        let burst = self.rate / PRECISION;
+
+        if burst == 0 {
+            return Err(anyhow::Error::msg(format!(
+                "Transaction rate is too low, should be at least {} tx/s and multiples of {}",
+                PRECISION, PRECISION
+            )));
+        }
 
         // The transaction size must be at least 16 bytes to ensure all txs are different.
         if self.size < 9 {
@@ -112,7 +138,6 @@ impl Client {
             .context(format!("failed to connect to {}", self.target))?;
 
         // Submit all transactions.
-        let burst = self.rate / PRECISION;
         let mut counter = 0;
         let mut r = rand::thread_rng().gen();
         let interval = interval(Duration::from_millis(BURST_DURATION));
