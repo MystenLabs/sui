@@ -1842,6 +1842,24 @@ impl GenesisEpoch {
             auth_sign_info: EmptySignInfo {},
         }
     }
+
+    pub fn verify(&self, genesis_committee: Committee) -> SuiResult {
+        fp_ensure!(
+            self.epoch_info.first_checkpoint == 0,
+            SuiError::InvalidAuthenticatedEpoch(
+                "Genesis epoch's first checkpoint must be 0".to_string()
+            )
+        );
+        fp_ensure!(
+            self.epoch_info.epoch() == 0,
+            SuiError::InvalidAuthenticatedEpoch("Genesis epoch must be epoch 0".to_string())
+        );
+        fp_ensure!(
+            self.epoch_info.committee == genesis_committee,
+            SuiError::InvalidAuthenticatedEpoch("Genesis epoch committee mismatch".to_string())
+        );
+        Ok(())
+    }
 }
 
 impl SignedEpoch {
@@ -1874,7 +1892,9 @@ impl SignedEpoch {
         let epoch = self.epoch_info.epoch();
         fp_ensure!(
             epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
-            SuiError::from("Epoch number in the committee inconsistent with signature")
+            SuiError::InvalidAuthenticatedEpoch(
+                "Epoch number in the committee inconsistent with signature".to_string()
+            )
         );
         self.auth_sign_info
             .verify(&self.epoch_info, prev_epoch_committee)?;
@@ -1889,7 +1909,9 @@ impl CertifiedEpoch {
         let epoch = self.epoch_info.epoch();
         fp_ensure!(
             epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
-            SuiError::from("Epoch number in the committee inconsistent with signature")
+            SuiError::InvalidAuthenticatedEpoch(
+                "Epoch number in the committee inconsistent with signature".to_string()
+            )
         );
         self.auth_sign_info.verify(&self.epoch_info, committee)?;
         Ok(())
@@ -1927,4 +1949,14 @@ impl AuthenticatedEpoch {
             Self::Genesis(g) => &g.epoch_info,
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochRequest {
+    pub epoch_id: Option<EpochId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochResponse {
+    pub epoch_info: Option<AuthenticatedEpoch>,
 }

@@ -397,6 +397,12 @@ pub enum SuiError {
 
     #[error("Invalid committee composition")]
     InvalidCommittee(String),
+
+    #[error("Invalid authenticated epoch: {0}")]
+    InvalidAuthenticatedEpoch(String),
+
+    #[error("Invalid epoch request response: {0}")]
+    InvalidEpochResponse(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

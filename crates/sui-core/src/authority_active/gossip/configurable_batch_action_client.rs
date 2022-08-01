@@ -22,8 +22,8 @@ use sui_types::crypto::{get_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes}
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-    TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, EpochRequest, EpochResponse, ObjectInfoRequest, ObjectInfoResponse,
+    Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
@@ -203,6 +203,10 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         &self,
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
+        todo!();
+    }
+
+    async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {
         todo!();
     }
 }
