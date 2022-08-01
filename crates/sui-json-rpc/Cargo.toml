@@ -12,7 +12,7 @@ jsonrpsee-core = "0.15.1"
 jsonrpsee-proc-macros = "0.15.1"
 prometheus = "0.13.1"
 anyhow = "1.0.58"
-tracing = "0.1.35"
+tracing = "0.1.36"
 async-trait = "0.1.57"
 serde = { version = "1.0.140", features = ["derive"] }
 futures = "0.3.21"

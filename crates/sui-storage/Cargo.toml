@@ -17,7 +17,7 @@ serde_json = "1.0.80"
 tokio = { version = "1.20.1", features = ["full", "tracing"] }
 tokio-stream = "^0.1"
 rocksdb = "0.18.0"
-tracing = "0.1.35"
+tracing = "0.1.36"
 sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "sqlite" ] }
 strum = "^0.24"
 strum_macros = "^0.24"
