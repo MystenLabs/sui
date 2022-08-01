@@ -44,10 +44,10 @@ impl RetryConfig {
     // default gives 5-6 retries in ~30 s total retry time.
 
     /// Default for [`RetryConfig::max_retry_interval`] (500 ms).
-    pub const DEFAULT_INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(100);
+    pub const DEFAULT_INITIAL_RETRY_INTERVAL: Duration = Duration::from_millis(500);
 
     /// Default for [`RetryConfig::max_retry_interval`] (15 s).
-    pub const DEFAULT_MAX_RETRY_INTERVAL: Duration = Duration::from_secs(1);
+    pub const DEFAULT_MAX_RETRY_INTERVAL: Duration = Duration::from_secs(15);
 
     /// Default for [`RetryConfig::retry_delay_multiplier`] (x1.5).
     pub const DEFAULT_RETRY_INTERVAL_MULTIPLIER: f64 = 1.5;
