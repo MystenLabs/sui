@@ -168,8 +168,7 @@ impl ConsensusAdapter {
 
         // Check if this authority submits the transaction to consensus.
         if Self::should_submit(certificate) {
-            self
-                .consensus_client
+            self.consensus_client
                 .clone()
                 .submit_transaction(TransactionProto { transaction: bytes })
                 .await
