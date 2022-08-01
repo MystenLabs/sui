@@ -115,7 +115,7 @@ jobs:
       - uses: technote-space/workflow-conclusion-action@v3
 
       - name: Post to slack
-        uses: slackapi/slack-github-action@v1.19.0
+        uses: slackapi/slack-github-action@v1.21.0
         env:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
         if: env.WORKFLOW_CONCLUSION == 'failure' # notify only if failure
