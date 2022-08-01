@@ -20,7 +20,7 @@ use sui_types::{
         CheckpointContents, CheckpointRequest, CheckpointResponse,
     },
 };
-use tracing::{debug, info, instrument, trace, Instrument};
+use tracing::{debug, info, instrument, trace, Instrument, error};
 
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
@@ -836,7 +836,7 @@ where
         let final_state = self
             .quorum_map_then_reduce_with_timeout(
                 initial_state,
-                |_name, client| {
+                |name, client| {
                     Box::pin(async move {
                         // Request and return an error if any
                         // TODO: Expose layout format option.
@@ -844,7 +844,9 @@ where
                             object_id,
                             Some(ObjectFormatOptions::default()),
                         );
-                        client.handle_object_info_request(request).await
+                        let response = client.handle_object_info_request(request).await;
+                        debug!(?object_id, ?name, ?response, "get_object_by_id");
+                        response
                     })
                 },
                 |mut state, name, weight, result| {
@@ -1598,6 +1600,9 @@ where
 
     pub async fn get_object_info_execute(&self, object_id: ObjectID) -> SuiResult<ObjectRead> {
         let (object_map, cert_map) = self.get_object_by_id(object_id).await?;
+        let obj_refs: Vec<_> = object_map.keys().cloned().collect();
+        let tx_digests: Vec<_> = cert_map.keys().cloned().collect();
+        debug!(?object_id, "get_object_info_execute. obj_refs: {:?}, tx_digests: {:?}", obj_refs, tx_digests);
         let mut object_ref_stack: Vec<_> = object_map.into_iter().collect();
 
         while let Some(((obj_ref, tx_digest), (obj_option, layout_option, authorities))) =
@@ -1613,6 +1618,7 @@ where
                 // If we have f+1 stake telling us of the latest version of the object, we just accept it.
                 is_ok = true;
             } else if cert_map.contains_key(&tx_digest) {
+                debug!(?object_id, ?tx_digest, "get_object_info_execute. found digest in cert_map");
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
                 if let Ok(effects) = self.process_certificate(cert_map[&tx_digest].clone()).await {
@@ -1620,6 +1626,7 @@ where
                         is_ok = true;
                     } else {
                         // TODO: Report a byzantine fault here
+                        error!(?object_id, ?tx_digest, "get_object_info_execute. Byzantine failure!");
                         continue;
                     }
                 }
@@ -1637,6 +1644,7 @@ where
             }
         }
 
+        debug!(?object_id, "get_object_info_execute. Object does not exist");
         Ok(ObjectRead::NotExists(object_id))
     }
 
