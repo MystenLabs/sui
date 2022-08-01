@@ -3,42 +3,13 @@
 
 import { PublicKey } from '../../src';
 
-const VALID_KEY_BASE64 = 'Uz39UFseB/B38iBwjesIU1JZxY6y+TRL9P84JFw41W4=';
 
-const BASE64_KEY_BYTES = [
-  180,
-  107,
-  26,
-  32,
-  169,
-  88,
-  248,
-  46,
-  88,
-  100,
-  108,
-  243,
-  255,
-  87,
-  146,
-  92,
-  42,
-  147,
-  104,
-  2,
-  39,
-  200,
-  114,
-  145,
-  37,
-  122,
-  8,
-  37,
-  170,
-  238,
-  164,
-  236,
-];
+// Sui Address                                |              Public Key (Base64)
+// -------------------------------------------------------------------------------------------
+// 0x4d0d03b6bf0e1a794203ac4652a2554c6efdf11a | 160QtV/5pPE2KFVC7agRpdk4AORt6QhiE5due6VYcy0=
+const VALID_KEY_BASE64 = '160QtV/5pPE2KFVC7agRpdk4AORt6QhiE5due6VYcy0=';
+const BASE64_KEY_BYTES = Buffer.from(VALID_KEY_BASE64, 'base64');
+const EXPECTED_SUI_ADDRESS = '4d0d03b6bf0e1a794203ac4652a2554c6efdf11a'
 
 describe('PublicKey', () => {
   it('invalid', () => {
@@ -117,8 +88,6 @@ describe('PublicKey', () => {
 
   it('toSuiAddress', () => {
     const key = new PublicKey(new Uint8Array(BASE64_KEY_BYTES));
-    expect(key.toSuiAddress()).toEqual(
-      '98fc1c8179b95274327069cf3b0ed051fb14e0bc'
-    );
+    expect(key.toSuiAddress()).toEqual(EXPECTED_SUI_ADDRESS);
   });
 });
