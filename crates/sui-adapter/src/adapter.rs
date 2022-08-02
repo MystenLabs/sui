@@ -37,8 +37,8 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_verifier::{
-    entry_points_verifier::{is_tx_context, INIT_FN_NAME, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
-    verifier,
+    entry_points_verifier::{is_tx_context, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
+    verifier, INIT_FN_NAME,
 };
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
@@ -264,12 +264,17 @@ pub fn store_package_and_init_modules<
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
-            module.function_defs.iter().find(|fdef| {
-                let fhandle = module.function_handle_at(fdef.function).name;
-                let fname = module.identifier_at(fhandle);
-                fname == INIT_FN_NAME
-            })?;
-            Some(module.self_id())
+            for fdef in &module.function_defs {
+                let fhandle = module.function_handle_at(fdef.function);
+                let fname = module.identifier_at(fhandle.name);
+                if fname == INIT_FN_NAME {
+                    return Some((
+                        module.self_id(),
+                        module.signature_at(fhandle.parameters).len(),
+                    ));
+                }
+            }
+            None
         })
         .collect();
 
@@ -286,13 +291,23 @@ pub fn store_package_and_init_modules<
 fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
     state_view: &mut S,
     vm: &MoveVM,
-    module_ids_to_init: Vec<ModuleId>,
+    module_ids_to_init: Vec<(ModuleId, usize)>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
 ) -> Result<(), ExecutionError> {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
-    for module_id in module_ids_to_init {
-        let args = vec![ctx.to_vec()];
+    for (module_id, num_args) in module_ids_to_init {
+        let mut args = vec![];
+        // an init function can have one or two arguments, with the last one always being of type
+        // &mut TxContext and the additional (first) one representing a characteristic type (see
+        // char_type verfier pass for additional explanation)
+        if num_args == 2 {
+            // characteristic type is a struct with a single bool filed which in bcs is encoded as
+            // 0x01
+            let bcs_char_type_value = vec![0x01];
+            args.push(bcs_char_type_value);
+        }
+        args.push(ctx.to_vec());
         let has_ctx_arg = true;
 
         execute_internal(

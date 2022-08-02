@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.53"
+async-trait = "0.1.57"
 enum_dispatch = "^0.3"
 fdlimit = "0.2.1"
 futures = "0.3.21"
