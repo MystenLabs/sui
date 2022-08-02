@@ -55,7 +55,10 @@ pub struct SimpleFaucet {
 const DEFAULT_GAS_BUDGET: u64 = 1000;
 
 impl SimpleFaucet {
-    pub async fn new(mut wallet: WalletContext, max_currency: usize) -> Result<Self, FaucetError> {
+    pub async fn new(
+        mut wallet: WalletContext,
+        max_concurrency: usize,
+    ) -> Result<Self, FaucetError> {
         let active_address = wallet
             .active_address()
             .map_err(|err| FaucetError::Wallet(err.to_string()))?;
@@ -70,14 +73,14 @@ impl SimpleFaucet {
             .map(|q| GasCoin::try_from(&q.1).unwrap())
             .collect::<Vec<GasCoin>>();
         info!("Coins held: {:?}", coins);
-        if max_currency * 2 > coins.len() {
+        if max_concurrency * 2 > coins.len() {
             panic!(
-                "Not enough coins to guarantee max_currency ({max_currency}), got {} coins",
+                "Not enough coins to guarantee max_concurrency ({max_concurrency}), got {} coins",
                 coins.len()
             );
         }
-        let primary_coins = coins.split_off(coins.len() - max_currency);
-        let gas_coins = coins.split_off(coins.len() - max_currency);
+        let primary_coins = coins.split_off(coins.len() - max_concurrency);
+        let gas_coins = coins.split_off(coins.len() - max_concurrency);
         let mut coins = BinaryHeap::new();
         for (_i, (primary, gas)) in primary_coins.iter().zip(gas_coins.iter()).enumerate() {
             coins.push(CoinPair {
@@ -87,7 +90,10 @@ impl SimpleFaucet {
             });
         }
 
-        info!("Using coins: {:?} with max concurrency {max_currency}", coins);
+        info!(
+            "Using coins: {:?} with max concurrency {max_concurrency}",
+            coins
+        );
 
         Ok(Self {
             wallet,

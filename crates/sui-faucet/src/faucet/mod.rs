@@ -57,7 +57,7 @@ impl From<&SuiParsedObject> for CoinInfo {
 mod tests {
     use std::time::Duration;
 
-    use sui::client_commands::{SuiClientCommands, SuiClientCommandResult};
+    use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
     use test_utils::network::setup_network_and_wallet;
 
     use super::*;
