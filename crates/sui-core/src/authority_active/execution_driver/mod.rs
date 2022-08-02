@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{collections::HashSet, sync::Arc};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
 use tracing::{debug, info};
 
@@ -59,22 +59,39 @@ where
         //       transactions awaiting execution, or less often than once per transactions.
         //       However, we need to be sure that if there is an awaiting trasnactions we
         //       will eventually fire the notification and wake up here.
-        tokio::time::sleep(Duration::from_millis(1_000)).await;
         active_authority.state.database.wait_for_new_pending().await;
 
         debug!("Pending certificate execution activated.");
 
-        if let Err(err) = execute_pending(active_authority).await {
-            tracing::error!("Error in pending execution subsystem: {err}");
-            // The above should not return an error if the DB works, and we are connected to
-            // the network. However if it does, we should backoff a little.
-            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        // Process any tx that failed to commit.
+        if let Err(err) = active_authority.state.process_tx_recovery_log(None).await {
+            tracing::error!("Error processing tx recovery log: {:?}", err);
+        }
+
+        match execute_pending(active_authority).await {
+            Err(err) => {
+                tracing::error!("Error in pending execution subsystem: {err}");
+                // The above should not return an error if the DB works, and we are connected to
+                // the network. However if it does, we should backoff a little.
+                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+            }
+            Ok(true) => {
+                // TODO: Move all of these timings into a control.
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            }
+            Ok(false) => {
+                // Some execution failed. Wait a bit before we retry.
+                // TODO: We may want to make the retry delay per-transaction, instead of
+                // applying to the entire loop.
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+            }
         }
     }
 }
 
 /// Reads all pending transactions as a block and executes them.
-async fn execute_pending<A>(active_authority: &ActiveAuthority<A>) -> SuiResult<()>
+/// Returns whether all pending transactions succeeded.
+async fn execute_pending<A>(active_authority: &ActiveAuthority<A>) -> SuiResult<bool>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -103,7 +120,7 @@ where
 
     // Send them for execution
     let sync_handle = active_authority.node_sync_handle();
-    let executed = sync_handle
+    let executed: Vec<_> = sync_handle
         // map to extract digest
         .handle_execution_request(pending_transactions.iter().map(|(_, digest)| *digest))
         .await?
@@ -120,11 +137,15 @@ where
         .collect()
         .await;
 
+    let pending_count = pending_transactions.len();
+    let executed_count = executed.len();
+    debug!(?pending_count, ?executed_count, "execute_pending completed");
+
     // Now update the pending store.
     active_authority
         .state
         .database
         .remove_pending_certificates(executed)?;
 
-    Ok(())
+    Ok(pending_count == executed_count)
 }
