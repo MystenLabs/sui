@@ -56,7 +56,7 @@ pub struct RpcExampleProvider {
 impl RpcExampleProvider {
     pub fn new() -> Self {
         Self {
-            rng: StdRng::from_seed([0; 32]).into(),
+            rng: StdRng::from_seed([0; 32]),
         }
     }
 
@@ -103,7 +103,7 @@ impl RpcExampleProvider {
             }),
             RPCTransactionRequestParams::TransferObjectRequestParams(TransferObjectParams {
                 recipient,
-                object_id: object_id.clone(),
+                object_id,
             }),
         ];
 
@@ -161,7 +161,7 @@ impl RpcExampleProvider {
 
     fn execute_transaction_example(&mut self) -> Examples {
         let (data, signature, result) = self.get_transfer_data_response();
-        let tx_bytes = TransactionBytes::from_data(data.clone()).unwrap();
+        let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
             "sui_executeTransaction",
