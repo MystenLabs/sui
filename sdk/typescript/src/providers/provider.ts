@@ -56,5 +56,6 @@ export abstract class Provider {
     pubkey: string
   ): Promise<TransactionResponse>;
 
+  abstract syncAccountState(address: string): Promise<any>
   // TODO: add more interface methods
 }

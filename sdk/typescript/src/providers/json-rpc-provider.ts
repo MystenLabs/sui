@@ -21,6 +21,7 @@ import {
 } from '../types';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
+const isAny = (_val: any): _val is any => true;
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
@@ -242,6 +243,20 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(
         `Error fetching recent transactions: ${err} for count ${count}`
+      );
+    }
+  }
+
+  async syncAccountState(address: string): Promise<any> {
+    try {
+      return await this.client.requestWithType(
+        'sui_syncAccountState',
+        [address],
+        isAny,
+      );
+    } catch (err) {
+      throw new Error(
+        `Error sync account address for address: ${address} with error: ${err}`,
       );
     }
   }
