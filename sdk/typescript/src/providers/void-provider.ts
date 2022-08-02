@@ -16,7 +16,13 @@ import { Provider } from './provider';
 export class VoidProvider extends Provider {
   // Objects
   async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
-    throw this.newError('getOwnedObjects');
+    throw this.newError('getObjectsOwnedByAddress');
+  }
+
+  async getObjectsOwnedByAddressGroupByType(
+    _address: string
+  ): Promise<{ [key: string]: SuiObjectInfo[] }> {
+    throw this.newError('getObjectsOwnedByAddressGroupByType');
   }
 
   async getObject(_objectId: string): Promise<GetObjectDataResponse> {

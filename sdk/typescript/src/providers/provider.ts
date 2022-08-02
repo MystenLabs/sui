@@ -22,6 +22,13 @@ export abstract class Provider {
   ): Promise<SuiObjectInfo[]>;
 
   /**
+   * Get all objects owned by an address and grouped by object type
+   */
+  abstract getObjectsOwnedByAddressGroupByType(
+    address: string
+  ): Promise<{ [key: string]: SuiObjectInfo[] }>;
+
+  /**
    * Get details about an object
    */
   abstract getObject(objectId: string): Promise<GetObjectDataResponse>;

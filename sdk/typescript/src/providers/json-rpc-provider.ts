@@ -52,6 +52,17 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
+  async getObjectsOwnedByAddressGroupByType(
+    address: string
+  ): Promise<{ [key: string]: SuiObjectInfo[] }> {
+    const objects = await this.getObjectsOwnedByAddress(address);
+    return objects.reduce((acc: any, val: SuiObjectInfo) => {
+      let type = val.type;
+      acc[type] ? acc[type].push(val) : (acc[type] = [val]);
+      return acc;
+    }, {});
+  }
+
   async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {
     try {
       return await this.client.requestWithType(
