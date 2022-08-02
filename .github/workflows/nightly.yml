@@ -60,6 +60,25 @@ jobs:
           command: build
           args: --all-targets --all-features --release --profile=release
 
+  test-windows:
+    name: Run test on windows
+    runs-on: [self-hosted, windows]
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      # The install script for nextest doesn't work on windows (very linux/bash
+      # specific) so the windows builders already have the binaries installed.
+      - uses: taiki-e/install-action@nextest
+        if: "startsWith(runner.os, 'linux')"
+      - name: cargo test
+        run: |
+          cargo nextest run --all-features --profile ci
+      - name: Doctests
+        run: |
+          cargo test --doc --all-features
+
   cargo-udeps:
     runs-on: [self-hosted, self-hosted-arc]
     steps:
