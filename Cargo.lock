@@ -5169,7 +5169,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "71adf41db68aa0daaefc69bb30bcd68ded9b9abaad5d1fbb6304c4fb390e083e"
 dependencies = [
  "bytes",
- "prost-derive 0.10.1",
+ "prost-derive",
 ]
 
 [[package]]
@@ -5199,19 +5199,6 @@ name = "prost-derive"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7b670f45da57fb8542ebdbb6105a925fe571b67f9e7ed9f47a06a84e72b4e7cc"
-dependencies = [
- "anyhow",
- "itertools",
- "proc-macro2 1.0.40",
- "quote 1.0.20",
- "syn 1.0.98",
-]
-
-[[package]]
-name = "prost-derive"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7345d5f0e08c0536d7ac7229952590239e77abf0a0100a1b1d890add6ea96364"
 dependencies = [
  "anyhow",
  "itertools",
@@ -7809,7 +7796,7 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost",
- "prost-derive 0.10.1",
+ "prost-derive",
  "rustls-pemfile",
  "tokio",
  "tokio-rustls 0.23.4",
@@ -9182,7 +9169,7 @@ dependencies = [
  "proptest-derive",
  "prost",
  "prost-build",
- "prost-derive 0.11.0",
+ "prost-derive",
  "prost-types",
  "protobuf",
  "ptree",
@@ -9669,7 +9656,7 @@ dependencies = [
  "proptest-derive",
  "prost",
  "prost-build",
- "prost-derive 0.10.1",
+ "prost-derive",
  "prost-types",
  "protobuf",
  "quick-error 1.2.3",
