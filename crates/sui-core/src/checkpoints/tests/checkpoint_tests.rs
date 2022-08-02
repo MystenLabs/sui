@@ -75,7 +75,7 @@ fn random_ckpoint_store_num(
 
             // Create an authority
             let cps = CheckpointStore::open(
-                &path.clone(),
+                &path,
                 None,
                 committee.epoch,
                 k.public().into(),
@@ -104,7 +104,7 @@ fn crash_recovery() {
     // Open store first time
 
     let mut cps = CheckpointStore::open(
-        &path.clone(),
+        &path,
         None,
         committee.epoch,
         k.public().into(),
