@@ -83,12 +83,12 @@ impl TestContext {
 
     pub async fn setup(options: ClusterTestOpt) -> Result<Self, anyhow::Error> {
         let cluster = ClusterFactory::start(&options).await?;
-        let faucet_url = cluster.faucet_url().map(String::from);
         let wallet_client = WalletClient::new_from_cluster(&cluster).await;
+        let faucet = FaucetClientFactory::new_from_cluster(&cluster).await;
         Ok(Self {
             cluster,
             client: wallet_client,
-            faucet: FaucetClientFactory::create(&options, faucet_url),
+            faucet,
         })
     }
 
@@ -96,7 +96,7 @@ impl TestContext {
     // A potential way to do this is to subscribe to txns from fullnode
     // when the feature is ready
     pub async fn let_fullnode_sync(&self) {
-        let duration = Duration::from_secs(10);
+        let duration = Duration::from_secs(5);
         sleep(duration).await;
     }
 }

@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use crate::metrics::FaucetMetrics;
 use prometheus::Registry;
-use sui::client_commands::WalletContext;
+use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionKind, SuiTransferSui, TransactionEffectsResponse,
 };
@@ -47,6 +47,14 @@ impl SimpleFaucet {
             .active_address()
             .map_err(|err| FaucetError::Wallet(err.to_string()))?;
         info!("SimpleFaucet::new with active address: {active_address}");
+
+        // Sync to have the latest status
+        SuiClientCommands::SyncClientState {
+            address: Some(active_address),
+        }
+        .execute(&mut wallet)
+        .await
+        .map_err(|err| FaucetError::Wallet(format!("Fail to sync client state: {}", err)))?;
 
         let coins = wallet
             .gas_objects(active_address)

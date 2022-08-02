@@ -6940,6 +6940,7 @@ dependencies = [
  "bcs",
  "clap 3.1.18",
  "futures",
+ "prometheus",
  "reqwest",
  "serde 1.0.141",
  "serde_json",
@@ -6957,6 +6958,7 @@ dependencies = [
  "test-utils",
  "tokio",
  "tracing",
+ "uuid",
  "workspace-hack 0.1.0",
 ]
 

@@ -3,12 +3,20 @@
 use super::config::{ClusterTestOpt, Env};
 use async_trait::async_trait;
 use clap::*;
+use sui::client_commands::WalletContext;
+use sui::config::SuiClientConfig;
 use sui_config::genesis_config::GenesisConfig;
+use sui_config::Config;
+use sui_config::SUI_KEYSTORE_FILENAME;
+use sui_sdk::crypto::KeystoreType;
+use sui_sdk::ClientType;
 use sui_swarm::memory::Node;
 use sui_swarm::memory::Swarm;
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use test_utils::network::{start_rpc_test_network_with_fullnode, TestNetwork};
+use tracing::info;
 
 const DEVNET_FAUCET_ADDR: &str = "https://faucet.devnet.sui.io:443";
 const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
@@ -41,9 +49,14 @@ pub trait Cluster {
         Self: Sized;
 
     fn rpc_url(&self) -> &str;
-    fn faucet_url(&self) -> Option<&str>;
     fn fullnode_url(&self) -> &str;
     fn user_key(&self) -> AccountKeyPair;
+
+    /// Returns faucet url in a remote cluster.
+    fn remote_faucet_url(&self) -> Option<&str>;
+
+    /// Returns faucet key in a local cluster.
+    fn local_faucet_key(&self) -> Option<&AccountKeyPair>;
 }
 
 /// Represents an up and running cluster deployed remotely.
@@ -103,11 +116,14 @@ impl Cluster for RemoteRunningCluster {
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
     }
-    fn faucet_url(&self) -> Option<&str> {
-        Some(&self.faucet_url)
-    }
     fn user_key(&self) -> AccountKeyPair {
         get_key_pair().1
+    }
+    fn remote_faucet_url(&self) -> Option<&str> {
+        Some(&self.faucet_url)
+    }
+    fn local_faucet_key(&self) -> Option<&AccountKeyPair> {
+        None
     }
 }
 
@@ -115,9 +131,11 @@ impl Cluster for RemoteRunningCluster {
 pub struct LocalNewCluster {
     test_network: TestNetwork,
     fullnode_url: String,
+    faucet_key: AccountKeyPair,
 }
 
 impl LocalNewCluster {
+    #[allow(unused)]
     fn swarm(&self) -> &Swarm {
         &self.test_network.network
     }
@@ -126,11 +144,22 @@ impl LocalNewCluster {
 #[async_trait]
 impl Cluster for LocalNewCluster {
     async fn start(_options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
-        let genesis_config = GenesisConfig::for_local_testing();
+        // Let the faucet account hold 1000 gas objects on genesis
+        let genesis_config = GenesisConfig::custom_genesis(4, 1, 1000);
 
-        let test_network = start_rpc_test_network_with_fullnode(Some(genesis_config), 1)
+        let mut test_network = start_rpc_test_network_with_fullnode(Some(genesis_config), 1)
             .await
             .unwrap_or_else(|e| panic!("Failed to start a local network, e: {e}"));
+
+        // Use the wealthy account for faucet
+        let faucet_key = test_network
+            .network
+            .config_mut()
+            .account_keys
+            .swap_remove(0);
+        let faucet_address = SuiAddress::from(faucet_key.public());
+        info!(?faucet_address, "faucet_address");
+
         let fullnode: &Node = test_network
             .network
             .fullnodes()
@@ -145,6 +174,7 @@ impl Cluster for LocalNewCluster {
         Ok(Self {
             test_network,
             fullnode_url,
+            faucet_key,
         })
     }
 
@@ -156,12 +186,80 @@ impl Cluster for LocalNewCluster {
         &self.fullnode_url
     }
 
-    // For now, a local cluster does not have faucet
-    fn faucet_url(&self) -> Option<&str> {
+    fn user_key(&self) -> AccountKeyPair {
+        get_key_pair().1
+    }
+
+    fn remote_faucet_url(&self) -> Option<&str> {
         None
     }
 
-    fn user_key(&self) -> AccountKeyPair {
-        self.swarm().config().account_keys[0].copy()
+    fn local_faucet_key(&self) -> Option<&AccountKeyPair> {
+        Some(&self.faucet_key)
     }
+}
+
+// Make linter happy
+#[async_trait]
+impl Cluster for Box<dyn Cluster + Send + Sync> {
+    async fn start(_options: &ClusterTestOpt) -> Result<Self, anyhow::Error> {
+        unreachable!(
+            "If we already have a boxed Cluster trait object we wouldn't have to call this function"
+        );
+    }
+    fn rpc_url(&self) -> &str {
+        (**self).rpc_url()
+    }
+
+    fn fullnode_url(&self) -> &str {
+        (**self).fullnode_url()
+    }
+
+    fn user_key(&self) -> AccountKeyPair {
+        (**self).user_key()
+    }
+
+    fn remote_faucet_url(&self) -> Option<&str> {
+        (**self).remote_faucet_url()
+    }
+
+    fn local_faucet_key(&self) -> Option<&AccountKeyPair> {
+        (**self).local_faucet_key()
+    }
+}
+
+pub async fn new_wallet_context_from_cluster(
+    cluster: &(dyn Cluster + Sync + Send),
+    key_pair: AccountKeyPair,
+) -> WalletContext {
+    let temp_dir = tempfile::tempdir().unwrap();
+    let wallet_config_path = temp_dir.path().join("client.yaml");
+    let rpc_url = cluster.rpc_url();
+    info!("Use gateway: {}", &rpc_url);
+    let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
+    let keystore = KeystoreType::File(keystore_path);
+    let address: SuiAddress = key_pair.public().into();
+    keystore.init().unwrap().add_key(key_pair).unwrap();
+    SuiClientConfig {
+        keystore,
+        gateway: ClientType::RPC(rpc_url.into()),
+        active_address: Some(address),
+    }
+    .persisted(&wallet_config_path)
+    .save()
+    .unwrap();
+
+    info!(
+        "Initialize wallet from config path: {:?}",
+        wallet_config_path
+    );
+
+    WalletContext::new(&wallet_config_path)
+        .await
+        .unwrap_or_else(|e| {
+            panic!(
+                "Failed to init wallet context from path {:?}, error: {e}",
+                wallet_config_path
+            )
+        })
 }
