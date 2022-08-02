@@ -73,9 +73,9 @@ export function isTransferSuiTransaction(obj: any, _argumentName?: string): obj 
             typeof obj === "function") &&
         isTransactionDigest(obj.suiObjectId) as boolean &&
         isSequenceNumber(obj.gasBudget) as boolean &&
-        isTransactionDigest(obj.recipient) as boolean && 
-        (typeof obj.amount === "undefined" || 
-            isSequenceNumber(obj.amount))
+        isTransactionDigest(obj.recipient) as boolean &&
+        (typeof obj.amount === "undefined" ||
+            isSequenceNumber(obj.amount) as boolean)
     )
 }
 
@@ -151,6 +151,7 @@ export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is Tx
             typeof obj === "object" ||
             typeof obj === "function") &&
         typeof obj.newTransferObject === "function" &&
+        typeof obj.newTransferSui === "function" &&
         typeof obj.newMoveCall === "function" &&
         typeof obj.newMergeCoin === "function" &&
         typeof obj.newSplitCoin === "function" &&

@@ -9,6 +9,7 @@ import {
   SuiObjectInfo,
   GetObjectDataResponse,
   TransactionResponse,
+  SuiObjectRef,
 } from '../types';
 import { Provider } from './provider';
 
@@ -20,6 +21,10 @@ export class VoidProvider extends Provider {
 
   async getObject(_objectId: string): Promise<GetObjectDataResponse> {
     throw this.newError('getObject');
+  }
+
+  async getObjectRef(_objectId: string): Promise<SuiObjectRef | undefined> {
+    throw this.newError('getObjectRef');
   }
 
   // Transactions

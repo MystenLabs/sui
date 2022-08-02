@@ -7,6 +7,7 @@ import {
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
   TransactionResponse,
+  SuiObjectRef,
 } from '../types';
 
 ///////////////////////////////
@@ -24,6 +25,12 @@ export abstract class Provider {
    * Get details about an object
    */
   abstract getObject(objectId: string): Promise<GetObjectDataResponse>;
+
+  /**
+   * Get object reference(id, tx digest, version id)
+   * @param objectId
+   */
+  abstract getObjectRef(objectId: string): Promise<SuiObjectRef | undefined>;
 
   // Transactions
   /**

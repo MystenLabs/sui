@@ -18,6 +18,8 @@ import {
   TransactionDigest,
   TransactionEffectsResponse,
   TransactionResponse,
+  SuiObjectRef,
+  getObjectReference,
 } from '../types';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
@@ -74,6 +76,11 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
     }
+  }
+
+  async getObjectRef(objectId: string): Promise<SuiObjectRef | undefined> {
+    const resp = await this.getObject(objectId);
+    return getObjectReference(resp);
   }
 
   async getObjectBatch(objectIds: string[]): Promise<GetObjectDataResponse[]> {
