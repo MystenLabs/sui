@@ -243,6 +243,36 @@ impl ValidatorService {
         })
     }
 
+    async fn handle_transaction(
+        state: Arc<AuthorityState>,
+        request: tonic::Request<Transaction>,
+    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+        let mut transaction = request.into_inner();
+
+        transaction
+            .verify()
+            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        //TODO This is really really bad, we should have different types for signature-verified transactions
+        transaction.is_verified = true;
+
+        let tx_digest = transaction.digest();
+
+        // Enable Trace Propagation across spans/processes using tx_digest
+        let span = tracing::debug_span!(
+            "process_tx",
+            ?tx_digest,
+            tx_kind = transaction.data.kind_as_str()
+        );
+
+        let info = state
+            .handle_transaction(transaction)
+            .instrument(span)
+            .await
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        Ok(tonic::Response::new(info))
+    }
+
     async fn handle_certificate(
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
@@ -306,31 +336,13 @@ impl Validator for ValidatorService {
         &self,
         request: tonic::Request<Transaction>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let mut transaction = request.into_inner();
+        let state = self.state.clone();
 
-        transaction
-            .verify()
-            .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
-        //TODO This is really really bad, we should have different types for signature-verified transactions
-        transaction.is_verified = true;
-
-        let tx_digest = transaction.digest();
-
-        // Enable Trace Propagation across spans/processes using tx_digest
-        let span = tracing::debug_span!(
-            "process_tx",
-            ?tx_digest,
-            tx_kind = transaction.data.kind_as_str()
-        );
-
-        let info = self
-            .state
-            .handle_transaction(transaction)
-            .instrument(span)
+        // Spawns a task which handles the transaction. The task will unconditionally continue
+        // processing in the event that the client connection is dropped.
+        tokio::spawn(async move { Self::handle_transaction(state, request).await })
             .await
-            .map_err(|e| tonic::Status::internal(e.to_string()))?;
-
-        Ok(tonic::Response::new(info))
+            .unwrap()
     }
 
     async fn handle_certificate(
