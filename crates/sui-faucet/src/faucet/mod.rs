@@ -62,7 +62,7 @@ mod tests {
     #[tokio::test]
     async fn simple_faucet_basic_interface_should_work() {
         let (_network, context, _address) = setup_network_and_wallet().await.unwrap();
-        let faucet = SimpleFaucet::new(context).await.unwrap();
+        let faucet = SimpleFaucet::new(context, 1).await.unwrap();
         test_basic_interface(faucet).await;
     }
 
