@@ -16,6 +16,7 @@ export class ExampleNFT {
         description?: string,
         imageUrl?: string
     ): Promise<TransactionResponse> {
+        await signer.syncAccountState();
         return await signer.executeMoveCall({
             packageObjectId: '0x2',
             module: 'devnet_nft',
@@ -39,6 +40,7 @@ export class ExampleNFT {
         recipientID: string,
         transferCost: number
     ): Promise<TransactionResponse> {
+        await signer.syncAccountState();
         return await signer.transferObject({
             objectId: nftId,
             gasBudget: transferCost,

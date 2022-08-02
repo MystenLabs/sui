@@ -41,7 +41,6 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
-use sui_types::crypto::AuthorityPublicKey;
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -1507,7 +1506,6 @@ impl AuthorityState {
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
-    type PubKey = AuthorityPublicKey;
     type Transaction = ConsensusTransaction;
     type Error = SuiError;
     type Outcome = Vec<u8>;
@@ -1517,16 +1515,10 @@ impl ExecutionState for AuthorityState {
     async fn handle_consensus_transaction(
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
-        _consensus_output: &narwhal_consensus::ConsensusOutput<Self::PubKey>,
+        _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<
-        (
-            Self::Outcome,
-            Option<narwhal_config::Committee<Self::PubKey>>,
-        ),
-        Self::Error,
-    > {
+    ) -> Result<(Self::Outcome, Option<narwhal_config::Committee>), Self::Error> {
         self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
