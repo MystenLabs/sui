@@ -13,7 +13,7 @@ use typed_store::traits::DBMapTableUtil;
 use typed_store_macros::DBMapUtils;
 
 #[derive(DBMapUtils)]
-pub struct StoreTables<S> {
+pub struct AuthorityStoreTables<S> {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.

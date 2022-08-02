@@ -7201,6 +7201,8 @@ dependencies = [
  "rocksdb",
  "serde 1.0.140",
  "serde_with 1.14.0",
+ "strum",
+ "strum_macros",
  "sui-config",
  "sui-core",
  "sui-storage",

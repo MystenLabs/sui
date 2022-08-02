@@ -23,6 +23,8 @@ narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "50411
 serde_with = { version = "1.14.0", features = ["hex"] }
 sui-storage = { path = "../sui-storage" }
 serde = { version = "1.0.140", features = ["derive"] }
+strum_macros = "^0.24"
+strum = "0.24.1"
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }

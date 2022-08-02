@@ -76,7 +76,7 @@ enum LockServiceQueries {
 /// Inner LockService implementation that does single threaded database accesses.  Cannot be
 /// used publicly, must be wrapped in a LockService to control access.
 #[derive(Clone, DBMapUtils)]
-struct LockServiceImpl {
+pub struct LockServiceImpl {
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
     /// lock exists for an object version, but no transaction has been seen using it the lock is set

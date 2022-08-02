@@ -63,11 +63,11 @@ pub enum ToolCommand {
         #[clap(long = "no-header", help = "don't show header in concise output")]
         no_header: bool,
     },
-    /// Tool to read validator & gateway db.
+    /// Tool to read DBs.
     #[clap(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
-        #[clap(long = "db_path")]
+        #[clap(long = "db-path")]
         db_path: String,
         #[clap(subcommand)]
         cmd: Option<DbToolCommand>,

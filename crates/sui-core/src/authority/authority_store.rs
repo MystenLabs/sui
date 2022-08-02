@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{authority_store_tables::StoreTables, *};
+use super::{authority_store_tables::AuthorityStoreTables, *};
 use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
@@ -63,13 +63,13 @@ pub struct SuiDataStore<S> {
     // A notifier for new pending certificates
     pending_notifier: Arc<Notify>,
 
-    pub(crate) tables: StoreTables<S>,
+    pub(crate) tables: AuthorityStoreTables<S>,
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Open an authority store by directory path
     pub fn open(path: &Path, db_options: Option<Options>) -> Self {
-        let tables = StoreTables::open_tables_read_write(path.to_path_buf(), db_options);
+        let tables = AuthorityStoreTables::open_tables_read_write(path.to_path_buf(), db_options);
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
         // subdir of the data store directory
