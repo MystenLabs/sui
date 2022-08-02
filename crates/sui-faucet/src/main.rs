@@ -10,6 +10,7 @@ use axum::{
 };
 use clap::Parser;
 use http::Method;
+use std::env;
 use std::{
     borrow::Cow,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -66,6 +67,11 @@ async fn main() -> Result<(), anyhow::Error> {
         .with_env()
         .init();
 
+    let max_concurrency = match env::var("MAX_CONCURRENCY") {
+        Ok(val) => val.parse::<usize>().unwrap(),
+        _ => CONCURRENCY_LIMIT,
+    };
+
     let context = create_wallet_context().await?;
 
     let config: FaucetConfig = FaucetConfig::parse();
@@ -79,7 +85,7 @@ async fn main() -> Result<(), anyhow::Error> {
     } = config;
 
     let app_state = Arc::new(AppState {
-        faucet: SimpleFaucet::new(context).await.unwrap(),
+        faucet: SimpleFaucet::new(context, max_concurrency).await.unwrap(),
         config,
     });
 
@@ -97,7 +103,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 .layer(HandleErrorLayer::new(handle_error))
                 .layer(cors)
                 .buffer(request_buffer_size)
-                .concurrency_limit(CONCURRENCY_LIMIT)
+                .concurrency_limit(max_concurrency)
                 .timeout(Duration::from_secs(timeout_in_seconds))
                 .layer(Extension(app_state))
                 .into_inner(),
