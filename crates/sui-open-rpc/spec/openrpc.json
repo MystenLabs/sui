@@ -67,7 +67,80 @@
         "schema": {
           "$ref": "#/components/schemas/TransactionBytes"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Create unsigned batch transaction data.",
+          "params": [
+            {
+              "name": "signer",
+              "value": "0x76a04053bda0a88bda5177b86a15c3b29f559873"
+            },
+            {
+              "name": "single_transaction_params",
+              "value": [
+                {
+                  "moveCallRequestParams": {
+                    "arguments": [
+                      "Example NFT",
+                      "An NFT created by the Sui Command Line Tool",
+                      "ipfs://bafkreibngqhl3gaa7daob4i2vccziay2jjlp435cf66vhono7nrvww53ty"
+                    ],
+                    "function": "mint",
+                    "module": "devnet_nft",
+                    "packageObjectId": "0x0000000000000000000000000000000000000002",
+                    "typeArguments": []
+                  }
+                },
+                {
+                  "transferObjectRequestParams": {
+                    "objectId": "0x1f6de831e52bfb76e51cca8b4e9016838657edfa",
+                    "recipient": "0xcb481232299cd5743151ac4b2d63ae198e7bb0a9"
+                  }
+                }
+              ]
+            },
+            {
+              "name": "gas",
+              "value": "0x011f28e473c95f4013d7d53ec5fbc3b42df8ed10"
+            },
+            {
+              "name": "gas_budget",
+              "value": 1000
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "gas": {
+                "digest": "Ge17DLulcl4D5fC34w2za234KsFR9mj1+ApeKpysfGQ=",
+                "objectId": "0x011f28e473c95f4013d7d53ec5fbc3b42df8ed10",
+                "version": 1
+              },
+              "inputObjects": [
+                {
+                  "MovePackage": "0x0000000000000000000000000000000000000002"
+                },
+                {
+                  "ImmOrOwnedMoveObject": {
+                    "digest": "7aFVmctds9uHC+pa7PNTFhw8tSiwxdmAUMRXC/yULYs=",
+                    "objectId": "0x1f6de831e52bfb76e51cca8b4e9016838657edfa",
+                    "version": 1
+                  }
+                },
+                {
+                  "ImmOrOwnedMoveObject": {
+                    "digest": "Ge17DLulcl4D5fC34w2za234KsFR9mj1+ApeKpysfGQ=",
+                    "objectId": "0x011f28e473c95f4013d7d53ec5fbc3b42df8ed10",
+                    "version": 1
+                  }
+                }
+              ],
+              "txBytes": "VHJhbnNhY3Rpb25EYXRhOjoBAgIAAAAAAAAAAAAAAAAAAAAAAAAAAgEAAAAAAAAAIOCcuaceshkCXEyHpnxKqobyCsCqeSvBIe5C4sMmEnBhCmRldm5ldF9uZnQEbWludAADAAtFeGFtcGxlIE5GVAArQW4gTkZUIGNyZWF0ZWQgYnkgdGhlIFN1aSBDb21tYW5kIExpbmUgVG9vbABCaXBmczovL2JhZmtyZWlibmdxaGwzZ2FhN2Rhb2I0aTJ2Y2N6aWF5MmpqbHA0MzVjZjY2dmhvbm83bnJ2d3c1M3R5AMtIEjIpnNV0MVGsSy1jrhmOe7CpH23oMeUr+3blHMqLTpAWg4ZX7foBAAAAAAAAACDtoVWZy12z24cL6lrs81MWHDy1KLDF2YBQxFcL/JQti3agQFO9oKiL2lF3uGoVw7KfVZhzAR8o5HPJX0AT19U+xfvDtC347RABAAAAAAAAACAZ7XsMu6VyXgPl8LfjDbNrbfgqwVH2aPX4Cl4qnKx8ZAEAAAAAAAAA6AMAAAAAAAA="
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_executeTransaction",
@@ -117,339 +190,120 @@
         "schema": {
           "$ref": "#/components/schemas/TransactionResponse"
         }
-      }
-    },
-    {
-      "name": "sui_getEventsByEventType",
-      "tags": [
+      },
+      "examples": [
         {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events matching the specified event type",
-      "params": [
-        {
-          "name": "event_type",
-          "description": "the event type, e.g. '0x2::devnet_nft::MintNFTEvent'",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsByModule",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events emitted by a specified Move module",
-      "params": [
-        {
-          "name": "package",
-          "description": "the Move package ID",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "module",
-          "description": "the module name",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
+          "name": "Execute an object transfer transaction",
+          "params": [
+            {
+              "name": "tx_bytes",
+              "value": "VHJhbnNhY3Rpb25EYXRhOjoAABdY7bkmDSqGyDbvwF8X5cWVJeQExGwtZKelsdk7LYZGgF2NKhIvzNsCAAAAAAAAACA7x9yXWrdfyGV5NTb2bmQYkFA2D2I9yIq7gwAYDN0Kj9BnwzQmQaTOqrLB29rQESsuPkj4xqk9BRZR/i5O764oE0klaDiQqUICAAAAAAAAACD2POST9RLwss+3xCoHzpEwy20FmjiNiGFTbLnFuBqajQEAAAAAAAAA6AMAAAAAAAA="
+            },
+            {
+              "name": "flag",
+              "value": "AA=="
+            },
+            {
+              "name": "signature",
+              "value": "ToDZxUmWfPg6oBlS+ZwhYfOlWzwYkymaQ15TANLjNmkWViWdxJF9lAsj7LflLslRYGN4mNCU4o/tUowJy7b+Aw=="
+            },
+            {
+              "name": "pub_key",
+              "value": "qmWfSqQCF9fGPsDsTjVFDrwGYEcuh21OWNSzokiS75E="
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "EffectResponse": {
+                "certificate": {
+                  "authSignInfo": {
+                    "epoch": 0,
+                    "signature": [],
+                    "signers_map": [
+                      58,
+                      48,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0,
+                      0
+                    ]
+                  },
+                  "data": {
+                    "gasBudget": 1000,
+                    "gasPayment": {
+                      "digest": "9jzkk/US8LLPt8QqB86RMMttBZo4jYhhU2y5xbgamo0=",
+                      "objectId": "0xc6a93d051651fe2e4eefae28134925683890a942",
+                      "version": 2
+                    },
+                    "sender": "0xd067c3342641a4ceaab2c1dbdad0112b2e3e48f8",
+                    "transactions": [
+                      {
+                        "TransferObject": {
+                          "objectRef": {
+                            "digest": "O8fcl1q3X8hleTU29m5kGJBQNg9iPciKu4MAGAzdCo8=",
+                            "objectId": "0xc46c2d64a7a5b1d93b2d8646805d8d2a122fccdb",
+                            "version": 2
+                          },
+                          "recipient": "0x1758edb9260d2a86c836efc05f17e5c59525e404"
+                        }
+                      }
+                    ]
+                  },
+                  "transactionDigest": "M9fSFZs98pa0bdZL7Fdgmj8vtK2LRuL9TJ8l1EMo3VA=",
+                  "txSignature": "AE6A2cVJlnz4OqAZUvmcIWHzpVs8GJMpmkNeUwDS4zZpFlYlncSRfZQLI+y35S7JUWBjeJjQlOKP7VKMCcu2/gOqZZ9KpAIX18Y+wOxONUUOvAZgRy6HbU5Y1LOiSJLvkQ=="
+                },
+                "effects": {
+                  "gasObject": {
+                    "owner": {
+                      "ObjectOwner": "0xd067c3342641a4ceaab2c1dbdad0112b2e3e48f8"
+                    },
+                    "reference": {
+                      "digest": "9jzkk/US8LLPt8QqB86RMMttBZo4jYhhU2y5xbgamo0=",
+                      "objectId": "0xc6a93d051651fe2e4eefae28134925683890a942",
+                      "version": 2
+                    }
+                  },
+                  "gasUsed": {
+                    "computationCost": 100,
+                    "storageCost": 100,
+                    "storageRebate": 10
+                  },
+                  "mutated": [
+                    {
+                      "owner": {
+                        "AddressOwner": "0xd067c3342641a4ceaab2c1dbdad0112b2e3e48f8"
+                      },
+                      "reference": {
+                        "digest": "9jzkk/US8LLPt8QqB86RMMttBZo4jYhhU2y5xbgamo0=",
+                        "objectId": "0xc6a93d051651fe2e4eefae28134925683890a942",
+                        "version": 2
+                      }
+                    },
+                    {
+                      "owner": {
+                        "AddressOwner": "0x1758edb9260d2a86c836efc05f17e5c59525e404"
+                      },
+                      "reference": {
+                        "digest": "O8fcl1q3X8hleTU29m5kGJBQNg9iPciKu4MAGAzdCo8=",
+                        "objectId": "0xc46c2d64a7a5b1d93b2d8646805d8d2a122fccdb",
+                        "version": 2
+                      }
+                    }
+                  ],
+                  "status": {
+                    "status": "success"
+                  },
+                  "transactionDigest": "zlFNt7v1DvUYwZWnBTdj0Kjf2ra5Ru6fOVRUkxmsfcY="
+                },
+                "timestamp_ms": null
+              }
+            }
           }
         }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsByObject",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events involving a specified object",
-      "params": [
-        {
-          "name": "object",
-          "description": "the object ID",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsByOwner",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events involving a specified owner.",
-      "params": [
-        {
-          "name": "owner",
-          "description": "the owner's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsBySender",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events involving a specified sender.",
-      "params": [
-        {
-          "name": "sender",
-          "description": "the sender's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsByTransaction",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events emitted by a specified transaction.",
-      "params": [
-        {
-          "name": "digest",
-          "description": "digest of the transaction, as base-64 encoded string",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
+      ]
     },
     {
       "name": "sui_getObject",
@@ -475,7 +329,48 @@
         "schema": {
           "$ref": "#/components/schemas/ObjectRead"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get Object data",
+          "params": [
+            {
+              "name": "object_id",
+              "value": "0xbac203232876b27b541433fb2f1438289799049b"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "details": {
+                "data": {
+                  "dataType": "moveObject",
+                  "fields": {
+                    "balance": 10000,
+                    "info": {
+                      "id": "0xbac203232876b27b541433fb2f1438289799049b",
+                      "version": 1
+                    }
+                  },
+                  "has_public_transfer": true,
+                  "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>"
+                },
+                "owner": {
+                  "AddressOwner": "0x349f7a2c205d3a97f66ef42800baa3cb78fb3313"
+                },
+                "previousTransaction": "AYF3X7JqYmMCNr2LxkSjZWSJ0TW6GLEYRgKakYPUNFk=",
+                "reference": {
+                  "digest": "PLvB4DpPjbpAz2z6B7oEPIP2pIiHNkwjMZGkuZr/Hps=",
+                  "objectId": "0xbac203232876b27b541433fb2f1438289799049b",
+                  "version": 1
+                },
+                "storageRebate": 100
+              },
+              "status": "Exists"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_getObjectsOwnedByAddress",
@@ -504,7 +399,63 @@
             "$ref": "#/components/schemas/ObjectInfo"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get objects owned by an address",
+          "params": [
+            {
+              "name": "address",
+              "value": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              {
+                "digest": "hAUX3IoL5ldXEQRx3y4Mg2RATmMPGKaIKWdw1ullPXA=",
+                "object_id": "0x7d348990b99e55fee2a4bc79b29b27f2f9720e96",
+                "owner": {
+                  "AddressOwner": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+                },
+                "previous_transaction": "k3TpQ4yaBB9zYnjbZVnLfx3gQ4HYIljcgPqeEo2eRLw=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "f4n4BIxgceZGB5K5L/4HgkenfnOrxSl8Q25nFk7I6gM=",
+                "object_id": "0x4748768277b694cee503ea339ebb53fc221a6fc0",
+                "owner": {
+                  "AddressOwner": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+                },
+                "previous_transaction": "Pdy2w4InAYTLHA5wRLJyugsjgtIbBpZt1f8A9fo22+8=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "RlRT5wnT1G2KroN2EHgVFK4bDuZ321+lAV1pYdLQAQc=",
+                "object_id": "0x1abe62cb97d5716d5d05da6e72c49bf2791775d0",
+                "owner": {
+                  "AddressOwner": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+                },
+                "previous_transaction": "0vCxMjueJyE/iwA/eKXN0IEAe9EfCbfm+iMrCj3Od0c=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "3ITAbnlT5fHHae+Kk9y+s5BG0FWAgrZ/FCwx4Iv8pSU=",
+                "object_id": "0xa12ad1e8a8d6521a26daafda96dacf7f582cb1db",
+                "owner": {
+                  "AddressOwner": "0x8ab2aba54ecc61a6a8d2a50043e8948be1e76a43"
+                },
+                "previous_transaction": "w0+opZ68swDnJYYiXWE+sK8yzoCw6VKfxKyiroCjk1A=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getObjectsOwnedByObject",
@@ -533,7 +484,63 @@
             "$ref": "#/components/schemas/ObjectInfo"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get objects owned by an object",
+          "params": [
+            {
+              "name": "object_id",
+              "value": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              {
+                "digest": "tjCDXhEw83BsmaFbfslselUwTP3qUzI/5dWw6WKxjNg=",
+                "object_id": "0xcaa8745bf26f63f76d85fdbda2f013ef4f4b3f87",
+                "owner": {
+                  "ObjectOwner": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+                },
+                "previous_transaction": "Omcr9khIrYBZLNP37nITnzE5gaKzYx7SoUI0SK+U+5o=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "trAgCjBvWEynl0tq1RjvAGd0QyLLmaRUU0pDPVwVaQo=",
+                "object_id": "0x6f946b81f4f20727c6aee702e34fc518e58163d5",
+                "owner": {
+                  "ObjectOwner": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+                },
+                "previous_transaction": "YftWgAsyn3nIUfh8DaHt1urQRJj7t2cpB6qiye4le30=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "/FEPllo2tcrafzR6KqDBTk0vaw4oG3vS3B6IzjkcPXk=",
+                "object_id": "0x568f49d11ca3392df7c1295dfa8b9524f161e029",
+                "owner": {
+                  "ObjectOwner": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+                },
+                "previous_transaction": "QNs5Mg+u5GuSM0M4FHEQ4I/2eporEIgo1T8B0nV0aLY=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "bWjEqSGAqDqp8hsYOFijZX0PaL9zM0XS7p++X0L9w3c=",
+                "object_id": "0xcf766399c27532f0bec382d9ce78e399307fef50",
+                "owner": {
+                  "ObjectOwner": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+                },
+                "previous_transaction": "zTfS+es09CXcFhSRhS8zFa1n53hWybFt1Qviz37dex4=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getRawObject",
@@ -559,7 +566,42 @@
         "schema": {
           "$ref": "#/components/schemas/ObjectRead"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get Raw Object data",
+          "params": [
+            {
+              "name": "object_id",
+              "value": "0xcbabe979c8e2e7f25b1e7d1ac222203afdafb9b4"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "details": {
+                "data": {
+                  "bcs_bytes": "y6vpecji5/JbHn0awiIgOv2vubQBAAAAAAAAABAnAAAAAAAA",
+                  "dataType": "moveObject",
+                  "has_public_transfer": true,
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>"
+                },
+                "owner": {
+                  "AddressOwner": "0x4db1ad9cd2e822480f3008903f1bd4ba2f27a12a"
+                },
+                "previousTransaction": "i3DGJIxgANNos2vY78x8/y+ExKZMjes7AZ3EAkPovBk=",
+                "reference": {
+                  "digest": "q/ujAPWMzM2f+TP+CFMAs4YToKwdXl9husJSY66idWo=",
+                  "objectId": "0xcbabe979c8e2e7f25b1e7d1ac222203afdafb9b4",
+                  "version": 1
+                },
+                "storageRebate": 100
+              },
+              "status": "Exists"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_getRecentTransactions",
@@ -602,7 +644,43 @@
             "minItems": 2
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get recent transactions",
+          "params": [
+            {
+              "name": "count",
+              "value": 5
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              [
+                5,
+                "ml8yQ95VLSjKu+j4LWY0p9W0SZrWL2dP+m5PKMVvf0Q="
+              ],
+              [
+                6,
+                "JoJ34ak/I2H3IRf20UHi+4T1GCbiW6TadV2GNV2mCW0="
+              ],
+              [
+                7,
+                "gBI0+nhg3mjKlh8Hm7Q2enGbWc+gHpEwF/kLaLyrj2o="
+              ],
+              [
+                8,
+                "1GWc2fNBxA0beKMBs5QQee3ylVIb+O7PT9JK0t6itFM="
+              ],
+              [
+                9,
+                "vBCK0fCf63aJE5r2gZDoRQauXbwGHRIeTSYB84M/hao="
+              ]
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getTotalTransactionNumber",
@@ -621,7 +699,17 @@
           "format": "uint64",
           "minimum": 0.0
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get total number of transactions",
+          "params": [],
+          "result": {
+            "name": "Result",
+            "value": 100
+          }
+        }
+      ]
     },
     {
       "name": "sui_getTransaction",
@@ -647,7 +735,106 @@
         "schema": {
           "$ref": "#/components/schemas/TransactionEffectsResponse"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction response object for specified transaction digest",
+          "params": [
+            {
+              "name": "digest",
+              "value": "C5nUvmgabpdPdv22Zpl9VO1Pp30d73kv9PpXyNJeO/M="
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "certificate": {
+                "authSignInfo": {
+                  "epoch": 0,
+                  "signature": [],
+                  "signers_map": [
+                    58,
+                    48,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0,
+                    0
+                  ]
+                },
+                "data": {
+                  "gasBudget": 1000,
+                  "gasPayment": {
+                    "digest": "W3cZCN9mn/bQDjJxoDrteleSSrfrZu1eJFcI+lFwEsk=",
+                    "objectId": "0xdfd332b8c6bbb96dcc32fa41910261a36e879305",
+                    "version": 2
+                  },
+                  "sender": "0xdd8a214f9b707fc2a7f4aaa87f78422177ce96f7",
+                  "transactions": [
+                    {
+                      "TransferObject": {
+                        "objectRef": {
+                          "digest": "r1WERqvHOe8ncW+9p5Z4R21pK/ViMk/OsaZItir+Xgg=",
+                          "objectId": "0xca1285f78f31e031b0eb8e7b3c7b7c7c14d79cbf",
+                          "version": 2
+                        },
+                        "recipient": "0x6bc520f045fffaeb71cdbabf9c5a259793a28a38"
+                      }
+                    }
+                  ]
+                },
+                "transactionDigest": "C5nUvmgabpdPdv22Zpl9VO1Pp30d73kv9PpXyNJeO/M=",
+                "txSignature": "AH++/2C3nybBNiQOwHipCbrnKpwXF/wAl5REok6aXkZCuJSY6psJP10mTw+RfnmxVipBoe21Fc2b/AHOsRAL1w2fn92fPKLsKErr4E7Bl70ydFbV87ZjPT2D/HGLI9ACkA=="
+              },
+              "effects": {
+                "gasObject": {
+                  "owner": {
+                    "ObjectOwner": "0xdd8a214f9b707fc2a7f4aaa87f78422177ce96f7"
+                  },
+                  "reference": {
+                    "digest": "W3cZCN9mn/bQDjJxoDrteleSSrfrZu1eJFcI+lFwEsk=",
+                    "objectId": "0xdfd332b8c6bbb96dcc32fa41910261a36e879305",
+                    "version": 2
+                  }
+                },
+                "gasUsed": {
+                  "computationCost": 100,
+                  "storageCost": 100,
+                  "storageRebate": 10
+                },
+                "mutated": [
+                  {
+                    "owner": {
+                      "AddressOwner": "0xdd8a214f9b707fc2a7f4aaa87f78422177ce96f7"
+                    },
+                    "reference": {
+                      "digest": "W3cZCN9mn/bQDjJxoDrteleSSrfrZu1eJFcI+lFwEsk=",
+                      "objectId": "0xdfd332b8c6bbb96dcc32fa41910261a36e879305",
+                      "version": 2
+                    }
+                  },
+                  {
+                    "owner": {
+                      "AddressOwner": "0x6bc520f045fffaeb71cdbabf9c5a259793a28a38"
+                    },
+                    "reference": {
+                      "digest": "r1WERqvHOe8ncW+9p5Z4R21pK/ViMk/OsaZItir+Xgg=",
+                      "objectId": "0xca1285f78f31e031b0eb8e7b3c7b7c7c14d79cbf",
+                      "version": 2
+                    }
+                  }
+                ],
+                "status": {
+                  "status": "success"
+                },
+                "transactionDigest": "4hHt3vKRUjeo3H2ov5NMtbVfKgDly95kSmeJK2Do/3s="
+              },
+              "timestamp_ms": null
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_getTransactionsByInputObject",
@@ -688,7 +875,35 @@
             "minItems": 2
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified input object",
+          "params": [
+            {
+              "name": "object",
+              "value": "0x450f652899990773759ec45baa3729cdd47730ad"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              [
+                5,
+                "yr/KXW8phvecGJfoUjpUahrq5QnXF2RDzTmizNBl6xo="
+              ],
+              [
+                6,
+                "QoVeKuyESxvrFHHr8kGw3NZUsXjLOq/G1BcI9P+UOHk="
+              ],
+              [
+                7,
+                "rIzmlgDYTDWxkqyU3snU/YODzGBxnC6k/2sbU2ptIu0="
+              ]
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getTransactionsByMoveFunction",
@@ -743,7 +958,47 @@
             "minItems": 2
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified input object",
+          "params": [
+            {
+              "name": "package",
+              "value": "0x0000000000000000000000000000000000000002"
+            },
+            {
+              "name": "module",
+              "value": "devnet_nft"
+            },
+            {
+              "name": "function",
+              "value": "function"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              [
+                6,
+                "vzwCe3Ng5vK1AxiauB+hzdy7vGZQ9lS6HfhGIh8I+QY="
+              ],
+              [
+                7,
+                "yYiavuOEAnhSUJIaJWNzr9zTK876pP7/RVmhV5j2lT8="
+              ],
+              [
+                8,
+                "ZegpGJUsJCW4x1euQkP71ZI3uPSg15NWW2HyVto0bxA="
+              ],
+              [
+                9,
+                "+o/Aob2fEhFX2932xlctKFX58kWVAZ1Xoul91ZPHuYA="
+              ]
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getTransactionsByMutatedObject",
@@ -784,7 +1039,35 @@
             "minItems": 2
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified mutated object",
+          "params": [
+            {
+              "name": "object",
+              "value": "0x49d8f2762542fab41158926da3b7cbf11974f30c"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              [
+                5,
+                "dxdb87ebwYUMZl0r7SUVc4o9CqLe6rAbtp6+W4n11pw="
+              ],
+              [
+                6,
+                "zx9TOoePZ2S3EV1tWSahov2Qr+e5aZ/ofpGuiqom6Hk="
+              ],
+              [
+                7,
+                "iQyicexKa2Wcq/QGyuLPyXVXzc2dPgyt7MsclALAlEo="
+              ]
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getTransactionsFromAddress",
@@ -825,7 +1108,35 @@
             "minItems": 2
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified sender address",
+          "params": [
+            {
+              "name": "addr",
+              "value": "0x587155a9dfbfe953b016c2e66289794f740e883a"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              [
+                5,
+                "chpRGYTr8vxSM/SnAyiv1Z+4GqwOvmRUuUv0WYM73G8="
+              ],
+              [
+                6,
+                "MY4OD/wPf31k/TkJajQyIG5e69pIfzkjOa+IgRgXOlk="
+              ],
+              [
+                7,
+                "q2wlUM9kqI3wyTvsbbmNN2JWna3zAqQPqd9/SVdR8ro="
+              ]
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getTransactionsInRange",
@@ -878,7 +1189,39 @@
             "minItems": 2
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest in range",
+          "params": [
+            {
+              "name": "start",
+              "value": 5
+            },
+            {
+              "name": "end",
+              "value": 8
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              [
+                5,
+                "aTy0Q8qkCtxR2anCArDt4y6uOoUOO8ci8NxzjuObgs0="
+              ],
+              [
+                6,
+                "gPM3yFEt+j2Vg0MrI4ctGDOaN6IZRc4nR63VWl5mFhQ="
+              ],
+              [
+                7,
+                "ArGLnggSaOc8jINVazJaN722be8YEi3IY26DbmurAyM="
+              ]
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getTransactionsToAddress",
@@ -919,7 +1262,35 @@
             "minItems": 2
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Return the transaction digest for specified recipient address",
+          "params": [
+            {
+              "name": "addr",
+              "value": "0xd6bfc32867b626b79fe7d827f950170c7c85df10"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              [
+                5,
+                "y11DOFlxQCeK9TfNOBdqzBYbBrgdgkr/1nqAVwXvT+s="
+              ],
+              [
+                6,
+                "894Kw8XhVejdW/9QZZPGrYqqtrs7KTISk9klCmnzf5w="
+              ],
+              [
+                7,
+                "3r7weq5ciJUCmapKSwMkC7UeH538m6sOExZNtVHhNtQ="
+              ]
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_mergeCoins",
