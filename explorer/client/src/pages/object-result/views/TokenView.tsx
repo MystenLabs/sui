@@ -9,20 +9,22 @@ import {
     getOwnerStr,
     parseImageURL,
     checkIsPropertyType,
+    extractName,
 } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
-function TokenView({ data, name }: { data: DataType; name?: string }) {
+function TokenView({ data }: { data: DataType }) {
     const viewedData = {
         ...data,
         objType: trimStdLibPrefix(data.objType),
-        name: data.name,
         tx_digest: data.data.tx_digest,
         owner: getOwnerStr(data.owner),
         url: parseImageURL(data.data.contents),
     };
+
+    const name = extractName(data?.data?.contents);
 
     const properties = Object.entries(viewedData.data?.contents).filter(
         ([key, value]) => key !== 'name' && checkIsPropertyType(value)
@@ -118,7 +120,12 @@ function TokenView({ data, name }: { data: DataType; name?: string }) {
                 {viewedData.url !== '' && (
                     <div className={styles.displaycontainer}>
                         <div className={styles.display}>
-                            <DisplayBox display={viewedData.url} />
+                            <DisplayBox
+                                display={viewedData.url}
+                                caption={
+                                    name || trimStdLibPrefix(viewedData.objType)
+                                }
+                            />
                         </div>
                         <div className={styles.metadata}>
                             {name && <h2 className={styles.header}>{name}</h2>}
