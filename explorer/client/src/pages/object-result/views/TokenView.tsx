@@ -1,5 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import { useState, useEffect } from 'react';
+
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
@@ -11,7 +14,7 @@ import {
     checkIsPropertyType,
     extractName,
 } from '../../../utils/objectUtils';
-import { trimStdLibPrefix } from '../../../utils/stringUtils';
+import { trimStdLibPrefix, extractFileType } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
@@ -40,6 +43,12 @@ function TokenView({ data }: { data: DataType }) {
             ([x, y]) => [x, JSON.stringify(y, null, 2)]
         );
     }
+
+    const [fileType, setFileType] = useState<undefined | string>(undefined);
+
+    useEffect(() => {
+        extractFileType(viewedData.url).then((result) => setFileType(result));
+    }, [viewedData.url]);
 
     return (
         <div>
@@ -125,10 +134,14 @@ function TokenView({ data }: { data: DataType }) {
                                 caption={
                                     name || trimStdLibPrefix(viewedData.objType)
                                 }
+                                fileInfo={fileType}
                             />
                         </div>
                         <div className={styles.metadata}>
                             {name && <h2 className={styles.header}>{name}</h2>}
+                            {fileType && (
+                                <p className={styles.header}>{fileType}</p>
+                            )}
                         </div>
                     </div>
                 )}

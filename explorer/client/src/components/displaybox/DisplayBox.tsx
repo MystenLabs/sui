@@ -15,9 +15,11 @@ import styles from './DisplayBox.module.css';
 function DisplayBox({
     display,
     caption,
+    fileInfo,
 }: {
     display: string;
     caption?: string;
+    fileInfo?: string;
 }) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
@@ -30,8 +32,12 @@ function DisplayBox({
     const [fileType, setFileType] = useState('');
 
     useEffect(() => {
-        extractFileType(display).then((result) => setFileType(result));
-    }, [display]);
+        if (!fileInfo) {
+            extractFileType(display).then((result) => setFileType(result));
+        } else {
+            setFileType(fileInfo);
+        }
+    }, [display, fileInfo]);
 
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(() => {
