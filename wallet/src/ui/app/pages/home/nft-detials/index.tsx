@@ -49,10 +49,17 @@ function NFTDetialsPage() {
 
     const shortAddress = useMiddleEllipsis(nftFields?.info.id, 10, 6);
     const fileExtentionType = useFileExtentionType(nftFields?.url || '');
+    const ownAddress = useMiddleEllipsis(
+        selectedNFT?.owner?.AddressOwner || '',
+        10,
+        6
+    );
 
     if (!objectId || !selectedNFT) {
         return <Navigate to="/nfts" replace={true} />;
     }
+
+   
 
     const NFTDetails = nftFields && (
         <div className={st.nftDetails}>
@@ -69,6 +76,10 @@ function NFTDetialsPage() {
                         {shortAddress}
                     </ExplorerLink>
                 </div>
+            </div>
+            <div className={st.nftItemDetail}>
+                <div className={st.label}>Owner</div>
+                <div className={st.value}>{ownAddress}</div>
             </div>
             <div className={st.nftItemDetail}>
                 <div className={st.label}>Media Type</div>

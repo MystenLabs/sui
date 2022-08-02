@@ -15,6 +15,7 @@ export type ButtonProps = {
     children: ReactNode | ReactNode[];
     disabled?: boolean;
     onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
+    type?: ButtonHTMLAttributes<HTMLButtonElement>['type'];
 };
 
 function Button({
@@ -24,10 +25,11 @@ function Button({
     children,
     disabled = false,
     onClick,
+    type = 'button',
 }: ButtonProps) {
     return (
         <button
-            type="button"
+            type={type}
             className={cl(st.container, className, st[mode], st[size])}
             onClick={onClick}
             disabled={disabled}

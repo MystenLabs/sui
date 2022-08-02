@@ -1,3 +1,4 @@
+@use '_utils';
 @use '_values/colors';
 
 .container {
@@ -5,6 +6,10 @@
     flex-flow: column nowrap;
     overflow-x: visible;
     height: 100%;
+}
+
+.content {
+    margin-top: 20px;
 }
 
 .shadow {
@@ -15,6 +20,7 @@
     font-size: 10px;
     color: #adcadd;
     margin-left: 12px;
+    font-weight: 300;
 }
 
 .send-nft {
@@ -26,21 +32,35 @@
     width: 100%;
 
     .input-group-append,
-    .input {
-        padding: 10px 12px;
+    .textarea {
+        padding: 5px 12px;
         border: 1px solid colors.$gray-50;
         box-shadow: 0 1px 2px #1018280d;
         border-radius: 10px;
     }
 
-    .input {
+    .textarea {
         width: 90%;
         border-top-right-radius: 0;
         border-bottom-right-radius: 0;
+
+        .input {
+            width: 100%;
+            border: 0;
+            resize: none;
+            padding: 5px 0;
+            vertical-align: bottom;
+            height: 40px;
+
+            &::placeholder {
+                color: colors.$gray-65;
+                line-height: 150%;
+            }
+        }
     }
 
     .input-group-append {
-        padding: 0 20px;
+        padding: 0 10px;
         border-top-left-radius: 0;
         border-bottom-left-radius: 0;
         border-left: 0;
@@ -48,23 +68,59 @@
         display: flex;
         justify-content: center;
         align-items: center;
+    }
+
+    .qr-code {
         background-image: url('_assets/images/qr-code.svg');
+        padding: 0 18px;
         background-repeat: no-repeat;
         background-position: center;
     }
+
+    &.invalid-addr {
+        .input-group-append,
+        .textarea {
+            border-color: colors.$error;
+        }
+    }
+
+    .change-addr-icon {
+        cursor: pointer;
+
+        &::before {
+            font-size: 16px;
+            color: colors.$gray-75;
+        }
+    }
 }
 
-.label {
-    margin-bottom: 4px;
-    font-weight: 600;
+.label-info {
+    text-align: center;
+    width: 90%;
+    color: colors.$gray-80;
+    margin: auto;
+    margin-bottom: 10px;
 }
 
 .error {
-    color: #8b1111;
-    line-height: 1em;
-    min-height: 1em;
-    margin-top: 2px;
-    margin-bottom: 5px;
+    background-color: colors.$error-light;
+    color: colors.$error;
+    padding: 5px;
+    margin-top: 10px;
+    border-radius: 6px;
+    padding-left: 30px;
+
+    &::before {
+        content: '';
+        background-image: url('_assets/images/Info.svg');
+        margin-right: 5px;
+        background-repeat: no-repeat;
+        background-position: center;
+        position: absolute;
+        height: 16px;
+        width: 16px;
+        margin-left: -20px;
+    }
 }
 
 .muted {
@@ -84,6 +140,7 @@ button {
     }
 }
 
+/*
 .recent-addresses {
     margin-top: 3px;
 
@@ -130,6 +187,59 @@ button {
             height: 24px;
             background-color: #a0b6c3;
             border-radius: 50%;
+        }
+    }
+}
+*/
+
+.formcta {
+    display: flex;
+    flex-flow: row nowrap;
+    height: 76px;
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    align-items: center;
+    justify-content: stretch;
+    padding: 5px 25px;
+    left: 0;
+}
+
+.nft-response {
+    margin-top: 20px;
+
+    .checkmark {
+        margin-right: 10px;
+        font-size: 10px;
+        color: colors.$gray-65;
+        font-weight: 300;
+    }
+
+    .success-text {
+        color: colors.$gray-100;
+        text-align: center;
+        margin-bottom: 20px;
+
+        @include utils.typography('stats/text-lg');
+    }
+
+    .success-icon {
+        position: relative;
+        width: 46px;
+        height: 46px;
+        display: flex;
+        justify-content: center;
+        margin: auto;
+        border: 2px dotted colors.$sui-steel-blue;
+        border-radius: 50%;
+        margin-bottom: 10px;
+
+        .angled-arrow {
+            height: 15px;
+            margin: auto !important;
+            color: #589aea !important;
+
+            @include utils.angled-arrow;
         }
     }
 }

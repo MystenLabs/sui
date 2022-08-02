@@ -97,5 +97,11 @@ $main-extra-space: sizing.$main-bottom-space;
         font-size: 14px;
         line-height: 17px;
         color: colors.$gray-100;
+    } @else if $type == 'nft-title' {
+        font-style: normal;
+        font-weight: 600;
+        font-size: 16px;
+        line-height: 19px;
+        color: colors.$gray-100;
     }
 }

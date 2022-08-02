@@ -3,6 +3,7 @@
 import { isSuiMoveObject } from '@mysten/sui.js';
 import cl from 'classnames';
 
+import Icon, { SuiIcons } from '_components/icon';
 import { useFileExtentionType, useMediaUrl } from '_hooks';
 
 import type { SuiObject as SuiObjectType } from '@mysten/sui.js';
@@ -14,7 +15,7 @@ export type NFTsProps = {
     showlabel?: boolean;
     size?: 'small' | 'medium' | 'large';
     expandable?: boolean;
-    showNTFType?: boolean;
+    wideview?: boolean;
 };
 
 function NFTDisplayCard({
@@ -22,20 +23,37 @@ function NFTDisplayCard({
     showlabel,
     size = 'medium',
     expandable,
+    wideview,
 }: NFTsProps) {
     const imgUrl = useMediaUrl(nftobj.data);
     const nftFields = isSuiMoveObject(nftobj.data) ? nftobj.data.fields : null;
     const fileExtentionType = useFileExtentionType(nftFields?.url || '');
 
-    return (
-        <div className={cl(st.nftimage, st.showNTFType)}>
-            {imgUrl ? (
-                <img className={cl(st.img, st[size])} src={imgUrl} alt="NFT" />
+    const wideviewSection = (
+        <div className={st.nftfields}>
+            <div className={st.nftName}>{nftFields?.name}</div>
+            <div className={st.nftType}>{fileExtentionType}</div>
+        </div>
+    );
+    const defaultSection = (
+        <>
+            {expandable ? (
+                <div className={st.expandable}>
+                    View Image <Icon icon={SuiIcons.Preview} />
+                </div>
             ) : null}
-            {expandable && <div className={st.expandable}>View Image</div>}
-            {showlabel && nftFields?.name && (
+            {showlabel && nftFields?.name ? (
                 <div className={st.nftfields}>{nftFields.name}</div>
+            ) : null}
+        </>
+    );
+
+    return (
+        <div className={cl(st.nftimage, wideview && st.wideview)}>
+            {imgUrl && (
+                <img className={cl(st.img, st[size])} src={imgUrl} alt="NFT" />
             )}
+            {wideview ? wideviewSection : defaultSection}
         </div>
     );
 }
