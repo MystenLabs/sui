@@ -35,7 +35,7 @@ tap = "1.0"
 
 syn = { version = "1.0.64", features = ["derive"] }
 quote = "1.0.9"
-proc-macro2 = "1.0.24"
+proc-macro2 = "1.0.42"
 eyre = "0.6.8"
 thiserror = "1.0.31"
 collectable = "0.0.2"
@@ -59,7 +59,7 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "790715
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f"}
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f"} 
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f" }
 
 narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "config" }
 narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", package = "consensus" }
@@ -77,7 +77,7 @@ move-package = { git = "https://github.com/move-language/move", rev = "790715285
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f" }
 
 test-fuzz = "3.0.2"
 test-utils = { path = "../test-utils" }

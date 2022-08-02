@@ -233,15 +233,15 @@ itoa-9fbad63c4bcf4a8f = { package = "itoa", version = "0.4", features = ["std"] 
 itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 json = { version = "0.12", default-features = false }
-jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
-jsonrpsee-client-transport = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
-jsonrpsee-core = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
-jsonrpsee-http-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["hyper-rustls", "tls"] }
-jsonrpsee-http-server = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-types = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-wasm-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-ws-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["tls"] }
-jsonrpsee-ws-server = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
+jsonrpsee = { version = "0.15", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
+jsonrpsee-client-transport = { version = "0.15", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
+jsonrpsee-core = { version = "0.15", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
+jsonrpsee-http-client = { version = "0.15", features = ["hyper-rustls", "tls"] }
+jsonrpsee-http-server = { version = "0.15", default-features = false }
+jsonrpsee-types = { version = "0.15", default-features = false }
+jsonrpsee-wasm-client = { version = "0.15", default-features = false }
+jsonrpsee-ws-client = { version = "0.15", features = ["tls"] }
+jsonrpsee-ws-server = { version = "0.15", default-features = false }
 k256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "keccak256", "pkcs8", "schnorr", "sha2", "sha256", "sha3", "std"] }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
@@ -309,6 +309,7 @@ multiaddr = { version = "0.14", features = ["url"] }
 multihash = { version = "0.16", default-features = false, features = ["alloc", "derive", "identity", "multihash-derive", "multihash-impl", "std"] }
 multimap = { version = "0.8", default-features = false }
 mysten-network-68692745110bd6f4 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
+mysten-network-3025a98e4ce7513c = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", default-features = false }
 mysten-network-a2655ef8805d82bb = { package = "mysten-network", git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
@@ -364,6 +365,7 @@ plotters = { version = "0.3", default-features = false, features = ["area_series
 plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
+pre = { version = "0.2", features = ["alloc", "core", "std"] }
 predicates = { version = "2", features = ["diff", "difflib", "float-cmp", "normalize-line-endings", "regex"] }
 predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
@@ -480,7 +482,8 @@ tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "uni
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-68692745110bd6f4 = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-3025a98e4ce7513c = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
@@ -533,8 +536,8 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", default-features = false }
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f"} 
+typed-store-68692745110bd6f4 = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
+typed-store-3025a98e4ce7513c = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", default-features = false }
 typenum = { version = "1", default-features = false }
 types = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e" }
 ucd-trie = { version = "0.1", features = ["std"] }
@@ -832,16 +835,16 @@ itoa-dff4ba8e3ae991db = { package = "itoa", version = "1", default-features = fa
 jobserver = { version = "0.1", default-features = false }
 js-sys = { version = "0.3", default-features = false }
 json = { version = "0.12", default-features = false }
-jsonrpsee = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
-jsonrpsee-client-transport = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
-jsonrpsee-core = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
-jsonrpsee-http-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["hyper-rustls", "tls"] }
-jsonrpsee-http-server = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-proc-macros = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-types = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-wasm-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
-jsonrpsee-ws-client = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", features = ["tls"] }
-jsonrpsee-ws-server = { git = "https://github.com/patrickkuo/jsonrpsee", rev = "76ce4e09537cb58b56e668121c95ea0a760db5fa", default-features = false }
+jsonrpsee = { version = "0.15", default-features = false, features = ["async-client", "client", "client-ws-transport", "full", "http-client", "http-server", "jsonrpsee-client-transport", "jsonrpsee-core", "jsonrpsee-http-client", "jsonrpsee-http-server", "jsonrpsee-proc-macros", "jsonrpsee-types", "jsonrpsee-wasm-client", "jsonrpsee-ws-client", "jsonrpsee-ws-server", "macros", "server", "tracing", "wasm-client", "ws-client", "ws-server"] }
+jsonrpsee-client-transport = { version = "0.15", default-features = false, features = ["anyhow", "futures-channel", "futures-timer", "futures-util", "gloo-net", "http", "jsonrpsee-types", "pin-project", "rustls-native-certs", "soketto", "thiserror", "tls", "tokio", "tokio-rustls", "tokio-util", "web", "webpki-roots", "ws"] }
+jsonrpsee-core = { version = "0.15", features = ["arrayvec", "async-client", "async-lock", "async-wasm-client", "client", "futures-timer", "futures-util", "globset", "http", "http-helpers", "hyper", "lazy_static", "parking_lot", "rand", "rustc-hash", "server", "soketto", "tokio", "tracing-futures", "unicase", "wasm-bindgen-futures"] }
+jsonrpsee-http-client = { version = "0.15", features = ["hyper-rustls", "tls"] }
+jsonrpsee-http-server = { version = "0.15", default-features = false }
+jsonrpsee-proc-macros = { version = "0.15", default-features = false }
+jsonrpsee-types = { version = "0.15", default-features = false }
+jsonrpsee-wasm-client = { version = "0.15", default-features = false }
+jsonrpsee-ws-client = { version = "0.15", features = ["tls"] }
+jsonrpsee-ws-server = { version = "0.15", default-features = false }
 k256 = { version = "0.11", features = ["arithmetic", "digest", "ecdsa", "ecdsa-core", "keccak256", "pkcs8", "schnorr", "sha2", "sha256", "sha3", "std"] }
 keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
@@ -913,8 +916,9 @@ multihash = { version = "0.16", default-features = false, features = ["alloc", "
 multihash-derive = { version = "0.8", default-features = false, features = ["std"] }
 multimap = { version = "0.8", default-features = false }
 mysten-network-68692745110bd6f4 = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
+mysten-network-3025a98e4ce7513c = { package = "mysten-network", git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", default-features = false }
 mysten-network-a2655ef8805d82bb = { package = "mysten-network", git = "https://github.com/mystenlabs/mysten-infra.git", rev = "c6dc7a23a40b3517f138d122a76d3bc15f844f67", default-features = false }
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
+name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", default-features = false }
 named-lock = { version = "0.1", default-features = false }
 nested = { version = "0.1", default-features = false }
 network = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", default-features = false }
@@ -962,8 +966,8 @@ pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
 peeking_take_while = { version = "0.1", default-features = false }
 percent-encoding = { version = "2", default-features = false }
 pest = { version = "2", features = ["std", "thiserror"] }
-pest_derive = { version = "2", default-features = false }
-pest_generator = { version = "2", default-features = false }
+pest_derive = { version = "2", features = ["std"] }
+pest_generator = { version = "2", default-features = false, features = ["std"] }
 pest_meta = { version = "2", default-features = false }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5", features = ["graphmap", "matrix_graph", "stable_graph"] }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", features = ["graphmap", "matrix_graph", "stable_graph"] }
@@ -981,6 +985,8 @@ plotters = { version = "0.3", default-features = false, features = ["area_series
 plotters-backend = { version = "0.3", default-features = false }
 plotters-svg = { version = "0.3", default-features = false }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
+pre = { version = "0.2", features = ["alloc", "core", "std"] }
+pre-proc-macro = { version = "0.2", default-features = false }
 predicates = { version = "2", features = ["diff", "difflib", "float-cmp", "normalize-line-endings", "regex"] }
 predicates-core = { version = "1", default-features = false }
 predicates-tree = { version = "1", default-features = false }
@@ -988,7 +994,8 @@ pretty = { version = "0.10", default-features = false }
 pretty_assertions = { version = "1", features = ["std"] }
 prettyplease = { version = "0.1", default-features = false }
 primary = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e", default-features = false, features = ["benchmark"] }
-proc-macro-crate = { version = "1", default-features = false }
+proc-macro-crate-c65f7effa3be6d31 = { package = "proc-macro-crate", version = "0.1", default-features = false }
+proc-macro-crate-dff4ba8e3ae991db = { package = "proc-macro-crate", version = "1", default-features = false }
 proc-macro-error = { version = "1", features = ["syn", "syn-error"] }
 proc-macro-error-attr = { version = "1", default-features = false }
 proc-macro2-9fbad63c4bcf4a8f = { package = "proc-macro2", version = "0.4", features = ["proc-macro"] }
@@ -1035,6 +1042,7 @@ rocksdb = { version = "0.18", features = ["bzip2", "lz4", "multi-threaded-cf", "
 rust-ini = { version = "0.13", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1", features = ["std"] }
+rustc_version-6f8ce4dd05d13bba = { package = "rustc_version", version = "0.2", default-features = false }
 rustc_version-468e82937335b1c9 = { package = "rustc_version", version = "0.3", default-features = false }
 rustc_version-9fbad63c4bcf4a8f = { package = "rustc_version", version = "0.4", default-features = false }
 rustls-cdcf2f9584511fe6 = { package = "rustls", version = "0.19", features = ["dangerous_configuration", "log", "logging"] }
@@ -1056,8 +1064,10 @@ sec1 = { version = "0.3", features = ["alloc", "base16ct", "der", "generic-array
 secp256k1 = { version = "0.24", features = ["alloc", "bitcoin_hashes", "global-context", "rand", "rand-std", "recovery", "std"] }
 secp256k1-sys = { version = "0.6", default-features = false, features = ["alloc", "recovery", "std"] }
 semver-a6292c17cd707f01 = { package = "semver", version = "0.11" }
+semver-274715c4dabd11b0 = { package = "semver", version = "0.9" }
 semver-dff4ba8e3ae991db = { package = "semver", version = "1", features = ["serde", "std"] }
-semver-parser = { version = "0.10", default-features = false }
+semver-parser-93f6ce9d446188ac = { package = "semver-parser", version = "0.10", default-features = false }
+semver-parser-ca01ad9e24f5d932 = { package = "semver-parser", version = "0.7", default-features = false }
 send_wrapper = { version = "0.4", default-features = false }
 serde-c38e5c1d305a1b54 = { package = "serde", version = "0.8", features = ["std"] }
 serde-dff4ba8e3ae991db = { package = "serde", version = "1", features = ["alloc", "derive", "rc", "serde_derive", "std"] }
@@ -1124,7 +1134,8 @@ tabular = { version = "0.2", features = ["ansi-cell", "strip-ansi-escapes", "uni
 tap = { version = "1", default-features = false }
 target-lexicon = { version = "0.12", features = ["std"] }
 target-spec = { version = "1", default-features = false, features = ["serde", "summaries"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-68692745110bd6f4 = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
+telemetry-subscribers-3025a98e4ce7513c = { package = "telemetry-subscribers", git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", features = ["chrome", "jaeger", "opentelemetry", "opentelemetry-jaeger", "tracing-chrome", "tracing-opentelemetry"] }
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
@@ -1184,8 +1195,9 @@ try-lock = { version = "0.2", default-features = false }
 tui = { version = "0.17", features = ["crossterm"] }
 twox-hash = { version = "1", default-features = false }
 typed-arena = { version = "2", features = ["std"] }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", default-features = false }
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f"} 
+typed-store-68692745110bd6f4 = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c", default-features = false }
+typed-store-3025a98e4ce7513c = { package = "typed-store", git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", default-features = false }
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f", default-features = false }
 typenum = { version = "1", default-features = false }
 types = { git = "https://github.com/MystenLabs/narwhal", rev = "50411aa4b8b6eac7e45fa0e0da4ad8fc6c20395e" }
 ucd-trie = { version = "0.1", features = ["std"] }
