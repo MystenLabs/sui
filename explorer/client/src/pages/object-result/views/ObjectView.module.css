@@ -58,6 +58,10 @@ div.metadata > h2 {
     @apply my-0;
 }
 
+div.metadata > p {
+    @apply text-sui-grey-80 text-[13px] leading-[12px];
+}
+
 div.display > div > img {
     @apply max-h-[120px] max-w-[120px] ml-auto;
 }
