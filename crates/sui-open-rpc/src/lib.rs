@@ -71,12 +71,9 @@ impl Project {
             .extend(module.components.content_descriptors);
     }
 
-    pub fn add_examples<'a>(
-        &'a mut self,
-        mut example_provider: BTreeMap<&'a str, Vec<ExamplePairing>>,
-    ) {
+    pub fn add_examples(&mut self, mut example_provider: BTreeMap<String, Vec<ExamplePairing>>) {
         for method in &mut self.methods {
-            if let Occupied(entry) = example_provider.entry(&method.name) {
+            if let Occupied(entry) = example_provider.entry(method.name.clone()) {
                 let examples = entry.remove();
                 let param_names = method
                     .params
