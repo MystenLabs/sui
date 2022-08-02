@@ -22,18 +22,23 @@ use typed_store::traits::Map;
 #[derive(DBMapUtils)]
 pub struct IndexStore {
     /// Index from sui address to transactions initiated by that address.
+    #[options(cache_capacity = 1_000_000)]
     transactions_from_addr: DBMap<(SuiAddress, TxSequenceNumber), TransactionDigest>,
 
     /// Index from sui address to transactions that were sent to that address.
+    #[options(cache_capacity = 1_000_000)]
     transactions_to_addr: DBMap<(SuiAddress, TxSequenceNumber), TransactionDigest>,
 
     /// Index from object id to transactions that used that object id as input.
+    #[options(cache_capacity = 1_000_000)]
     transactions_by_input_object_id: DBMap<(ObjectID, TxSequenceNumber), TransactionDigest>,
 
     /// Index from object id to transactions that modified/created that object id.
+    #[options(cache_capacity = 1_000_000)]
     transactions_by_mutated_object_id: DBMap<(ObjectID, TxSequenceNumber), TransactionDigest>,
 
     /// Index from package id, module and function identifier to transactions that used that moce function call as input.
+    #[options(cache_capacity = 1_000_000)]
     transactions_by_move_function:
         DBMap<(ObjectID, String, String, TxSequenceNumber), TransactionDigest>,
 
@@ -41,7 +46,7 @@ pub struct IndexStore {
     /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
     /// on a node according to the local machine time, so it varies across nodes.
     /// The timestamping happens when the node sees a txn certificate for the first time.
-    #[options(optimization = "point_lookup")]
+    #[options(optimization = "point_lookup", cache_capacity = 1_000_000)]
     timestamps: DBMap<TransactionDigest, u64>,
 }
 
