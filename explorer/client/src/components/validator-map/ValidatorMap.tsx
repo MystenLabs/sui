@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useQuery } from '@tanstack/react-query';
-import { useTooltip, useTooltipInPortal } from '@visx/tooltip';
 import { ParentSizeModern } from '@visx/responsive';
+import { useTooltip, useTooltipInPortal } from '@visx/tooltip';
 import React, { useCallback } from 'react';
 
+import { ReactComponent as ForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import { WorldMap } from './WorldMap';
+
 import styles from './ValidatorMap.module.css';
 
 export function ValidatorMap() {
-    const { data, isLoading } = useQuery(['validator-map'], async () => {
+    const { data } = useQuery(['validator-map'], async () => {
         return [];
     });
 
@@ -57,7 +59,13 @@ export function ValidatorMap() {
                     </div>
                 </div>
 
-                <div className={styles.button}>Become a Validator</div>
+                <a
+                    href="https://bit.ly/sui_validator"
+                    className={styles.button}
+                >
+                    <span>Become a Validator</span>
+                    <ForwardArrowDark />
+                </a>
             </div>
 
             <div className={styles.mapcontainer}>
