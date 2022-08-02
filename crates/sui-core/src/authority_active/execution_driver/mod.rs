@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc, time::Duration};
 use sui_types::{base_types::TransactionDigest, error::SuiResult, messages::CertifiedTransaction};
 use tracing::{debug, info};
 
@@ -59,6 +59,7 @@ where
         //       transactions awaiting execution, or less often than once per transactions.
         //       However, we need to be sure that if there is an awaiting trasnactions we
         //       will eventually fire the notification and wake up here.
+        tokio::time::sleep(Duration::from_millis(1_000)).await;
         active_authority.state.database.wait_for_new_pending().await;
 
         debug!("Pending certificate execution activated.");
@@ -80,9 +81,28 @@ where
     // Get the pending transactions
     let pending_transactions = active_authority.state.database.get_pending_digests()?;
 
-    let sync_handle = active_authority.node_sync_handle();
+    // Before executing de-duplicate the list of pending trasnactions
+    let mut seen = HashSet::new();
+    let mut indexes_to_delete = Vec::new();
+    let pending_transactions: Vec<_> = pending_transactions
+        .into_iter()
+        .filter(|(idx, digest)| {
+            if seen.contains(digest) {
+                indexes_to_delete.push(*idx);
+                false
+            } else {
+                seen.insert(*digest);
+                true
+            }
+        })
+        .collect();
+    active_authority
+        .state
+        .database
+        .remove_pending_certificates(indexes_to_delete)?;
 
     // Send them for execution
+    let sync_handle = active_authority.node_sync_handle();
     let executed = sync_handle
         // map to extract digest
         .handle_execution_request(pending_transactions.iter().map(|(_, digest)| *digest))
