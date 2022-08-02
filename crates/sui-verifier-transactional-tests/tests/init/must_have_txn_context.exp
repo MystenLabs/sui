@@ -2,7 +2,7 @@ processed 2 tasks
 
 task 0 'publish'. lines 4-11:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Expected exactly one parameter for _::m::init  of type &mut sui::tx_context::TxContext") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: SuiMoveVerificationError, source: Some("Expected at least one and at most two parameters for _::m::init") } }
 
 task 1 'publish'. lines 14-21:
 Error: Transaction Effects Status: Sui Move Bytecode Verification Error. Please run the Sui Move Verifier for more information.
