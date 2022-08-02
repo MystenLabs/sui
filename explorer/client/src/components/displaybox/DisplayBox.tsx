@@ -16,10 +16,12 @@ function DisplayBox({
     display,
     caption,
     fileInfo,
+    modalImage,
 }: {
     display: string;
     caption?: string;
     fileInfo?: string;
+    modalImage?: [boolean, (hasClickedImage: boolean) => void];
 }) {
     const [hasDisplayLoaded, setHasDisplayLoaded] = useState(false);
     const [hasFailedToLoad, setHasFailedToLoad] = useState(false);
@@ -39,6 +41,23 @@ function DisplayBox({
         }
     }, [display, fileInfo]);
 
+    const [isFullScreen, setIsFullScreen] = modalImage || [];
+
+    // When image is clicked this is communicated outside the component:
+    useEffect(() => {
+        if (setIsFullScreen) {
+            setIsFullScreen(hasClickedImage);
+        }
+    }, [hasClickedImage, setIsFullScreen]);
+
+    // When a signal that the image should be full screen is received, this is
+    // implemented:
+    useEffect(() => {
+        if (isFullScreen) {
+            setHasClickedImage(isFullScreen);
+        }
+    }, [isFullScreen]);
+
     const imageStyle = hasDisplayLoaded ? {} : { display: 'none' };
     const handleImageLoad = useCallback(() => {
         setHasDisplayLoaded(true);
@@ -46,8 +65,8 @@ function DisplayBox({
     }, [setHasDisplayLoaded]);
 
     const handleImageClick = useCallback(() => {
-        setHasClickedImage(!hasClickedImage);
-    }, [hasClickedImage]);
+        setHasClickedImage((prevHasClicked) => !prevHasClicked);
+    }, []);
 
     useEffect(() => {
         setHasFailedToLoad(false);

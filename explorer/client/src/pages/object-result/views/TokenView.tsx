@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import Longtext from '../../../components/longtext/Longtext';
@@ -49,6 +49,12 @@ function TokenView({ data }: { data: DataType }) {
     useEffect(() => {
         extractFileType(viewedData.url).then((result) => setFileType(result));
     }, [viewedData.url]);
+
+    const [isImageFullScreen, setImageFullScreen] = useState<boolean>(false);
+
+    const handlePreviewClick = useCallback(() => {
+        setImageFullScreen(true);
+    }, []);
 
     return (
         <div>
@@ -135,6 +141,10 @@ function TokenView({ data }: { data: DataType }) {
                                     name || trimStdLibPrefix(viewedData.objType)
                                 }
                                 fileInfo={fileType}
+                                modalImage={[
+                                    isImageFullScreen,
+                                    setImageFullScreen,
+                                ]}
                             />
                         </div>
                         <div className={styles.metadata}>
@@ -142,6 +152,9 @@ function TokenView({ data }: { data: DataType }) {
                             {fileType && (
                                 <p className={styles.header}>{fileType}</p>
                             )}
+                            <button onClick={handlePreviewClick}>
+                                Preview Media
+                            </button>
                         </div>
                     </div>
                 )}
