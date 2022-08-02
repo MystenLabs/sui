@@ -69,6 +69,15 @@ export abstract class SignerWithProvider implements Signer {
   }
 
   /**
+   * Trigger gateway to sync account state related to the address,
+   * based on the account state on validators.
+   */
+  async syncAccountState(): Promise<any> {
+    const address = await this.getAddress();
+    return await this.provider.syncAccountState(address);
+  }
+
+  /**
    * Serialize and Sign a `TransferObject` transaction and submit to the Gateway for execution
    */
   async transferObject(
