@@ -308,6 +308,7 @@ impl GossipDigestHandler {
             // But it should know the certificate!
             Err(SuiError::ByzantineAuthoritySuspicion {
                 authority: peer_name,
+                reason: "Gossip peer is expected to have certificate".to_string(),
             })
         }
     }
