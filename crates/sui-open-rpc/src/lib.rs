@@ -169,7 +169,7 @@ impl ExamplePairing {
                 })
                 .collect(),
             result: Example {
-                name: format!("{} Result", name),
+                name: "Result".to_string(),
                 summary: None,
                 description: None,
                 value: result,

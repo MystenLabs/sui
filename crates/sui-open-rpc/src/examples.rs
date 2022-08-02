@@ -16,8 +16,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams, SuiCertifiedTransaction, SuiData,
     SuiExecutionStatus, SuiGasCostSummary, SuiMoveObject, SuiObject, SuiObjectRead, SuiObjectRef,
-    SuiParsedMoveObject, SuiTransactionData, SuiTransactionEffects, TransactionBytes,
-    TransactionEffectsResponse, TransactionResponse, TransferObjectParams,
+    SuiParsedMoveObject, SuiRawMoveObject, SuiTransactionData, SuiTransactionEffects,
+    TransactionBytes, TransactionEffectsResponse, TransactionResponse, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -53,6 +53,11 @@ impl RpcExampleProvider {
                 "sui_getObjectsOwnedByAddress",
                 self.get_objects_owned_by_address(),
             ),
+            (
+                "sui_getObjectsOwnedByObject",
+                self.get_objects_owned_by_object(),
+            ),
+            ("sui_getRawObject", self.get_raw_object()),
         ]
         .into_iter()
         .collect()
@@ -194,7 +199,7 @@ impl RpcExampleProvider {
         });
 
         vec![ExamplePairing::new(
-            "Execute transaction",
+            "Execute an object transfer transaction",
             vec![
                 ("tx_bytes", json!(tx_bytes.tx_bytes)),
                 ("flag", json!(Base64::from_bytes(&[signature.flag_byte()]))),
@@ -231,7 +236,7 @@ impl RpcExampleProvider {
         });
 
         vec![ExamplePairing::new(
-            "Get Object",
+            "Get Object data",
             vec![("object_id", json!(object_id))],
             json!(result),
         )]
@@ -252,6 +257,53 @@ impl RpcExampleProvider {
         vec![ExamplePairing::new(
             "Get objects owned by an address",
             vec![("address", json!(owner))],
+            json!(result),
+        )]
+    }
+    fn get_objects_owned_by_object(&mut self) -> Vec<ExamplePairing> {
+        let owner = ObjectID::new(self.rng.gen());
+        let result = (0..4)
+            .map(|_| ObjectInfo {
+                object_id: ObjectID::new(self.rng.gen()),
+                version: Default::default(),
+                digest: ObjectDigest::new(self.rng.gen()),
+                type_: GasCoin::type_().to_string(),
+                owner: Owner::ObjectOwner(SuiAddress::from(owner)),
+                previous_transaction: TransactionDigest::new(self.rng.gen()),
+            })
+            .collect::<Vec<_>>();
+
+        vec![ExamplePairing::new(
+            "Get objects owned by an object",
+            vec![("object_id", json!(owner))],
+            json!(result),
+        )]
+    }
+
+    fn get_raw_object(&mut self) -> Vec<ExamplePairing> {
+        let object_id = ObjectID::new(self.rng.gen());
+
+        let coin = GasCoin::new(object_id, SequenceNumber::from_u64(1), 10000);
+        let object = coin.to_object();
+        let result = SuiObjectRead::Exists(SuiObject {
+            data: SuiData::MoveObject(SuiRawMoveObject {
+                type_: GasCoin::type_().to_string(),
+                has_public_transfer: object.has_public_transfer(),
+                bcs_bytes: object.into_contents(),
+            }),
+            owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),
+            previous_transaction: TransactionDigest::new(self.rng.gen()),
+            storage_rebate: 100,
+            reference: SuiObjectRef::from((
+                object_id,
+                SequenceNumber::from_u64(1),
+                ObjectDigest::new(self.rng.gen()),
+            )),
+        });
+
+        vec![ExamplePairing::new(
+            "Get Raw Object data",
+            vec![("object_id", json!(object_id))],
             json!(result),
         )]
     }

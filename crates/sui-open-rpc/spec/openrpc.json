@@ -110,7 +110,7 @@
             }
           ],
           "result": {
-            "name": "Create unsigned batch transaction data. Result",
+            "name": "Result",
             "value": {
               "gas": {
                 "digest": "Ge17DLulcl4D5fC34w2za234KsFR9mj1+ApeKpysfGQ=",
@@ -193,7 +193,7 @@
       },
       "examples": [
         {
-          "name": "Execute transaction",
+          "name": "Execute an object transfer transaction",
           "params": [
             {
               "name": "tx_bytes",
@@ -213,7 +213,7 @@
             }
           ],
           "result": {
-            "name": "Execute transaction Result",
+            "name": "Result",
             "value": {
               "EffectResponse": {
                 "certificate": {
@@ -306,338 +306,6 @@
       ]
     },
     {
-      "name": "sui_getEventsByEventType",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events matching the specified event type",
-      "params": [
-        {
-          "name": "event_type",
-          "description": "the event type, e.g. '0x2::devnet_nft::MintNFTEvent'",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsByModule",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events emitted by a specified Move module",
-      "params": [
-        {
-          "name": "package",
-          "description": "the Move package ID",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "module",
-          "description": "the module name",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsByObject",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events involving a specified object",
-      "params": [
-        {
-          "name": "object",
-          "description": "the object ID",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsByOwner",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events involving a specified owner.",
-      "params": [
-        {
-          "name": "owner",
-          "description": "the owner's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsBySender",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events involving a specified sender.",
-      "params": [
-        {
-          "name": "sender",
-          "description": "the sender's Sui address",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SuiAddress"
-          }
-        },
-        {
-          "name": "count",
-          "description": "maximum size of the result",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "start_time",
-          "description": "the matching events' timestamp will be after the specified start time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        },
-        {
-          "name": "end_time",
-          "description": "the matching events' timestamp will be before the specified end time",
-          "required": true,
-          "schema": {
-            "type": "integer",
-            "format": "uint64",
-            "minimum": 0.0
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
-      "name": "sui_getEventsByTransaction",
-      "tags": [
-        {
-          "name": "Event Read API"
-        }
-      ],
-      "description": "Return list of events emitted by a specified transaction.",
-      "params": [
-        {
-          "name": "digest",
-          "description": "digest of the transaction, as base-64 encoded string",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/TransactionDigest"
-          }
-        }
-      ],
-      "result": {
-        "name": "Vec<SuiEventEnvelope>",
-        "required": true,
-        "schema": {
-          "type": "array",
-          "items": {
-            "$ref": "#/components/schemas/EventEnvelope"
-          }
-        }
-      }
-    },
-    {
       "name": "sui_getObject",
       "tags": [
         {
@@ -664,7 +332,7 @@
       },
       "examples": [
         {
-          "name": "Get Object",
+          "name": "Get Object data",
           "params": [
             {
               "name": "object_id",
@@ -672,7 +340,7 @@
             }
           ],
           "result": {
-            "name": "Get Object Result",
+            "name": "Result",
             "value": {
               "details": {
                 "data": {
@@ -742,7 +410,7 @@
             }
           ],
           "result": {
-            "name": "Get objects owned by an address Result",
+            "name": "Result",
             "value": [
               {
                 "digest": "hAUX3IoL5ldXEQRx3y4Mg2RATmMPGKaIKWdw1ullPXA=",
@@ -816,7 +484,63 @@
             "$ref": "#/components/schemas/ObjectInfo"
           }
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get objects owned by an object",
+          "params": [
+            {
+              "name": "object_id",
+              "value": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": [
+              {
+                "digest": "tjCDXhEw83BsmaFbfslselUwTP3qUzI/5dWw6WKxjNg=",
+                "object_id": "0xcaa8745bf26f63f76d85fdbda2f013ef4f4b3f87",
+                "owner": {
+                  "ObjectOwner": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+                },
+                "previous_transaction": "Omcr9khIrYBZLNP37nITnzE5gaKzYx7SoUI0SK+U+5o=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "trAgCjBvWEynl0tq1RjvAGd0QyLLmaRUU0pDPVwVaQo=",
+                "object_id": "0x6f946b81f4f20727c6aee702e34fc518e58163d5",
+                "owner": {
+                  "ObjectOwner": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+                },
+                "previous_transaction": "YftWgAsyn3nIUfh8DaHt1urQRJj7t2cpB6qiye4le30=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "/FEPllo2tcrafzR6KqDBTk0vaw4oG3vS3B6IzjkcPXk=",
+                "object_id": "0x568f49d11ca3392df7c1295dfa8b9524f161e029",
+                "owner": {
+                  "ObjectOwner": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+                },
+                "previous_transaction": "QNs5Mg+u5GuSM0M4FHEQ4I/2eporEIgo1T8B0nV0aLY=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              },
+              {
+                "digest": "bWjEqSGAqDqp8hsYOFijZX0PaL9zM0XS7p++X0L9w3c=",
+                "object_id": "0xcf766399c27532f0bec382d9ce78e399307fef50",
+                "owner": {
+                  "ObjectOwner": "0xf6ce4988f3b078f37f863539358646c46f14aa24"
+                },
+                "previous_transaction": "zTfS+es09CXcFhSRhS8zFa1n53hWybFt1Qviz37dex4=",
+                "type_": "0x2::coin::Coin<0x2::sui::SUI>",
+                "version": 0
+              }
+            ]
+          }
+        }
+      ]
     },
     {
       "name": "sui_getRawObject",
@@ -842,7 +566,42 @@
         "schema": {
           "$ref": "#/components/schemas/ObjectRead"
         }
-      }
+      },
+      "examples": [
+        {
+          "name": "Get Raw Object data",
+          "params": [
+            {
+              "name": "object_id",
+              "value": "0xcbabe979c8e2e7f25b1e7d1ac222203afdafb9b4"
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "details": {
+                "data": {
+                  "bcs_bytes": "y6vpecji5/JbHn0awiIgOv2vubQBAAAAAAAAABAnAAAAAAAA",
+                  "dataType": "moveObject",
+                  "has_public_transfer": true,
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>"
+                },
+                "owner": {
+                  "AddressOwner": "0x4db1ad9cd2e822480f3008903f1bd4ba2f27a12a"
+                },
+                "previousTransaction": "i3DGJIxgANNos2vY78x8/y+ExKZMjes7AZ3EAkPovBk=",
+                "reference": {
+                  "digest": "q/ujAPWMzM2f+TP+CFMAs4YToKwdXl9husJSY66idWo=",
+                  "objectId": "0xcbabe979c8e2e7f25b1e7d1ac222203afdafb9b4",
+                  "version": 1
+                },
+                "storageRebate": 100
+              },
+              "status": "Exists"
+            }
+          }
+        }
+      ]
     },
     {
       "name": "sui_getRecentTransactions",

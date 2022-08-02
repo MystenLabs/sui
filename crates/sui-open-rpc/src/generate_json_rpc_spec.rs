@@ -20,7 +20,6 @@ use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NF
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::SUI_CLIENT_CONFIG;
 use sui_json::SuiJsonValue;
-use sui_json_rpc::api::EventReadApiOpenRpc;
 use sui_json_rpc::api::EventStreamingApiOpenRpc;
 use sui_json_rpc::api::RpcReadApiClient;
 use sui_json_rpc::api::RpcTransactionBuilderClient;
@@ -80,7 +79,8 @@ async fn main() {
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());
     open_rpc.add_module(EventStreamingApiOpenRpc::module_doc());
-    open_rpc.add_module(EventReadApiOpenRpc::module_doc());
+    // TODO: Re-enable this when event read API is ready
+    //open_rpc.add_module(EventReadApiOpenRpc::module_doc());
     open_rpc.add_module(GatewayWalletSyncApiImpl::rpc_doc_module());
 
     open_rpc.add_examples(RpcExampleProvider::new().examples());
