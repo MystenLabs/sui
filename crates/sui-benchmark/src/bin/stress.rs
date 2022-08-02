@@ -165,7 +165,7 @@ async fn run(
 ) {
     let mut tasks = Vec::new();
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-    let request_delay_micros = 1_000_000 / (opts.num_workers * opts.target_qps);
+    let request_delay_micros = (1_000_000 * opts.num_workers) / opts.target_qps;
     let stat_delay_micros = 1_000_000 * opts.stat_collection_interval;
 
     for i in 0..opts.num_workers {
@@ -486,7 +486,14 @@ async fn main() -> Result<()> {
         (primary_gas_id, owner, Arc::new(keypair), gateway_config)
     } else {
         eprintln!("Configuring remote benchmark..");
-        cloned_barrier.wait().await;
+        std::thread::spawn(move || {
+            Builder::new_multi_thread()
+                .build()
+                .unwrap()
+                .block_on(async move {
+                    cloned_barrier.wait().await;
+                });
+        });
         let config_path = Some(&opts.gateway_config_path)
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)
@@ -530,7 +537,6 @@ async fn main() -> Result<()> {
             })
             .map(|x| x.encode_base64())
             .unwrap();
-        //let contents = std::fs::read_to_string(keypair.encode_base64())?;
         (
             primary_gas_id,
             primary_gas_account,
