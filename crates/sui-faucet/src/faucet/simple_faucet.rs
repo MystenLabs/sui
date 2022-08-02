@@ -9,28 +9,29 @@ use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{SuiExecutionStatus, SuiParsedObject};
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
-    // coin::Coin,
     gas_coin::GasCoin,
     messages::Transaction,
-    // object::Object,
 };
 use tokio::sync::Mutex;
-use tracing::info;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::{Faucet, FaucetError, FaucetReceipt};
 
-#[derive(Debug, Eq, PartialEq)]
-struct CoinPair {
-    primary_coin_id: ObjectID,
+/// Pair a primary coin (to split off SUI coins) with a gas coin
+/// for higher concurrenc.. They always work together.
+/// Usage represents the times this pair has been used since
+/// faucet's start. We just need a consistent metric to spread out
+/// loads, a global metric such as sequence number is not necessary.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct CoinPair {
+    pub primary_coin_id: ObjectID,
     gas_coin_id: ObjectID,
-    usage: usize,
+    pub usage: usize,
 }
 
-// a min-heap
 impl Ord for CoinPair {
     fn cmp(&self, other: &Self) -> Ordering {
-        // FIXME?
         other
             .usage
             .cmp(&self.usage)
@@ -44,17 +45,10 @@ impl PartialOrd for CoinPair {
     }
 }
 
-/// A naive implementation of a faucet that processes
-/// request sequentially
 pub struct SimpleFaucet {
     wallet: WalletContext,
-    coins: Mutex<BinaryHeap<CoinPair>>,
-    // TODO: use a queue of coins to improve concurrency
-    /// Used to provide fund to users
-    // primary_coin_id: ObjectID,
-    // /// Pay for the gas incurred in operations such as
-    // /// transfer and split(as opposed to sending to users)
-    // gas_coin_id: ObjectID,
+    /// A Min Heap to order CoinPairs. Favors the least used pair.
+    pub(crate) coins: Mutex<BinaryHeap<CoinPair>>,
     active_address: SuiAddress,
 }
 
@@ -95,43 +89,24 @@ impl SimpleFaucet {
 
         info!("Using coins: {:?}", coins);
 
-        // coins.sort_by_key(|a| a.value());
-
-        // if coins.len() < 2 {
-        //     return Err(FaucetError::InsuffientCoins(2, coins.len()));
-        // }
-
-        // let primary_coin = &coins[coins.len() - 1];
-        // let gas_coin = &coins[coins.len() - 2];
-
-        // info!(
-        //     "Using {} as primary, {} as the gas payment",
-        //     primary_coin, gas_coin
-        // );
-
         Ok(Self {
             wallet,
             coins: Mutex::new(coins),
-            // primary_coin_id: *primary_coin.id(),
-            // gas_coin_id: *gas_coin.id(),
             active_address,
         })
     }
 
     async fn select_coins(&self) -> (ObjectID, ObjectID) {
         // TODO: for now we assume each SUI object is enough to cover the split
-        // but this may not be true, if we run the faucet for really really long time or 
+        // but this may not be true, if we run the faucet for really really long time or
         // due to some other unexpected issues.
         let mut coins = self.coins.lock().await;
-        // fixme
-        info!("before selection, Coins: {:?}", coins);
         let mut candidate = coins.pop().expect("Coins heap shouldn't be empty");
         let primary = candidate.primary_coin_id;
         let gas = candidate.gas_coin_id;
         candidate.usage += 1;
         coins.push(candidate);
         info!("after selection, Coins: {:?}", coins);
-        drop(coins);
         (primary, gas)
     }
 
@@ -160,14 +135,25 @@ impl SimpleFaucet {
         coins: &[ObjectID],
         recipient: SuiAddress,
     ) -> Result<Vec<TransactionDigest>, FaucetError> {
-        let mut digests = Vec::with_capacity(coins.len());
-        for coin_id in coins.iter() {
-            let digest = self
-                .transfer_sui(*coin_id, self.active_address, recipient, DEFAULT_GAS_BUDGET)
-                .await
-                .map_err(|err| FaucetError::Transfer(err.to_string()))?;
-            digests.push(digest);
-        }
+        let futures: Vec<_> = coins
+            .iter()
+            .map(|coin_id| {
+                self.transfer_sui(*coin_id, self.active_address, recipient, DEFAULT_GAS_BUDGET)
+            })
+            .collect();
+        let results = futures::future::join_all(futures).await;
+        let digests: Vec<_> = results
+            .into_iter()
+            .filter(|res| {
+                if res.is_ok() {
+                    true
+                } else {
+                    error!("Encountered error in transfer sui: {:?}", res);
+                    false
+                }
+            })
+            .map(|res| res.unwrap())
+            .collect();
         Ok(digests)
     }
 
@@ -209,7 +195,6 @@ impl SimpleFaucet {
     async fn transfer_sui(
         &self,
         coin_id: ObjectID,
-        // gas_object_id: ObjectID,
         signer: SuiAddress,
         recipient: SuiAddress,
         budget: u64,

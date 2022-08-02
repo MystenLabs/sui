@@ -6868,6 +6868,7 @@ dependencies = [
  "async-trait",
  "axum",
  "clap 3.1.18",
+ "futures",
  "http",
  "serde 1.0.140",
  "sui",
