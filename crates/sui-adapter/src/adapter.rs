@@ -507,7 +507,7 @@ fn process_successful_execution<
                 // We don't care about IDs that are generated in this same transaction
                 // but only to be deleted.
                 if !newly_generated_ids.contains(obj_id) {
-                    match by_value_objects.remove(uid.object_id()) {
+                    match by_value_objects.remove(obj_id) {
                         Some((_, version)) => {
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
@@ -522,10 +522,9 @@ fn process_successful_execution<
                             // be unwrapped in this transaction and then get deleted.
                             // When an object was wrapped at version `v`, we added an record into `parent_sync`
                             // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
-                            // it will also have version `v+1`, leading to a violation of the invariant that any
-                            // object_id and version pair must be unique. Hence for any object that's just unwrapped,
-                            // we force it to `v+2` to make it sure it is distinct
-                            // This incrementing will be done in `delete_object`
+                            // we force it to `v+2` by fetching the old version from `parent_sync`.
+                            // This ensures that the object_id and version pair will be unique.
+                            // Here it is set to `v+1` and will be incremented in `delete_object`
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
                                 module_id.name(),
@@ -535,6 +534,8 @@ fn process_successful_execution<
                             let previous_version =
                                 match state_view.get_latest_parent_entry_ref(*obj_id) {
                                     Ok(Some((_, previous_version, _))) => previous_version,
+                                    // TODO this error is (hopefully) transient and should not be
+                                    // a normal execution error
                                     _ => {
                                         return Err(ExecutionError::new_with_source(
                                             ExecutionErrorKind::InvariantViolation,
@@ -617,6 +618,8 @@ fn handle_transfer<
         None if is_unwrapped => match state_view.get_latest_parent_entry_ref(id) {
             Ok(Some((_, last_version, _))) => last_version,
             _ => {
+                // TODO this error is (hopefully) transient and should not be
+                // a normal execution error
                 return Err(ExecutionError::new_with_source(
                     ExecutionErrorKind::InvariantViolation,
                     missing_unwrapped_msg(&id),
