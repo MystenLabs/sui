@@ -34,8 +34,10 @@
         "@mysten/sui.js": "file:../../sdk/typescript",
         "@sentry/react": "^7.6.0",
         "@sentry/tracing": "^7.6.0",
+        "@tanstack/react-query": "^4.0.10",
         "@tanstack/react-table": "^8.1.4",
         "@visx/geo": "^2.10.0",
+        "@visx/responsive": "^2.10.0",
         "@visx/tooltip": "^2.10.0",
         "bn.js": "^5.2.0",
         "classnames": "^2.3.1",
@@ -70,7 +72,9 @@
     },
     "resolutions": {
         "async": "3.2.2",
-        "nth-check": "2.0.1"
+        "nth-check": "2.0.1",
+        "@types/react": "17.x",
+        "@types/react-dom": "17.x"
     },
     "browserslist": {
         "production": [

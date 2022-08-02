@@ -9,6 +9,7 @@ import {
     TopValidatorsCardStatic,
 } from '../../components/top-validators-card/TopValidatorsCard';
 import LastestTxCard from '../../components/transaction-card/RecentTxCard';
+import { ValidatorMap } from '../../components/validator-map/ValidatorMap';
 import { NetworkContext } from '../../context';
 import {
     DefaultRpcClient as rpc,
@@ -99,6 +100,7 @@ function HomeAPI() {
             </section>
             <section className="right-item">
                 <TopValidatorsCardAPI />
+                <ValidatorMap />
             </section>
         </div>
     );

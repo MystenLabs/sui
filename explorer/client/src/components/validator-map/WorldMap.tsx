@@ -18,6 +18,12 @@ const land = topojson.feature(world, world.objects.countries) as unknown as {
     features: FeatureShape[];
 };
 
+// We hide Antarctica because there will not be nodes there:
+const HIDDEN_REGIONS = ['Antarctica'];
+const filteredLand = land.features.filter(
+    (feature) => !HIDDEN_REGIONS.includes(feature.properties.name)
+);
+
 interface Node {
     ipAddress: string;
     city: string;
@@ -28,7 +34,7 @@ interface Node {
 interface MapProps {
     width: number;
     height: number;
-    nodes: Node[];
+    nodes?: Node[];
     onMouseOver(event: React.MouseEvent): void;
     onMouseOut(event: React.MouseEvent): void;
 }
@@ -42,7 +48,7 @@ const BaseWorldMap = forwardRef<SVGSVGElement, MapProps>(
         return (
             <svg ref={ref} width={width} height={height}>
                 <Mercator
-                    data={land.features}
+                    data={filteredLand}
                     scale={scale}
                     translate={[centerX, centerY + 20]}
                 >
@@ -50,21 +56,20 @@ const BaseWorldMap = forwardRef<SVGSVGElement, MapProps>(
                         <g>
                             {features.map(({ feature, path }, i) => (
                                 <path
+                                    key={i}
                                     name={feature.properties.name}
                                     onMouseOver={onMouseOver}
                                     onMouseMove={onMouseOver}
                                     onMouseOut={onMouseOut}
-                                    key={`map-feature-${i}`}
                                     d={path || ''}
                                     fill="white"
                                     // stroke="#F3F4F5"
                                     // stroke={background}
                                     // strokeWidth={0.5}
-                                    // strokeWidth={0}
                                 />
                             ))}
 
-                            {nodes.map(({ location }, index) => {
+                            {nodes?.map(({ location }, index) => {
                                 const position = projection(location);
 
                                 if (!position) return null;

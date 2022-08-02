@@ -1,12 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { useQuery } from '@tanstack/react-query';
 import { useTooltip, useTooltipInPortal } from '@visx/tooltip';
+import { ParentSizeModern } from '@visx/responsive';
 import React, { useCallback } from 'react';
 
 import { WorldMap } from './WorldMap';
+import styles from './ValidatorMap.module.css';
 
 export function ValidatorMap() {
+    const { data, isLoading } = useQuery(['validator-map'], async () => {
+        return [];
+    });
+
     const {
         tooltipData,
         tooltipLeft,
@@ -37,26 +44,44 @@ export function ValidatorMap() {
     );
 
     return (
-        <div>
-            <WorldMap
-                ref={containerRef}
-                onMouseOver={handleMouseOver}
-                onMouseOut={hideTooltip}
-                width={500}
-                height={500}
-                nodes={[]}
-            />
+        <div className={styles.card}>
+            <div className={styles.container}>
+                <div className={styles.contents}>
+                    <div>
+                        <div className={styles.title}>Total Nodes</div>
+                        <div className={styles.stat}>15,123</div>
+                    </div>
+                    <div>
+                        <div className={styles.title}>Average APY</div>
+                        <div className={styles.stat}>4.96%</div>
+                    </div>
+                </div>
 
-            {tooltipOpen && (
-                <TooltipInPortal
-                    // set this to random so it correctly updates with parent bounds
-                    // key={Math.random()}
-                    top={tooltipTop}
-                    left={tooltipLeft}
-                >
-                    Data value <strong>{tooltipData}</strong>
-                </TooltipInPortal>
-            )}
+                <div className={styles.button}>Become a Validator</div>
+            </div>
+
+            <div className={styles.mapcontainer}>
+                <div className={styles.map}>
+                    <ParentSizeModern>
+                        {(parent) => (
+                            <WorldMap
+                                ref={containerRef}
+                                onMouseOver={handleMouseOver}
+                                onMouseOut={hideTooltip}
+                                width={parent.width}
+                                height={parent.height}
+                                nodes={data}
+                            />
+                        )}
+                    </ParentSizeModern>
+
+                    {tooltipOpen && (
+                        <TooltipInPortal top={tooltipTop} left={tooltipLeft}>
+                            Data value <strong>{tooltipData}</strong>
+                        </TooltipInPortal>
+                    )}
+                </div>
+            </div>
         </div>
     );
 }

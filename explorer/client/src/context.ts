@@ -18,7 +18,7 @@ const LOCALSTORE_RPC_TIME_KEY = CURRENT_ENV + 'sui-explorer-rpc-lastset';
 const LOCALSTORE_RPC_VALID_MS = 60000 * 60 * 3;
 
 export const NetworkContext = createContext<
-    [Network | string, Dispatch<SetStateAction<Network | string>>]
+    [Network | string, (network: Network | string) => void]
 >(['', () => null]);
 
 const wasNetworkSetLongTimeAgo = (): boolean => {
