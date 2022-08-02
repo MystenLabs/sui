@@ -223,6 +223,10 @@ impl Proposer {
             if (timer_expired || (enough_digests && advance)) && enough_parents {
                 if timer_expired && matches!(self.network_model, NetworkModel::PartiallySynchronous)
                 {
+                    // It is expected that this timer expires from time to time. If it expires too often, it
+                    // either means some validators are Byzantine or that the network is experiencing periods
+                    // of asynchrony. In practice, the latter scenario means we misconfigured the parameter
+                    // called `max_header_delay`.
                     debug!("Timer expired for round {}", self.round);
                 }
 
