@@ -16,10 +16,9 @@ use tokio::{
 };
 use tonic::{Request, Response, Status};
 use types::{
-    BatchMessageProto, BlockError, BlockRemoverErrorKind, CertificateDigest,
-    CertificateDigestProto, CollectionRetrievalResult, Empty, GetCollectionsRequest,
-    GetCollectionsResponse, ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest,
-    Validator,
+    BlockError, BlockRemoverErrorKind, CertificateDigest, CertificateDigestProto, Collection,
+    CollectionRetrievalResult, Empty, GetCollectionsRequest, GetCollectionsResponse,
+    ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest, TransactionProto, Validator,
 };
 
 pub struct NarwhalValidator<SynchronizerHandler: Handler + Send + Sync + 'static> {
@@ -130,7 +129,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> Validator
             }
         } else {
             Err(Status::invalid_argument(
-                "Attemped to remove no collections!",
+                "Attempted to remove no collections!",
             ))
         };
         remove_collections_response.map(Response::new)
@@ -159,7 +158,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> Validator
                 Ok(blocks_response) => {
                     let mut retrieval_results = vec![];
                     for block_result in blocks_response.blocks {
-                        retrieval_results.extend(get_collection_retrieval_results(block_result));
+                        retrieval_results.push(get_collection_retrieval_results(block_result));
                     }
                     Ok(GetCollectionsResponse {
                         result: retrieval_results,
@@ -171,7 +170,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> Validator
             }
         } else {
             Err(Status::invalid_argument(
-                "Attemped fetch of no collections!",
+                "Attempted fetch of no collections!",
             ))
         };
         get_collections_response.map(Response::new)
@@ -180,24 +179,30 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> Validator
 
 fn get_collection_retrieval_results(
     block_result: Result<GetBlockResponse, BlockError>,
-) -> Vec<CollectionRetrievalResult> {
+) -> CollectionRetrievalResult {
     match block_result {
         Ok(block_response) => {
-            let mut collection_retrieval_results = vec![];
+            let mut transactions = vec![];
             for batch in block_response.batches {
-                collection_retrieval_results.push(CollectionRetrievalResult {
-                    retrieval_result: Some(types::RetrievalResult::Batch(BatchMessageProto::from(
-                        batch,
-                    ))),
-                });
+                transactions.extend(
+                    batch
+                        .transactions
+                        .0
+                        .into_iter()
+                        .map(Into::into)
+                        .collect::<Vec<TransactionProto>>(),
+                )
             }
-            collection_retrieval_results
+            CollectionRetrievalResult {
+                retrieval_result: Some(types::RetrievalResult::Collection(Collection {
+                    id: Some(CertificateDigestProto::from(block_response.id)),
+                    transactions,
+                })),
+            }
         }
-        Err(block_error) => {
-            vec![CollectionRetrievalResult {
-                retrieval_result: Some(types::RetrievalResult::Error(block_error.into())),
-            }]
-        }
+        Err(block_error) => CollectionRetrievalResult {
+            retrieval_result: Some(types::RetrievalResult::Error(block_error.into())),
+        },
     }
 }
 

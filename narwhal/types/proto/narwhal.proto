@@ -9,32 +9,20 @@ message CertificateDigest {
     bytes digest = 1;
 }
 
-message BatchDigest {
-    bytes digest = 1;
-}
-
-message Batch {
-    repeated Transaction transaction = 1;
-}
-
 message Transaction {
     bytes transaction = 1;
 }
 
-enum CollectionErrorType {
-    COLLECTION_NOT_FOUND = 0;
-    COLLECTION_TIMEOUT = 1;
-    COLLECTION_ERROR = 2;
-}
-
 message CollectionError {
+    // The collection for which this error refers to
     CertificateDigest id = 1;
-    CollectionErrorType error = 2;
-}
 
-message BatchMessage {
-    BatchDigest id = 1;
-    Batch transactions = 2;
+    enum CollectionErrorType {
+        COLLECTION_NOT_FOUND = 0;
+        COLLECTION_TIMEOUT = 1;
+        COLLECTION_ERROR = 2;
+    }
+    CollectionErrorType error = 2;
 }
 
 message PrimaryAddresses {
@@ -56,15 +44,23 @@ message ValidatorData {
     PrimaryAddresses primary_addresses = 3;
 }
 
+message Collection {
+    // The collection's id
+    CertificateDigest id = 1;
+
+    // The transactions that are part of the collection
+    repeated Transaction transactions = 2;
+}
+
 message CollectionRetrievalResult {
     oneof retrieval_result {
-        BatchMessage batch = 1;
+        Collection collection = 1;
         CollectionError error = 2;
     }
 }
 
 message GetCollectionsRequest {
-    // List of collections to be retreived.
+    // List of collections to be retrieved.
     repeated CertificateDigest collection_ids = 1;
 }
 

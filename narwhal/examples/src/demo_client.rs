@@ -4,10 +4,10 @@
 use clap::{crate_name, crate_version, App, AppSettings, Arg, SubCommand};
 use narwhal::{
     collection_retrieval_result::RetrievalResult, proposer_client::ProposerClient,
-    validator_client::ValidatorClient, BatchDigest, CertificateDigest, CollectionRetrievalResult,
-    Empty, GetCollectionsRequest, GetCollectionsResponse, NodeReadCausalRequest,
-    NodeReadCausalResponse, PublicKey, ReadCausalRequest, ReadCausalResponse,
-    RemoveCollectionsRequest, RoundsRequest, RoundsResponse,
+    validator_client::ValidatorClient, CertificateDigest, CollectionRetrievalResult, Empty,
+    GetCollectionsRequest, GetCollectionsResponse, NodeReadCausalRequest, NodeReadCausalResponse,
+    PublicKey, ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest, RoundsRequest,
+    RoundsResponse,
 };
 use std::{
     fmt,
@@ -337,7 +337,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // TODO: This doesn't work in Docker yet, figure out why
     println!("\tFound {total_num_of_transactions} transactions with a total size of {total_transactions_size} bytes\n");
 
-    println!("\tWaiting for validators to decide wheter to vote for the block...\n");
+    println!("\tWaiting for validators to decide whether to vote for the block...\n");
     println!("\tVote completed successfully, block can be removed!\n");
 
     println!("\n4) Remove collections that have been voted on and committed.\n");
@@ -365,8 +365,8 @@ fn get_total_transaction_count_and_size(result: Vec<CollectionRetrievalResult>) 
     let mut total_transactions_size = 0;
     for r in result {
         match r.retrieval_result.unwrap() {
-            RetrievalResult::Batch(message) => {
-                for t in message.transactions.unwrap().transaction {
+            RetrievalResult::Collection(collection) => {
+                for t in collection.transactions {
                     total_transactions_size += t.transaction.len();
                     total_num_of_transactions += 1;
                 }
@@ -413,20 +413,19 @@ impl std::fmt::Display for GetCollectionsResponse {
 
         for r in self.result.clone() {
             match r.retrieval_result.unwrap() {
-                RetrievalResult::Batch(message) => {
-                    let batch_id = &message.id.unwrap();
-                    //let batch_id = &message.id.unwrap();
+                RetrievalResult::Collection(collection) => {
+                    let collection_id = &collection.id.unwrap();
                     let mut transactions_size = 0;
                     let mut num_of_transactions = 0;
 
-                    for t in message.transactions.unwrap().transaction {
+                    for t in collection.transactions {
                         transactions_size += t.transaction.len();
                         num_of_transactions += 1;
                     }
 
                     result = format!(
-                        "{}\n\t|-Batch id {}, transactions {}, size: {} bytes",
-                        result, batch_id, num_of_transactions, transactions_size
+                        "{}\n\t|-Collection id {}, transactions {}, size: {} bytes",
+                        result, collection_id, num_of_transactions, transactions_size
                     );
                 }
                 RetrievalResult::Error(error) => {
@@ -526,12 +525,6 @@ impl std::fmt::Display for RoundsResponse {
 }
 
 impl std::fmt::Display for CertificateDigest {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", base64::encode(&self.digest))
-    }
-}
-
-impl std::fmt::Display for BatchDigest {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         write!(f, "{}", base64::encode(&self.digest))
     }

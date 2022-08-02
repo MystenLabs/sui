@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     error::{DagError, DagResult},
-    BatchDigestProto, CertificateDigestProto,
+    CertificateDigestProto,
 };
 use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
@@ -47,14 +47,6 @@ impl fmt::Display for BatchDigest {
 impl From<BatchDigest> for Digest {
     fn from(digest: BatchDigest) -> Self {
         Digest::new(digest.0)
-    }
-}
-
-impl From<BatchDigest> for BatchDigestProto {
-    fn from(digest: BatchDigest) -> Self {
-        BatchDigestProto {
-            digest: Bytes::from(digest.0.to_vec()),
-        }
     }
 }
 

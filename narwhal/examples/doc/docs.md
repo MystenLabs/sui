@@ -4,11 +4,9 @@
 ## Table of Contents
 
 - [narwhal.proto](#narwhal-proto)
-    - [Batch](#narwhal-Batch)
-    - [BatchDigest](#narwhal-BatchDigest)
-    - [BatchMessage](#narwhal-BatchMessage)
     - [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload)
     - [CertificateDigest](#narwhal-CertificateDigest)
+    - [Collection](#narwhal-Collection)
     - [CollectionError](#narwhal-CollectionError)
     - [CollectionRetrievalResult](#narwhal-CollectionRetrievalResult)
     - [Empty](#narwhal-Empty)
@@ -28,9 +26,9 @@
     - [RoundsResponse](#narwhal-RoundsResponse)
     - [Transaction](#narwhal-Transaction)
     - [ValidatorData](#narwhal-ValidatorData)
-  
-    - [CollectionErrorType](#narwhal-CollectionErrorType)
-  
+
+    - [CollectionError.CollectionErrorType](#narwhal-CollectionError-CollectionErrorType)
+
     - [Configuration](#narwhal-Configuration)
     - [PrimaryToPrimary](#narwhal-PrimaryToPrimary)
     - [PrimaryToWorker](#narwhal-PrimaryToWorker)
@@ -39,7 +37,7 @@
     - [Validator](#narwhal-Validator)
     - [WorkerToPrimary](#narwhal-WorkerToPrimary)
     - [WorkerToWorker](#narwhal-WorkerToWorker)
-  
+
 - [Scalar Value Types](#scalar-value-types)
 
 
@@ -48,52 +46,6 @@
 <p align="right"><a href="#top">Top</a></p>
 
 ## narwhal.proto
-
-
-
-<a name="narwhal-Batch"></a>
-
-### Batch
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| transaction | [Transaction](#narwhal-Transaction) | repeated |  |
-
-
-
-
-
-
-<a name="narwhal-BatchDigest"></a>
-
-### BatchDigest
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| digest | [bytes](#bytes) |  |  |
-
-
-
-
-
-
-<a name="narwhal-BatchMessage"></a>
-
-### BatchMessage
-
-
-
-| Field | Type | Label | Description |
-| ----- | ---- | ----- | ----------- |
-| id | [BatchDigest](#narwhal-BatchDigest) |  |  |
-| transactions | [Batch](#narwhal-Batch) |  |  |
-
-
-
 
 
 
@@ -128,6 +80,22 @@ while we don&#39;t have good protobuf definitions for Narwhal types
 
 
 
+<a name="narwhal-Collection"></a>
+
+### Collection
+
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| id | [CertificateDigest](#narwhal-CertificateDigest) |  | The collection&#39;s id |
+| transactions | [Transaction](#narwhal-Transaction) | repeated | The transactions that are part of the collection |
+
+
+
+
+
+
 <a name="narwhal-CollectionError"></a>
 
 ### CollectionError
@@ -136,8 +104,8 @@ while we don&#39;t have good protobuf definitions for Narwhal types
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| id | [CertificateDigest](#narwhal-CertificateDigest) |  |  |
-| error | [CollectionErrorType](#narwhal-CollectionErrorType) |  |  |
+| id | [CertificateDigest](#narwhal-CertificateDigest) |  | The collection for which this error refers to |
+| error | [CollectionError.CollectionErrorType](#narwhal-CollectionError-CollectionErrorType) |  |  |
 
 
 
@@ -152,7 +120,7 @@ while we don&#39;t have good protobuf definitions for Narwhal types
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| batch | [BatchMessage](#narwhal-BatchMessage) |  |  |
+| collection | [Collection](#narwhal-Collection) |  |  |
 | error | [CollectionError](#narwhal-CollectionError) |  |  |
 
 
@@ -178,7 +146,7 @@ Empty message for when we don&#39;t have anything to return
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| collection_ids | [CertificateDigest](#narwhal-CertificateDigest) | repeated | List of collections to be retreived. |
+| collection_ids | [CertificateDigest](#narwhal-CertificateDigest) | repeated | List of collections to be retrieved. |
 
 
 
@@ -416,12 +384,12 @@ Empty message for when we don&#39;t have anything to return
 
 
 
- 
 
 
-<a name="narwhal-CollectionErrorType"></a>
 
-### CollectionErrorType
+<a name="narwhal-CollectionError-CollectionErrorType"></a>
+
+### CollectionError.CollectionErrorType
 
 
 | Name | Number | Description |
@@ -431,9 +399,9 @@ Empty message for when we don&#39;t have anything to return
 | COLLECTION_ERROR | 2 |  |
 
 
- 
 
- 
+
+
 
 
 <a name="narwhal-Configuration"></a>
@@ -522,7 +490,7 @@ The worker-to-worker interface
 | SendMessage | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [Empty](#narwhal-Empty) | Sends a worker message |
 | ClientBatchRequest | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) | [BincodeEncodedPayload](#narwhal-BincodeEncodedPayload) stream | requests a number of batches that the service then streams back to the client |
 
- 
+
 
 
 
@@ -545,4 +513,3 @@ The worker-to-worker interface
 | <a name="bool" /> bool |  | bool | boolean | boolean | bool | bool | boolean | TrueClass/FalseClass |
 | <a name="string" /> string | A string must always contain UTF-8 encoded or 7-bit ASCII text. | string | String | str/unicode | string | string | string | String (UTF-8) |
 | <a name="bytes" /> bytes | May contain any arbitrary sequence of bytes. | string | ByteString | str | []byte | ByteString | string | String (ASCII-8BIT) |
-
