@@ -126,6 +126,11 @@
         "name": "See what's New",
         "sublist": [
           {
+            "name": "Apply to be a Validator",
+            "url": "https://sui.io/resources-sui/validator-registration-open/",
+            "external": true
+          },
+          {
             "name": "Use Almost Any OS",
             "url": "/build/install#supported-oses"
           },
@@ -141,11 +146,6 @@
           {
             "name": "Use Move VSCode Plugin",
             "url": "https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin",
-            "external": true
-          },
-          {
-            "name": "Join Incentivized Testnet",
-            "url": "https://sui.io/resources-sui/announcing-sui-incentivized-testnet/",
             "external": true
           },
           {
