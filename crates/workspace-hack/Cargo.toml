@@ -249,6 +249,7 @@ lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", defau
 lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default-features = false }
 lexical-core = { version = "0.7", features = ["arrayvec", "correct", "ryu", "static_assertions", "std", "table"] }
 libc = { version = "0.2", features = ["std"] }
+libm = { version = "0.2" }
 librocksdb-sys = { version = "0.6", features = ["bzip2", "bzip2-sys", "libz-sys", "lz4", "snappy", "static", "zlib", "zstd", "zstd-sys"] }
 libsqlite3-sys = { version = "0.24", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
 libtest-mimic = { version = "0.4", default-features = false }
@@ -327,7 +328,7 @@ num-integer = { version = "0.1", default-features = false, features = ["i128", "
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint", "num-bigint-std", "std"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
-num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "std"] }
+num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm", "std"] }
 num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.5", features = ["std"] }
 object-1f5adca70f036a62 = { package = "object", version = "0.28", default-features = false, features = ["archive", "coff", "elf", "macho", "pe", "read_core", "unaligned"] }
@@ -388,6 +389,7 @@ rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc"
 rand_chacha = { version = "0.3", features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
+rand_distr = { version = "0.4", features = ["alloc", "std"] }
 rand_pcg = { version = "0.2", default-features = false }
 rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
@@ -850,6 +852,7 @@ lazycell = { version = "1", default-features = false }
 lexical-core = { version = "0.7", features = ["arrayvec", "correct", "ryu", "static_assertions", "std", "table"] }
 libc = { version = "0.2", features = ["std"] }
 libloading = { version = "0.7", default-features = false }
+libm = { version = "0.2" }
 librocksdb-sys = { version = "0.6", features = ["bzip2", "bzip2-sys", "libz-sys", "lz4", "snappy", "static", "zlib", "zstd", "zstd-sys"] }
 libsqlite3-sys = { version = "0.24", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
 libtest-mimic = { version = "0.4", default-features = false }
@@ -931,7 +934,7 @@ num-integer = { version = "0.1", default-features = false, features = ["i128", "
 num-iter = { version = "0.1", default-features = false, features = ["i128", "std"] }
 num-rational = { version = "0.4", default-features = false, features = ["num-bigint", "num-bigint-std", "std"] }
 num-traits-c65f7effa3be6d31 = { package = "num-traits", version = "0.1", default-features = false }
-num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "std"] }
+num-traits-6f8ce4dd05d13bba = { package = "num-traits", version = "0.2", features = ["i128", "libm", "std"] }
 num_cpus = { version = "1", default-features = false }
 num_enum = { version = "0.5", features = ["std"] }
 num_enum_derive = { version = "0.5", default-features = false, features = ["proc-macro-crate", "std"] }
@@ -1011,6 +1014,7 @@ rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc"
 rand_chacha = { version = "0.3", features = ["std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
+rand_distr = { version = "0.4", features = ["alloc", "std"] }
 rand_pcg = { version = "0.2", default-features = false }
 rand_xorshift = { version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
