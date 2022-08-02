@@ -6,7 +6,7 @@ use crate::{
     metrics::PrimaryMetrics,
     PrimaryWorkerMessage,
 };
-use core::sync::atomic::AtomicU64;
+
 use crypto::Hash;
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
@@ -23,20 +23,20 @@ async fn successfully_synchronize_batches() {
     // GIVEN
     let (name, committee) = resolve_name_and_committee();
     let (_, certificate_store, payload_store) = create_db_stores();
-    let consensus_round = Arc::new(AtomicU64::new(0));
     let gc_depth: Round = 1;
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
     let (tx_synchronizer, rx_synchronizer) = channel(10);
     let (tx_core, mut rx_core) = channel(10);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     let _header_waiter_handle = HeaderWaiter::spawn(
         name.clone(),
         committee.clone(),
         certificate_store,
         payload_store.clone(),
-        consensus_round,
+        rx_consensus_round_updates,
         gc_depth,
         /* sync_retry_delay */ Duration::from_secs(5),
         /* sync_retry_nodes */ 3,

@@ -13,10 +13,7 @@ use crypto::{Hash as _, PublicKey, Signature, SignatureService};
 use network::{CancelOnDropHandler, MessageResult, PrimaryNetwork, ReliableNetwork};
 use std::{
     collections::{HashMap, HashSet},
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::Arc,
     time::Instant,
 };
 use store::Store;
@@ -51,8 +48,8 @@ pub struct Core {
     synchronizer: Synchronizer,
     /// Service to sign headers.
     signature_service: SignatureService<Signature>,
-    /// The current consensus round (used for cleanup).
-    consensus_round: Arc<AtomicU64>,
+    /// Get a signal when the round changes
+    rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
 
@@ -101,7 +98,7 @@ impl Core {
         certificate_store: Store<CertificateDigest, Certificate>,
         synchronizer: Synchronizer,
         signature_service: SignatureService<Signature>,
-        consensus_round: Arc<AtomicU64>,
+        rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         rx_committee: watch::Receiver<ReconfigureNotification>,
         rx_primaries: Receiver<PrimaryMessage>,
@@ -121,7 +118,7 @@ impl Core {
                 certificate_store,
                 synchronizer,
                 signature_service,
-                consensus_round,
+                rx_consensus_round_updates,
                 gc_depth,
                 rx_reconfigure: rx_committee,
                 rx_primaries,
@@ -602,6 +599,29 @@ impl Core {
                         ReconfigureNotification::Shutdown => return
                     }
                 }
+
+                // Check whether the consensus round has changed, to clean up structures
+                Ok(()) = self.rx_consensus_round_updates.changed() => {
+                    let round = *self.rx_consensus_round_updates.borrow();
+                    if round > self.gc_depth {
+                        let now = Instant::now();
+
+                        let gc_round = round - self.gc_depth;
+                        self.last_voted.retain(|k, _| k > &gc_round);
+                        self.processing.retain(|k, _| k > &gc_round);
+                        self.certificates_aggregators.retain(|k, _| k > &gc_round);
+                        self.cancel_handlers.retain(|k, _| k > &gc_round);
+                        self.gc_round = gc_round;
+
+                        self.metrics
+                            .gc_core_latency
+                            .with_label_values(&[&self.committee.epoch.to_string()])
+                            .observe(now.elapsed().as_secs_f64());
+                    }
+
+                    Ok(())
+                }
+
             };
             match result {
                 Ok(()) => (),
@@ -612,24 +632,6 @@ impl Core {
                 }
                 Err(e @ DagError::TooOld(..) | e @ DagError::InvalidEpoch { .. }) => debug!("{e}"),
                 Err(e) => warn!("{e}"),
-            }
-
-            // Cleanup internal state.
-            let round = self.consensus_round.load(Ordering::Relaxed);
-            if round > self.gc_depth {
-                let now = Instant::now();
-
-                let gc_round = round - self.gc_depth;
-                self.last_voted.retain(|k, _| k > &gc_round);
-                self.processing.retain(|k, _| k > &gc_round);
-                self.certificates_aggregators.retain(|k, _| k > &gc_round);
-                self.cancel_handlers.retain(|k, _| k > &gc_round);
-                self.gc_round = gc_round;
-
-                self.metrics
-                    .gc_core_latency
-                    .with_label_values(&[&self.committee.epoch.to_string()])
-                    .observe(now.elapsed().as_secs_f64());
             }
 
             self.metrics

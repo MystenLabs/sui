@@ -15,10 +15,7 @@ use network::{LuckyNetwork, PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNe
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::HashMap,
-    sync::{
-        atomic::{AtomicU64, Ordering},
-        Arc,
-    },
+    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use store::Store;
@@ -62,8 +59,8 @@ pub struct HeaderWaiter {
     certificate_store: Store<CertificateDigest, Certificate>,
     /// The persistent storage for payload markers from workers.
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    /// The current consensus round (used for cleanup).
-    consensus_round: Arc<AtomicU64>,
+    /// A watch channel receiver to get consensus round updates.
+    rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
     /// The delay to wait before re-trying sync requests.
@@ -101,7 +98,7 @@ impl HeaderWaiter {
         committee: Committee,
         certificate_store: Store<CertificateDigest, Certificate>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        consensus_round: Arc<AtomicU64>,
+        rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         sync_retry_delay: Duration,
         sync_retry_nodes: usize,
@@ -118,7 +115,7 @@ impl HeaderWaiter {
                 committee,
                 certificate_store,
                 payload_store,
-                consensus_round,
+                rx_consensus_round_updates,
                 gc_depth,
                 sync_retry_delay,
                 sync_retry_nodes,
@@ -176,6 +173,8 @@ impl HeaderWaiter {
         tokio::pin!(timer);
 
         loop {
+            let mut attempt_garbage_collection = false;
+
             tokio::select! {
                 Some(message) = self.rx_synchronizer.recv() => {
                     match message {
@@ -332,39 +331,46 @@ impl HeaderWaiter {
                         },
                         ReconfigureNotification::Shutdown => return
                     }
-                }
+                },
+
+                // Check for a new consensus round number
+                Ok(()) = self.rx_consensus_round_updates.changed() => {
+                    attempt_garbage_collection = true;
+                },
+
             }
 
-            // Cleanup internal state.
-            let round = self.consensus_round.load(Ordering::Relaxed);
-            if round > self.gc_depth {
-                let now = Instant::now();
+            if attempt_garbage_collection {
+                let round = *self.rx_consensus_round_updates.borrow();
+                if round > self.gc_depth {
+                    let now = Instant::now();
 
-                let mut gc_round = round - self.gc_depth;
+                    let mut gc_round = round - self.gc_depth;
 
-                // Cancel expired `notify_read`s, keep the rest in the map
-                // TODO: replace with `drain_filter` once that API stabilizes
-                self.pending = self
-                    .pending
-                    .drain()
-                    .flat_map(|(digest, (r, handler))| {
-                        if r <= gc_round {
-                            // note: this send can fail, harmlessly, if the certificate has been delivered (`notify_read`)
-                            // and the present code path fires before the corresponding `waiting` item is unpacked above.
-                            let _ = handler.send(());
-                            None
-                        } else {
-                            Some((digest, (r, handler)))
-                        }
-                    })
-                    .collect();
-                self.batch_requests.retain(|_, r| r > &mut gc_round);
-                self.parent_requests.retain(|_, (r, _)| r > &mut gc_round);
+                    // Cancel expired `notify_read`s, keep the rest in the map
+                    // TODO: replace with `drain_filter` once that API stabilizes
+                    self.pending = self
+                        .pending
+                        .drain()
+                        .flat_map(|(digest, (r, handler))| {
+                            if r <= gc_round {
+                                // note: this send can fail, harmlessly, if the certificate has been delivered (`notify_read`)
+                                // and the present code path fires before the corresponding `waiting` item is unpacked above.
+                                let _ = handler.send(());
+                                None
+                            } else {
+                                Some((digest, (r, handler)))
+                            }
+                        })
+                        .collect();
+                    self.batch_requests.retain(|_, r| r > &mut gc_round);
+                    self.parent_requests.retain(|_, (r, _)| r > &mut gc_round);
 
-                self.metrics
-                    .gc_header_waiter_latency
-                    .with_label_values(&[&self.committee.epoch.to_string()])
-                    .observe(now.elapsed().as_secs_f64());
+                    self.metrics
+                        .gc_header_waiter_latency
+                        .with_label_values(&[&self.committee.epoch.to_string()])
+                        .observe(now.elapsed().as_secs_f64());
+                }
             }
 
             // measure the pending & parent elements

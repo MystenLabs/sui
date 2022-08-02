@@ -50,6 +50,9 @@ async fn process_certificate_missing_parents_in_reverse() {
     // Create test stores.
     let (header_store, certificates_store, payload_store) = create_db_stores();
 
+    // Signal consensus round
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name.clone(),
@@ -62,7 +65,6 @@ async fn process_certificate_missing_parents_in_reverse() {
     );
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
-    let consensus_round = Arc::new(AtomicU64::new(0));
     let gc_depth: Round = 50;
 
     // Make a headerWaiter
@@ -71,7 +73,7 @@ async fn process_certificate_missing_parents_in_reverse() {
         committee(None),
         certificates_store.clone(),
         payload_store.clone(),
-        consensus_round.clone(),
+        rx_consensus_round_updates.clone(),
         gc_depth,
         /* sync_retry_delay */ Duration::from_secs(5),
         /* sync_retry_nodes */ 3,
@@ -87,7 +89,7 @@ async fn process_certificate_missing_parents_in_reverse() {
     let _certificate_waiter_handle = CertificateWaiter::spawn(
         committee(None),
         certificates_store.clone(),
-        consensus_round.clone(),
+        rx_consensus_round_updates.clone(),
         gc_depth,
         rx_reconfigure.clone(),
         rx_sync_certificates,
@@ -103,7 +105,7 @@ async fn process_certificate_missing_parents_in_reverse() {
         certificates_store.clone(),
         synchronizer,
         signature_service,
-        /* consensus_round */ consensus_round,
+        rx_consensus_round_updates,
         /* gc_depth */ gc_depth,
         rx_reconfigure,
         /* rx_primaries */ rx_primary_messages,
@@ -188,6 +190,9 @@ async fn process_certificate_check_gc_fires() {
     // core -> proposers, byproduct of certificate processing, a small channel limit could backpressure the test into failure
     let (tx_parents, _rx_parents) = channel(100);
 
+    // Signal consensus round
+    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+
     // Create test stores.
     let (header_store, certificates_store, payload_store) = create_db_stores();
 
@@ -212,7 +217,7 @@ async fn process_certificate_check_gc_fires() {
         committee(None),
         certificates_store.clone(),
         payload_store.clone(),
-        consensus_round.clone(),
+        rx_consensus_round_updates.clone(),
         gc_depth,
         /* sync_retry_delay */ Duration::from_secs(5),
         /* sync_retry_nodes */ 3,
@@ -228,7 +233,7 @@ async fn process_certificate_check_gc_fires() {
     let _certficate_waiter_handle = CertificateWaiter::spawn(
         committee(None),
         certificates_store.clone(),
-        consensus_round.clone(),
+        rx_consensus_round_updates.clone(),
         gc_depth,
         rx_reconfigure.clone(),
         rx_sync_certificates,
@@ -244,7 +249,7 @@ async fn process_certificate_check_gc_fires() {
         certificates_store.clone(),
         synchronizer,
         signature_service,
-        /* consensus_round */ consensus_round.clone(),
+        rx_consensus_round_updates,
         /* gc_depth */ gc_depth,
         rx_reconfigure,
         /* rx_primaries */ rx_primary_messages,

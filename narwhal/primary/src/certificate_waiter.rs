@@ -9,10 +9,7 @@ use futures::{
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
 };
 use once_cell::sync::OnceCell;
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 use store::Store;
 use tokio::{
     sync::{
@@ -43,8 +40,8 @@ pub struct CertificateWaiter {
     committee: Committee,
     /// The persistent storage.
     store: Store<CertificateDigest, Certificate>,
-    /// The current consensus round (used for cleanup).
-    consensus_round: Arc<AtomicU64>,
+    /// Receiver for signal of round change
+    rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
     gc_depth: Round,
     /// Watch channel notifying of epoch changes, it is only used for cleanup.
@@ -67,7 +64,7 @@ impl CertificateWaiter {
     pub fn spawn(
         committee: Committee,
         store: Store<CertificateDigest, Certificate>,
-        consensus_round: Arc<AtomicU64>,
+        rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_synchronizer: Receiver<Certificate>,
@@ -78,7 +75,7 @@ impl CertificateWaiter {
             Self {
                 committee,
                 store,
-                consensus_round,
+                rx_consensus_round_updates,
                 gc_depth,
                 rx_reconfigure,
                 rx_synchronizer,
@@ -115,8 +112,12 @@ impl CertificateWaiter {
 
         let timer = sleep(Duration::from_millis(GC_RESOLUTION));
         tokio::pin!(timer);
+        let mut attempt_garbage_collection;
 
         loop {
+            // Initially set to not garbage collect
+            attempt_garbage_collection = false;
+
             tokio::select! {
                 Some(certificate) = self.rx_synchronizer.recv() => {
                     if certificate.epoch() < self.committee.epoch() {
@@ -178,27 +179,35 @@ impl CertificateWaiter {
 
                     // Reschedule the timer.
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(GC_RESOLUTION));
+                    attempt_garbage_collection = true;
                 },
+
+                Ok(()) = self.rx_consensus_round_updates.changed() => {
+                    attempt_garbage_collection = true;
+                }
+
             }
 
-            // Cleanup internal state. Deliver the certificates waiting on garbage collected ancestors.
-            let round = self.consensus_round.load(Ordering::Relaxed);
-            if round > self.gc_depth {
-                let gc_round = round - self.gc_depth;
+            // Either upon time-out or round change
+            if attempt_garbage_collection {
+                let round = *self.rx_consensus_round_updates.borrow();
+                if round > self.gc_depth {
+                    let gc_round = round - self.gc_depth;
 
-                self.pending.retain(|_digest, (r, once_cancel)| {
-                    if *r <= gc_round {
-                        // note: this send can fail, harmlessly, if the certificate has been delivered (`notify_read`)
-                        // and the present code path fires before the corresponding `waiting` item is unpacked above.
-                        let _ = once_cancel
-                            .take()
-                            .expect("This should be protected by a write lock")
-                            .send(());
-                        false
-                    } else {
-                        true
-                    }
-                });
+                    self.pending.retain(|_digest, (r, once_cancel)| {
+                        if *r <= gc_round {
+                            // note: this send can fail, harmlessly, if the certificate has been delivered (`notify_read`)
+                            // and the present code path fires before the corresponding `waiting` item is unpacked above.
+                            let _ = once_cancel
+                                .take()
+                                .expect("This should be protected by a write lock")
+                                .send(());
+                            false
+                        } else {
+                            true
+                        }
+                    });
+                }
             }
 
             self.update_metrics();

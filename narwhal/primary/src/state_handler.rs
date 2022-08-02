@@ -5,10 +5,7 @@ use crate::primary::PrimaryWorkerMessage;
 use config::SharedCommittee;
 use crypto::PublicKey;
 use network::{PrimaryToWorkerNetwork, UnreliableNetwork};
-use std::sync::{
-    atomic::{AtomicU64, Ordering},
-    Arc,
-};
+use std::sync::Arc;
 use tokio::{
     sync::{mpsc::Receiver, watch},
     task::JoinHandle,
@@ -21,10 +18,10 @@ pub struct StateHandler {
     name: PublicKey,
     /// The committee information.
     committee: SharedCommittee,
-    /// The current consensus round (used for cleanup).
-    consensus_round: Arc<AtomicU64>,
     /// Receives the ordered certificates from consensus.
     rx_consensus: Receiver<Certificate>,
+    /// Signals a new consensus round
+    tx_consensus_round_updates: watch::Sender<u64>,
     /// Receives notifications to reconfigure the system.
     rx_reconfigure: Receiver<ReconfigureNotification>,
     /// Channel to signal committee changes.
@@ -40,8 +37,8 @@ impl StateHandler {
     pub fn spawn(
         name: PublicKey,
         committee: SharedCommittee,
-        consensus_round: Arc<AtomicU64>,
         rx_consensus: Receiver<Certificate>,
+        tx_consensus_round_updates: watch::Sender<u64>,
         rx_reconfigure: Receiver<ReconfigureNotification>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
     ) -> JoinHandle<()> {
@@ -49,8 +46,8 @@ impl StateHandler {
             Self {
                 name,
                 committee,
-                consensus_round,
                 rx_consensus,
+                tx_consensus_round_updates,
                 rx_reconfigure,
                 tx_reconfigure,
                 last_committed_round: 0,
@@ -69,7 +66,7 @@ impl StateHandler {
             self.last_committed_round = round;
 
             // Trigger cleanup on the primary.
-            self.consensus_round.store(round, Ordering::Relaxed);
+            let _ = self.tx_consensus_round_updates.send(round); // ignore error when receivers dropped.
 
             // Trigger cleanup on the workers..
             let addresses = self
@@ -102,7 +99,7 @@ impl StateHandler {
                             tracing::debug!("Committee updated to {}", self.committee);
 
                             // Trigger cleanup on the primary.
-                            self.consensus_round.store(0, Ordering::Relaxed);
+                            let _ = self.tx_consensus_round_updates.send(0); // ignore error when receivers dropped.
 
                             false
                         },
