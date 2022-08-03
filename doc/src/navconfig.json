@@ -180,6 +180,11 @@
             "fileName": "build/sui-json"
           },
           {
+            "label": "See Sui JSON-RPC API reference",
+            "link": "https://docs.sui.io/sui-jsonrpc",
+            "external": true
+          },
+          {
             "label": "Make calls with Rust SDK",
             "fileName": "build/rust-sdk"
           },
