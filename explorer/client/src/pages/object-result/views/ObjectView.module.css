@@ -51,7 +51,7 @@ div.displaycontainer {
 }
 
 div.metadata {
-    @apply ml-5;
+    @apply ml-2.5 sm:ml-5;
 }
 
 div.metadata > h2 {

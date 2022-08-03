@@ -140,10 +140,16 @@ function DisplayBox({
                                 src={transformURL(display)}
                             />
                             <span className={styles.cross}>&times;</span>
-                            {caption && (
-                                <div className={styles.caption}>{caption} </div>
-                            )}
-                            <div className={styles.filetype}>{fileType}</div>
+                            <div>
+                                {caption && (
+                                    <div className={styles.caption}>
+                                        {caption}{' '}
+                                    </div>
+                                )}
+                                <div className={styles.filetype}>
+                                    {fileType}
+                                </div>
+                            </div>
                         </div>
                         <div className={styles.detailsbg} />
                     </div>
