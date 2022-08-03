@@ -112,7 +112,7 @@ fn network_config_snapshot_matches() {
             consensus_config
                 .narwhal_config
                 .prometheus_metrics
-                .socket_addr = fake_socket;
+                .socket_addr = Multiaddr::empty();
         }
     }
     assert_yaml_snapshot!(network_config, {
