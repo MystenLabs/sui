@@ -1265,7 +1265,6 @@ where
                                     self.metrics.num_bad_stake.observe(state.bad_stake as f64);
                                     state.certificate =
                                         Some(CertifiedTransaction::new_with_signatures(
-                                            self.committee.epoch(),
                                             transaction_ref.clone(),
                                             state.signatures.clone(),
                                             &self.committee,
@@ -1536,12 +1535,7 @@ where
                     good_stake = stake,
                     "Found an effect with good stake over threshold"
                 );
-                return CertifiedTransactionEffects::new(
-                    certificate.auth_sign_info.epoch,
-                    effects,
-                    signatures,
-                    &self.committee,
-                );
+                return CertifiedTransactionEffects::new(effects, signatures, &self.committee);
             }
         }
 

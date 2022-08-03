@@ -1468,7 +1468,6 @@ pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStron
 
 impl CertifiedTransactionEffects {
     pub fn new(
-        epoch: EpochId,
         effects: TransactionEffects,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
         committee: &Committee,
@@ -1682,7 +1681,6 @@ impl CertifiedTransaction {
     }
 
     pub fn new_with_signatures(
-        epoch: EpochId,
         transaction: Transaction,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
         committee: &Committee,
