@@ -53,20 +53,20 @@ Navigate and search this site however you see fit. If you're new to Sui, we reco
 * [How Sui works](../learn/how-sui-works.md)
 * [Sui compared to other blockchains](../learn/sui-compared.md)
 
-[**Build**](../build/index.md) - includes information about how to:
+**Build** - includes information about how to:
 * [Install Sui](../build/install.md)
 * [Create smart contracts with Move](../build/move/index.md)
 * [Set up and configure a local Sui network](../build/cli-client.md)
 * [Start a local JSON-RPC Gateway server](../build/json-rpc.md#start-local-rpc-server)
 
-[**Explore**](../explore/index.md) - includes more in-depth information about:
+**Explore** - includes more in-depth information about:
 * [Sui Wallet](../explore/wallet-browser.md)
 * [Devnet](../explore/devnet.md)
 * [Sui tutorials](../explore/tutorials.md)
 * [Sui prototypes](../explore/prototypes.md)
 * [Sui examples](../explore/examples.md)  
 
-[**Contribute**] - includes the following:
+**Contribute** - includes the following:
 * [Frequently Asked Questions](../contribute/faq.md)
 * [Logging, Tracing, Metrics, and Observability](../contribute/observability.md)
 * [Research Papers](../contribute/research-papers.md)
