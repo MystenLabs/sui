@@ -242,6 +242,7 @@ where
 #[derive(Clone, JsonSchema)]
 pub enum Signature {
     Ed25519SuiSignature,
+    Secp256k1SuiSignature,
 }
 
 impl Serialize for Signature {
@@ -295,18 +296,27 @@ impl AsRef<[u8]> for Signature {
     fn as_ref(&self) -> &[u8] {
         match self {
             Signature::Ed25519SuiSignature(sig) => sig.as_ref(),
+            Signature::Secp256k1SuiSignature(sig) => sig.as_ref(),
         }
     }
 }
 
 impl signature::Signature for Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        match bytes.first().ok_or_else(signature::Error::new)? {
-            x if x == &Ed25519SuiSignature::FLAG => {
-                Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)
-                    .map_err(|_| signature::Error::new())?
-                    .into())
-            }
+        match bytes.first().ok_or_else(signature::Error::new) {
+            Ok(&x) => match x {
+                Ed25519SuiSignature::FLAG => {
+                    Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)
+                        .map_err(|_| signature::Error::new())?
+                        .into())
+                }
+                Secp256k1SuiSignature::FLAG => {
+                    Ok(<Secp256k1SuiSignature as ToFromBytes>::from_bytes(bytes)
+                        .map_err(|_| signature::Error::new())?
+                        .into())
+                }
+                _ => Err(signature::Error::new()),
+            },
             _ => Err(signature::Error::new()),
         }
     }
@@ -413,13 +423,13 @@ impl signature::Signature for Secp256k1SuiSignature {
     }
 }
 
-// impl signature::Signer<Signature> for Secp256k1KeyPair {
-//     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-//         Ok(Secp256k1SuiSignature::new(self, msg)
-//             .map_err(|_| signature::Error::new())?
-//             .into())
-//     }
-// }
+impl signature::Signer<Signature> for Secp256k1KeyPair {
+    fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
+        Ok(Secp256k1SuiSignature::new(self, msg)
+            .map_err(|_| signature::Error::new())?
+            .into())
+    }
+}
 
 //
 // This struct exists due to the limitations of the `enum_dispatch` library.
