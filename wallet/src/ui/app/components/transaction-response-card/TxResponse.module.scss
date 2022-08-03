@@ -45,6 +45,8 @@
     }
 
     .success-icon {
+        border: 2px dotted colors.$sui-steel-blue;
+
         .angled-arrow {
             height: 15px;
             margin: auto !important;

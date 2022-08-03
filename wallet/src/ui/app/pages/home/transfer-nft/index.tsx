@@ -18,14 +18,13 @@ import {
     accountAggregateBalancesSelector,
     accountNftsSelector,
 } from '_redux/slices/account';
-import { setSelectedNFT } from '_redux/slices/selected-nft';
+import { setSelectedNFT, clearActiveNFT } from '_redux/slices/selected-nft';
 import { transferSuiNFT } from '_redux/slices/sui-objects';
 import {
     GAS_TYPE_ARG,
     DEFAULT_NFT_TRANSFER_GAS_FEE,
 } from '_redux/slices/sui-objects/Coin';
 
-import type { SuiObject } from '@mysten/sui.js';
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
@@ -47,6 +46,7 @@ type TxResponse = {
 
 const initTxResponse: TxResponse = null;
 
+// Once the form transfer of the NFT is we have to cahce the selected NFT to show the details in the transaction response
 function TransferNFTPage() {
     const [searchParams] = useSearchParams();
     const objectId = useMemo(
@@ -57,16 +57,20 @@ function TransferNFTPage() {
     const dispatch = useAppDispatch();
     const nftCollections = useAppSelector(accountNftsSelector);
 
-    let selectedNFTObj: SuiObject;
-    if (nftCollections && nftCollections.length) {
-        selectedNFTObj = nftCollections.filter(
-            (nftItems) => nftItems.reference.objectId === objectId
-        )[0];
-    }
+    const selectedNFTObj = useMemo(
+        () =>
+            nftCollections.filter(
+                (nftItems) => nftItems.reference.objectId === objectId
+            )[0],
+        [nftCollections, objectId]
+    );
 
     useEffect(() => {
-        dispatch(setSelectedNFT({ data: selectedNFTObj, loaded: true }));
-    });
+        dispatch(clearActiveNFT());
+        if (selectedNFTObj) {
+            dispatch(setSelectedNFT({ data: selectedNFTObj, loaded: true }));
+        }
+    }, [dispatch, objectId, selectedNFTObj]);
 
     const selectedNFT = useAppSelector(({ selectedNft }) => selectedNft);
 
@@ -135,7 +139,10 @@ function TransferNFTPage() {
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
 
-    if (!objectId || (selectedNFT.loaded && !selectedNFT.data)) {
+    if (
+        !objectId ||
+        (!loadingBalance && selectedNFT.loaded && !selectedNFT.data)
+    ) {
         return <Navigate to="/nfts" replace={true} />;
     }
 

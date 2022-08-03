@@ -27,7 +27,11 @@ const selectedNft = createSlice({
             state.data = payload.data;
             state.loaded = payload.loaded;
         },
+        clearActiveNFT: (state) => {
+            state.data = undefined;
+            state.loaded = false;
+        },
     },
 });
-export const { setSelectedNFT } = selectedNft.actions;
+export const { setSelectedNFT, clearActiveNFT } = selectedNft.actions;
 export default selectedNft.reducer;
