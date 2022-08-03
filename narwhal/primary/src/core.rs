@@ -463,7 +463,7 @@ impl Core {
         // Verify the header's signature.
         header.verify(&self.committee)?;
 
-        // TODO [issue #3]: Prevent bad nodes from sending junk headers with high round numbers.
+        // TODO [issue #672]: Prevent bad nodes from sending junk headers with high round numbers.
 
         Ok(())
     }
