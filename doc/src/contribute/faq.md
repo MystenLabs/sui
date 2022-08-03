@@ -128,12 +128,16 @@ Not currently. Packages are immutable objects, and this property is relied upon 
 
 ### Is there any information on node architecture and running validators on Sui?
 
+Yes! You can now [register to participate](https://airtable.com/shr3phh3FCZYhZUDF) in [Sui Incentivized Testnet as a validator](https://sui.io/resources-sui/validator-registration-open/)!
+
 Section four in the [Sui Smart Contract Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper is the best reference for node architecture.
 
 See the instructions to [run a Sui Fullnode](../build/fullnode.md).
 
 
 ### Can I run a Sui validator node?
+
+You can now [register to participate](https://airtable.com/shr3phh3FCZYhZUDF) in [Sui Incentivized Testnet as a validator](https://sui.io/resources-sui/validator-registration-open/)!
 
 We have a public [Sui Devnet](../explore/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
 
