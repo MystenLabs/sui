@@ -25,8 +25,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-// TODO: Increase this once we use multiple gas objects
-const CONCURRENCY_LIMIT: usize = 1;
+const CONCURRENCY_LIMIT: usize = 30;
 
 #[derive(Parser)]
 #[clap(
@@ -71,6 +70,7 @@ async fn main() -> Result<(), anyhow::Error> {
         Ok(val) => val.parse::<usize>().unwrap(),
         _ => CONCURRENCY_LIMIT,
     };
+    info!("Max concurrency: {max_concurrency}.");
 
     let context = create_wallet_context().await?;
 
@@ -85,7 +85,7 @@ async fn main() -> Result<(), anyhow::Error> {
     } = config;
 
     let app_state = Arc::new(AppState {
-        faucet: SimpleFaucet::new(context, max_concurrency).await.unwrap(),
+        faucet: SimpleFaucet::new(context).await.unwrap(),
         config,
     });
 

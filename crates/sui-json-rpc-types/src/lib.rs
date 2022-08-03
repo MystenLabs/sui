@@ -844,7 +844,7 @@ impl TryFrom<MoveModulePublish> for SuiMovePackage {
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
     pub sender: SuiAddress,
-    gas_payment: SuiObjectRef,
+    pub gas_payment: SuiObjectRef,
     pub gas_budget: u64,
 }
 
