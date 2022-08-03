@@ -3,7 +3,7 @@ div.imagebox {
 }
 
 img.smallimage {
-    @apply object-scale-down w-[100%] cursor-pointer;
+    @apply object-scale-down w-full cursor-pointer;
 }
 
 div.modalcontainer,
@@ -12,7 +12,7 @@ div.detailsbg {
 }
 
 .modal {
-    @apply w-[100%] h-[90%] max-h-[450px]  z-50 fixed left-0 top-[5%] text-center justify-center flex flex-wrap;
+    @apply w-full h-[90%] max-h-[450px]  z-50 fixed left-0 top-[5%] text-center justify-center flex flex-wrap;
 }
 
 img.largeimage {
