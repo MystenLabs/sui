@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::WorkerId;
+use indexmap::IndexMap;
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::Serialize;
-use std::collections::BTreeMap;
 use store::{
     reopen,
     rocks::{open_cf, DBMap},
@@ -28,7 +28,7 @@ pub fn test_batch<T: Serialize>(transactions: Vec<T>) -> (BatchDigest, Serialize
 }
 
 /// A test certificate with a specific payload.
-pub fn test_certificate(payload: BTreeMap<BatchDigest, WorkerId>) -> Certificate {
+pub fn test_certificate(payload: IndexMap<BatchDigest, WorkerId>) -> Certificate {
     Certificate {
         header: Header {
             payload,
@@ -66,7 +66,7 @@ pub fn test_u64_certificates(
                 })
                 .collect();
 
-            let payload: BTreeMap<_, _> = batches
+            let payload: IndexMap<_, _> = batches
                 .iter()
                 .enumerate()
                 .map(|(i, (digest, _))| (*digest, /* worker_id */ i as WorkerId))

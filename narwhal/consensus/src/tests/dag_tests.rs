@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use indexmap::IndexMap;
 use prometheus::Registry;
 use std::collections::BTreeSet;
 
@@ -152,7 +153,7 @@ async fn test_dag_compresses_empty_blocks() {
         make_optimal_certificates(1..=1, &genesis.clone(), &keys);
     // make those empty
     for mut cert in certificates.iter_mut() {
-        cert.header.payload = std::collections::BTreeMap::new();
+        cert.header.payload = IndexMap::new();
     }
 
     // Feed the certificates to the Dag
@@ -220,7 +221,7 @@ async fn test_dag_rounds_after_compression() {
         make_optimal_certificates(1..=1, &genesis.clone(), &keys);
     // make those empty
     for mut cert in certificates.iter_mut() {
-        cert.header.payload = std::collections::BTreeMap::new();
+        cert.header.payload = IndexMap::new();
     }
 
     // Feed the certificates to the Dag

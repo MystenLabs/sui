@@ -24,6 +24,7 @@ thiserror = "1.0.31"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = { version = "0.7.2", features = ["tls"] }
+indexmap = { version = "1.9.1", features = ["serde"] }
 
 config = { path = "../config" }
 crypto = { path = "../crypto" }

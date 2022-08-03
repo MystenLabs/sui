@@ -218,11 +218,11 @@ async fn internal_error_execution() {
     };
     tx_executor.send(message).await.unwrap();
 
-    // Ensure the execution state does not change.
+    // Ensure the execution state only processes the first batch.
     let _ = rx_output.recv().await;
     let expected = ExecutionIndices {
         next_certificate_index: 0,
-        next_batch_index: 0,
+        next_batch_index: 1,
         next_transaction_index: 1,
     };
     assert_eq!(execution_state.get_execution_indices().await, expected);

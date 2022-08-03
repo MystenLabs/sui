@@ -34,6 +34,7 @@ bincode = "1.3.3"
 criterion = "0.3.6"
 ed25519-dalek = { version = "1.0.1", features = ["batch", "serde"] }
 test_utils = { path = "../test_utils"}
+indexmap = { version = "1.9.1", features = ["serde"] }
 
 [target.'cfg(unix)'.dev-dependencies]
 pprof = { version = "0.10.0", features = ["criterion", "flamegraph"] }

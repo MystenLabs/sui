@@ -52,10 +52,10 @@ Header:
     - round: U64
     - epoch: U64
     - payload:
-        MAP:
-          KEY:
-            TYPENAME: BatchDigest
-          VALUE: U32
+        SEQ:
+          TUPLE:
+            - TYPENAME: BatchDigest
+            - U32
     - parents:
         SEQ:
           TYPENAME: CertificateDigest

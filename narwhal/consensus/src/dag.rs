@@ -70,7 +70,10 @@ pub enum ValidatorDagError {
 }
 
 enum DagCommand {
-    Insert(Certificate, oneshot::Sender<Result<(), ValidatorDagError>>),
+    Insert(
+        Box<Certificate>,
+        oneshot::Sender<Result<(), ValidatorDagError>>,
+    ),
     Contains(CertificateDigest, oneshot::Sender<bool>),
     HasEverContained(CertificateDigest, oneshot::Sender<bool>),
     Rounds(
@@ -131,11 +134,11 @@ impl InnerDag {
                 Some(command) = self.rx_commands.recv() => {
                     match command {
                         DagCommand::Insert(cert, sender) => {
-                            let _ = sender.send(self.insert(cert.clone()));
+                            let _ = sender.send(self.insert(*cert.clone()));
                             let digest = cert.digest();
                             if let Some(mut senders) = obligations.remove(&digest) {
                                 while let Some(s) = senders.pop_front() {
-                                    let _ = s.send(Ok(cert.clone()));
+                                    let _ = s.send(Ok(*cert.clone()));
                                 }
                             }
                         },
@@ -366,7 +369,7 @@ impl Dag {
         let (sender, receiver) = oneshot::channel();
         if let Err(e) = self
             .tx_commands
-            .send(DagCommand::Insert(certificate, sender))
+            .send(DagCommand::Insert(Box::new(certificate), sender))
             .await
         {
             panic!("Failed to send Insert command to store: {e}");

@@ -14,10 +14,11 @@ use crypto::{
 };
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
+use indexmap::IndexMap;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    collections::{BTreeSet, HashMap, HashSet},
     fmt,
     fmt::Formatter,
 };
@@ -72,7 +73,8 @@ pub struct Header {
     pub author: PublicKey,
     pub round: Round,
     pub epoch: Epoch,
-    pub payload: BTreeMap<BatchDigest, WorkerId>,
+    #[serde(with = "indexmap::serde_seq")]
+    pub payload: IndexMap<BatchDigest, WorkerId>,
     pub parents: BTreeSet<CertificateDigest>,
     pub id: HeaderDigest,
     pub signature: Signature,
@@ -103,7 +105,7 @@ impl HeaderBuilder {
     // helper method to set directly values to the payload
     pub fn with_payload_batch(mut self, batch: Batch, worker_id: WorkerId) -> Self {
         if self.payload.is_none() {
-            self.payload = Some(BTreeMap::new());
+            self.payload = Some(Default::default());
         }
         let payload = self.payload.as_mut().unwrap();
 
@@ -118,7 +120,7 @@ impl Header {
         author: PublicKey,
         round: Round,
         epoch: Epoch,
-        payload: BTreeMap<BatchDigest, WorkerId>,
+        payload: IndexMap<BatchDigest, WorkerId>,
         parents: BTreeSet<CertificateDigest>,
         signature_service: &mut SignatureService<Signature>,
     ) -> Self {

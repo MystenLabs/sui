@@ -161,7 +161,11 @@ async fn run_client(name: PublicKey, committee: Committee, mut rx_reconfigure: R
 #[tokio::test]
 async fn restart() {
     let committee = committee(None);
-    let parameters = Parameters::default();
+    let parameters = Parameters {
+        batch_size: 200,
+        header_size: 1,
+        ..Parameters::default()
+    };
 
     // Spawn the nodes.
     let mut states = Vec::new();
@@ -240,7 +244,11 @@ async fn restart() {
 #[tokio::test]
 async fn epoch_change() {
     let committee = committee(None);
-    let parameters = Parameters::default();
+    let parameters = Parameters {
+        batch_size: 200,
+        header_size: 1,
+        ..Parameters::default()
+    };
 
     // Spawn the nodes.
     let mut states = Vec::new();

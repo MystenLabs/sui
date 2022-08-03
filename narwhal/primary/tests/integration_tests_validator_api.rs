@@ -4,12 +4,13 @@ use arc_swap::ArcSwap;
 use config::{Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::{traits::KeyPair as _, Hash, KeyPair, PublicKey};
+use indexmap::IndexMap;
 use network::metrics::WorkerNetworkMetrics;
 use node::NodeStorage;
 use primary::{NetworkModel, PayloadToken, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeSet, HashMap},
     sync::Arc,
     time::Duration,
 };
@@ -1011,7 +1012,7 @@ async fn fixture_certificate(
     let serialized_batch = bincode::serialize(&message).unwrap();
     let batch_digest = batch.digest();
 
-    let mut payload = BTreeMap::new();
+    let mut payload = IndexMap::new();
     payload.insert(batch_digest, worker_id);
 
     let builder = types::HeaderBuilder::default();

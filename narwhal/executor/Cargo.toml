@@ -35,3 +35,4 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 rand = "0.7.3"
 tempfile = "3.3.0"
 test_utils = { path = "../test_utils" }
+indexmap = { version = "1.9.1", features = ["serde"] }
