@@ -51,24 +51,10 @@ export function truncate(fullStr: string, strLen: number, separator?: string) {
 }
 
 export async function extractFileType(displayString: string) {
-    const OPTIONS = ['PNG', 'JPG', 'JPEG'];
-    // First check file extension:
-    let result = displayString.split('.').at(-1)?.toUpperCase();
+    const result = await fetch(transformURL(displayString)).then((resp) =>
+        resp?.headers?.get('Content-Type')?.split('/')?.at(-1)?.toUpperCase()
+    );
 
-    if (!OPTIONS.includes(result || '')) {
-        // Second check Content-Type header:
-        result = await fetch(transformURL(displayString)).then((resp) =>
-            resp?.headers
-                ?.get('Content-Type')
-                ?.split('/')
-                ?.at(-1)
-                ?.toUpperCase()
-        );
-        // If neither work, don't specify:
-        if (!OPTIONS.includes(result || '')) {
-            result = 'Image';
-        }
-    }
     return `1 ${result} File`;
 }
 
