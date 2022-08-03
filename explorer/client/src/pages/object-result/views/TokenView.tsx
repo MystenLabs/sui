@@ -153,7 +153,10 @@ function TokenView({ data }: { data: DataType }) {
                             {fileType && (
                                 <p className={styles.header}>{fileType}</p>
                             )}
-                            <button onClick={handlePreviewClick}>
+                            <button
+                                onClick={handlePreviewClick}
+                                className={styles.previewmedia}
+                            >
                                 Preview Media <PreviewMediaIcon />
                             </button>
                         </div>

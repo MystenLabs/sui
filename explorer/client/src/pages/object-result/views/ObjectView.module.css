@@ -62,6 +62,11 @@ div.metadata > p {
     @apply text-sui-grey-80 text-[13px] leading-[12px];
 }
 
+.previewmedia {
+    @apply bg-inherit border-0 p-0 mt-[20px] cursor-pointer text-[14px] leading-[13px] 
+  text-sui-grey-80 font-semibold tracking-[-0.02em];
+}
+
 div.display > div > img {
     @apply max-h-[120px] max-w-[120px] ml-auto;
 }
