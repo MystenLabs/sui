@@ -65,6 +65,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
 
       return await this.constructTransactionData(
         tx,
+        // TODO: make `gasPayment` a required field in `MoveCallTransaction`
         t.gasPayment!,
         t.gasBudget,
         signerAddress
