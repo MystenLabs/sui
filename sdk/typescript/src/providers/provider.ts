@@ -22,13 +22,6 @@ export abstract class Provider {
   ): Promise<SuiObjectInfo[]>;
 
   /**
-   * Get all objects owned by an address and grouped by object type
-   */
-  abstract getObjectsOwnedByAddressGroupByType(
-    address: string
-  ): Promise<{ [key: string]: SuiObjectInfo[] }>;
-
-  /**
    * Convenience method for getting all gas objects(SUI Tokens) owned by an address
    */
   abstract getGasObjectsOwnedByAddress(

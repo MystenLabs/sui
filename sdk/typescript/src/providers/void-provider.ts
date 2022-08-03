@@ -19,12 +19,6 @@ export class VoidProvider extends Provider {
     throw this.newError('getObjectsOwnedByAddress');
   }
 
-  async getObjectsOwnedByAddressGroupByType(
-    _address: string
-  ): Promise<{ [key: string]: SuiObjectInfo[] }> {
-    throw this.newError('getObjectsOwnedByAddressGroupByType');
-  }
-
   async getGasObjectsOwnedByAddress(
     _address: string
   ): Promise<SuiObjectInfo[]> {
