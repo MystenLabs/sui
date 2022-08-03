@@ -25,6 +25,12 @@ export class VoidProvider extends Provider {
     throw this.newError('getObjectsOwnedByAddressGroupByType');
   }
 
+  async getGasObjectsOwnedByAddress(
+    _address: string
+  ): Promise<SuiObjectInfo[]> {
+    throw this.newError('getGasObjectsOwnedByAddress');
+  }
+
   async getObject(_objectId: string): Promise<GetObjectDataResponse> {
     throw this.newError('getObject');
   }

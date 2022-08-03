@@ -20,6 +20,7 @@ import {
   TransactionResponse,
   SuiObjectRef,
   getObjectReference,
+  Coin,
 } from '../types';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
@@ -61,6 +62,11 @@ export class JsonRpcProvider extends Provider {
       acc[type] ? acc[type].push(val) : (acc[type] = [val]);
       return acc;
     }, {});
+  }
+
+  async getGasObjectsOwnedByAddress(address: string): Promise<SuiObjectInfo[]> {
+    const objects = await this.getObjectsOwnedByAddress(address);
+    return objects.filter((obj: SuiObjectInfo) => Coin.isSUI(obj));
   }
 
   async getObjectsOwnedByObject(objectId: string): Promise<SuiObjectInfo[]> {
