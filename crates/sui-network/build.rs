@@ -83,6 +83,15 @@ fn main() -> Result<()> {
                 .codec_path(codec_path)
                 .build(),
         )
+        .method(
+            Method::builder()
+                .name("epoch_info")
+                .route_name("Epoch")
+                .input_type("sui_types::messages::EpochRequest")
+                .output_type("sui_types::messages::EpochResponse")
+                .codec_path(codec_path)
+                .build(),
+        )
         .build();
 
     Builder::new()
