@@ -14,7 +14,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
-use narwhal_crypto::traits::KeyPair;
+use narwhal_config::Committee as ConsensusCommittee;
+use narwhal_crypto::{traits::KeyPair as _, KeyPair as ConsensusKeyPair};
 use prometheus::Registry;
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
@@ -22,6 +23,7 @@ use sui_network::{
     api::{Validator, ValidatorServer},
     tonic,
 };
+use tokio::sync::mpsc::Receiver;
 
 use sui_types::{error::*, messages::*};
 use tokio::{
@@ -166,7 +168,8 @@ impl ValidatorService {
     pub async fn new(
         config: &NodeConfig,
         state: Arc<AuthorityState>,
-        prometheus_registry: &Registry,
+        _prometheus_registry: &Registry,
+        rx_reconfigure_consensus: Receiver<(ConsensusKeyPair, ConsensusCommittee)>,
     ) -> Result<Self> {
         let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
         let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
@@ -176,27 +179,45 @@ impl ValidatorService {
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
         let consensus_keypair = config.key_pair().copy();
-        let consensus_name = consensus_keypair.public().clone();
-        let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
-        narwhal_node::Node::spawn_primary(
-            consensus_keypair,
-            config.genesis()?.narwhal_committee(),
-            &consensus_store,
-            consensus_config.narwhal_config().to_owned(),
-            /* consensus */ true, // Indicate that we want to run consensus.
-            /* execution_state */ state.clone(),
-            /* tx_confirmation */ tx_consensus_to_sui,
-            prometheus_registry,
-        )
-        .await?;
-        narwhal_node::Node::spawn_workers(
-            consensus_name,
-            /* ids */ vec![0], // We run a single worker with id '0'.
-            config.genesis()?.narwhal_committee(),
-            &consensus_store,
-            consensus_config.narwhal_config().to_owned(),
-            prometheus_registry,
-        );
+        // let consensus_name = consensus_keypair.public().clone();
+        let consensus_committee = config.genesis()?.narwhal_committee().load();
+        let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
+        // let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
+        let consensus_execution_state = state.clone();
+        let consensus_parameters = consensus_config.narwhal_config().to_owned();
+
+        tokio::spawn(async move {
+            narwhal_node::restarter::NodeRestarter::watch(
+                consensus_keypair,
+                &(&*consensus_committee).clone(),
+                consensus_storage_base_path,
+                consensus_execution_state,
+                consensus_parameters,
+                rx_reconfigure_consensus,
+                /* tx_output */ tx_consensus_to_sui,
+            )
+            .await
+        });
+
+        // narwhal_node::Node::spawn_primary(
+        //     consensus_keypair,
+        //     config.genesis()?.narwhal_committee(),
+        //     &consensus_store,
+        //     consensus_config.narwhal_config().to_owned(),
+        //     /* consensus */ true, // Indicate that we want to run consensus.
+        //     /* execution_state */ state.clone(),
+        //     /* tx_confirmation */ tx_consensus_to_sui,
+        //     prometheus_registry,
+        // )
+        // .await?;
+        // narwhal_node::Node::spawn_workers(
+        //     consensus_name,
+        //     /* ids */ vec![0], // We run a single worker with id '0'.
+        //     config.genesis()?.narwhal_committee(),
+        //     &consensus_store,
+        //     consensus_config.narwhal_config().to_owned(),
+        //     prometheus_registry,
+        // );
 
         // Spawn a consensus listener. It listen for consensus outputs and notifies the
         // authority server when a sequenced transaction is ready for execution.

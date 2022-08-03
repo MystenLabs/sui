@@ -29,6 +29,7 @@ use sui_storage::{
     IndexStore,
 };
 use sui_types::crypto::ToFromBytes;
+use tokio::sync::mpsc::channel;
 
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
@@ -108,6 +109,7 @@ impl SuiNode {
             None
         };
 
+        let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
         let state = Arc::new(
             AuthorityState::new(
                 committee,
@@ -119,6 +121,7 @@ impl SuiNode {
                 Some(checkpoint_store),
                 genesis,
                 &prometheus_registry,
+                tx_reconfigure_consensus,
             )
             .await,
         );
@@ -237,7 +240,15 @@ impl SuiNode {
             };
 
         let validator_service = if config.consensus_config().is_some() {
-            Some(ValidatorService::new(config, state.clone(), &prometheus_registry).await?)
+            Some(
+                ValidatorService::new(
+                    config,
+                    state.clone(),
+                    &prometheus_registry,
+                    rx_reconfigure_consensus,
+                )
+                .await?,
+            )
         } else {
             None
         };

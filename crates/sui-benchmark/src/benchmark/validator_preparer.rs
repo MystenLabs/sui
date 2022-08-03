@@ -280,6 +280,7 @@ fn make_authority_state(
     // opts.set_manual_wal_flush(true);
 
     let store = Arc::new(AuthorityStore::open(store_path, Some(opts)));
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     (
         Runtime::new().unwrap().block_on(async {
             AuthorityState::new(
@@ -292,6 +293,7 @@ fn make_authority_state(
                 None,
                 &sui_config::genesis::Genesis::get_default_genesis(),
                 &prometheus::Registry::new(),
+                tx_reconfigure_consensus,
             )
             .await
         }),
