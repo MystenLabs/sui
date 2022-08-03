@@ -26,6 +26,7 @@ function TxResponseCard({
     date,
     address,
     status,
+    errorMessage,
 }: TxResponseProps) {
     const SuccessCard = (
         <>
@@ -47,6 +48,7 @@ function TxResponseCard({
                 </div>
             </div>
             <div className={st.failedText}>NFT Transfer Failed</div>
+            <div className={st.errorMessage}>{errorMessage}</div>
         </>
     );
 

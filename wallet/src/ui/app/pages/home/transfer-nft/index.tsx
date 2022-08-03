@@ -178,7 +178,7 @@ function TransferNFTPage() {
         </>
     );
 
-    const TransferReps = (
+    const TransferResponse = (
         <>
             {txResponse?.address ? (
                 <div className={st.nftResponse}>
@@ -221,7 +221,7 @@ function TransferNFTPage() {
 
     return (
         <div className={st.container}>
-            {txResponse?.address ? TransferReps : TransferNFT}
+            {txResponse?.address ? TransferResponse : TransferNFT}
         </div>
     );
 }

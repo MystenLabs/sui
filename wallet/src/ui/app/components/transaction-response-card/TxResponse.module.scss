@@ -13,6 +13,10 @@
         @include utils.typography('stats/text-lg');
     }
 
+    .failed-text {
+        margin-bottom: 10px;
+    }
+
     .success-icon,
     .failed-icon {
         position: relative;
@@ -42,6 +46,14 @@
             align-items: center;
             background: #f05252;
         }
+    }
+
+    .error-message {
+        color: colors.$gray-80;
+        text-align: center;
+        margin-bottom: 20px;
+
+        @include utils.typography('stats/text-sm');
     }
 
     .success-icon {
