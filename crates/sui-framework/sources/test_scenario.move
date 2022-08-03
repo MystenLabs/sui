@@ -195,6 +195,31 @@ module sui::test_scenario {
         }
     }
 
+    /// Remove the object of type `T` from the shared inventory that wast most recently created.
+    /// Aborts if there is no object of type `T` in the inventory.
+    public fun take_last_created_shared<T: key>(scenario: &mut Scenario): SharedWrapper<T> {
+        let objects: vector<T> = get_unowned_inventory<T>(
+            false,
+            last_tx_start_index(scenario)
+        );
+        let num_objects = vector::length(&objects);
+        assert!(num_objects > 0, EEmptyInventory);
+        let object = vector::pop_back(&mut objects);
+        let removed_id = object::id(&object);
+        assert!(!vector::contains(&scenario.removed, &removed_id), EAlreadyRemovedObject);
+        vector::push_back(&mut scenario.removed, removed_id);
+        let i = 0;
+        // Put the rest of the objects back into the storage.
+        while (i < num_objects - 1) {
+            update_object(vector::remove(&mut objects, 0));
+            i = i + 1
+        };
+        vector::destroy_empty(objects);
+        SharedWrapper {
+            object,
+        }
+    }
+
     /// Returns the underlying mutable reference of a shared object.
     public fun borrow_mut<T: key>(wrapper: &mut SharedWrapper<T>): &mut T {
         &mut wrapper.object
