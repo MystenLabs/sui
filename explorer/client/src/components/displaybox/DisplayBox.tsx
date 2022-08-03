@@ -133,23 +133,29 @@ function DisplayBox({
                         onClick={handleImageClick}
                     >
                         <div className={styles.modal}>
-                            <img
-                                id="loadedImage"
-                                className={styles.largeimage}
-                                alt="NFT"
-                                src={transformURL(display)}
-                            />
-                            <span className={styles.cross}>&times;</span>
-                            <div>
-                                {caption && (
-                                    <div className={styles.caption}>
-                                        {caption}{' '}
-                                    </div>
-                                )}
-                                <div className={styles.filetype}>
-                                    {fileType}
+                            <figure>
+                                <div className={styles.imageandcross}>
+                                    <img
+                                        id="loadedImage"
+                                        className={styles.largeimage}
+                                        alt="NFT"
+                                        src={transformURL(display)}
+                                    />
+                                    <span className={styles.cross}>
+                                        &times;
+                                    </span>
                                 </div>
-                            </div>
+                                <figcaption>
+                                    {caption && (
+                                        <div className={styles.caption}>
+                                            {caption}{' '}
+                                        </div>
+                                    )}
+                                    <div className={styles.filetype}>
+                                        {fileType}
+                                    </div>
+                                </figcaption>
+                            </figure>
                         </div>
                         <div className={styles.detailsbg} />
                     </div>

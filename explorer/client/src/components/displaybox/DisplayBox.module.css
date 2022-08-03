@@ -12,7 +12,11 @@ div.detailsbg {
 }
 
 .modal {
-    @apply w-full h-[90%] max-h-[450px]  z-50 fixed left-0 top-[5%] text-center justify-center flex flex-wrap;
+    @apply w-full h-[90%] max-h-[450px]  z-50 fixed left-0 top-[5%] text-center justify-center flex;
+}
+
+div.imageandcross {
+    @apply flex;
 }
 
 img.largeimage {
@@ -28,7 +32,7 @@ span.cross {
 
 div.filetype,
 div.caption {
-    @apply w-[90vw] text-offwhite z-50 text-left text-2xl font-semibold mt-5;
+    @apply text-offwhite z-50 text-left text-2xl font-semibold mt-5;
 }
 
 div.filetype {
