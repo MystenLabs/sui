@@ -36,6 +36,7 @@
         "@sentry/tracing": "^7.6.0",
         "@tanstack/react-query": "^4.0.10",
         "@tanstack/react-table": "^8.1.4",
+        "@visx/event": "^2.6.0",
         "@visx/geo": "^2.10.0",
         "@visx/responsive": "^2.10.0",
         "@visx/tooltip": "^2.10.0",

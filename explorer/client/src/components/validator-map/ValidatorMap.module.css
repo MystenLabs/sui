@@ -3,7 +3,7 @@
 }
 
 .container {
-    @apply p-6 flex md:flex-col items-end md:items-start justify-between gap-8 relative z-10;
+    @apply p-6 flex md:flex-col items-end md:items-start justify-between gap-8 relative z-10 pointer-events-none;
 }
 
 .contents {
@@ -19,13 +19,25 @@
 }
 
 .button {
-    @apply p-2 text-sui-grey-80 border border-solid border-sui-grey-55 text-sm font-semibold rounded-md inline-flex items-center gap-2 no-underline;
+    @apply p-2 text-sui-grey-80 border border-solid border-sui-grey-55 text-sm font-semibold rounded-md inline-flex items-center gap-2 no-underline pointer-events-none;
 }
 
 .mapcontainer {
-    @apply absolute top-0 bottom-16 right-0 left-0 md:left-32 md:bottom-0 z-0;
+    @apply absolute top-0 bottom-0 right-0 left-0 md:left-32 z-0;
 }
 
 .map {
     @apply absolute inset-0;
+}
+
+.tooltip {
+    @apply bg-sui-grey-100 text-white p-2 absolute z-20 text-xs font-sans rounded-md min-w-[100px];
+}
+
+.tipitem {
+    @apply uppercase flex items-center justify-between font-semibold;
+}
+
+.tipdivider {
+    @apply my-1 h-px bg-sui-grey-90;
 }

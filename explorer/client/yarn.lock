@@ -2406,6 +2406,14 @@
     "@types/react-dom" "*"
     prop-types "^15.5.10"
 
+"@visx/event@^2.6.0":
+  version "2.6.0"
+  resolved "https://registry.yarnpkg.com/@visx/event/-/event-2.6.0.tgz#0718eb1efabd5305cf659a153779c94ba4038996"
+  integrity sha512-WGp91g82s727g3NAnENF1ppC3ZAlvWg+Y+GG0WFg34NmmOZbvPI/PTOqTqZE3x6B8EUn8NJiMxRjxIMbi+IvRw==
+  dependencies:
+    "@types/react" "*"
+    "@visx/point" "2.6.0"
+
 "@visx/geo@^2.10.0":
   version "2.10.0"
   resolved "https://registry.yarnpkg.com/@visx/geo/-/geo-2.10.0.tgz#6cda4079717505244fffc3c25505437276628779"
@@ -2427,6 +2435,11 @@
     "@types/react" "*"
     classnames "^2.3.1"
     prop-types "^15.6.2"
+
+"@visx/point@2.6.0":
+  version "2.6.0"
+  resolved "https://registry.yarnpkg.com/@visx/point/-/point-2.6.0.tgz#c4316ca409b5b829c5455f07118d8c14a92cc633"
+  integrity sha512-amBi7yMz4S2VSchlPdliznN41TuES64506ySI22DeKQ+mc1s1+BudlpnY90sM1EIw4xnqbKmrghTTGfy6SVqvQ==
 
 "@visx/responsive@^2.10.0":
   version "2.10.0"

@@ -24,8 +24,8 @@ const filteredLand = land.features.filter(
     (feature) => !HIDDEN_REGIONS.includes(feature.properties.name)
 );
 
-interface Node {
-    ipAddress: string;
+export interface NodeLocation {
+    count: number;
     city: string;
     country: string;
     location: [lat: number, long: number];
@@ -34,7 +34,7 @@ interface Node {
 interface MapProps {
     width: number;
     height: number;
-    nodes?: Node[];
+    nodes?: NodeLocation[];
     onMouseOver(event: React.MouseEvent): void;
     onMouseOut(event: React.MouseEvent): void;
 }
@@ -43,46 +43,48 @@ const BaseWorldMap = forwardRef<SVGSVGElement, MapProps>(
     ({ onMouseOver, onMouseOut, width, height, nodes }, ref) => {
         const centerX = width / 2;
         const centerY = height / 2;
-        const scale = (width / 630) * 100;
 
         return (
             <svg ref={ref} width={width} height={height}>
                 <Mercator
                     data={filteredLand}
-                    scale={scale}
+                    scale={100}
                     translate={[centerX, centerY + 20]}
                 >
                     {({ features, projection }) => (
                         <g>
-                            {features.map(({ feature, path }, i) => (
-                                <path
-                                    key={i}
-                                    name={feature.properties.name}
-                                    onMouseOver={onMouseOver}
-                                    onMouseMove={onMouseOver}
-                                    onMouseOut={onMouseOut}
-                                    d={path || ''}
-                                    fill="white"
-                                    // stroke="#F3F4F5"
-                                    // stroke={background}
-                                    // strokeWidth={0.5}
-                                />
-                            ))}
+                            <g>
+                                {features.map(({ feature, path }, i) => (
+                                    <path
+                                        key={i}
+                                        name={feature.properties.name}
+                                        onMouseOver={onMouseOver}
+                                        onMouseMove={onMouseOver}
+                                        onMouseOut={onMouseOut}
+                                        d={path || ''}
+                                        fill="white"
+                                        // stroke="#F3F4F5"
+                                        // stroke={background}
+                                        // strokeWidth={0.5}
+                                    />
+                                ))}
+                            </g>
 
-                            {nodes?.map(({ location }, index) => {
+                            {nodes?.map(({ location, city }, index) => {
                                 const position = projection(location);
 
                                 if (!position) return null;
 
                                 return (
                                     <circle
+                                        style={{ pointerEvents: 'none' }}
                                         key={index}
-                                        x={position[0]}
-                                        y={position[1]}
-                                        width={15}
-                                        height={15}
+                                        cx={position[0]}
+                                        cy={position[1]}
+                                        r={10}
                                         fill="#6FBCF0"
                                         opacity={0.4}
+                                        data-name={city}
                                     />
                                 );
                             })}
