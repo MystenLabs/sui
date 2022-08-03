@@ -1347,7 +1347,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             SuiError::from("Unexpected new epoch number")
         );
 
-        let signed_epoch = SignedEpoch::new(new_committee, authority, secret, next_checkpoint);
+        let signed_epoch = SignedEpoch::new(
+            new_committee,
+            authority,
+            secret,
+            next_checkpoint,
+            latest_epoch.epoch_info(),
+        );
         self.tables
             .epochs
             .insert(&cur_epoch, &AuthenticatedEpoch::Signed(signed_epoch))?;
