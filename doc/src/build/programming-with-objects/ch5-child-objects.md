@@ -96,10 +96,11 @@ And let's see how we define the API to create `AnotherParent` instance:
 ```rust
 public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
     let info = object::new(ctx);
-    let (id, child_ref) = transfer::transfer_to_object_id(child, id);
+    let child_id = *object::id(&child);
+    transfer::transfer_to_object_id(child, &info);
     let parent = AnotherParent {
-        id,
-        child: child_ref,
+        info,
+        child: child_id,
     };
     transfer::transfer(parent, tx_context::sender(ctx));
 }
