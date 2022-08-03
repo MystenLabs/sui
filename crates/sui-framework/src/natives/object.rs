@@ -34,7 +34,7 @@ pub fn bytes_to_address(
     Ok(NativeResult::ok(cost, smallvec![Value::address(addr)]))
 }
 
-pub fn get_info(
+pub fn borrow_uid(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
@@ -43,12 +43,12 @@ pub fn get_info(
     debug_assert!(args.len() == 1);
 
     let obj = pop_arg!(args, StructRef);
-    let info_field = obj.borrow_field(0)?;
+    let id_field = obj.borrow_field(0)?;
 
     // TODO: what should the cost of this be?
     let cost = native_gas(context.cost_table(), NativeCostIndex::SIGNER_BORROW, 0);
 
-    Ok(NativeResult::ok(cost, smallvec![info_field]))
+    Ok(NativeResult::ok(cost, smallvec![id_field]))
 }
 
 pub fn delete_impl(

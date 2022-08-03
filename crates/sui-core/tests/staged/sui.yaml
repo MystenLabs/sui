@@ -228,6 +228,8 @@ MoveObject:
     - type_:
         TYPENAME: StructTag
     - has_public_transfer: BOOL
+    - version:
+        TYPENAME: SequenceNumber
     - contents: BYTES
 MovePackage:
   STRUCT:

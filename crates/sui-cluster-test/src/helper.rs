@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::bail;
-use sui_core::gateway_state::GatewayClient;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiEvent, SuiObject, SuiParsedMoveObject};
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
@@ -11,6 +10,7 @@ use sui_types::{
     object::Owner,
 };
 
+use sui_sdk::SuiClient;
 use tracing::debug;
 
 /// A util struct that helps verify Sui Object.
@@ -54,7 +54,7 @@ impl ObjectChecker {
         self
     }
 
-    pub async fn check_into_gas_coin(self, client: &GatewayClient) -> GasCoin {
+    pub async fn check_into_gas_coin(self, client: &SuiClient) -> GasCoin {
         if self.is_sui_coin == Some(false) {
             panic!("'check_into_gas_coin' shouldn't be called with 'is_sui_coin' set as false");
         }
@@ -65,14 +65,11 @@ impl ObjectChecker {
             .into_gas_coin()
     }
 
-    pub async fn check_into_sui_object(
-        self,
-        client: &GatewayClient,
-    ) -> SuiObject<SuiParsedMoveObject> {
+    pub async fn check_into_sui_object(self, client: &SuiClient) -> SuiObject<SuiParsedMoveObject> {
         self.check(client).await.unwrap().into_sui_object()
     }
 
-    pub async fn check(self, client: &GatewayClient) -> Result<CheckerResultObject, anyhow::Error> {
+    pub async fn check(self, client: &SuiClient) -> Result<CheckerResultObject, anyhow::Error> {
         debug!(?self);
 
         let object_id = self.object_id;

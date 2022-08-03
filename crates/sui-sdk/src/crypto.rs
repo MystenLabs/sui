@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
-use signature::Signer;
+use signature::{Error, Signer};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -10,7 +10,6 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
@@ -142,15 +141,19 @@ impl SuiKeystore {
     pub fn key_pairs(&self) -> Vec<&AccountKeyPair> {
         self.keys.values().collect()
     }
+
+    pub fn signer(&self, signer: SuiAddress) -> impl Signer<Signature> + '_ {
+        SuiKeystoreSigner::new(self, signer)
+    }
 }
 
-pub struct SuiKeystoreSigner {
-    keystore: Arc<RwLock<Box<dyn Keystore>>>,
+struct SuiKeystoreSigner<'a> {
+    keystore: &'a SuiKeystore,
     address: SuiAddress,
 }
 
-impl SuiKeystoreSigner {
-    pub fn new(keystore: Arc<RwLock<Box<dyn Keystore>>>, account: SuiAddress) -> Self {
+impl<'a> SuiKeystoreSigner<'a> {
+    pub fn new(keystore: &'a SuiKeystore, account: SuiAddress) -> Self {
         Self {
             keystore,
             address: account,
@@ -158,8 +161,8 @@ impl SuiKeystoreSigner {
     }
 }
 
-impl signature::Signer<Signature> for SuiKeystoreSigner {
-    fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-        self.keystore.read().unwrap().sign(&self.address, msg)
+impl Signer<Signature> for SuiKeystoreSigner<'_> {
+    fn try_sign(&self, msg: &[u8]) -> Result<Signature, Error> {
+        self.keystore.sign(&self.address, msg)
     }
 }

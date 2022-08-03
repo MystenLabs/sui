@@ -4,7 +4,7 @@
 //# publish
 module 0x0.m {
     import 0x2.object;
-    struct R has key { info: object.Info }
+    struct R has key { id: object.UID }
 
     no(addr: address): bool {
         label l0:
@@ -16,7 +16,7 @@ module 0x0.m {
 //# publish
 module 0x0.m {
     import 0x2.object;
-    struct R<phantom T> has key { info: object.Info }
+    struct R<phantom T> has key { id: object.UID }
 
     no<T>(addr: address): bool {
         label l0:

@@ -41,7 +41,6 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
-use sui_types::crypto::AuthorityPublicKey;
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -1000,6 +999,14 @@ impl AuthorityState {
         }
     }
 
+    pub fn handle_epoch_request(&self, request: &EpochRequest) -> SuiResult<EpochResponse> {
+        let epoch_info = match &request.epoch_id {
+            Some(id) => self.database.get_authenticated_epoch(id)?,
+            None => Some(self.database.get_latest_authenticated_epoch()),
+        };
+        Ok(EpochResponse { epoch_info })
+    }
+
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
@@ -1117,7 +1124,7 @@ impl AuthorityState {
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
-    async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
+    pub async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
         let mut limit = limit.unwrap_or(usize::max_value());
         while limit > 0 {
             limit -= 1;
@@ -1507,7 +1514,6 @@ impl AuthorityState {
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
-    type PubKey = AuthorityPublicKey;
     type Transaction = ConsensusTransaction;
     type Error = SuiError;
     type Outcome = Vec<u8>;
@@ -1517,16 +1523,10 @@ impl ExecutionState for AuthorityState {
     async fn handle_consensus_transaction(
         &self,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
-        _consensus_output: &narwhal_consensus::ConsensusOutput<Self::PubKey>,
+        _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<
-        (
-            Self::Outcome,
-            Option<narwhal_config::Committee<Self::PubKey>>,
-        ),
-        Self::Error,
-    > {
+    ) -> Result<(Self::Outcome, Option<narwhal_config::Committee>), Self::Error> {
         self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {

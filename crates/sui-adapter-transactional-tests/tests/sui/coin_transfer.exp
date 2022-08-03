@@ -5,7 +5,8 @@ A: object(100), B: object(101), C: object(102)
 
 task 1 'view-object'. lines 8-8:
 Owner: Account Address ( A )
-Contents: sui::coin::Coin<sui::sui::SUI> {info: sui::object::Info {id: sui::object::ID {bytes: fake(100)}, version: 0u64}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100000u64}}
+Version: 0
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100000u64}}
 
 task 2 'run'. lines 10-10:
 created: object(106)
@@ -13,15 +14,18 @@ written: object(100), object(105)
 
 task 3 'view-object'. lines 12-12:
 Owner: Account Address ( A )
-Contents: sui::coin::Coin<sui::sui::SUI> {info: sui::object::Info {id: sui::object::ID {bytes: fake(100)}, version: 1u64}, balance: sui::balance::Balance<sui::sui::SUI> {value: 99990u64}}
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 99990u64}}
 
 task 4 'view-object'. lines 14-14:
 Owner: Account Address ( B )
-Contents: sui::coin::Coin<sui::sui::SUI> {info: sui::object::Info {id: sui::object::ID {bytes: fake(106)}, version: 1u64}, balance: sui::balance::Balance<sui::sui::SUI> {value: 10u64}}
+Version: 1
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(106)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 10u64}}
 
 task 5 'run'. lines 16-16:
 written: object(100), object(107)
 
 task 6 'view-object'. lines 18-18:
 Owner: Account Address ( C )
-Contents: sui::coin::Coin<sui::sui::SUI> {info: sui::object::Info {id: sui::object::ID {bytes: fake(100)}, version: 2u64}, balance: sui::balance::Balance<sui::sui::SUI> {value: 99990u64}}
+Version: 2
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 99990u64}}

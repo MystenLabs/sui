@@ -10,7 +10,7 @@
 ///     fixed set of predefined categories, and the framework is guaranteed to use those consistently.
 ///
 ///  2. The *error reason* which is encoded in the remaining 56 bits of the code. The reason is a unique
-///     number relative to the module which raised the error and can be used to obtain more information about
+///     number relative to the module which raised the error and can be used to obtain more UIDrmation about
 ///     the error at hand. It is mostly used for diagnosis purposes. Error reasons may change over time as the
 ///     framework evolves.
 ///

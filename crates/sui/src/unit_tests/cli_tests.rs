@@ -10,9 +10,10 @@ use serde_json::json;
 use sui::client_commands::SwitchResponse;
 use sui::{
     client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext},
-    config::{GatewayConfig, GatewayType, SuiClientConfig},
+    config::SuiClientConfig,
     sui_commands::SuiCommand,
 };
+use sui_config::gateway::GatewayConfig;
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfig};
 use sui_config::{
     Config, NetworkConfig, PersistedConfig, ValidatorInfo, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
@@ -21,6 +22,7 @@ use sui_config::{
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_sdk::crypto::KeystoreType;
+use sui_sdk::ClientType;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits};
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 
@@ -74,7 +76,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     let wallet_conf =
         PersistedConfig::<SuiClientConfig>::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
 
-    if let GatewayType::Embedded(config) = &wallet_conf.gateway {
+    if let ClientType::Embedded(config) = &wallet_conf.gateway {
         assert_eq!(4, config.validator_set.len());
         assert_eq!(working_dir.join("client_db"), config.db_folder_path);
     } else {
@@ -106,7 +108,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let wallet_config = SuiClientConfig {
         accounts: vec![],
         keystore: KeystoreType::File(working_dir.join(SUI_KEYSTORE_FILENAME)),
-        gateway: GatewayType::Embedded(GatewayConfig {
+        gateway: ClientType::Embedded(GatewayConfig {
             db_folder_path: working_dir.join("client_db"),
             validator_set: vec![ValidatorInfo {
                 name: "0".into(),
@@ -136,7 +138,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     }
     wallet_config.save().unwrap();
 
-    let mut context = WalletContext::new(&wallet_conf_path).unwrap();
+    let mut context = WalletContext::new(&wallet_conf_path).await.unwrap();
 
     // Print all addresses
     SuiClientCommands::Addresses
@@ -216,7 +218,7 @@ async fn test_custom_genesis() -> Result<(), anyhow::Error> {
     let network = start_test_network(Some(config)).await?;
 
     // Wallet config
-    let mut context = WalletContext::new(&network.dir().join(SUI_CLIENT_CONFIG))?;
+    let mut context = WalletContext::new(&network.dir().join(SUI_CLIENT_CONFIG)).await?;
     assert_eq!(1, context.config.accounts.len());
     let address = context.config.accounts.first().cloned().unwrap();
 
@@ -669,7 +671,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     // Create Wallet context.
     let wallet_conf = network.dir().join(SUI_CLIENT_CONFIG);
 
-    let mut context = WalletContext::new(&wallet_conf)?;
+    let mut context = WalletContext::new(&wallet_conf).await?;
 
     // Get the active address
     let addr1 = context.active_address()?;
@@ -767,7 +769,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     // Create Wallet context.
     let wallet_conf = network.dir().join(SUI_CLIENT_CONFIG);
 
-    let mut context = WalletContext::new(&wallet_conf)?;
+    let mut context = WalletContext::new(&wallet_conf).await?;
 
     // Get the active address
     let addr1 = context.active_address()?;

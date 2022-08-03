@@ -1,42 +1,26 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::path::Path;
 use sui_types::{
     base_types::AuthorityName,
     batch::TxSequenceNumber,
     error::{SuiError, SuiResult},
 };
 use typed_store::rocks::DBMap;
-use typed_store::{reopen, traits::Map};
-
-use crate::default_db_options;
+use typed_store::traits::DBMapTableUtil;
+use typed_store::traits::Map;
+use typed_store_macros::DBMapUtils;
 
 use tracing::debug;
 
 /// FollowerStore tracks the next tx sequence numbers that we should expect after the previous
 /// batch.
+#[derive(DBMapUtils)]
 pub struct FollowerStore {
     next_sequence: DBMap<AuthorityName, TxSequenceNumber>,
 }
 
 impl FollowerStore {
-    pub fn open<P: AsRef<Path>>(path: P) -> Result<Self, SuiError> {
-        let (options, _) = default_db_options(None, None);
-
-        let db = {
-            let path = &path;
-            let db_options = Some(options.clone());
-            let opt_cfs: &[(&str, &rocksdb::Options)] = &[("next_sequence", &options)];
-            typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
-        }
-        .map_err(SuiError::StorageError)?;
-
-        let next_sequence = reopen!(&db, "next_sequence";<AuthorityName, TxSequenceNumber>);
-
-        Ok(Self { next_sequence })
-    }
-
     pub fn get_next_sequence(&self, name: &AuthorityName) -> SuiResult<Option<TxSequenceNumber>> {
         self.next_sequence.get(name).map_err(SuiError::StorageError)
     }
@@ -53,12 +37,14 @@ impl FollowerStore {
 mod test {
     use crate::follower_store::FollowerStore;
     use sui_types::crypto::{get_key_pair, AuthorityKeyPair, KeypairTraits};
+    use typed_store::traits::DBMapTableUtil;
 
     #[test]
     fn test_follower_store() {
         let working_dir = tempfile::tempdir().unwrap();
 
-        let follower_store = FollowerStore::open(&working_dir).expect("cannot open db");
+        let follower_store =
+            FollowerStore::open_tables_read_write(working_dir.as_ref().to_path_buf(), None);
 
         let (_, key_pair): (_, AuthorityKeyPair) = get_key_pair();
         let val_name = &key_pair.public().into();

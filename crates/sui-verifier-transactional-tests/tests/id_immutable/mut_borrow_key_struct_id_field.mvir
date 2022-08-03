@@ -6,12 +6,12 @@ module 0x0.m {
     import 0x2.object;
 
     struct Foo has key {
-        info: object.Info,
+        id: object.UID,
     }
 
     foo(f: Self.Foo) {
         label l0:
-        _ = &mut (&mut f).Foo::info;
+        _ = &mut (&mut f).Foo::id;
         abort 0;
     }
 

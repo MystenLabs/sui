@@ -15,7 +15,7 @@ module 0x0.m {
 module 0x0.m {
     import 0x2.tx_context;
     import 0x2.object;
-    struct Obj has key { info: object.Info }
+    struct Obj has key { id: object.UID }
     public entry t(flag: bool, arg: &mut Self.Obj) {
         label l0:
         abort 0;

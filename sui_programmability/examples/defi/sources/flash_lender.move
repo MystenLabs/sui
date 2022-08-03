@@ -5,13 +5,13 @@
 module defi::flash_lender {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, ID, Info};
+    use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// A shared object offering flash loans to any buyer willing to pay `fee`.
     struct FlashLender<phantom T> has key {
-        info: Info,
+        id: UID,
         /// Coins available to be lent to prospective borrowers
         to_lend: Balance<T>,
         /// Number of `Coin<T>`'s that will be charged for the loan.
@@ -38,7 +38,7 @@ module defi::flash_lender {
     /// `FlashLender` instance with ID `flash_lender_id`. Initially granted to the creator
     /// of the `FlashLender`, and only one `AdminCap` per lender exists.
     struct AdminCap has key, store {
-        info: Info,
+        id: UID,
         flash_lender_id: ID,
     }
 
@@ -68,14 +68,14 @@ module defi::flash_lender {
     /// Any borrower will need to repay the borrowed amount and `fee` by the end of the
     /// current transaction.
     public fun new<T>(to_lend: Balance<T>, fee: u64, ctx: &mut TxContext): AdminCap {
-        let info = object::new(ctx);
-        let flash_lender_id = *object::info_id(&info);
-        let flash_lender = FlashLender { info, to_lend, fee };
+        let id = object::new(ctx);
+        let flash_lender_id = object::uid_to_inner(&id);
+        let flash_lender = FlashLender { id, to_lend, fee };
         // make the `FlashLender` a shared object so anyone can request loans
         transfer::share_object(flash_lender);
 
         // give the creator admin permissions
-        AdminCap { info: object::new(ctx), flash_lender_id }
+        AdminCap { id: object::new(ctx), flash_lender_id }
     }
 
     /// Same as `new`, but transfer `WithdrawCap` to the transaction sender
@@ -98,7 +98,7 @@ module defi::flash_lender {
         assert!(balance::value(to_lend) >= amount, ELoanTooLarge);
         let loan = coin::take(to_lend, amount, ctx);
         let repay_amount = amount + self.fee;
-        let receipt = Receipt { flash_lender_id: *object::id(self), repay_amount };
+        let receipt = Receipt { flash_lender_id: object::id(self), repay_amount };
 
         (loan, receipt)
     }
@@ -108,7 +108,7 @@ module defi::flash_lender {
     /// that issued the original loan.
     public fun repay<T>(self: &mut FlashLender<T>, payment: Coin<T>, receipt: Receipt<T>) {
         let Receipt { flash_lender_id, repay_amount } = receipt;
-        assert!(object::id(self) == &flash_lender_id, ERepayToWrongLender);
+        assert!(object::id(self) == flash_lender_id, ERepayToWrongLender);
         assert!(coin::value(&payment) == repay_amount, EInvalidRepaymentAmount);
 
         coin::put(&mut self.to_lend, payment)
@@ -151,7 +151,7 @@ module defi::flash_lender {
     }
 
     fun check_admin<T>(self: &FlashLender<T>, admin_cap: &AdminCap) {
-        assert!(object::id(self) == &admin_cap.flash_lender_id, EAdminOnly);
+        assert!(object::borrow_id(self) == &admin_cap.flash_lender_id, EAdminOnly);
     }
 
     // === Reads ===

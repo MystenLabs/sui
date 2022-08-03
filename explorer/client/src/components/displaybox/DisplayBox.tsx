@@ -3,6 +3,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
+import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/broken-image.svg';
 import {
     FALLBACK_IMAGE,
     ImageModClient,
@@ -83,7 +84,7 @@ function DisplayBox({ display }: { display: string }) {
                 )}
                 {hasFailedToLoad && (
                     <div className={styles.imagebox} id="noImage">
-                        No Image was Found
+                        <BrokenImage />
                     </div>
                 )}
                 {!hasFailedToLoad && (

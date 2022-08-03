@@ -4,7 +4,7 @@
 module sui::locked_coin {
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::{Self, EpochTimeLock};
@@ -14,7 +14,7 @@ module sui::locked_coin {
 
     /// A coin of type `T` locked until `locked_until_epoch`.
     struct LockedCoin<phantom T> has key, store {
-        info: Info,
+        id: UID,
         balance: Balance<T>,
         locked_until_epoch: EpochTimeLock
     }
@@ -22,7 +22,7 @@ module sui::locked_coin {
     /// Create a LockedCoin from `balance` and transfer it to `owner`.
     public fun new_from_balance<T>(balance: Balance<T>, locked_until_epoch: EpochTimeLock, owner: address, ctx: &mut TxContext) {
         let locked_coin = LockedCoin {
-            info: object::new(ctx),
+            id: object::new(ctx),
             balance,
             locked_until_epoch
         };
@@ -31,8 +31,8 @@ module sui::locked_coin {
 
     /// Destruct a LockedCoin wrapper and keep the balance.
     public(friend) fun into_balance<T>(coin: LockedCoin<T>): (Balance<T>, EpochTimeLock) {
-        let LockedCoin { info, locked_until_epoch, balance } = coin;
-        object::delete(info);
+        let LockedCoin { id, locked_until_epoch, balance } = coin;
+        object::delete(id);
         (balance, locked_until_epoch)
     }
 
@@ -55,8 +55,8 @@ module sui::locked_coin {
     /// of the coin. If the check is successful, the locked coin is deleted and a Coin<T> is transferred back
     /// to the sender.
     public entry fun unlock_coin<T>(locked_coin: LockedCoin<T>, ctx: &mut TxContext) {
-        let LockedCoin { info, balance, locked_until_epoch } = locked_coin;
-        object::delete(info);
+        let LockedCoin { id, balance, locked_until_epoch } = locked_coin;
+        object::delete(id);
         epoch_time_lock::destroy(locked_until_epoch, ctx);
         let coin = coin::from_balance(balance, ctx);
         transfer::transfer(coin, tx_context::sender(ctx));

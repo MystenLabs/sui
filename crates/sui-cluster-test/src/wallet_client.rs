@@ -2,13 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::Cluster;
-use std::sync::Arc;
 use sui::client_commands::WalletContext;
-use sui::config::{Config, GatewayType, SuiClientConfig};
+use sui::config::{Config, SuiClientConfig};
 use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_core::gateway_state::GatewayClient;
-use sui_gateway::rpc_gateway_client::RpcGatewayClient;
 use sui_sdk::crypto::KeystoreType;
+use sui_sdk::{ClientType, SuiClient};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};
 use sui_types::messages::TransactionData;
@@ -17,12 +15,12 @@ use tracing::info;
 pub struct WalletClient {
     wallet_context: WalletContext,
     address: SuiAddress,
-    fullnode_client: GatewayClient,
+    fullnode_client: SuiClient,
 }
 
 #[allow(clippy::borrowed_box)]
 impl WalletClient {
-    pub fn new_from_cluster(cluster: &Box<dyn Cluster + Sync + Send>) -> Self {
+    pub async fn new_from_cluster(cluster: &Box<dyn Cluster + Sync + Send>) -> Self {
         let temp_dir = tempfile::tempdir().unwrap();
         let wallet_config_path = temp_dir.path().join("client.yaml");
         let rpc_url = cluster.rpc_url();
@@ -35,7 +33,7 @@ impl WalletClient {
         SuiClientConfig {
             accounts: vec![address],
             keystore,
-            gateway: GatewayType::RPC(rpc_url.into()),
+            gateway: ClientType::RPC(rpc_url.into()),
             active_address: Some(address),
         }
         .persisted(&wallet_config_path)
@@ -47,16 +45,18 @@ impl WalletClient {
             wallet_config_path
         );
 
-        let wallet_context = WalletContext::new(&wallet_config_path).unwrap_or_else(|e| {
-            panic!(
-                "Failed to init wallet context from path {:?}, error: {e}",
-                wallet_config_path
-            )
-        });
+        let wallet_context = WalletContext::new(&wallet_config_path)
+            .await
+            .unwrap_or_else(|e| {
+                panic!(
+                    "Failed to init wallet context from path {:?}, error: {e}",
+                    wallet_config_path
+                )
+            });
 
         let fullnode_url = String::from(cluster.fullnode_url());
         info!("Use fullnode: {}", &fullnode_url);
-        let fullnode_client: GatewayClient = Arc::new(RpcGatewayClient::new(fullnode_url).unwrap());
+        let fullnode_client = SuiClient::new_http_client(&fullnode_url).unwrap();
 
         Self {
             wallet_context,
@@ -77,11 +77,11 @@ impl WalletClient {
         self.address
     }
 
-    pub fn get_gateway(&self) -> &GatewayClient {
+    pub fn get_gateway(&self) -> &SuiClient {
         &self.wallet_context.gateway
     }
 
-    pub fn get_fullnode(&self) -> &GatewayClient {
+    pub fn get_fullnode(&self) -> &SuiClient {
         &self.fullnode_client
     }
 
