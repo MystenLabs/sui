@@ -1921,6 +1921,24 @@ impl SignedEpoch {
 }
 
 impl CertifiedEpoch {
+    pub fn new(
+        committee: Committee,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        first_checkpoint: CheckpointSequenceNumber,
+        prev_epoch_info: &EpochInfo,
+    ) -> SuiResult<Self> {
+        let epoch = committee.epoch;
+        let epoch_info = EpochInfo::new(committee, first_checkpoint, prev_epoch_info.digest());
+        Ok(Self {
+            epoch_info,
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
+                epoch - 1,
+                signatures,
+                &prev_epoch_info.committee,
+            )?,
+        })
+    }
+
     /// Verify the signature of this certified epoch. The committee to verify this must be the
     /// committee from the previous epoch, as this is signed by a quorum from the previous epoch.
     pub fn verify(&self, committee: &Committee) -> SuiResult {
