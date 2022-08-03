@@ -73,5 +73,5 @@ Navigate and search this site however you see fit. If you're new to Sui, we reco
 * [Sui Code of Conduct](../contribute/code-of-conduct.md)
    
 **Additional resources** - lets you:
-* Employ the [Sui API Reference](https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json) files for the [Sui JSON-RPC API](../build/json-rpc.md).
+* Employ the [Sui API Reference](https://docs.sui.io/sui-jsonrpc) files for the [Sui JSON-RPC API](../build/json-rpc.md).
 * View the [Mysten Labs](https://www.youtube.com/channel/UCI7pCUVxSLcndVhPpZOwZgg) YouTube channel for introductory videos on technology and partners.
