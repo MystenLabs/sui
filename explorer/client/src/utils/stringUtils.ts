@@ -57,7 +57,7 @@ export async function extractFileType(displayString: string) {
 
     if (!OPTIONS.includes(result || '')) {
         // Second check Content-Type header:
-        result = await fetch(displayString).then((resp) =>
+        result = await fetch(transformURL(displayString)).then((resp) =>
             resp?.headers
                 ?.get('Content-Type')
                 ?.split('/')
@@ -66,10 +66,10 @@ export async function extractFileType(displayString: string) {
         );
         // If neither work, don't specify:
         if (!OPTIONS.includes(result || '')) {
-            result = '';
+            result = 'Image';
         }
     }
-    return `1 ${result} Image File`;
+    return `1 ${result} File`;
 }
 
 /* Currently unused but potentially useful:
