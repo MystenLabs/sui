@@ -1,5 +1,5 @@
 div.imagebox {
-    @apply border-0 border-b-2 border-solid border-gray-300;
+    @apply h-full w-full flex items-center justify-center;
 }
 
 img.imagebox {

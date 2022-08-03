@@ -6,39 +6,21 @@ use super::{
     *,
 };
 use narwhal_executor::ExecutionIndices;
-use rocksdb::Options;
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::fmt::Debug;
-use std::path::Path;
-use sui_storage::default_db_options;
 use sui_types::base_types::{ExecutionDigests, SequenceNumber};
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use typed_store::rocks::DBMap;
-use typed_store::{reopen, traits::Map};
+use typed_store::traits::DBMapTableUtil;
+use typed_store_macros::DBMapUtils;
 
-const OBJECTS_TABLE_NAME: &str = "objects";
-const OWNER_INDEX_TABLE_NAME: &str = "owner_index";
-const TX_TABLE_NAME: &str = "transactions";
-const CERTS_TABLE_NAME: &str = "certificates";
-const PENDING_EXECUTION: &str = "pending_execution";
-const PARENT_SYNC_TABLE_NAME: &str = "parent_sync";
-const EFFECTS_TABLE_NAME: &str = "effects";
-const ASSIGNED_OBJECT_VERSIONS_TABLE_NAME: &str = "assigned_object_versions";
-const NEXT_OBJECT_VERSIONS_TABLE_NAME: &str = "next_object_versions";
-const CONSENSUS_MESSAGE_PROCESSED_TABLE_NAME: &str = "consensus_message_processed";
-const EXEC_SEQ_TABLE_NAME: &str = "executed_sequence";
-const BATCHES_TABLE_NAME: &str = "batches";
-const LAST_CONSENSUS_TABLE_NAME: &str = "last_consensus_index";
-const EPOCH_TABLE_NAME: &str = "epochs";
-
-pub struct StoreTables<S> {
+#[derive(DBMapUtils)]
+pub struct AuthorityStoreTables<S> {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
     /// state that is needed to process new transactions. If an object is deleted its entry is
     /// removed from this map.
     ///
     /// Note that while this map can store all versions of an object, in practice it only stores
     /// the most recent version.
+    #[options(optimization = "point_lookup")]
     pub(crate) objects: DBMap<ObjectKey, Object>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
@@ -48,12 +30,14 @@ pub struct StoreTables<S> {
     pub(crate) owner_index: DBMap<(Owner, ObjectID), ObjectInfo>,
 
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
+    #[options(optimization = "point_lookup")]
     pub(crate) transactions: DBMap<TransactionDigest, TransactionEnvelope<S>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
+    #[options(optimization = "point_lookup")]
     pub(crate) certificates: DBMap<TransactionDigest, CertifiedTransaction>,
 
     /// The pending execution table holds a sequence of transactions that are present
@@ -76,6 +60,7 @@ pub struct StoreTables<S> {
     /// (ie in `certificates`) and the effects its execution has on the authority state. This
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
+    #[options(optimization = "point_lookup")]
     pub(crate) effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
 
     /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
@@ -110,225 +95,6 @@ pub struct StoreTables<S> {
 
     /// Map from each epoch ID to the epoch information. The epoch is either signed by this node,
     /// or is certified (signed by a quorum).
+    #[options(optimization = "point_lookup")]
     pub(crate) epochs: DBMap<EpochId, AuthenticatedEpoch>,
-}
-impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> StoreTables<S> {
-    /// If with_secondary_path is set, the DB is opened in read only mode with the path specified
-    pub fn open_impl<P: AsRef<Path>>(
-        path: P,
-        db_options: Option<Options>,
-        with_secondary_path: Option<P>,
-    ) -> Self {
-        let (options, point_lookup) = default_db_options(db_options, None);
-
-        let db = {
-            let path = &path;
-            let db_options = Some(options.clone());
-            let opt_cfs: &[(&str, &rocksdb::Options)] = &[
-                (OBJECTS_TABLE_NAME, &point_lookup),
-                (TX_TABLE_NAME, &point_lookup),
-                (OWNER_INDEX_TABLE_NAME, &options),
-                (CERTS_TABLE_NAME, &point_lookup),
-                (PENDING_EXECUTION, &options),
-                (PARENT_SYNC_TABLE_NAME, &options),
-                (EFFECTS_TABLE_NAME, &point_lookup),
-                (ASSIGNED_OBJECT_VERSIONS_TABLE_NAME, &options),
-                (NEXT_OBJECT_VERSIONS_TABLE_NAME, &options),
-                (CONSENSUS_MESSAGE_PROCESSED_TABLE_NAME, &options),
-                (EXEC_SEQ_TABLE_NAME, &options),
-                (BATCHES_TABLE_NAME, &options),
-                (LAST_CONSENSUS_TABLE_NAME, &options),
-                (EPOCH_TABLE_NAME, &point_lookup),
-            ];
-            if let Some(p) = with_secondary_path {
-                typed_store::rocks::open_cf_opts_secondary(path, Some(&p), db_options, opt_cfs)
-            } else {
-                typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
-            }
-        }
-        .expect("Cannot open DB.");
-
-        let executed_sequence =
-            DBMap::reopen(&db, Some(EXEC_SEQ_TABLE_NAME)).expect("Cannot open CF.");
-
-        let (
-            objects,
-            owner_index,
-            transactions,
-            certificates,
-            pending_execution,
-            parent_sync,
-            effects,
-            assigned_object_versions,
-            next_object_versions,
-            consensus_message_processed,
-            batches,
-            last_consensus_index,
-            epochs,
-        ) = reopen! (
-            &db,
-            OBJECTS_TABLE_NAME;<ObjectKey, Object>,
-            OWNER_INDEX_TABLE_NAME;<(Owner, ObjectID), ObjectInfo>,
-            TX_TABLE_NAME;<TransactionDigest, TransactionEnvelope<S>>,
-            CERTS_TABLE_NAME;<TransactionDigest, CertifiedTransaction>,
-            PENDING_EXECUTION;<InternalSequenceNumber, TransactionDigest>,
-            PARENT_SYNC_TABLE_NAME;<ObjectRef, TransactionDigest>,
-            EFFECTS_TABLE_NAME;<TransactionDigest, TransactionEffectsEnvelope<S>>,
-            ASSIGNED_OBJECT_VERSIONS_TABLE_NAME;<(TransactionDigest, ObjectID), SequenceNumber>,
-            NEXT_OBJECT_VERSIONS_TABLE_NAME;<ObjectID, SequenceNumber>,
-            CONSENSUS_MESSAGE_PROCESSED_TABLE_NAME;<TransactionDigest, bool>,
-            BATCHES_TABLE_NAME;<TxSequenceNumber, SignedBatch>,
-            LAST_CONSENSUS_TABLE_NAME;<u64, ExecutionIndices>,
-            EPOCH_TABLE_NAME;<EpochId, AuthenticatedEpoch>
-        );
-
-        Self {
-            objects,
-            owner_index,
-            transactions,
-            certificates,
-            pending_execution,
-            parent_sync,
-            effects,
-            assigned_object_versions,
-            next_object_versions,
-            consensus_message_processed,
-            executed_sequence,
-            batches,
-            last_consensus_index,
-            epochs,
-        }
-    }
-
-    /// Open an authority store by directory path in read-write mode
-    pub fn open_read_write<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
-        Self::open_impl(path, db_options, None)
-    }
-
-    /// Open an authority store by directory path in read only mode
-    pub fn open_read_only<P: AsRef<Path>>(
-        path: P,
-        secondary_path: P,
-        db_options: Option<Options>,
-    ) -> Self {
-        Self::open_impl(path, db_options, Some(secondary_path))
-    }
-
-    // TODO: condense with macros
-    pub fn dump(&self, table_name: &str) -> anyhow::Result<BTreeMap<String, String>> {
-        Ok(match table_name {
-            OBJECTS_TABLE_NAME => {
-                self.objects.try_catch_up_with_primary()?;
-                self.objects
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-            OWNER_INDEX_TABLE_NAME => {
-                self.owner_index.try_catch_up_with_primary()?;
-
-                self.owner_index
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-            TX_TABLE_NAME => {
-                self.transactions.try_catch_up_with_primary()?;
-                self.transactions
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            CERTS_TABLE_NAME => {
-                self.certificates.try_catch_up_with_primary()?;
-                self.certificates
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            PENDING_EXECUTION => {
-                self.pending_execution.try_catch_up_with_primary()?;
-                self.pending_execution
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            PARENT_SYNC_TABLE_NAME => {
-                self.parent_sync.try_catch_up_with_primary()?;
-                self.parent_sync
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            EFFECTS_TABLE_NAME => {
-                self.effects.try_catch_up_with_primary()?;
-                self.effects
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            ASSIGNED_OBJECT_VERSIONS_TABLE_NAME => {
-                self.assigned_object_versions.try_catch_up_with_primary()?;
-                self.assigned_object_versions
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            NEXT_OBJECT_VERSIONS_TABLE_NAME => {
-                self.next_object_versions.try_catch_up_with_primary()?;
-                self.next_object_versions
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            CONSENSUS_MESSAGE_PROCESSED_TABLE_NAME => {
-                self.consensus_message_processed
-                    .try_catch_up_with_primary()?;
-                self.consensus_message_processed
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            EXEC_SEQ_TABLE_NAME => {
-                self.executed_sequence.try_catch_up_with_primary()?;
-                self.executed_sequence
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            BATCHES_TABLE_NAME => {
-                self.batches.try_catch_up_with_primary()?;
-                self.batches
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            LAST_CONSENSUS_TABLE_NAME => {
-                self.last_consensus_index.try_catch_up_with_primary()?;
-                self.last_consensus_index
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-
-            EPOCH_TABLE_NAME => {
-                self.epochs.try_catch_up_with_primary()?;
-                self.epochs
-                    .iter()
-                    .map(|(k, v)| (format!("{:?}", k), format!("{:?}", v)))
-                    .collect::<BTreeMap<_, _>>()
-            }
-            _ => anyhow::bail!("No such table name: {}", table_name),
-        })
-    }
 }

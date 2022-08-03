@@ -14,7 +14,7 @@
 
 #[test_only]
 module sui::natives_calibration_tests {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
 
     use sui::test_scenario;
     use sui::transfer;
@@ -31,7 +31,7 @@ module sui::natives_calibration_tests {
     }
     // A very basic object which has an Info to be used in calls
     struct ObjectWithID has key, store{
-        info: Info,
+        id: UID,
     }
 
 
@@ -203,16 +203,16 @@ module sui::natives_calibration_tests {
 
     // This test function calls the native in a typical manner
     #[test]
-    public entry fun test_calibrate_id_get_info() {
+    public entry fun test_calibrate_id_borrow_uid() {
         let trials: u64 = NUM_TRIALS;
         let sender = @0x0;
         let scenario = &mut test_scenario::begin(&sender);
 
         while (trials > 0) {
-            let obj = ObjectWithID {info: object::new(test_scenario::ctx(scenario)) };
-            object::calibrate_get_info(&obj);
-            let ObjectWithID { info } = obj;
-            object::delete(info);
+            let obj = ObjectWithID { id: object::new(test_scenario::ctx(scenario)) };
+            object::calibrate_borrow_uid(&obj);
+            let ObjectWithID { id } = obj;
+            object::delete(id);
 
             trials = trials - 1;
 
@@ -220,18 +220,18 @@ module sui::natives_calibration_tests {
     }
     // This test function excludes the natives
     #[test]
-    public entry fun test_calibrate_id_get_info__baseline() {
+    public entry fun test_calibrate_id_borrow_uid__baseline() {
         let trials: u64 = NUM_TRIALS;
         let sender = @0x0;
         let scenario = &mut test_scenario::begin(&sender);
 
         while (trials > 0) {
-            let obj = ObjectWithID {info: object::new(test_scenario::ctx(scenario)) };
-            object::calibrate_get_info_nop(&obj);
+            let obj = ObjectWithID { id: object::new(test_scenario::ctx(scenario)) };
+            object::calibrate_borrow_uid(&obj);
             // This forces an immutable borrow to counter the ImmBorrowLoc in object::get_versioned_id
             let _ = &obj;
-            let ObjectWithID { info } = obj;
-            object::delete(info);
+            let ObjectWithID { id } = obj;
+            object::delete(id);
 
             trials = trials - 1;
         }

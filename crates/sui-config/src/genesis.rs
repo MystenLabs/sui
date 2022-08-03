@@ -17,7 +17,7 @@ use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes};
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
@@ -60,7 +60,7 @@ impl Genesis {
         )
     }
 
-    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee<AuthorityPublicKey> {
+    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee {
         let narwhal_committee = self
             .validator_set
             .iter()

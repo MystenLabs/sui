@@ -3,13 +3,13 @@
 
 /// A freely transfererrable Wrapper for custom data.
 module examples::wrapper {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
     /// An object with `store` can be transferred in any
     /// module without a custom transfer implementation.
     struct Wrapper<T: store> has key, store {
-        info: Info,
+        id: UID,
         contents: T
     }
 
@@ -24,14 +24,14 @@ module examples::wrapper {
     ): Wrapper<T> {
         Wrapper {
             contents,
-            info: object::new(ctx),
+            id: object::new(ctx),
         }
     }
 
     /// Destroy `Wrapper` and get T.
     public fun destroy<T: store> (c: Wrapper<T>): T {
-        let Wrapper { info, contents } = c;
-        object::delete(info);
+        let Wrapper { id, contents } = c;
+        object::delete(id);
         contents
     }
 }
@@ -53,7 +53,7 @@ module examples::profile {
     }
 
     /// Read `name` field from `ProfileInfo`.
-    public fun name(info: &ProfileInfo): &String {
+    public fun name(id: &ProfileInfo): &String {
         &info.name
     }
 

@@ -78,13 +78,12 @@ async fn main() -> Result<()> {
         });
     }
 
-    task::spawn(async move {
+    task::spawn(async {
         loop {
             sleep(Duration::from_secs(3600)).await;
             send_telemetry_event().await;
         }
-    })
-    .await?;
+    });
 
     sui_node::admin::start_admin_server(config.admin_interface_port, filter_handle);
 

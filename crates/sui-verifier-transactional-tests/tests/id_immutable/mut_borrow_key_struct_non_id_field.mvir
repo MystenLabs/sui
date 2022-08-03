@@ -6,8 +6,8 @@ module 0x0.m {
     import 0x2.object;
 
     struct Foo has key {
-        info: object.Info,
-        other: object.Info,
+        id: object.UID,
+        other: object.UID,
     }
 
     foo(f: Self.Foo) {

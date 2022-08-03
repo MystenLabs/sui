@@ -22,7 +22,7 @@ use test_utils::{
     objects::test_gas_objects,
 };
 use tokio::time::{sleep, Duration};
-use typed_store::Map;
+use typed_store::traits::Map;
 
 /// Helper function determining whether the checkpoint store of an authority contains the input
 /// transactions' digests.
@@ -34,6 +34,7 @@ fn transactions_in_checkpoint(authority: &AuthorityState) -> HashSet<Transaction
         .filter_map(|checkpoint_sequence| {
             checkpoints_store
                 .lock()
+                .tables
                 .checkpoint_contents
                 .get(&checkpoint_sequence)
                 .unwrap()
@@ -138,6 +139,7 @@ async fn sequence_fragments() {
             .checkpoints()
             .unwrap()
             .lock()
+            .tables
             .fragments
             .iter()
             .skip_to_last()
@@ -167,6 +169,7 @@ async fn sequence_fragments() {
                 .checkpoints()
                 .unwrap()
                 .lock()
+                .tables
                 .fragments
                 .iter()
                 .next()

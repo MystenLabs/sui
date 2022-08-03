@@ -137,7 +137,7 @@ impl AuthorityServer {
             .server_builder()
             .add_service(ValidatorServer::new(ValidatorService {
                 state: self.state,
-                consensus_adapter: self.consensus_adapter,
+                consensus_adapter: Arc::new(self.consensus_adapter),
                 _checkpoint_consensus_handle: None,
             }))
             .bind(&address)
@@ -156,7 +156,7 @@ impl AuthorityServer {
 
 pub struct ValidatorService {
     state: Arc<AuthorityState>,
-    consensus_adapter: ConsensusAdapter,
+    consensus_adapter: Arc<ConsensusAdapter>,
     _checkpoint_consensus_handle: Option<JoinHandle<()>>,
 }
 
@@ -238,16 +238,13 @@ impl ValidatorService {
 
         Ok(Self {
             state,
-            consensus_adapter,
+            consensus_adapter: Arc::new(consensus_adapter),
             _checkpoint_consensus_handle: checkpoint_consensus_handle,
         })
     }
-}
 
-#[async_trait]
-impl Validator for ValidatorService {
-    async fn transaction(
-        &self,
+    async fn handle_transaction(
+        state: Arc<AuthorityState>,
         request: tonic::Request<Transaction>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut transaction = request.into_inner();
@@ -267,8 +264,7 @@ impl Validator for ValidatorService {
             tx_kind = transaction.data.kind_as_str()
         );
 
-        let info = self
-            .state
+        let info = state
             .handle_transaction(transaction)
             .instrument(span)
             .await
@@ -278,21 +274,21 @@ impl Validator for ValidatorService {
     }
 
     async fn handle_certificate(
-        &self,
+        state: Arc<AuthorityState>,
+        consensus_adapter: Arc<ConsensusAdapter>,
         request: tonic::Request<CertifiedTransaction>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut certificate = request.into_inner();
         // 1) Verify certificate
         certificate
-            .verify(&self.state.committee.load())
+            .verify(&state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         //TODO This is really really bad, we should have different types for signature verified transactions
         certificate.is_verified = true;
 
         // 2) Check idempotency
         let digest = certificate.digest();
-        if let Some(response) = self
-            .state
+        if let Some(response) = state
             .check_tx_already_executed(digest)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?
@@ -303,13 +299,12 @@ impl Validator for ValidatorService {
         // 3) If it's a shared object transaction and requires consensus, we need to do so.
         // This will wait until either timeout or we have heard back from consensus.
         if certificate.contains_shared_object()
-            && !self
-                .state
+            && !state
                 .transaction_shared_locks_exist(&certificate)
                 .await
                 .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
-            self.consensus_adapter
+            consensus_adapter
                 .submit(&ConsensusTransaction::UserTransaction(Box::new(
                     certificate.clone(),
                 )))
@@ -325,14 +320,45 @@ impl Validator for ValidatorService {
             tx_kind = certificate.data.kind_as_str()
         );
 
-        let response = self
-            .state
+        let response = state
             .handle_certificate(certificate)
             .instrument(span)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
         Ok(tonic::Response::new(response))
+    }
+}
+
+#[async_trait]
+impl Validator for ValidatorService {
+    async fn transaction(
+        &self,
+        request: tonic::Request<Transaction>,
+    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+        let state = self.state.clone();
+
+        // Spawns a task which handles the transaction. The task will unconditionally continue
+        // processing in the event that the client connection is dropped.
+        tokio::spawn(async move { Self::handle_transaction(state, request).await })
+            .await
+            .unwrap()
+    }
+
+    async fn handle_certificate(
+        &self,
+        request: tonic::Request<CertifiedTransaction>,
+    ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
+        let state = self.state.clone();
+        let consensus_adapter = self.consensus_adapter.clone();
+
+        // Spawns a task which handles the certificate. The task will unconditionally continue
+        // processing in the event that the client connection is dropped.
+        tokio::spawn(
+            async move { Self::handle_certificate(state, consensus_adapter, request).await },
+        )
+        .await
+        .unwrap()
     }
 
     async fn account_info(
@@ -408,6 +434,20 @@ impl Validator for ValidatorService {
         let response = self
             .state
             .handle_checkpoint_request(&request)
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        return Ok(tonic::Response::new(response));
+    }
+
+    async fn epoch_info(
+        &self,
+        request: tonic::Request<EpochRequest>,
+    ) -> Result<tonic::Response<EpochResponse>, tonic::Status> {
+        let request = request.into_inner();
+
+        let response = self
+            .state
+            .handle_epoch_request(&request)
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
         return Ok(tonic::Response::new(response));

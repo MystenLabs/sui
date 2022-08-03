@@ -4,7 +4,6 @@ expression: genesis.sui_system_object()
 ---
 info:
   id: "0x0000000000000000000000000000000000000005"
-  version: 1
 epoch: 0
 validators:
   validator_stake: 1

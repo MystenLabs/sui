@@ -7,8 +7,9 @@ use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
-use sui_core::gateway_state::GatewayClient;
+
 use sui_json_rpc_types::TransactionResponse;
+use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::SuiAddress,
@@ -52,11 +53,11 @@ impl TestContext {
         &self.client
     }
 
-    fn get_gateway(&self) -> &GatewayClient {
+    fn get_gateway(&self) -> &SuiClient {
         self.client.get_gateway()
     }
 
-    fn get_fullnode(&self) -> &GatewayClient {
+    fn get_fullnode(&self) -> &SuiClient {
         self.client.get_fullnode()
     }
 
@@ -83,7 +84,7 @@ impl TestContext {
     pub async fn setup(options: ClusterTestOpt) -> Result<Self, anyhow::Error> {
         let cluster = ClusterFactory::start(&options).await?;
         let faucet_url = cluster.faucet_url().map(String::from);
-        let wallet_client = WalletClient::new_from_cluster(&cluster);
+        let wallet_client = WalletClient::new_from_cluster(&cluster).await;
         Ok(Self {
             cluster,
             client: wallet_client,

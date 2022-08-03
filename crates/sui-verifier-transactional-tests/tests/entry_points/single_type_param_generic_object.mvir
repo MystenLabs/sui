@@ -6,7 +6,7 @@ module 0x0.m {
     import 0x2.object;
     import 0x2.tx_context;
     struct Obj<T> has key {
-        info: object.Info,
+        id: object.UID,
     }
     public entry foo<T: store>(l: Self.Obj<T>, ctx: &mut tx_context.TxContext) {
         label l0:

@@ -6,6 +6,28 @@ use futures::future::try_join_all;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
+use prometheus::register_gauge_with_registry;
+use prometheus::register_histogram_with_registry;
+use prometheus::register_int_counter_with_registry;
+use prometheus::Gauge;
+use prometheus::Histogram;
+use prometheus::IntCounter;
+use prometheus::Registry;
+use sui_benchmark::workloads::workload::get_latest;
+use sui_benchmark::workloads::workload::WorkloadType;
+use sui_config::gateway::GatewayConfig;
+use sui_config::Config;
+use sui_config::PersistedConfig;
+use sui_core::authority_aggregator::AuthAggMetrics;
+use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::gateway_state::GatewayState;
+use sui_node::metrics;
+use sui_node::SuiNode;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SuiAddress;
+use tokio::sync::OnceCell;
+
+use std::collections::HashMap;
 use std::collections::{BTreeMap, VecDeque};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -14,20 +36,12 @@ use std::time::Duration;
 use strum_macros::EnumString;
 use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
 use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
-use sui_benchmark::workloads::workload::get_latest;
+use sui_benchmark::workloads::workload::CombinationWorkload;
 use sui_benchmark::workloads::workload::Payload;
 use sui_benchmark::workloads::workload::Workload;
-use sui_config::Config;
-use sui_config::PersistedConfig;
-use sui_core::authority_aggregator::AuthAggMetrics;
-use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_gateway::config::GatewayConfig;
-use sui_node::SuiNode;
 use sui_quorum_driver::QuorumDriverHandler;
 use sui_sdk::crypto::SuiKeystore;
-use sui_types::base_types::ObjectID;
-use sui_types::base_types::SuiAddress;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{AccountKeyPair, EmptySignInfo};
@@ -41,7 +55,6 @@ use test_utils::objects::generate_gas_objects_with_owner;
 use test_utils::test_account_keys;
 use tokio::runtime::Builder;
 use tokio::sync::Barrier;
-use tokio::sync::OnceCell;
 use tokio::time;
 use tokio::time::Instant;
 use tracing::{debug, error};
@@ -67,9 +80,6 @@ struct Opts {
     /// Stat collection interval seconds
     #[clap(long, default_value = "10", global = true)]
     pub stat_collection_interval: u64,
-    /// Shared counter or transfer object
-    #[clap(arg_enum, default_value = "owned", global = true, ignore_case = true)]
-    pub transaction_type: TransactionType,
     /// Num server threads
     #[clap(long, default_value = "24", global = true)]
     pub num_server_threads: u64,
@@ -96,6 +106,84 @@ struct Opts {
     /// gateway_config_path, keypair_path and primary_gas_id
     #[clap(long, parse(try_from_str), default_value = "true", global = true)]
     pub local: bool,
+    // Default workload is 100% transfer object
+    #[clap(subcommand)]
+    workload_spec: OptWorkloadSpec,
+    #[clap(long, default_value = "9091", global = true)]
+    pub server_metric_port: u16,
+    #[clap(long, default_value = "8081", global = true)]
+    pub client_metric_port: u16,
+}
+
+#[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]
+#[non_exhaustive]
+#[clap(rename_all = "kebab-case")]
+pub enum OptWorkloadSpec {
+    // Allow the ability to mix shared object and
+    // single owner transactions in the benchmarking
+    // framework. Currently, only shared counter
+    // and transfer obejct transaction types are
+    // supported but there will be more in future. Also
+    // there is no dependency between individual
+    // transactions such that they can all be executed
+    // and make progress in parallel. But this too
+    // will likely change in future to support
+    // more representative workloads.
+    WorkloadSpec {
+        // relative weight of shared counter
+        // transaction in the benchmark workload
+        #[clap(long, default_value = "0")]
+        shared_counter: u32,
+        // relative weight of transfer object
+        // transactions in the benchmark workload
+        #[clap(long, default_value = "1")]
+        transfer_object: u32,
+    },
+}
+
+pub struct BenchMetrics {
+    pub num_success: IntCounter,
+    pub num_error: IntCounter,
+    pub num_submitted: IntCounter,
+    pub num_in_flight: Gauge,
+    pub latency_s: Histogram,
+}
+
+impl BenchMetrics {
+    fn new(registry: &Registry) -> Self {
+        BenchMetrics {
+            num_success: register_int_counter_with_registry!(
+                "num_success",
+                "Total number of transaction success",
+                registry,
+            )
+            .unwrap(),
+            num_error: register_int_counter_with_registry!(
+                "num_error",
+                "Total number of transaction errors",
+                registry,
+            )
+            .unwrap(),
+            num_submitted: register_int_counter_with_registry!(
+                "num_submitted",
+                "Total number of transaction submitted to sui",
+                registry,
+            )
+            .unwrap(),
+            num_in_flight: register_gauge_with_registry!(
+                "num_in_flight",
+                "Total number of transaction in flight",
+                registry,
+            )
+            .unwrap(),
+            latency_s: register_histogram_with_registry!(
+                "latency_s",
+                "Total time in seconds to return a response",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
 }
 
 struct Stats {
@@ -108,15 +196,6 @@ struct Stats {
     pub min_latency: Duration,
     pub max_latency: Duration,
     pub duration: Duration,
-}
-
-#[derive(Parser, Debug, Clone, PartialEq, ArgEnum, EnumString, Eq)]
-#[clap(rename_all = "kebab-case")]
-enum TransactionType {
-    #[clap(name = "shared")]
-    SharedCounter,
-    #[clap(name = "owned")]
-    TransferObject,
 }
 
 type RetryType = Box<(TransactionEnvelope<EmptySignInfo>, Box<dyn Payload>)>;
@@ -140,10 +219,11 @@ async fn run(
     num_requests_per_worker: u64,
     opts: Opts,
     barrier: Arc<Barrier>,
+    metrics: Arc<BenchMetrics>,
 ) {
     let mut tasks = Vec::new();
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-    let request_delay_micros = 1_000_000 / (opts.num_workers * opts.target_qps);
+    let request_delay_micros = (1_000_000 * opts.num_workers) / opts.target_qps;
     let stat_delay_micros = 1_000_000 * opts.stat_collection_interval;
 
     for i in 0..opts.num_workers {
@@ -153,6 +233,7 @@ async fn run(
             .await;
         let tx_cloned = tx.clone();
         let cloned_barrier = barrier.clone();
+        let metrics_cloned = metrics.clone();
         // Make a per worker quorum driver, otherwise they all share the same task.
         let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
         let qd = quorum_driver_handler.clone_quorum_driver();
@@ -208,6 +289,8 @@ async fn run(
                         if let Some(b) = retry_queue.pop_front() {
                             num_submitted += 1;
                             num_error += 1;
+                            metrics_cloned.num_submitted.inc();
+                            metrics_cloned.num_error.inc();
                             let res = qd
                                 .execute_transaction(ExecuteTransactionRequest {
                                     transaction: b.0.clone(),
@@ -246,6 +329,8 @@ async fn run(
                         } else {
                             num_in_flight += 1;
                             num_submitted += 1;
+                            metrics_cloned.num_in_flight.inc();
+                            metrics_cloned.num_submitted.inc();
                             let payload = free_pool.pop().unwrap();
                             let tx = payload.make_transaction();
                             let start = Instant::now();
@@ -287,8 +372,11 @@ async fn run(
                             NextOp::Response(Some((start, payload))) => {
                                 free_pool.push(payload);
                                 let latency = start.elapsed();
+                                metrics_cloned.latency_s.observe(latency.as_secs_f64());
                                 num_success += 1;
                                 num_in_flight -= 1;
+                                metrics_cloned.num_success.inc();
+                                metrics_cloned.num_in_flight.dec();
                                 if latency > max_latency {
                                     max_latency = latency;
                                 }
@@ -370,20 +458,37 @@ fn make_workload(
     primary_gas_account_keypair: Arc<AccountKeyPair>,
     opts: &Opts,
 ) -> Box<dyn Workload<dyn Payload>> {
-    match opts.transaction_type {
-        TransactionType::SharedCounter => SharedCounterWorkload::new_boxed(
-            primary_gas_id,
-            primary_gas_account_owner,
-            primary_gas_account_keypair,
-            None,
-        ),
-        TransactionType::TransferObject => TransferObjectWorkload::new_boxed(
-            opts.num_transfer_accounts,
-            primary_gas_id,
-            primary_gas_account_owner,
-            primary_gas_account_keypair,
-        ),
+    let mut workloads = HashMap::<WorkloadType, (u32, Box<dyn Workload<dyn Payload>>)>::new();
+    match opts.workload_spec {
+        OptWorkloadSpec::WorkloadSpec {
+            shared_counter,
+            transfer_object,
+        } => {
+            if shared_counter > 0 {
+                let workload = SharedCounterWorkload::new_boxed(
+                    primary_gas_id,
+                    primary_gas_account_owner,
+                    primary_gas_account_keypair.clone(),
+                    None,
+                );
+                workloads
+                    .entry(WorkloadType::SharedCounter)
+                    .or_insert((shared_counter, workload));
+            }
+            if transfer_object > 0 {
+                let workload = TransferObjectWorkload::new_boxed(
+                    opts.num_transfer_accounts,
+                    primary_gas_id,
+                    primary_gas_account_owner,
+                    primary_gas_account_keypair,
+                );
+                workloads
+                    .entry(WorkloadType::TransferObject)
+                    .or_insert((transfer_object, workload));
+            }
+        }
     }
+    CombinationWorkload::new_boxed(workloads)
 }
 
 #[tokio::main]
@@ -403,9 +508,12 @@ async fn main() -> Result<()> {
         eprintln!("Configuring local benchmark..");
         let configs = {
             let mut configs = test_and_configure_authority_configs(opts.committee_size as usize);
+            let mut metric_port = opts.server_metric_port;
             configs.validator_configs.iter_mut().for_each(|config| {
                 let parameters = &mut config.consensus_config.as_mut().unwrap().narwhal_config;
                 parameters.batch_size = 12800;
+                config.metrics_address = format!("127.0.0.1:{}", metric_port).parse().unwrap();
+                metric_port += 1;
             });
             Arc::new(configs)
         };
@@ -447,7 +555,14 @@ async fn main() -> Result<()> {
         (primary_gas_id, owner, Arc::new(keypair), gateway_config)
     } else {
         eprintln!("Configuring remote benchmark..");
-        cloned_barrier.wait().await;
+        std::thread::spawn(move || {
+            Builder::new_multi_thread()
+                .build()
+                .unwrap()
+                .block_on(async move {
+                    cloned_barrier.wait().await;
+                });
+        });
         let config_path = Some(&opts.gateway_config_path)
             .filter(|s| !s.is_empty())
             .map(PathBuf::from)
@@ -458,8 +573,8 @@ async fn main() -> Result<()> {
                 ))
             })?;
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
-        let committee = config.make_committee()?;
-        let authority_clients = config.make_authority_clients();
+        let committee = GatewayState::make_committee(&config)?;
+        let authority_clients = GatewayState::make_authority_clients(&config);
         let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
         let aggregator = AuthorityAggregator::new(committee, authority_clients, metrics);
         let primary_gas_id = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
@@ -491,7 +606,6 @@ async fn main() -> Result<()> {
             })
             .map(|x| x.encode_base64())
             .unwrap();
-        //let contents = std::fs::read_to_string(keypair.encode_base64())?;
         (
             primary_gas_id,
             primary_gas_account,
@@ -509,19 +623,26 @@ async fn main() -> Result<()> {
         .unwrap();
     let handle: JoinHandle<()> = std::thread::spawn(move || {
         client_runtime.block_on(async move {
-            let committee = gateway_config.make_committee().unwrap();
-            let authority_clients = gateway_config.make_authority_clients();
-            let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
+            let committee = GatewayState::make_committee(&gateway_config).unwrap();
+            let authority_clients = GatewayState::make_authority_clients(&gateway_config);
+            let registry: Registry = metrics::start_prometheus_server(
+                format!("127.0.0.1:{}", opts.client_metric_port)
+                    .parse()
+                    .unwrap(),
+            );
+            let metrics = AuthAggMetrics::new(&registry);
             let aggregator = AuthorityAggregator::new(committee, authority_clients, metrics);
             let mut workload = make_workload(primary_gas_id, owner, keypair, &opts);
             workload.init(&aggregator).await;
             let barrier = Arc::new(Barrier::new(opts.num_workers as usize));
+            let metrics = Arc::new(BenchMetrics::new(&registry));
             run(
                 aggregator,
                 workload,
                 max_in_flight_ops as u64 / opts.num_workers,
                 opts,
                 barrier,
+                metrics,
             )
             .await
         });

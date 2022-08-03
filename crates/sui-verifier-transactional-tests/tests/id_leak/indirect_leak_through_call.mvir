@@ -6,7 +6,7 @@ module 0x0.m {
     import 0x2.object;
 
     struct Foo has key {
-        info: object.Info,
+        id: object.UID,
     }
 
     transfer(id: Self.Foo) {
@@ -14,11 +14,11 @@ module 0x0.m {
         abort 0;
     }
 
-    foo(f: Self.Foo, v: &mut vector<object.Info>) {
-        let info: object.Info;
+    foo(f: Self.Foo, v: &mut vector<object.UID>) {
+        let id: object.UID;
         label l0:
-        Foo { info } = move(f);
-        Self.transfer(Foo { info: move(info) });
+        Foo { id } = move(f);
+        Self.transfer(Foo { id: move(id) });
         return;
     }
 

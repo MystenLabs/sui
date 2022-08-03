@@ -4,29 +4,29 @@
 module tutorial::simple_warrior {
     use std::option::{Self, Option};
 
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct Sword has key, store {
-        info: Info,
+        id: UID,
         strength: u8,
     }
 
     struct Shield has key, store {
-        info: Info,
+        id: UID,
         armor: u8,
     }
 
     struct SimpleWarrior has key {
-        info: Info,
+        id: UID,
         sword: Option<Sword>,
         shield: Option<Shield>,
     }
 
     public entry fun create_sword(strength: u8, ctx: &mut TxContext) {
         let sword = Sword {
-            info: object::new(ctx),
+            id: object::new(ctx),
             strength,
         };
         transfer::transfer(sword, tx_context::sender(ctx))
@@ -34,7 +34,7 @@ module tutorial::simple_warrior {
 
     public entry fun create_shield(armor: u8, ctx: &mut TxContext) {
         let shield = Shield {
-            info: object::new(ctx),
+            id: object::new(ctx),
             armor,
         };
         transfer::transfer(shield, tx_context::sender(ctx))
@@ -42,7 +42,7 @@ module tutorial::simple_warrior {
 
     public entry fun create_warrior(ctx: &mut TxContext) {
         let warrior = SimpleWarrior {
-            info: object::new(ctx),
+            id: object::new(ctx),
             sword: option::none(),
             shield: option::none(),
         };

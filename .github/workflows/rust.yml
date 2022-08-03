@@ -106,7 +106,7 @@ jobs:
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [ubuntu-latest]
+    runs-on: [self-hosted, self-hosted-arc]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1

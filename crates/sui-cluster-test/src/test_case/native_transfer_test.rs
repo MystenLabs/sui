@@ -36,7 +36,7 @@ impl TestCaseImpl for NativeTransferTest {
         let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
         let data = ctx
             .get_gateway()
-            .public_transfer_object(
+            .transfer_object(
                 signer,
                 *obj_to_transfer.id(),
                 Some(*gas_obj.id()),

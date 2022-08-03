@@ -22,7 +22,6 @@ The following list includes the recent updates to Sui and the documentation:
 * Sui [version 0.6.1](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.1) released to DevNet. See the [#sui-release-notes](https://discord.com/channels/916379725201563759/974444055259910174) channel in Discord for details on this and prior releases.
 * Install the [Sui Wallet Browser Extension](../explore/wallet-browser.md) to create NFTs, transfer coins, and carry out common transactions in a Chrome tab.
 
-
 For a complete view of all changes in the Sui `devnet` branch, see:
 https://github.com/MystenLabs/sui/commits/devnet
 
