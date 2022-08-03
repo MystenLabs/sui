@@ -9,7 +9,8 @@ use narwhal_crypto::traits::KeyPair;
 use roaring::RoaringBitmap;
 
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
-use crate::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes};
+use crate::crypto::DefaultAccountKeyPair;
+use crate::crypto::{get_key_pair, AuthorityKeyPair, AuthorityPublicKeyBytes};
 use crate::object::Owner;
 
 use super::*;
@@ -28,8 +29,8 @@ fn test_signed_values() {
     let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
     let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
     let (_a3, sec3): (_, AuthorityKeyPair) = get_key_pair();
-    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
-    let (_a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
+    let (a_sender, sender_sec): (_, DefaultAccountKeyPair) = get_key_pair();
+    let (_a_sender2, sender_sec2): (_, DefaultAccountKeyPair) = get_key_pair();
 
     authorities.insert(
         /* address */ AuthorityPublicKeyBytes::from(sec1.public()),
@@ -100,8 +101,8 @@ fn test_certificates() {
     let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
     let (a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
     let (_a3, sec3): (_, AuthorityKeyPair) = get_key_pair();
-    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
-    let (_a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
+    let (a_sender, sender_sec): (_, DefaultAccountKeyPair) = get_key_pair();
+    let (_a_sender2, sender_sec2): (_, DefaultAccountKeyPair) = get_key_pair();
 
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(
@@ -362,8 +363,8 @@ fn test_digest_caching() {
     let (a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
     let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
 
-    let (sa1, _ssec1): (_, AccountKeyPair) = get_key_pair();
-    let (sa2, ssec2): (_, AccountKeyPair) = get_key_pair();
+    let (sa1, _ssec1): (_, DefaultAccountKeyPair) = get_key_pair();
+    let (sa2, ssec2): (_, DefaultAccountKeyPair) = get_key_pair();
 
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);

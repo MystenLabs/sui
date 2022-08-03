@@ -9,7 +9,7 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
+use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, DefaultAccountKeyPair};
 use sui_types::sui_serde::KeyPairBase64;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for
@@ -19,7 +19,7 @@ use sui_types::sui_serde::KeyPairBase64;
 pub struct NetworkConfig {
     pub validator_configs: Vec<NodeConfig>,
     #[serde_as(as = "Vec<KeyPairBase64>")]
-    pub account_keys: Vec<AccountKeyPair>,
+    pub account_keys: Vec<DefaultAccountKeyPair>,
     pub genesis: genesis::Genesis,
 }
 

@@ -46,7 +46,7 @@ use sui_types::{
         ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
         SUI_ADDRESS_LENGTH,
     },
-    crypto::{get_key_pair_from_rng, AccountKeyPair, Signature},
+    crypto::{get_key_pair_from_rng, DefaultAccountKeyPair, Signature},
     event::Event,
     gas,
     messages::{ExecutionStatus, InputObjects, Transaction, TransactionData, TransactionEffects},
@@ -69,7 +69,7 @@ pub struct SuiTestAdapter<'a> {
     pub(crate) storage: Arc<InMemoryStorage>,
     native_functions: NativeFunctionTable,
     pub(crate) compiled_state: CompiledState<'a>,
-    accounts: BTreeMap<String, (SuiAddress, AccountKeyPair)>,
+    accounts: BTreeMap<String, (SuiAddress, DefaultAccountKeyPair)>,
     default_syntax: SyntaxChoice,
     object_enumeration: BiBTreeMap<ObjectID, FakeID>,
     next_fake: FakeID,
@@ -130,7 +130,7 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
 
         let mut named_address_mapping = NAMED_ADDRESSES.clone();
         let additional_mapping = additional_mapping.into_iter().chain(accounts.iter().map(
-            |(n, (addr, _)): (_, &(_, AccountKeyPair))| {
+            |(n, (addr, _)): (_, &(_, DefaultAccountKeyPair))| {
                 let addr = NumericalAddress::new(addr.to_inner(), NumberFormat::Hex);
                 (n.clone(), addr)
             },
@@ -439,7 +439,7 @@ impl<'a> SuiTestAdapter<'a> {
                 None => panic!("Unbound account {}", n),
             },
             None => {
-                let (sender, sender_key) = get_key_pair_from_rng(&mut self.rng);
+                let (sender, sender_key ) = get_key_pair_from_rng(&mut self.rng);
                 new_key_pair = sender_key;
                 (sender, &new_key_pair)
             }

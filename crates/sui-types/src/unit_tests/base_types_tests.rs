@@ -11,7 +11,7 @@ use move_binary_format::file_format;
 
 use crate::crypto::bcs_signable_test::{Bar, Foo};
 use crate::crypto::{
-    get_key_pair_from_bytes, AccountKeyPair, AuthorityKeyPair, AuthoritySignature,
+    get_key_pair_from_bytes, AuthorityKeyPair, AuthoritySignature, DefaultAccountKeyPair,
     SuiAuthoritySignature, SuiSignature,
 };
 use crate::{
@@ -25,8 +25,8 @@ use super::*;
 
 #[test]
 fn test_signatures() {
-    let (addr1, sec1): (_, AccountKeyPair) = get_key_pair();
-    let (addr2, _sec2): (_, AccountKeyPair) = get_key_pair();
+    let (addr1, sec1): (_, DefaultAccountKeyPair) = get_key_pair();
+    let (addr2, _sec2): (_, DefaultAccountKeyPair) = get_key_pair();
 
     let foo = Foo("hello".into());
     let foox = Foo("hellox".into());
@@ -41,7 +41,7 @@ fn test_signatures() {
 
 #[test]
 fn test_signatures_serde() {
-    let (_, sec1): (_, AccountKeyPair) = get_key_pair();
+    let (_, sec1): (_, DefaultAccountKeyPair) = get_key_pair();
     let foo = Foo("hello".into());
     let s = Signature::new(&foo, &sec1);
 
@@ -351,7 +351,7 @@ fn test_move_package_size_for_gas_metering() {
 const SAMPLE_ADDRESS: &str = "32866f0109fa1ba911392dcd2d4260f1d8243133";
 
 // Derive a sample address and public key tuple from KeyPair bytes.
-fn derive_sample_address() -> (SuiAddress, AccountKeyPair) {
+fn derive_sample_address() -> (SuiAddress, DefaultAccountKeyPair) {
     let (address, pub_key) = get_key_pair_from_bytes(&[
         10, 112, 5, 142, 174, 127, 187, 146, 251, 68, 22, 191, 128, 68, 84, 13, 102, 71, 77, 57,
         92, 154, 128, 240, 158, 45, 13, 123, 57, 21, 194, 214, 189, 215, 127, 86, 129, 189, 1, 4,
