@@ -48,7 +48,14 @@ function TokenView({ data }: { data: DataType }) {
     const [fileType, setFileType] = useState<undefined | string>(undefined);
 
     useEffect(() => {
-        extractFileType(viewedData.url).then((result) => setFileType(result));
+        const controller = new AbortController();
+        extractFileType(viewedData.url, controller.signal)
+            .then((result) => setFileType(result))
+            .catch((err) => console.log(err));
+
+        return () => {
+            controller.abort();
+        };
     }, [viewedData.url]);
 
     const [isImageFullScreen, setImageFullScreen] = useState<boolean>(false);

@@ -50,8 +50,13 @@ export function truncate(fullStr: string, strLen: number, separator?: string) {
     );
 }
 
-export async function extractFileType(displayString: string) {
-    const result = await fetch(transformURL(displayString)).then((resp) =>
+export async function extractFileType(
+    displayString: string,
+    signal: AbortSignal
+) {
+    const result = await fetch(transformURL(displayString), {
+        signal: signal,
+    }).then((resp) =>
         resp?.headers?.get('Content-Type')?.split('/')?.at(-1)?.toUpperCase()
     );
 

@@ -35,7 +35,14 @@ function DisplayBox({
 
     useEffect(() => {
         if (!fileInfo) {
-            extractFileType(display).then((result) => setFileType(result));
+            const controller = new AbortController();
+            extractFileType(display, controller.signal)
+                .then((result) => setFileType(result))
+                .catch((err) => console.log(err));
+
+            return () => {
+                controller.abort();
+            };
         } else {
             setFileType(fileInfo);
         }
