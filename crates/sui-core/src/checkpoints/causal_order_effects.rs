@@ -69,6 +69,7 @@ pub trait EffectsStore {
         // Load the extra transactions in memory, we will use them quite a bit.
         // TODO: monitor memory use here.
         let tx_not_in_checkpoint: HashSet<_> = ckpt_store
+            .tables
             .extra_transactions
             .keys()
             .map(|e| e.transaction)
@@ -295,7 +296,7 @@ mod tests {
         // Open store first time
 
         let mut cps = CheckpointStore::open(
-            path,
+            &path,
             None,
             committee.epoch,
             k.public().into(),
@@ -335,9 +336,9 @@ mod tests {
         let x = effect_map.causal_order_from_effects(input.iter(), &mut cps);
         assert_eq!(x.unwrap().len(), 0);
 
-        cps.extra_transactions.insert(&input[0], &0).unwrap();
-        cps.extra_transactions.insert(&input[1], &1).unwrap();
-        cps.extra_transactions.insert(&input[2], &2).unwrap();
+        cps.tables.extra_transactions.insert(&input[0], &0).unwrap();
+        cps.tables.extra_transactions.insert(&input[1], &1).unwrap();
+        cps.tables.extra_transactions.insert(&input[2], &2).unwrap();
 
         // TEST 2
         // The two transactions are recorded as new so they are re-ordered and sequenced
@@ -376,8 +377,8 @@ mod tests {
             .map(|item| ExecutionDigests::new(item.transaction_digest, item.digest()))
             .collect();
 
-        cps.extra_transactions.insert(&input[1], &3).unwrap();
-        cps.extra_transactions.insert(&input[2], &4).unwrap();
+        cps.tables.extra_transactions.insert(&input[1], &3).unwrap();
+        cps.tables.extra_transactions.insert(&input[2], &4).unwrap();
 
         assert!(input[1..].len() == 3);
         let x = effect_map.causal_order_from_effects(input[1..].iter(), &mut cps);

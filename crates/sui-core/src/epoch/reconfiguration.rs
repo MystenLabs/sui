@@ -73,7 +73,7 @@ where
                 "finish_epoch_change called at the wrong checkpoint",
             );
 
-            for (tx_digest, _) in checkpoints.extra_transactions.iter() {
+            for (tx_digest, _) in checkpoints.tables.extra_transactions.iter() {
                 debug!(?epoch, tx_digest=?tx_digest.transaction, "Reverting local transaction effects");
                 self.state
                     .database
@@ -81,7 +81,7 @@ where
             }
 
             // Delete any extra certificates now unprocessed.
-            checkpoints.extra_transactions.clear()?;
+            checkpoints.tables.extra_transactions.clear()?;
 
             self.state.database.remove_all_pending_certificates()?;
 

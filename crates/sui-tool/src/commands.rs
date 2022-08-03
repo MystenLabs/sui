@@ -63,6 +63,7 @@ pub enum ToolCommand {
         #[clap(long = "no-header", help = "don't show header in concise output")]
         no_header: bool,
     },
+
     #[clap(name = "fetch-transaction")]
     FetchTransaction {
         #[clap(long = "genesis")]
@@ -75,7 +76,7 @@ pub enum ToolCommand {
     #[clap(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
-        #[clap(long = "db_path")]
+        #[clap(long = "db-path")]
         db_path: String,
         #[clap(subcommand)]
         cmd: Option<DbToolCommand>,

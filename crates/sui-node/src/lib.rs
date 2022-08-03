@@ -38,6 +38,7 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_types::crypto::{AuthorityPublicKeyBytes, KeypairTraits};
+use typed_store::traits::DBMapTableUtil;
 
 pub mod admin;
 pub mod metrics;
@@ -74,10 +75,10 @@ impl SuiNode {
 
         let secret = Arc::pin(config.key_pair().copy());
         let committee = genesis.committee()?;
-        let store = Arc::new(AuthorityStore::open(config.db_path().join("store"), None));
+        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
 
         let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
-            config.db_path().join("checkpoints"),
+            &config.db_path().join("checkpoints"),
             None,
             committee.epoch,
             config.public_key(),
@@ -87,13 +88,16 @@ impl SuiNode {
         let index_store = if config.consensus_config().is_some() {
             None
         } else {
-            Some(Arc::new(IndexStore::open(
+            Some(Arc::new(IndexStore::open_tables_read_write(
                 config.db_path().join("indexes"),
                 None,
             )))
         };
 
-        let follower_store = Arc::new(FollowerStore::open(config.db_path().join("follower_db"))?);
+        let follower_store = Arc::new(FollowerStore::open_tables_read_write(
+            config.db_path().join("follower_db"),
+            None,
+        ));
 
         let event_store = if config.enable_event_processing {
             let path = config.db_path().join("events.db");
@@ -166,8 +170,10 @@ impl SuiNode {
                     AuthAggMetrics::new(&prometheus_registry),
                 );
 
-                let pending_store =
-                    Arc::new(NodeSyncStore::open(config.db_path().join("node_sync_db"))?);
+                let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
+                    config.db_path().join("node_sync_db"),
+                    None,
+                ));
 
                 let active_authority = Arc::new(ActiveAuthority::new(
                     state.clone(),

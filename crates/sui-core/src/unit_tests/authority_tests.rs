@@ -1587,7 +1587,7 @@ async fn test_store_revert_state_update() {
 fn init_store() -> Arc<AuthorityStore> {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("authority_db");
-    Arc::new(AuthorityStore::open(path, None))
+    Arc::new(AuthorityStore::open(&path, None))
 }
 
 #[cfg(test)]

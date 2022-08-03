@@ -1,16 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{authority_store_tables::StoreTables, *};
+use super::{authority_store_tables::AuthorityStoreTables, *};
 use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::fmt::Debug;
 use std::iter;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
+use std::{fmt::Debug, path::PathBuf};
 use sui_storage::{
     mutex_table::{LockGuard, MutexTable},
     write_ahead_log::{DBWriteAheadLog, WriteAheadLog},
@@ -26,7 +26,7 @@ use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, trace};
 use typed_store::rocks::{DBBatch, DBMap};
-use typed_store::traits::Map;
+use typed_store::traits::{DBMapTableUtil, Map};
 
 pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<EmptySignInfo>;
@@ -63,21 +63,21 @@ pub struct SuiDataStore<S> {
     // A notifier for new pending certificates
     pending_notifier: Arc<Notify>,
 
-    pub(crate) tables: StoreTables<S>,
+    pub(crate) tables: AuthorityStoreTables<S>,
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Open an authority store by directory path
-    pub fn open<P: AsRef<Path> + Clone>(path: P, db_options: Option<Options>) -> Self {
-        let tables = StoreTables::open_read_write(path.clone(), db_options);
+    pub fn open(path: &Path, db_options: Option<Options>) -> Self {
+        let tables = AuthorityStoreTables::open_tables_read_write(path.to_path_buf(), db_options);
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
         // subdir of the data store directory
-        let lockdb_path = path.as_ref().join("lockdb");
+        let lockdb_path: PathBuf = path.join("lockdb");
         let lock_service =
             LockService::new(lockdb_path, None).expect("Could not initialize lockdb");
 
-        let wal_path = path.as_ref().join("recovery_log");
+        let wal_path = path.join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
 
         // Get the last sequence item

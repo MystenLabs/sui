@@ -22,9 +22,11 @@ sqlx = { version = "0.5", features = [ "runtime-tokio-rustls", "sqlite" ] }
 strum = "^0.24"
 strum_macros = "^0.24"
 anyhow = "1.0.58"
+tempfile = "3.3.0"
 
 sui-types = { path = "../sui-types" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f"}
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f"} 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 workspace-hack = { path = "../workspace-hack"}
 
@@ -34,7 +36,7 @@ bcs = "0.1.3"
 tempfile = "3.3.0"
 num_cpus = "1.13.1"
 pretty_assertions = "1.2.0"
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f" }
 
 [[bench]]
 name = "write_ahead_log"
