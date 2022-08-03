@@ -46,7 +46,7 @@ type TxResponse = {
 
 const initTxResponse: TxResponse = null;
 
-// Once the form transfer of the NFT is we have to cahce the selected NFT to show the details in the transaction response
+// Cache NFT object data before transfer of the NFT to use it in the TxResponse card
 function TransferNFTPage() {
     const [searchParams] = useSearchParams();
     const objectId = useMemo(
