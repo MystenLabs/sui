@@ -11,6 +11,7 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::Base64;
 
 #[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
@@ -23,7 +24,7 @@ pub trait RpcGatewayApi {
         /// transaction data bytes, as base-64 encoded string
         tx_bytes: Base64,
         /// Flag of the signature scheme that is used.
-        flag: Base64,
+        sig_scheme: SignatureScheme,
         /// transaction signature, as base-64 encoded string
         signature: Base64,
         /// signer's public key, as base-64 encoded string

@@ -301,8 +301,8 @@ impl AsRef<[u8]> for Signature {
 
 impl signature::Signature for Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        match bytes.first().ok_or_else(signature::Error::new)? {
-            x if x == &Ed25519SuiSignature::FLAG => {
+        match bytes.first() {
+            Some(x) if x == &Ed25519SuiSignature::SCHEME.flag() => {
                 Ok(<Ed25519SuiSignature as ToFromBytes>::from_bytes(bytes)
                     .map_err(|_| signature::Error::new())?
                     .into())
@@ -314,7 +314,7 @@ impl signature::Signature for Signature {
 
 impl std::fmt::Debug for Signature {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::result::Result<(), std::fmt::Error> {
-        let flag = base64ct::Base64::encode_string(&[self.flag_byte()]);
+        let flag = base64ct::Base64::encode_string(&[self.scheme().flag()]);
         let s = base64ct::Base64::encode_string(self.signature_bytes());
         let p = base64ct::Base64::encode_string(self.public_key_bytes());
         write!(f, "{flag}@{s}@{p}")?;
@@ -342,7 +342,7 @@ impl SuiSignatureInner for Ed25519SuiSignature {
 }
 
 impl SuiPublicKey for Ed25519PublicKey {
-    const FLAG: u8 = 0x00;
+    const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::ED25519;
 }
 
 impl AsRef<[u8]> for Ed25519SuiSignature {
@@ -393,7 +393,7 @@ impl SuiSignatureInner for Secp256k1SuiSignature {
 // }
 
 impl SuiPublicKey for Secp256k1PublicKey {
-    const FLAG: u8 = 0xed;
+    const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256k1;
 }
 
 impl AsRef<[u8]> for Secp256k1SuiSignature {
@@ -430,7 +430,7 @@ pub trait SuiSignatureInner: Sized + signature::Signature {
     type KeyPair: KeypairTraits<PubKey = Self::PubKey, Sig = Self::Sig>;
 
     const LENGTH: usize = Self::Sig::LENGTH + Self::PubKey::LENGTH + 1;
-    const FLAG: u8 = Self::PubKey::FLAG;
+    const SCHEME: SignatureScheme = Self::PubKey::SIGNATURE_SCHEME;
 
     fn get_verification_inputs(&self, author: SuiAddress) -> SuiResult<(Self::Sig, Self::PubKey)> {
         // Is this signature emitted by the expected author?
@@ -463,7 +463,8 @@ pub trait SuiSignatureInner: Sized + signature::Signature {
             })?;
 
         let mut signature_bytes: Vec<u8> = Vec::new();
-        signature_bytes.extend_from_slice(&[<Self::PubKey as SuiPublicKey>::FLAG]);
+        signature_bytes
+            .extend_from_slice(&[<Self::PubKey as SuiPublicKey>::SIGNATURE_SCHEME.flag()]);
         signature_bytes.extend_from_slice(sig.as_ref());
         signature_bytes.extend_from_slice(kp.public().as_ref());
         Self::from_bytes(&signature_bytes[..]).map_err(|err| SuiError::InvalidSignature {
@@ -473,14 +474,14 @@ pub trait SuiSignatureInner: Sized + signature::Signature {
 }
 
 pub trait SuiPublicKey: VerifyingKey {
-    const FLAG: u8;
+    const SIGNATURE_SCHEME: SignatureScheme;
 }
 
 #[enum_dispatch(Signature)]
 pub trait SuiSignature: Sized + signature::Signature {
     fn signature_bytes(&self) -> &[u8];
     fn public_key_bytes(&self) -> &[u8];
-    fn flag_byte(&self) -> u8;
+    fn scheme(&self) -> SignatureScheme;
 
     fn verify<T>(&self, value: &T, author: SuiAddress) -> SuiResult<()>
     where
@@ -536,8 +537,8 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
         &self.as_ref()[S::Sig::LENGTH + 1..]
     }
 
-    fn flag_byte(&self) -> u8 {
-        S::PubKey::FLAG
+    fn scheme(&self) -> SignatureScheme {
+        S::PubKey::SIGNATURE_SCHEME
     }
 }
 
@@ -1000,5 +1001,20 @@ pub mod bcs_signable_test {
         // Add the obligation of the authority signature verifications.
         let idx = obligation.add_message(value);
         (obligation, idx)
+    }
+}
+
+#[derive(Deserialize, Serialize, JsonSchema, Debug)]
+pub enum SignatureScheme {
+    ED25519,
+    Secp256k1,
+}
+
+impl SignatureScheme {
+    pub fn flag(&self) -> u8 {
+        match self {
+            SignatureScheme::ED25519 => 0x00,
+            SignatureScheme::Secp256k1 => 0xed,
+        }
     }
 }

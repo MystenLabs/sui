@@ -160,11 +160,11 @@
           }
         },
         {
-          "name": "flag",
+          "name": "sig_scheme",
           "description": "Flag of the signature scheme that is used.",
           "required": true,
           "schema": {
-            "$ref": "#/components/schemas/Base64"
+            "$ref": "#/components/schemas/SignatureScheme"
           }
         },
         {
@@ -200,8 +200,8 @@
               "value": "VHJhbnNhY3Rpb25EYXRhOjoAABdY7bkmDSqGyDbvwF8X5cWVJeQExGwtZKelsdk7LYZGgF2NKhIvzNsCAAAAAAAAACA7x9yXWrdfyGV5NTb2bmQYkFA2D2I9yIq7gwAYDN0Kj9BnwzQmQaTOqrLB29rQESsuPkj4xqk9BRZR/i5O764oE0klaDiQqUICAAAAAAAAACD2POST9RLwss+3xCoHzpEwy20FmjiNiGFTbLnFuBqajQEAAAAAAAAA6AMAAAAAAAA="
             },
             {
-              "name": "flag",
-              "value": "AA=="
+              "name": "sig_scheme",
+              "value": "ED25519"
             },
             {
               "name": "signature",
@@ -2922,6 +2922,13 @@
             },
             "additionalProperties": false
           }
+        ]
+      },
+      "SignatureScheme": {
+        "type": "string",
+        "enum": [
+          "ED25519",
+          "Secp256k1"
         ]
       },
       "SplitCoinResponse": {
