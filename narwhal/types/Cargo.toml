@@ -38,7 +38,7 @@ serde_test = "1.0.141"
 criterion = "0.3.6"
 
 [build-dependencies]
-rustversion = "1.0.8"
+rustversion = "1.0.9"
 prost-build = "0.10.4"
 tonic-build = { version = "0.7.2", features = [ "prost", "transport" ] }
 
