@@ -54,7 +54,7 @@ Navigate and search this site however you see fit. If you're new to Sui, we reco
 * [How Sui works](../learn/how-sui-works.md)
 * [Sui compared to other blockchains](../learn/sui-compared.md)
 
-**Build** - the [Build](../build/index.md) section includes information about how to:
+[**Build**](../build/index.md) - the Build section includes information about how to:
 * [Install Sui](../build/install.md)
 * [Create smart contracts with Move](../build/move/index.md)
 * [Set up and configure a local Sui network](../build/cli-client.md)
