@@ -185,14 +185,16 @@ module sui::delegation {
         epoch_to_claim: u64,
         validator: address,
     ): bool {
-        if (validator != self.validator_address) {
-            false
-        } else if (is_active(self)) {
-            self.next_reward_unclaimed_epoch <= epoch_to_claim
-        } else {
+        if (validator != self.validator_address || 
+            self.next_reward_unclaimed_epoch > epoch_to_claim) 
+        {
+            return false
+        }; 
+        if (!is_active(self)) {
             let ending_epoch = *option::borrow(&self.ending_epoch);
-            ending_epoch > epoch_to_claim
-        }
+            return ending_epoch > epoch_to_claim
+        };
+        true
     }
 
     public fun validator(self: &Delegation): address {

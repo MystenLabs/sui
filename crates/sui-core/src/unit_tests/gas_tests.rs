@@ -419,7 +419,7 @@ async fn test_move_call_gas() -> SuiResult {
     let gas_used_before_vm_exec = gas_status.summary(true).gas_used();
     // The gas cost to execute the function in Move VM.
     // Hard code it here since it's difficult to mock that in test.
-    const MOVE_VM_EXEC_COST: u64 = 16006;
+    const MOVE_VM_EXEC_COST: u64 = 17006;
     gas_status.charge_vm_exec_test_only(MOVE_VM_EXEC_COST)?;
     let created_object = authority_state
         .get_object(&effects.created[0].0 .0)
