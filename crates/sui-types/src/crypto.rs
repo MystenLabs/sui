@@ -758,7 +758,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     }
 
     pub fn new_with_signatures(
-        epoch: EpochId,
         mut signatures: Vec<(AuthorityPublicKeyBytes, AuthoritySignature)>,
         committee: &Committee,
     ) -> SuiResult<Self> {
@@ -775,7 +774,7 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         let sigs: Vec<AuthoritySignature> = signatures.into_iter().map(|(_, sig)| sig).collect();
 
         Ok(AuthorityQuorumSignInfo {
-            epoch,
+            epoch: committee.epoch,
             signature: AggregateAuthoritySignature::aggregate(sigs).map_err(|e| {
                 SuiError::InvalidSignature {
                     error: e.to_string(),

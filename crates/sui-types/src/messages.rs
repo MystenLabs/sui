@@ -1477,7 +1477,7 @@ impl CertifiedTransactionEffects {
             transaction_effects_digest: OnceCell::from(effects.digest()),
             effects,
             auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                epoch, signatures, committee,
+                signatures, committee,
             )?,
         })
     }
@@ -1660,7 +1660,6 @@ impl<'a> SignatureAggregator<'a> {
 
         if self.weight >= self.committee.quorum_threshold() {
             self.partial.auth_sign_info = AuthorityStrongQuorumSignInfo::new_with_signatures(
-                self.partial.auth_sign_info.epoch,
                 self.signature_stash.clone(),
                 self.committee,
             )?;
@@ -1694,7 +1693,7 @@ impl CertifiedTransaction {
             data: transaction.data,
             tx_signature: transaction.tx_signature,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                epoch, signatures, committee,
+                signatures, committee,
             )?,
         })
     }
@@ -1927,12 +1926,11 @@ impl CertifiedEpoch {
         first_checkpoint: CheckpointSequenceNumber,
         prev_epoch_info: &EpochInfo,
     ) -> SuiResult<Self> {
-        let epoch = committee.epoch;
+        debug_assert_eq!(prev_epoch_info.epoch() + 1, committee.epoch);
         let epoch_info = EpochInfo::new(committee, first_checkpoint, prev_epoch_info.digest());
         Ok(Self {
             epoch_info,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                epoch - 1,
                 signatures,
                 &prev_epoch_info.committee,
             )?,
