@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
+import { ReactComponent as PreviewMediaIcon } from '../../../assets/SVGIcons/preview-media.svg';
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
@@ -153,7 +154,7 @@ function TokenView({ data }: { data: DataType }) {
                                 <p className={styles.header}>{fileType}</p>
                             )}
                             <button onClick={handlePreviewClick}>
-                                Preview Media
+                                Preview Media <PreviewMediaIcon />
                             </button>
                         </div>
                     </div>
