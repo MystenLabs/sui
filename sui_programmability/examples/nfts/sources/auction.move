@@ -36,7 +36,7 @@ module nfts::auction {
     use sui::coin::{Self, Coin};
     use sui::balance::Balance;
     use sui::sui::SUI;
-    use sui::object::{Self, ID, Info};
+    use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self,TxContext};
 
@@ -49,7 +49,7 @@ module nfts::auction {
 
     /// Represents a bid sent by a bidder to the auctioneer.
     struct Bid has key {
-        info: Info,
+        id: UID,
         /// Address of the bidder
         bidder: address,
         /// ID of the Auction object this bid is intended for
@@ -66,9 +66,9 @@ module nfts::auction {
     /// moment. This is executed by the owner of the asset to be
     /// auctioned.
     public fun create_auction<T: key + store>(
-        to_sell: T, info: Info, auctioneer: address, ctx: &mut TxContext
+        to_sell: T, id: UID, auctioneer: address, ctx: &mut TxContext
     ) {
-        let auction = auction_lib::create_auction(info, to_sell, ctx);
+        let auction = auction_lib::create_auction(id, to_sell, ctx);
         auction_lib::transfer(auction, auctioneer);
     }
 
@@ -78,7 +78,7 @@ module nfts::auction {
         coin: Coin<SUI>, auction_id: ID, auctioneer: address, ctx: &mut TxContext
     ) {
         let bid = Bid {
-            info: object::new(ctx),
+            id: object::new(ctx),
             bidder: tx_context::sender(ctx),
             auction_id,
             bid: coin::into_balance(coin),
@@ -93,11 +93,11 @@ module nfts::auction {
     public entry fun update_auction<T: key + store>(
         auction: &mut Auction<T>, bid: Bid, ctx: &mut TxContext
     ) {
-        let Bid { info, bidder, auction_id, bid: balance } = bid;
-        assert!(auction_lib::auction_id(auction) == &auction_id, EWrongAuction);
+        let Bid { id, bidder, auction_id, bid: balance } = bid;
+        assert!(object::borrow_id(auction) == &auction_id, EWrongAuction);
         auction_lib::update_auction(auction, bidder, balance, ctx);
 
-        object::delete(info);
+        object::delete(id);
     }
 
     /// Ends the auction - transfers item to the currently highest

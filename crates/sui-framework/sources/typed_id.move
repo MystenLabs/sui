@@ -26,7 +26,7 @@ module sui::typed_id {
 
     /// Get the underlying `ID` of `obj`, and remember the type
     public fun new<T: key>(obj: &T): TypedID<T> {
-        TypedID { id: *object::id(obj) }
+        TypedID { id: object::id(obj) }
     }
 
     /// Borrow the inner `ID` of `typed_id`
@@ -42,6 +42,6 @@ module sui::typed_id {
 
     /// Check that underlying `ID` in the `typed_id` equals the objects ID
     public fun equals_object<T: key>(typed_id: &TypedID<T>, obj: &T): bool {
-        &typed_id.id == object::id(obj)
+        typed_id.id == object::id(obj)
     }
 }

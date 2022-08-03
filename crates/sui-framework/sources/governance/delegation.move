@@ -5,7 +5,7 @@ module sui::delegation {
     use std::option::{Self, Option};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
@@ -23,7 +23,7 @@ module sui::delegation {
     /// When the delegation is deactivated, we keep track of the ending epoch
     /// so that we know the ending epoch that the delegator can still claim reward.
     struct Delegation has key {
-        info: Info,
+        id: UID,
         /// The delegated stake, if the delegate is still active
         active_delegation: Option<Balance<SUI>>,
         /// If the delegation is inactive, `ending_epoch` will be
@@ -54,7 +54,7 @@ module sui::delegation {
     ) {
         let delegate_amount = coin::value(&stake);
         let delegation = Delegation {
-            info: object::new(ctx),
+            id: object::new(ctx),
             active_delegation: option::some(coin::into_balance(stake)),
             ending_epoch: option::none(),
             delegate_amount,
@@ -74,7 +74,7 @@ module sui::delegation {
         let delegate_amount = locked_coin::value(&stake);
         let (balance, epoch_lock) = locked_coin::into_balance(stake);
         let delegation = Delegation {
-            info: object::new(ctx),
+            id: object::new(ctx),
             active_delegation: option::some(balance),
             ending_epoch: option::none(),
             delegate_amount,
@@ -130,7 +130,7 @@ module sui::delegation {
         self.ending_epoch = option::some(current_epoch);
 
         let new_delegation = Delegation {
-            info: object::new(ctx),
+            id: object::new(ctx),
             active_delegation: option::some(balance),
             ending_epoch: option::none(),
             delegate_amount,
@@ -159,7 +159,7 @@ module sui::delegation {
         assert!(!is_active(&self), 0);
 
         let Delegation {
-            info,
+            id,
             active_delegation,
             ending_epoch,
             delegate_amount: _,
@@ -167,7 +167,7 @@ module sui::delegation {
             coin_locked_until_epoch,
             validator_address: _,
         } = self;
-        object::delete(info);
+        object::delete(id);
         option::destroy_none(active_delegation);
         option::destroy_none(coin_locked_until_epoch);
         let ending_epoch = *option::borrow(&ending_epoch);

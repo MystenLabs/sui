@@ -22,6 +22,8 @@ const mainBodyCSS = 'main > section > div';
 
 const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num}) a`;
 
+const ownerButton = 'td#owner span:first-child';
+
 //Standardized Expectations
 const cssInteract = (page: Page) => ({
     with: (cssValue: string) => ({
@@ -223,9 +225,7 @@ describe('End-to-end Tests', () => {
             expect(childText.trim()).toBe(childValue);
 
             //Click on Owner text:
-            await cssInteract(page)
-                .with('div#owner > div >span:first-child')
-                .click();
+            await cssInteract(page).with(ownerButton).click();
 
             //Looking for object or address?
             const lookingFor =
@@ -262,11 +262,13 @@ describe('End-to-end Tests', () => {
 
             // 2) This leads to a no image warning:
             expect(
-                await cssInteract(page).with('#noImage').get.textContent()
-            ).toBe('No Image was Found');
+                await cssInteract(page)
+                    .with('div#displayContainer > div')
+                    .get.attribute('id')
+            ).toBe('noImage');
 
             // 3) Click on owner:
-            await page.click('div#owner span:first-child');
+            await page.click(ownerButton);
 
             await page.waitForFunction(() =>
                 document.querySelector('#loadedImage')

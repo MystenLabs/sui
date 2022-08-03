@@ -10,19 +10,19 @@
 module test::m {
     use sui::transfer;
     use sui::tx_context::TxContext;
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
 
-    struct S has key { info: Info }
-    struct Child has key { info: Info }
+    struct S has key { id: UID }
+    struct Child has key { id: UID }
 
     public entry fun mint_s(ctx: &mut TxContext) {
-        let info = object::new(ctx);
-        transfer::share_object(S { info })
+        let id = object::new(ctx);
+        transfer::share_object(S { id })
     }
 
     public entry fun mint_child(s: &mut S, ctx: &mut TxContext) {
-        let info = object::new(ctx);
-        transfer::transfer_to_object(Child { info }, s);
+        let id = object::new(ctx);
+        transfer::transfer_to_object(Child { id }, s);
     }
 }
 

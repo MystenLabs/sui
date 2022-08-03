@@ -32,17 +32,6 @@ scopeguard = "1.1"
 once_cell = "1.11.0"
 tap = "1.0"
 
-
-syn = { version = "1.0.64", features = ["derive"] }
-quote = "1.0.9"
-proc-macro2 = "1.0.42"
-eyre = "0.6.8"
-thiserror = "1.0.31"
-collectable = "0.0.2"
-fdlimit = "0.2.1"
-
-
-
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
 sui-network = { path = "../sui-network" }

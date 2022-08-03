@@ -1116,7 +1116,7 @@ impl AuthorityState {
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
-    async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
+    pub async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
         let mut limit = limit.unwrap_or(usize::max_value());
         while limit > 0 {
             limit -= 1;
