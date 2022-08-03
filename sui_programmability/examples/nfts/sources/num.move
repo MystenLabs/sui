@@ -2,18 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module nfts::num {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// Very silly NFT: a natural number!
     struct Num has key, store {
-        info: Info,
+        id: UID,
         n: u64
     }
 
     struct NumIssuerCap has key {
-        info: Info,
+        id: UID,
         /// Number of NFT<Num>'s in circulation. Fluctuates with minting and burning.
         /// A maximum of `MAX_SUPPLY` NFT<Num>'s can exist at a given time.
         supply: u64,
@@ -31,7 +31,7 @@ module nfts::num {
     /// Create a unique issuer cap and give it to the transaction sender
     fun init(ctx: &mut TxContext) {
         let issuer_cap = NumIssuerCap {
-            info: object::new(ctx),
+            id: object::new(ctx),
             supply: 0,
             issued_counter: 0,
         };
@@ -44,7 +44,7 @@ module nfts::num {
         cap.issued_counter = n + 1;
         cap.supply = cap.supply + 1;
         assert!(n <= MAX_SUPPLY, ETooManyNums);
-        Num { info: object::new(ctx), n }
+        Num { id: object::new(ctx), n }
     }
 
     /// Burn `nft`. This reduces the supply.
@@ -53,8 +53,8 @@ module nfts::num {
     /// is maxed out, burning will allow us to mint new Num's with
     /// higher values.
     public fun burn(cap: &mut NumIssuerCap, nft: Num) {
-        let Num { info, n: _ } = nft;
+        let Num { id, n: _ } = nft;
         cap.supply = cap.supply - 1;
-        object::delete(info);
+        object::delete(id);
     }
 }

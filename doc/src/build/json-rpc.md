@@ -301,4 +301,4 @@ Below you can see a truncated sample output of [sui_publish](#sui_publish). One 
 
 ## Connect to remote JSON-RPC server
 
-Coming soon - alternative ways of working with Sui's JSON-RPC API. Connect to Sui Devnet, Testnet, or Mainnet!
+Employ alternative ways of working with Sui's JSON-RPC API. Connect to [Sui Devnet](../explore/devnet.md), [Join Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/) and soon Mainnet!

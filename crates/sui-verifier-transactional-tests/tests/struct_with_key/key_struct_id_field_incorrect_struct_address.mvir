@@ -4,8 +4,8 @@
 //# publish
 module 0x0.object {
     import 0x2.object;
-    struct Info has store { flag: bool }
+    struct UID has store { flag: bool }
     struct S has key {
-        info: Self.Info
+        id: Self.UID
     }
 }

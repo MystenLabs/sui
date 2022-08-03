@@ -24,6 +24,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::ConsensusTransaction,
 };
+use tap::prelude::*;
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -33,6 +34,7 @@ use tokio::{
     time::{timeout, Duration},
 };
 use tracing::debug;
+use tracing::log::error;
 
 #[cfg(test)]
 #[path = "unit_tests/consensus_tests.rs"]
@@ -170,7 +172,10 @@ impl ConsensusAdapter {
                 .clone()
                 .submit_transaction(TransactionProto { transaction: bytes })
                 .await
-                .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))?;
+                .map_err(|e| SuiError::ConsensusConnectionBroken(format!("{:?}", e)))
+                .tap_err(|r| {
+                    error!("Submit transaction failed with: {:?}", r);
+                })?;
         }
 
         // Wait for the consensus to sequence the certificate and assign locks to shared objects.
@@ -427,7 +432,8 @@ impl CheckpointConsensusAdapter {
                         let future = Self::waiter(waiter, self.retry_delay, deliver);
                         waiting.push(future);
                     }
-                    Err(_) => {
+                    Err(e) => {
+                        error!("Checkpoint fragment submit failed: {:?}", e);
                         self.buffer.push_back((serialized, sequence_number));
                         break;
                     }
@@ -452,14 +458,14 @@ impl CheckpointConsensusAdapter {
                     // Add the fragment to the buffer.
                     let transaction = ConsensusTransaction::Checkpoint(Box::new(fragment));
                     let serialized = bincode::serialize(&transaction)
-                        .expect("Failed to serialize consensus tx");
+                        .expect("Failed to serialize checkpoint fragment");
                     self.buffer.push_front((serialized, sequence_number));
                 },
 
                 // Listen to checkpoint fragments who failed to be sequenced and need retries.
                 Some((outcome, identifier)) = waiting.next() => {
                    if let Err(error) = outcome {
-                       tracing::debug!("Failed to sequence transaction: {error}");
+                       tracing::debug!("Failed to sequence checkpoint fragment: {error}");
                        let (serialized_transaction, checkpoint_sequence_number) = identifier;
                        self.buffer.push_back((serialized_transaction, checkpoint_sequence_number));
                    }

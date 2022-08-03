@@ -1,0 +1,117 @@
+@tailwind components;
+
+@layer components {
+    .textdetails {
+        @apply border-collapse;
+    }
+
+    .textdetails > tbody > tr > td {
+        @apply block sm:table-cell text-start align-top text-[0.875rem] leading-[1.063rem];
+    }
+
+    .textdetails > tbody > tr > td:first-child {
+        @apply text-sui-grey-80  font-medium pr-6 w-[150px];
+    }
+
+    .textdetails > tbody > tr > td:nth-child(2) {
+        @apply break-all;
+    }
+
+    .textdetails > tbody > tr:not(:last-child) > td:nth-child(2) {
+        @apply pb-5 sm:pb-2.5 break-all;
+    }
+
+    .textdetails > tbody > tr:last-child > td:nth-child(2) {
+        @apply pb-5 sm:pb-0;
+    }
+}
+
+h1.title {
+    @apply font-semibold text-3xl leading-6;
+}
+
+/* Text Box CSS */
+
+div.mutable {
+    @apply h-[1.5rem] p-2 border-none bg-blue-300;
+}
+
+div.immutable {
+    @apply h-[1.5rem] p-2 border-none bg-gray-300;
+}
+
+/* Description / Image CSS */
+
+div.descimagecontainer {
+    @apply flex flex-wrap inline-block mb-[3.75rem];
+}
+
+div.displaycontainer {
+    @apply w-[533px] flex;
+}
+
+div.metadata {
+    @apply ml-5;
+}
+
+div.metadata > h2 {
+    @apply my-0;
+}
+
+div.display div,
+div.display img {
+    @apply max-h-[120px] max-w-[120px] ml-auto;
+}
+
+table.description {
+    @apply w-full sm:w-[866px] mb-[3.75rem] 2xl:mb-0;
+}
+
+/* Description CSS */
+
+table.description,
+table.properties {
+    @apply textdetails;
+}
+
+.description > tbody > tr > td:nth-child(2) {
+    @apply font-mono;
+}
+
+.properties > tbody > tr > td:nth-child(2) {
+    @apply font-sans;
+}
+
+td.objectid {
+    @apply text-sui-dark;
+}
+
+/* Clickable Header CSS */
+
+h2.header {
+    @apply text-sui-grey-100 font-semibold text-[1.125rem] leading-[1.125rem] mb-5;
+}
+
+div.accommodate > h2.header {
+    @apply lg:w-[50vw];
+}
+
+/* Bytecode Styling */
+
+div.bytecodebox > div {
+    @apply ml-[5vw];
+}
+
+div.bytecodebox > div > div:first-child {
+    @apply font-sans tracking-tight font-semibold block;
+}
+
+div.bytecodebox > div > div:nth-child(2) {
+    @apply w-[65vw] h-[30vh] mt-[2vh] mb-[5vh];
+}
+
+div.jsondata {
+    @apply border-solid border-stone-300 mb-[5vh] p-5 bg-white whitespace-pre text-lg font-mono;
+
+    overflow-x: scroll;
+}

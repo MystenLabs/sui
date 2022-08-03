@@ -12,13 +12,13 @@
 module rc::regulated_coin {
     use sui::balance::{Self, Balance};
     use sui::tx_context::TxContext;
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
 
     /// The RegulatedCoin struct; holds a common `Balance<T>` which is compatible
     /// with all the other Coins and methods, as well as the `creator` field, which
     /// can be used for additional security/regulation implementations.
     struct RegulatedCoin<phantom T> has key, store {
-        info: Info,
+        id: UID,
         balance: Balance<T>,
         creator: address
     }
@@ -47,20 +47,20 @@ module rc::regulated_coin {
 
     /// Author of the currency can restrict who is allowed to create new balances;
     public fun zero<T: drop>(_: T, creator: address, ctx: &mut TxContext): RegulatedCoin<T> {
-        RegulatedCoin { info: object::new(ctx), balance: balance::zero(), creator }
+        RegulatedCoin { id: object::new(ctx), balance: balance::zero(), creator }
     }
 
     /// Build a transferable `RegulatedCoin` from a `Balance`;
     public fun from_balance<T: drop>(
         _: T, balance: Balance<T>, creator: address, ctx: &mut TxContext
     ): RegulatedCoin<T> {
-        RegulatedCoin { info: object::new(ctx), balance, creator }
+        RegulatedCoin { id: object::new(ctx), balance, creator }
     }
 
     /// Destroy `RegulatedCoin` and return its `Balance`;
     public fun into_balance<T: drop>(_: T, coin: RegulatedCoin<T>): Balance<T> {
-        let RegulatedCoin { balance, creator: _, info } = coin;
-        sui::object::delete(info);
+        let RegulatedCoin { balance, creator: _, id } = coin;
+        sui::object::delete(id);
         balance
     }
 
@@ -94,7 +94,7 @@ module abc::abc {
     use sui::tx_context::{Self, TxContext};
     use sui::balance::{Self, Balance};
     use sui::coin::{Self, Coin, TreasuryCap};
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use std::vector;
 
@@ -103,14 +103,14 @@ module abc::abc {
 
     /// A restricted transfer of Abc to another account.
     struct Transfer has key {
-        info: Info,
+        id: UID,
         balance: Balance<Abc>,
         to: address,
     }
 
     /// A registry of addresses banned from using the coin.
     struct Registry has key {
-        info: Info,
+        id: UID,
         banned: vector<address>,
         swapped_amount: u64,
     }
@@ -133,7 +133,7 @@ module abc::abc {
         transfer::transfer(treasury_cap, sender);
 
         transfer::share_object(Registry {
-            info: object::new(ctx),
+            id: object::new(ctx),
             banned: vector::empty(),
             swapped_amount: 0,
         });
@@ -192,7 +192,7 @@ module abc::abc {
 
         transfer::transfer(Transfer {
             to,
-            info: object::new(ctx),
+            id: object::new(ctx),
             balance: balance::split(borrow_mut(coin), value),
         }, to)
     }
@@ -203,13 +203,13 @@ module abc::abc {
     /// 1. the `RegulatedCoin<Abc>.creator` does not match `Transfer.to`;
     /// 2. the address of the creator/recipient is banned;
     public entry fun accept_transfer(r: &Registry, coin: &mut RCoin<Abc>, transfer: Transfer, _: &mut TxContext) {
-        let Transfer { info, balance, to } = transfer;
+        let Transfer { id, balance, to } = transfer;
 
         assert!(rcoin::creator(coin) == to, ENotOwner);
         assert!(vector::contains(&r.banned, &to) == false, EAddressBanned);
 
         balance::join(borrow_mut(coin), balance);
-        object::delete(info)
+        object::delete(id)
     }
 
     // === Public: Swap RegulatedCoin <-> Coin ===

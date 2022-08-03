@@ -437,8 +437,8 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
                 if let Some(SuiMoveValue::Number(balance)) = fields.get("balance") {
-                    if let Some(SuiMoveValue::Info { id, version }) = fields.get("info") {
-                        return Ok(GasCoin::new(*id, SequenceNumber::from(*version), *balance));
+                    if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
+                        return Ok(GasCoin::new(*id, *balance));
                     }
                 }
             }
@@ -574,7 +574,7 @@ pub enum SuiMoveValue {
     Vector(Vec<SuiMoveValue>),
     Bytearray(Base64),
     String(String),
-    Info { id: ObjectID, version: u64 },
+    UID { id: ObjectID },
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
 }
@@ -602,8 +602,8 @@ impl Display for SuiMoveValue {
             SuiMoveValue::String(value) => {
                 write!(writer, "{}", value)?;
             }
-            SuiMoveValue::Info { id, version } => {
-                write!(writer, "{id}[{version}]")?;
+            SuiMoveValue::UID { id } => {
+                write!(writer, "{id}")?;
             }
             SuiMoveValue::Struct(value) => {
                 write!(writer, "{}", value)?;
@@ -774,14 +774,11 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 return Some(SuiMoveValue::Address(*id));
             }
         }
-        "0x2::object::Info" => {
+        "0x2::object::UID" => {
             if let Some(SuiMoveValue::Address(address)) = fields.get("id") {
-                if let Some(SuiMoveValue::Number(version)) = fields.get("version") {
-                    return Some(SuiMoveValue::Info {
-                        id: ObjectID::from(*address),
-                        version: *version,
-                    });
-                }
+                return Some(SuiMoveValue::UID {
+                    id: ObjectID::from(*address),
+                });
             }
         }
         "0x2::balance::Balance" => {

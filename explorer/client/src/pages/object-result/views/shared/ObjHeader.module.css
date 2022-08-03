@@ -1,0 +1,17 @@
+.objheader {
+    @apply pb-[40px] mb-[30px];
+
+    border-bottom: 1px solid #f0f1f2;
+}
+
+.objtypes {
+    @apply text-sui-grey-85 font-semibold mt-10 text-lg mb-3;
+}
+
+.objaddress {
+    @apply text-offblack font-bold text-lg md:text-2xl font-mono break-all block items-center mb-2.5;
+}
+
+.objname {
+    @apply text-sui-grey-75 font-semibold text-[1.125rem] leading-[1.125rem];
+}

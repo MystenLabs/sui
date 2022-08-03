@@ -4,7 +4,7 @@
 module sui::stake {
     use std::option::{Self, Option};
     use sui::balance::Balance;
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::locked_coin;
     use sui::sui::SUI;
     use sui::transfer;
@@ -19,7 +19,7 @@ module sui::stake {
 
     /// A custodial stake object holding the staked SUI coin.
     struct Stake has key {
-        info: Info,
+        id: UID,
         /// The staked SUI tokens.
         balance: Balance<SUI>,
         /// The epoch until which the staked coin is locked. If the stake
@@ -44,7 +44,7 @@ module sui::stake {
         ctx: &mut TxContext,
     ) {
         let stake = Stake {
-            info: object::new(ctx),
+            id: object::new(ctx),
             balance,
             locked_until_epoch,
         };
@@ -76,8 +76,8 @@ module sui::stake {
 
     /// Burn the stake object. This can be done only when the stake has a zero balance.
     public entry fun burn(self: Stake, ctx: &mut TxContext) {
-        let Stake { info, balance, locked_until_epoch } = self;
-        object::delete(info);
+        let Stake { id, balance, locked_until_epoch } = self;
+        object::delete(id);
         balance::destroy_zero(balance);
         if (option::is_some(&locked_until_epoch)) {
             epoch_time_lock::destroy(option::extract(&mut locked_until_epoch), ctx);

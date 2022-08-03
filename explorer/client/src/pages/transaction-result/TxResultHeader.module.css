@@ -2,18 +2,10 @@
     @apply pb-2 mb-0;
 }
 
-.txback {
-    @apply w-full pb-2 px-0;
+.longtext {
+    @apply bg-transparent border-0 font-sans text-sm text-[#1F6493] font-[500] cursor-pointer hover:text-sui-grey-80;
 
-    border-bottom: 1px solid #f0f1f2;
-}
-
-.txback button {
-    @apply px-0;
-}
-
-.txback a {
-    @apply text-sui-dark text-[14px] font-[500] md:text-[15px] no-underline hover:text-sui;
+    box-sizing: border-box;
 }
 
 .txtypes {
@@ -40,12 +32,6 @@
 
 .failed {
     @apply bg-[#EB5A291A] capitalize text-sm font-sans text-[#B94118] font-normal p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1;
-
-    box-sizing: border-box;
-}
-
-.longtext {
-    @apply bg-transparent border-0 font-sans text-sm text-[#1F6493] font-[500] cursor-pointer hover:text-sui-grey-80;
 
     box-sizing: border-box;
 }
