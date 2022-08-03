@@ -4,7 +4,7 @@
 module nfts::marketplace {
     use sui::bag::{Self, Bag};
     use sui::tx_context::{Self, TxContext};
-    use sui::object::{Self, ID, Info};
+    use sui::object::{Self, ID, UID};
     use sui::typed_id::{Self, TypedID};
     use sui::transfer;
     use sui::coin::{Self, Coin};
@@ -16,7 +16,7 @@ module nfts::marketplace {
     const ENotOwner: u64 = 1;
 
     struct Marketplace has key {
-        info: Info,
+        id: UID,
         bag_id: TypedID<Bag>,
     }
 
@@ -29,12 +29,12 @@ module nfts::marketplace {
 
     /// Create a new shared Marketplace.
     public entry fun create(ctx: &mut TxContext) {
-        let info = object::new(ctx);
+        let id = object::new(ctx);
         let bag = bag::new(ctx);
         let bag_id = typed_id::new(&bag);
-        bag::transfer_to_object_id(bag, &info);
+        bag::transfer_to_object_id(bag, &id);
         let market_place = Marketplace {
-            info,
+            id,
             bag_id,
         };
         transfer::share_object(market_place);
@@ -123,7 +123,7 @@ module nfts::marketplace {
 
 #[test_only]
 module nfts::marketplaceTests {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::bag::{Self, Bag};
     use sui::transfer;
     use sui::coin::{Self, Coin};
@@ -133,7 +133,7 @@ module nfts::marketplaceTests {
 
     // Simple Kitty-NFT data structure.
     struct Kitty has key, store {
-        info: Info,
+        id: UID,
         kitty_id: u8
     }
 
@@ -157,7 +157,7 @@ module nfts::marketplaceTests {
     /// Mint Kitty NFT and send it to SELLER.
     fun mint_kitty(scenario: &mut Scenario) {
         test_scenario::next_tx(scenario, &ADMIN);
-        let nft = Kitty { info: object::new(test_scenario::ctx(scenario)), kitty_id: 1 };
+        let nft = Kitty { id: object::new(test_scenario::ctx(scenario)), kitty_id: 1 };
         transfer::transfer(nft, SELLER);
     }
 
@@ -291,8 +291,8 @@ module nfts::marketplaceTests {
     }
 
     fun burn_kitty(kitty: Kitty): u8 {
-        let Kitty{ info, kitty_id } = kitty;
-        object::delete(info);
+        let Kitty{ id, kitty_id } = kitty;
+        object::delete(id);
         kitty_id
     }
 }

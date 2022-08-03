@@ -6,7 +6,7 @@ module examples::donuts_with_events {
     use sui::transfer;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, ID, Info};
+    use sui::object::{Self, ID, UID};
     use sui::balance::{Self, Balance};
     use sui::tx_context::{Self, TxContext};
 
@@ -17,13 +17,13 @@ module examples::donuts_with_events {
     const ENotEnough: u64 = 0;
 
     /// Capability that grants an owner the right to collect profits.
-    struct ShopOwnerCap has key { info: Info }
+    struct ShopOwnerCap has key { id: UID }
 
     /// A purchasable Donut. For simplicity's sake we ignore implementation.
-    struct Donut has key { info: Info }
+    struct Donut has key { id: UID }
 
     struct DonutShop has key {
-        info: Info,
+        id: UID,
         price: u64,
         balance: Balance<SUI>
     }
@@ -44,11 +44,11 @@ module examples::donuts_with_events {
 
     fun init(ctx: &mut TxContext) {
         transfer::transfer(ShopOwnerCap {
-            info: object::new(ctx)
+            id: object::new(ctx)
         }, tx_context::sender(ctx));
 
         transfer::share_object(DonutShop {
-            info: object::new(ctx),
+            id: object::new(ctx),
             price: 1000,
             balance: balance::zero()
         })
@@ -62,19 +62,19 @@ module examples::donuts_with_events {
 
         let coin_balance = coin::balance_mut(payment);
         let paid = balance::split(coin_balance, shop.price);
-        let info = object::new(ctx);
+        let id = object::new(ctx);
 
         balance::join(&mut shop.balance, paid);
 
         // Emit the event using future object's ID.
-        event::emit(DonutBought { id: *object::info_id(&info) });
-        transfer::transfer(Donut { info }, tx_context::sender(ctx))
+        event::emit(DonutBought { id: object::uid_to_inner(&id) });
+        transfer::transfer(Donut { id }, tx_context::sender(ctx))
     }
 
     /// Consume donut and get nothing...
     public entry fun eat_donut(d: Donut) {
-        let Donut { info } = d;
-        object::delete(info);
+        let Donut { id } = d;
+        object::delete(id);
     }
 
     /// Take coin from `DonutShop` and transfer it to tx sender.

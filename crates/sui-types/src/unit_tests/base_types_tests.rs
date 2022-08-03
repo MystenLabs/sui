@@ -60,13 +60,12 @@ fn test_max_sequence_number() {
 #[test]
 fn test_gas_coin_ser_deser_roundtrip() {
     let id = ObjectID::random();
-    let coin = GasCoin::new(id, SequenceNumber::new(), 10);
+    let coin = GasCoin::new(id, 10);
     let coin_bytes = coin.to_bcs_bytes();
 
     let deserialized_coin: GasCoin = bcs::from_bytes(&coin_bytes).unwrap();
     assert_eq!(deserialized_coin.id(), coin.id());
     assert_eq!(deserialized_coin.value(), coin.value());
-    assert_eq!(deserialized_coin.version(), coin.version());
 }
 
 #[test]
@@ -74,14 +73,12 @@ fn test_increment_version() {
     let id = ObjectID::random();
     let version = SequenceNumber::from(257);
     let value = 10;
-    let coin = GasCoin::new(id, version, value);
+    let coin = GasCoin::new(id, value);
     assert_eq!(coin.id(), &id);
     assert_eq!(coin.value(), value);
-    assert_eq!(coin.version(), version);
 
-    let mut coin_obj = coin.to_object();
+    let mut coin_obj = coin.to_object(version);
     assert_eq!(&coin_obj.id(), coin.id());
-    assert_eq!(coin_obj.version(), coin.version());
 
     // update contents, which should increase sequence number, but leave
     // everything else the same

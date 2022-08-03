@@ -20,7 +20,7 @@ use sui_types::{
         CheckpointContents, CheckpointRequest, CheckpointResponse,
     },
 };
-use tracing::{debug, info, instrument, trace, Instrument};
+use tracing::{debug, error, info, instrument, trace, Instrument};
 
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
@@ -488,8 +488,8 @@ where
                         let source_client = &self.authority_clients[&source_authority];
                         let destination_client = &self.authority_clients[&destination_authority];
 
-                        source_client.report_client_error(inner_err.clone());
-                        destination_client.report_client_error(inner_err);
+                        source_client.report_client_error(&inner_err);
+                        destination_client.report_client_error(&inner_err);
 
                         debug!(
                             ?source_authority,
@@ -1493,14 +1493,7 @@ where
                                     ));
                                 }
                             }
-                            maybe_err => {
-                                // Returning Ok but without signed effects is unexpected.
-                                let err = match maybe_err {
-                                    Err(err) => err,
-                                    Ok(_) => SuiError::ByzantineAuthoritySuspicion {
-                                        authority: name,
-                                    }
-                                };
+                            Err(err) => {
                                 state.errors.push(err);
                                 state.bad_stake += weight;
                                 if state.bad_stake > validity {
@@ -1512,6 +1505,7 @@ where
                                     return Err(SuiError::QuorumFailedToExecuteCertificate { errors: state.errors });
                                 }
                             }
+                            _ => { unreachable!("SafeClient should have ruled out this case") }
                         }
                         Ok(ReduceOutput::Continue(state))
                     })
@@ -1606,7 +1600,12 @@ where
                     if effects.effects.is_object_mutated_here(obj_ref) {
                         is_ok = true;
                     } else {
-                        // TODO: Report a byzantine fault here
+                        // TODO: Throw a byzantine fault here
+                        error!(
+                            ?object_id,
+                            ?tx_digest,
+                            "get_object_info_execute. Byzantine failure!"
+                        );
                         continue;
                     }
                 }
@@ -1810,7 +1809,13 @@ where
                             if authorities.is_some() {
                                 // The caller is passing in authorities that have claimed to have the
                                 // cert and effects, so if they now say they don't, they're byzantine.
-                                Err(SuiError::ByzantineAuthoritySuspicion { authority })
+                                Err(SuiError::ByzantineAuthoritySuspicion {
+                                    authority,
+                                    reason: format!(
+                                        "Validator claimed to have the cert and effects for tx {:?} but did not return them when queried",
+                                        digests.transaction,
+                                    )
+                                })
                             } else {
                                 Err(SuiError::TransactionNotFound {
                                     digest: digests.transaction,
@@ -1897,18 +1902,11 @@ where
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
-
-                            // validator returned OK but did not give us an effects
-                            Ok(_) => {
-                                info!(?name, "peer failed to return effects");
-                                state.errors.push((
-                                    name,
-                                    SuiError::ByzantineAuthoritySuspicion { authority: name },
-                                ));
-                            }
-
                             Err(e) => {
                                 state.errors.push((name, e));
+                            }
+                            _ => {
+                                unreachable!("SafeClient should have ruled out this case")
                             }
                         }
 

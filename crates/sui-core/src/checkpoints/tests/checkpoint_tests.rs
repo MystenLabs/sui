@@ -75,7 +75,7 @@ fn random_ckpoint_store_num(
 
             // Create an authority
             let cps = CheckpointStore::open(
-                path.clone(),
+                &path,
                 None,
                 committee.epoch,
                 k.public().into(),
@@ -104,7 +104,7 @@ fn crash_recovery() {
     // Open store first time
 
     let mut cps = CheckpointStore::open(
-        path.clone(),
+        &path,
         None,
         committee.epoch,
         k.public().into(),
@@ -148,7 +148,7 @@ fn crash_recovery() {
     drop(cps);
 
     let mut cps_new = CheckpointStore::open(
-        path,
+        &path,
         None,
         committee.epoch,
         k.public().into(),
@@ -188,8 +188,8 @@ fn make_checkpoint_db() {
 
     cps.update_processed_transactions(&[(1, t1), (2, t2), (3, t3)])
         .unwrap();
-    assert_eq!(cps.checkpoint_contents.iter().count(), 0);
-    assert_eq!(cps.extra_transactions.iter().count(), 3);
+    assert_eq!(cps.tables.checkpoint_contents.iter().count(), 0);
+    assert_eq!(cps.tables.extra_transactions.iter().count(), 3);
 
     assert_eq!(cps.next_checkpoint(), 0);
 
@@ -212,14 +212,19 @@ fn make_checkpoint_db() {
         PendCertificateForExecutionNoop,
     )
     .unwrap();
-    assert_eq!(cps.checkpoint_contents.iter().count(), 1);
-    assert_eq!(cps.extra_transactions.iter().count(), 1);
+    assert_eq!(cps.tables.checkpoint_contents.iter().count(), 1);
+    assert_eq!(cps.tables.extra_transactions.iter().count(), 1);
 
     cps.update_processed_transactions(&[(6, t6)]).unwrap();
-    assert_eq!(cps.checkpoint_contents.iter().count(), 1);
-    assert_eq!(cps.extra_transactions.iter().count(), 2); // t3 & t6
+    assert_eq!(cps.tables.checkpoint_contents.iter().count(), 1);
+    assert_eq!(cps.tables.extra_transactions.iter().count(), 2); // t3 & t6
 
-    let (_cp_seq, tx_seq) = cps.transactions_to_checkpoint.get(&t4).unwrap().unwrap();
+    let (_cp_seq, tx_seq) = cps
+        .tables
+        .transactions_to_checkpoint
+        .get(&t4)
+        .unwrap()
+        .unwrap();
     assert_eq!(tx_seq, 4);
 }
 
@@ -308,7 +313,10 @@ fn make_proposals() {
     .unwrap();
 
     assert_eq!(
-        cps4.extra_transactions.keys().collect::<HashSet<_>>(),
+        cps4.tables
+            .extra_transactions
+            .keys()
+            .collect::<HashSet<_>>(),
         [t5].into_iter().collect::<HashSet<_>>()
     );
 }
@@ -810,7 +818,7 @@ fn checkpoint_integration() {
     // Make a checkpoint store:
 
     let mut cps = CheckpointStore::open(
-        path,
+        &path,
         None,
         committee.epoch,
         k.public().into(),
@@ -1428,7 +1436,7 @@ fn test_fragment_full_flow() {
         .is_ok());
 
     // Check we registered one local fragment
-    assert_eq!(test_objects[5].1.local_fragments.iter().count(), 1);
+    assert_eq!(test_objects[5].1.tables.local_fragments.iter().count(), 1);
 
     // Make a daisy chain of the other proposals
     let mut fragments = vec![fragment_xy];
@@ -1499,7 +1507,7 @@ fn test_fragment_full_flow() {
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
-    assert_eq!(cps6.fragments.iter().count(), 6);
+    assert_eq!(cps6.tables.fragments.iter().count(), 6);
     // Cannot advance to next checkpoint
     assert!(cps6.latest_stored_checkpoint().is_none());
     // But recording of fragments is closed
@@ -1520,7 +1528,7 @@ fn test_fragment_full_flow() {
     }
 
     // Two fragments for 5-6, and then 0-1, 1-2, 2-3, 3-4
-    assert_eq!(cps6.fragments.iter().count(), 12);
+    assert_eq!(cps6.tables.fragments.iter().count(), 12);
     // Cannot advance to next checkpoint
     assert_eq!(cps6.next_checkpoint(), 0);
     // But recording of fragments is closed

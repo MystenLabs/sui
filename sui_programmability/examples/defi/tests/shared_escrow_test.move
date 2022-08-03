@@ -3,7 +3,7 @@
 
 #[test_only]
 module defi::shared_escrow_tests {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::test_scenario::{Self, Scenario};
 
     use defi::shared_escrow::{Self, EscrowedObj};
@@ -19,12 +19,12 @@ module defi::shared_escrow_tests {
 
     // Example of an object type used for exchange
     struct ItemA has key, store {
-        info: Info
+        id: UID
     }
 
     // Example of the other object type used for exchange
     struct ItemB has key, store {
-        info: Info
+        id: UID
     }
 
     #[test]
@@ -125,13 +125,13 @@ module defi::shared_escrow_tests {
         };
     }
 
-    fun exchange(scenario: &mut Scenario, bob: &address, item_b_verioned_id: Info) {
+    fun exchange(scenario: &mut Scenario, bob: &address, item_b_verioned_id: UID) {
         test_scenario::next_tx(scenario, bob);
         {
             let escrow_wrapper = test_scenario::take_shared<EscrowedObj<ItemA, ItemB>>(scenario);
             let escrow = test_scenario::borrow_mut(&mut escrow_wrapper);
             let item_b = ItemB {
-                info: item_b_verioned_id
+                id: item_b_verioned_id
             };
             let ctx = test_scenario::ctx(scenario);
             shared_escrow::exchange(item_b, escrow, ctx);
@@ -142,7 +142,7 @@ module defi::shared_escrow_tests {
     fun create_escrow(
         alice: address,
         bob: address,
-    ): (Scenario, Info) {
+    ): (Scenario, UID) {
         let new_scenario = test_scenario::begin(&alice);
         let scenario = &mut new_scenario;
         let ctx = test_scenario::ctx(scenario);
@@ -151,14 +151,14 @@ module defi::shared_escrow_tests {
         test_scenario::next_tx(scenario, &bob);
         let ctx = test_scenario::ctx(scenario);
         let item_b_versioned_id = object::new(ctx);
-        let item_b_id = *object::info_id(&item_b_versioned_id);
+        let item_b_id = object::uid_to_inner(&item_b_versioned_id);
 
         // Alice creates the escrow
         test_scenario::next_tx(scenario, &alice);
         {
             let ctx = test_scenario::ctx(scenario);
             let escrowed = ItemA {
-                info: item_a_versioned_id
+                id: item_a_versioned_id
             };
             shared_escrow::create<ItemA, ItemB>(
                 bob,

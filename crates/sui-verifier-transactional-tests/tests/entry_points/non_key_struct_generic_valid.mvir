@@ -8,7 +8,7 @@ module 0x0.m {
     import 0x2.tx_context;
     import 0x2.object;
 
-    struct Obj<T> has key { info: object.Info }
+    struct Obj<T> has key { id: object.UID }
 
     public entry no<T: store>(s: Self.Obj<T>, ctx: &mut tx_context.TxContext) {
         label l0:

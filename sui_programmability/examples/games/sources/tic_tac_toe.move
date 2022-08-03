@@ -21,7 +21,7 @@ module games::tic_tac_toe {
     use std::option::{Self, Option};
     use std::vector;
 
-    use sui::object::{Self, ID, Info};
+    use sui::object::{Self, ID, UID};
     use sui::event;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -38,7 +38,7 @@ module games::tic_tac_toe {
     const ENoMoreMark: u64 = 1;
 
     struct TicTacToe has key {
-        info: Info,
+        id: UID,
         gameboard: vector<vector<Option<Mark>>>,
         cur_turn: u8,
         game_status: u8,
@@ -47,20 +47,20 @@ module games::tic_tac_toe {
     }
 
     struct MarkMintCap has key {
-        info: Info,
+        id: UID,
         game_id: ID,
         remaining_supply: u8,
     }
 
     struct Mark has key, store {
-        info: Info,
+        id: UID,
         player: address,
         row: u64,
         col: u64,
     }
 
     struct Trophy has key {
-        info: Info,
+        id: UID,
     }
 
     struct MarkSentEvent has copy, drop {
@@ -79,15 +79,15 @@ module games::tic_tac_toe {
     public entry fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
-        let info = object::new(ctx);
-        let game_id = *object::info_id(&info);
+        let id = object::new(ctx);
+        let game_id = object::uid_to_inner(&id);
         let gameboard = vector[
             vector[option::none(), option::none(), option::none()],
             vector[option::none(), option::none(), option::none()],
             vector[option::none(), option::none(), option::none()],
         ];
         let game = TicTacToe {
-            info,
+            id,
             gameboard,
             cur_turn: 0,
             game_status: IN_PROGRESS,
@@ -96,13 +96,13 @@ module games::tic_tac_toe {
         };
         transfer::transfer(game, tx_context::sender(ctx));
         let cap = MarkMintCap {
-            info: object::new(ctx),
+            id: object::new(ctx),
             game_id,
             remaining_supply: 5,
         };
         transfer::transfer(cap, x_address);
         let cap = MarkMintCap {
-            info: object::new(ctx),
+            id: object::new(ctx),
             game_id,
             remaining_supply: 5,
         };
@@ -126,7 +126,7 @@ module games::tic_tac_toe {
         // The game server will then call `place_mark` to place this mark.
         event::emit(MarkSentEvent {
             game_id: *&cap.game_id,
-            mark_id: *object::info_id(&mark.info),
+            mark_id: object::id(&mark),
         });
         transfer::transfer(mark, game_address);
     }
@@ -152,17 +152,17 @@ module games::tic_tac_toe {
 
         if (game.game_status != IN_PROGRESS) {
             // Notify the server that the game ended so that it can delete the game.
-            event::emit(GameEndEvent { game_id: *object::info_id(&game.info) });
+            event::emit(GameEndEvent { game_id: object::id(game) });
             if (game.game_status == X_WIN) {
-                transfer::transfer( Trophy { info: object::new(ctx) }, *&game.x_address);
+                transfer::transfer( Trophy { id: object::new(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
-                transfer::transfer( Trophy { info: object::new(ctx) }, *&game.o_address);
+                transfer::transfer( Trophy { id: object::new(ctx) }, *&game.o_address);
             }
         }
     }
 
     public entry fun delete_game(game: TicTacToe) {
-        let TicTacToe { info, gameboard, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
+        let TicTacToe { id, gameboard, cur_turn: _, game_status: _, x_address: _, o_address: _ } = game;
         while (vector::length(&gameboard) > 0) {
             let row = vector::pop_back(&mut gameboard);
             while (vector::length(&row) > 0) {
@@ -176,17 +176,17 @@ module games::tic_tac_toe {
             vector::destroy_empty(row);
         };
         vector::destroy_empty(gameboard);
-        object::delete(info);
+        object::delete(id);
     }
 
     public entry fun delete_trophy(trophy: Trophy) {
-        let Trophy { info } = trophy;
-        object::delete(info);
+        let Trophy { id } = trophy;
+        object::delete(id);
     }
 
     public entry fun delete_cap(cap: MarkMintCap) {
-        let MarkMintCap { info, game_id: _, remaining_supply: _ } = cap;
-        object::delete(info);
+        let MarkMintCap { id, game_id: _, remaining_supply: _ } = cap;
+        object::delete(id);
     }
 
     public fun get_status(game: &TicTacToe): u8 {
@@ -199,7 +199,7 @@ module games::tic_tac_toe {
         };
         cap.remaining_supply = cap.remaining_supply - 1;
         Mark {
-            info: object::new(ctx),
+            id: object::new(ctx),
             player: tx_context::sender(ctx),
             row,
             col,
@@ -274,8 +274,8 @@ module games::tic_tac_toe {
     }
 
     fun delete_mark(mark: Mark) {
-        let Mark { info, player: _, row: _, col: _ } = mark;
-        object::delete(info);
+        let Mark { id, player: _, row: _, col: _ } = mark;
+        object::delete(id);
     }
 
     public fun mark_player(mark: &Mark): &address {

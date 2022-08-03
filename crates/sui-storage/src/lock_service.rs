@@ -17,19 +17,19 @@
 
 use futures::channel::oneshot;
 use rocksdb::Options;
-use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap};
-use typed_store::{reopen, traits::Map};
+use typed_store::traits::DBMapTableUtil;
+use typed_store::traits::Map;
+use typed_store_macros::DBMapUtils;
 
 use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
-
-use crate::default_db_options;
 
 /// Commands to send to the LockService (for mutating lock state)
 // TODO: use smallvec as an optimization
@@ -75,51 +75,28 @@ enum LockServiceQueries {
 
 /// Inner LockService implementation that does single threaded database accesses.  Cannot be
 /// used publicly, must be wrapped in a LockService to control access.
-#[derive(Clone)]
-struct LockServiceImpl {
+#[derive(Clone, DBMapUtils)]
+pub struct LockServiceImpl {
     /// This is a map between object references of currently active objects that can be mutated,
     /// and the transaction that they are lock on for use by this specific authority. Where an object
     /// lock exists for an object version, but no transaction has been seen using it the lock is set
     /// to None. The safety of consistent broadcast depend on each honest authority never changing
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
+    #[options(optimization = "point_lookup")]
     transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
 
     /// The semantics of transaction_lock ensure that certificates are always processed
     /// in causal order - that is, certificates naturally form a partial order. tx_sequence
     /// records a total ordering among all processed certificates (which is naturally local
     /// to this authority).
+    #[options(optimization = "point_lookup")]
     tx_sequence: DBMap<TransactionDigest, TxSequenceNumber>,
 }
 
 // TODO: Create method needs to make sure only one instance or thread of this is running per authority
 // If not for multiple authorities per process, it should really be one per process.
 impl LockServiceImpl {
-    /// Open or create a new LockService database
-    fn try_open_db<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Result<Self, SuiError> {
-        let (options, point_lookup) = default_db_options(db_options, None);
-
-        let db = {
-            let path = &path;
-            let db_options = Some(options);
-            let opt_cfs: &[(&str, &rocksdb::Options)] = &[
-                ("transaction_lock", &point_lookup),
-                ("tx_sequence", &point_lookup),
-            ];
-            typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
-        }
-        .map_err(SuiError::StorageError)?;
-
-        let (transaction_lock, tx_sequence) = reopen!(&db, "transaction_lock";<ObjectRef, Option<TransactionDigest>>,
-                "tx_sequence";<TransactionDigest, TxSequenceNumber>
-        );
-
-        Ok(Self {
-            transaction_lock,
-            tx_sequence,
-        })
-    }
-
     fn get_tx_sequence(&self, tx: TransactionDigest) -> SuiResult<Option<TxSequenceNumber>> {
         self.tx_sequence.get(&tx).map_err(SuiError::StorageError)
     }
@@ -466,8 +443,8 @@ impl Drop for LockServiceInner {
 impl LockService {
     /// Create a new instance of LockService.  For now, the caller has to guarantee only one per data store -
     /// namely each SuiDataStore creates its own LockService.
-    pub fn new<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Result<Self, SuiError> {
-        let inner_service = LockServiceImpl::try_open_db(path, db_options)?;
+    pub fn new(path: PathBuf, db_options: Option<Options>) -> Result<Self, SuiError> {
+        let inner_service = LockServiceImpl::open_tables_read_write(path, db_options);
 
         // Now, create a sync channel and spawn a thread
         let (sender, receiver) = channel(LOCKSERVICE_QUEUE_LEN);
@@ -637,8 +614,7 @@ mod tests {
         let dir = std::env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         std::fs::create_dir(&path).unwrap();
-
-        LockServiceImpl::try_open_db(path, None).expect("Could not create LockDB")
+        LockServiceImpl::open_tables_read_write(path, None)
     }
 
     fn init_lockservice() -> LockService {

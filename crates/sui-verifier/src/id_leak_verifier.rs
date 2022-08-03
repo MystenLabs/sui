@@ -163,7 +163,7 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
 
 impl<'a> AbstractInterpreter for IDLeakAnalysis<'a> {}
 
-/// Certain Sui Framework functions can safely take a `Info` by value
+/// Certain Sui Framework functions can safely take a `ID` by value
 fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHandle) -> bool {
     let m = verifier
         .binary_view
@@ -234,7 +234,7 @@ fn pack(verifier: &mut IDLeakAnalysis, struct_def: &StructDefinition) {
 
 fn unpack(verifier: &mut IDLeakAnalysis, struct_def: &StructDefinition) {
     // When unpacking, fields of the struct will be pushed to the stack in order.
-    // An object whose struct type has key ability must have the first field as "info",
+    // An object whose struct type has key ability must have the first field as "id",
     // representing the ID field of the object. It's the focus of our tracking.
     // The struct_with_key_verifier verifies that the first field must be the id field.
     verifier.stack.pop().unwrap();

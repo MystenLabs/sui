@@ -7,7 +7,7 @@ use move_binary_format::{
     file_format::{AbilitySet, Bytecode, FunctionDefinition, SignatureToken, Visibility},
     CompiledModule,
 };
-use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
+use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
 use sui_types::{
     base_types::{
         STD_OPTION_MODULE_NAME, STD_OPTION_STRUCT_NAME, TX_CONTEXT_MODULE_NAME,
@@ -18,9 +18,7 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::{format_signature_token, resolve_struct, verification_failure};
-
-pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
+use crate::{format_signature_token, resolve_struct, verification_failure, INIT_FN_NAME};
 
 /// Checks valid rules rules for entry points, both for module initialization and transactions
 ///
@@ -28,7 +26,10 @@ pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 /// - The existence of the function is optional
 /// - The function must have the name specified by `INIT_FN_NAME`
 /// - The function must have `Visibility::Private`
-/// - The function can have a single parameter: &mut TxContext (see `is_tx_context`)
+/// - The function can have at most two parameters:
+///   - mandatory &mut TxContext (see `is_tx_context`) in the last position
+///   - optional characteristic type (see char_type verifier pass) passed by value in the first
+///   position
 ///
 /// For transaction entry points
 /// - The function must have `is_entry` true
@@ -113,7 +114,7 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
         ));
     }
 
-    if !view.signature_at(fhandle.return_).0.is_empty() {
+    if !view.signature_at(fhandle.return_).is_empty() {
         return Err(format!(
             "{}, '{}' function cannot have return values",
             module.self_id(),
@@ -122,22 +123,23 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
     }
 
     let parameters = &view.signature_at(fhandle.parameters).0;
-    if parameters.len() != 1 {
+    if parameters.is_empty() || parameters.len() > 2 {
         return Err(format!(
-            "Expected exactly one parameter for {}::{}  of type &mut {}::{}::{}",
+            "Expected at least one and at most two parameters for {}::{}",
             module.self_id(),
             INIT_FN_NAME,
-            SUI_FRAMEWORK_ADDRESS,
-            TX_CONTEXT_MODULE_NAME,
-            TX_CONTEXT_STRUCT_NAME,
         ));
     }
 
-    if is_tx_context(view, &parameters[0]) {
+    // Checking only the last (and possibly the only) parameter here. If there are two parameters,
+    // then the first parameter must be of a characteristic type and must be passed by value. This
+    // is checked by the verifier pass handling characteristic types (char_type) - please see the
+    // description of this pass for additional details.
+    if is_tx_context(view, &parameters[parameters.len() - 1]) {
         Ok(())
     } else {
         Err(format!(
-            "Expected parameter for {}::{} to be &mut {}::{}::{}, but found {}",
+            "Expected last parameter for {}::{} to be &mut {}::{}::{}, but found {}",
             module.self_id(),
             INIT_FN_NAME,
             SUI_FRAMEWORK_ADDRESS,

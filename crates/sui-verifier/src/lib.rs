@@ -3,6 +3,7 @@
 
 pub mod verifier;
 
+pub mod char_type_verifier;
 pub mod entry_points_verifier;
 pub mod global_storage_access_verifier;
 pub mod id_leak_verifier;
@@ -13,8 +14,10 @@ use move_binary_format::{
     binary_views::BinaryIndexedView,
     file_format::{SignatureToken, StructHandleIndex},
 };
-use move_core_types::{account_address::AccountAddress, identifier::IdentStr};
+use move_core_types::{account_address::AccountAddress, ident_str, identifier::IdentStr};
 use sui_types::error::{ExecutionError, ExecutionErrorKind};
+
+pub const INIT_FN_NAME: &IdentStr = ident_str!("init");
 
 fn verification_failure(error: String) -> ExecutionError {
     ExecutionError::new_with_source(ExecutionErrorKind::SuiMoveVerificationError, error)

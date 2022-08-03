@@ -13,22 +13,22 @@ module sui::test_scenarioTests {
     const OBJECT_ID_NOT_FOUND: u64 = 2;
 
     struct Object has key, store {
-        info: object::Info,
+        id: object::UID,
         value: u64,
     }
 
     struct Wrapper has key {
-        info: object::Info,
+        id: object::UID,
         child: Object,
     }
 
     struct Parent has key {
-        info: object::Info,
+        id: object::UID,
         child: object::ID,
     }
 
     struct MultiChildParent has key {
-        info: object::Info,
+        id: object::UID,
         child1: object::ID,
         child2: object::ID,
     }
@@ -38,16 +38,16 @@ module sui::test_scenarioTests {
         let sender = @0x0;
         let scenario = test_scenario::begin(&sender);
         {
-            let info = test_scenario::new_object(&mut scenario);
-            let obj = Object { info, value: 10 };
+            let id = test_scenario::new_object(&mut scenario);
+            let obj = Object { id, value: 10 };
             transfer::transfer(obj, copy sender);
         };
         // now, object gets wrapped
         test_scenario::next_tx(&mut scenario, &sender);
         {
-            let info = test_scenario::new_object(&mut scenario);
+            let id = test_scenario::new_object(&mut scenario);
             let child = test_scenario::take_owned<Object>(&mut scenario);
-            let wrapper = Wrapper { info, child };
+            let wrapper = Wrapper { id, child };
             transfer::transfer(wrapper, copy sender);
         };
         // wrapped object should no longer be removable, but wrapper should be
@@ -63,8 +63,8 @@ module sui::test_scenarioTests {
         let sender = @0x0;
         let scenario = test_scenario::begin(&sender);
         {
-            let info = test_scenario::new_object(&mut scenario);
-            let obj = Object { info, value: 10 };
+            let id = test_scenario::new_object(&mut scenario);
+            let obj = Object { id, value: 10 };
             transfer::transfer(obj, copy sender);
         };
         // object gets removed, then returned
@@ -85,8 +85,8 @@ module sui::test_scenarioTests {
         let sender = @0x0;
         let scenario = test_scenario::begin(&sender);
         {
-            let info = test_scenario::new_object(&mut scenario);
-            let obj = Object { info, value: 10 };
+            let id = test_scenario::new_object(&mut scenario);
+            let obj = Object { id, value: 10 };
             transfer::transfer(obj, copy sender);
         };
         test_scenario::next_tx(&mut scenario, &sender);
@@ -109,8 +109,8 @@ module sui::test_scenarioTests {
         let sender = @0x0;
         let scenario = test_scenario::begin(&sender);
         {
-            let info = test_scenario::new_object(&mut scenario);
-            let obj = Object { info, value: 10 };
+            let id = test_scenario::new_object(&mut scenario);
+            let obj = Object { id, value: 10 };
             transfer::transfer(obj, copy sender);
             // an object transferred during the tx shouldn't be available in that tx
             assert!(!test_scenario::can_take_owned<Object>(&scenario), 0)
@@ -123,8 +123,8 @@ module sui::test_scenarioTests {
         let sender = @0x0;
         let scenario = test_scenario::begin(&sender);
         {
-            let info = test_scenario::new_object(&mut scenario);
-            let obj = Object { info, value: 10 };
+            let id = test_scenario::new_object(&mut scenario);
+            let obj = Object { id, value: 10 };
             transfer::transfer(obj, copy sender);
         };
         test_scenario::next_tx(&mut scenario, &sender);
@@ -145,8 +145,8 @@ module sui::test_scenarioTests {
         let addr3 = @0x2;
         let scenario = test_scenario::begin(&addr1);
         {
-            let info = test_scenario::new_object(&mut scenario);
-            let obj = Object { info, value: 10 };
+            let id = test_scenario::new_object(&mut scenario);
+            let obj = Object { id, value: 10 };
             // self-transfer
             transfer::transfer(obj, copy addr1);
         };
@@ -192,9 +192,9 @@ module sui::test_scenarioTests {
         // send an object to tx2_sender
         let id_bytes;
         {
-            let info = test_scenario::new_object(&mut scenario);
-            id_bytes = *object::info_id(&info);
-            let obj = Object { info, value: 100 };
+            let id = test_scenario::new_object(&mut scenario);
+            id_bytes = object::uid_to_inner(&id);
+            let obj = Object { id, value: 100 };
             transfer::transfer(obj, copy tx2_sender);
             // sender cannot access the object
             assert!(!test_scenario::can_take_owned<Object>(&scenario), 0);
@@ -204,10 +204,10 @@ module sui::test_scenarioTests {
         {
             assert!(test_scenario::can_take_owned<Object>(&scenario), 1);
             let received_obj = test_scenario::take_owned<Object>(&mut scenario);
-            let Object { info: received_info, value } = received_obj;
-            assert!(object::info_id(&received_info) == &id_bytes, ID_BYTES_MISMATCH);
+            let Object { id: received_id, value } = received_obj;
+            assert!(object::uid_to_inner(&received_id) == id_bytes, ID_BYTES_MISMATCH);
             assert!(value == 100, VALUE_MISMATCH);
-            object::delete(received_info);
+            object::delete(received_id);
         };
         // check that the object is no longer accessible after deletion
         test_scenario::next_tx(&mut scenario, &tx2_sender);
@@ -220,16 +220,16 @@ module sui::test_scenarioTests {
     fun test_take_owned_by_id() {
         let sender = @0x0;
         let scenario = test_scenario::begin(&sender);
-        let info1 = test_scenario::new_object(&mut scenario);
-        let info2 = test_scenario::new_object(&mut scenario);
-        let info3 = test_scenario::new_object(&mut scenario);
-        let id1 = *object::info_id(&info1);
-        let id2 = *object::info_id(&info2);
-        let id3 = *object::info_id(&info3);
+        let uid1 = test_scenario::new_object(&mut scenario);
+        let uid2 = test_scenario::new_object(&mut scenario);
+        let uid3 = test_scenario::new_object(&mut scenario);
+        let id1 = object::uid_to_inner(&uid1);
+        let id2 = object::uid_to_inner(&uid2);
+        let id3 = object::uid_to_inner(&uid3);
         {
-            let obj1 = Object { info: info1, value: 10 };
-            let obj2 = Object { info: info2, value: 20 };
-            let obj3 = Object { info: info3, value: 30 };
+            let obj1 = Object { id: uid1, value: 10 };
+            let obj2 = Object { id: uid2, value: 20 };
+            let obj3 = Object { id: uid3, value: 30 };
             transfer::transfer(obj1, copy sender);
             transfer::transfer(obj2, copy sender);
             transfer::transfer(obj3, copy sender);
@@ -265,12 +265,12 @@ module sui::test_scenarioTests {
         let sender = @0x0;
         let scenario = test_scenario::begin(&sender);
         {
-            let info = test_scenario::new_object(&mut scenario);
-            let id = *object::info_id(&info);
-            let obj = Object { info, value: 10 };
+            let id = test_scenario::new_object(&mut scenario);
+            let id_addr = object::uid_to_address(&id);
+            let obj = Object { id, value: 10 };
             transfer::transfer(obj, copy sender);
             let ctx = test_scenario::ctx(&mut scenario);
-            assert!(id == object::id_from_address(tx_context::last_created_object_id(ctx)), 0);
+            assert!(id_addr == tx_context::last_created_object_id(ctx), 0);
         };
     }
 
@@ -348,21 +348,21 @@ module sui::test_scenarioTests {
         let scenario = test_scenario::begin(&sender);
         // Create two children and a parent object.
         let child1 = Object {
-            info: test_scenario::new_object(&mut scenario),
+            id: test_scenario::new_object(&mut scenario),
             value: 10,
         };
-        let child1_id = *object::id(&child1);
+        let child1_id = object::id(&child1);
         let child2 = Object {
-            info: test_scenario::new_object(&mut scenario),
+            id: test_scenario::new_object(&mut scenario),
             value: 20,
         };
-        let child2_id = *object::id(&child2);
-        let parent_info = test_scenario::new_object(&mut scenario);
-        transfer::transfer_to_object_id(child1, &parent_info);
-        transfer::transfer_to_object_id(child2, &parent_info);
+        let child2_id = object::id(&child2);
+        let parent_id = test_scenario::new_object(&mut scenario);
+        transfer::transfer_to_object_id(child1, &parent_id);
+        transfer::transfer_to_object_id(child2, &parent_id);
 
         let parent = MultiChildParent {
-            info: parent_info,
+            id: parent_id,
             child1: child1_id,
             child2: child2_id,
         };
@@ -384,15 +384,15 @@ module sui::test_scenarioTests {
     /// Create object and parent. object is a child of parent.
     /// parent is owned by sender of `scenario`.
     fun create_parent_and_object(scenario: &mut Scenario) {
-        let parent_info = test_scenario::new_object(scenario);
+        let parent_id = test_scenario::new_object(scenario);
         let object = Object {
-            info: test_scenario::new_object(scenario),
+            id: test_scenario::new_object(scenario),
             value: 10,
         };
-        let child_id = *object::id(&object);
-        transfer::transfer_to_object_id(object, &parent_info);
+        let child_id = object::id(&object);
+        transfer::transfer_to_object_id(object, &parent_id);
         let parent = Parent {
-            info: parent_info,
+            id: parent_id,
             child: child_id,
         };
         transfer::transfer(parent, test_scenario::sender(scenario));
@@ -401,7 +401,7 @@ module sui::test_scenarioTests {
     /// Create an object and transfer it to the sender of `scenario`.
     fun create_and_transfer_object(scenario: &mut Scenario, value: u64) {
         let object = Object {
-            info: test_scenario::new_object(scenario),
+            id: test_scenario::new_object(scenario),
             value,
         };
         transfer::transfer(object, test_scenario::sender(scenario));

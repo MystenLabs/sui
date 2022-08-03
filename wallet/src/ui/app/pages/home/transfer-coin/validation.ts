@@ -57,13 +57,6 @@ export function createValidationSchema(
                     }
                 }
             )
-            .test(
-                'num-gas-coins-check',
-                `Need at least 2 ${GAS_SYMBOL} coins to transfer a ${GAS_SYMBOL} coin`,
-                () => {
-                    return coinType !== GAS_TYPE_ARG || totalGasCoins >= 2;
-                }
-            )
             .label('Amount'),
     });
 }

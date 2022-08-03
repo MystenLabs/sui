@@ -22,7 +22,7 @@ written: object(109), object(110)
 
 task 6 'run'. lines 89-89:
 Error: Transaction Effects Status: Invalid Shared Child Object Usage. When a child object (either direct or indirect) of a shared object is passed by-value to an entry function, either the child object's type or the shared object's type must be defined in the same module as the called function. This is violated by object fake(109), whose ancestor fake(111) is a shared object, and neither are defined in this module..
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidSharedChildUse(InvalidSharedChildUse { child: fake(109), ancestor: fake(111) }), source: Some("When a child object (either direct or indirect) of a shared object is passed by-value to an entry function, either the child object's type or the shared object's type must be defined in the same module as the called function. This is violated by object fake(109) (defined in module 'T3::O3'), whose ancestor fake(111) is a shared object (defined in module 'T2::O2'), and neither are defined in this module 'T1::O1'") } }
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidSharedChildUse(InvalidSharedChildUse { child: fake(109), ancestor: fake(111) }), source: Some("When a child object (either direct or indirect) of a shared object is passed by-value to an entry function, either the child object's type or the shared object's type must be defined in the same module as the called function. This is violated by object fake(109) (defined in module 't3::o3'), whose ancestor fake(111) is a shared object (defined in module 't2::o2'), and neither are defined in this module 't1::o1'") } }
 
 task 7 'run'. lines 91-91:
 written: object(109), object(111), object(113)

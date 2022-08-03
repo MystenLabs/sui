@@ -290,10 +290,11 @@ pub enum SuiError {
     AuthorityInformationUnavailable,
     #[error("Failed to update authority.")]
     AuthorityUpdateFailure,
-    #[error(
-        "We have received cryptographic level of evidence that authority {authority:?} is faulty in a Byzantine manner."
-    )]
-    ByzantineAuthoritySuspicion { authority: AuthorityName },
+    #[error("Validator {authority:?} is faulty in a Byzantine manner: {reason:?}")]
+    ByzantineAuthoritySuspicion {
+        authority: AuthorityName,
+        reason: String,
+    },
     #[error(
         "Sync from authority failed. From {xsource:?} to {destination:?}, digest {tx_digest:?}: {error:?}",
     )]
@@ -396,6 +397,12 @@ pub enum SuiError {
 
     #[error("Invalid committee composition")]
     InvalidCommittee(String),
+
+    #[error("Invalid authenticated epoch: {0}")]
+    InvalidAuthenticatedEpoch(String),
+
+    #[error("Invalid epoch request response: {0}")]
+    InvalidEpochResponse(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;
