@@ -13,6 +13,7 @@ export * from './serialization/hex';
 
 export * from './signers/txn-data-serializers/rpc-txn-data-serializer';
 export * from './signers/txn-data-serializers/txn-data-serializer';
+export * from './signers/txn-data-serializers/local-txn-data-serializer';
 
 export * from './signers/signer';
 export * from './signers/raw-signer';

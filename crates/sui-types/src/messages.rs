@@ -336,6 +336,7 @@ impl TransactionData {
         TransactionData {
             kind,
             sender,
+            // TODO: Update local-txn-data-serializer.ts if `gas_price` is changed
             gas_price: 1,
             gas_payment,
             gas_budget,
