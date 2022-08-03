@@ -681,7 +681,7 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         &self,
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        unimplemented!();
+        unimplemented!()
     }
 
     async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {

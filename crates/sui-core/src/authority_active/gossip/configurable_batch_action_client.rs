@@ -201,13 +201,15 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
 
     async fn handle_checkpoint(
         &self,
-        _request: CheckpointRequest,
+        request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        todo!();
+        let state = self.state.clone();
+        state.handle_checkpoint_request(&request)
     }
 
-    async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {
-        todo!();
+    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        let state = self.state.clone();
+        state.handle_epoch_request(&request)
     }
 }
 

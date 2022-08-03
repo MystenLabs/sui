@@ -265,6 +265,7 @@ impl<C> SafeClient<C> {
 
     /// This function is used by the higher level authority logic to report an
     /// error that could be due to this authority.
+    /// TODO: Get rid of this. https://github.com/MystenLabs/sui/issues/3740
     pub fn report_client_error(&self, error: &SuiError) {
         info!(?error, authority =? self.address, "Client error");
     }
