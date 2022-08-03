@@ -56,9 +56,18 @@ export async function extractFileType(
 ) {
     const result = await fetch(transformURL(displayString), {
         signal: signal,
-    }).then((resp) =>
-        resp?.headers?.get('Content-Type')?.split('/')?.at(-1)?.toUpperCase()
-    );
+    })
+        .then((resp) =>
+            resp?.headers
+                ?.get('Content-Type')
+                ?.split('/')
+                ?.at(-1)
+                ?.toUpperCase()
+        )
+        .catch((err) => {
+            console.error(err);
+            return 'Image';
+        });
 
     return `1 ${result} File`;
 }
