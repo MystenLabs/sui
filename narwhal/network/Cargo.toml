@@ -25,7 +25,7 @@ prometheus = "0.13.1"
 
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-serde = "1.0.141"
+serde = "1.0.142"
 
 [dev-dependencies]
 bincode = "1.3.3"
