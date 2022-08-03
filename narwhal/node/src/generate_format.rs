@@ -33,7 +33,7 @@ fn get_registry() -> Result<Registry> {
     let signature = kp.try_sign(msg).unwrap();
     tracer.trace_value(&mut samples, &signature)?;
 
-    // Trace the correspondng header
+    // Trace the corresponding header
     let keys: Vec<_> = (0..4).map(|_| KeyPair::generate(&mut rng)).collect();
     let committee = Committee {
         epoch: Epoch::default(),
@@ -107,13 +107,18 @@ fn get_registry() -> Result<Registry> {
     let request_batch = PrimaryWorkerMessage::RequestBatch(BatchDigest([0u8; 32]));
     let delete_batch = PrimaryWorkerMessage::DeleteBatches(vec![BatchDigest([0u8; 32])]);
     let sync = PrimaryWorkerMessage::Synchronize(vec![BatchDigest([0u8; 32])], pk.clone());
-    let reconfigure =
-        PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewCommittee(committee));
+    let epoch_change =
+        PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee.clone()));
+    let update_committee =
+        PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee));
+    let shutdown = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::Shutdown);
     tracer.trace_value(&mut samples, &cleanup)?;
     tracer.trace_value(&mut samples, &request_batch)?;
     tracer.trace_value(&mut samples, &delete_batch)?;
     tracer.trace_value(&mut samples, &sync)?;
-    tracer.trace_value(&mut samples, &reconfigure)?;
+    tracer.trace_value(&mut samples, &epoch_change)?;
+    tracer.trace_value(&mut samples, &update_committee)?;
+    tracer.trace_value(&mut samples, &shutdown)?;
 
     // 2. Trace the main entry point(s) + every enum separately.
     tracer.trace_type::<Batch>(&samples)?;

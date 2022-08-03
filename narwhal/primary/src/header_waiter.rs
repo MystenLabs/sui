@@ -135,13 +135,12 @@ impl HeaderWaiter {
     }
 
     /// Update the committee and cleanup internal state.
-    fn update_committee(&mut self, committee: Committee) {
+    fn change_epoch(&mut self, committee: Committee) {
+        self.committee = committee;
+
         self.pending.clear();
         self.batch_requests.clear();
         self.parent_requests.clear();
-
-        self.committee = committee;
-        tracing::debug!("Committee updated to {}", self.committee);
     }
 
     /// Helper function. It waits for particular data to become available in the storage
@@ -214,8 +213,7 @@ impl HeaderWaiter {
                                     .expect("Author of valid header is not in the committee")
                                     .primary_to_worker;
 
-                                // TODO [issue #423]: This network transmission needs to be reliable. The worker may crash-recover
-                                // or a committee change may change the worker's IP address.
+                                // TODO [issue #423]: This network transmission needs to be reliable: the worker may crash-recover.
                                 let message = PrimaryWorkerMessage::Synchronize(digests, author.clone());
                                 self.worker_network.unreliable_send(address, &message).await;
                             }
@@ -326,11 +324,15 @@ impl HeaderWaiter {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewCommittee(new_committee) => {
-                            self.update_committee(new_committee);
+                        ReconfigureNotification::NewEpoch(new_committee) => {
+                            self.change_epoch(new_committee);
+                        },
+                        ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            self.committee = new_committee;
                         },
                         ReconfigureNotification::Shutdown => return
                     }
+                    tracing::debug!("Committee updated to {}", self.committee);
                 },
 
                 // Check for a new consensus round number

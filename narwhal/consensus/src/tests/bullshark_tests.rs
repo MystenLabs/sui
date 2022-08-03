@@ -75,7 +75,7 @@ async fn commit_one() {
     let (tx_output, mut rx_output) = channel(1);
 
     let committee = mock_committee(&keys[..]);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
 
     let store = make_consensus_store(&test_utils::temp_dir());
@@ -138,7 +138,7 @@ async fn dead_node() {
     let (tx_output, mut rx_output) = channel(1);
 
     let committee = mock_committee(&keys[..]);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
 
     let store = make_consensus_store(&test_utils::temp_dir());
@@ -248,7 +248,7 @@ async fn not_enough_support() {
     let (tx_output, mut rx_output) = channel(1);
 
     let committee = mock_committee(&keys[..]);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
 
     let store = make_consensus_store(&test_utils::temp_dir());
@@ -332,7 +332,7 @@ async fn missing_leader() {
     let (tx_output, mut rx_output) = channel(1);
 
     let committee = mock_committee(&keys[..]);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
 
     let store = make_consensus_store(&test_utils::temp_dir());
@@ -393,7 +393,7 @@ async fn epoch_change() {
     let (tx_primary, mut rx_primary) = channel(1);
     let (tx_output, mut rx_output) = channel(1);
 
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
 
     let store = make_consensus_store(&test_utils::temp_dir());
@@ -456,7 +456,7 @@ async fn epoch_change() {
 
         // Move to the next epoch.
         committee.epoch = epoch + 1;
-        let message = ReconfigureNotification::NewCommittee(committee.clone());
+        let message = ReconfigureNotification::NewEpoch(committee.clone());
         tx_reconfigure.send(message).unwrap();
     }
 }
@@ -478,7 +478,7 @@ async fn restart_with_new_committee() {
         let (tx_primary, mut rx_primary) = channel(1);
         let (tx_output, mut rx_output) = channel(1);
 
-        let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+        let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
         let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
         let store = make_consensus_store(&test_utils::temp_dir());
         let cert_store = make_certificate_store(&test_utils::temp_dir());

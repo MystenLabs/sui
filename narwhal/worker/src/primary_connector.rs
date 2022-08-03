@@ -73,12 +73,16 @@ impl PrimaryConnector {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewCommittee(new_committee) => {
+                        ReconfigureNotification::NewEpoch(new_committee) => {
                             self.committee = new_committee;
-                            tracing::debug!("Committee updated to {}", self.committee);
+                        },
+                        ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            self.committee = new_committee;
+
                         },
                         ReconfigureNotification::Shutdown => return
                     }
+                    tracing::debug!("Committee updated to {}", self.committee);
                 }
 
                 Some(_result) = futures.next() => ()

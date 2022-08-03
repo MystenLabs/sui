@@ -22,7 +22,7 @@ async fn spawn_consensus_and_subscriber(
     let (tx_client_to_consensus, rx_client_to_consensus) = channel(10);
 
     let committee = committee(None);
-    let message = ReconfigureNotification::NewCommittee(committee);
+    let message = ReconfigureNotification::NewEpoch(committee);
     let (tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn a mock consensus core.
@@ -111,7 +111,7 @@ async fn synchronize() {
     let (tx_client_to_consensus, rx_client_to_consensus) = channel(10);
 
     let committee = committee(None);
-    let message = ReconfigureNotification::NewCommittee(committee);
+    let message = ReconfigureNotification::NewEpoch(committee);
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn a mock consensus core.

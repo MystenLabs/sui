@@ -82,9 +82,8 @@ impl Worker {
         let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY);
 
         let initial_committee = (*(*(*committee).load()).clone()).clone();
-        let (tx_reconfigure, rx_reconfigure) = watch::channel(
-            ReconfigureNotification::NewCommittee(initial_committee.clone()),
-        );
+        let (tx_reconfigure, rx_reconfigure) =
+            watch::channel(ReconfigureNotification::NewEpoch(initial_committee.clone()));
 
         let client_flow_handles = worker.handle_clients_transactions(
             &tx_reconfigure,

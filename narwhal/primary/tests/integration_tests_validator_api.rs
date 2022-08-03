@@ -101,7 +101,7 @@ async fn test_get_collections() {
 
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -287,7 +287,7 @@ async fn test_remove_collections() {
     }
 
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     Primary::spawn(
@@ -490,7 +490,7 @@ async fn test_read_causal_signed_certificates() {
 
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     let primary_1_parameters = Parameters {
@@ -521,7 +521,7 @@ async fn test_read_causal_signed_certificates() {
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     let primary_2_parameters = Parameters {
@@ -696,7 +696,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     // Spawn Primary 1 that we will be interacting with.
@@ -719,7 +719,7 @@ async fn test_read_causal_unsigned_certificates() {
 
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -860,7 +860,7 @@ async fn test_get_collections_with_missing_certificates() {
     // Spawn the primary 1 (which will be the one that we'll interact with)
     let (tx_new_certificates_1, rx_new_certificates_1) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_1, rx_feedback_1) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -904,7 +904,7 @@ async fn test_get_collections_with_missing_certificates() {
     // Spawn the primary 2 - a peer to fetch missing certificates from
     let (tx_new_certificates_2, _) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     Primary::spawn(

@@ -213,9 +213,8 @@ impl Subscriber {
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewCommittee(_) => (),
-                        ReconfigureNotification::Shutdown => return Ok(())
+                    if let ReconfigureNotification::Shutdown = message {
+                        return Ok(());
                     }
                 }
             }

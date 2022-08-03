@@ -50,7 +50,7 @@ pub async fn spawn_node(
         .collect();
 
     let committee = mock_committee(&keys[..]);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, rx_reconfigure) = watch::channel(initial_committee);
 
     // Create the storages.

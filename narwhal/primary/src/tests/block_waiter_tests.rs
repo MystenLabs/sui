@@ -40,7 +40,7 @@ async fn test_successfully_retrieve_block() {
 
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_commands) = channel(1);
     let (tx_get_block, rx_get_block) = oneshot::channel();
     let (tx_batch_messages, rx_batch_messages) = channel(10);
@@ -212,7 +212,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
 
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_commands) = channel(1);
     let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
     let (tx_batch_messages, rx_batch_messages) = channel(10);
@@ -302,8 +302,7 @@ async fn test_one_pending_request_for_block_at_time() {
     let block_id = certificate.digest();
 
     // AND
-    let (_, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = channel(1);
     let (_, rx_batch_messages) = channel(1);
 
@@ -380,8 +379,7 @@ async fn test_unlocking_pending_get_block_request_after_response() {
     let block_id = certificate.digest();
 
     // AND spawn a new blocks waiter
-    let (_, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = channel(1);
     let (_, rx_batch_messages) = channel(1);
 
@@ -450,7 +448,7 @@ async fn test_batch_timeout() {
 
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_commands) = channel(1);
     let (tx_get_block, rx_get_block) = oneshot::channel();
     let (_, rx_batch_messages) = channel(10);
@@ -518,7 +516,7 @@ async fn test_return_error_when_certificate_is_missing() {
 
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_commands) = channel(1);
     let (tx_get_block, rx_get_block) = oneshot::channel();
     let (_, rx_batch_messages) = channel(10);
@@ -580,7 +578,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
 
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_commands) = channel(1);
     let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
     let (_, rx_batch_messages) = channel(10);

@@ -161,13 +161,16 @@ impl CertificateWaiter {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow_and_update().clone();
                     match message {
-                        ReconfigureNotification::NewCommittee(committee) => {
+                        ReconfigureNotification::NewEpoch(committee) => {
                             self.committee = committee;
-                            tracing::debug!("Committee updated to {}", self.committee);
                             self.pending.clear();
+                        },
+                        ReconfigureNotification::UpdateCommittee(committee) => {
+                            self.committee = committee;
                         },
                         ReconfigureNotification::Shutdown => return
                     }
+                    tracing::debug!("Committee updated to {}", self.committee);
 
                 }
                 () = &mut timer => {

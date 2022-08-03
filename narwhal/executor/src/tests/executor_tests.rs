@@ -17,7 +17,7 @@ async fn execute_transactions() {
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
-    let message = ReconfigureNotification::NewCommittee(committee);
+    let message = ReconfigureNotification::NewEpoch(committee);
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn the executor.
@@ -64,7 +64,7 @@ async fn execute_empty_certificate() {
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
-    let message = ReconfigureNotification::NewCommittee(committee);
+    let message = ReconfigureNotification::NewEpoch(committee);
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn the executor.
@@ -120,7 +120,7 @@ async fn execute_malformed_transactions() {
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
-    let message = ReconfigureNotification::NewCommittee(committee);
+    let message = ReconfigureNotification::NewEpoch(committee);
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn the executor.
@@ -182,7 +182,7 @@ async fn internal_error_execution() {
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
-    let message = ReconfigureNotification::NewCommittee(committee);
+    let message = ReconfigureNotification::NewEpoch(committee);
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn the executor.
@@ -234,7 +234,7 @@ async fn crash_recovery() {
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
-    let reconfigure_notification = ReconfigureNotification::NewCommittee(committee);
+    let reconfigure_notification = ReconfigureNotification::NewEpoch(committee);
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(reconfigure_notification.clone());
 
     // Spawn the executor.

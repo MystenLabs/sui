@@ -524,8 +524,8 @@ impl Core {
             .expect("Reconfigure channel dropped")
         {
             let message = self.rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::NewCommittee(new_committee) = message {
-                self.update_committee(new_committee);
+            if let ReconfigureNotification::NewEpoch(new_committee) = message {
+                self.change_epoch(new_committee);
                 // Mark the value as seen.
                 let _ = self.rx_reconfigure.borrow_and_update();
             }
@@ -533,16 +533,15 @@ impl Core {
     }
 
     /// Update the committee and cleanup internal state.
-    fn update_committee(&mut self, committee: Committee) {
-        tracing::info!("Committee updated to epoch {}", committee.epoch);
+    fn change_epoch(&mut self, committee: Committee) {
+        self.committee = committee;
+
         self.last_voted.clear();
         self.processing.clear();
         self.certificates_aggregators.clear();
         self.cancel_handlers.clear();
 
-        self.committee = committee;
         self.synchronizer.update_genesis(&self.committee);
-        tracing::debug!("Committee updated to {}", self.committee);
     }
 
     // Main loop listening to incoming messages.
@@ -592,12 +591,16 @@ impl Core {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewCommittee(new_committee) => {
-                            self.update_committee(new_committee);
-                            Ok(())
+                        ReconfigureNotification::NewEpoch(new_committee) => {
+                            self.change_epoch(new_committee);
+                        },
+                        ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            self.committee = new_committee;
                         },
                         ReconfigureNotification::Shutdown => return
                     }
+                    tracing::debug!("Committee updated to {}", self.committee);
+                    Ok(())
                 }
 
                 // Check whether the consensus round has changed, to clean up structures

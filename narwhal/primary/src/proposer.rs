@@ -129,11 +129,11 @@ impl Proposer {
     }
 
     /// Update the committee and cleanup internal state.
-    fn update_committee(&mut self, committee: Committee) {
+    fn change_epoch(&mut self, committee: Committee) {
         self.committee = committee;
+
         self.round = 0;
         self.last_parents = Certificate::genesis(&self.committee);
-        tracing::debug!("Committee updated to {}", self.committee);
     }
 
     // Main loop listening to incoming messages.
@@ -259,11 +259,15 @@ impl Proposer {
                         Ordering::Greater => {
                             let message = self.rx_reconfigure.borrow_and_update().clone();
                             match message  {
-                                ReconfigureNotification::NewCommittee(new_committee) => {
-                                    self.update_committee(new_committee);
+                                ReconfigureNotification::NewEpoch(new_committee) => {
+                                    self.change_epoch(new_committee);
+                                },
+                                ReconfigureNotification::UpdateCommittee(new_committee) => {
+                                    self.committee = new_committee;
                                 },
                                 ReconfigureNotification::Shutdown => return,
                             }
+                            tracing::debug!("Committee updated to {}", self.committee);
                         }
                         Ordering::Less => {
                             // We already updated committee but the core is slow. Ignore the parents
@@ -316,11 +320,16 @@ impl Proposer {
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewCommittee(new_committee) => {
-                            self.update_committee(new_committee);
+                        ReconfigureNotification::NewEpoch(new_committee) => {
+                            self.change_epoch(new_committee);
+                        },
+                        ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            self.committee = new_committee;
                         },
                         ReconfigureNotification::Shutdown => return,
                     }
+                    tracing::debug!("Committee updated to {}", self.committee);
+
                 }
             }
         }

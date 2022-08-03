@@ -158,7 +158,7 @@ type RequestKey = Vec<u8>;
 ///
 ///     let name = Ed25519PublicKey::default();
 ///     let committee = Committee{ epoch: 0, authorities: BTreeMap::new() };
-///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 ///
 ///     // A dummy certificate
 ///     let certificate = Certificate::default();
@@ -328,12 +328,15 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewCommittee(new_committee) => {
+                        ReconfigureNotification::NewEpoch(new_committee)=> {
                             self.committee = new_committee;
-                            tracing::debug!("Committee updated to {}", self.committee);
                         }
-                        ReconfigureNotification::Shutdown => return,
+                        ReconfigureNotification::UpdateCommittee(new_committee)=> {
+                            self.committee = new_committee;
+                        }
+                        ReconfigureNotification::Shutdown => return
                     }
+                    tracing::debug!("Committee updated to {}", self.committee);
                 }
             }
         }

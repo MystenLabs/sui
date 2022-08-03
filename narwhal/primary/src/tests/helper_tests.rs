@@ -29,7 +29,7 @@ async fn test_process_certificates_stream_mode() {
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewCommittee(
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
     let (tx_primaries, rx_primaries) = channel(10);
@@ -105,7 +105,7 @@ async fn test_process_certificates_batch_mode() {
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewCommittee(
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
     let (tx_primaries, rx_primaries) = channel(10);
@@ -202,7 +202,7 @@ async fn test_process_payload_availability_success() {
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewCommittee(
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
     let (tx_primaries, rx_primaries) = channel(10);
@@ -318,7 +318,7 @@ async fn test_process_payload_availability_when_failures() {
 
     let key = keys(None).pop().unwrap();
     let (name, committee) = resolve_name_and_committee();
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewCommittee(
+    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
     let (tx_primaries, rx_primaries) = channel(10);

@@ -270,9 +270,9 @@ async fn epoch_change() {
                     .primary(&name_clone)
                     .expect("Our key is not in the committee")
                     .primary_to_primary;
-                let message = WorkerPrimaryMessage::Reconfigure(
-                    ReconfigureNotification::NewCommittee(committee.clone()),
-                );
+                let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewEpoch(
+                    committee.clone(),
+                ));
                 let primary_cancel_handle = primary_network.send(address, &message).await;
 
                 let addresses = committee
@@ -281,9 +281,9 @@ async fn epoch_change() {
                     .into_iter()
                     .map(|x| x.primary_to_worker)
                     .collect();
-                let message = PrimaryWorkerMessage::Reconfigure(
-                    ReconfigureNotification::NewCommittee(committee.clone()),
-                );
+                let message = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(
+                    committee.clone(),
+                ));
                 let worker_cancel_handles = worker_network
                     .unreliable_broadcast(addresses, &message)
                     .await;

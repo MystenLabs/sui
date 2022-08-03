@@ -19,7 +19,7 @@ async fn worker_batch_reply() {
     let id = 0;
     let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
     // Create a new test store.
     let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(
@@ -67,7 +67,7 @@ async fn client_batch_reply() {
     let id = 0;
     let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
     // Create a new test store.
     let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(

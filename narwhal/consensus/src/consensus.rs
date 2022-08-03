@@ -244,10 +244,9 @@ where
         })
     }
 
-    fn reconfigure(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
+    fn change_epoch(&mut self, new_committee: Committee) -> StoreResult<ConsensusState> {
         self.committee = new_committee.clone();
         self.protocol.update_committee(new_committee)?;
-        tracing::debug!("Committee updated to {}", self.committee);
 
         self.consensus_index = 0;
 
@@ -282,11 +281,15 @@ where
                         Ordering::Greater => {
                             let message = self.rx_reconfigure.borrow_and_update().clone();
                             match message  {
-                                ReconfigureNotification::NewCommittee(new_committee) => {
-                                    state = self.reconfigure(new_committee)?;
+                                ReconfigureNotification::NewEpoch(new_committee) => {
+                                    state = self.change_epoch(new_committee)?;
                                 },
+                                ReconfigureNotification::UpdateCommittee(new_committee) => {
+                                    self.committee = new_committee;
+                                }
                                 ReconfigureNotification::Shutdown => return Ok(()),
                             }
+                            tracing::debug!("Committee updated to {}", self.committee);
                         }
                         Ordering::Less => {
                             // We already updated committee but the core is slow.
@@ -336,11 +339,15 @@ where
                     result.expect("Committee channel dropped");
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
-                        ReconfigureNotification::NewCommittee(new_committee) => {
-                            state = self.reconfigure(new_committee)?;
+                        ReconfigureNotification::NewEpoch(new_committee) => {
+                            state = self.change_epoch(new_committee)?;
                         },
+                        ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            self.committee = new_committee;
+                        }
                         ReconfigureNotification::Shutdown => return Ok(())
                     }
+                    tracing::debug!("Committee updated to {}", self.committee);
                 }
             }
         }

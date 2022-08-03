@@ -71,7 +71,7 @@ async fn test_rounds_errors() {
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     // AND create a committee passed exclusively to the DAG that does not include the name public key
@@ -154,7 +154,7 @@ async fn test_rounds_return_successful_response() {
     // Spawn the primary
     let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     // AND setup the DAG
@@ -291,7 +291,7 @@ async fn test_node_read_causal_signed_certificates() {
         .unwrap();
 
     let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     let primary_1_parameters = Parameters {
@@ -322,7 +322,7 @@ async fn test_node_read_causal_signed_certificates() {
     let (tx_new_certificates_2, rx_new_certificates_2) = channel(CHANNEL_CAPACITY);
     let (tx_feedback_2, rx_feedback_2) = channel(CHANNEL_CAPACITY);
 
-    let initial_committee = ReconfigureNotification::NewCommittee(committee.clone());
+    let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
     let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
     let primary_2_parameters = Parameters {

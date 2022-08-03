@@ -15,7 +15,7 @@ async fn wait_for_quorum() {
 
     let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =
-        watch::channel(ReconfigureNotification::NewCommittee(committee.clone()));
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
     // Spawn a `QuorumWaiter` instance.
     let _quorum_waiter_handler = QuorumWaiter::spawn(

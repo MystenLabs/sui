@@ -129,7 +129,7 @@ impl Node {
         State::Outcome: Send + 'static,
         State::Error: Debug,
     {
-        let initial_committee = ReconfigureNotification::NewCommittee((**committee.load()).clone());
+        let initial_committee = ReconfigureNotification::NewEpoch((**committee.load()).clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
         let (tx_new_certificates, rx_new_certificates) = channel(Self::CHANNEL_CAPACITY);

@@ -93,16 +93,22 @@ impl StateHandler {
 
                 Some(message) = self.rx_reconfigure.recv() => {
                     let shutdown = match &message {
-                        ReconfigureNotification::NewCommittee(committee) => {
+                        ReconfigureNotification::NewEpoch(committee) => {
                             // Update the committee.
                             self.committee.swap(Arc::new(committee.clone()));
-                            tracing::debug!("Committee updated to {}", self.committee);
 
                             // Trigger cleanup on the primary.
                             let _ = self.tx_consensus_round_updates.send(0); // ignore error when receivers dropped.
 
+                            tracing::debug!("Committee updated to {}", self.committee);
                             false
                         },
+                        ReconfigureNotification::UpdateCommittee(committee) => {
+                            self.committee.swap(Arc::new(committee.clone()));
+
+                            tracing::debug!("Committee updated to {}", self.committee);
+                            false
+                        }
                         ReconfigureNotification::Shutdown => true,
                     };
 
