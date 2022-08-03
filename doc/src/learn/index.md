@@ -50,29 +50,29 @@ Finish with the detailed [Programming with objects](../build/programming-with-ob
 Navigate and search this site however you see fit. If you're new to Sui, we recommend that you review the following content in this order:
 
 **Learn** - the Learn section includes information to help you learn:
- * [About Sui](../learn/about-sui.md)
- * [How Sui works](../learn/how-sui-works.md)
- * [Sui compared to other blockchains](../learn/sui-compared.md)
+* [About Sui](../learn/about-sui.md)
+* [How Sui works](../learn/how-sui-works.md)
+* [Sui compared to other blockchains](../learn/sui-compared.md)
 
 **Build** - the [Build](../build/index.md) section includes information about how to:
- * [Install Sui](../build/install.md)
- * [Create smart contracts with Move](../build/move/index.md)
- * [Set up and configure a local Sui network](../build/cli-client.md)
- * [Start a local JSON-RPC Gateway server](../build/json-rpc.md#start-local-rpc-server)
+* [Install Sui](../build/install.md)
+* [Create smart contracts with Move](../build/move/index.md)
+* [Set up and configure a local Sui network](../build/cli-client.md)
+* [Start a local JSON-RPC Gateway server](../build/json-rpc.md#start-local-rpc-server)
 
 **Explore** - the [Explore](../explore/index.md) section includes more in-depth information about:
-  * [Sui Wallet](../explore/wallet-browser.md)
-  * [Devnet](../explore/devnet.md)
-  * [Sui tutorials](../explore/tutorials.md)
-  * [Sui prototypes](../explore/prototypes.md)
-  * [Sui examples](../explore/examples.md)  
+* [Sui Wallet](../explore/wallet-browser.md)
+* [Devnet](../explore/devnet.md)
+* [Sui tutorials](../explore/tutorials.md)
+* [Sui prototypes](../explore/prototypes.md)
+* [Sui examples](../explore/examples.md)  
 
 **Contribute** - the [Contribute](../contribute/index.md) section includes the following:
-  * [Frequently Asked Questions](../contribute/faq.md)
-  * [Logging, Tracing, Metrics, and Observability](../contribute/observability.md)
-  * [Research Papers](../contribute/research-papers.md)
-  * [Sui Code of Conduct](../contribute/code-of-conduct.md)
+* [Frequently Asked Questions](../contribute/faq.md)
+* [Logging, Tracing, Metrics, and Observability](../contribute/observability.md)
+* [Research Papers](../contribute/research-papers.md)
+* [Sui Code of Conduct](../contribute/code-of-conduct.md)
    
 **Additional resources** - the following additional resources contain more information about Sui:
-  * Employ the [Sui API Reference](https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json) files for the [Sui JSON-RPC API](../build/json-rpc.md).
-  * View the [Mysten Labs](https://www.youtube.com/channel/UCI7pCUVxSLcndVhPpZOwZgg) YouTube channel for introductory videos on technology and partners.
+* Employ the [Sui API Reference](https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json) files for the [Sui JSON-RPC API](../build/json-rpc.md).
+* View the [Mysten Labs](https://www.youtube.com/channel/UCI7pCUVxSLcndVhPpZOwZgg) YouTube channel for introductory videos on technology and partners.
