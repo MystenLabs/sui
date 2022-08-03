@@ -1921,18 +1921,15 @@ impl SignedEpoch {
 
 impl CertifiedEpoch {
     pub fn new(
-        committee: Committee,
+        epoch_info: &EpochInfo,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
-        first_checkpoint: CheckpointSequenceNumber,
-        prev_epoch_info: &EpochInfo,
+        prev_epoch_committee: &Committee,
     ) -> SuiResult<Self> {
-        debug_assert_eq!(prev_epoch_info.epoch() + 1, committee.epoch);
-        let epoch_info = EpochInfo::new(committee, first_checkpoint, prev_epoch_info.digest());
         Ok(Self {
-            epoch_info,
+            epoch_info: epoch_info.clone(),
             auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
                 signatures,
-                &prev_epoch_info.committee,
+                prev_epoch_committee,
             )?,
         })
     }

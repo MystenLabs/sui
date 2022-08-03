@@ -1360,6 +1360,13 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(())
     }
 
+    pub fn store_epoch_cert(&self, cert: CertifiedEpoch) -> SuiResult {
+        Ok(self.tables.epochs.insert(
+            &cert.epoch_info.epoch(),
+            &AuthenticatedEpoch::Certified(cert),
+        )?)
+    }
+
     pub fn get_authenticated_epoch(
         &self,
         epoch_id: &EpochId,

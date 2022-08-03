@@ -1187,6 +1187,10 @@ impl AuthorityState {
         Ok(())
     }
 
+    pub(crate) fn promote_signed_epoch_to_cert(&self, cert: CertifiedEpoch) -> SuiResult {
+        self.database.store_epoch_cert(cert)
+    }
+
     #[cfg(test)]
     pub(crate) fn is_halted(&self) -> bool {
         self.halted.load(Ordering::Relaxed)
