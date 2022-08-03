@@ -45,77 +45,76 @@ function TransferNFTForm({
         setFieldValue('to', '');
     }, [setFieldValue]);
 
-    const StepOne = (
-        <>
-            <Form className={st.container} autoComplete="off" noValidate={true}>
-                <label className={st.labelInfo}>
-                    Enter the address of the recipient to start sending the NFT
-                </label>
-                <div
-                    className={cl(
-                        st.group,
-                        dirty && to !== '' && !isValid ? st.invalidAddr : ''
-                    )}
-                >
-                    <div className={st.textarea}>
-                        <Field
-                            as="textarea"
-                            name="to"
-                            rows="1"
-                            col="30"
-                            placeholder="Enter Address"
-                            className={st.input}
-                        />
-                    </div>
-                    <div
-                        onClick={clearAddress}
-                        className={cl(
-                            st.inputGroupAppend,
-                            dirty && to !== ''
-                                ? st.changeAddrIcon + ' sui-icons-close'
-                                : st.qrCode
-                        )}
-                    ></div>
-                </div>
-
-                <ErrorMessage className={st.error} name="to" component="div" />
-                {BigInt(gasBalance) < DEFAULT_NFT_TRANSFER_GAS_FEE && (
-                    <div className={st.error}>
-                        * Insufficient balance to cover transfer cost
-                    </div>
-                )}
-
-                <div className={st.formcta}>
-                    <Button
-                        size="large"
-                        mode="primary"
-                        type="submit"
-                        disabled={!isValid || isSubmitting}
-                        className={cl(st.action, 'btn')}
-                    >
-                        Send NFT Now
-                        {isSubmitting ? (
-                            <LoadingIndicator />
-                        ) : (
-                            <Icon
-                                icon={SuiIcons.ArrowRight}
-                                className={st.arrowActionIcon}
-                            />
-                        )}
-                    </Button>
-                </div>
-            </Form>
-        </>
-    );
-
-    const NtfTransferFailed = (
-        <>{submitError ? <div className={st.container}></div> : null}</>
-    );
-
     return (
         <div className={st.sendNft}>
             <Content>
-                <div>{StepOne}</div>
+                <Form
+                    className={st.container}
+                    autoComplete="off"
+                    noValidate={true}
+                >
+                    <label className={st.labelInfo}>
+                        Enter the address of the recipient to start sending the
+                        NFT
+                    </label>
+                    <div
+                        className={cl(
+                            st.group,
+                            dirty && to !== '' && !isValid ? st.invalidAddr : ''
+                        )}
+                    >
+                        <div className={st.textarea}>
+                            <Field
+                                as="textarea"
+                                name="to"
+                                rows="1"
+                                col="30"
+                                placeholder="Enter Address"
+                                className={st.input}
+                            />
+                        </div>
+                        <div
+                            onClick={clearAddress}
+                            className={cl(
+                                st.inputGroupAppend,
+                                dirty && to !== ''
+                                    ? st.changeAddrIcon + ' sui-icons-close'
+                                    : st.qrCode
+                            )}
+                        ></div>
+                    </div>
+
+                    <ErrorMessage
+                        className={st.error}
+                        name="to"
+                        component="div"
+                    />
+                    {BigInt(gasBalance) < DEFAULT_NFT_TRANSFER_GAS_FEE && (
+                        <div className={st.error}>
+                            * Insufficient balance to cover transfer cost
+                        </div>
+                    )}
+
+                    <div className={st.formcta}>
+                        <Button
+                            size="large"
+                            mode="primary"
+                            type="submit"
+                            disabled={!isValid || isSubmitting}
+                            className={cl(st.action, 'btn')}
+                        >
+                            Send NFT Now
+                            {isSubmitting ? (
+                                <LoadingIndicator />
+                            ) : (
+                                <Icon
+                                    icon={SuiIcons.ArrowRight}
+                                    className={st.arrowActionIcon}
+                                />
+                            )}
+                        </Button>
+                    </div>
+                </Form>
             </Content>
         </div>
     );

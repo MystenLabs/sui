@@ -3,6 +3,8 @@
 import { isSuiMoveObject } from '@mysten/sui.js';
 import cl from 'classnames';
 
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import { useFileExtentionType, useMediaUrl } from '_hooks';
 
@@ -37,9 +39,16 @@ function NFTDisplayCard({
     );
     const defaultSection = (
         <>
-            {expandable ? (
+            {expandable && nftFields?.info.id ? (
                 <div className={st.expandable}>
-                    View Image <Icon icon={SuiIcons.Preview} />
+                    <ExplorerLink
+                        type={ExplorerLinkType.object}
+                        objectID={nftFields?.info.id}
+                        showIcon={false}
+                        className={st['explorer-link']}
+                    >
+                        View Image <Icon icon={SuiIcons.Preview} />
+                    </ExplorerLink>
                 </div>
             ) : null}
             {showlabel && nftFields?.name ? (

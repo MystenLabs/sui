@@ -16,7 +16,7 @@ import HomePage, {
     TransactionsPage,
     TransferNFTPage,
     TransferCoinPage,
-    NFTDetialsPage,
+    NFTDetailsPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -55,7 +55,7 @@ const App = () => {
                 />
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
-                <Route path="nft-details" element={<NFTDetialsPage />} />
+                <Route path="nft-details" element={<NFTDetailsPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="send-nft" element={<TransferNFTPage />} />
                 <Route path="send" element={<TransferCoinPage />} />

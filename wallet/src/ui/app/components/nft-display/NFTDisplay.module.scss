@@ -43,11 +43,14 @@
         @include utils.typography('table/title-sm');
 
         margin-top: 10px;
-        color: colors.$gray-80;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        cursor: pointer;
+
+        a {
+            text-decoration: none;
+            color: colors.$gray-80;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
 
         i {
             color: colors.$gray-65;

@@ -3,28 +3,29 @@
 
 import cl from 'classnames';
 import { Formik } from 'formik';
-import { useCallback, useMemo, useState } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useMemo, useState, memo, useEffect } from 'react';
+import { Navigate, useSearchParams, Link } from 'react-router-dom';
 
 import TransferNFTForm from './TransferNFTForm';
 import { createValidationSchema } from './validation';
-import Button from '_app/shared/button';
 import PageTitle from '_app/shared/page-title';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import NFTDisplayCard from '_components/nft-display';
+import TxResponseCard from '_components/transaction-response-card';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import {
     accountAggregateBalancesSelector,
     accountNftsSelector,
 } from '_redux/slices/account';
+import { setSelectedNFT } from '_redux/slices/selected-nft';
 import { transferSuiNFT } from '_redux/slices/sui-objects';
 import {
     GAS_TYPE_ARG,
-    // GAS_SYMBOL,
     DEFAULT_NFT_TRANSFER_GAS_FEE,
 } from '_redux/slices/sui-objects/Coin';
 
+import type { SuiObject } from '@mysten/sui.js';
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
@@ -37,6 +38,15 @@ const initialValues = {
 
 export type FormValues = typeof initialValues;
 
+type TxResponse = {
+    address?: string;
+    gasFee?: number;
+    date?: number;
+    status: 'success' | 'failure';
+} | null;
+
+const initTxResponse: TxResponse = null;
+
 function TransferNFTPage() {
     const [searchParams] = useSearchParams();
     const objectId = useMemo(
@@ -44,14 +54,21 @@ function TransferNFTPage() {
         [searchParams]
     );
     const address = useAppSelector(({ account: { address } }) => address);
-
-    let selectedNFT;
+    const dispatch = useAppDispatch();
     const nftCollections = useAppSelector(accountNftsSelector);
+
+    let selectedNFTObj: SuiObject;
     if (nftCollections && nftCollections.length) {
-        selectedNFT = nftCollections.filter(
+        selectedNFTObj = nftCollections.filter(
             (nftItems) => nftItems.reference.objectId === objectId
         )[0];
     }
+
+    useEffect(() => {
+        dispatch(setSelectedNFT({ data: selectedNFTObj, loaded: true }));
+    });
+
+    const selectedNFT = useAppSelector(({ selectedNft }) => selectedNft);
 
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
 
@@ -60,6 +77,7 @@ function TransferNFTPage() {
         [aggregateBalances]
     );
 
+    const [txResponse, setTxResponse] = useState<TxResponse>(initTxResponse);
     const [sendError, setSendError] = useState<string | null>(null);
 
     const validationSchema = useMemo(
@@ -71,8 +89,6 @@ function TransferNFTPage() {
             ),
         [gasAggregateBalance, address, objectId]
     );
-    const dispatch = useAppDispatch();
-    const navigate = useNavigate();
 
     const onHandleSubmit = useCallback(
         async (
@@ -84,20 +100,32 @@ function TransferNFTPage() {
             }
             setSendError(null);
             try {
-                await dispatch(
+                const resp = await dispatch(
                     transferSuiNFT({
                         recipientAddress: to,
                         nftId: objectId,
                         transferCost: DEFAULT_NFT_TRANSFER_GAS_FEE,
                     })
                 ).unwrap();
+
+                setTxResponse((state) => ({
+                    ...state,
+                    address: to,
+                    gasFee: resp.gasFee,
+                    date: resp?.timestamp_ms,
+                    status: resp.status === 'success' ? 'success' : 'failure',
+                }));
                 resetForm();
-                navigate('/nfts/');
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
+                setTxResponse((state) => ({
+                    ...state,
+                    address: to,
+                    status: 'failure',
+                }));
             }
         },
-        [dispatch, navigate, objectId]
+        [dispatch, objectId]
     );
 
     const handleOnClearSubmitError = useCallback(() => {
@@ -107,7 +135,7 @@ function TransferNFTPage() {
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
 
-    if (!objectId || !selectedNFT) {
+    if (!objectId || (selectedNFT.loaded && !selectedNFT.data)) {
         return <Navigate to="/nfts" replace={true} />;
     }
 
@@ -120,7 +148,12 @@ function TransferNFTPage() {
             />
             <Loading loading={loadingBalance}>
                 <div className={st.content}>
-                    <NFTDisplayCard nftobj={selectedNFT} wideview={true} />
+                    {selectedNFT.data && (
+                        <NFTDisplayCard
+                            nftobj={selectedNFT.data}
+                            wideview={true}
+                        />
+                    )}
                     <Formik
                         initialValues={initialValues}
                         validateOnMount={true}
@@ -138,36 +171,52 @@ function TransferNFTPage() {
         </>
     );
 
-    const TransferNFTSuccess = (
+    const TransferReps = (
         <>
-            <div className={st.nftResponse}>
-                <div className={st.successIcon}>
-                    <Icon
-                        icon={SuiIcons.ArrowLeft}
-                        className={cl(st.arrowActionIcon, st.angledArrow)}
-                    />
-                </div>
-                <div className={st.successText}>Successfully Sent!</div>
-                <NFTDisplayCard nftobj={selectedNFT} wideview={true} />
-
-                <div className={st.formcta}>
-                    <Button
-                        size="large"
-                        mode="neutral"
-                        className={cl(st.action, 'btn')}
+            {txResponse?.address ? (
+                <div className={st.nftResponse}>
+                    <TxResponseCard
+                        status={txResponse.status}
+                        address={txResponse.address}
+                        date={
+                            txResponse.date
+                                ? new Date(txResponse.date).toDateString()
+                                : null
+                        }
+                        errorMessage={sendError}
+                        gasFee={txResponse.gasFee}
                     >
-                        <Icon
-                            icon={SuiIcons.Checkmark}
-                            className={st.checkmark}
-                        />
-                        Done
-                    </Button>
+                        {selectedNFT.data && (
+                            <NFTDisplayCard
+                                nftobj={selectedNFT.data}
+                                wideview={true}
+                            />
+                        )}
+                    </TxResponseCard>
+                    <div className={st.formcta}>
+                        <Link
+                            to="/nfts"
+                            className={cl('btn', st.action, st.done, 'neutral')}
+                        >
+                            <Icon
+                                icon={SuiIcons.Checkmark}
+                                className={st.checkmark}
+                            />
+                            Done
+                        </Link>
+                    </div>
                 </div>
-            </div>
+            ) : (
+                <></>
+            )}
         </>
     );
 
-    return <div className={st.container}>{TransferNFTSuccess}</div>;
+    return (
+        <div className={st.container}>
+            {txResponse?.address ? TransferReps : TransferNFT}
+        </div>
+    );
 }
 
-export default TransferNFTPage;
+export default memo(TransferNFTPage);

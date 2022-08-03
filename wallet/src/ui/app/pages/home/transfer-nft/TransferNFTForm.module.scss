@@ -130,68 +130,6 @@
     margin-top: 1px;
 }
 
-button {
-    width: 100%;
-
-    & button[disabled] {
-        cursor: initial;
-        color: #707070;
-        background: #a0b6c3;
-    }
-}
-
-/*
-.recent-addresses {
-    margin-top: 3px;
-
-    .recent-addresses-title {
-        font-weight: 600;
-        font-size: 12px;
-        line-height: 12px;
-        margin-bottom: 10px;
-        text-transform: uppercase;
-        color: colors.$gray-75;
-    }
-
-    .recent-addresses-list {
-        button {
-            background-color: transparent;
-            padding: 0;
-            border: 0;
-            font-family: 'Space Mono', ui-monospace, monospace;
-        }
-    }
-
-    .recent-tx-address {
-        font-size: 13px;
-        color: colors.$gray-100;
-        display: flex;
-        align-items: center;
-        justify-content: left;
-        gap: 8px;
-        margin-bottom: 10px;
-        cursor: pointer;
-
-        &:hover {
-            color: colors.$gray-75;
-        }
-    }
-
-    .img-container {
-        border: 1px solid #a0b6c3;
-        border-radius: 50%;
-        padding: 3px;
-
-        .img {
-            width: 24px;
-            height: 24px;
-            background-color: #a0b6c3;
-            border-radius: 50%;
-        }
-    }
-}
-*/
-
 .formcta {
     display: flex;
     flex-flow: row nowrap;
@@ -203,6 +141,20 @@ button {
     justify-content: stretch;
     padding: 5px 25px;
     left: 0;
+
+    .action,
+    .done {
+        width: 100%;
+    }
+
+    .done {
+        @include utils.typography('table/text-lg');
+
+        background-color: colors.$gray-45;
+        border-radius: 10px;
+        display: flex;
+        justify-content: center;
+    }
 }
 
 .nft-response {
@@ -213,33 +165,5 @@ button {
         font-size: 10px;
         color: colors.$gray-65;
         font-weight: 300;
-    }
-
-    .success-text {
-        color: colors.$gray-100;
-        text-align: center;
-        margin-bottom: 20px;
-
-        @include utils.typography('stats/text-lg');
-    }
-
-    .success-icon {
-        position: relative;
-        width: 46px;
-        height: 46px;
-        display: flex;
-        justify-content: center;
-        margin: auto;
-        border: 2px dotted colors.$sui-steel-blue;
-        border-radius: 50%;
-        margin-bottom: 10px;
-
-        .angled-arrow {
-            height: 15px;
-            margin: auto !important;
-            color: #589aea !important;
-
-            @include utils.angled-arrow;
-        }
     }
 }
