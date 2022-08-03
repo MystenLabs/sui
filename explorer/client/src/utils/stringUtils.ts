@@ -54,20 +54,33 @@ export async function extractFileType(
     displayString: string,
     signal: AbortSignal
 ) {
-    const result = await fetch(transformURL(displayString), {
+    let result: string;
+
+    // First check Content-Type in header:
+    result = await fetch(transformURL(displayString), {
         signal: signal,
     })
-        .then((resp) =>
-            resp?.headers
-                ?.get('Content-Type')
-                ?.split('/')
-                ?.at(-1)
-                ?.toUpperCase()
+        .then(
+            (resp) =>
+                resp?.headers
+                    ?.get('Content-Type')
+                    ?.split('/')
+                    ?.at(-1)
+                    ?.toUpperCase() || 'Image'
         )
         .catch((err) => {
             console.error(err);
             return 'Image';
         });
+
+    // When Content-Type cannot be accessed (e.g. because of CORS), rely on file extension
+
+    if (result === 'Image') {
+        const extension = displayString.split('.').at(-1)?.toUpperCase() || '';
+        if (['JPG', 'JPEG', 'PNG'].includes(extension)) {
+            result = extension;
+        }
+    }
 
     return `1 ${result} File`;
 }
