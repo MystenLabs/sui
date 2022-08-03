@@ -33,9 +33,9 @@ def main():
             "stake": 1,
             "workers": {
                 "0": {
-                    "primary_to_worker": "/dns/worker_00/tcp/4000/http",
-                    "transactions": "/dns/worker_00/tcp/4001/http",
-                    "worker_to_worker": "/dns/worker_00/tcp/4002/http"
+                    "primary_to_worker": "/dns/worker_{:02d}/tcp/4000/http".format(i),
+                    "transactions": "/dns/worker_{:02d}/tcp/4001/http".format(i),
+                    "worker_to_worker": "/dns/worker_{:02d}/tcp/4002/http".format(i)
                 }
             }
         }

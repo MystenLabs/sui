@@ -108,12 +108,18 @@ cp -r templates/{grafana,prometheus} ${target}/
 t=$(($num - 1))
 for i in $(seq -f %02g 0 ${t})
 do
-    scrape="primary_${i}:8010"
+    scrape_primary="primary_${i}:8010"
+    scrape_worker="worker_${i}:8010"
     cat >> ${target}/prometheus/prometheus.yml <<EOF
 
   - job_name: 'primary_${i}'
     scrape_interval: 10s
     static_configs:
-      - targets: ['${scrape}']
+      - targets: ['${scrape_primary}']
+
+  - job_name: 'worker_${i}'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['${scrape_worker}']
 EOF
 done
