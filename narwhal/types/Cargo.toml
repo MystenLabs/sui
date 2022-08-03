@@ -34,7 +34,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 hex = "0.4.3"
-serde_test = "1.0.141"
+serde_test = "1.0.142"
 criterion = "0.3.6"
 
 [build-dependencies]
