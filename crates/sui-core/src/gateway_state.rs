@@ -483,7 +483,7 @@ where
                 | TypeTag::U128
                 | TypeTag::Address
                 | TypeTag::Signer => (),
-                TypeTag::Vector(inner) => used_packages(packages, &**inner),
+                TypeTag::Vector(inner) => used_packages(packages, inner),
                 TypeTag::Struct(StructTag {
                     address,
                     type_params,
