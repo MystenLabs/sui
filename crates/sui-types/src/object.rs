@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
 
@@ -37,16 +37,13 @@ pub struct MoveObject {
     /// Determines if it is usable with the TransferObject
     /// Derived from the type_
     has_public_transfer: bool,
+    version: SequenceNumber,
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
 }
 
-/// Byte encoding of a 64 byte unsigned integer in BCS
-type BcsU64 = [u8; 8];
 /// Index marking the end of the object's ID + the beginning of its version
-const ID_END_INDEX: usize = ObjectID::LENGTH;
-/// Index marking the end of the object's version + the beginning of type-specific data
-const VERSION_END_INDEX: usize = ID_END_INDEX + 8;
+pub const ID_END_INDEX: usize = ObjectID::LENGTH;
 
 /// Different schemes for converting a Move value into a structured representation
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -72,6 +69,7 @@ impl MoveObject {
     pub unsafe fn new_from_execution(
         type_: StructTag,
         has_public_transfer: bool,
+        version: SequenceNumber,
         contents: Vec<u8>,
     ) -> Self {
         // coins should always have public transfer, as they always should have store.
@@ -80,12 +78,13 @@ impl MoveObject {
         Self {
             type_,
             has_public_transfer,
+            version,
             contents,
         }
     }
 
-    pub fn new_gas_coin(contents: Vec<u8>) -> Self {
-        unsafe { Self::new_from_execution(GasCoin::type_(), true, contents) }
+    pub fn new_gas_coin(version: SequenceNumber, contents: Vec<u8>) -> Self {
+        unsafe { Self::new_from_execution(GasCoin::type_(), true, version, contents) }
     }
 
     pub fn has_public_transfer(&self) -> bool {
@@ -97,18 +96,18 @@ impl MoveObject {
     }
 
     pub fn version(&self) -> SequenceNumber {
-        SequenceNumber::from(u64::from_le_bytes(*self.version_bytes()))
+        self.version
     }
 
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
     /// For example if the object was declared as `struct S has key { id: ID, f1: u64, f2: bool },
     /// this returns the slice containing `f1` and `f2`.
     pub fn type_specific_contents(&self) -> &[u8] {
-        &self.contents[VERSION_END_INDEX..]
+        &self.contents[ID_END_INDEX..]
     }
 
-    pub fn id_version_contents(&self) -> &[u8] {
-        &self.contents[..VERSION_END_INDEX]
+    pub fn id_contents(&self) -> &[u8] {
+        &self.contents[..ID_END_INDEX]
     }
 
     /// Update the contents of this object and increment its version
@@ -136,20 +135,7 @@ impl MoveObject {
 
     /// Increase the version of this object by one
     pub fn increment_version(&mut self) {
-        let new_version = self.version().increment();
-        // TODO: better bit tricks are probably possible here. for now, just do the obvious thing
-        self.version_bytes_mut()
-            .copy_from_slice(bcs::to_bytes(&new_version).unwrap().as_slice());
-    }
-
-    fn version_bytes(&self) -> &BcsU64 {
-        self.contents[ID_END_INDEX..VERSION_END_INDEX]
-            .try_into()
-            .unwrap()
-    }
-
-    fn version_bytes_mut(&mut self) -> &mut [u8] {
-        &mut self.contents[ID_END_INDEX..VERSION_END_INDEX]
+        self.version = self.version.increment();
     }
 
     pub fn contents(&self) -> &[u8] {
@@ -219,7 +205,8 @@ impl MoveObject {
         let seriealized_type_tag =
             bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
         // + 1 for 'has_public_transfer'
-        self.contents.len() + seriealized_type_tag.len() + 1
+        // + 8 for `version`
+        self.contents.len() + seriealized_type_tag.len() + 1 + 8
     }
 }
 
@@ -476,7 +463,8 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+            version: SequenceNumber::new(),
+            contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
             owner: Owner::Immutable,
@@ -490,7 +478,8 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, SequenceNumber::new(), gas).to_bcs_bytes(),
+            version: SequenceNumber::new(),
+            contents: GasCoin::new(id, gas).to_bcs_bytes(),
         });
         Self {
             owner: Owner::AddressOwner(owner),
@@ -504,7 +493,8 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+            version: SequenceNumber::new(),
+            contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
             owner: Owner::ObjectOwner(owner.into()),
@@ -527,7 +517,8 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, version, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+            version,
+            contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
             owner: Owner::AddressOwner(owner),

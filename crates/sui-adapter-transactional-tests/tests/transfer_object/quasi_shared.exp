@@ -17,7 +17,8 @@ written: object(107), object(108)
 
 task 4 'view-object'. lines 33-33:
 Owner: Object ID: ( fake(107) )
-Contents: test::m::Child {info: sui::object::Info {id: sui::object::ID {bytes: fake(109)}, version: 1u64}}
+Version: 1
+Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}}
 
 task 5 'transfer-object'. lines 35-35:
 Error: Transaction Effects Status: Invalid Transfer Object Transaction. Possibly not address-owned or possibly does not have public transfer.
@@ -25,4 +26,5 @@ Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { k
 
 task 6 'view-object'. lines 37-37:
 Owner: Object ID: ( fake(107) )
-Contents: test::m::Child {info: sui::object::Info {id: sui::object::ID {bytes: fake(109)}, version: 2u64}}
+Version: 2
+Contents: test::m::Child {id: sui::object::UID {id: sui::object::ID {bytes: fake(109)}}}

@@ -55,7 +55,7 @@ export class Coin {
     }
 
     public static getID(obj: SuiMoveObject): ObjectId {
-        return obj.fields.info.id;
+        return obj.fields.id.id;
     }
 
     public static getCoinTypeFromArg(coinTypeArg: string) {

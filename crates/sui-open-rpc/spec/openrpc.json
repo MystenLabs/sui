@@ -347,9 +347,8 @@
                   "dataType": "moveObject",
                   "fields": {
                     "balance": 10000,
-                    "info": {
-                      "id": "0xbac203232876b27b541433fb2f1438289799049b",
-                      "version": 1
+                    "id": {
+                      "id": "0xbac203232876b27b541433fb2f1438289799049b"
                     }
                   },
                   "has_public_transfer": true,
@@ -581,7 +580,7 @@
             "value": {
               "details": {
                 "data": {
-                  "bcs_bytes": "y6vpecji5/JbHn0awiIgOv2vubQBAAAAAAAAABAnAAAAAAAA",
+                  "bcs_bytes": "y6vpecji5/JbHn0awiIgOv2vubQQJwAAAAAAAA==",
                   "dataType": "moveObject",
                   "has_public_transfer": true,
                   "type": "0x2::coin::Coin<0x2::sui::SUI>"
@@ -2581,17 +2580,11 @@
           {
             "type": "object",
             "required": [
-              "id",
-              "version"
+              "id"
             ],
             "properties": {
               "id": {
                 "$ref": "#/components/schemas/ObjectID"
-              },
-              "version": {
-                "type": "integer",
-                "format": "uint64",
-                "minimum": 0.0
               }
             }
           },

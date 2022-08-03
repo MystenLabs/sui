@@ -9,17 +9,17 @@ module sui::id_tests {
     const ID_BYTES_MISMATCH: u64 = 0;
 
     struct Object has key {
-        info: object::Info,
+        id: object::UID,
     }
 
     #[test]
     fun test_get_id() {
         let ctx = tx_context::dummy();
-        let info = object::new(&mut ctx);
-        let obj_id = *object::info_id(&info);
-        let obj = Object { info };
-        assert!(*object::id(&obj) == obj_id, ID_BYTES_MISMATCH);
-        let Object { info } = obj;
-        object::delete(info);
+        let id = object::new(&mut ctx);
+        let obj_id = object::uid_to_inner(&id);
+        let obj = Object { id };
+        assert!(object::id(&obj) == obj_id, ID_BYTES_MISMATCH);
+        let Object { id } = obj;
+        object::delete(id);
     }
 }

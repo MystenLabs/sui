@@ -30,10 +30,10 @@ use sui_types::{
     error::{ExecutionErrorKind, SuiError},
     event::{Event, TransferType},
     gas::SuiGasStatus,
-    id::Info,
+    id::UID,
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
-    object::{self, Data, MoveObject, Object, Owner},
-    storage::{DeleteKind, Storage},
+    object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
+    storage::{DeleteKind, ParentSync, Storage},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_verifier::{
@@ -58,7 +58,10 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
 /// otherwise we return Ok(Ok).
 /// TODO: Do we really need the two layers?
 #[allow(clippy::too_many_arguments)]
-pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+pub fn execute<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+>(
     vm: &MoveVM,
     state_view: &mut S,
     module_id: ModuleId,
@@ -113,7 +116,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 #[allow(clippy::too_many_arguments)]
 fn execute_internal<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
 >(
     vm: &MoveVM,
     state_view: &mut S,
@@ -221,7 +224,10 @@ fn execute_internal<
     Ok(())
 }
 
-pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+pub fn publish<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+>(
     state_view: &mut S,
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
@@ -253,7 +259,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 /// Store package in state_view and call module initializers
 pub fn store_package_and_init_modules<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
 >(
     state_view: &mut S,
     vm: &MoveVM,
@@ -288,7 +294,10 @@ pub fn store_package_and_init_modules<
 }
 
 /// Modules in module_ids_to_init must have the init method defined
-fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+fn init_modules<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+>(
     state_view: &mut S,
     vm: &MoveVM,
     module_ids_to_init: Vec<(ModuleId, usize)>,
@@ -425,7 +434,7 @@ type MoveEvent = (Vec<u8>, u64, TypeTag, AbilitySet, Vec<u8>);
 #[allow(clippy::too_many_arguments)]
 fn process_successful_execution<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
 >(
     state_view: &mut S,
     module_id: &ModuleId,
@@ -493,38 +502,50 @@ fn process_successful_execution<
             EventType::DeleteObjectID => {
                 // unwrap safe because this event can only be emitted from processing
                 // native call delete_id, which guarantees the type of the id.
-                let info: Info = bcs::from_bytes(&event_bytes).unwrap();
-                let obj_id = info.object_id();
+                let uid: UID = bcs::from_bytes(&event_bytes).unwrap();
+                let obj_id = uid.object_id();
                 // We don't care about IDs that are generated in this same transaction
                 // but only to be deleted.
                 if !newly_generated_ids.contains(obj_id) {
-                    match by_value_objects.remove(info.object_id()) {
-                        Some(_) => {
+                    match by_value_objects.remove(obj_id) {
+                        Some((_, version)) => {
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
                                 module_id.name(),
                                 ctx.sender(),
                                 *obj_id,
                             ));
-                            state_view.delete_object(obj_id, info.version(), DeleteKind::Normal)
+                            state_view.delete_object(obj_id, version, DeleteKind::Normal)
                         }
                         None => {
                             // This object wasn't in the input, and is being deleted. It must
                             // be unwrapped in this transaction and then get deleted.
                             // When an object was wrapped at version `v`, we added an record into `parent_sync`
                             // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
-                            // it will also have version `v+1`, leading to a violation of the invariant that any
-                            // object_id and version pair must be unique. Hence for any object that's just unwrapped,
-                            // we force incrementing its version number again to make it `v+2` before writing to the store.
+                            // we force it to `v+2` by fetching the old version from `parent_sync`.
+                            // This ensures that the object_id and version pair will be unique.
+                            // Here it is set to `v+1` and will be incremented in `delete_object`
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
                                 module_id.name(),
                                 ctx.sender(),
                                 *obj_id,
                             ));
+                            let previous_version =
+                                match state_view.get_latest_parent_entry_ref(*obj_id) {
+                                    Ok(Some((_, previous_version, _))) => previous_version,
+                                    // TODO this error is (hopefully) transient and should not be
+                                    // a normal execution error
+                                    _ => {
+                                        return Err(ExecutionError::new_with_source(
+                                            ExecutionErrorKind::InvariantViolation,
+                                            missing_unwrapped_msg(obj_id),
+                                        ));
+                                    }
+                                };
                             state_view.delete_object(
                                 obj_id,
-                                info.version().increment(),
+                                previous_version,
                                 DeleteKind::UnwrapThenDelete,
                             )
                         }
@@ -563,7 +584,7 @@ fn process_successful_execution<
 #[allow(clippy::too_many_arguments)]
 fn handle_transfer<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
 >(
     sender: SuiAddress,
     recipient: Owner,
@@ -577,95 +598,114 @@ fn handle_transfer<
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
     newly_generated_ids: &HashSet<ObjectID>,
 ) -> Result<(), ExecutionError> {
-    match type_ {
-        TypeTag::Struct(s_type) => {
-            let has_public_transfer = abilities.has_store();
-            // safe because `has_public_transfer` was properly determined from the abilities
-            let mut move_obj =
-                unsafe { MoveObject::new_from_execution(s_type, has_public_transfer, contents) };
-            let old_object = by_value_objects.remove(&move_obj.id());
-
-            #[cfg(debug_assertions)]
-            {
-                check_transferred_object_invariants(&move_obj, &old_object)
-            }
-
-            // increment the object version. note that if the transferred object was
-            // freshly created, this means that its version will now be 1.
-            // thus, all objects in the global object pool have version > 0
-            move_obj.increment_version();
-            let obj_id = move_obj.id();
-            // A to-be-transferred object can come from 3 sources:
-            //   1. Passed in by-value (in `by_value_objects`, i.e. old_object is not none)
-            //   2. Created in this transaction (in `newly_generated_ids`)
-            //   3. Unwrapped in this transaction
-            // The following condition checks if this object was unwrapped in this transaction.
-            if old_object.is_none() {
-                // Newly created object
-                if newly_generated_ids.contains(&obj_id) || obj_id == SUI_SYSTEM_STATE_OBJECT_ID {
-                    state_view.log_event(Event::new_object(
-                        module_id.address(),
-                        module_id.name(),
-                        sender,
-                        recipient,
-                        obj_id,
-                    ));
-                } else {
-                    // When an object was wrapped at version `v`, we added an record into `parent_sync`
-                    // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
-                    // it will also have version `v+1`, leading to a violation of the invariant that any
-                    // object_id and version pair must be unique. Hence for any object that's just unwrapped,
-                    // we force incrementing its version number again to make it `v+2` before writing to the store.
-                    move_obj.increment_version();
-                }
-            } else if let Some((_, old_obj_ver)) = old_object {
-                // Some kind of transfer since there's an old object
-                // Add an event for the transfer
-                let transfer_type = match recipient {
-                    Owner::AddressOwner(_) => Some(TransferType::ToAddress),
-                    Owner::ObjectOwner(_) => Some(TransferType::ToObject),
-                    _ => None,
-                };
-                if let Some(type_) = transfer_type {
-                    state_view.log_event(Event::TransferObject {
-                        package_id: ObjectID::from(*module_id.address()),
-                        transaction_module: Identifier::from(module_id.name()),
-                        sender,
-                        recipient,
-                        object_id: obj_id,
-                        version: old_obj_ver,
-                        type_,
-                    })
-                }
-            }
-            let obj = Object::new_move(move_obj, recipient, tx_digest);
-            if old_object.is_none() {
-                // Charge extra gas based on object size if we are creating a new object.
-                // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
-            }
-            let obj_address: SuiAddress = obj_id.into();
-            object_owner_map.remove(&obj_address);
-            if let Owner::ObjectOwner(new_owner) = recipient {
-                // Below we check whether the transfer introduced any circular ownership.
-                // We know that for any mutable object, all its ancenstors (if it was owned by another object)
-                // must be in the input as well. Prior to this we have recorded the original ownership mapping
-                // in object_owner_map. For any new transfer, we trace the new owner through the ownership
-                // chain to see if a cycle is detected.
-                // TODO: Set a constant upper bound to the depth of the new ownership chain.
-                let mut parent = new_owner;
-                while parent != obj_address && object_owner_map.contains_key(&parent) {
-                    parent = *object_owner_map.get(&parent).unwrap();
-                }
-                if parent == obj_address {
-                    return Err(ExecutionErrorKind::circular_object_ownership(parent.into()).into());
-                }
-                object_owner_map.insert(obj_address, new_owner);
-            }
-
-            state_view.write_object(obj);
-        }
+    let s_type = match type_ {
+        TypeTag::Struct(s_type) => s_type,
         _ => unreachable!("Only structs can be transferred"),
+    };
+    let has_public_transfer = abilities.has_store();
+    debug_assert!(abilities.has_key(), "objects should have key");
+    let id = ObjectID::try_from(&contents[0..ID_END_INDEX])
+        .expect("object contents should start with an id");
+    let old_object = by_value_objects.remove(&id);
+    let is_unwrapped = !(newly_generated_ids.contains(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID);
+    let version = match old_object {
+        Some((_, version)) => version,
+        // When an object was wrapped at version `v`, we added an record into `parent_sync`
+        // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
+        // it will also have version `v+1`, leading to a violation of the invariant that any
+        // object_id and version pair must be unique. We use the version from parent_sync and
+        // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
+        None if is_unwrapped => match state_view.get_latest_parent_entry_ref(id) {
+            Ok(Some((_, last_version, _))) => last_version,
+            _ => {
+                // TODO this error is (hopefully) transient and should not be
+                // a normal execution error
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvariantViolation,
+                    missing_unwrapped_msg(&id),
+                ));
+            }
+        },
+        None => SequenceNumber::new(),
+    };
+
+    // safe because `has_public_transfer` was properly determined from the abilities
+    let mut move_obj =
+        unsafe { MoveObject::new_from_execution(s_type, has_public_transfer, version, contents) };
+
+    debug_assert_eq!(id, move_obj.id());
+
+    #[cfg(debug_assertions)]
+    {
+        check_transferred_object_invariants(&move_obj, &old_object)
     }
+
+    // increment the object version. note that if the transferred object was
+    // freshly created, this means that its version will now be 1.
+    // thus, all objects in the global object pool have version > 0
+    move_obj.increment_version();
+    let obj_id = move_obj.id();
+    // A to-be-transferred object can come from 3 sources:
+    //   1. Passed in by-value (in `by_value_objects`, i.e. old_object is not none)
+    //   2. Created in this transaction (in `newly_generated_ids`)
+    //   3. Unwrapped in this transaction
+    // The following condition checks if this object was unwrapped in this transaction.
+    if let Some((_, old_obj_ver)) = old_object {
+        // Some kind of transfer since there's an old object
+        // Add an event for the transfer
+        let transfer_type = match recipient {
+            Owner::AddressOwner(_) => Some(TransferType::ToAddress),
+            Owner::ObjectOwner(_) => Some(TransferType::ToObject),
+            _ => None,
+        };
+        if let Some(type_) = transfer_type {
+            state_view.log_event(Event::TransferObject {
+                package_id: ObjectID::from(*module_id.address()),
+                transaction_module: Identifier::from(module_id.name()),
+                sender,
+                recipient,
+                object_id: obj_id,
+                version: old_obj_ver,
+                type_,
+            })
+        }
+    } else {
+        // Newly created object
+        if !is_unwrapped {
+            state_view.log_event(Event::new_object(
+                module_id.address(),
+                module_id.name(),
+                sender,
+                recipient,
+                obj_id,
+            ));
+        }
+    }
+    let obj = Object::new_move(move_obj, recipient, tx_digest);
+    if old_object.is_none() {
+        // Charge extra gas based on object size if we are creating a new object.
+        // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
+    }
+    let obj_address: SuiAddress = obj_id.into();
+    object_owner_map.remove(&obj_address);
+    if let Owner::ObjectOwner(new_owner) = recipient {
+        // Below we check whether the transfer introduced any circular ownership.
+        // We know that for any mutable object, all its ancenstors (if it was owned by another object)
+        // must be in the input as well. Prior to this we have recorded the original ownership mapping
+        // in object_owner_map. For any new transfer, we trace the new owner through the ownership
+        // chain to see if a cycle is detected.
+        // TODO: Set a constant upper bound to the depth of the new ownership chain.
+        let mut parent = new_owner;
+        while parent != obj_address && object_owner_map.contains_key(&parent) {
+            parent = *object_owner_map.get(&parent).unwrap();
+        }
+        if parent == obj_address {
+            return Err(ExecutionErrorKind::circular_object_ownership(parent.into()).into());
+        }
+        object_owner_map.insert(obj_address, new_owner);
+    }
+
+    state_view.write_object(obj);
     Ok(())
 }
 
@@ -1188,4 +1228,11 @@ fn struct_tag_equals_struct_inst(
                 )
             },
         )
+}
+
+fn missing_unwrapped_msg(id: &ObjectID) -> String {
+    format!(
+        "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
+        id
+    )
 }

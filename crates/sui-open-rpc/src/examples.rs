@@ -187,11 +187,15 @@ impl RpcExampleProvider {
     fn get_object_example(&mut self) -> Examples {
         let object_id = ObjectID::new(self.rng.gen());
 
-        let coin = GasCoin::new(object_id, SequenceNumber::from_u64(1), 10000);
+        let coin = GasCoin::new(object_id, 10000);
 
         let result = SuiObjectRead::Exists(SuiObject {
             data: SuiData::MoveObject(
-                SuiParsedMoveObject::try_from_layout(coin.to_object(), GasCoin::layout()).unwrap(),
+                SuiParsedMoveObject::try_from_layout(
+                    coin.to_object(SequenceNumber::from_u64(1)),
+                    GasCoin::layout(),
+                )
+                .unwrap(),
             ),
             owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),
             previous_transaction: TransactionDigest::new(self.rng.gen()),
@@ -260,8 +264,8 @@ impl RpcExampleProvider {
     fn get_raw_object(&mut self) -> Examples {
         let object_id = ObjectID::new(self.rng.gen());
 
-        let coin = GasCoin::new(object_id, SequenceNumber::from_u64(1), 10000);
-        let object = coin.to_object();
+        let coin = GasCoin::new(object_id, 10000);
+        let object = coin.to_object(SequenceNumber::from_u64(1));
         let result = SuiObjectRead::Exists(SuiObject {
             data: SuiData::MoveObject(SuiRawMoveObject {
                 type_: GasCoin::type_().to_string(),
