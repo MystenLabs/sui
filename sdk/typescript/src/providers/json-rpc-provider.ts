@@ -36,7 +36,7 @@ const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
 export class JsonRpcProvider extends Provider {
-  private client: JsonRpcClient;
+  protected client: JsonRpcClient;
 
   /**
    * Establish a connection to a Sui Gateway endpoint
