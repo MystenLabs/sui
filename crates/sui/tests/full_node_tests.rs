@@ -9,6 +9,7 @@ use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
+use sui_types::sui_framework_address_concat_string;
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -424,7 +425,7 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
         .subscribe(
             "sui_subscribeEvent",
             rpc_params![SuiEventFilter::MoveEventType(
-                "0x2::devnet_nft::MintNFTEvent".to_string()
+                sui_framework_address_concat_string("::devnet_nft::MintNFTEvent")
             )],
             "sui_unsubscribeEvent",
         )
@@ -439,7 +440,10 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
             event: SuiEvent::MoveEvent { type_, fields, .. },
             ..
         }))) => {
-            assert_eq!(type_, "0x2::devnet_nft::MintNFTEvent");
+            assert_eq!(
+                type_,
+                sui_framework_address_concat_string("::devnet_nft::MintNFTEvent")
+            );
             assert_eq!(
                 fields,
                 Some(SuiMoveStruct::WithFields(BTreeMap::from([
