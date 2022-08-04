@@ -41,9 +41,14 @@ fn serialize_deserialize() {
 
     let private_key = kpref.private();
     let bytes = bincode::serialize(&private_key).unwrap();
-    let privkey = bincode::deserialize::<Ed25519PublicKey>(&bytes).unwrap();
+
+    // serialize with Ed25519PrivateKey successes
+    let privkey = bincode::deserialize::<Ed25519PrivateKey>(&bytes).unwrap();
     let bytes2 = bincode::serialize(&privkey).unwrap();
     assert_eq!(bytes, bytes2);
+
+    // serialize with Ed25519PublicKey fails
+    assert!(bincode::deserialize::<Ed25519PublicKey>(&bytes).is_err());
 }
 
 #[test]
@@ -53,7 +58,7 @@ fn test_serde_signatures_non_human_readable() {
     let sig = keys().pop().unwrap().sign(message);
     let serialized = bincode::serialize(&sig).unwrap();
     let deserialized: Ed25519Signature = bincode::deserialize(&serialized).unwrap();
-    assert_eq!(deserialized.0, sig.0);
+    assert_eq!(deserialized.sig, sig.sig);
 }
 
 #[test]
@@ -67,12 +72,12 @@ fn test_serde_signatures_human_readable() {
     assert_eq!(
         format!(
             "\"{}\"",
-            base64ct::Base64::encode_string(&signature.0.to_bytes())
+            base64ct::Base64::encode_string(&signature.sig.to_bytes())
         ),
         serialized
     );
     let deserialized: Ed25519Signature = serde_json::from_str(&serialized).unwrap();
-    assert_eq!(deserialized, signature);
+    assert_eq!(deserialized.as_ref(), signature.as_ref());
 }
 
 #[test]
@@ -100,7 +105,7 @@ fn to_from_bytes_signature() {
     let signature = kpref.sign(b"Hello, world");
     let sig_bytes = signature.as_ref();
     let rebuilt_sig = <Ed25519Signature as ToFromBytes>::from_bytes(sig_bytes).unwrap();
-    assert_eq!(rebuilt_sig, signature);
+    assert_eq!(rebuilt_sig.as_ref(), signature.as_ref());
 }
 
 #[test]

@@ -69,6 +69,7 @@ pub enum ValidatorDagError {
     DagInvariantViolation(#[from] dag::node_dag::NodeDagError),
 }
 
+#[allow(clippy::large_enum_variant)]
 enum DagCommand {
     Insert(
         Box<Certificate>,

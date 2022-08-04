@@ -4,7 +4,7 @@ expression: committee
 ---
 {
   "authorities": {
-    "IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ/LRIhon3oUQ=": {
+    "ildi4hrBzbOHBELHe0w69Yx87bh3nQJw5tTx4vc2fXQ=": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/1/http",
@@ -33,7 +33,7 @@ expression: committee
         }
       }
     },
-    "YxwVQfOkv0TU2JcGFWSqhJXXZvYZGj/2FWIAPxhLjGU=": {
+    "rvP0pLjsod/DQzYb+OQ2vULeklnAS4MU644gVN1ugqs=": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/1/http",
@@ -62,7 +62,7 @@ expression: committee
         }
       }
     },
-    "deQXTdWIIlSAhvF7A3zssO6GUWt9E0AKgMhWtL2vf+E=": {
+    "ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/1/http",
@@ -91,7 +91,7 @@ expression: committee
         }
       }
     },
-    "vq2gYSbHjZi0oaafbuYYlpTw9HUVONqCTxrcixShtWI=": {
+    "zGIzLjS7LVzWn2Dvuyo2y5FsfrRYMB6jZjbE27ASvYg=": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/1/http",

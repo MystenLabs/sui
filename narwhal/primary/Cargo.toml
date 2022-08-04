@@ -20,7 +20,7 @@ futures = "0.3.21"
 itertools = "0.10.3"
 multiaddr = "0.14.0"
 prost = "0.10.4"
-rand = { version = "0.7.3", features = ["small_rng"] }
+rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.142", features = ["derive"] }
 thiserror = "1.0.31"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }

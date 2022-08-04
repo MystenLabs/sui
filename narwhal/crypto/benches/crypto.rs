@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 #[macro_use]
 extern crate criterion;
-extern crate ed25519_dalek;
+extern crate ed25519_consensus;
 extern crate rand;
 
 mod ed25519_benches {
@@ -44,8 +44,8 @@ mod ed25519_benches {
         let mut csprng: ThreadRng = thread_rng();
         let ed_keypair = Ed25519KeyPair::generate(&mut csprng);
         let bls_keypair = BLS12377KeyPair::generate(&mut csprng);
-        let blst_keypair = BLS12381KeyPair::generate(&mut csprng);
-        let secp256k1_keypair = Secp256k1KeyPair::generate(&mut csprng);
+        let blst_keypair = BLS12381KeyPair::generate(&mut csprng.clone());
+        let secp256k1_keypair = Secp256k1KeyPair::generate(&mut csprng.clone());
 
         let ed_public = ed_keypair.public();
         let bls_public = bls_keypair.public();
@@ -135,18 +135,21 @@ mod ed25519_benches {
 
     fn key_generation(c: &mut Criterion) {
         let mut csprng: ThreadRng = thread_rng();
+        let mut csprng1 = csprng.clone();
+        let mut csprng2 = csprng.clone();
+        let mut csprng3 = csprng.clone();
 
         c.bench_function("Ed25519 keypair generation", move |b| {
             b.iter(|| Ed25519KeyPair::generate(&mut csprng))
         });
         c.bench_function("BLS12377 keypair generation", move |b| {
-            b.iter(|| BLS12377KeyPair::generate(&mut csprng))
+            b.iter(|| BLS12377KeyPair::generate(&mut csprng1))
         });
         c.bench_function("BLS12381 keypair generation", move |b| {
-            b.iter(|| BLS12381KeyPair::generate(&mut csprng))
+            b.iter(|| BLS12381KeyPair::generate(&mut csprng2))
         });
         c.bench_function("Secp256k1 keypair generation", move |b| {
-            b.iter(|| Secp256k1KeyPair::generate(&mut csprng))
+            b.iter(|| Secp256k1KeyPair::generate(&mut csprng3))
         });
     }
 

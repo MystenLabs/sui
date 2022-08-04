@@ -16,7 +16,7 @@ clap = "2.34"
 futures = "0.3.21"
 multiaddr = "0.14.0"
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "20ef52a00135114eb361e28673cfaa9bf4560f6f" }
-rand = "0.7.3"
+rand = "0.8.5"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 thiserror = "1.0.31"
 tokio = { version = "1.20.1", features = ["full"] }

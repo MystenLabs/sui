@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use base64ct::{Base64, Encoding};
-
+use ed25519_consensus::{batch, VerificationKeyBytes};
+use once_cell::sync::OnceCell;
 use serde::{de, Deserialize, Serialize};
-use serde_with::serde_as;
-use signature::{Signature, Signer, Verifier};
+use signature::{rand_core::OsRng, Signature, Signer, Verifier};
 use std::{
     fmt::{self, Display},
     str::FromStr,
@@ -12,23 +12,28 @@ use std::{
 
 use crate::{
     pubkey_bytes::PublicKeyBytes,
-    serde_helpers::{keypair_decode_base64, Ed25519Signature as Ed25519Sig},
+    serde_helpers::keypair_decode_base64,
     traits::{
         AggregateAuthenticator, Authenticator, EncodeDecodeBase64, KeyPair, SigningKey,
         ToFromBytes, VerifyingKey,
     },
 };
+
+pub const ED25519_PRIVATE_KEY_LENGTH: usize = 32;
+pub const ED25519_PUBLIC_KEY_LENGTH: usize = 32;
+pub const ED25519_SIGNATURE_LENGTH: usize = 64;
+
 ///
 /// Define Structs
 ///
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Ed25519PublicKey(pub ed25519_dalek::PublicKey);
+pub struct Ed25519PublicKey(pub ed25519_consensus::VerificationKey);
 
 pub type Ed25519PublicKeyBytes = PublicKeyBytes<Ed25519PublicKey, { Ed25519PublicKey::LENGTH }>;
 
 #[derive(Debug)]
-pub struct Ed25519PrivateKey(pub ed25519_dalek::SecretKey);
+pub struct Ed25519PrivateKey(pub ed25519_consensus::SigningKey);
 
 // There is a strong requirement for this specific impl. in Fab benchmarks
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,15 +43,14 @@ pub struct Ed25519KeyPair {
     secret: Ed25519PrivateKey,
 }
 
-#[serde_as]
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Ed25519Signature(#[serde_as(as = "Ed25519Sig")] pub ed25519_dalek::Signature);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Ed25519Signature {
+    pub sig: ed25519_consensus::Signature,
+    pub bytes: OnceCell<[u8; ED25519_SIGNATURE_LENGTH]>,
+}
 
-#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub struct Ed25519AggregateSignature(
-    #[serde_as(as = "Vec<Ed25519Sig>")] pub Vec<ed25519_dalek::Signature>,
-);
+pub struct Ed25519AggregateSignature(pub Vec<ed25519_consensus::Signature>);
 
 ///
 /// Implement VerifyingKey
@@ -54,36 +58,42 @@ pub struct Ed25519AggregateSignature(
 
 impl<'a> From<&'a Ed25519PrivateKey> for Ed25519PublicKey {
     fn from(secret: &'a Ed25519PrivateKey) -> Self {
-        let inner = &secret.0;
-        let pk = inner.into();
-        Ed25519PublicKey(pk)
+        Ed25519PublicKey(secret.0.verification_key())
     }
 }
 
 impl VerifyingKey for Ed25519PublicKey {
     type PrivKey = Ed25519PrivateKey;
     type Sig = Ed25519Signature;
-    const LENGTH: usize = ed25519_dalek::PUBLIC_KEY_LENGTH;
+    const LENGTH: usize = ED25519_PUBLIC_KEY_LENGTH;
 
     fn verify_batch(msg: &[u8], pks: &[Self], sigs: &[Self::Sig]) -> Result<(), signature::Error> {
-        let msgs = vec![msg; pks.len()];
-        // TODO: replace this with some unsafe - but faster & non-alloc - implementation
-        let sigs: Vec<_> = sigs.iter().map(|s| s.0).collect();
-        let pks: Vec<_> = pks.iter().map(|p| p.0).collect();
+        let mut batch = batch::Verifier::new();
 
-        ed25519_dalek::verify_batch(&msgs, &sigs, &pks)
+        for i in 0..sigs.len() {
+            let vk_bytes = VerificationKeyBytes::try_from(pks[i].as_ref()).unwrap();
+            batch.queue((vk_bytes, sigs[i].sig, msg))
+        }
+        batch
+            .verify(&mut OsRng)
+            .map_err(|_| signature::Error::new())
     }
 }
 
 impl Verifier<Ed25519Signature> for Ed25519PublicKey {
+    // Compliant to ZIP215: https://zips.z.cash/protocol/protocol.pdf#concreteed25519
     fn verify(&self, msg: &[u8], signature: &Ed25519Signature) -> Result<(), signature::Error> {
-        self.0.verify(msg, &signature.0)
+        self.0
+            .verify(&signature.sig, msg)
+            .map_err(|_| signature::Error::new())
     }
 }
 
 impl ToFromBytes for Ed25519PublicKey {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        ed25519_dalek::PublicKey::from_bytes(bytes).map(Ed25519PublicKey)
+        ed25519_consensus::VerificationKey::try_from(bytes)
+            .map(Ed25519PublicKey)
+            .map_err(|_| signature::Error::new())
     }
 }
 
@@ -105,8 +115,8 @@ impl Display for Ed25519PublicKey {
     }
 }
 
-/// Things sorely lacking in upstream Dalek
-#[allow(clippy::derive_hash_xor_eq)] // ed25519_dalek's PartialEq is compatible
+/// Missing in ed25519_consensus
+#[allow(clippy::derive_hash_xor_eq)] // ed25519_consensus's PartialEq is compatible
 impl std::hash::Hash for Ed25519PublicKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.as_bytes().hash(state);
@@ -155,12 +165,14 @@ impl<'de> Deserialize<'de> for Ed25519PublicKey {
 impl SigningKey for Ed25519PrivateKey {
     type PubKey = Ed25519PublicKey;
     type Sig = Ed25519Signature;
-    const LENGTH: usize = ed25519_dalek::SECRET_KEY_LENGTH;
+    const LENGTH: usize = ED25519_PRIVATE_KEY_LENGTH;
 }
 
 impl ToFromBytes for Ed25519PrivateKey {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        ed25519_dalek::SecretKey::from_bytes(bytes).map(Ed25519PrivateKey)
+        ed25519_consensus::SigningKey::try_from(bytes)
+            .map(Ed25519PrivateKey)
+            .map_err(|_| signature::Error::new())
     }
 }
 
@@ -194,7 +206,7 @@ impl<'de> Deserialize<'de> for Ed25519PrivateKey {
 impl Authenticator for Ed25519Signature {
     type PubKey = Ed25519PublicKey;
     type PrivKey = Ed25519PrivateKey;
-    const LENGTH: usize = ed25519_dalek::SIGNATURE_LENGTH;
+    const LENGTH: usize = ED25519_SIGNATURE_LENGTH;
 }
 
 impl AsRef<[u8]> for Ed25519PrivateKey {
@@ -205,13 +217,20 @@ impl AsRef<[u8]> for Ed25519PrivateKey {
 
 impl Signature for Ed25519Signature {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        <ed25519_dalek::Signature as Signature>::from_bytes(bytes).map(Ed25519Signature)
+        ed25519_consensus::Signature::try_from(bytes)
+            .map(|sig| Ed25519Signature {
+                sig,
+                bytes: OnceCell::new(),
+            })
+            .map_err(|_| signature::Error::new())
     }
 }
 
 impl AsRef<[u8]> for Ed25519Signature {
     fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
+        self.bytes
+            .get_or_try_init::<_, eyre::Report>(|| Ok(self.sig.to_bytes()))
+            .expect("OnceCell invariant violated")
     }
 }
 
@@ -223,8 +242,36 @@ impl Display for Ed25519Signature {
 
 impl Default for Ed25519Signature {
     fn default() -> Self {
-        let sig = <ed25519_dalek::Signature as Signature>::from_bytes(&[0u8; 64]).unwrap();
-        Ed25519Signature(sig)
+        <Ed25519Signature as Signature>::from_bytes(&[1u8; ED25519_SIGNATURE_LENGTH]).unwrap()
+    }
+}
+
+impl Serialize for Ed25519Signature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        if serializer.is_human_readable() {
+            base64ct::Base64::encode_string(self.as_ref()).serialize(serializer)
+        } else {
+            self.as_ref().serialize(serializer)
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Ed25519Signature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let bytes = if deserializer.is_human_readable() {
+            let s = String::deserialize(deserializer)?;
+            base64ct::Base64::decode_vec(&s).map_err(|e| de::Error::custom(e.to_string()))?
+        } else {
+            Vec::deserialize(deserializer)?
+        };
+        <Ed25519Signature as signature::Signature>::from_bytes(&bytes)
+            .map_err(|e| de::Error::custom(e.to_string()))
     }
 }
 
@@ -239,7 +286,7 @@ impl Display for Ed25519AggregateSignature {
             "{:?}",
             self.0
                 .iter()
-                .map(|x| Base64::encode_string(x.as_ref()))
+                .map(|x| Base64::encode_string(&x.to_bytes()))
                 .collect::<Vec<_>>()
         )
     }
@@ -252,11 +299,11 @@ impl AggregateAuthenticator for Ed25519AggregateSignature {
 
     /// Parse a key from its byte representation
     fn aggregate(signatures: Vec<Self::Sig>) -> Result<Self, signature::Error> {
-        Ok(Self(signatures.iter().map(|s| s.0).collect()))
+        Ok(Self(signatures.iter().map(|s| s.sig).collect()))
     }
 
     fn add_signature(&mut self, signature: Self::Sig) -> Result<(), signature::Error> {
-        self.0.push(signature.0);
+        self.0.push(signature.sig);
         Ok(())
     }
 
@@ -270,13 +317,17 @@ impl AggregateAuthenticator for Ed25519AggregateSignature {
         pks: &[<Self::Sig as Authenticator>::PubKey],
         message: &[u8],
     ) -> Result<(), signature::Error> {
-        ed25519_dalek::verify_batch(
-            &vec![message; pks.len()][..],
-            &self.0[..],
-            &pks.iter().map(|x| x.0).collect::<Vec<_>>()[..],
-        )
-        .map_err(|_| signature::Error::new())?;
-        Ok(())
+        if pks.len() != self.0.len() {
+            return Err(signature::Error::new());
+        }
+        let mut batch = batch::Verifier::new();
+
+        for (i, pk) in pks.iter().enumerate() {
+            let vk_bytes = VerificationKeyBytes::try_from(pk.0).unwrap();
+            batch.queue((vk_bytes, self.0[i], message));
+        }
+
+        batch.verify(OsRng).map_err(|_| signature::Error::new())
     }
 
     fn batch_verify(
@@ -287,25 +338,15 @@ impl AggregateAuthenticator for Ed25519AggregateSignature {
         if pks.len() != messages.len() || messages.len() != sigs.len() {
             return Err(signature::Error::new());
         }
-        let mut inner_messages: Vec<&[u8]> = Vec::new();
-        for i in 0..messages.len() {
-            for _ in 0..pks[i].len() {
-                inner_messages.push(messages[i]);
+        let mut batch = batch::Verifier::new();
+
+        for i in 0..pks.len() {
+            for j in 0..pks[i].len() {
+                let vk_bytes = VerificationKeyBytes::from(pks[i][j].0);
+                batch.queue((vk_bytes, sigs[i].0[j], messages[i]));
             }
         }
-
-        ed25519_dalek::verify_batch(
-            &inner_messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],
-            &sigs
-                .iter()
-                .flat_map(|x| x.0.iter().copied())
-                .collect::<Vec<_>>()[..],
-            &pks.iter()
-                .flat_map(|x| x.iter().map(|y| y.0).collect::<Vec<_>>())
-                .collect::<Vec<_>>()[..],
-        )
-        .map_err(|_| signature::Error::new())?;
-        Ok(())
+        batch.verify(OsRng).map_err(|_| signature::Error::new())
     }
 }
 
@@ -355,10 +396,10 @@ impl KeyPair for Ed25519KeyPair {
     }
 
     fn generate<R: rand::CryptoRng + rand::RngCore>(rng: &mut R) -> Self {
-        let kp = ed25519_dalek::Keypair::generate(rng);
+        let kp = ed25519_consensus::SigningKey::new(rng);
         Ed25519KeyPair {
-            name: Ed25519PublicKey(kp.public),
-            secret: Ed25519PrivateKey(kp.secret),
+            name: Ed25519PublicKey(kp.verification_key()),
+            secret: Ed25519PrivateKey(kp),
         }
     }
 }
@@ -372,21 +413,21 @@ impl FromStr for Ed25519KeyPair {
     }
 }
 
-impl From<ed25519_dalek::Keypair> for Ed25519KeyPair {
-    fn from(dalek_kp: ed25519_dalek::Keypair) -> Self {
+impl From<ed25519_consensus::SigningKey> for Ed25519KeyPair {
+    fn from(kp: ed25519_consensus::SigningKey) -> Self {
         Ed25519KeyPair {
-            name: Ed25519PublicKey(dalek_kp.public),
-            secret: Ed25519PrivateKey(dalek_kp.secret),
+            name: Ed25519PublicKey(kp.verification_key()),
+            secret: Ed25519PrivateKey(kp),
         }
     }
 }
 
 impl Signer<Ed25519Signature> for Ed25519KeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Ed25519Signature, signature::Error> {
-        let privkey: &ed25519_dalek::SecretKey = &self.secret.0;
-        let pubkey: &ed25519_dalek::PublicKey = &self.name.0;
-        let expanded_privkey: ed25519_dalek::ExpandedSecretKey = (privkey).into();
-        Ok(Ed25519Signature(expanded_privkey.sign(msg, pubkey)))
+        Ok(Ed25519Signature {
+            sig: self.secret.0.sign(msg),
+            bytes: OnceCell::new(),
+        })
     }
 }
 
@@ -398,9 +439,10 @@ impl TryFrom<Ed25519PublicKeyBytes> for Ed25519PublicKey {
     type Error = signature::Error;
 
     fn try_from(bytes: Ed25519PublicKeyBytes) -> Result<Ed25519PublicKey, Self::Error> {
-        // TODO(https://github.com/MystenLabs/sui/issues/101): Do better key validation
-        // to ensure the bytes represent a poin on the curve.
-        Ed25519PublicKey::from_bytes(bytes.as_ref()).map_err(|_| Self::Error::new())
+        VerificationKeyBytes::try_from(bytes.as_ref())
+            .and_then(ed25519_consensus::VerificationKey::try_from)
+            .map(Ed25519PublicKey)
+            .map_err(|_| signature::Error::new())
     }
 }
 
