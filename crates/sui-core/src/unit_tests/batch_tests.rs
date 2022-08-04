@@ -27,8 +27,8 @@ use std::fs;
 use std::sync::Arc;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-    TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, EpochRequest, EpochResponse, ObjectInfoRequest, ObjectInfoResponse,
+    Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::object::Object;
 
@@ -565,6 +565,10 @@ impl AuthorityAPI for TrustworthyAuthorityClient {
         unimplemented!();
     }
 
+    async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        unimplemented!()
+    }
+
     /// Handle Batch information requests for this authority.
     async fn handle_batch_stream(
         &self,
@@ -677,7 +681,11 @@ impl AuthorityAPI for ByzantineAuthorityClient {
         &self,
         _request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        unimplemented!();
+        unimplemented!()
+    }
+
+    async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        unimplemented!()
     }
 
     /// Handle Batch information requests for this authority.

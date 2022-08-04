@@ -999,6 +999,14 @@ impl AuthorityState {
         }
     }
 
+    pub fn handle_epoch_request(&self, request: &EpochRequest) -> SuiResult<EpochResponse> {
+        let epoch_info = match &request.epoch_id {
+            Some(id) => self.database.get_authenticated_epoch(id)?,
+            None => Some(self.database.get_latest_authenticated_epoch()),
+        };
+        Ok(EpochResponse { epoch_info })
+    }
+
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(

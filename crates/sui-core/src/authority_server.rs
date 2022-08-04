@@ -438,4 +438,18 @@ impl Validator for ValidatorService {
 
         return Ok(tonic::Response::new(response));
     }
+
+    async fn epoch_info(
+        &self,
+        request: tonic::Request<EpochRequest>,
+    ) -> Result<tonic::Response<EpochResponse>, tonic::Status> {
+        let request = request.into_inner();
+
+        let response = self
+            .state
+            .handle_epoch_request(&request)
+            .map_err(|e| tonic::Status::internal(e.to_string()))?;
+
+        return Ok(tonic::Response::new(response));
+    }
 }

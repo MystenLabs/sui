@@ -952,6 +952,10 @@ async fn test_quorum_once_with_timeout() {
         ) -> Result<CheckpointResponse, SuiError> {
             unreachable!();
         }
+
+        async fn handle_epoch(&self, _request: EpochRequest) -> Result<EpochResponse, SuiError> {
+            unreachable!()
+        }
     }
 
     let count = Arc::new(Mutex::new(0));

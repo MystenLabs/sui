@@ -15,6 +15,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
+use tap::TapFallible;
 use tracing::info;
 
 #[derive(Clone)]
@@ -264,6 +265,7 @@ impl<C> SafeClient<C> {
 
     /// This function is used by the higher level authority logic to report an
     /// error that could be due to this authority.
+    /// TODO: Get rid of this. https://github.com/MystenLabs/sui/issues/3740
     pub fn report_client_error(&self, error: &SuiError) {
         info!(?error, authority =? self.address, "Client error");
     }
@@ -580,5 +582,57 @@ where
             },
         ));
         Ok(Box::pin(stream))
+    }
+
+    fn verify_epoch(
+        &self,
+        requested_epoch_id: Option<EpochId>,
+        response: &EpochResponse,
+    ) -> SuiResult {
+        if let Some(epoch) = &response.epoch_info {
+            fp_ensure!(
+                requested_epoch_id.is_none() || requested_epoch_id == Some(epoch.epoch()),
+                SuiError::InvalidEpochResponse("Responded epoch number mismatch".to_string())
+            );
+        }
+        match (requested_epoch_id, &response.epoch_info) {
+            (None, None) => Err(SuiError::InvalidEpochResponse(
+                "Latest epoch must not be None".to_string(),
+            )),
+            (Some(epoch_id), None) => {
+                fp_ensure!(
+                    epoch_id != 0,
+                    SuiError::InvalidEpochResponse("Genesis epoch must be available".to_string())
+                );
+                Ok(())
+            }
+            (_, Some(AuthenticatedEpoch::Genesis(_))) => {
+                // TODO: Verify the epoch data using genesis committee
+                Ok(())
+            }
+            (_, Some(AuthenticatedEpoch::Signed(_))) => {
+                // TODO: Verify the epoch data using previous committee
+                Ok(())
+            }
+            (_, Some(AuthenticatedEpoch::Certified(_))) => {
+                // TODO: Verify the epoch data using previous committee
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        let epoch_id = request.epoch_id;
+        let authority = self.address;
+        let response = self.authority_client.handle_epoch(request).await?;
+        self.verify_epoch(epoch_id, &response)
+            .map_err(|err| SuiError::ByzantineAuthoritySuspicion {
+                authority,
+                reason: err.to_string(),
+            })
+            .tap_err(|err| {
+                self.report_client_error(err);
+            })?;
+        Ok(response)
     }
 }

@@ -2,6 +2,16 @@
   "name": "sui-wallet-adapter",
   "version": "0.1.0",
   "private": true,
+  "workspaces": {
+    "packages": [
+      "packages/adapters/base-adapter",
+      "packages/adapters/integrations/sui-wallet",
+      "packages/adapters/integrations/mock-wallet",
+      "packages/adapters/integrations/all-wallets",
+      "packages/react-providers",
+      "packages/ui"
+    ]
+  },
   "dependencies": {
     "@emotion/react": "^11.9.3",
     "@emotion/styled": "^11.9.3",
@@ -26,8 +36,8 @@
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
+    "start": "npm run build --workspaces && react-scripts start",
+    "build": "npm run build --workspaces && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
