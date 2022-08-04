@@ -1,6 +1,4 @@
 .container {
-    @apply pb-[40px] mb-[30px];
-
     border-bottom: 1px solid #f0f1f2;
 }
 
