@@ -5,7 +5,7 @@ use crate::base_types::AuthorityName;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    Signable, SuiAuthoritySignature,
+    Signable, SuiAuthoritySignature, VerificationObligation,
 };
 use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
@@ -16,7 +16,17 @@ pub trait Message {
 
     fn digest(&self) -> Self::DigestType;
 
+    /// Verify the internal data consistency of this message.
+    /// In some cases, such as user signed transaction, we also need
+    /// to verify the user signature here.
     fn verify(&self) -> SuiResult;
+
+    /// This is only needed if this message contains signature that needs
+    /// to be verified. In most messages this function can be a noop.
+    fn add_to_verification_obligation(
+        &self,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()>;
 }
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
@@ -56,9 +66,25 @@ where
         &self.auth_signature
     }
 
+    /// A convenient interface to verify this message only.
     pub fn verify(&self, committee: &Committee) -> SuiResult {
         self.data.verify()?;
         self.auth_signature.verify(&self.data, committee)
+    }
+
+    /// Add this message to `obligation` for verification.
+    /// This allows batch verification. This message can be
+    /// one of the many messages that need to be verified.
+    pub fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+    ) -> SuiResult<()> {
+        self.data.add_to_verification_obligation(obligation)?;
+
+        let idx = obligation.add_message(&self.data);
+        self.auth_signature
+            .add_to_verification_obligation(committee, obligation, idx)
     }
 }
 

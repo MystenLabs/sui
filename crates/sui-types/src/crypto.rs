@@ -548,12 +548,28 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
 ///       This will make CertifiedTransaction also an instance of the same struct.
 pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
     fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult;
+
+    fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+        message_index: usize,
+    ) -> SuiResult<()>;
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EmptySignInfo {}
 impl AuthoritySignInfoTrait for EmptySignInfo {
     fn verify<T: Signable<Vec<u8>>>(&self, _data: &T, _committee: &Committee) -> SuiResult {
+        Ok(())
+    }
+
+    fn add_to_verification_obligation(
+        &self,
+        _committee: &Committee,
+        _obligation: &mut VerificationObligation,
+        _message_index: usize,
+    ) -> SuiResult<()> {
         Ok(())
     }
 }
@@ -570,6 +586,31 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
         let idx = obligation.add_message(data);
         self.add_to_verification_obligation(committee, &mut obligation, idx)?;
         obligation.verify_all()?;
+        Ok(())
+    }
+
+    fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+        message_index: usize,
+    ) -> SuiResult<()> {
+        let weight = committee.weight(&self.authority);
+        fp_ensure!(weight > 0, SuiError::UnknownSigner);
+
+        obligation
+            .public_keys
+            .get_mut(message_index)
+            .ok_or(SuiError::InvalidAddress)?
+            .push(committee.public_key(&self.authority)?);
+        obligation
+            .signatures
+            .get_mut(message_index)
+            .ok_or(SuiError::InvalidAddress)?
+            .add_signature(self.signature.clone())
+            .map_err(|_| SuiError::InvalidSignature {
+                error: "Invalid Signature".to_string(),
+            })?;
         Ok(())
     }
 }
@@ -596,33 +637,6 @@ impl PartialEq for AuthoritySignInfo {
         // We do not compare the signature, because there can be multiple
         // valid signatures for the same epoch and authority.
         self.epoch == other.epoch && self.authority == other.authority
-    }
-}
-
-impl AuthoritySignInfo {
-    pub fn add_to_verification_obligation(
-        &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
-        message_index: usize,
-    ) -> SuiResult<()> {
-        let weight = committee.weight(&self.authority);
-        fp_ensure!(weight > 0, SuiError::UnknownSigner);
-
-        obligation
-            .public_keys
-            .get_mut(message_index)
-            .ok_or(SuiError::InvalidAddress)?
-            .push(committee.public_key(&self.authority)?);
-        obligation
-            .signatures
-            .get_mut(message_index)
-            .ok_or(SuiError::InvalidAddress)?
-            .add_signature(self.signature.clone())
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Invalid Signature".to_string(),
-            })?;
-        Ok(())
     }
 }
 
@@ -659,12 +673,68 @@ pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
 static_assertions::assert_not_impl_any!(AuthorityStrongQuorumSignInfo: Hash, Eq, PartialEq);
 static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, PartialEq);
 
-impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {
+impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
+    for AuthorityQuorumSignInfo<STRONG_THRESHOLD>
+{
     fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
         let mut obligation = VerificationObligation::default();
         let message_index = obligation.add_message(data);
         self.add_to_verification_obligation(committee, &mut obligation, message_index)?;
         obligation.verify_all()?;
+        Ok(())
+    }
+
+    fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+        message_index: usize,
+    ) -> SuiResult<()> {
+        // Check epoch
+        fp_ensure!(
+            self.epoch == committee.epoch(),
+            SuiError::WrongEpoch {
+                expected_epoch: committee.epoch()
+            }
+        );
+
+        let mut weight = 0;
+
+        // Create obligations for the committee signatures
+        obligation
+            .signatures
+            .get_mut(message_index)
+            .ok_or(SuiError::InvalidAuthenticator)?
+            .add_aggregate(self.signature.clone())
+            .map_err(|_| SuiError::InvalidSignature {
+                error: "Signature Aggregation failed".to_string(),
+            })?;
+
+        let selected_public_keys = obligation
+            .public_keys
+            .get_mut(message_index)
+            .ok_or(SuiError::InvalidAuthenticator)?;
+
+        for authority_index in self.signers_map.iter() {
+            let authority = committee
+                .authority_by_index(authority_index)
+                .ok_or(SuiError::UnknownSigner)?;
+
+            // Update weight.
+            let voting_rights = committee.weight(authority);
+            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
+            weight += voting_rights;
+
+            selected_public_keys.push(committee.public_key(authority)?);
+        }
+
+        let threshold = if STRONG_THRESHOLD {
+            committee.quorum_threshold()
+        } else {
+            committee.validity_threshold()
+        };
+        fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
+
         Ok(())
     }
 }
@@ -723,60 +793,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
 
     pub fn is_empty(&self) -> bool {
         self.signers_map.is_empty()
-    }
-
-    pub fn add_to_verification_obligation(
-        &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
-        message_index: usize,
-    ) -> SuiResult<()> {
-        // Check epoch
-        fp_ensure!(
-            self.epoch == committee.epoch(),
-            SuiError::WrongEpoch {
-                expected_epoch: committee.epoch()
-            }
-        );
-
-        let mut weight = 0;
-
-        // Create obligations for the committee signatures
-        obligation
-            .signatures
-            .get_mut(message_index)
-            .ok_or(SuiError::InvalidAuthenticator)?
-            .add_aggregate(self.signature.clone())
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Signature Aggregation failed".to_string(),
-            })?;
-
-        let selected_public_keys = obligation
-            .public_keys
-            .get_mut(message_index)
-            .ok_or(SuiError::InvalidAuthenticator)?;
-
-        for authority_index in self.signers_map.iter() {
-            let authority = committee
-                .authority_by_index(authority_index)
-                .ok_or(SuiError::UnknownSigner)?;
-
-            // Update weight.
-            let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
-            weight += voting_rights;
-
-            selected_public_keys.push(committee.public_key(authority)?);
-        }
-
-        let threshold = if STRONG_THRESHOLD {
-            committee.quorum_threshold()
-        } else {
-            committee.validity_threshold()
-        };
-        fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
-
-        Ok(())
     }
 }
 
