@@ -1,14 +1,133 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use move_binary_format::file_format::{
-    Bytecode, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex, FunctionHandleIndex,
-    FunctionInstantiationIndex, SignatureIndex, StructDefInstantiationIndex, StructDefinitionIndex,
-};
-use move_core_types::gas_schedule::GasCost;
+use once_cell::sync::Lazy;
 
+use move_binary_format::{
+    file_format::{
+        Bytecode, ConstantPoolIndex, FieldHandleIndex, FieldInstantiationIndex,
+        FunctionHandleIndex, FunctionInstantiationIndex, SignatureIndex,
+        StructDefInstantiationIndex, StructDefinitionIndex,
+    },
+    file_format_common::instruction_key,
+};
+use move_core_types::gas_schedule::CostTable;
+use move_core_types::gas_schedule::GasCost;
+use move_vm_types::gas_schedule::new_from_instructions;
+
+// NOTE: all values in this file are subject to change
+
+// Maximum gas a TX can use
+pub const MAX_TX_GAS: u64 = 1_000_000_000;
+
+//
+// Fixed costs: these are charged regardless of execution
+//
+// This is a flat fee
+pub const BASE_TX_COST_FIXED: u64 = 1_000;
+// This is charged per byte of the TX
+pub const BASE_TX_COST_PER_BYTE: u64 = 10;
+
+//
+// Object access costs: These are for reading, writing, and verifying objects
+//
+// Cost to read an object per byte
+pub const OBJ_ACCESS_COST_READ: u64 = 100;
+// Cost to mutate an object per byte
+pub const OBJ_ACCESS_COST_MUTATE: u64 = 100;
+// Cost to delete an object per byte
+pub const OBJ_ACCESS_COST_DELETE: u64 = 20;
+// For checking locks. Charged per object
+pub const OBJ_ACCESS_COST_VERIFY: u64 = 200;
+
+//
+// Object storage costs: These are for storing objects
+//
+// Cost to store an object per byte. This is refundable
+pub const OBJ_DATA_COST_REFUNDABLE: u64 = 100;
+// Cost to store metadata of objects per byte.
+// This depends on the size of various fields including the effects
+pub const OBJ_METADATA_COST_REFUNDABLE: u64 = 100;
+
+//
+// Consensus costs: costs for TXes that use shared object
+//
+// Flat cost for consensus transactions
+pub const CONSENSUS_COST: u64 = 1_000;
+
+//
+// Package verification & publish cost: when publishing a package
+//
+// Flat cost
+pub const PACKAGE_PUBLISH_COST: u64 = 1_000;
+
+//
+// Native function costs
+//
+// TODO: need to refactor native gas calculation so it is extensible. Currently we
+// have hardcoded here the stdlib natives.
+#[allow(non_camel_case_types)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[repr(u8)]
+pub enum SuiNativeCostIndex {
+    EVENT_EMIT = 0,
+
+    OBJECT_BYTES_TO_ADDR = 1,
+    OBJECT_BORROW_UUID = 2,
+    OBJECT_DELETE_IMPL = 3,
+
+    TRANSFER_TRANSFER_INTERNAL = 4,
+    TRANSFER_FREEZE_OBJECT = 5,
+    TRANSFER_SHARE_OBJECT = 6,
+
+    TX_CONTEXT_DERIVE_ID = 7,
+    TX_CONTEXT_NEW_SIGNER_FROM_ADDR = 8,
+}
+
+// Native costs are currently flat
+// TODO recalibrate wrt bytecode costs
+pub fn native_cost_schedule() -> Vec<GasCost> {
+    use SuiNativeCostIndex as N;
+
+    let mut native_table = vec![
+        // This is artificially chosen to limit too many event emits
+        // We will change this in https://github.com/MystenLabs/sui/issues/3341
+        (N::EVENT_EMIT, GasCost::new(MAX_TX_GAS / 256, 1)),
+        (N::OBJECT_BYTES_TO_ADDR, GasCost::new(30, 1)),
+        (N::OBJECT_BORROW_UUID, GasCost::new(150, 1)),
+        (N::OBJECT_DELETE_IMPL, GasCost::new(100, 1)),
+        (N::TRANSFER_TRANSFER_INTERNAL, GasCost::new(80, 1)),
+        (N::TRANSFER_FREEZE_OBJECT, GasCost::new(80, 1)),
+        (N::TRANSFER_SHARE_OBJECT, GasCost::new(80, 1)),
+        (N::TX_CONTEXT_DERIVE_ID, GasCost::new(110, 1)),
+        (N::TX_CONTEXT_NEW_SIGNER_FROM_ADDR, GasCost::new(200, 1)),
+    ];
+    native_table.sort_by_key(|cost| cost.0 as u64);
+    native_table
+        .into_iter()
+        .map(|(_, cost)| cost)
+        .collect::<Vec<_>>()
+}
+
+pub fn bytecode_cost_schedule() -> Vec<(Bytecode, GasCost)> {
+    let mut instrs: Vec<_> = bytecode_costs()
+        .iter()
+        .map(|q| (q.0.clone(), q.1.clone()))
+        .collect();
+    // Note that the DiemVM is expecting the table sorted by instruction order.
+    instrs.sort_by_key(|cost| instruction_key(&cost.0));
+    instrs
+}
+pub static COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
+    // Note that the DiemVM is expecting the table sorted by instruction order.
+    new_from_instructions(bytecode_cost_schedule(), native_cost_schedule())
+});
+
+//
+// Bytecode cost tables
+//
 // Bytecode, cost, and whether or not it's depends on size of operand
-pub fn _bytecode_instruction_costs() -> Vec<(Bytecode, GasCost, bool)> {
+fn bytecode_costs() -> Vec<(Bytecode, GasCost, bool)> {
     use Bytecode::*;
     return vec![
         //

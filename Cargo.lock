@@ -6904,6 +6904,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-cost"
+version = "0.1.0"
+dependencies = [
+ "move-binary-format",
+ "move-bytecode-utils",
+ "move-core-types",
+ "move-disassembler",
+ "move-ir-types",
+ "move-vm-types",
+ "once_cell",
+]
+
+[[package]]
 name = "sui-faucet"
 version = "0.1.0"
 dependencies = [

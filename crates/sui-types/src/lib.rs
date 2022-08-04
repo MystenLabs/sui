@@ -18,7 +18,6 @@ pub mod base_types;
 pub mod batch;
 pub mod coin;
 pub mod committee;
-pub mod cost;
 pub mod crypto;
 pub mod event;
 pub mod gas;

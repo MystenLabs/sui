@@ -8,6 +8,7 @@ members = [
     "crates/sui-cluster-test",
     "crates/sui-config",
     "crates/sui-core",
+    "crates/sui-cost",
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-build",
