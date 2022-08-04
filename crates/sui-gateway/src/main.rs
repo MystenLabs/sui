@@ -15,7 +15,7 @@ use sui_json_rpc::gateway_api::{GatewayWalletSyncApiImpl, RpcGatewayImpl};
 use sui_json_rpc::JsonRpcServerBuilder;
 use tracing::info;
 
-const DEFAULT_RPC_SERVER_PORT: &str = "5001";
+const DEFAULT_RPC_SERVER_PORT: &str = "9000";
 const DEFAULT_RPC_SERVER_ADDR_IPV4: &str = "127.0.0.1";
 const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
 
