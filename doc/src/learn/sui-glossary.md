@@ -118,7 +118,7 @@ Sui refers to the Sui blockchain, the SUI currency, and the [Sui open source pro
 
 [Total order](https://en.wikipedia.org/wiki/Total_order) refers to the ordered presentation of the history of all transactions processed by a traditional blockchain up to a given time. This is maintained by many blockchain systems, as the only way to process transactions. In contrast, Sui uses a causal (partial) order wherever possible and safe.
 
-For more information, see [Causal order vs total order](sui-compared#causal-order-vs-total-order). 
+For more information, see [Causal order vs total order](sui-compared.md#causal-order-vs-total-order). 
 
 
 ### Transaction
