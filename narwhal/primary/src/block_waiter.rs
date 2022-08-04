@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle,
     time::timeout,
 };
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 use types::{
     BatchDigest, BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate,
     CertificateDigest, Header, PrimaryWorkerMessage, ReconfigureNotification,
@@ -282,6 +282,10 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
         let mut waiting_get_block = FuturesUnordered::new();
         let mut waiting_get_blocks = FuturesUnordered::new();
 
+        info!(
+            "BlockWaiter on node {} has started successfully.",
+            self.name
+        );
         loop {
             tokio::select! {
                 Some(command) = self.rx_commands.recv() => {

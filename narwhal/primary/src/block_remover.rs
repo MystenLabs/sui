@@ -21,7 +21,7 @@ use tokio::{
     task::JoinHandle,
     time::timeout,
 };
-use tracing::{debug, error, instrument, warn};
+use tracing::{debug, error, info, instrument, warn};
 use types::{
     BatchDigest, BlockRemoverError, BlockRemoverErrorKind, BlockRemoverResult, Certificate,
     CertificateDigest, Header, HeaderDigest, PrimaryWorkerMessage, ReconfigureNotification,
@@ -264,6 +264,10 @@ impl BlockRemover {
     async fn run(&mut self) {
         let mut waiting = FuturesUnordered::new();
 
+        info!(
+            "BlockRemover on node {} has started successfully.",
+            self.name
+        );
         loop {
             tokio::select! {
                 Some(command) = self.rx_commands.recv() => {

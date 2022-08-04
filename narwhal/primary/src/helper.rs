@@ -11,7 +11,7 @@ use tokio::{
     sync::{mpsc::Receiver, watch},
     task::JoinHandle,
 };
-use tracing::{error, instrument};
+use tracing::{error, info, instrument};
 use types::{BatchDigest, Certificate, CertificateDigest, ReconfigureNotification};
 
 #[cfg(test)]
@@ -76,6 +76,10 @@ impl Helper {
     }
 
     async fn run(&mut self) {
+        info!(
+            "Helper for availability requests on node {} has started successfully.",
+            self.name
+        );
         loop {
             tokio::select! {
                 Some(request) = self.rx_primaries.recv() => match request {

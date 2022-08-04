@@ -5,6 +5,7 @@ use crate::primary::PayloadToken;
 use config::WorkerId;
 use store::Store;
 use tokio::{sync::mpsc::Receiver, task::JoinHandle};
+use tracing::info;
 use types::BatchDigest;
 
 /// Receives batches' digests of other authorities. These are only needed to verify incoming
@@ -28,6 +29,7 @@ impl PayloadReceiver {
     }
 
     async fn run(&mut self) {
+        info!("PayloadReceiver has started successfully.");
         while let Some((digest, worker_id)) = self.rx_workers.recv().await {
             self.store.write((digest, worker_id), 0u8).await;
         }

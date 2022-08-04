@@ -13,7 +13,7 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
-use tracing::debug;
+use tracing::{debug, info};
 use types::{
     error::{DagError, DagResult},
     BatchDigest, Certificate, Header, ReconfigureNotification, Round,
@@ -209,6 +209,7 @@ impl Proposer {
         let timer = sleep(self.max_header_delay);
         tokio::pin!(timer);
 
+        info!("Proposer on node {} has started successfully.", self.name);
         loop {
             // Check if we can propose a new header. We propose a new header when we have a quorum of parents
             // and one of the following conditions is met:
