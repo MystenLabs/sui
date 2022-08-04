@@ -17,6 +17,9 @@ use move_vm_types::gas_schedule::new_from_instructions;
 
 // NOTE: all values in this file are subject to change
 
+// Maximum number of events a call can emit
+pub const MAX_NUM_EVENT_EMIT: u64 = 256;
+
 // Maximum gas a TX can use
 pub const MAX_TX_GAS: u64 = 1_000_000_000;
 
@@ -92,7 +95,10 @@ pub fn native_cost_schedule() -> Vec<GasCost> {
     let mut native_table = vec![
         // This is artificially chosen to limit too many event emits
         // We will change this in https://github.com/MystenLabs/sui/issues/3341
-        (N::EVENT_EMIT, GasCost::new(MAX_TX_GAS / 256, 1)),
+        (
+            N::EVENT_EMIT,
+            GasCost::new(MAX_TX_GAS / MAX_NUM_EVENT_EMIT, 1),
+        ),
         (N::OBJECT_BYTES_TO_ADDR, GasCost::new(30, 1)),
         (N::OBJECT_BORROW_UUID, GasCost::new(150, 1)),
         (N::OBJECT_DELETE_IMPL, GasCost::new(100, 1)),
