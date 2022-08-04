@@ -56,30 +56,36 @@ export async function extractFileType(
 ) {
     let result: string;
 
-    // First check Content-Type in header:
-    result = await fetch(transformURL(displayString), {
-        signal: signal,
-    })
-        .then(
-            (resp) =>
-                resp?.headers
-                    ?.get('Content-Type')
-                    ?.split('/')
-                    ?.at(-1)
-                    ?.toUpperCase() || 'Image'
-        )
-        .catch((err) => {
-            console.error(err);
-            return 'Image';
-        });
+    try {
+        // First check Content-Type in header:
+        result = await fetch(transformURL(displayString), {
+            signal: signal,
+        })
+            .then(
+                (resp) =>
+                    resp?.headers
+                        ?.get('Content-Type')
+                        ?.split('/')
+                        .reverse()?.[0]
+                        ?.toUpperCase() || 'Image'
+            )
+            .catch((err) => {
+                console.error(err);
+                return 'Image';
+            });
 
-    // When Content-Type cannot be accessed (e.g. because of CORS), rely on file extension
+        // When Content-Type cannot be accessed (e.g. because of CORS), rely on file extension
 
-    if (result === 'Image') {
-        const extension = displayString.split('.').at(-1)?.toUpperCase() || '';
-        if (['JPG', 'JPEG', 'PNG'].includes(extension)) {
-            result = extension;
+        if (result === 'Image') {
+            const extension =
+                displayString?.split('.').reverse()?.[0]?.toUpperCase() || '';
+            if (['JPG', 'JPEG', 'PNG'].includes(extension)) {
+                result = extension;
+            }
         }
+    } catch (err) {
+        console.error(err);
+        result = 'Image';
     }
 
     return `1 ${result} File`;
