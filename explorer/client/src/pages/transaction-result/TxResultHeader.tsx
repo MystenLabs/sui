@@ -9,6 +9,7 @@ import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/fai
 import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/success.svg';
 import GoBack from '../../components/goback/GoBack';
 import Longtext from '../../components/longtext/Longtext';
+import resultheaderstyle from '../../styles/resultheader.module.css';
 
 import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
 
@@ -45,11 +46,13 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
     return (
         <div className={styles.txheader}>
             <GoBack />
-            <div className={styles.txtypes}>
+            <div className={resultheaderstyle.category}>
                 <Icon /> {TxKindName}
             </div>
-            <div className={styles.txid}>
-                <div className={styles.txaddress}>
+            <div>
+                <div
+                    className={cl(resultheaderstyle.address, styles.txaddress)}
+                >
                     <Longtext
                         text={data.txId}
                         category="addresses"
