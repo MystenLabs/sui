@@ -546,11 +546,17 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
 /// those structs can be instanted on, hence the sealed trait.
 /// TODO: We could also add the aggregated signature as another impl of the trait.
 ///       This will make CertifiedTransaction also an instance of the same struct.
-pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {}
+pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
+    fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult;
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EmptySignInfo {}
-impl AuthoritySignInfoTrait for EmptySignInfo {}
+impl AuthoritySignInfoTrait for EmptySignInfo {
+    fn verify<T: Signable<Vec<u8>>>(&self, _data: &T, _committee: &Committee) -> SuiResult {
+        Ok(())
+    }
+}
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct AuthoritySignInfo {
@@ -558,7 +564,15 @@ pub struct AuthoritySignInfo {
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
-impl AuthoritySignInfoTrait for AuthoritySignInfo {}
+impl AuthoritySignInfoTrait for AuthoritySignInfo {
+    fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
+        let mut obligation = VerificationObligation::default();
+        let idx = obligation.add_message(data);
+        self.add_to_verification_obligation(committee, &mut obligation, idx)?;
+        obligation.verify_all()?;
+        Ok(())
+    }
+}
 
 impl Hash for AuthoritySignInfo {
     fn hash<H: Hasher>(&self, state: &mut H) {
@@ -610,17 +624,6 @@ impl AuthoritySignInfo {
             })?;
         Ok(())
     }
-
-    pub fn verify<T>(&self, data: &T, committee: &Committee) -> SuiResult<()>
-    where
-        T: Signable<Vec<u8>>,
-    {
-        let mut obligation = VerificationObligation::default();
-        let idx = obligation.add_message(data);
-        self.add_to_verification_obligation(committee, &mut obligation, idx)?;
-        obligation.verify_all()?;
-        Ok(())
-    }
 }
 
 /// Represents at least a quorum (could be more) of authority signatures.
@@ -656,7 +659,15 @@ pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
 static_assertions::assert_not_impl_any!(AuthorityStrongQuorumSignInfo: Hash, Eq, PartialEq);
 static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, PartialEq);
 
-impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {}
+impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {
+    fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
+        let mut obligation = VerificationObligation::default();
+        let message_index = obligation.add_message(data);
+        self.add_to_verification_obligation(committee, &mut obligation, message_index)?;
+        obligation.verify_all()?;
+        Ok(())
+    }
+}
 
 impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     pub fn new(epoch: EpochId) -> Self {
@@ -765,17 +776,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
         };
         fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
 
-        Ok(())
-    }
-
-    pub fn verify<T>(&self, data: &T, committee: &Committee) -> SuiResult<()>
-    where
-        T: Signable<Vec<u8>>,
-    {
-        let mut obligation = VerificationObligation::default();
-        let message_index = obligation.add_message(data);
-        self.add_to_verification_obligation(committee, &mut obligation, message_index)?;
-        obligation.verify_all()?;
         Ok(())
     }
 }

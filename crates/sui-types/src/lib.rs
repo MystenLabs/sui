@@ -23,6 +23,7 @@ pub mod event;
 pub mod gas;
 pub mod gas_coin;
 pub mod id;
+pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;
 pub mod move_package;
