@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
+use sui_sdk::crypto::KeystoreType;
 use sui_sdk::{
     crypto::SuiKeystore,
     json::SuiJsonValue,
@@ -27,7 +28,7 @@ use sui_sdk::{
 async fn main() -> Result<(), anyhow::Error> {
     let opts: TicTacToeOpts = TicTacToeOpts::parse();
     let keystore_path = opts.keystore_path.unwrap_or_else(default_keystore_path);
-    let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+    let keystore = KeystoreType::File(keystore_path).init()?;
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,

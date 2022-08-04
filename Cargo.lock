@@ -504,6 +504,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "bip39"
+version = "1.0.1"
+source = "git+https://github.com/patrickkuo/rust-bip39.git?rev=a76fe8310416555e6383b42b8acc4eb93c7bcc89#a76fe8310416555e6383b42b8acc4eb93c7bcc89"
+dependencies = [
+ "bitcoin_hashes 0.9.7",
+ "rand_core 0.4.2",
+ "serde 1.0.141",
+ "unicode-normalization",
+]
+
+[[package]]
 name = "bit-set"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -517,6 +528,12 @@ name = "bit-vec"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "349f9b6a179ed607305526ca489b34ad0a41aed5f7980fa90eb03160b69598fb"
+
+[[package]]
+name = "bitcoin_hashes"
+version = "0.9.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7ce18265ec2324ad075345d5814fbeed4f41f0a660055dc78840b74d19b874b1"
 
 [[package]]
 name = "bitcoin_hashes"
@@ -5383,6 +5400,12 @@ dependencies = [
 
 [[package]]
 name = "rand_core"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9c33a3c44ca05fa6f1807d8e6743f3824e8509beca625669633be0acbdf509dc"
+
+[[package]]
+name = "rand_core"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "90bde5296fc891b0cef12a6d03ddccc162ce7b2aff54160af9338f8d40df6d19"
@@ -5932,7 +5955,7 @@ version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b7649a0b3ffb32636e60c7ce0d70511eda9c52c658cd0634e194d5a19943aeff"
 dependencies = [
- "bitcoin_hashes",
+ "bitcoin_hashes 0.11.0",
  "rand 0.8.5",
  "secp256k1-sys",
 ]
@@ -7158,6 +7181,7 @@ dependencies = [
  "async-recursion",
  "async-trait",
  "bcs",
+ "bip39",
  "clap 3.1.18",
  "dirs",
  "futures",
@@ -8943,9 +8967,11 @@ dependencies = [
  "bimap",
  "bincode",
  "bindgen",
+ "bip39",
  "bit-set",
  "bit-vec",
- "bitcoin_hashes",
+ "bitcoin_hashes 0.11.0",
+ "bitcoin_hashes 0.9.7",
  "bitflags",
  "bitmaps",
  "blake2",
@@ -9333,6 +9359,7 @@ dependencies = [
  "rand 0.7.3",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
+ "rand_core 0.4.2",
  "rand_core 0.5.1",
  "rand_core 0.6.3",
  "rand_distr",
@@ -9615,7 +9642,7 @@ dependencies = [
  "bindgen",
  "bit-set",
  "bit-vec",
- "bitcoin_hashes",
+ "bitcoin_hashes 0.11.0",
  "bitflags",
  "blake2",
  "blake2s_simd",

@@ -22,7 +22,7 @@ use sui_json_rpc::gateway_api::{
     GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
 };
 use sui_json_rpc::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
-use sui_sdk::crypto::{KeystoreType, SuiKeystore};
+use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, KeystoreType};
 use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::SuiAddress;
@@ -64,9 +64,9 @@ pub async fn start_test_network_with_fullnodes(
     let gateway_path = dir.join(SUI_GATEWAY_CONFIG);
 
     swarm.config().save(&network_path)?;
-    let mut keystore = SuiKeystore::default();
+    let mut keystore = FileBasedKeystore::default();
     for key in &swarm.config().account_keys {
-        keystore.add_key(key.public().into(), key.copy())?;
+        keystore.add_key(key.copy())?;
     }
     keystore.set_path(&keystore_path);
     keystore.save()?;
@@ -83,7 +83,6 @@ pub async fn start_test_network_with_fullnodes(
 
     // Create wallet config with stated authorities port
     SuiClientConfig {
-        accounts,
         keystore: KeystoreType::File(keystore_path),
         gateway: ClientType::Embedded(GatewayConfig {
             db_folder_path,
@@ -106,7 +105,7 @@ pub async fn setup_network_and_wallet() -> Result<(Swarm, WalletContext, SuiAddr
     // Create Wallet context.
     let wallet_conf = swarm.dir().join(SUI_CLIENT_CONFIG);
     let mut context = WalletContext::new(&wallet_conf).await?;
-    let address = context.config.accounts.first().cloned().unwrap();
+    let address = context.keystore.addresses().first().cloned().unwrap();
 
     // Sync client to retrieve objects from the network.
     SuiClientCommands::SyncClientState {
@@ -152,7 +151,7 @@ pub async fn start_rpc_test_network_with_fullnode(
     let mut wallet_conf: SuiClientConfig =
         PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
     let rpc_url = format!("http://{}", server_addr);
-    let accounts = wallet_conf.accounts.clone();
+    let accounts = wallet_conf.keystore.init()?.addresses();
     wallet_conf.gateway = ClientType::RPC(rpc_url.clone());
     wallet_conf
         .persisted(&working_dir.join(SUI_CLIENT_CONFIG))

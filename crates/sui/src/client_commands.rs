@@ -16,17 +16,18 @@ use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
-use sui_json_rpc_types::{
-    GetObjectDataResponse, MergeCoinResponse, PublishResponse, SplitCoinResponse, SuiObjectInfo,
-    SuiParsedObject,
-};
 use tracing::info;
 
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::{
+    GetObjectDataResponse, MergeCoinResponse, PublishResponse, SplitCoinResponse, SuiObjectInfo,
+    SuiParsedObject,
+};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
-use sui_sdk::crypto::Keystore;
+use sui_sdk::crypto::SuiKeystore;
 use sui_sdk::{ClientType, SuiClient};
+use sui_types::crypto::get_key_pair;
 use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
@@ -377,7 +378,7 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::Addresses => {
-                SuiClientCommandResult::Addresses(context.config.accounts.clone())
+                SuiClientCommandResult::Addresses(context.keystore.addresses())
             }
 
             SuiClientCommands::Objects { address } => {
@@ -401,10 +402,9 @@ impl SuiClientCommands {
                 SuiClientCommandResult::SyncClientState
             }
             SuiClientCommands::NewAddress => {
-                let address = context.keystore.add_random_key()?;
-                context.config.accounts.push(address);
-                context.config.save()?;
-                SuiClientCommandResult::NewAddress(address)
+                let (address, keypair) = get_key_pair();
+                let phrase = context.keystore.add_key(keypair)?;
+                SuiClientCommandResult::NewAddress((address, phrase))
             }
             SuiClientCommands::Gas { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -458,7 +458,7 @@ impl SuiClientCommands {
             }
             SuiClientCommands::Switch { address, gateway } => {
                 if let Some(addr) = address {
-                    if !context.config.accounts.contains(&addr) {
+                    if !context.keystore.addresses().contains(&addr) {
                         return Err(anyhow!("Address {} not managed by wallet", addr));
                     }
                     context.config.active_address = Some(addr);
@@ -525,7 +525,7 @@ impl SuiClientCommands {
 
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
-    pub keystore: Box<dyn Keystore>,
+    pub keystore: SuiKeystore,
     pub gateway: SuiClient,
 }
 
@@ -548,7 +548,7 @@ impl WalletContext {
         Ok(context)
     }
     pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        if self.config.accounts.is_empty() {
+        if self.keystore.addresses().is_empty() {
             return Err(anyhow!(
                 "No managed addresses. Create new address with `new-address` command."
             ));
@@ -559,7 +559,7 @@ impl WalletContext {
         self.config.active_address = Some(
             self.config
                 .active_address
-                .unwrap_or(*self.config.accounts.get(0).unwrap()),
+                .unwrap_or(*self.keystore.addresses().get(0).unwrap()),
         );
 
         Ok(self.config.active_address.unwrap())
@@ -680,8 +680,9 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
-            SuiClientCommandResult::NewAddress(address) => {
-                writeln!(writer, "Created new keypair for address : {}", &address)?;
+            SuiClientCommandResult::NewAddress((address, recovery_phrase)) => {
+                writeln!(writer, "Created new keypair for address : [{address}]")?;
+                writeln!(writer, "Secret Recovery Phrase : [{recovery_phrase}]")?;
             }
             SuiClientCommandResult::Gas(gases) => {
                 // TODO: generalize formatting of CLI
@@ -836,7 +837,7 @@ pub enum SuiClientCommandResult {
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,
-    NewAddress(SuiAddress),
+    NewAddress((SuiAddress, String)),
     Gas(Vec<GasCoin>),
     SplitCoin(SplitCoinResponse),
     MergeCoin(MergeCoinResponse),

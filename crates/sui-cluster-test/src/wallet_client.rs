@@ -31,7 +31,6 @@ impl WalletClient {
         let address: SuiAddress = key_pair.public().into();
         keystore.init().unwrap().add_key(key_pair).unwrap();
         SuiClientConfig {
-            accounts: vec![address],
             keystore,
             gateway: ClientType::RPC(rpc_url.into()),
             active_address: Some(address),

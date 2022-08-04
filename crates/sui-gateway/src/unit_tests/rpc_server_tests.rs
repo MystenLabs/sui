@@ -13,7 +13,7 @@ use sui_json_rpc::api::{
 use sui_json_rpc_types::{
     GetObjectDataResponse, TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
-use sui_sdk::crypto::{Keystore, SuiKeystore};
+use sui_sdk::crypto::KeystoreType;
 use sui_types::crypto::SuiSignature;
 use sui_types::sui_serde::Base64;
 use sui_types::{
@@ -53,8 +53,9 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let keystore =
-        SuiKeystore::load_or_create(&test_network.network.dir().join(SUI_KEYSTORE_FILENAME))?;
+    let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = KeystoreType::File(keystore_path).init()?;
+
     let tx_bytes = tx_data.tx_bytes.to_vec()?;
     let signature = keystore.sign(address, &tx_bytes)?;
 
@@ -94,8 +95,9 @@ async fn test_publish() -> Result<(), anyhow::Error> {
         .publish(*address, compiled_modules, Some(gas.object_id), 10000)
         .await?;
 
-    let keystore =
-        SuiKeystore::load_or_create(&test_network.network.dir().join(SUI_KEYSTORE_FILENAME))?;
+    let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = KeystoreType::File(keystore_path).init()?;
+
     let tx_bytes = tx_data.tx_bytes.to_vec()?;
     let signature = keystore.sign(address, &tx_bytes)?;
 
@@ -144,8 +146,9 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
         )
         .await?;
 
-    let keystore =
-        SuiKeystore::load_or_create(&test_network.network.dir().join(SUI_KEYSTORE_FILENAME))?;
+    let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
+    let keystore = KeystoreType::File(keystore_path).init()?;
+
     let tx_bytes = tx_data.tx_bytes.to_vec()?;
     let signature = keystore.sign(address, &tx_bytes)?;
 
@@ -198,8 +201,9 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
             .transfer_object(*address, oref.object_id, Some(gas_id), 1000, *address)
             .await?;
 
-        let keystore =
-            SuiKeystore::load_or_create(&test_network.network.dir().join(SUI_KEYSTORE_FILENAME))?;
+        let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
+        let keystore = KeystoreType::File(keystore_path).init()?;
+
         let tx_bytes = tx_data.tx_bytes.to_vec()?;
         let signature = keystore.sign(address, &tx_bytes)?;
 
