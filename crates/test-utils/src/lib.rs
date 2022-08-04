@@ -11,7 +11,7 @@ use sui_types::{
     committee::Committee,
     crypto::{
         get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-        KeypairTraits,
+        KeypairTraits, DefaultAccountKeyPair,
     },
     signature_seed::SignatureSeed,
 };
@@ -28,11 +28,11 @@ pub fn test_keys() -> Vec<(SuiAddress, AuthorityKeyPair)> {
 }
 
 /// Generate `COMMITTEE_SIZE` test cryptographic key pairs.
-pub fn test_account_keys() -> Vec<(SuiAddress, AccountKeyPair)> {
+pub fn test_account_keys() -> Vec<(SuiAddress, DefaultAccountKeyPair)> {
     let mut vec = Vec::new();
     let ss = SignatureSeed::from_bytes(&[0; 32]).unwrap();
     for i in 0..TEST_COMMITTEE_SIZE {
-        let kp: AccountKeyPair = ss.new_deterministic_keypair(&[i as u8], Some(&[])).unwrap();
+        let kp: DefaultAccountKeyPair = ss.new_deterministic_keypair(&[i as u8], Some(&[])).unwrap();
         vec.push((kp.public().into(), kp));
     }
     vec

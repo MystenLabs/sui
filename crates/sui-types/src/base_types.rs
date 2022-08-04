@@ -26,7 +26,7 @@ use sha2::Sha512;
 use sha3::Sha3_256;
 
 use crate::committee::EpochId;
-use crate::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, SuiPublicKey};
+use crate::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, SuiPublicKey, AccountPubkey};
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;

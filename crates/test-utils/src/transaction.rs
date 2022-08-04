@@ -29,7 +29,7 @@ pub async fn publish_package(
         gas_object.compute_object_reference(),
         path,
         sender,
-        &keypair,
+        &keypair.into(),
     );
     let effects = submit_single_owner_transaction(transaction, configs).await;
     parse_package_ref(&effects).unwrap()

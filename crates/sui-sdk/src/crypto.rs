@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    get_key_pair, AccountKeyPair, EncodeDecodeBase64, KeypairTraits, Signature,
+    get_key_pair, AccountKeyPair, EncodeDecodeBase64, KeypairTraits, Signature, DefaultAccountKeyPair,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -50,7 +50,7 @@ impl Display for KeystoreType {
     }
 }
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Default)]
 pub struct SuiKeystore {
     keys: BTreeMap<SuiAddress, AccountKeyPair>,
     path: Option<PathBuf>,
@@ -67,14 +67,14 @@ impl Keystore for SuiKeystore {
     }
 
     fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        let (address, keypair): (_, AccountKeyPair) = get_key_pair();
-        self.keys.insert(address, keypair);
+        let (address, keypair): (_, DefaultAccountKeyPair) = get_key_pair();
+        self.keys.insert(address, keypair.into());
         self.save()?;
         Ok(address)
     }
 
     fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error> {
-        let address: SuiAddress = keypair.public().into();
+        let address: SuiAddress = keypair.public().address();
         self.keys.insert(address, keypair);
         self.save()?;
         Ok(())
@@ -97,7 +97,7 @@ impl SuiKeystore {
 
         let keys = keys
             .into_iter()
-            .map(|key| (key.public().into(), key))
+            .map(|key| (key.public().address(), key))
             .collect();
 
         Ok(Self {

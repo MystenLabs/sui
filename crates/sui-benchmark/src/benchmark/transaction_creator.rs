@@ -92,7 +92,7 @@ fn make_transactions(
     account_gas_objects
         .par_iter()
         .map(|(objects, gas_obj)| {
-            let next_recipient: SuiAddress = get_key_pair::<AccountKeyPair>().0;
+            let next_recipient: SuiAddress = get_key_pair::<Ed25519KeyPair>().0;
             let mut single_kinds = vec![];
             for object in objects {
                 single_kinds.push(make_transfer_transaction(

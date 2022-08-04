@@ -66,7 +66,7 @@ pub async fn start_test_network_with_fullnodes(
     swarm.config().save(&network_path)?;
     let mut keystore = SuiKeystore::default();
     for key in &swarm.config().account_keys {
-        keystore.add_key(key.public().into(), key.copy())?;
+        keystore.add_key(key.public().into(), sui_types::crypto::AccountKeyPair::Ed25519KeyPair(key.copy()))?;
     }
     keystore.set_path(&keystore_path);
     keystore.save()?;

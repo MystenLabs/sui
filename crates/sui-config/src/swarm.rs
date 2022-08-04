@@ -9,7 +9,7 @@ use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::Arc;
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, DefaultAccountKeyPair};
+use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, DefaultAccountKeyPair, AccountKeyPair};
 use sui_types::sui_serde::KeyPairBase64;
 
 /// This is a config that is used for testing or local use as it contains the config and keys for

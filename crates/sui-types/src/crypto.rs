@@ -11,7 +11,7 @@ use narwhal_crypto::ed25519::{
     Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
     Ed25519Signature,
 };
-use narwhal_crypto::secp256k1::{Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1Signature};
+use narwhal_crypto::secp256k1::{Secp256k1KeyPair, Secp256k1PublicKey, Secp256k1Signature, Secp256k1PrivateKey};
 pub use narwhal_crypto::traits::KeyPair as KeypairTraits;
 pub use narwhal_crypto::traits::{
     AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
@@ -48,25 +48,52 @@ pub type DefaultAccountPrivateKey = Ed25519PrivateKey;
 pub type DefaultAccountSignature = Ed25519Signature;
 
 #[enum_dispatch]
-
+#[derive(Debug)]
 pub enum AccountKeyPair {
-    Ed25519KeyPair,
-    Secp256k1KeyPair,
+    Ed25519KeyPair(Ed25519KeyPair),
+    Secp256k1KeyPair(Secp256k1KeyPair),
 }
 
-// #[enum_dispatch(AccountKeyPair)]
-// pub trait SuiAccountKeyPair {
-//     // fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error>;
-// }
+#[enum_dispatch]
+pub enum AccountPubkey {
+    Ed25519KeyPair(Ed25519PublicKey),
+    Secp256k1KeyPair(Secp256k1PublicKey),
+}
 
-// impl<T: KeypairTraits> SuiAccountKeyPair for T {
-//     // fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
-//     //     match self.try_sign(msg) {
-//     //         Ok(sig) => Signature::from_bytes(sig.as_bytes()),
-//     //         Err(_) => Err(signature::Error::new()),
-//     //     }
-//     // }
-// }
+pub enum AccountPrivKey {
+    Ed25519KeyPair(Ed25519PrivateKey),
+    Secp256k1KeyPair(Secp256k1PrivateKey),
+}
+
+#[enum_dispatch(AccountKeyPair)]
+pub trait SuiAccountKeyPair {
+    // fn public(&self) -> Result<Signature, signature::Error>;
+    // fn encode_base64(&self) -> String {
+    //     todo!()
+    // }
+
+    // fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
+    //     todo!()
+    // }
+}
+
+impl AccountKeyPair {
+    pub fn public(&self) -> AccountPubkey {
+        match self {
+            AccountKeyPair::Ed25519KeyPair(kp) => AccountPubkey::Ed25519KeyPair(Ed25519PublicKey::from_bytes(kp.public().as_bytes()).unwrap()),
+            AccountKeyPair::Secp256k1KeyPair(kp) => AccountPubkey::Secp256k1KeyPair(Secp256k1PublicKey::from_bytes(kp.public().as_bytes()).unwrap())
+        }
+    }
+}
+
+impl AccountPubkey {
+    pub fn address(&self) -> SuiAddress {
+        match self {
+            AccountPubkey::Ed25519KeyPair(kp) => kp.into(),
+            AccountPubkey::Secp256k1KeyPair(kp) => kp.into()
+        }
+    }
+}
 
 impl signature::Signer<Signature> for AccountKeyPair {
     fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
@@ -77,105 +104,16 @@ impl signature::Signer<Signature> for AccountKeyPair {
     }
 }
 
-pub enum AccountPubKey {
-    Ed25519PublicKey,
-    Secp256k1PublicKey,
-}
-
-pub enum AccountPrivKey {
-    Ed25519PrivateKey,
-    Secp256k1PrivateKey
-}
-impl FromStr for AccountKeyPair {
-    
-}
-impl KeypairTraits for AccountKeyPair {
-    type PubKey = AccountPubKey;
-
-    type PrivKey = AccountPrivKey;
-
-    type Sig = Signature;
-
-    fn public(&'_ self) -> &'_ Self::PubKey {
+impl EncodeDecodeBase64 for AccountKeyPair {
+    fn encode_base64(&self) -> String {
         todo!()
     }
 
-    fn private(self) -> Self::PrivKey {
-        todo!()
-    }
-
-    fn copy(&self) -> Self {
-        todo!()
-    }
-
-    fn generate<R: rand::CryptoRng + rand::RngCore>(rng: &mut R) -> Self {
+    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
         todo!()
     }
 }
-// impl Serialize for AccountKeyPair {
-//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: Serializer,
-//     {
-//         let mut kp_bytes: Vec<u8> = Vec::new();
 
-//         match self {
-//             AccountKeyPair::Ed25519KeyPair(kp) => {
-//                 kp_bytes.extend_from_slice(&[Ed25519SuiSignature::FLAG]);
-//                 kp_bytes.extend_from_slice(kp.public().as_ref());
-//             }
-//             AccountKeyPair::Secp256k1KeyPair(kp) => {
-//                 kp_bytes.extend_from_slice(&[Secp256k1SuiSignature::FLAG]);
-//                 kp_bytes.extend_from_slice(kp.public().as_ref());
-//             },
-//         }
-//         if serializer.is_human_readable() {
-//             let s = base64ct::Base64::encode_string(&kp_bytes);
-//             serializer.serialize_str(&s)
-//         } else {
-//             serializer.serialize_bytes(&kp_bytes)
-//         }
-//     }
-// }
-
-// impl<'de> Deserialize<'de> for AccountKeyPair {
-//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-//     where
-//         D: Deserializer<'de>,
-//     {
-//         use serde::de::Error;
-
-//         let bytes = if deserializer.is_human_readable() {
-//             let s = String::deserialize(deserializer)?;
-//             base64ct::Base64::decode_vec(&s).map_err(|e| Error::custom(e.to_string()))?
-//         } else {
-//             let data: Vec<u8> = Vec::deserialize(deserializer)?;
-//             data
-//         };
-//         match Self {
-//             AccountKeyPair::Ed25519KeyPair(kp) => {
-//                 kp.
-//                 kp_bytes.extend_from_slice(kp.public().as_ref());
-//             }
-//             AccountKeyPair::Secp256k1KeyPair(kp) => {
-//                 kp_bytes.extend_from_slice(&[Secp256k1SuiSignature::FLAG]);
-//                 kp_bytes.extend_from_slice(kp.public().as_ref());
-//             },
-//         }
-
-//         Self::from_bytes(&bytes).map_err(|e| Error::custom(e.to_string()))
-//     }
-// }
-
-
-impl std::fmt::Debug for AccountKeyPair {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Ed25519KeyPair(arg0) => f.debug_tuple("Ed25519KeyPair").field(arg0).finish(),
-            Self::Secp256k1KeyPair(arg0) => f.debug_tuple("Secp256k1KeyPair").field(arg0).finish(),
-        }
-    }
-}
 //
 // Define Bytes representation of the Authority's PublicKey
 //

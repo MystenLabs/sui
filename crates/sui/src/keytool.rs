@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use sui_sdk::crypto::{Keystore, SuiKeystore};
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
-use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits};
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits, DefaultAccountKeyPair};
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
 use tracing::info;
@@ -23,7 +23,7 @@ pub enum KeyToolCommand {
     },
     /// Extract components
     Unpack {
-        keypair: AccountKeyPair,
+        keypair: DefaultAccountKeyPair,
     },
     /// List all keys in the keystore
     List,
@@ -40,7 +40,7 @@ impl KeyToolCommand {
     pub fn execute(self, keystore: SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate => {
-                let (_address, keypair): (_, AccountKeyPair) = get_key_pair();
+                let (_address, keypair): (_, DefaultAccountKeyPair) = get_key_pair();
 
                 let hex = encode_bytes_hex(keypair.public());
                 let file_name = format!("{hex}.key");
@@ -65,7 +65,7 @@ impl KeyToolCommand {
                 for keypair in keystore.key_pairs() {
                     println!(
                         " {0: ^42} | {1: ^45} ",
-                        Into::<SuiAddress>::into(keypair.public()),
+                        keypair.public().address(),
                         Base64::encode(keypair.public().as_ref()),
                     );
                 }

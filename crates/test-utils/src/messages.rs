@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use sui_adapter::genesis;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::crypto::{AccountKeyPair, KeypairTraits};
+use sui_types::crypto::{AccountKeyPair, KeypairTraits, DefaultAccountKeyPair};
 use sui_types::messages::CallArg;
 use sui_types::messages::{
     CertifiedTransaction, ObjectArg, SignatureAggregator, SignedTransaction, Transaction,
@@ -25,7 +25,7 @@ pub const MAX_GAS: u64 = 10_000;
 /// Make a few different single-writer test transactions owned by specific addresses.
 pub fn test_transactions<K>(keys: K) -> (Vec<Transaction>, Vec<Object>)
 where
-    K: Iterator<Item = AccountKeyPair>,
+    K: Iterator<Item = DefaultAccountKeyPair>,
 {
     // The key pair of the recipient of the transaction.
     let (recipient, _) = test_account_keys().pop().unwrap();

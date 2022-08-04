@@ -28,7 +28,7 @@ impl WalletClient {
         let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
         let keystore = KeystoreType::File(keystore_path);
         let key_pair = cluster.user_key();
-        let address: SuiAddress = key_pair.public().into();
+        let address: SuiAddress = key_pair.public().address();
         keystore.init().unwrap().add_key(key_pair).unwrap();
         SuiClientConfig {
             accounts: vec![address],
