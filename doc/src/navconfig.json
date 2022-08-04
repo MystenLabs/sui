@@ -113,6 +113,10 @@
         "fileName": "build/install"
       },
       {
+        "label": "Use Sui CLI to Start Network",
+        "fileName": "build/cli-client"
+      },
+      {
         "label": "Create Smart Contracts with Move",
         "fileName": "build/move/index",
         "title": "Create Smart Contracts with Move",
@@ -134,10 +138,6 @@
             "fileName": "build/move/sui-move-library"
           }
         ]
-      },
-      {
-        "label": "Use Sui CLI",
-        "fileName": "build/cli-client"
       },
       {
         "label": "Program with Objects",
@@ -167,20 +167,41 @@
         ]
       },
       {
-        "label": "Use Sui RPC Server",
-        "fileName": "build/json-rpc"
-      },
-      {
-        "label": "Employ SuiJSON Format",
-        "fileName": "build/sui-json"
-      },
-      {
-        "label": "Run a Fullnode",
-        "fileName": "build/fullnode"
-      },
-      {
-        "label": "Subscribe to Events",
-        "fileName": "build/pubsub"
+        "label": "Talk with Sui",
+        "fileName": "build/comms/index",
+        "title": "Talk with Sui",
+        "items": [
+          {
+            "label": "Use Sui RPC Server",
+            "fileName": "build/json-rpc"
+          },
+          {
+            "label": "Employ SuiJSON Format",
+            "fileName": "build/sui-json"
+          },
+          {
+            "label": "See Sui JSON-RPC API reference",
+            "link": "https://docs.sui.io/sui-jsonrpc",
+            "external": true
+          },
+          {
+            "label": "Make calls with Rust SDK",
+            "fileName": "build/rust-sdk"
+          },
+          {
+            "label": "Write TypeScript/JavaScript",
+            "link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
+            "external": true
+          },
+          {
+            "label": "Run a Fullnode",
+            "fileName": "build/fullnode"
+          },
+          {
+            "label": "Subscribe to Events",
+            "fileName": "build/pubsub"
+          }
+        ]
       }
     ],
     "explore": [
