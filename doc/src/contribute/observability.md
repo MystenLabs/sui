@@ -223,10 +223,10 @@ and dump out the profile every 2^24 or 16MB of memory allocated.
 
 To view the profile files:
 1. `brew install jemalloc libunwind gprof2dot`
+2. Build with debug symbols: `cargo build --profile bench-profiling`
+2. cd to `$SUI_REPO/target/bench-profiling`
 1. Start `./sui node --config-path ...`
-1. In the same `target/release` directory, run `jeprof --text sui-node jeprof.66*.heap` where 66 is the starting PID of the current sui-node process.
-
-TODO: Define where the `target/release` directory is since we refer to it as the same but haven't yet referenced it.
+1. In the same directory, run `jeprof --svg sui-node jeprof.66*.heap` where 66 is the starting PID of the current sui-node process.
 
 If the profiling does not create `.heap` files, check your env vars.  There is a log line dumped at the
 start of sui-node, that should look like this:

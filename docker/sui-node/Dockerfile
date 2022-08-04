@@ -24,6 +24,8 @@ RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
 # with all dependencies built.
 FROM chef AS builder 
 ARG PROFILE=release
+# Enable frame pointers to assist in profiling/getting stack frames
+ENV RUSTFLAGS "-Cforce-frame-pointers=yes"
 COPY --from=planner /sui/Cargo.toml Cargo.toml
 COPY --from=planner /sui/Cargo.lock Cargo.lock
 COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
