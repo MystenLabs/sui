@@ -2,20 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Mercator } from '@visx/geo';
-import { forwardRef, memo } from 'react';
+import React, { memo } from 'react';
 import * as topojson from 'topojson-client';
-import world from 'world-atlas/countries-50m.json';
 
-interface FeatureShape {
-    type: 'Feature';
-    id: string;
-    geometry: { coordinates: [number, number][][]; type: 'Polygon' };
-    properties: { name: string };
-}
+import { MapFeature } from './MapFeature';
+import { NodesLocation } from './NodesLocation';
+import world from './topology.json';
+import { type Feature, type NodeLocation } from './types';
 
+// @ts-expect-error: The types of `world` here aren't aligned but they are correct
 const land = topojson.feature(world, world.objects.countries) as unknown as {
     type: 'FeatureCollection';
-    features: FeatureShape[];
+    features: Feature[];
 };
 
 // We hide Antarctica because there will not be nodes there:
@@ -24,76 +22,58 @@ const filteredLand = land.features.filter(
     (feature) => !HIDDEN_REGIONS.includes(feature.properties.name)
 );
 
-export interface NodeLocation {
-    count: number;
-    city: string;
-    country: string;
-    location: [lat: number, long: number];
-}
-
-interface MapProps {
+interface Props {
     width: number;
     height: number;
     nodes?: NodeLocation[];
-    onMouseOver(event: React.MouseEvent): void;
-    onMouseOut(event: React.MouseEvent): void;
+    onMouseOver(event: React.MouseEvent, alpha2?: string): void;
+    onMouseOut(): void;
 }
 
-const BaseWorldMap = forwardRef<SVGSVGElement, MapProps>(
-    ({ onMouseOver, onMouseOut, width, height, nodes }, ref) => {
-        const centerX = width / 2;
-        const centerY = height / 2;
+function BaseWorldMap({
+    onMouseOver,
+    onMouseOut,
+    width,
+    height,
+    nodes,
+}: Props) {
+    const centerX = width / 2;
+    const centerY = height / 2;
 
-        return (
-            <svg ref={ref} width={width} height={height}>
-                <Mercator
-                    data={filteredLand}
-                    scale={100}
-                    translate={[centerX, centerY + 20]}
-                >
-                    {({ features, projection }) => (
+    return (
+        <svg width={width} height={height}>
+            <Mercator
+                data={filteredLand}
+                scale={100}
+                translate={[centerX, centerY + 20]}
+            >
+                {({ features, projection }) => (
+                    <g>
                         <g>
-                            <g>
-                                {features.map(({ feature, path }, i) => (
-                                    <path
-                                        key={i}
-                                        name={feature.properties.name}
-                                        onMouseOver={onMouseOver}
-                                        onMouseMove={onMouseOver}
-                                        onMouseOut={onMouseOut}
-                                        d={path || ''}
-                                        fill="white"
-                                        // stroke="#F3F4F5"
-                                        // stroke={background}
-                                        // strokeWidth={0.5}
-                                    />
-                                ))}
-                            </g>
-
-                            {nodes?.map(({ location, city }, index) => {
-                                const position = projection(location);
-
-                                if (!position) return null;
-
-                                return (
-                                    <circle
-                                        style={{ pointerEvents: 'none' }}
-                                        key={index}
-                                        cx={position[0]}
-                                        cy={position[1]}
-                                        r={10}
-                                        fill="#6FBCF0"
-                                        opacity={0.4}
-                                        data-name={city}
-                                    />
-                                );
-                            })}
+                            {features.map(({ feature, path }, index) => (
+                                <MapFeature
+                                    key={index}
+                                    onMouseOut={onMouseOut}
+                                    onMouseOver={onMouseOver}
+                                    feature={feature}
+                                    path={path}
+                                />
+                            ))}
                         </g>
-                    )}
-                </Mercator>
-            </svg>
-        );
-    }
-);
 
+                        {nodes?.map((node, index) => (
+                            <NodesLocation
+                                key={index}
+                                node={node}
+                                projection={projection}
+                            />
+                        ))}
+                    </g>
+                )}
+            </Mercator>
+        </svg>
+    );
+}
+
+// NOTE: Rendering the map is relatively expensive, so we memo this component to improve performance:
 export const WorldMap = memo(BaseWorldMap);

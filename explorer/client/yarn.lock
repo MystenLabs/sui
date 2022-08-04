@@ -1194,6 +1194,11 @@
     minimatch "^3.1.2"
     strip-json-comments "^3.1.1"
 
+"@faker-js/faker@^7.3.0":
+  version "7.3.0"
+  resolved "https://registry.yarnpkg.com/@faker-js/faker/-/faker-7.3.0.tgz#a508df35ded585c4e071cb5d9d7c89623c837fae"
+  integrity sha512-1W0PZezq2rxlAssoWemi9gFRD8IQxvf0FPL5Km3TOmGHFG7ib0TbFBJ0yC7D/1NsxunjNTK6WjUXV8ao/mKZ5w==
+
 "@hapi/hoek@^9.0.0":
   version "9.3.0"
   resolved "https://registry.yarnpkg.com/@hapi/hoek/-/hoek-9.3.0.tgz#8368869dcb735be2e7f5cb7647de78e167a251fb"
@@ -2406,14 +2411,6 @@
     "@types/react-dom" "*"
     prop-types "^15.5.10"
 
-"@visx/event@^2.6.0":
-  version "2.6.0"
-  resolved "https://registry.yarnpkg.com/@visx/event/-/event-2.6.0.tgz#0718eb1efabd5305cf659a153779c94ba4038996"
-  integrity sha512-WGp91g82s727g3NAnENF1ppC3ZAlvWg+Y+GG0WFg34NmmOZbvPI/PTOqTqZE3x6B8EUn8NJiMxRjxIMbi+IvRw==
-  dependencies:
-    "@types/react" "*"
-    "@visx/point" "2.6.0"
-
 "@visx/geo@^2.10.0":
   version "2.10.0"
   resolved "https://registry.yarnpkg.com/@visx/geo/-/geo-2.10.0.tgz#6cda4079717505244fffc3c25505437276628779"
@@ -2435,11 +2432,6 @@
     "@types/react" "*"
     classnames "^2.3.1"
     prop-types "^15.6.2"
-
-"@visx/point@2.6.0":
-  version "2.6.0"
-  resolved "https://registry.yarnpkg.com/@visx/point/-/point-2.6.0.tgz#c4316ca409b5b829c5455f07118d8c14a92cc633"
-  integrity sha512-amBi7yMz4S2VSchlPdliznN41TuES64506ySI22DeKQ+mc1s1+BudlpnY90sM1EIw4xnqbKmrghTTGfy6SVqvQ==
 
 "@visx/responsive@^2.10.0":
   version "2.10.0"
@@ -10387,11 +10379,6 @@ workbox-window@6.5.3:
   dependencies:
     "@types/trusted-types" "^2.0.2"
     workbox-core "6.5.3"
-
-world-atlas@^2.0.2:
-  version "2.0.2"
-  resolved "https://registry.yarnpkg.com/world-atlas/-/world-atlas-2.0.2.tgz#4bca4a578f3a413bd409c3f07f2054fe7375824f"
-  integrity sha512-IXfV0qwlKXpckz1FhwXVwKRjiIhOnWttOskm5CtxMsjgE/MXAYRHWJqgXOpM8IkcPBoXnyTU5lFHcYa5ChG0LQ==
 
 wrap-ansi@^7.0.0:
   version "7.0.0"

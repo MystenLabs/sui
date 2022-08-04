@@ -1,5 +1,5 @@
 .card {
-    @apply rounded-lg bg-cardDark overflow-hidden flex flex-col justify-end min-h-[220px] antialiased relative;
+    @apply rounded-lg bg-cardDark flex flex-col justify-end min-h-[220px] antialiased relative;
 }
 
 .container {
@@ -19,7 +19,7 @@
 }
 
 .button {
-    @apply p-2 text-sui-grey-80 border border-solid border-sui-grey-55 text-sm font-semibold rounded-md inline-flex items-center gap-2 no-underline pointer-events-none;
+    @apply p-2 text-sui-grey-80 border border-solid border-sui-grey-55 text-sm font-semibold rounded-md inline-flex items-center gap-2 no-underline pointer-events-auto;
 }
 
 .mapcontainer {
@@ -27,7 +27,7 @@
 }
 
 .map {
-    @apply absolute inset-0;
+    @apply absolute inset-0 overflow-hidden;
 }
 
 .tooltip {

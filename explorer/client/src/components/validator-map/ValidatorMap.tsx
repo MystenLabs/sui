@@ -3,103 +3,31 @@
 
 import { useQuery } from '@tanstack/react-query';
 import { ParentSizeModern } from '@visx/responsive';
-import { Tooltip, useTooltip, useTooltipInPortal } from '@visx/tooltip';
-import { localPoint } from '@visx/event';
+import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { useCallback, useMemo } from 'react';
 
 import { ReactComponent as ForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
-import { WorldMap, type NodeLocation } from './WorldMap';
+import { WorldMap } from './WorldMap';
+import { type NodeLocation } from './types';
 
 import styles from './ValidatorMap.module.css';
 
 const HOST = 'https://imgmod.sui.io';
 
+// TODO: Ensure this is the shape of the API that actually lands
 type NodeList = [
     ip: string,
     city: string,
     region: string,
     country: string,
-    loc: string
+    loc: string,
+    alpha2: string,
 ][];
 
-const MOCK_DATA = [
-    ['135.181.16.143', 'Tuusula', 'Uusimaa', 'Finland', '60.3540,24.9794'],
-    [
-        '167.99.148.152',
-        'North Bergen',
-        'New Jersey',
-        'United States',
-        '40.8043,-74.0121',
-    ],
-    [
-        '195.46.164.179',
-        'Kemerovo',
-        'Kemerovo Oblast',
-        'Russia',
-        '55.3333,86.0833',
-    ],
-    ['23.88.34.250', 'Oberdorla', 'Thuringia', 'Germany', '51.1658,10.4216'],
-    ['23.88.34.250', 'Oberdorla', 'Thuringia', 'Germany', '51.1658,10.4216'],
-    ['23.88.34.250', 'Oberdorla', 'Thuringia', 'Germany', '51.1658,10.4216'],
-    [
-        '37.154.179.123',
-        'Washington',
-        'Washington',
-        'United States',
-        '41.0318,28.9684',
-    ],
-    [
-        '51.38.194.32',
-        'Gravelines',
-        'Hauts-de-France',
-        'France',
-        '50.9865,2.1281',
-    ],
-    [
-        '51.38.194.32',
-        'Gravelines',
-        'Hauts-de-France',
-        'France',
-        '50.9865,2.1281',
-    ],
-    [
-        '51.38.194.32',
-        'Gravelines',
-        'Hauts-de-France',
-        'France',
-        '50.9865,2.1281',
-    ],
-    [
-        '51.38.194.32',
-        'Gravelines',
-        'Hauts-de-France',
-        'France',
-        '50.9865,2.1281',
-    ],
-    [
-        '51.38.194.32',
-        'Gravelines',
-        'Hauts-de-France',
-        'France',
-        '50.9865,2.1281',
-    ],
-    [
-        '51.38.194.32',
-        'Gravelines',
-        'Hauts-de-France',
-        'France',
-        '50.9865,2.1281',
-    ],
-    ['8.21.13.47', 'Newark', 'New Jersey', 'United States', '40.7357,-74.1724'],
-    ['8.21.13.47', 'Newark', 'New Jersey', 'United States', '40.7357,-74.1724'],
-    ['8.21.13.47', 'Newark', 'New Jersey', 'United States', '40.7357,-74.1724'],
-    ['8.21.13.47', 'Newark', 'New Jersey', 'United States', '40.7357,-74.1724'],
-    ['8.21.13.47', 'Newark', 'New Jersey', 'United States', '40.7357,-74.1724'],
-];
+type CountryNodes = Record<string, { count: number; name: string }>;
 
-export function ValidatorMap() {
+export default function ValidatorMap() {
     const { data } = useQuery(['validator-map'], async () => {
-        return MOCK_DATA;
         const res = await fetch(`${HOST}/locations`, {
             method: 'GET',
         });
@@ -107,15 +35,27 @@ export function ValidatorMap() {
         return res.json() as Promise<NodeList>;
     });
 
-    const bucketedData = useMemo(() => {
+    const { nodes, countryCount, countryNodes } = useMemo<{
+        nodes: NodeLocation[];
+        countryCount?: number;
+        countryNodes: CountryNodes;
+    }>(() => {
         if (!data) {
-            return [];
+            return { nodes: [], countryNodes: {} };
         }
 
         const nodeLocations: Record<string, NodeLocation> = {};
+        const countryNodes: CountryNodes = {};
 
-        data.forEach(([ip, city, region, country, loc]) => {
+        data.forEach(([, city, region, country, loc, alpha2]) => {
             const key = `${city}-${region}-${country}`;
+
+            countryNodes[alpha2] ??= {
+                count: 0,
+                name: country,
+            };
+            countryNodes[alpha2].count += 1;
+
             nodeLocations[key] ??= {
                 count: 0,
                 city,
@@ -128,7 +68,11 @@ export function ValidatorMap() {
             nodeLocations[key].count += 1;
         });
 
-        return Object.values(nodeLocations);
+        return {
+            nodes: Object.values(nodeLocations),
+            countryCount: Object.keys(countryNodes).length,
+            countryNodes,
+        };
     }, [data]);
 
     const {
@@ -138,33 +82,26 @@ export function ValidatorMap() {
         tooltipOpen,
         showTooltip,
         hideTooltip,
-    } = useTooltip();
-
-    // If you don't want to use a Portal, simply replace `TooltipInPortal` below with
-    // `Tooltip` or `TooltipWithBounds` and remove `containerRef`
-    const { containerRef, TooltipInPortal } = useTooltipInPortal({
-        // use TooltipWithBounds
-        // detectBounds: true,
-        // when tooltip containers are scrolled, this will correctly update the Tooltip position
-        // scroll: true,
-    });
+    } = useTooltip<string>();
 
     const handleMouseOver = useCallback(
-        (event: React.MouseEvent<SVGElement>) => {
+        (event: React.MouseEvent<SVGElement>, alpha2?: string) => {
             const owner = event.currentTarget.ownerSVGElement;
             if (!owner) return;
 
-            const coords = localPoint(owner, event);
+            const rect = owner.getBoundingClientRect();
 
-            if (!coords) return;
-
-            showTooltip({
-                tooltipLeft: coords.x,
-                tooltipTop: coords.y,
-                tooltipData: event.currentTarget.getAttribute('name') || '',
-            });
+            if (alpha2 && countryNodes[alpha2]) {
+                showTooltip({
+                    tooltipLeft: event.clientX - rect.x,
+                    tooltipTop: event.clientY - rect.y,
+                    tooltipData: alpha2,
+                });
+            } else {
+                hideTooltip();
+            }
         },
-        [showTooltip]
+        [showTooltip, countryNodes, hideTooltip]
     );
 
     return (
@@ -173,11 +110,11 @@ export function ValidatorMap() {
                 <div className={styles.contents}>
                     <div>
                         <div className={styles.title}>Total Nodes</div>
-                        <div className={styles.stat}>15,123</div>
+                        <div className={styles.stat}>{data?.length}</div>
                     </div>
                     <div>
-                        <div className={styles.title}>Average APY</div>
-                        <div className={styles.stat}>4.96%</div>
+                        <div className={styles.title}>Total Countries</div>
+                        <div className={styles.stat}>{countryCount}</div>
                     </div>
                 </div>
 
@@ -190,37 +127,37 @@ export function ValidatorMap() {
                 </a>
             </div>
 
-            <div className={styles.mapcontainer} ref={containerRef}>
+            <div className={styles.mapcontainer}>
                 <div className={styles.map}>
                     <ParentSizeModern>
                         {(parent) => (
                             <WorldMap
-                                onMouseOver={handleMouseOver}
-                                onMouseOut={hideTooltip}
+                                nodes={nodes}
                                 width={parent.width}
                                 height={parent.height}
-                                nodes={bucketedData}
+                                onMouseOver={handleMouseOver}
+                                onMouseOut={hideTooltip}
                             />
                         )}
                     </ParentSizeModern>
-
-                    {tooltipOpen && (
-                        <TooltipInPortal
-                            key={Math.random()}
-                            top={tooltipTop}
-                            left={tooltipLeft}
-                            className={styles.tooltip}
-                            style={{}}
-                        >
-                            <div className={styles.tipitem}>
-                                <div>Nodes</div>
-                                <div>10</div>
-                            </div>
-                            <div className={styles.tipdivider} />
-                            <div>{tooltipData}</div>
-                        </TooltipInPortal>
-                    )}
                 </div>
+
+                {tooltipOpen && tooltipData && (
+                    <TooltipWithBounds
+                        top={tooltipTop}
+                        left={tooltipLeft}
+                        className={styles.tooltip}
+                        // NOTE: Tooltip will un-style itself if we provide a style object:
+                        style={{}}
+                    >
+                        <div className={styles.tipitem}>
+                            <div>Nodes</div>
+                            <div>{countryNodes[tooltipData].count}</div>
+                        </div>
+                        <div className={styles.tipdivider} />
+                        <div>{countryNodes[tooltipData].name}</div>
+                    </TooltipWithBounds>
+                )}
             </div>
         </div>
     );
