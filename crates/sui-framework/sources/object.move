@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Sui object identifiers
+/// Sui object identifiers and utilities
 module sui::object {
     use std::bcs;
     use sui::tx_context::{Self, TxContext};
@@ -126,6 +126,12 @@ module sui::object {
     /// Cannot be made public as the access to `UID` for a given object must be privledged, and
     /// restrictable in the object's module.
     native fun borrow_uid<T: key>(obj: &T): &UID;
+
+    // === one-time witness ===
+
+    /// Tests if the argument type is a one-time witness, that is a type with only one instantiation
+    /// across the entire code base.
+    public native fun is_one_time_witness<T: drop>(_: &T): bool;
 
     // === test functions ===
 

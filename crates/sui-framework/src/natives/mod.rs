@@ -24,6 +24,7 @@ pub fn all_natives(
         ("object", "bytes_to_address", object::bytes_to_address),
         ("object", "delete_impl", object::delete_impl),
         ("object", "borrow_uid", object::borrow_uid),
+        ("object", "is_one_time_witness", object::is_one_time_witness),
         (
             "test_scenario",
             "drop_object_for_testing",
