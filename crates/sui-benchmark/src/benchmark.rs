@@ -17,7 +17,7 @@ use std::{panic, thread, thread::sleep, time::Duration};
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_types::{
     batch::UpdateItem,
-    messages::{BatchInfoRequest, BatchInfoResponseItem},
+    messages::{BatchInfoRequest, BatchInfoResponseItem, TransactionInfoRequest},
 };
 use tracing::{error, info};
 
@@ -217,9 +217,13 @@ fn run_latency_microbench(
 
 async fn run_follower(address: Multiaddr) {
     // We spawn a second client that listens to the batch interface
-    let _batch_client_handle = tokio::task::spawn(async move {
-        let authority_client = NetworkAuthorityClient::connect(&address).await.unwrap();
+    let authority_client = NetworkAuthorityClient::connect(&address).await.unwrap();
 
+    follow(authority_client, false).await;
+}
+
+pub async fn follow(authority_client: NetworkAuthorityClient, download_txes: bool) {
+    let _batch_client_handle = tokio::task::spawn(async move {
         let mut start = 0;
 
         loop {
@@ -239,7 +243,19 @@ async fn run_follower(address: Multiaddr) {
             info!("Start batch listener at sequence: {}.", start);
             while let Some(item) = receiver.next().await {
                 match item {
-                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((_tx_seq, _tx_digest)))) => {
+                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((_tx_seq, tx_digest)))) => {
+                        if download_txes {
+                            authority_client
+                                .handle_transaction_info_request(TransactionInfoRequest::from(
+                                    tx_digest.transaction,
+                                ))
+                                .await
+                                .unwrap();
+                            info!(
+                                "Client downloaded TX with digest {:?}",
+                                tx_digest.transaction
+                            );
+                        }
                         start = _tx_seq + 1;
                     }
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => {
