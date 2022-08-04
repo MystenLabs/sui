@@ -6,7 +6,7 @@ Sui is the first permissionless Layer 1 blockchain designed from the ground up t
 
 ## What Sui is
 
-Sui is a [smart contract](sui-glossary#smart-contract) platform maintained by a permissionless set of [validators](sui-glossary#validator) that play a role similar to validators or miners in other blockchain systems.
+Sui is a [smart contract](sui-glossary.md#smart-contract) platform maintained by a permissionless set of [validators](sui-glossary.md#validator) that play a role similar to validators or miners in other blockchain systems.
 
 Sui offers scalability and unprecedented low-latency for simple use cases. Sui makes most transactions processable in parallel. This better utilizes processing resources, and offers the option to increase throughput by adding additional resources. Sui forgoes consensus to instead use simpler and lower-latency primitives for simple use cases, such as payment transactions and assets transfer. This is unprecedented in the blockchain world, and enables a number of new latency-sensitive distributed applications ranging from gaming to retail payment at physical points of sale.
 
