@@ -27,7 +27,6 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::SuiKeystore;
 use sui_sdk::{ClientType, SuiClient};
-use sui_types::crypto::get_key_pair;
 use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
@@ -402,8 +401,7 @@ impl SuiClientCommands {
                 SuiClientCommandResult::SyncClientState
             }
             SuiClientCommands::NewAddress => {
-                let (address, keypair) = get_key_pair();
-                let phrase = context.keystore.add_key(keypair)?;
+                let (address, phrase) = context.keystore.generate_new_key()?;
                 SuiClientCommandResult::NewAddress((address, phrase))
             }
             SuiClientCommands::Gas { address } => {

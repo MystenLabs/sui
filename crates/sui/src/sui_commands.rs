@@ -24,7 +24,7 @@ use sui_config::{
 use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, KeystoreType};
 use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::Swarm;
-use sui_types::crypto::{get_key_pair, KeypairTraits};
+use sui_types::crypto::KeypairTraits;
 use tracing::info;
 
 #[derive(Parser)]
@@ -399,9 +399,8 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
                 .unwrap_or(&sui_config_dir()?)
                 .join(SUI_KEYSTORE_FILENAME);
             let keystore = KeystoreType::File(keystore_path);
-            let (new_address, keypair) = get_key_pair();
+            let (new_address, phrase) = keystore.init()?.generate_new_key()?;
             println!("Generated new keypair for address [{new_address}]");
-            let phrase = keystore.init()?.add_key(keypair)?;
             println!("Secret Recovery Phrase : [{phrase}]");
             SuiClientConfig {
                 keystore,

@@ -17,7 +17,7 @@ futures = "0.3.21"
 signature = "1.5.0"
 rand = "0.7.3"
 
-bip39 = { git = "https://github.com/patrickkuo/rust-bip39.git" , rev = "a76fe8310416555e6383b42b8acc4eb93c7bcc89"}
+bip39 = { git = "https://github.com/patrickkuo/rust-bip39.git" , rev = "a76fe8310416555e6383b42b8acc4eb93c7bcc89", features = ["rand"]}
 rand = "0.7.3"
 
 sui-json-rpc = { path = "../sui-json-rpc" }
@@ -35,6 +35,8 @@ dirs = "4.0.0"
 tokio = "1.20.1"
 bcs = "0.1.3"
 async-recursion = "1.0.0"
+tempfile = "3.3.0"
+sha3 = "0.10.2"
 
 [[example]]
 name = "tic-tac-toe"

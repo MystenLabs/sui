@@ -21,7 +21,7 @@ use signature::Signer;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     get_key_pair_from_rng, get_key_pair_from_rng, AccountKeyPair, AccountPublicKey,
-    EncodeDecodeBase64, KeypairTraits, Signature, ToFromBytes,
+    EncodeDecodeBase64, KeypairTraits, Signature,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -146,12 +146,17 @@ impl SuiKeystore {
         Self(Box::new(keystore))
     }
 
-    pub fn add_key(&mut self, keypair: AccountKeyPair) -> Result<String, anyhow::Error> {
-        let pk = keypair.private();
-        let phrase = Mnemonic::from_entropy(pk.as_bytes())?.to_string();
-        let keypair = AccountKeyPair::from(pk);
-        self.0.add_key(keypair)?;
-        Ok(phrase)
+    pub fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error> {
+        self.0.add_key(keypair)
+    }
+
+    pub fn generate_new_key(&mut self) -> Result<(SuiAddress, String), anyhow::Error> {
+        let mnemonic = Mnemonic::generate(12)?;
+        let seed = mnemonic.to_seed("");
+        let mut rng = RngWrapper(ReadRng::new(&seed));
+        let (address, kp) = get_key_pair_from_rng(&mut rng);
+        self.0.add_key(kp)?;
+        Ok((address, mnemonic.to_string()))
     }
 
     pub fn keys(&self) -> Vec<AccountPublicKey> {
