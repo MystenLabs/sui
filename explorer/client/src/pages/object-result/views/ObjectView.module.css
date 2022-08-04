@@ -67,8 +67,12 @@ div.metadata > p {
   text-sui-grey-80 font-semibold tracking-[-0.02em];
 }
 
+div.display {
+    @apply w-[50%] sm:w-auto;
+}
+
 div.display > div > img {
-    @apply max-h-[120px] max-w-[120px] ml-auto;
+    @apply max-h-[120px] w-full sm:max-w-[120px] ml-auto;
 }
 
 table.description {

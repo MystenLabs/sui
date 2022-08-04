@@ -3,7 +3,7 @@ div.imagebox {
 }
 
 img.smallimage {
-    @apply object-cover cursor-pointer rounded-[6px];
+    @apply object-fill cursor-pointer rounded-[6px];
 }
 
 div.modalcontainer,
