@@ -27,6 +27,7 @@ use sui_types::messages::{
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
+use tokio::sync::mpsc::channel;
 
 static mut SHOULD_FAIL: bool = true;
 static FIXER: Once = Once::new();
@@ -73,6 +74,7 @@ impl ConfigurableBatchActionClient {
         fs::create_dir(&path).unwrap();
 
         let store = Arc::new(AuthorityStore::open(&path, None));
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
         let state = AuthorityState::new(
             committee.clone(),
             address,
@@ -83,6 +85,7 @@ impl ConfigurableBatchActionClient {
             None,
             &sui_config::genesis::Genesis::get_default_genesis(),
             &prometheus::Registry::new(),
+            tx_reconfigure_consensus,
         )
         .await;
 

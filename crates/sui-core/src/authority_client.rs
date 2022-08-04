@@ -339,6 +339,7 @@ impl LocalAuthorityClient {
         use crate::checkpoints::CheckpointStore;
         use parking_lot::Mutex;
         use std::{env, fs};
+        use tokio::sync::mpsc::channel;
 
         // Random directory
         let dir = env::temp_dir();
@@ -361,6 +362,7 @@ impl LocalAuthorityClient {
         )
         .expect("Should not fail to open local checkpoint DB");
 
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
         let state = AuthorityState::new(
             committee.clone(),
             address,
@@ -371,6 +373,7 @@ impl LocalAuthorityClient {
             Some(Arc::new(Mutex::new(checkpoints))),
             genesis,
             &prometheus::Registry::new(),
+            tx_reconfigure_consensus,
         )
         .await;
         Self {

@@ -31,6 +31,7 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
+use tokio::sync::mpsc::channel;
 
 pub enum TestCallArg {
     Object(ObjectID),
@@ -1613,7 +1614,7 @@ pub async fn init_state_with_committee(
     };
 
     let store = init_store();
-
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
     AuthorityState::new(
         committee,
         authority_key.public().into(),
@@ -1624,6 +1625,7 @@ pub async fn init_state_with_committee(
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
+        tx_reconfigure_consensus,
     )
     .await
 }

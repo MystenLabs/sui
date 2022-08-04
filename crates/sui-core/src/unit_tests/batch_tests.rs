@@ -31,6 +31,7 @@ use sui_types::messages::{
     Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::object::Object;
+use tokio::sync::mpsc::channel;
 
 pub(crate) fn init_state_parameters_from_rng<R>(
     rng: &mut R,
@@ -54,6 +55,7 @@ pub(crate) async fn init_state(
     authority_key: AuthorityKeyPair,
     store: Arc<AuthorityStore>,
 ) -> AuthorityState {
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
     AuthorityState::new(
         committee,
         authority_key.public().into(),
@@ -64,6 +66,7 @@ pub(crate) async fn init_state(
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
+        tx_reconfigure_consensus,
     )
     .await
 }
@@ -759,6 +762,7 @@ async fn test_safe_batch_stream() {
     let committee = Committee::new(0, authorities).unwrap();
     // Create an authority
     let store = Arc::new(AuthorityStore::open(&path, None));
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
     let state = AuthorityState::new(
         committee.clone(),
         public_key_bytes,
@@ -769,6 +773,7 @@ async fn test_safe_batch_stream() {
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
+        tx_reconfigure_consensus,
     )
     .await;
 
@@ -806,6 +811,7 @@ async fn test_safe_batch_stream() {
     // Byzantine cases:
     let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
     let public_key_bytes_b = authority_key.public().into();
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
     let state_b = AuthorityState::new(
         committee.clone(),
         public_key_bytes_b,
@@ -816,6 +822,7 @@ async fn test_safe_batch_stream() {
         None,
         &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
+        tx_reconfigure_consensus,
     )
     .await;
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);

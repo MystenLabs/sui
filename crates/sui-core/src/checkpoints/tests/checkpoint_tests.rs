@@ -24,6 +24,7 @@ use sui_types::{
     utils::{make_committee_key, make_committee_key_num},
     waypoint::GlobalCheckpoint,
 };
+use tokio::sync::mpsc::channel;
 
 use crate::authority_aggregator::AuthAggMetrics;
 use parking_lot::Mutex;
@@ -974,6 +975,7 @@ async fn test_batch_to_checkpointing() {
         .unwrap(),
     ));
 
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
     let state = AuthorityState::new(
         committee,
         secret.public().into(),
@@ -984,6 +986,7 @@ async fn test_batch_to_checkpointing() {
         Some(checkpoints.clone()),
         &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
+        tx_reconfigure_consensus,
     )
     .await;
     let authority_state = Arc::new(state);
@@ -1064,6 +1067,7 @@ async fn test_batch_to_checkpointing_init_crash() {
     {
         let store = Arc::new(AuthorityStore::open(&store_path, None));
 
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
         let state = AuthorityState::new(
             committee.clone(),
             secret.public().into(),
@@ -1074,6 +1078,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             None,
             &sui_config::genesis::Genesis::get_default_genesis(),
             &prometheus::Registry::new(),
+            tx_reconfigure_consensus,
         )
         .await;
         let authority_state = Arc::new(state);
@@ -1147,6 +1152,7 @@ async fn test_batch_to_checkpointing_init_crash() {
         // Start with no transactions
         assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 0);
 
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
         let state = AuthorityState::new(
             committee,
             secret.public().into(),
@@ -1157,6 +1163,7 @@ async fn test_batch_to_checkpointing_init_crash() {
             Some(checkpoints.clone()),
             &sui_config::genesis::Genesis::get_default_genesis(),
             &prometheus::Registry::new(),
+            tx_reconfigure_consensus,
         )
         .await;
         let authority_state = Arc::new(state);
@@ -1667,6 +1674,7 @@ pub async fn checkpoint_tests_setup(
             .set_consensus(Box::new(sender.clone()))
             .expect("No issues");
         let checkpoint = Arc::new(Mutex::new(checkpoint));
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = channel(1);
         let authority = AuthorityState::new(
             committee.clone(),
             secret.public().into(),
@@ -1677,6 +1685,7 @@ pub async fn checkpoint_tests_setup(
             Some(checkpoint.clone()),
             &genesis,
             &prometheus::Registry::new(),
+            tx_reconfigure_consensus,
         )
         .await;
 
