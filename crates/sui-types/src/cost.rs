@@ -75,41 +75,46 @@ pub fn _bytecode_instruction_costs() -> Vec<(Bytecode, GasCost, bool)> {
         // TODO: Do we scale by memory for swap?
         (VecSwap(SignatureIndex::new(0)), GasCost::new(2, 0), true),
         // TODO: This is actually a linear function (dependent on object size and vec length) with a small base constant but that's not easy to model yet
-        (VecPack(SignatureIndex::new(0), 0), GasCost::new(7, 1), true),
+        (VecPack(SignatureIndex::new(0), 0), GasCost::new(7, 0), true),
+        // Performs a copy
         (
             VecImmBorrow(SignatureIndex::new(0)),
             GasCost::new(3, 1),
-            false,
+            true,
         ),
+        // Performs a copy
         (
             VecMutBorrow(SignatureIndex::new(0)),
             GasCost::new(3, 1),
-            false,
+            true,
         ),
         //
         // Pack/Unpack
         //
         (
             Unpack(StructDefinitionIndex::new(0)),
-            GasCost::new(2, 1),
+            GasCost::new(2, 0),
             true,
         ),
         (
             UnpackGeneric(StructDefInstantiationIndex::new(0)),
-            GasCost::new(2, 1),
+            GasCost::new(2, 0),
             true,
         ),
         (
             Pack(StructDefinitionIndex::new(0)),
-            GasCost::new(4, 1),
+            GasCost::new(4, 0),
             true,
         ),
         (
             PackGeneric(StructDefInstantiationIndex::new(0)),
-            GasCost::new(4, 1),
+            GasCost::new(4, 0),
             true,
         ),
+        //
         // Borrow
+        //
+        // Performs a copy
         (MutBorrowLoc(0), GasCost::new(2, 1), true),
         (ImmBorrowLoc(0), GasCost::new(2, 1), true),
         (
@@ -135,7 +140,8 @@ pub fn _bytecode_instruction_costs() -> Vec<(Bytecode, GasCost, bool)> {
         //
         // Ref
         //
-        (WriteRef, GasCost::new(2, 1), true),
+        (WriteRef, GasCost::new(2, 0), true),
+        // Performs c aopy
         (ReadRef, GasCost::new(3, 1), true),
         // Same cost as NOP. No work is done
         (FreezeRef, GasCost::new(1, 1), false),
@@ -150,16 +156,18 @@ pub fn _bytecode_instruction_costs() -> Vec<(Bytecode, GasCost, bool)> {
         // Values are approx
         (MoveLoc(0), GasCost::new(1, 1), false),
         (StLoc(0), GasCost::new(1, 1), false),
-        (CastU8, GasCost::new(2, 1), false),
-        (CastU64, GasCost::new(1, 1), false),
-        (CastU128, GasCost::new(1, 1), false),
-        (Branch(0), GasCost::new(1, 1), false),
-        (BrFalse(0), GasCost::new(1, 1), false),
-        (BrTrue(0), GasCost::new(1, 1), false),
+        (CastU8, GasCost::new(2, 1), true),
+        (CastU64, GasCost::new(1, 1), true),
+        (CastU128, GasCost::new(1, 1), true),
+        (Branch(0), GasCost::new(1, 0), false),
+        (BrFalse(0), GasCost::new(1, 0), false),
+        (BrTrue(0), GasCost::new(1, 0), false),
+        // We have to modify the Move code to truly calculate this
+        // For now scale by size
         (
             Call(FunctionHandleIndex::new(0)),
-            GasCost::new(1132, 1),
-            false,
+            GasCost::new(100, 1),
+            true,
         ),
         (
             CallGeneric(FunctionInstantiationIndex::new(0)),
