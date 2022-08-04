@@ -6914,6 +6914,7 @@ dependencies = [
  "move-ir-types",
  "move-vm-types",
  "once_cell",
+ "workspace-hack 0.1.0",
 ]
 
 [[package]]
