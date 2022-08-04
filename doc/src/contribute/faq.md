@@ -24,16 +24,15 @@ Use these online resources:
 
 ### What does Sui offer over other blockchains?
 
-Sui offers ease of development, a developer interface, fast transaction speeds, a sane object model, and better security. Sui calls the consensus protocol only for transactions affecting objects owned by multiple accounts. This means simple transactions complete almost immediately.
+Sui offers ease of development, a developer interface, fast transaction speeds, a sane object model, and better security. Sui calls the [consensus protocol](../learn/architecture/consensus.md) only for transactions affecting objects owned by multiple accounts. This means simple transactions complete almost immediately.
 
 See these resources on the [Sui Developer Portal](https://docs.sui.io/) for the complete story on why we built Sui:
-
-
 
 * [Why Move?](../learn/why-move)
 * [How Sui Move differs from Core Move](../learn/sui-move-diffs.md)
 * [How Sui Works](../learn/how-sui-works.md)
 * [Sui Compared to Other Blockchains](../learn/sui-compared.md)
+* [Narwhal and Tusk, Sui's Consensus Engine](../learn/architecture/consensus.md)
 
 
 ### Is Sui based on Diem?
