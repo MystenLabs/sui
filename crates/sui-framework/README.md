@@ -11,7 +11,7 @@ To set up and build the [Sui CLI client](https://docs.sui.io/build/cli-client) n
 3. Add the rust implementation of the function under `./sui-framework/src/natives` with name `{name}.rs`.
 4. Link the move interface with the native function in [all_natives](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/src/natives/mod.rs#L23)
 5. Write some tests in `{name}_tests.move` and pass `run_framework_move_unit_tests`.
-6. May need to update the mock move VM value in [gas_tests.rs] (https://github.com/MystenLabs/sui/blob/276356e168047cdfce71814cb14403f4653a3656/crates/sui-core/src/unit_tests/gas_tests.rs) since the sui-framework package will increase the gas metering.
-7. May need to run `cargo insta test` and `cargo insta review` since the sui-framework build will change the empty genesis config.
+6. Optionally, update the mock move VM value in [gas_tests.rs](https://github.com/MystenLabs/sui/blob/276356e168047cdfce71814cb14403f4653a3656/crates/sui-core/src/unit_tests/gas_tests.rs) since the sui-framework package will increase the gas metering.
+7. Optionally, run `cargo insta test` and `cargo insta review` since the sui-framework build will change the empty genesis config.
 
 Note: The gas metering for native functions is currently a WIP; use a dummy value for now and please open an issue with `move` label.
