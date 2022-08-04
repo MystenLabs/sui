@@ -9,7 +9,7 @@ publish = false
 [dependencies]
 anyhow = { version = "1.0.59", features = ["backtrace"] }
 base64ct = { version = "1.5.1", features = ["alloc"] }
-ed25519-consensus = { version = "1.2.1", features = ["serde"] }
+ed25519-consensus = { version = "2.0.1", features = ["serde"] }
 eyre = "0.6.8"
 hex = "0.4.3"
 rand = { version = "0.8.5", features = ["std"] }
