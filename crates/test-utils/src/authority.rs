@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{messages::make_certificates, TEST_COMMITTEE_SIZE};
+use crate::TEST_COMMITTEE_SIZE;
 use rand::{prelude::StdRng, SeedableRng};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -12,15 +12,10 @@ use sui_core::{
         ActiveAuthority,
     },
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
-    authority_client::{AuthorityAPI, NetworkAuthorityClient},
+    authority_client::NetworkAuthorityClient,
 };
 use sui_node::SuiNode;
-use sui_types::{
-    committee::Committee,
-    error::SuiResult,
-    messages::{Transaction, TransactionInfoResponse},
-    object::Object,
-};
+use sui_types::{committee::Committee, object::Object};
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -118,61 +113,4 @@ pub fn test_authority_aggregator(
 /// Get a network client to communicate with the consensus.
 pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
     NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()
-}
-
-/// Submit a certificate containing only owned-objects to all authorities.
-pub async fn submit_single_owner_transaction(
-    transaction: Transaction,
-    configs: &[ValidatorInfo],
-) -> Vec<TransactionInfoResponse> {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-
-    let mut responses = Vec::new();
-    for config in configs {
-        let client = get_client(config);
-        let reply = client
-            .handle_certificate(certificate.clone())
-            .await
-            .unwrap();
-        responses.push(reply);
-    }
-    responses
-}
-
-/// Keep submitting the certificates of a shared-object transaction until it is sequenced by
-/// at least one consensus node. We use the loop since some consensus protocols (like Tusk)
-/// may drop transactions. The certificate is submitted to every Sui authority.
-pub async fn submit_shared_object_transaction(
-    transaction: Transaction,
-    configs: &[ValidatorInfo],
-) -> Vec<SuiResult<TransactionInfoResponse>> {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-
-    loop {
-        let futures: Vec<_> = configs
-            .iter()
-            .map(|config| {
-                let client = get_client(config);
-                let cert = certificate.clone();
-                async move { client.handle_certificate(cert).await }
-            })
-            .collect();
-
-        let replies: Vec<_> = futures::future::join_all(futures)
-            .await
-            .into_iter()
-            // Remove all `FailedToHearBackFromConsensus` replies. Note that the original Sui error type
-            // `SuiError::FailedToHearBackFromConsensus(..)` is lost when the message is sent through the
-            // network (it is replaced by `RpcError`). As a result, the following filter doesn't work:
-            // `.filter(|result| !matches!(result, Err(SuiError::FailedToHearBackFromConsensus(..))))`.
-            .filter(|result| match result {
-                Err(e) => !e.to_string().contains("deadline has elapsed"),
-                _ => true,
-            })
-            .collect();
-
-        if !replies.is_empty() {
-            break replies;
-        }
-    }
 }

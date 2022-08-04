@@ -12,11 +12,11 @@ use sui_types::{
     crypto::get_key_pair_from_rng,
     messages::{CallArg, ExecutionStatus, ObjectArg, Transaction},
 };
-use test_utils::transaction::publish_counter_package;
+use test_utils::transaction::{publish_counter_package, submit_shared_object_transaction};
 use test_utils::{
     authority::{
-        spawn_checkpoint_processes, spawn_test_authorities, submit_shared_object_transaction,
-        test_authority_aggregator, test_authority_configs,
+        spawn_checkpoint_processes, spawn_test_authorities, test_authority_aggregator,
+        test_authority_configs,
     },
     messages::{move_transaction, test_transactions},
     objects::test_gas_objects,
@@ -290,20 +290,13 @@ async fn checkpoint_with_shared_objects() {
         package_ref,
         vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
     );
-    let replies = submit_shared_object_transaction(
+    let effects = submit_shared_object_transaction(
         increment_counter_transaction.clone(),
         configs.validator_set(),
     )
-    .await;
-    for reply in replies {
-        match reply {
-            Ok(info) => {
-                let effects = info.signed_effects.unwrap().effects;
-                assert!(matches!(effects.status, ExecutionStatus::Success { .. }));
-            }
-            Err(error) => panic!("{error}"),
-        }
-    }
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
 
     // Now send a few single-writer transactions.
     execute_transactions(&aggregator, &transactions).await;

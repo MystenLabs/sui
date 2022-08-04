@@ -16,7 +16,7 @@ use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::error::SuiResult;
 use sui_types::messages::SignedTransaction;
 use sui_types::sui_system_state::SuiSystemState;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use typed_store::Map;
 
 #[async_trait]
@@ -93,7 +93,7 @@ where
         };
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;
-        let next_epoch = sui_system_state.epoch + 1;
+        let next_epoch = epoch + 1;
         let next_epoch_validators = &sui_system_state.validators.next_epoch_validators;
         let votes = next_epoch_validators
             .iter()
@@ -125,6 +125,7 @@ where
             ));
             self.net.store(new_net);
         }
+
         // TODO: Update all committee in all components safely,
         // potentially restart narwhal committee/consensus adapter,
         // all active processes, maybe batch service.
@@ -163,7 +164,7 @@ where
                 },
                 Err(err) => err,
             };
-            warn!(
+            debug!(
                 ?epoch,
                 "Error when processing advance epoch transaction: {:?}", err
             );
@@ -172,7 +173,11 @@ where
 
         // Resume the validator to start accepting transactions for the new epoch.
         self.state.unhalt_validator();
-        info!(?epoch, "Validator unhalted. Epoch change finished");
+        info!(?epoch, "Validator unhalted.");
+        info!(
+            "Epoch change finished. We are now at epoch {:?}",
+            next_epoch
+        );
         Ok(())
     }
 
