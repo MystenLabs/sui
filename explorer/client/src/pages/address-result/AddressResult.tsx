@@ -31,7 +31,7 @@ function AddressResult() {
     if (addressID !== undefined) {
         return (
             <>
-                <div className={resultheaderstyle.container}>
+                <div className={resultheaderstyle.btmborder}>
                     <GoBack />
                     <div className={resultheaderstyle.category}>
                         <AddressIcon /> Address

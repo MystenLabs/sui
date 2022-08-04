@@ -17,7 +17,7 @@ type ObjHeaderData = {
 function ObjAddressHeader({ data }: { data: ObjHeaderData }) {
     return (
         <div
-            className={`${resultheaderstyle.container} ${styles.objcontainer}`}
+            className={`${resultheaderstyle.btmborder} ${styles.objcontainer}`}
         >
             <GoBack />
             <div className={resultheaderstyle.category}>
