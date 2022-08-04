@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use anyhow::{anyhow, Result};
 use clap::*;
+use futures::future::join_all;
 use futures::future::try_join_all;
 use futures::future::BoxFuture;
 use futures::FutureExt;
@@ -13,6 +14,7 @@ use prometheus::Gauge;
 use prometheus::Histogram;
 use prometheus::IntCounter;
 use prometheus::Registry;
+use sui_benchmark::benchmark::follow;
 use sui_benchmark::workloads::workload::get_latest;
 use sui_benchmark::workloads::workload::WorkloadType;
 use sui_config::gateway::GatewayConfig;
@@ -113,6 +115,12 @@ struct Opts {
     pub server_metric_port: u16,
     #[clap(long, default_value = "8081", global = true)]
     pub client_metric_port: u16,
+    /// Number of followers to run. This also  stresses the follower logic in validators
+    #[clap(long, default_value = "0", global = true)]
+    pub num_folowers: u64,
+    /// Whether or no to download TXes during follow
+    #[clap(long, global = true)]
+    pub download_txes: bool,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]
@@ -533,6 +541,7 @@ async fn main() -> Result<()> {
         // Make the client runtime wait until we are done creating genesis objects
         let cloned_config = configs;
         let cloned_gas = primary_gas;
+        let auth_clients = GatewayState::make_authority_clients(&gateway_config);
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime
         let _ = std::thread::spawn(move || {
             // create server runtime
@@ -547,9 +556,23 @@ async fn main() -> Result<()> {
                 let nodes: Vec<SuiNode> = spawn_test_authorities(cloned_gas, &cloned_config).await;
                 let handles: Vec<_> = nodes.into_iter().map(move |node| node.wait()).collect();
                 cloned_barrier.wait().await;
+                let mut follower_handles = vec![];
+
+                // Start the followers if any
+                for idx in 0..opts.num_folowers {
+                    // Kick off a task which follows all authorities and discards the data
+                    for (name, auth_client) in auth_clients.clone() {
+                        follower_handles.push(tokio::task::spawn(async move {
+                            eprintln!("Starting follower {idx} for validator {}", name);
+                            follow(auth_client.clone(), opts.download_txes).await
+                        }))
+                    }
+                }
+
                 if try_join_all(handles).await.is_err() {
                     error!("Failed while waiting for nodes");
                 }
+                join_all(follower_handles).await;
             });
         });
         (primary_gas_id, owner, Arc::new(keypair), gateway_config)
