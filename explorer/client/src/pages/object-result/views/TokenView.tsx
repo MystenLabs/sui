@@ -194,7 +194,9 @@ function TokenView({ data }: { data: DataType }) {
                 />
             )}
             <h2 className={styles.header}>Child Objects</h2>
-            <OwnedObjects id={viewedData.id} byAddress={false} />
+            <div className={styles.ownedobjects}>
+                <OwnedObjects id={viewedData.id} byAddress={false} />
+            </div>
             <h2 className={styles.header}>Transactions </h2>
             <TxForID id={viewedData.id} category="object" />
         </div>
