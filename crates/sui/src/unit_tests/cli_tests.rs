@@ -25,6 +25,7 @@ use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits};
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
+use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_OBJECT_ID};
 
 use test_utils::network::{setup_network_and_wallet, start_test_network};
 
@@ -187,7 +188,10 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
     match result {
         SuiClientCommandResult::CreateExampleNFT(GetObjectDataResponse::Exists(obj)) => {
             assert_eq!(obj.owner, address);
-            assert_eq!(obj.data.type_().unwrap(), "0x2::devnet_nft::DevNetNFT");
+            assert_eq!(
+                obj.data.type_().unwrap(),
+                sui_framework_address_concat_string("::devnet_nft::DevNetNFT")
+            );
             Ok(obj)
         }
         _ => Err(anyhow!(
@@ -350,7 +354,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // Test case with no gas specified
     let resp = SuiClientCommands::Call {
-        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        package: SUI_FRAMEWORK_OBJECT_ID,
         module: "object_basics".to_string(),
         function: "create".to_string(),
         type_args: vec![],
@@ -390,7 +394,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     }
 
     let resp = SuiClientCommands::Call {
-        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        package: SUI_FRAMEWORK_OBJECT_ID,
         module: "object_basics".to_string(),
         function: "create".to_string(),
         type_args: vec![],
@@ -418,7 +422,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     }
 
     let resp = SuiClientCommands::Call {
-        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        package: SUI_FRAMEWORK_OBJECT_ID,
         module: "object_basics".to_string(),
         function: "transfer".to_string(),
         type_args: vec![],
@@ -432,7 +436,8 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     assert!(resp.is_err());
 
     let err_string = format!("{} ", resp.err().unwrap());
-    assert!(err_string.contains("Expected argument of type 0x2::object_basics::Object, but found type 0x2::coin::Coin<0x2::sui::SUI>"));
+    let framework_addr = sui_framework_address_concat_string("");
+    assert!(err_string.contains(&format!("Expected argument of type {framework_addr}::object_basics::Object, but found type {framework_addr}::coin::Coin<{framework_addr}::sui::SUI>")));
 
     // Try a proper transfer
     let obj_str = format!("0x{:02x}", created_obj);
@@ -445,7 +450,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     }
 
     SuiClientCommands::Call {
-        package: ObjectID::from_hex_literal("0x2").unwrap(),
+        package: SUI_FRAMEWORK_OBJECT_ID,
         module: "object_basics".to_string(),
         function: "transfer".to_string(),
         type_args: vec![],
