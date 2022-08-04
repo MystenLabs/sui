@@ -1,8 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 import { ReactComponent as ObjIcon } from '../../../../assets/SVGIcons/Call.svg';
 import GoBack from '../../../../components/goback/GoBack';
 import Longtext from '../../../../components/longtext/Longtext';
+import resultheaderstyle from '../../../../styles/resultheader.module.css';
 
 import styles from './ObjHeader.module.css';
 
@@ -14,12 +16,14 @@ type ObjHeaderData = {
 
 function ObjAddressHeader({ data }: { data: ObjHeaderData }) {
     return (
-        <div className={styles.objheader}>
+        <div
+            className={`${resultheaderstyle.btmborder} ${styles.objcontainer}`}
+        >
             <GoBack />
-            <div className={styles.objtypes}>
+            <div className={resultheaderstyle.category}>
                 <ObjIcon /> {data.objKind}
             </div>
-            <div className={styles.objaddress}>
+            <div className={resultheaderstyle.address}>
                 <Longtext text={data.objId} category="objects" isLink={false} />
             </div>
             {data.objName && (

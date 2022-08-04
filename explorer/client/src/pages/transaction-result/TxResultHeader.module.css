@@ -8,14 +8,6 @@
     box-sizing: border-box;
 }
 
-.txtypes {
-    @apply text-sui-dark font-[500] mt-10 text-lg mb-2;
-}
-
-.txid {
-    @apply text-offblack font-[600] text-lg md:text-2xl font-mono break-all block items-center;
-}
-
 .txaddress {
     @apply block md:flex justify-start align-middle items-center;
 
