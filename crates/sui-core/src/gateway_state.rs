@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
@@ -752,10 +753,28 @@ where
         let result = self.authorities.get_object_info_execute(object_id).await?;
         if let ObjectRead::Exists(obj_ref, object, _) = &result {
             let local_object = self.store.get_object(&object_id)?;
-            if local_object.is_none()
-                // We only update local object if the validator version is newer.
-                || local_object.unwrap().version() < obj_ref.1
-            {
+            let should_update = match local_object {
+                None => true, // Local store doesn't have it.
+                Some(local_obj) => {
+                    let local_obj_ref = local_obj.compute_object_reference();
+                    match local_obj_ref.1.cmp(&obj_ref.1) {
+                        Ordering::Greater => false, // Local version is more up-to-date
+                        Ordering::Less => true,
+                        Ordering::Equal => {
+                            if local_obj_ref.2 != obj_ref.2 {
+                                error!(
+                                    "Inconsistent object digest. Local store: {:?}, on-chain: {:?}",
+                                    local_obj_ref, obj_ref
+                                );
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    }
+                }
+            };
+            if should_update {
                 self.store.insert_object_direct(*obj_ref, object).await?;
             }
         }
