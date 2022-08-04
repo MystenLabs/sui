@@ -1046,7 +1046,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .iter()
             .map(|(id, version, _)| ((digest, *id), *version))
             .collect();
-        info!(?sequenced, "locking");
+        debug!(?sequenced, "Shared object locks sequenced from effects");
 
         let mut write_batch = self.tables.assigned_object_versions.batch();
         write_batch = write_batch.insert_batch(&self.tables.assigned_object_versions, sequenced)?;
