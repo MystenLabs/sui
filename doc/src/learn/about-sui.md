@@ -8,7 +8,7 @@ Sui is the first permissionless Layer 1 blockchain designed from the ground up t
 
 Sui is a [smart contract](sui-glossary#smart-contract) platform maintained by a permissionless set of [validators](sui-glossary#validator) that play a role similar to validators or miners in other blockchain systems.
 
-Sui offers scalability and unprecedented low-latency for simple use cases. Sui makes most transactions processable in parallel. This better utilizes processing resources, and offers the option to increase throughput by adding additional resources. Sui forgoes consensus to instead use simpler and lower-latency primitives for simple use cases, such as payment transactions and assets transfer. This is unprecedented in the blockchain world, and enables a number of new latency-sensitive distributed applications ranging from gaming to retail payment at physical points of sale.
+Sui offers scalability and unprecedented low-latency for simple use cases. Sui makes most transactions processable in parallel. This better utilizes processing resources and offers the option to increase throughput by adding more resources. Sui forgoes consensus to instead use simpler and lower-latency primitives for simple use cases, such as payment transactions and assets transfer. This is unprecedented in the blockchain world and enables a number of new latency-sensitive distributed applications ranging from gaming to retail payment at physical points of sale.
 
 Sui is written in [Rust](https://www.rust-lang.org) and supports smart contracts written in the [Move programming language](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) to define assets that may have an owner. Move programs define operations on these assets, including: custom rules for their creation, the transfer of these assets to new owners, and operations that mutate assets. To learn about the differences between core Move and Sui move, see [How Sui Move differs from Core Move](../learn/sui-move-diffs.md).
 
@@ -20,7 +20,7 @@ Sui is backed by a number of state-of-the-art [peer-reviewed works](../contribut
 
 ### Transactions
 
-A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-owner, single-address objects, such as minting an NFT or transferring an NFT to a different token. These *simple transactions* may bypass the consensus protocol in Sui.
+A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-owner, single-address objects, such as minting an NFT or transferring an NFT or a different token. These *simple transactions* may bypass the consensus protocol in Sui.
 
 More *complex transactions* affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, go through the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
 
@@ -30,7 +30,7 @@ Sui scales horizontally with no upper bound to meet application demand while mai
 
 Sui takes a significant leap in scalability by enabling parallel agreement on causally independent transactions. Sui validators commit such transactions using Byzantine Consistent Broadcast, eliminating the overhead of global consensus without sacrificing safety and liveness guarantees.
 
-This breakthrough is possible only with Sui's novel data model. Thanks to its object-centric view, and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on, and executes transactions on many objects in parallel. A minority of transactions that affect shared state are ordered via Byzantine Fault Tolerant consensus and executed in parallel.
+This breakthrough is possible only with Sui's novel data model. Thanks to its object-centric view, and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on, and executes transactions on many objects in parallel. Meanwhile, transactions that affect shared state are ordered via Byzantine Fault Tolerant consensus and executed in parallel.
 
 ### Sui highlights
 
