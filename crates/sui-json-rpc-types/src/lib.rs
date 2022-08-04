@@ -53,6 +53,19 @@ mod rpc_types_tests;
 pub type GatewayTxSeqNumber = u64;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub enum ObjectValueKind {
+    ByImmutableReference,
+    ByMutableReference,
+    ByValue,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub enum MoveFunctionArgType {
+    Pure,
+    Object(ObjectValueKind),
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
 pub struct TransactionEffectsResponse {
     pub certificate: SuiCertifiedTransaction,
     pub effects: SuiTransactionEffects,

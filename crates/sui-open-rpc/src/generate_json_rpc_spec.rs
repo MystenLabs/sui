@@ -30,8 +30,8 @@ use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, TransactionBytes, TransactionEffectsResponse,
-    TransactionResponse,
+    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiObjectInfo, TransactionBytes,
+    TransactionEffectsResponse, TransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::SuiSignature;
@@ -59,6 +59,8 @@ struct Options {
 }
 
 const FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/spec/openrpc.json",);
+
+const MOVE_SAMPLE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/samples/move.json",);
 
 const OBJECT_SAMPLE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/samples/objects.json",);
 
@@ -89,7 +91,8 @@ async fn main() {
         Action::Print => {
             let content = serde_json::to_string_pretty(&open_rpc).unwrap();
             println!("{content}");
-            let (objects, txs, addresses) = create_response_sample().await.unwrap();
+            let (move_info, objects, txs, addresses) = create_response_sample().await.unwrap();
+            println!("{}", serde_json::to_string_pretty(&move_info).unwrap());
             println!("{}", serde_json::to_string_pretty(&objects).unwrap());
             println!("{}", serde_json::to_string_pretty(&txs).unwrap());
             println!("{}", serde_json::to_string_pretty(&addresses).unwrap());
@@ -98,7 +101,10 @@ async fn main() {
             let content = serde_json::to_string_pretty(&open_rpc).unwrap();
             let mut f = File::create(FILE_PATH).unwrap();
             writeln!(f, "{content}").unwrap();
-            let (objects, txs, addresses) = create_response_sample().await.unwrap();
+            let (move_info, objects, txs, addresses) = create_response_sample().await.unwrap();
+            let content = serde_json::to_string_pretty(&move_info).unwrap();
+            let mut f = File::create(MOVE_SAMPLE_FILE_PATH).unwrap();
+            writeln!(f, "{content}").unwrap();
             let content = serde_json::to_string_pretty(&objects).unwrap();
             let mut f = File::create(OBJECT_SAMPLE_FILE_PATH).unwrap();
             writeln!(f, "{content}").unwrap();
@@ -119,6 +125,7 @@ async fn main() {
 
 async fn create_response_sample() -> Result<
     (
+        MoveResponseSample,
         ObjectResponseSample,
         TransactionResponseSample,
         BTreeMap<SuiAddress, Vec<SuiObjectInfo>>,
@@ -144,6 +151,8 @@ async fn create_response_sample() -> Result<
         .get_object(coins.first().unwrap().object_id)
         .await?;
 
+    let example_move_function_arg_types = create_move_function_arg_type_response()?;
+
     let (example_nft_tx, example_nft) = get_nft_response(&mut context).await?;
     let (move_package, publish) = create_package_object_response(&mut context).await?;
     let (hero_package, hero) = create_hero_response(&mut context, &coins).await?;
@@ -163,6 +172,10 @@ async fn create_response_sample() -> Result<
         owned_objects.insert(account, objects);
     }
 
+    let move_info = MoveResponseSample {
+        move_function_arg_types: example_move_function_arg_types,
+    };
+
     let objects = ObjectResponseSample {
         example_nft,
         coin,
@@ -179,7 +192,16 @@ async fn create_response_sample() -> Result<
         error,
     };
 
-    Ok((objects, txs, owned_objects))
+    Ok((move_info, objects, txs, owned_objects))
+}
+
+fn create_move_function_arg_type_response() -> Result<Vec<MoveFunctionArgType>, anyhow::Error> {
+    Ok(vec![
+        MoveFunctionArgType::Pure,
+        MoveFunctionArgType::Object(ObjectValueKind::ByImmutableReference),
+        MoveFunctionArgType::Object(ObjectValueKind::ByMutableReference),
+        MoveFunctionArgType::Object(ObjectValueKind::ByValue),
+    ])
 }
 
 async fn create_package_object_response(
@@ -424,6 +446,11 @@ async fn get_nft_response(
     } else {
         panic!()
     }
+}
+
+#[derive(Serialize)]
+struct MoveResponseSample {
+    pub move_function_arg_types: Vec<MoveFunctionArgType>,
 }
 
 #[derive(Serialize)]
