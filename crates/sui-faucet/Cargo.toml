@@ -18,10 +18,13 @@ serde = { version = "1.0.141", features = ["derive"] }
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
 http = { version = "0.2.8" }
-
+futures = "0.3.21"
 uuid = {version = "1.1.2", features = [ "v4", "fast-rng"]}
+prometheus = "0.13.1"
+scopeguard = "1.1"
 
 sui = { path = "../sui" }
+sui-node = { path = "../sui-node" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }

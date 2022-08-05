@@ -52,30 +52,3 @@ impl From<&SuiParsedObject> for CoinInfo {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use test_utils::network::setup_network_and_wallet;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn simple_faucet_basic_interface_should_work() {
-        let (_network, context, _address) = setup_network_and_wallet().await.unwrap();
-        let faucet = SimpleFaucet::new(context).await.unwrap();
-        test_basic_interface(faucet).await;
-    }
-
-    async fn test_basic_interface(faucet: impl Faucet) {
-        let recipient = SuiAddress::random_for_testing_only();
-        let amounts = vec![1, 2, 3];
-
-        let FaucetReceipt { sent } = faucet
-            .send(Uuid::new_v4(), recipient, &amounts)
-            .await
-            .unwrap();
-        let mut actual_amounts: Vec<u64> = sent.iter().map(|c| c.amount).collect();
-        actual_amounts.sort_unstable();
-        assert_eq!(actual_amounts, amounts);
-    }
-}
