@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 async-trait = "0.1.57"
-tonic = "0.7"
+tonic = "0.8"
 
 sui-types = { path = "../sui-types" }
 
