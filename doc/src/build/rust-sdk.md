@@ -1,5 +1,5 @@
 ---
-title: Sui Rust SDK
+title: Interact with Sui over Rust SDK
 ---
 
 ## Overview
