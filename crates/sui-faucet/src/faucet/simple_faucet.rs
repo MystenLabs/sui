@@ -237,7 +237,6 @@ impl Faucet for SimpleFaucet {
 
         let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
             metrics.current_requests_in_flight.dec();
-            info!(?metrics);
         });
 
         let timer = self.metrics.process_latency.start_timer();
