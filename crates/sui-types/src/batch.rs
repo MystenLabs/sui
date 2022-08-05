@@ -3,7 +3,9 @@
 
 use crate::base_types::{AuthorityName, ExecutionDigests};
 use crate::committee::{Committee, EpochId};
-use crate::crypto::{sha3_hash, AuthoritySignInfo, AuthoritySignature, SuiAuthoritySignature};
+use crate::crypto::{
+    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature, SuiAuthoritySignature,
+};
 use crate::error::{SuiError, SuiResult};
 use serde::{Deserialize, Serialize};
 

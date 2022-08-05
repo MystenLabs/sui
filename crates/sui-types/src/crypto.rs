@@ -547,11 +547,49 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
 /// those structs can be instanted on, hence the sealed trait.
 /// TODO: We could also add the aggregated signature as another impl of the trait.
 ///       This will make CertifiedTransaction also an instance of the same struct.
-pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {}
+pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
+    fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult;
+
+    fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+        message_index: usize,
+    ) -> SuiResult<()>;
+}
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct EmptySignInfo {}
-impl AuthoritySignInfoTrait for EmptySignInfo {}
+impl AuthoritySignInfoTrait for EmptySignInfo {
+    fn verify<T: Signable<Vec<u8>>>(&self, _data: &T, _committee: &Committee) -> SuiResult {
+        Ok(())
+    }
+
+    fn add_to_verification_obligation(
+        &self,
+        _committee: &Committee,
+        _obligation: &mut VerificationObligation,
+        _message_index: usize,
+    ) -> SuiResult<()> {
+        Ok(())
+    }
+}
+
+pub fn add_to_verification_obligation_and_verify<S, T>(
+    sig: &S,
+    data: &T,
+    committee: &Committee,
+) -> SuiResult
+where
+    S: AuthoritySignInfoTrait,
+    T: Signable<Vec<u8>>,
+{
+    let mut obligation = VerificationObligation::default();
+    let idx = obligation.add_message(data);
+    sig.add_to_verification_obligation(committee, &mut obligation, idx)?;
+    obligation.verify_all()?;
+    Ok(())
+}
 
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct AuthoritySignInfo {
@@ -559,35 +597,12 @@ pub struct AuthoritySignInfo {
     pub authority: AuthorityName,
     pub signature: AuthoritySignature,
 }
-impl AuthoritySignInfoTrait for AuthoritySignInfo {}
-
-impl Hash for AuthoritySignInfo {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.epoch.hash(state);
-        self.authority.hash(state);
+impl AuthoritySignInfoTrait for AuthoritySignInfo {
+    fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
+        add_to_verification_obligation_and_verify(self, data, committee)
     }
-}
 
-impl Display for AuthoritySignInfo {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "AuthoritySignInfo {{ epoch: {:?}, authority: {} }}",
-            self.epoch, self.authority,
-        )
-    }
-}
-
-impl PartialEq for AuthoritySignInfo {
-    fn eq(&self, other: &Self) -> bool {
-        // We do not compare the signature, because there can be multiple
-        // valid signatures for the same epoch and authority.
-        self.epoch == other.epoch && self.authority == other.authority
-    }
-}
-
-impl AuthoritySignInfo {
-    pub fn add_to_verification_obligation(
+    fn add_to_verification_obligation(
         &self,
         committee: &Committee,
         obligation: &mut VerificationObligation,
@@ -611,16 +626,30 @@ impl AuthoritySignInfo {
             })?;
         Ok(())
     }
+}
 
-    pub fn verify<T>(&self, data: &T, committee: &Committee) -> SuiResult<()>
-    where
-        T: Signable<Vec<u8>>,
-    {
-        let mut obligation = VerificationObligation::default();
-        let idx = obligation.add_message(data);
-        self.add_to_verification_obligation(committee, &mut obligation, idx)?;
-        obligation.verify_all()?;
-        Ok(())
+impl Hash for AuthoritySignInfo {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.epoch.hash(state);
+        self.authority.hash(state);
+    }
+}
+
+impl Display for AuthoritySignInfo {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "AuthoritySignInfo {{ epoch: {:?}, authority: {} }}",
+            self.epoch, self.authority,
+        )
+    }
+}
+
+impl PartialEq for AuthoritySignInfo {
+    fn eq(&self, other: &Self) -> bool {
+        // We do not compare the signature, because there can be multiple
+        // valid signatures for the same epoch and authority.
+        self.epoch == other.epoch && self.authority == other.authority
     }
 }
 
@@ -657,7 +686,67 @@ pub type AuthorityWeakQuorumSignInfo = AuthorityQuorumSignInfo<false>;
 static_assertions::assert_not_impl_any!(AuthorityStrongQuorumSignInfo: Hash, Eq, PartialEq);
 static_assertions::assert_not_impl_any!(AuthorityWeakQuorumSignInfo: Hash, Eq, PartialEq);
 
-impl<const S: bool> AuthoritySignInfoTrait for AuthorityQuorumSignInfo<S> {}
+impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
+    for AuthorityQuorumSignInfo<STRONG_THRESHOLD>
+{
+    fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
+        add_to_verification_obligation_and_verify(self, data, committee)
+    }
+
+    fn add_to_verification_obligation(
+        &self,
+        committee: &Committee,
+        obligation: &mut VerificationObligation,
+        message_index: usize,
+    ) -> SuiResult<()> {
+        // Check epoch
+        fp_ensure!(
+            self.epoch == committee.epoch(),
+            SuiError::WrongEpoch {
+                expected_epoch: committee.epoch()
+            }
+        );
+
+        let mut weight = 0;
+
+        // Create obligations for the committee signatures
+        obligation
+            .signatures
+            .get_mut(message_index)
+            .ok_or(SuiError::InvalidAuthenticator)?
+            .add_aggregate(self.signature.clone())
+            .map_err(|_| SuiError::InvalidSignature {
+                error: "Signature Aggregation failed".to_string(),
+            })?;
+
+        let selected_public_keys = obligation
+            .public_keys
+            .get_mut(message_index)
+            .ok_or(SuiError::InvalidAuthenticator)?;
+
+        for authority_index in self.signers_map.iter() {
+            let authority = committee
+                .authority_by_index(authority_index)
+                .ok_or(SuiError::UnknownSigner)?;
+
+            // Update weight.
+            let voting_rights = committee.weight(authority);
+            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
+            weight += voting_rights;
+
+            selected_public_keys.push(committee.public_key(authority)?);
+        }
+
+        let threshold = if STRONG_THRESHOLD {
+            committee.quorum_threshold()
+        } else {
+            committee.validity_threshold()
+        };
+        fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
+
+        Ok(())
+    }
+}
 
 impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
     pub fn new(epoch: EpochId) -> Self {
@@ -713,71 +802,6 @@ impl<const STRONG_THRESHOLD: bool> AuthorityQuorumSignInfo<STRONG_THRESHOLD> {
 
     pub fn is_empty(&self) -> bool {
         self.signers_map.is_empty()
-    }
-
-    pub fn add_to_verification_obligation(
-        &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
-        message_index: usize,
-    ) -> SuiResult<()> {
-        // Check epoch
-        fp_ensure!(
-            self.epoch == committee.epoch(),
-            SuiError::WrongEpoch {
-                expected_epoch: committee.epoch()
-            }
-        );
-
-        let mut weight = 0;
-
-        // Create obligations for the committee signatures
-        obligation
-            .signatures
-            .get_mut(message_index)
-            .ok_or(SuiError::InvalidAuthenticator)?
-            .add_aggregate(self.signature.clone())
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Signature Aggregation failed".to_string(),
-            })?;
-
-        let selected_public_keys = obligation
-            .public_keys
-            .get_mut(message_index)
-            .ok_or(SuiError::InvalidAuthenticator)?;
-
-        for authority_index in self.signers_map.iter() {
-            let authority = committee
-                .authority_by_index(authority_index)
-                .ok_or(SuiError::UnknownSigner)?;
-
-            // Update weight.
-            let voting_rights = committee.weight(authority);
-            fp_ensure!(voting_rights > 0, SuiError::UnknownSigner);
-            weight += voting_rights;
-
-            selected_public_keys.push(committee.public_key(authority)?);
-        }
-
-        let threshold = if STRONG_THRESHOLD {
-            committee.quorum_threshold()
-        } else {
-            committee.validity_threshold()
-        };
-        fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
-
-        Ok(())
-    }
-
-    pub fn verify<T>(&self, data: &T, committee: &Committee) -> SuiResult<()>
-    where
-        T: Signable<Vec<u8>>,
-    {
-        let mut obligation = VerificationObligation::default();
-        let message_index = obligation.add_message(data);
-        self.add_to_verification_obligation(committee, &mut obligation, message_index)?;
-        obligation.verify_all()?;
-        Ok(())
     }
 }
 
