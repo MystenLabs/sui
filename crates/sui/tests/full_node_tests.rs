@@ -10,6 +10,7 @@ use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use sui_types::sui_framework_address_concat_string;
+use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -17,17 +18,23 @@ use tokio::time::{sleep, Duration};
 use tracing::info;
 
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
+use sui_config::utils::get_available_port;
 use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
     SplitCoinResponse, SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue,
-    SuiObjectInfo, SuiObjectRead,
+    SuiObjectRead,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
+use sui_types::messages::{
+    ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+};
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     messages::TransactionInfoRequest,
 };
+use test_utils::messages::get_account_and_gas_coins;
+use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::setup_network_and_wallet;
 
 async fn transfer_coin(
@@ -62,25 +69,17 @@ async fn transfer_coin(
     Ok((object_to_send, sender, receiver, digest))
 }
 
-async fn get_account_and_objects(
-    context: &mut WalletContext,
-) -> Result<(SuiAddress, Vec<SuiObjectInfo>), anyhow::Error> {
-    let sender = context.config.accounts.get(0).cloned().unwrap();
-    let object_refs = context.gateway.get_objects_owned_by_address(sender).await?;
-    Ok((sender, object_refs))
-}
-
 async fn emit_move_events(
     context: &mut WalletContext,
 ) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
-    let (sender, object_refs) = get_account_and_objects(context).await.unwrap();
-    let gas_object = object_refs.get(0).unwrap().object_id;
+    let (sender, gas_objects) = get_account_and_gas_coins(context).await?.swap_remove(0);
+    let gas_object = gas_objects.get(0).unwrap().id();
 
     let res = SuiClientCommands::CreateExampleNFT {
         name: Some("example_nft_name".into()),
         description: Some("example_nft_desc".into()),
         url: Some("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg".into()),
-        gas: Some(gas_object),
+        gas: Some(*gas_object),
         gas_budget: Some(50000),
     }
     .execute(context)
@@ -384,8 +383,8 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 }
 
 /// Call this function to set up a network and a fullnode with subscription enabled.
-/// Pass in an unique port for each test case otherwise they may interfere with one another.
-async fn set_up_subscription(port: u16, swarm: &Swarm) -> Result<(SuiNode, Client), anyhow::Error> {
+async fn set_up_subscription(swarm: &Swarm) -> Result<(SuiNode, Client), anyhow::Error> {
+    let port = get_available_port();
     let ws_server_url = format!("127.0.0.1:{}", port);
     let ws_addr: SocketAddr = ws_server_url.parse().unwrap();
 
@@ -401,8 +400,8 @@ async fn set_up_subscription(port: u16, swarm: &Swarm) -> Result<(SuiNode, Clien
 }
 
 /// Call this function to set up a network and a fullnode and return a jsonrpc client.
-/// Pass in an unique port for each test case otherwise they may interfere with one another.
-async fn set_up_jsonrpc(port: u16, swarm: &Swarm) -> Result<(SuiNode, HttpClient), anyhow::Error> {
+async fn set_up_jsonrpc(swarm: &Swarm) -> Result<(SuiNode, HttpClient), anyhow::Error> {
+    let port = get_available_port();
     let jsonrpc_server_url = format!("127.0.0.1:{}", port);
     let jsonrpc_addr: SocketAddr = jsonrpc_server_url.parse().unwrap();
 
@@ -418,8 +417,7 @@ async fn set_up_jsonrpc(port: u16, swarm: &Swarm) -> Result<(SuiNode, HttpClient
 #[tokio::test]
 async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
-    // Pass in an unique port for each test case otherwise they may interfere with one another.
-    let (node, ws_client) = set_up_subscription(6666, &swarm).await?;
+    let (node, ws_client) = set_up_subscription(&swarm).await?;
 
     let mut sub: Subscription<SuiEventEnvelope> = ws_client
         .subscribe(
@@ -479,8 +477,7 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (swarm, _context, address) = setup_network_and_wallet().await?;
-    // Pass in an unique port for each test case otherwise they may interfere with one another.
-    let (_node, jsonrpc_client) = set_up_jsonrpc(6667, &swarm).await?;
+    let (_node, jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
 
     let params = rpc_params![address, 10, 0, 666];
     let response: Vec<SuiEventEnvelope> = jsonrpc_client
@@ -489,4 +486,113 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
         .unwrap();
     assert!(response.is_empty());
     Ok(())
+}
+
+#[tokio::test]
+async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
+    let (swarm, mut context, _address) = setup_network_and_wallet().await?;
+    let (node, _jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
+    let quorum_driver = node
+        .quorum_driver()
+        .expect("Fullnode should have quorum driver toggled on.");
+    let mut rx = node
+        .subscribe_to_quorum_driver_effects()
+        .expect("Fullnode should have quorum driver toggled on.");
+
+    let mut txns = make_transactions_with_wallet_context(&mut context, 3).await;
+    assert!(
+        txns.len() >= 3,
+        "Expect at least 3 txns. Do we generate enough gas objects during genesis?"
+    );
+
+    // Test WaitForEffectsCert
+    let txn = txns.swap_remove(0);
+    let digest = *txn.digest();
+    let res = quorum_driver
+        .execute_transaction(ExecuteTransactionRequest {
+            transaction: txn,
+            request_type: ExecuteTransactionRequestType::WaitForEffectsCert,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
+
+    match res {
+        ExecuteTransactionResponse::EffectsCert(res) => {
+            let (certified_txn, certified_txn_effects) = rx.recv().await.unwrap();
+            let (ct, cte) = *res;
+            assert_eq!(*ct.digest(), digest);
+            assert_eq!(*certified_txn.digest(), digest);
+            assert_eq!(*cte.digest(), *certified_txn_effects.digest());
+        }
+        other => {
+            panic!(
+                "WaitForEffectsCert should get EffectCerts, but got: {:?}",
+                other
+            );
+        }
+    };
+
+    // Test WaitForTxCert
+    let txn = txns.swap_remove(0);
+    let digest = *txn.digest();
+    let res = quorum_driver
+        .execute_transaction(ExecuteTransactionRequest {
+            transaction: txn,
+            request_type: ExecuteTransactionRequestType::WaitForTxCert,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
+
+    match res {
+        ExecuteTransactionResponse::TxCert(res) => {
+            let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
+            let ct = *res;
+            assert_eq!(*ct.digest(), digest);
+            assert_eq!(*certified_txn.digest(), digest);
+        }
+        other => {
+            panic!("WaitForTxCert should get TxCert, but got: {:?}", other);
+        }
+    };
+
+    // Test ImmediateReturn
+    let txn = txns.swap_remove(0);
+    let digest = *txn.digest();
+    let res = quorum_driver
+        .execute_transaction(ExecuteTransactionRequest {
+            transaction: txn,
+            request_type: ExecuteTransactionRequestType::ImmediateReturn,
+        })
+        .await
+        .unwrap_or_else(|e| panic!("Failed to execute transaction {:?}: {:?}", digest, e));
+
+    match res {
+        ExecuteTransactionResponse::ImmediateReturn => {
+            let (certified_txn, _certified_txn_effects) = rx.recv().await.unwrap();
+            assert_eq!(*certified_txn.digest(), digest);
+        }
+        other => {
+            panic!(
+                "ImmediateReturn should get ImmediateReturn, but got: {:?}",
+                other
+            );
+        }
+    };
+    wait_for_tx(digest, node.state().clone()).await;
+
+    // verify that the node has seen the transaction
+    node.state().get_transaction(digest).await
+        .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with ImmediateReturn: {:?}", digest, e));
+
+    Ok(())
+}
+
+/// Test a validator node does not have quorum driver
+#[tokio::test]
+async fn test_validator_node_has_no_quorum_driver() {
+    let configs = test_and_configure_authority_configs(1);
+    let validator_config = &configs.validator_configs()[0];
+    let node = SuiNode::start(validator_config).await.unwrap();
+    assert!(node.quorum_driver().is_none());
+    assert!(node.subscribe_to_quorum_driver_effects().is_err());
 }

@@ -51,7 +51,7 @@ pub fn generate_gas_objects_with_owner(count: usize, owner: SuiAddress) -> Vec<O
         .collect()
 }
 
-/// Make a few test gas objects with a specific owners.
+/// Make a few test gas objects with specific owners.
 pub fn test_gas_objects_with_owners<O>(owners: O) -> Vec<Object>
 where
     O: IntoIterator<Item = SuiAddress>,
