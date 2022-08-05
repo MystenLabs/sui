@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SignatureScheme } from '../cryptography/publickey';
 import {
   GetObjectDataResponse,
   SuiObjectInfo,
@@ -65,11 +66,11 @@ export abstract class Provider {
 
   abstract executeTransaction(
     txnBytes: string,
-    flag: string,
+    signatureScheme: SignatureScheme,
     signature: string,
     pubkey: string
   ): Promise<TransactionResponse>;
 
-  abstract syncAccountState(address: string): Promise<any>
+  abstract syncAccountState(address: string): Promise<any>;
   // TODO: add more interface methods
 }

@@ -62,7 +62,7 @@ export abstract class SignerWithProvider implements Signer {
     const sig = await this.signData(txBytes);
     return await this.provider.executeTransaction(
       txBytes.toString(),
-      sig.flag.toString(),
+      sig.signatureScheme,
       sig.signature.toString(),
       sig.pubKey.toString()
     );
@@ -147,9 +147,7 @@ export abstract class SignerWithProvider implements Signer {
     return await this.signAndExecuteTransaction(txBytes);
   }
 
-  async publish(
-    transaction: PublishTransaction
-  ): Promise<TransactionResponse> {
+  async publish(transaction: PublishTransaction): Promise<TransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPublish(
       signerAddress,

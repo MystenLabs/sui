@@ -224,7 +224,7 @@ impl SuiClient {
         Ok(match &self {
             Self::Http(c) => {
                 let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
-                let flag = Base64::from_bytes(&[tx.tx_signature.flag_byte()]);
+                let flag = tx.tx_signature.scheme();
                 let signature = Base64::from_bytes(tx.tx_signature.signature_bytes());
                 let pub_key = Base64::from_bytes(tx.tx_signature.public_key_bytes());
                 c.execute_transaction(tx_bytes, flag, signature, pub_key)
@@ -232,7 +232,7 @@ impl SuiClient {
             }
             Self::Ws(c) => {
                 let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
-                let flag = Base64::from_bytes(&[tx.tx_signature.flag_byte()]);
+                let flag = tx.tx_signature.scheme();
                 let signature = Base64::from_bytes(tx.tx_signature.signature_bytes());
                 let pub_key = Base64::from_bytes(tx.tx_signature.public_key_bytes());
                 c.execute_transaction(tx_bytes, flag, signature, pub_key)

@@ -169,7 +169,7 @@ impl RpcExampleProvider {
                 "Execute an object transfer transaction",
                 vec![
                     ("tx_bytes", json!(tx_bytes.tx_bytes)),
-                    ("flag", json!(Base64::from_bytes(&[signature.flag_byte()]))),
+                    ("sig_scheme", json!(signature.scheme())),
                     (
                         "signature",
                         json!(Base64::from_bytes(signature.signature_bytes())),

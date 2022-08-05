@@ -59,12 +59,12 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let signature = keystore.sign(address, &tx_bytes)?;
 
     let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let flag_bytes = Base64::from_bytes(&[signature.flag_byte()]);
+    let sig_scheme = signature.scheme();
     let signature_bytes = Base64::from_bytes(signature.signature_bytes());
     let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
     let tx_response: TransactionResponse = http_client
-        .execute_transaction(tx_bytes, flag_bytes, signature_bytes, pub_key)
+        .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
         .await?;
 
     let effect = tx_response.to_effect_response()?.effects;
@@ -100,12 +100,12 @@ async fn test_publish() -> Result<(), anyhow::Error> {
     let signature = keystore.sign(address, &tx_bytes)?;
 
     let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let flag_bytes = Base64::from_bytes(&[signature.flag_byte()]);
+    let sig_scheme = signature.scheme();
     let signature_bytes = Base64::from_bytes(signature.signature_bytes());
     let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
     let tx_response: TransactionResponse = http_client
-        .execute_transaction(tx_bytes, flag_bytes, signature_bytes, pub_key)
+        .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
         .await?;
 
     let response = tx_response.to_publish_response()?;
@@ -150,12 +150,12 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let signature = keystore.sign(address, &tx_bytes)?;
 
     let tx_bytes = Base64::from_bytes(&tx_bytes);
-    let flag_bytes = Base64::from_bytes(&[signature.flag_byte()]);
+    let sig_scheme = signature.scheme();
     let signature_bytes = Base64::from_bytes(signature.signature_bytes());
     let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
     let tx_response: TransactionResponse = http_client
-        .execute_transaction(tx_bytes, flag_bytes, signature_bytes, pub_key)
+        .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
         .await?;
 
     let effect = tx_response.to_effect_response()?.effects;
@@ -204,12 +204,12 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let signature = keystore.sign(address, &tx_bytes)?;
 
         let tx_bytes = Base64::from_bytes(&tx_bytes);
-        let flag_bytes = Base64::from_bytes(&[signature.flag_byte()]);
+        let sig_scheme = signature.scheme();
         let signature_bytes = Base64::from_bytes(signature.signature_bytes());
         let pub_key = Base64::from_bytes(signature.public_key_bytes());
 
         let response: TransactionResponse = http_client
-            .execute_transaction(tx_bytes, flag_bytes, signature_bytes, pub_key)
+            .execute_transaction(tx_bytes, sig_scheme, signature_bytes, pub_key)
             .await?;
 
         if let TransactionResponse::EffectResponse(effects) = response {

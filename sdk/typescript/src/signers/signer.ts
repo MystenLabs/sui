@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { PublicKey } from '../cryptography/publickey';
+import { PublicKey, SignatureScheme } from '../cryptography/publickey';
 import { Base64DataBuffer } from '../serialization/base64';
 
 ///////////////////////////////
@@ -11,7 +11,7 @@ import { Base64DataBuffer } from '../serialization/base64';
  * Pair of signature and corresponding public key
  */
 export type SignaturePubkeyPair = {
-  flag: Base64DataBuffer;
+  signatureScheme: SignatureScheme;
   signature: Base64DataBuffer;
   pubKey: PublicKey;
 };
