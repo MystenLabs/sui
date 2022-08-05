@@ -1,0 +1,181 @@
+@use '_utils';
+@use '_values/colors';
+
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    overflow-x: visible;
+    height: 100%;
+}
+
+.content {
+    margin-top: 20px;
+}
+
+.shadow {
+    box-shadow: 0 0 44px rgb(0 0 0 / 15%);
+}
+
+.arrow-action-icon {
+    font-size: 10px;
+    color: #adcadd;
+    margin-left: 12px;
+    font-weight: 300;
+}
+
+.send-nft {
+    margin-top: 20px;
+}
+
+.group {
+    display: flex;
+    width: 100%;
+
+    .input-group-append,
+    .textarea {
+        padding: 5px 12px;
+        border: 1px solid colors.$gray-50;
+        box-shadow: 0 1px 2px #1018280d;
+        border-radius: 10px;
+    }
+
+    .textarea {
+        width: 90%;
+        border-top-right-radius: 0;
+        border-bottom-right-radius: 0;
+
+        .input {
+            width: 100%;
+            border: 0;
+            resize: none;
+            padding: 5px 0;
+            vertical-align: bottom;
+            height: 40px;
+
+            &::placeholder {
+                color: colors.$gray-65;
+                line-height: 200%;
+            }
+        }
+    }
+
+    .input-group-append {
+        padding: 0 10px;
+        border-top-left-radius: 0;
+        border-bottom-left-radius: 0;
+        border-left: 0;
+        background-color: colors.$gray-40;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .qr-code {
+        background-image: url('_assets/images/qr-code.svg');
+        padding: 0 18px;
+        background-repeat: no-repeat;
+        background-position: center;
+    }
+
+    &.invalid-addr {
+        .input-group-append,
+        .textarea {
+            border-color: colors.$error;
+        }
+    }
+
+    .change-addr-icon {
+        cursor: pointer;
+
+        &::before {
+            font-size: 16px;
+            color: colors.$gray-75;
+        }
+    }
+}
+
+.label-info {
+    text-align: center;
+    width: 90%;
+    color: colors.$gray-80;
+    margin: auto;
+    margin-bottom: 10px;
+}
+
+.valid-address {
+    position: absolute;
+    margin-top: 67px;
+    margin-right: 24vw;
+    right: 0;
+
+    i {
+        color: colors.$success;
+        font-size: 8px;
+    }
+}
+
+.error {
+    background-color: colors.$error-light;
+    color: colors.$error;
+    padding: 5px;
+    margin-top: 10px;
+    border-radius: 6px;
+    padding-left: 30px;
+
+    &::before {
+        content: '';
+        background-image: url('_assets/images/Info.svg');
+        margin-right: 5px;
+        background-repeat: no-repeat;
+        background-position: center;
+        position: absolute;
+        height: 16px;
+        width: 16px;
+        margin-left: -20px;
+    }
+}
+
+.muted {
+    font-size: 12px;
+    font-weight: 400;
+    color: #666;
+    margin-top: 1px;
+}
+
+.formcta {
+    display: flex;
+    flex-flow: row nowrap;
+    height: 76px;
+    position: absolute;
+    bottom: 0;
+    width: 100%;
+    align-items: center;
+    justify-content: stretch;
+    padding: 5px 25px;
+    left: 0;
+
+    .action,
+    .done {
+        width: 100%;
+    }
+
+    .done {
+        @include utils.typography('table/text-lg');
+
+        background-color: colors.$gray-45;
+        border-radius: 10px;
+        display: flex;
+        justify-content: center;
+    }
+}
+
+.nft-response {
+    margin-top: 20px;
+
+    .checkmark {
+        margin-right: 10px;
+        font-size: 10px;
+        color: colors.$gray-65;
+        font-weight: 300;
+    }
+}

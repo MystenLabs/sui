@@ -7,10 +7,15 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_package::BuildConfig;
 use std::path::PathBuf;
+use sui::client_commands::WalletContext;
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
+use sui_json_rpc_types::SuiObjectInfo;
+use sui_sdk::crypto::Keystore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::crypto::{AccountKeyPair, KeypairTraits};
+use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, KeypairTraits};
+use sui_types::gas_coin::GasCoin;
 use sui_types::messages::CallArg;
 use sui_types::messages::{
     CertifiedTransaction, ObjectArg, SignatureAggregator, SignedTransaction, Transaction,
@@ -18,23 +23,103 @@ use sui_types::messages::{
 };
 use sui_types::object::Object;
 use sui_types::{base_types::SuiAddress, crypto::Signature};
-
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 10_000;
 
-/// Make a few different single-writer test transactions owned by specific addresses.
-pub fn test_transactions<K>(keys: K) -> (Vec<Transaction>, Vec<Object>)
-where
-    K: Iterator<Item = AccountKeyPair>,
-{
-    // The key pair of the recipient of the transaction.
-    let (recipient, _) = test_account_keys().pop().unwrap();
+/// A helper function to get all accounts and their owned GasCoin
+/// with a WalletContext
+pub async fn get_account_and_gas_coins(
+    context: &mut WalletContext,
+) -> Result<Vec<(SuiAddress, Vec<GasCoin>)>, anyhow::Error> {
+    let mut res = Vec::with_capacity(context.config.accounts.len());
+    let accounts = context.config.accounts.clone();
+    for address in accounts {
+        let result = SuiClientCommands::Gas {
+            address: Some(address),
+        }
+        .execute(context)
+        .await?;
+        if let SuiClientCommandResult::Gas(coins) = result {
+            res.push((address, coins))
+        } else {
+            panic!(
+                "Failed to get owned objects result for address {address}: {:?}",
+                result
+            )
+        }
+    }
+    Ok(res)
+}
 
-    // The gas objects and the objects used in the transfer transactions. Ever two
+/// A helper function to get all accounts and their owned objects
+/// with a WalletContext.
+pub async fn get_account_and_objects(
+    context: &WalletContext,
+) -> Vec<(SuiAddress, Vec<SuiObjectInfo>)> {
+    let owned_gas_objects = futures::future::join_all(
+        context
+            .config
+            .accounts
+            .iter()
+            .map(|account| context.gateway.get_objects_owned_by_address(*account)),
+    )
+    .await;
+    context
+        .config
+        .accounts
+        .iter()
+        .zip(owned_gas_objects.into_iter())
+        .map(|(address, objects)| (*address, objects.unwrap()))
+        .collect::<Vec<_>>()
+}
+
+/// A helper function to make Transactions with controlled accounts in WalletContext.
+/// However, if this function is called multiple times without any "sync" actions
+/// on gas object management, txns may fail and objects may be locked.
+///
+/// The param is called `max_txn_num` because it does not always return the exact
+/// same amount of Transactions, for example when there are not enough gas objects
+/// controlled by the WalletContext. Caller should rely on the return value to
+/// check the count.
+pub async fn make_transactions_with_wallet_context(
+    context: &mut WalletContext,
+    max_txn_num: usize,
+) -> Vec<Transaction> {
+    let recipient = get_key_pair::<AuthorityKeyPair>().0;
+    let accounts_and_objs = get_account_and_objects(context).await;
+    let mut res = Vec::with_capacity(max_txn_num);
+    for (address, objs) in &accounts_and_objs {
+        for obj in objs {
+            if res.len() >= max_txn_num {
+                return res;
+            }
+            let data = TransactionData::new_transfer_sui(
+                recipient,
+                *address,
+                Some(2),
+                obj.to_object_ref(),
+                MAX_GAS,
+            );
+            let sig = context.keystore.sign(address, &data.to_bytes()).unwrap();
+
+            res.push(Transaction::new(data, sig));
+        }
+    }
+    res
+}
+
+/// Make a few different single-writer test transactions owned by specific addresses.
+pub fn make_transactions_with_pre_genesis_objects(
+    keys: &dyn Keystore,
+) -> (Vec<Transaction>, Vec<Object>) {
+    // The key pair of the recipient of the transaction.
+    let recipient = get_key_pair::<AuthorityKeyPair>().0;
+
+    // The gas objects and the objects used in the transfer transactions. Evert two
     // consecutive objects must have the same owner for the transaction to be valid.
     let mut addresses_two_by_two = Vec::new();
     let mut keypairs = Vec::new(); // Keys are not copiable, move them here.
-    for keypair in keys {
+    for keypair in keys.key_pairs() {
         let address = keypair.public().into();
         addresses_two_by_two.push(address);
         addresses_two_by_two.push(address);
@@ -57,7 +142,7 @@ where
             /* gas_object_ref */ o2.compute_object_reference(),
             MAX_GAS,
         );
-        let signature = Signature::new(&data, &keypair);
+        let signature = Signature::new(&data, keypair);
         transactions.push(Transaction::new(data, signature));
     }
     (transactions, gas_objects)

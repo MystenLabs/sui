@@ -6,24 +6,23 @@ use crate::authority::AuthorityState;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use mysten_network::config::Config;
+use narwhal_crypto::traits::ToFromBytes;
+use std::collections::BTreeMap;
 use std::sync::Arc;
-
+use sui_config::genesis::Genesis;
 use sui_network::{api::ValidatorClient, tonic};
-use sui_types::{error::SuiError, messages::*};
-
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::{error::SuiError, messages::*};
 
 #[cfg(test)]
 use sui_types::{
-    base_types::ObjectID,
-    committee::Committee,
-    crypto::{AuthorityKeyPair, AuthorityPublicKeyBytes},
-    object::Object,
+    base_types::ObjectID, committee::Committee, crypto::AuthorityKeyPair, object::Object,
 };
 
 use crate::epoch::reconfiguration::Reconfigurable;
-#[cfg(test)]
-use sui_config::genesis::Genesis;
 use sui_network::tonic::transport::Channel;
 
 #[async_trait]
@@ -205,6 +204,35 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
     }
+}
+
+pub fn make_network_authority_client_sets_from_system_state(
+    sui_system_state: &SuiSystemState,
+    network_config: &Config,
+) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+    let mut authority_clients = BTreeMap::new();
+    for validator in &sui_system_state.validators.active_validators {
+        let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
+        let channel = network_config.connect_lazy(&address)?;
+        let client = NetworkAuthorityClient::new(channel);
+        let name: &[u8] = &validator.metadata.name;
+        let public_key_bytes = AuthorityPublicKeyBytes::from_bytes(name)?;
+        authority_clients.insert(public_key_bytes, client);
+    }
+    Ok(authority_clients)
+}
+
+pub fn make_network_authority_client_sets_from_genesis(
+    genesis: &Genesis,
+    network_config: &Config,
+) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+    let mut authority_clients = BTreeMap::new();
+    for validator in genesis.validator_set() {
+        let channel = network_config.connect_lazy(validator.network_address())?;
+        let client = NetworkAuthorityClient::new(channel);
+        authority_clients.insert(validator.public_key(), client);
+    }
+    Ok(authority_clients)
 }
 
 #[derive(Clone, Copy, Default)]

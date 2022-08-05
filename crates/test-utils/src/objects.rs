@@ -17,11 +17,17 @@ pub fn test_gas_objects() -> Vec<Object> {
         .collect()
 }
 
-/// Make a few test gas objects (all with the same owner).
+/// Make a test gas objects.
 pub fn generate_gas_object() -> Object {
     let gas_object_id = ObjectID::random();
     let (owner, _) = test_account_keys().pop().unwrap();
     Object::with_id_owner_for_testing(gas_object_id, owner)
+}
+
+pub fn generate_gas_object_with_balance(balance: u64) -> Object {
+    let gas_object_id = ObjectID::random();
+    let (owner, _) = test_account_keys().pop().unwrap();
+    Object::with_id_owner_gas_for_testing(gas_object_id, owner, balance)
 }
 
 /// Make a few test gas objects (all with the same owner).
@@ -45,7 +51,7 @@ pub fn generate_gas_objects_with_owner(count: usize, owner: SuiAddress) -> Vec<O
         .collect()
 }
 
-/// Make a few test gas objects with a specific owners.
+/// Make a few test gas objects with specific owners.
 pub fn test_gas_objects_with_owners<O>(owners: O) -> Vec<Object>
 where
     O: IntoIterator<Item = SuiAddress>,

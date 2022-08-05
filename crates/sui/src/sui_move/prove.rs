@@ -5,6 +5,7 @@ use clap::Parser;
 use move_cli::base::{self, prove};
 use move_package::BuildConfig;
 use std::path::{Path, PathBuf};
+use sui_types::sui_framework_address_concat_string;
 
 const SUI_NATIVE_TEMPLATE: &[u8] = include_bytes!("sui-natives.bpl");
 
@@ -42,11 +43,17 @@ impl Prove {
                     template_bytes: SUI_NATIVE_TEMPLATE.to_vec(),
                     module_instance_names: vec![
                         (
-                            "0x2::transfer".to_string(),
+                            sui_framework_address_concat_string("::transfer"),
                             "transfer_instances".to_string(),
                         ),
-                        ("0x2::object".to_string(), "object_instances".to_string()),
-                        ("0x2::event".to_string(), "sui_event_instances".to_string()),
+                        (
+                            sui_framework_address_concat_string("::object"),
+                            "object_instances".to_string(),
+                        ),
+                        (
+                            sui_framework_address_concat_string("::event"),
+                            "sui_event_instances".to_string(),
+                        ),
                     ],
                 });
         }

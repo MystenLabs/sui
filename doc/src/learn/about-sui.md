@@ -6,11 +6,13 @@ Sui is the first permissionless Layer 1 blockchain designed from the ground up t
 
 ## What Sui is
 
-Sui is a smart contract platform maintained by a permissionless set of validators that play a role similar to validators or miners in other blockchain systems.
+Sui is a [smart contract](sui-glossary.md#smart-contract) platform maintained by a permissionless set of [validators](sui-glossary.md#validator) that play a role similar to validators or miners in other blockchain systems.
 
-Sui offers scalability and unprecedented low-latency for simple use cases. Sui makes the vast majority of transactions processable in parallel, which makes better use of processing resources, and offers the option to increase throughput with more resources. Sui forgoes consensus to instead use simpler and lower-latency primitives for simple use cases, such as payment transactions and assets transfer. This is unprecedented in the blockchain world and enables a number of new latency-sensitive distributed applications, ranging from gaming to retail payment at physical points of sale.
+Sui offers scalability and unprecedented low-latency for simple use cases. Sui makes most transactions processable in parallel. This better utilizes processing resources and offers the option to increase throughput by adding more resources. Sui forgoes consensus to instead use simpler and lower-latency primitives for simple use cases, such as payment transactions and assets transfer. This is unprecedented in the blockchain world and enables a number of new latency-sensitive distributed applications ranging from gaming to retail payment at physical points of sale.
 
-Sui is written in [Rust](https://www.rust-lang.org) and supports smart contracts written in the [Move programming language](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) to define assets that may have an owner. Move programs define operations on these assets including custom rules for their creation, the transfer of these assets to new owners, and operations that mutate assets.
+Sui is written in [Rust](https://www.rust-lang.org) and supports smart contracts written in the [Move programming language](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) to define assets that may have an owner. Move programs define operations on these assets, including: custom rules for their creation, the transfer of these assets to new owners, and operations that mutate assets. To learn about the differences between core Move and Sui move, see [How Sui Move differs from Core Move](../learn/sui-move-diffs.md).
+
+### Sui tokens and validators
 
 Sui has a native token called SUI, with a fixed supply. The SUI token is used to pay for gas, and is also used as [delegated stake on validators](https://learn.bybit.com/blockchain/delegated-proof-of-stake-dpos/) within an epoch. The voting power of validators within this epoch is a function of this delegated stake. Validators are periodically reconfigured according to the stake delegated to them. In any epoch the set of validators is [Byzantine fault tolerant](https://pmg.csail.mit.edu/papers/osdi99.pdf). At the end of the epoch, fees collected through all transactions processed are distributed to validators according to their contribution to the operation of the system. Validators can in turn share some of the fees as rewards to users that delegated stake to them.
 
@@ -18,7 +20,7 @@ Sui is backed by a number of state-of-the-art [peer-reviewed works](../contribut
 
 ### Transactions
 
-A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-owner, single-address objects, such as minting an NFT or transferring it or another token. These transactions may bypass the consensus protocol in Sui.
+A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-owner, single-address objects, such as minting an NFT or transferring an NFT or a different token. These *simple transactions* may bypass the consensus protocol in Sui.
 
 More *complex transactions* affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, go through the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
 
@@ -26,11 +28,11 @@ More *complex transactions* affecting objects that are shared or owned by multip
 
 Sui scales horizontally with no upper bound to meet application demand while maintaining extremely low operating costs per transaction. Its system design breakthrough eliminates a critical bottleneck in existing blockchains: the need to achieve global consensus on a total-ordered list of transactions. This computation is wasteful given many transactions are not contending for the same resource against other transactions.
 
-Sui takes a significant leap in scalability by enabling parallel agreement on causally independent transactions. Sui validators commit such transactions using Byzantine Consistent Broadcast, eliminating global consensus's overhead without sacrificing safety and liveness guarantees.
+Sui takes a significant leap in scalability by enabling parallel agreement on causally independent transactions. Sui validators commit such transactions using Byzantine Consistent Broadcast, eliminating the overhead of global consensus without sacrificing safety and liveness guarantees.
 
-This breakthrough is possible only with Sui's novel data model. Thanks to its object-centric view and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on and executes transactions on many objects in parallel, while a minority of transactions that affect shared state are ordered via Byzantine Fault Tolerant consensus and executed in parallel.
+This breakthrough is possible only with Sui's novel data model. Thanks to its object-centric view, and Move’s strong ownership types, dependencies are explicitly encoded. As a result, Sui both agrees on, and executes transactions on many objects in parallel. Meanwhile, transactions that affect shared state are ordered via Byzantine Fault Tolerant consensus and executed in parallel.
 
-### Highlights
+### Sui highlights
 
 * Unmatched scalability, instant settlement
 * A safe smart contract language accessible to mainstream developers
@@ -42,7 +44,7 @@ Sui is the only blockchain today that can scale with the growth of web3 while ac
 
 ## Unparalleled scalability, immediate settlement
 
-Today, users of existing blockchains pay a considerable tax as network usage increases due to limited throughput. In addition, high latency limits the responsiveness of applications. These factors contribute to the bad user experiences that are all too common in web3:
+Today, users of existing blockchains pay a considerable tax as network usage increases due to limited throughput. In addition, high latency limits the responsiveness of applications. These factors contribute to the poor user experiences that are all too common in web3:
 
 * Games are slow and prohibitively expensive to play
 * Investors lose funds when they can’t liquidate undercollateralized loans in Decentralized Finance (DeFi)
@@ -55,7 +57,7 @@ By design, Sui validators (nodes) can effectively scale the network throughput i
 
 > **Note:** As of Mar. 19, 2022, an unoptimized single-worker Sui validator running on an 8-core M1 Macbook Pro can execute and commit 120,000 token transfer transactions per second (TPS). Throughput scales linearly with the number of cores–the same machine processes 25,000 TPS in a single core configuration.
 
-This experiment uses a configuration where each client submits a batch of 100 transactions (i.e., transfers to 100 distinct recipients) with a single signature. This configuration captures the anticipated usage pattern of a highly scalable blockchain--e.g., a custodial wallet or game server operating at scale will likely need to submit hundreds or thousands of on-chain transactions per second. With a batch size of 1, a validator running on the same machine can process 20,000 TPS with 8 cores, and exhibits the same linear growth in throughput as more cores are added.
+This experiment uses a configuration where each client submits a batch of 100 transactions (such as transfers to 100 distinct recipients) with a single signature. This configuration captures the anticipated usage pattern of a highly scalable blockchain--for example, a custodial wallet or game server operating at scale will likely need to submit hundreds or thousands of on-chain transactions per second. With a batch size of 1, a validator running on the same machine can process 20,000 TPS with 8 cores, and exhibits the same linear growth in throughput as more cores are added.
 
 We will publish a full performance report for optimized Sui networks in a variety of configurations when our testnet is released.
 

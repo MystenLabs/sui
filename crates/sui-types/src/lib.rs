@@ -54,3 +54,7 @@ const fn get_hex_address_two() -> AccountAddress {
     addr[AccountAddress::LENGTH - 1] = 2u8;
     AccountAddress::new(addr)
 }
+
+pub fn sui_framework_address_concat_string(suffix: &str) -> String {
+    format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
+}

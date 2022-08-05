@@ -21,7 +21,7 @@
 }
 
 .back-icon {
-    color: colors.$gray-60;
+    color: colors.$gray-70;
     margin-right: 6px;
 }
 
@@ -45,5 +45,10 @@
         left: 50%;
         transform: translateX(-50%);
         font-size: 16px;
+    }
+
+    .stats {
+        font-size: 14px;
+        color: colors.$gray-80;
     }
 }
