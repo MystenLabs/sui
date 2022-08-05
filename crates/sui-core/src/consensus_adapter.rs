@@ -89,49 +89,49 @@ impl ConsensusAdapterMetrics {
         Some(Arc::new(ConsensusAdapterMetrics {
             sequencing_certificate_attempt: register_int_counter_with_registry!(
                 "sequencing_certificate_attempt",
-                "TODO",
+                "Counts the number of certifiates the validator attempts to sequence.",
                 registry,
             )
             .unwrap(),
             sequencing_certificate_success: register_int_counter_with_registry!(
                 "sequencing_certificate_success",
-                "TODO",
+                "Counts the number of successfully sequenced certificates.",
                 registry,
             )
             .unwrap(),
             sequencing_certificate_timeouts: register_int_counter_with_registry!(
                 "sequencing_certificate_timeouts",
-                "TODO",
+                "Counts the number of sequenced certificates that timed out.",
                 registry,
             )
             .unwrap(),
             sequencing_certificate_control_delay: register_int_gauge_with_registry!(
                 "sequencing_certificate_control_delay",
-                "Current number of concurrent follower connections",
+                "The estimated latency for the certificate sequencer.",
                 registry,
             )
             .unwrap(),
             sequencing_fragment_attempt: register_int_counter_with_registry!(
                 "sequencing_fragment_attempt",
-                "TODO",
+                "Counts the number of sequenced fragments submitted.",
                 registry,
             )
             .unwrap(),
             sequencing_fragment_success: register_int_counter_with_registry!(
                 "sequencing_fragment_success",
-                "TODO",
+                "Counts the number of successfully sequenced fragments.",
                 registry,
             )
             .unwrap(),
             sequencing_fragment_timeouts: register_int_counter_with_registry!(
                 "sequencing_fragment_timeouts",
-                "TODO",
+                "Counts the number of sequenced fragments that timed out.",
                 registry,
             )
             .unwrap(),
             sequencing_fragment_control_delay: register_int_gauge_with_registry!(
                 "sequencing_fragment_control_delay",
-                "Current number of concurrent follower connections",
+                "The estimated latency of sequencing fragments.",
                 registry,
             )
             .unwrap(),
