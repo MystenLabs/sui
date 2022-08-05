@@ -31,7 +31,6 @@
         "typescript": "^4.5.5"
     },
     "dependencies": {
-        "@faker-js/faker": "^7.3.0",
         "@mysten/sui.js": "file:../../sdk/typescript",
         "@sentry/react": "^7.6.0",
         "@sentry/tracing": "^7.6.0",
