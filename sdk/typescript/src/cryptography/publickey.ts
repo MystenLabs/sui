@@ -27,6 +27,13 @@ export type PublicKeyData = {
 export const PUBLIC_KEY_SIZE = 32;
 export const TYPE_BYTE = 0x00;
 
+export type SignatureScheme = 'ED25519' | 'Secp256k1';
+
+const SIGNATURE_SCHEME_TO_FLAG = {
+  ED25519: 0x00,
+  Secp256k1: 0x01,
+};
+
 function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
   return (value as PublicKeyData)._bn !== undefined;
 }
@@ -108,9 +115,9 @@ export class PublicKey {
   /**
    * Return the Sui address associated with this public key
    */
-  toSuiAddress(): string {
+  toSuiAddress(scheme: SignatureScheme = 'ED25519'): string {
     let tmp = new Uint8Array(PUBLIC_KEY_SIZE + 1);
-    tmp.set([TYPE_BYTE]);
+    tmp.set([SIGNATURE_SCHEME_TO_FLAG[scheme]]);
     tmp.set(this.toBytes(), 1);
     const hexHash = sha3_256(tmp);
     const publicKeyBytes = new BN(hexHash, 16).toArray(undefined, 32);

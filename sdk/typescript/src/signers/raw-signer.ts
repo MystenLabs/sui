@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Ed25519Keypair } from '../cryptography/ed25519-keypair';
-import { TYPE_BYTE } from '../cryptography/publickey';
 import { Provider } from '../providers/provider';
 import { Base64DataBuffer } from '../serialization/base64';
 import { SuiAddress } from '../types';
@@ -28,7 +27,7 @@ export class RawSigner extends SignerWithProvider {
 
   async signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
     return {
-      flag: new Base64DataBuffer(new Uint8Array([TYPE_BYTE])),
+      signatureScheme: 'ED25519',
       signature: this.keypair.signData(data),
       pubKey: this.keypair.getPublicKey(),
     };

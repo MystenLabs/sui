@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SignatureScheme } from '../cryptography/publickey';
 import {
   CertifiedTransaction,
   TransactionDigest,
@@ -42,7 +43,7 @@ export class VoidProvider extends Provider {
 
   async executeTransaction(
     _txnBytes: string,
-    _flag: string,
+    _signatureScheme: SignatureScheme,
     _signature: string,
     _pubkey: string
   ): Promise<TransactionResponse> {
