@@ -16,6 +16,9 @@ use tracing::instrument;
 use self::{iter::Iter, keys::Keys, values::Values};
 pub use errors::TypedStoreError;
 
+// The default bytes limit on total memtable size per RocksDB.
+const DB_WRITE_BUFFER_SIZE: usize = 512 * 1024 * 1024;
+
 #[cfg(test)]
 mod tests;
 
@@ -316,7 +319,7 @@ where
     fn clear(&self) -> Result<(), TypedStoreError> {
         let _ = self.rocksdb.drop_cf(&self.cf);
         self.rocksdb
-            .create_cf(self.cf.clone(), &rocksdb::Options::default())?;
+            .create_cf(self.cf.clone(), &default_rocksdb_options())?;
         Ok(())
     }
 
@@ -427,6 +430,14 @@ where
     }
 }
 
+/// Creates a default Rocksdb option.
+pub fn default_rocksdb_options() -> rocksdb::Options {
+    let mut opt = rocksdb::Options::default();
+    // Limit the total memtable usage per db.
+    opt.set_db_write_buffer_size(DB_WRITE_BUFFER_SIZE);
+    opt
+}
+
 /// Opens a database with options, and a number of column families that are created if they do not exist.
 #[instrument(level="debug", skip_all, fields(path = ?path.as_ref(), cf = ?opt_cfs), err)]
 pub fn open_cf<P: AsRef<Path>>(
@@ -434,7 +445,7 @@ pub fn open_cf<P: AsRef<Path>>(
     db_options: Option<rocksdb::Options>,
     opt_cfs: &[&str],
 ) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
-    let options = db_options.unwrap_or_default();
+    let options = db_options.unwrap_or_else(default_rocksdb_options);
     let column_descriptors: Vec<_> = opt_cfs.iter().map(|name| (*name, &options)).collect();
     open_cf_opts(path, Some(options.clone()), &column_descriptors[..])
 }
@@ -447,14 +458,14 @@ pub fn open_cf_opts<P: AsRef<Path>>(
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
     // Customize database options
-    let mut options = db_options.unwrap_or_default();
+    let mut options = db_options.unwrap_or_else(default_rocksdb_options);
 
     let mut opt_cfs: std::collections::HashMap<_, _> = opt_cfs.iter().cloned().collect();
     let cfs = rocksdb::DBWithThreadMode::<MultiThreaded>::list_cf(&options, &path)
         .ok()
         .unwrap_or_default();
 
-    let default_rocksdb_options = rocksdb::Options::default();
+    let default_rocksdb_options = default_rocksdb_options();
     // Add CFs not explicitly listed
     for cf_key in cfs.iter() {
         if !opt_cfs.contains_key(&cf_key[..]) {
@@ -488,7 +499,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
     opt_cfs: &[(&str, &rocksdb::Options)],
 ) -> Result<Arc<rocksdb::DBWithThreadMode<MultiThreaded>>, TypedStoreError> {
     // Customize database options
-    let mut options = db_options.unwrap_or_default();
+    let mut options = db_options.unwrap_or_else(default_rocksdb_options);
 
     fdlimit::raise_fd_limit();
     // This is a requirement by RocksDB when opening as secondary
@@ -499,7 +510,7 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
         .ok()
         .unwrap_or_default();
 
-    let default_rocksdb_options = rocksdb::Options::default();
+    let default_rocksdb_options = default_rocksdb_options();
     // Add CFs not explicitly listed
     for cf_key in cfs.iter() {
         if !opt_cfs.contains_key(&cf_key[..]) {
