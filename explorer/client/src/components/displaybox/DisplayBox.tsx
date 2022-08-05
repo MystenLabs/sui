@@ -76,6 +76,8 @@ function DisplayBox({
     const handleImageClick = useCallback(() => {
         setHasClickedImage((prevHasClicked) => !prevHasClicked);
         setFadeEffect(true);
+        // If changing the animation duration here do
+        // not forget to change the duration in the CSS class .fade
         setTimeout(() => setFadeEffect(false), 300);
     }, []);
 
