@@ -64,7 +64,7 @@ rand = "0.7.3"
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 
 serde-reflection = "0.3.6"
-serde_yaml = "0.8.26"
+serde_yaml = "0.9.4"
 pretty_assertions = "1.2.1"
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 
