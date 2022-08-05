@@ -72,9 +72,7 @@ function TxResponseCard({
 
                     {gasFee && (
                         <div className={st.txFees}>
-                            <div className={st.txInfoLabel}>
-                                Gas Fee
-                            </div>
+                            <div className={st.txInfoLabel}>Gas Fee</div>
                             <div className={st.walletInfoValue}>
                                 {gasFee} {GAS_SYMBOL}
                             </div>
