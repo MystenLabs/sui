@@ -73,6 +73,7 @@ impl TicTacToe {
         // Create a move call transaction using the TransactionBuilder API.
         let create_game_call = self
             .client
+            .transaction_builder()
             .move_call(
                 player_x,
                 self.game_package_id,
@@ -161,6 +162,7 @@ impl TicTacToe {
             // Create a move call transaction using the TransactionBuilder API.
             let place_mark_call = self
                 .client
+                .transaction_builder()
                 .move_call(
                     my_identity,
                     self.game_package_id,
@@ -222,7 +224,7 @@ impl TicTacToe {
     // Retrieve the latest game state from the server.
     async fn fetch_game_state(&self, game_id: ObjectID) -> Result<TicTacToeState, anyhow::Error> {
         // Get the raw BCS serialised move object data
-        let current_game = self.client.get_raw_object(game_id).await?;
+        let current_game = self.client.read_api().get_raw_object(game_id).await?;
         let current_game_bytes = current_game
             .object()?
             .data

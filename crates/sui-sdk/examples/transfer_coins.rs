@@ -27,6 +27,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Create a sui transfer transaction
     let transfer_tx = sui
+        .transaction_builder()
         .transfer_sui(my_address, gas_object_id, 1000, recipient, Some(1000))
         .await?;
 

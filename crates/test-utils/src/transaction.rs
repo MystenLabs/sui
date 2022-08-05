@@ -62,6 +62,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
 
         let data = context
             .gateway
+            .transaction_builder()
             .publish(sender, all_module_bytes, None, 50000)
             .await
             .unwrap();
@@ -97,6 +98,7 @@ pub async fn submit_move_transaction(
 
     let data = context
         .gateway
+        .transaction_builder()
         .move_call(
             sender,
             package_ref.0,

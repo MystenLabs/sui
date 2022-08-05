@@ -35,6 +35,7 @@ impl TestCaseImpl for CoinMergeSplitTest {
 
         let data = ctx
             .get_gateway()
+            .transaction_builder()
             .split_coin(
                 signer,
                 *primary_coin.id(),
@@ -132,6 +133,7 @@ impl CoinMergeSplitTest {
     ) {
         let data = ctx
             .get_gateway()
+            .transaction_builder()
             .merge_coins(signer, primary_coin, coin_to_merge, Some(gas_obj_id), 5000)
             .await
             .expect("Failed to get transaction data for coin merge");

@@ -74,6 +74,7 @@ impl ObjectChecker {
 
         let object_id = self.object_id;
         let object_info = client
+            .read_api()
             .get_object(object_id)
             .await
             .or_else(|err| bail!("Failed to get object info (id: {}), err: {err}", object_id))?;
