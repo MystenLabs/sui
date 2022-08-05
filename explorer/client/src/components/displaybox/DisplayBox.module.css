@@ -11,6 +11,21 @@ div.detailsbg {
     @apply fixed top-0 left-0 w-full h-full z-20;
 }
 
+@keyframes fadein {
+    0% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+div.fade {
+    opacity: 0;
+    animation: fadein 0.3s linear forwards;
+}
+
 .modal {
     @apply w-full h-full z-50 fixed left-0 top-0 text-center justify-center flex;
 }

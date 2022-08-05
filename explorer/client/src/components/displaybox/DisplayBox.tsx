@@ -71,8 +71,12 @@ function DisplayBox({
         setHasFailedToLoad(false);
     }, [setHasDisplayLoaded]);
 
+    const [isFadeEffect, setFadeEffect] = useState(false);
+
     const handleImageClick = useCallback(() => {
         setHasClickedImage((prevHasClicked) => !prevHasClicked);
+        setFadeEffect(true);
+        setTimeout(() => setFadeEffect(false), 300);
     }, []);
 
     useEffect(() => {
@@ -129,7 +133,8 @@ function DisplayBox({
             <>
                 {hasClickedImage && (
                     <div
-                        className={styles.modalcontainer}
+                        className={`${styles.modalcontainer} 
+                          ${isFadeEffect ? styles.fade : ''}`}
                         onClick={handleImageClick}
                     >
                         <div className={styles.modal}>
