@@ -154,6 +154,7 @@ async fn submit_transaction_to_consensus() {
 
     let committee = state.clone_committee();
     let state_guard = Arc::new(state);
+    let metrics = ConsensusAdapterMetrics::new_test();
 
     // Make a new consensus submitter instance.
     let submitter = ConsensusAdapter::new(
@@ -161,6 +162,7 @@ async fn submit_transaction_to_consensus() {
         committee,
         tx_consensus_listener,
         /* max_delay */ Duration::from_millis(1_000),
+        metrics,
     );
 
     // Spawn a network listener to receive the transaction (emulating the consensus node).
