@@ -12,7 +12,11 @@ div.detailsbg {
 }
 
 .modal {
-    @apply w-full h-[90%] z-50 fixed left-0 top-[5%] text-center justify-center flex;
+    @apply w-full h-full z-50 fixed left-0 top-0 text-center justify-center flex;
+}
+
+.fig {
+    @apply my-auto;
 }
 
 div.imageandcross {
@@ -28,7 +32,7 @@ img.largeimage {
 span.cross {
     @apply text-offwhite bg-sui-grey-100 z-50 h-[30px] w-[30px] self-start
   flex justify-center items-center rounded-[50px] cursor-pointer  text-2xl
-  absolute  bottom-0 left-0 right-0 mx-auto 
+  absolute  bottom-[60px] left-0 right-0 mx-auto 
   sm:block sm:ml-2 sm:mr-0 sm:static;
 }
 

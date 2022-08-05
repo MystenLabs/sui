@@ -133,7 +133,7 @@ function DisplayBox({
                         onClick={handleImageClick}
                     >
                         <div className={styles.modal}>
-                            <figure>
+                            <figure className={styles.fig}>
                                 <div className={styles.imageandcross}>
                                     <img
                                         id="loadedImage"
