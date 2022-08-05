@@ -275,7 +275,7 @@ Please see our [privacy policy](https://sui.io/policy/) to learn how we handle
 information about our nodes.
 
 ## Resolving errors 
-1. Error 98/99  ![Error 98](https://user-images.githubusercontent.com/86624298/183159157-46971a06-a5c4-4196-80b0-63177a78164d.png) 
+#### Error 98/99
 You should restart your server ```shell $ shutdown -r now  ``` and after that will run Restart your Sui fullnode  ```shell
     $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
     ```
