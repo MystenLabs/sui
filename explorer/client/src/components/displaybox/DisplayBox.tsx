@@ -141,8 +141,10 @@ function DisplayBox({
                                         alt="NFT"
                                         src={transformURL(display)}
                                     />
-                                    <span className={styles.cross}>
-                                        &times;
+                                    <span className={styles.desktopcross}>
+                                        <span className={styles.cross}>
+                                            &times;
+                                        </span>
                                     </span>
                                 </div>
                                 <figcaption>
@@ -155,6 +157,11 @@ function DisplayBox({
                                         {fileType}
                                     </div>
                                 </figcaption>
+                                <div className={styles.mobilecross}>
+                                    <span className={styles.cross}>
+                                        &times;
+                                    </span>
+                                </div>
                             </figure>
                         </div>
                         <div className={styles.detailsbg} />

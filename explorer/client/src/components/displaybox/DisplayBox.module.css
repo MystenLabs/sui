@@ -16,7 +16,7 @@ div.detailsbg {
 }
 
 .fig {
-    @apply my-auto;
+    @apply mt-auto mb-[60px] sm:my-auto;
 }
 
 div.imageandcross {
@@ -30,10 +30,16 @@ img.largeimage {
 }
 
 span.cross {
-    @apply text-offwhite bg-sui-grey-100 z-20 h-[30px] w-[30px] self-start
-  flex justify-center items-center rounded-[50px] cursor-pointer  text-2xl
-  absolute  bottom-[60px] left-0 right-0 mx-auto 
-  sm:block sm:ml-2 sm:mr-0 sm:static;
+    @apply text-offwhite bg-sui-grey-100 z-20 h-[30px] w-[30px] 
+  flex justify-center items-center rounded-[50px] cursor-pointer  text-2xl mx-auto;
+}
+
+span.desktopcross {
+    @apply hidden sm:block sm:ml-2 sm:mr-0;
+}
+
+div.mobilecross {
+    @apply block mx-auto mt-[10vh] sm:hidden;
 }
 
 div.filetype,
