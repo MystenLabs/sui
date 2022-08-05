@@ -48,6 +48,7 @@ validators:
         name:
           - 48
         net_address: []
+        onboarding_epoch: 1
         next_epoch_stake: 1
         next_epoch_delegation: 0
       stake_amount: 1
@@ -99,6 +100,7 @@ validators:
       name:
         - 48
       net_address: []
+      onboarding_epoch: 1
       next_epoch_stake: 1
       next_epoch_delegation: 0
 treasury_cap:

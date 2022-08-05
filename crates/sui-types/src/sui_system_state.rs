@@ -37,6 +37,7 @@ pub struct ValidatorMetadata {
     pub pubkey_bytes: Vec<u8>,
     pub name: Vec<u8>,
     pub net_address: Vec<u8>,
+    pub onboarding_epoch: u64,
     pub next_epoch_stake: u64,
     pub next_epoch_delegation: u64,
 }

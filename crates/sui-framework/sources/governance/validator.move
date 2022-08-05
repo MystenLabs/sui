@@ -7,7 +7,7 @@ module sui::validator {
 
     use sui::balance::{Self, Balance};
     use sui::sui::SUI;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
     use sui::stake;
     use sui::stake::Stake;
     use sui::epoch_time_lock::EpochTimeLock;
@@ -35,6 +35,8 @@ module sui::validator {
         name: vector<u8>,
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
         net_address: vector<u8>,
+        /// The epoch where the valdiator became active.
+        onboarding_epoch: u64,
         /// Total amount of validator stake that would be active in the next epoch.
         next_epoch_stake: u64,
         /// Total amount of delegated stake that would be active in the next epoch.
@@ -91,6 +93,7 @@ module sui::validator {
                 pubkey_bytes,
                 name,
                 net_address,
+                onboarding_epoch: tx_context::epoch(ctx) + 1,
                 next_epoch_stake: stake_amount,
                 next_epoch_delegation: 0,
             },
@@ -208,6 +211,10 @@ module sui::validator {
 
     public fun pending_withdraw(self: &Validator): u64 {
         self.pending_withdraw
+    }
+
+    public fun onboarding_epoch(self: &Validator): u64 {
+        self.metadata.onboarding_epoch
     }
 
     public fun is_duplicate(self: &Validator, other: &Validator): bool {

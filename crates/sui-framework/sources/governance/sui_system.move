@@ -249,9 +249,7 @@ module sui::sui_system {
         epoch_reward_record: &mut EpochRewardRecord,
         ctx: &mut TxContext,
     ) {
-        let epoch = epoch_reward_record::epoch(epoch_reward_record);
-        let validator = epoch_reward_record::validator(epoch_reward_record);
-        assert!(delegation::can_claim_reward(delegation, epoch, validator), 0);
+        assert!(delegation::can_claim_reward(delegation, epoch_reward_record), 0);
         let reward_amount = epoch_reward_record::claim_reward(
             epoch_reward_record,
             delegation::delegate_amount(delegation),

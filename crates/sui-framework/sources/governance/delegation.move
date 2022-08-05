@@ -11,6 +11,7 @@ module sui::delegation {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use sui::epoch_time_lock::EpochTimeLock;
+    use sui::epoch_reward_record::{Self, EpochRewardRecord};
 
     friend sui::sui_system;
 
@@ -26,6 +27,8 @@ module sui::delegation {
         id: UID,
         /// The delegated stake, if the delegate is still active
         active_delegation: Option<Balance<SUI>>,
+        /// The epoch at which this delegation started.
+        starting_epoch: u64,
         /// If the delegation is inactive, `ending_epoch` will be
         /// set to the ending epoch, i.e. the epoch when the delegation
         /// was withdrawn. Delegator will not be eligible to claim reward
@@ -56,6 +59,7 @@ module sui::delegation {
         let delegation = Delegation {
             id: object::new(ctx),
             active_delegation: option::some(coin::into_balance(stake)),
+            starting_epoch,
             ending_epoch: option::none(),
             delegate_amount,
             next_reward_unclaimed_epoch: starting_epoch,
@@ -76,6 +80,7 @@ module sui::delegation {
         let delegation = Delegation {
             id: object::new(ctx),
             active_delegation: option::some(balance),
+            starting_epoch,
             ending_epoch: option::none(),
             delegate_amount,
             next_reward_unclaimed_epoch: starting_epoch,
@@ -132,6 +137,7 @@ module sui::delegation {
         let new_delegation = Delegation {
             id: object::new(ctx),
             active_delegation: option::some(balance),
+            starting_epoch: current_epoch + 1,
             ending_epoch: option::none(),
             delegate_amount,
             next_reward_unclaimed_epoch: current_epoch + 1,
@@ -161,6 +167,7 @@ module sui::delegation {
         let Delegation {
             id,
             active_delegation,
+            starting_epoch: _,
             ending_epoch,
             delegate_amount: _,
             next_reward_unclaimed_epoch,
@@ -182,14 +189,20 @@ module sui::delegation {
     /// given the epoch to claim and the validator address.
     public fun can_claim_reward(
         self: &Delegation,
-        epoch_to_claim: u64,
-        validator: address,
+        epoch_reward_record: &EpochRewardRecord,
     ): bool {
-        if (validator != self.validator_address || 
-            self.next_reward_unclaimed_epoch > epoch_to_claim) 
+        let validator_address = epoch_reward_record::validator(epoch_reward_record);
+        let validator_onboarding_epoch = epoch_reward_record::validator_onboarding_epoch(epoch_reward_record);
+        let epoch_to_claim = epoch_reward_record::epoch(epoch_reward_record);
+
+        if (validator_address != self.validator_address || 
+            self.next_reward_unclaimed_epoch > epoch_to_claim ||
+            validator_onboarding_epoch > self.starting_epoch) // The validator becomes active after the starting
+                                                              // epoch of the delegation so delegation is invalid.
         {
             return false
         }; 
+
         if (!is_active(self)) {
             let ending_epoch = *option::borrow(&self.ending_epoch);
             return ending_epoch > epoch_to_claim

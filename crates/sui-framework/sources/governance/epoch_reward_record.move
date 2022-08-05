@@ -22,6 +22,7 @@ module sui::epoch_reward_record {
         total_stake: u64,
         delegator_count: u64,
         validator: address,
+        validator_onboarding_epoch: u64,
     }
 
     public(friend) fun create(
@@ -30,6 +31,7 @@ module sui::epoch_reward_record {
         total_stake: u64,
         delegator_count: u64,
         validator: address,
+        validator_onboarding_epoch: u64,
         ctx: &mut TxContext,
     ) {
         transfer::share_object(EpochRewardRecord {
@@ -39,6 +41,7 @@ module sui::epoch_reward_record {
             total_stake,
             delegator_count,
             validator,
+            validator_onboarding_epoch,
         })
     }
 
@@ -55,5 +58,9 @@ module sui::epoch_reward_record {
 
     public fun validator(self: &EpochRewardRecord): address {
         self.validator
+    }
+
+    public fun validator_onboarding_epoch(self: &EpochRewardRecord): u64 {
+        self.validator_onboarding_epoch
     }
 }

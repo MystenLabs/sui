@@ -160,10 +160,6 @@ module sui::validator_set {
             let validator_index = option::extract(&mut validator_index_opt);
             let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
             validator::request_remove_delegation(validator, delegate_amount);
-        } else {
-            // TODO: How do we deal with undelegating from inactive validators?
-            // https://github.com/MystenLabs/sui/issues/2837
-            abort 0
         };
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }
@@ -185,6 +181,7 @@ module sui::validator_set {
                 total_stake,
                 validator::delegator_count(v),
                 validator::sui_address(v),
+                validator::onboarding_epoch(v),
                 ctx,
             );
             i = i + 1;
