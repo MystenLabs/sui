@@ -17,7 +17,7 @@ futures = "0.3.21"
 multiaddr = "0.14.0"
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "20ef52a00135114eb361e28673cfaa9bf4560f6f" }
 rand = "0.8.5"
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 thiserror = "1.0.31"
 tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = "0.1.9"
@@ -25,7 +25,7 @@ tokio-util = { version = "0.7.3", features = ["codec"] }
 tracing = "0.1.36"
 tracing-log = "0.1.3"
 tracing-subscriber = { version = "0.3.15", features = ["time", "env-filter"] }
-telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 url = "2.2.2"
 dhat = { version = "0.3.0", optional = true }
 
