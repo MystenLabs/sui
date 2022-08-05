@@ -18,7 +18,7 @@ use sqlx::{
 };
 use sui_types::error::SuiError;
 use sui_types::event::Event;
-use tracing::{debug, info, warn, log};
+use tracing::{debug, info, log, warn};
 
 /// Maximum number of events one can ask for right now
 const MAX_LIMIT: usize = 5000;
@@ -92,7 +92,7 @@ impl SqlEventStore {
         let mut options = SqliteConnectOptions::new()
             .filename(db_path)
             .create_if_missing(true);
-        options.log_statements(log::LevelFilter::Trace);
+        options.log_statements(log::LevelFilter::Off);
         let pool = SqlitePool::connect_with(options)
             .await
             .map_err(convert_sqlx_err)?;
