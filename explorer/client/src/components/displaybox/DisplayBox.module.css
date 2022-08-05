@@ -31,7 +31,7 @@ div.fade {
 }
 
 .fig {
-    @apply mt-auto mb-[60px] sm:my-auto;
+    @apply mt-auto mb-[60px] sm:my-auto sm:relative sm:left-[19px];
 }
 
 div.imageandcross {
@@ -50,7 +50,7 @@ span.cross {
 }
 
 span.desktopcross {
-    @apply hidden sm:block sm:ml-2 sm:mr-0;
+    @apply hidden sm:block sm:ml-[8px] sm:mr-0;
 }
 
 div.mobilecross {
