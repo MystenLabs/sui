@@ -16,7 +16,7 @@ tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.36"
 parking_lot = "0.12.1"
 futures = "0.3.21"
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa"}
 
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
@@ -26,8 +26,8 @@ sui-json-rpc = { path = "../sui-json-rpc" }
 sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 workspace-hack = { path = "../workspace-hack"}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

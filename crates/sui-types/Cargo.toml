@@ -40,9 +40,9 @@ enum_dispatch = "^0.3"
 # This version is incompatible with ed25519-dalek
 rand_latest = { version = "0.8.5", package = "rand" }
 
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f" }
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f"} 
+name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa"} 
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }

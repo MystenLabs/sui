@@ -22,7 +22,7 @@ rocksdb = "0.18.0"
 serde_with = { version = "1.14.0", features = ["hex"] }
 tracing = "0.1.36"
 tracing-subscriber = { version = "0.3.15", features = ["time", "registry", "env-filter"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "a4c2cae59d823533061a5d8fe28771629819c43f" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 clap = { version = "3.1.17", features = ["derive"] }
 prometheus = "0.13.1"
 multiaddr = "0.14.0"
