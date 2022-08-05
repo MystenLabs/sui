@@ -17,7 +17,7 @@ rocksdb = { version = "0.18.0", features = ["snappy", "lz4", "zstd", "zlib"], de
 serde = { version = "1.0.142", features = ["derive"] }
 serde_bytes = "0.11.6"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
-thiserror = "1.0.31"
+thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["sync"] }
 tracing = "0.1.36"
 

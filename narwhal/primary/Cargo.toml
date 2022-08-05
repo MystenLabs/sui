@@ -22,7 +22,7 @@ multiaddr = "0.14.0"
 prost = "0.10.4"
 rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.142", features = ["derive"] }
-thiserror = "1.0.31"
+thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = "0.7.2"
@@ -53,7 +53,7 @@ tracing-test = "0.2.3"
 worker = { path = "../worker" }
 async-trait = "0.1.57"
 executor = { path = "../executor" }
-thiserror = "1.0.31"
+thiserror = "1.0.32"
 tracing = "0.1.36"
 telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 indexmap = { version = "1.9.1", features = ["serde"] }
