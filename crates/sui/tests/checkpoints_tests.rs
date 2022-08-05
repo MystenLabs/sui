@@ -6,7 +6,7 @@ use sui_core::{
     authority_client::NetworkAuthorityClient,
 };
 use sui_node::SuiNode;
-use sui_sdk::crypto::InMemKeystore;
+use sui_sdk::crypto::KeystoreType;
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     messages::{CallArg, ExecutionStatus, ObjectArg, Transaction},
@@ -186,8 +186,8 @@ async fn end_to_end() {
     telemetry_subscribers::init_for_testing();
     // Make a few test transactions.
     let total_transactions = 3;
-    let keys = InMemKeystore::new(total_transactions);
-    let (transactions, input_objects) = make_transactions_with_pre_genesis_objects(&keys);
+    let keys = KeystoreType::InMem(total_transactions).init().unwrap();
+    let (transactions, input_objects) = make_transactions_with_pre_genesis_objects(keys);
     let transaction_digests: HashSet<_> = transactions.iter().map(|x| *x.digest()).collect();
 
     // Spawn a quorum of authorities.
@@ -209,8 +209,8 @@ async fn end_to_end_with_one_byzantine() {
     telemetry_subscribers::init_for_testing();
     // Make a few test transactions.
     let total_transactions = 3;
-    let keys = InMemKeystore::new(total_transactions);
-    let (transactions, input_objects) = make_transactions_with_pre_genesis_objects(&keys);
+    let keystore = KeystoreType::InMem(total_transactions).init().unwrap();
+    let (transactions, input_objects) = make_transactions_with_pre_genesis_objects(keystore);
     let transaction_digests: HashSet<_> = transactions.iter().map(|x| *x.digest()).collect();
 
     // Spawn a quorum of authorities.
@@ -239,8 +239,8 @@ async fn checkpoint_with_shared_objects() {
 
     // Make a few test transactions.
     let total_transactions = 3;
-    let keys = InMemKeystore::new(total_transactions);
-    let (transactions, input_objects) = make_transactions_with_pre_genesis_objects(&keys);
+    let keystore = KeystoreType::InMem(total_transactions).init().unwrap();
+    let (transactions, input_objects) = make_transactions_with_pre_genesis_objects(keystore);
 
     // Spawn a quorum of authorities.
     let configs = test_authority_configs();

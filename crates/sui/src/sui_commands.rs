@@ -21,7 +21,7 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
-use sui_sdk::crypto::{AccountKeystore, FileBasedKeystore, KeystoreType};
+use sui_sdk::crypto::KeystoreType;
 use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::Swarm;
 use sui_types::crypto::KeypairTraits;
@@ -243,7 +243,7 @@ impl SuiCommand {
                         .build()
                 };
 
-                let mut keystore = FileBasedKeystore::default();
+                let mut keystore = KeystoreType::File(keystore_path.clone()).init().unwrap();
 
                 for key in &network_config.account_keys {
                     keystore.add_key(key.copy())?;
@@ -258,8 +258,6 @@ impl SuiCommand {
                 network_config.save(&network_path)?;
                 info!("Network config file is stored in {:?}.", network_path);
 
-                keystore.set_path(&keystore_path);
-                keystore.save()?;
                 info!("Client keystore is stored in {:?}.", keystore_path);
 
                 // Use the first address if any
