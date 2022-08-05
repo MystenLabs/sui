@@ -47,7 +47,6 @@ type TxResponse = {
 const initTxResponse: TxResponse = null;
 
 interface TransferProps {
-    // nftObj?: SuiObject;
     objectId: ObjectId;
 }
 
