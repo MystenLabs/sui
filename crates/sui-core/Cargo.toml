@@ -49,12 +49,12 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "790715
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c"}
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "cdf44079efc2ced6125f6a2ee7827680be3cbd0a", package = "config" }
-narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "cdf44079efc2ced6125f6a2ee7827680be3cbd0a", package = "consensus" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "cdf44079efc2ced6125f6a2ee7827680be3cbd0a", package = "crypto", features=["copy_key"]}
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "cdf44079efc2ced6125f6a2ee7827680be3cbd0a", package = "executor" }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "cdf44079efc2ced6125f6a2ee7827680be3cbd0a", package = "types" }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "cdf44079efc2ced6125f6a2ee7827680be3cbd0a", package = "node" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "e2231eb858d985a6ddedfcc64cc422893090be08", package = "config" }
+narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "e2231eb858d985a6ddedfcc64cc422893090be08", package = "consensus" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "e2231eb858d985a6ddedfcc64cc422893090be08", package = "crypto", features=["copy_key"]}
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "e2231eb858d985a6ddedfcc64cc422893090be08", package = "executor" }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "e2231eb858d985a6ddedfcc64cc422893090be08", package = "types" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "e2231eb858d985a6ddedfcc64cc422893090be08", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]

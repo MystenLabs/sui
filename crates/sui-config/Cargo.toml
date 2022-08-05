@@ -20,8 +20,8 @@ multiaddr = "0.14.0"
 once_cell = "1.11.0"
 tracing = "0.1.36"
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "cdf44079efc2ced6125f6a2ee7827680be3cbd0a", package = "config" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "cdf44079efc2ced6125f6a2ee7827680be3cbd0a", package = "crypto" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "e2231eb858d985a6ddedfcc64cc422893090be08", package = "config" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "e2231eb858d985a6ddedfcc64cc422893090be08", package = "crypto" }
 move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
