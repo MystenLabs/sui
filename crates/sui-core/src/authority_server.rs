@@ -5,8 +5,8 @@
 use crate::{
     authority::AuthorityState,
     consensus_adapter::{
-        CheckpointConsensusAdapter, CheckpointSender, ConsensusAdapter, ConsensusListener,
-        ConsensusListenerMessage,
+        CheckpointConsensusAdapter, CheckpointSender, ConsensusAdapter, ConsensusAdapterMetrics,
+        ConsensusListener, ConsensusListenerMessage,
     },
 };
 use anyhow::anyhow;
@@ -86,11 +86,13 @@ impl AuthorityServer {
         consensus_address: Multiaddr,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
     ) -> Self {
+        let metrics = ConsensusAdapterMetrics::new_test();
         let consensus_adapter = ConsensusAdapter::new(
             consensus_address,
             state.clone_committee(),
             tx_consensus_listener,
             /* max_delay */ Duration::from_millis(20_000),
+            metrics,
         );
 
         Self {
@@ -206,12 +208,15 @@ impl ValidatorService {
             /* max_pending_transactions */ 1_000_000,
         );
 
+        let metrics = ConsensusAdapterMetrics::new(prometheus_registry);
+
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
             consensus_config.address().to_owned(),
             state.clone_committee(),
             tx_sui_to_consensus.clone(),
             /* max_delay */ Duration::from_millis(5_000),
+            metrics.clone(),
         );
 
         // Update the checkpoint store with a consensus client.
@@ -229,6 +234,7 @@ impl ValidatorService {
                 /* checkpoint_locals */ checkpoint_store,
                 /* retry_delay */ Duration::from_millis(5_000),
                 /* max_pending_transactions */ 10_000,
+                metrics,
             )
             .spawn();
             Some(handle)
