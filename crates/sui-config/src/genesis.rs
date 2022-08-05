@@ -137,6 +137,16 @@ impl Genesis {
     pub fn to_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).expect("failed to serialize genesis")
     }
+
+    pub fn sha3(&self) -> [u8; 32] {
+        use digest::Digest;
+        use std::io::Write;
+
+        let mut digest = sha3::Sha3_256::default();
+        digest.write_all(&self.to_bytes()).unwrap();
+        let hash = digest.finalize();
+        hash.into()
+    }
 }
 
 impl Serialize for Genesis {
