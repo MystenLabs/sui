@@ -10,7 +10,6 @@ use once_cell::sync::OnceCell;
 use rust_secp256k1::{
     constants,
     ecdsa::{RecoverableSignature, RecoveryId},
-    rand::rngs::OsRng,
     Message, PublicKey, Secp256k1, SecretKey,
 };
 use serde::{de, Deserialize, Serialize};
@@ -333,10 +332,9 @@ impl KeyPair for Secp256k1KeyPair {
         self.secret
     }
 
-    fn generate<R: rand::CryptoRng + rand::RngCore>(_rng: &mut R) -> Self {
+    fn generate<R: rand::CryptoRng + rand::RngCore>(rng: &mut R) -> Self {
         let secp = Secp256k1::new();
-        // TODO: use param rng instead of generate a fresh OsRng when rand is upgraded to match. https://github.com/MystenLabs/narwhal/issues/544
-        let (privkey, pubkey) = secp.generate_keypair(&mut OsRng);
+        let (privkey, pubkey) = secp.generate_keypair(rng);
 
         Secp256k1KeyPair {
             name: Secp256k1PublicKey {

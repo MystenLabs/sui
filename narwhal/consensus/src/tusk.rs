@@ -178,7 +178,7 @@ mod tests {
     #[test]
     fn state_limits_test() {
         let gc_depth = 12;
-        let rounds: Round = rand::thread_rng().gen_range(10, 100);
+        let rounds: Round = rand::thread_rng().gen_range(10..100);
 
         // process certificates for rounds, check we don't grow the dag too much
         let keys: Vec<_> = test_utils::keys(None)
@@ -225,7 +225,7 @@ mod tests {
     #[test]
     fn imperfect_state_limits_test() {
         let gc_depth = 12;
-        let rounds: Round = rand::thread_rng().gen_range(10, 100);
+        let rounds: Round = rand::thread_rng().gen_range(10..100);
 
         // process certificates for rounds, check we don't grow the dag too much
         let keys: Vec<_> = test_utils::keys(None)
