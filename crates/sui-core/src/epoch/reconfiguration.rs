@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_active::ActiveAuthority;
-use crate::authority_aggregator::AuthorityAggregator;
+use crate::authority_aggregator::{AuthorityAggregator, ReduceOutput};
 use crate::authority_client::AuthorityAPI;
 use async_trait::async_trait;
 use multiaddr::Multiaddr;
@@ -11,10 +11,14 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_network::tonic;
-use sui_types::committee::Committee;
-use sui_types::crypto::AuthorityPublicKeyBytes;
-use sui_types::error::SuiResult;
-use sui_types::messages::SignedTransaction;
+use sui_types::base_types::AuthorityName;
+use sui_types::committee::{Committee, EpochId, StakeUnit};
+use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
+use sui_types::error::{SuiError, SuiResult};
+use sui_types::messages::{
+    AuthenticatedEpoch, CertifiedEpoch, EpochInfoDigest, EpochRequest, EpochResponse,
+    SignedTransaction,
+};
 use sui_types::sui_system_state::SuiSystemState;
 use tracing::{debug, error, info};
 use typed_store::Map;
@@ -26,7 +30,9 @@ pub trait Reconfigurable {
     fn recreate(channel: tonic::transport::Channel) -> Self;
 }
 
-const WAIT_BETWEEN_EPOCH_TX_QUERY_RETRY: Duration = Duration::from_millis(300);
+// TODO: Move these constants to a control config.
+const WAIT_BETWEEN_EPOCH_QUERY_RETRY: Duration = Duration::from_millis(300);
+const QUORUM_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl<A> ActiveAuthority<A>
 where
@@ -110,8 +116,35 @@ where
             ?epoch,
             "New committee for the next epoch: {:?}", new_committee
         );
+        let old_committee = self.state.clone_committee();
         self.state
             .sign_new_epoch_and_update_committee(new_committee.clone(), next_checkpoint)?;
+
+        loop {
+            let err = match self
+                .wait_for_epoch_cert(next_epoch, &old_committee, QUORUM_TIMEOUT)
+                .await
+            {
+                Ok(cert) => {
+                    info!(epoch=?next_epoch, "Epoch Certificate Formed");
+                    debug!("Epoch Certificate: {:?}", cert);
+                    match self.state.promote_signed_epoch_to_cert(cert) {
+                        Ok(()) => {
+                            break;
+                        }
+                        Err(err) => err,
+                    }
+                }
+                Err(err) => err,
+            };
+            debug!(
+                ?epoch,
+                "Failed to obtain certificate for the next epoch: {:?}", err
+            );
+            // TODO: Instead of actively waiting in a loop, we could instead use a notification
+            // pattern.
+            tokio::time::sleep(WAIT_BETWEEN_EPOCH_QUERY_RETRY).await;
+        }
 
         // Reconnect the network if we have an type of AuthorityClient that has a network.
         if A::needs_network_recreation() {
@@ -168,7 +201,7 @@ where
                 ?epoch,
                 "Error when processing advance epoch transaction: {:?}", err
             );
-            tokio::time::sleep(WAIT_BETWEEN_EPOCH_TX_QUERY_RETRY).await;
+            tokio::time::sleep(WAIT_BETWEEN_EPOCH_QUERY_RETRY).await;
         }
 
         // Resume the validator to start accepting transactions for the new epoch.
@@ -254,5 +287,110 @@ where
         ));
         self.net.store(new_net);
         Ok(())
+    }
+
+    async fn wait_for_epoch_cert(
+        &self,
+        epoch_id: EpochId,
+        old_committee: &Committee,
+        timeout_until_quorum: Duration,
+    ) -> SuiResult<CertifiedEpoch> {
+        #[derive(Default)]
+        struct Signatures {
+            total_stake: StakeUnit,
+            sigs: Vec<(AuthorityName, AuthoritySignature)>,
+        }
+        #[derive(Default)]
+        struct Summaries {
+            bad_weight: StakeUnit,
+            signed: BTreeMap<EpochInfoDigest, Signatures>,
+            cert: Option<CertifiedEpoch>,
+            errors: Vec<(AuthorityName, SuiError)>,
+        }
+        let initial_state = Summaries::default();
+        let net = self.net.load();
+        let threshold = net.committee.quorum_threshold();
+        let validity = net.committee.validity_threshold();
+        let final_state = net
+            .quorum_map_then_reduce_with_timeout(
+                initial_state,
+                |_name, client| {
+                    Box::pin(async move {
+                        client
+                            .handle_epoch(EpochRequest { epoch_id: Some(epoch_id) })
+                            .await
+                    })
+                },
+                |mut state, name, weight, result| {
+                    Box::pin(async move {
+                        if let Ok(EpochResponse {
+                                      epoch_info: Some(epoch_info)
+                                  }) = result
+                        {
+                            match epoch_info {
+                                AuthenticatedEpoch::Signed(s) => {
+                                    let entry = state.signed.entry(s.epoch_info.digest()).or_default();
+                                    entry.total_stake += weight;
+                                    entry.sigs.push((name, s.auth_sign_info.signature));
+                                    if entry.total_stake >= threshold {
+                                        let maybe_cert = CertifiedEpoch::new(
+                                            &s.epoch_info,
+                                            entry.sigs.clone(),
+                                            old_committee
+                                        );
+                                        match maybe_cert {
+                                            Ok(cert) => {
+                                                state.cert = Some(cert);
+                                                return Ok(ReduceOutput::End(state));
+                                            },
+                                            Err(err) => {
+                                                error!("Unexpected error when creating epoch cert: {:?}", err);
+                                                state.errors.push((name, err));
+                                            }
+                                        }
+                                    }
+                                }
+                                AuthenticatedEpoch::Certified(c) => {
+                                    state.cert = Some(c);
+                                    return Ok(ReduceOutput::End(state));
+                                }
+                                AuthenticatedEpoch::Genesis(_) => {
+                                    unreachable!();
+                                }
+                            }
+                        } else {
+                            state.bad_weight += weight;
+
+                            // Add to the list of errors.
+                            match result {
+                                Err(err) => state.errors.push((name, err)),
+                                Ok(_) => state.errors.push((
+                                    name,
+                                    SuiError::from("Epoch info not yet available"),
+                                )),
+                            }
+
+                            // Return all errors if a quorum is not possible.
+                            if state.bad_weight > validity {
+                                return Err(SuiError::TooManyIncorrectAuthorities {
+                                    errors: state.errors,
+                                });
+                            }
+                        }
+
+                        Ok(ReduceOutput::Continue(state))
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                timeout_until_quorum,
+            )
+            .await?;
+        if let Some(cert) = final_state.cert {
+            Ok(cert)
+        } else {
+            Err(SuiError::TooManyIncorrectAuthorities {
+                errors: final_state.errors,
+            })
+        }
     }
 }

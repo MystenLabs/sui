@@ -216,7 +216,7 @@ async fn test_finish_epoch_change() {
         assert_eq!(active.net.load().committee.epoch, 1);
         let latest_epoch = active.state.db().get_latest_authenticated_epoch();
         assert_eq!(latest_epoch.epoch(), 1);
-        assert!(matches!(latest_epoch, AuthenticatedEpoch::Signed(..)));
+        assert!(matches!(latest_epoch, AuthenticatedEpoch::Certified(..)));
         assert_eq!(latest_epoch.epoch_info().epoch(), 1);
         // Verify that validator is no longer halted.
         assert!(!active.state.is_halted());

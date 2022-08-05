@@ -285,7 +285,6 @@ where
     assert!(stake >= quorum_threshold);
 
     CertifiedTransaction::new_with_signatures(
-        committee.epoch(),
         transaction.unwrap().to_transaction(),
         votes,
         committee,

@@ -1468,7 +1468,6 @@ pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStron
 
 impl CertifiedTransactionEffects {
     pub fn new(
-        epoch: EpochId,
         effects: TransactionEffects,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
         committee: &Committee,
@@ -1477,7 +1476,7 @@ impl CertifiedTransactionEffects {
             transaction_effects_digest: OnceCell::from(effects.digest()),
             effects,
             auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                epoch, signatures, committee,
+                signatures, committee,
             )?,
         })
     }
@@ -1660,7 +1659,6 @@ impl<'a> SignatureAggregator<'a> {
 
         if self.weight >= self.committee.quorum_threshold() {
             self.partial.auth_sign_info = AuthorityStrongQuorumSignInfo::new_with_signatures(
-                self.partial.auth_sign_info.epoch,
                 self.signature_stash.clone(),
                 self.committee,
             )?;
@@ -1683,7 +1681,6 @@ impl CertifiedTransaction {
     }
 
     pub fn new_with_signatures(
-        epoch: EpochId,
         transaction: Transaction,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
         committee: &Committee,
@@ -1694,7 +1691,7 @@ impl CertifiedTransaction {
             data: transaction.data,
             tx_signature: transaction.tx_signature,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                epoch, signatures, committee,
+                signatures, committee,
             )?,
         })
     }
@@ -1802,13 +1799,20 @@ pub struct EpochInfo {
     committee: Committee,
     /// The first checkpoint included in this epoch.
     first_checkpoint: CheckpointSequenceNumber,
+    /// Digest of the epoch info from the previous epoch.
+    prev_digest: EpochInfoDigest,
 }
 
 impl EpochInfo {
-    pub fn new(committee: Committee, first_checkpoint: CheckpointSequenceNumber) -> Self {
+    pub fn new(
+        committee: Committee,
+        first_checkpoint: CheckpointSequenceNumber,
+        prev_digest: EpochInfoDigest,
+    ) -> Self {
         Self {
             committee,
             first_checkpoint,
+            prev_digest,
         }
     }
 
@@ -1823,7 +1827,17 @@ impl EpochInfo {
     pub fn first_checkpoint(&self) -> &CheckpointSequenceNumber {
         &self.first_checkpoint
     }
+
+    pub fn prev_epoch_info_digest(&self) -> &EpochInfoDigest {
+        &self.prev_digest
+    }
+
+    pub fn digest(&self) -> EpochInfoDigest {
+        sha3_hash(self)
+    }
 }
+
+pub type EpochInfoDigest = [u8; 32];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EpochEnvelop<S> {
@@ -1838,7 +1852,7 @@ pub type CertifiedEpoch = EpochEnvelop<AuthorityStrongQuorumSignInfo>;
 impl GenesisEpoch {
     pub fn new(committee: Committee) -> Self {
         Self {
-            epoch_info: EpochInfo::new(committee, 0),
+            epoch_info: EpochInfo::new(committee, 0, EpochInfoDigest::default()),
             auth_sign_info: EmptySignInfo {},
         }
     }
@@ -1868,9 +1882,10 @@ impl SignedEpoch {
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
         first_checkpoint: CheckpointSequenceNumber,
+        prev_epoch_info: &EpochInfo,
     ) -> Self {
         let epoch = committee.epoch;
-        let epoch_info = EpochInfo::new(committee, first_checkpoint);
+        let epoch_info = EpochInfo::new(committee, first_checkpoint, prev_epoch_info.digest());
         let signature = AuthoritySignature::new(&epoch_info, secret);
         Self {
             epoch_info,
@@ -1903,6 +1918,20 @@ impl SignedEpoch {
 }
 
 impl CertifiedEpoch {
+    pub fn new(
+        epoch_info: &EpochInfo,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        prev_epoch_committee: &Committee,
+    ) -> SuiResult<Self> {
+        Ok(Self {
+            epoch_info: epoch_info.clone(),
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
+                signatures,
+                prev_epoch_committee,
+            )?,
+        })
+    }
+
     /// Verify the signature of this certified epoch. The committee to verify this must be the
     /// committee from the previous epoch, as this is signed by a quorum from the previous epoch.
     pub fn verify(&self, committee: &Committee) -> SuiResult {

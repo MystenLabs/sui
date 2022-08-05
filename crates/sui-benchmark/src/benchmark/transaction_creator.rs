@@ -73,8 +73,7 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
         sigs.push((pubx, sig));
     }
     let mut certificate =
-        CertifiedTransaction::new_with_signatures(committee.epoch(), tx.clone(), sigs, &committee)
-            .unwrap();
+        CertifiedTransaction::new_with_signatures(tx.clone(), sigs, &committee).unwrap();
     certificate.auth_sign_info.epoch = committee.epoch();
     certificate
 }

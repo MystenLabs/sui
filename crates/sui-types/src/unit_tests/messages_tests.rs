@@ -197,8 +197,7 @@ fn test_new_with_signatures() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures.clone(), &committee)
-            .unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures.clone(), &committee).unwrap();
 
     let sig_clone = signatures.clone();
     let mut alphabetical_authorities = sig_clone
@@ -232,7 +231,7 @@ fn test_handle_reject_malicious_signature() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures, &committee).unwrap();
     {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new(&message, &sec);
@@ -259,7 +258,7 @@ fn test_bitmap_out_of_range() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures, &committee).unwrap();
 
     // Insert outside of range
     quorum.signers_map.insert(10);
@@ -293,7 +292,7 @@ fn test_reject_extra_public_key() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, used_signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(used_signatures, &committee).unwrap();
 
     quorum.signers_map.insert(3);
 
@@ -324,7 +323,7 @@ fn test_reject_reuse_signatures() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, used_signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(used_signatures, &committee).unwrap();
 
     let (mut obligation, idx) = get_obligation_input(&message);
     assert!(quorum
@@ -346,7 +345,7 @@ fn test_empty_bitmap() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures, &committee).unwrap();
     quorum.signers_map = RoaringBitmap::new();
 
     let (mut obligation, idx) = get_obligation_input(&message);
