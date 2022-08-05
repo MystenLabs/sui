@@ -43,7 +43,7 @@ dashmap = "5.3.4"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-arc-swap = { version = "1.5.0", features = ["serde"] }
+arc-swap = { version = "1.5.1", features = ["serde"] }
 itertools = "0.10.3"
 mockall = "0.11.2"
 node = { path = "../node" }

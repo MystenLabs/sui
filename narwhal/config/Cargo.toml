@@ -13,7 +13,7 @@ tracing = "0.1.36"
 multiaddr = "0.14.0"
 
 crypto = { path = "../crypto" }
-arc-swap = { version = "1.5.0", features = ["serde"] }
+arc-swap = { version = "1.5.1", features = ["serde"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

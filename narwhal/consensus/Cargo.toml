@@ -6,7 +6,7 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 
 [dependencies]
-arc-swap = { version = "1.5.0", features = ["serde"] }
+arc-swap = { version = "1.5.1", features = ["serde"] }
 bincode = "1.3.3"
 blake2 = "0.9"
 bytes = "1.2.1"
