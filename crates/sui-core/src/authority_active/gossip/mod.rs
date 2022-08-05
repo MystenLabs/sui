@@ -425,7 +425,7 @@ where
                 items = &mut streamx.next() => {
                     match items {
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) )) => {
-                            let next_seq = signed_batch.batch.next_sequence_number;
+                            let next_seq = signed_batch.data().next_sequence_number;
                             debug!(?peer, batch_next_seq = ?next_seq, "Received signed batch");
                             batch_seq_to_record.push_back((next_seq, last_seq_in_cur_batch));
                             if let Some(max_seq) = latest_seq {

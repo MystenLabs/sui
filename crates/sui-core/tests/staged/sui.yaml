@@ -94,6 +94,12 @@ EntryArgumentErrorKind:
       UnsupportedPureArg: UNIT
     5:
       ArityMismatch: UNIT
+Envelope:
+  STRUCT:
+    - data:
+        TYPENAME: AuthorityBatch
+    - auth_signature:
+        TYPENAME: AuthoritySignInfo
 ExecutionDigests:
   STRUCT:
     - transaction:
@@ -329,12 +335,6 @@ Owner:
       Immutable: UNIT
 SequenceNumber:
   NEWTYPESTRUCT: U64
-SignedBatch:
-  STRUCT:
-    - batch:
-        TYPENAME: AuthorityBatch
-    - auth_signature:
-        TYPENAME: AuthoritySignInfo
 SingleTransactionKind:
   ENUM:
     0:
@@ -449,5 +449,5 @@ UpdateItem:
     1:
       Batch:
         NEWTYPE:
-          TYPENAME: SignedBatch
+          TYPENAME: Envelope
 

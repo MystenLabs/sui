@@ -932,7 +932,7 @@ impl AuthorityState {
             None => {
                 self.last_batch()?
                     .expect("Authority is always initialized with a batch")
-                    .batch
+                    .data()
                     .next_sequence_number
             }
         };
@@ -951,7 +951,7 @@ impl AuthorityState {
             loop {
                 // No more items or item too large for this batch
                 if dq_transactions.is_empty()
-                    || dq_transactions[0].0 >= current_batch.batch.next_sequence_number
+                    || dq_transactions[0].0 >= current_batch.data().next_sequence_number
                 {
                     break;
                 }
@@ -961,7 +961,7 @@ impl AuthorityState {
             }
 
             // Now send the batch
-            last_batch_next_seq = current_batch.batch.next_sequence_number;
+            last_batch_next_seq = current_batch.data().next_sequence_number;
             items.push_back(UpdateItem::Batch(current_batch));
         }
 
@@ -1105,16 +1105,16 @@ impl AuthorityState {
                     .tables
                     .executed_sequence
                     .iter()
-                    .skip_to(&batch.batch.initial_sequence_number)
+                    .skip_to(&batch.data().initial_sequence_number)
                     .expect("Should never fail to get an iterator")
-                    .take_while(|(seq, _tx)| *seq < batch.batch.next_sequence_number)
+                    .take_while(|(seq, _tx)| *seq < batch.data().next_sequence_number)
                     .collect();
 
-                if batch.batch.next_sequence_number > next_expected_tx {
+                if batch.data().next_sequence_number > next_expected_tx {
                     // Update the checkpointing mechanism
                     checkpoint
                         .lock()
-                        .handle_internal_batch(batch.batch.next_sequence_number, &transactions)
+                        .handle_internal_batch(batch.data().next_sequence_number, &transactions)
                         .expect("Should see no errors updating the checkpointing mechanism.");
                 }
             }
