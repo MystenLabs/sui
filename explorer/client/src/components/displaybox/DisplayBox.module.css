@@ -12,7 +12,7 @@ div.detailsbg {
 }
 
 .modal {
-    @apply w-full h-[90%] max-h-[450px]  z-50 fixed left-0 top-[5%] text-center justify-center flex;
+    @apply w-full h-[90%] z-50 fixed left-0 top-[5%] text-center justify-center flex;
 }
 
 div.imageandcross {
@@ -26,13 +26,15 @@ img.largeimage {
 }
 
 span.cross {
-    @apply block text-offwhite bg-sui-grey-100 z-50 h-[30px] w-[30px] self-start
-  flex justify-center items-center rounded-[50px] cursor-pointer ml-2 text-2xl;
+    @apply text-offwhite bg-sui-grey-100 z-50 h-[30px] w-[30px] self-start
+  flex justify-center items-center rounded-[50px] cursor-pointer  text-2xl
+  absolute  bottom-0 left-0 right-0 mx-auto 
+  sm:block sm:ml-2 sm:mr-0 sm:static;
 }
 
 div.filetype,
 div.caption {
-    @apply text-offwhite z-50 text-left text-2xl font-semibold mt-5;
+    @apply text-offwhite z-50 text-center sm:text-left text-2xl font-semibold mt-5;
 }
 
 div.filetype {
