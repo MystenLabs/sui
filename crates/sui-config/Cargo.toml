@@ -31,6 +31,8 @@ sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
 sui-types = { path = "../sui-types" }
 workspace-hack = { path = "../workspace-hack"}
+sha3 = "0.10.2"
+digest = "0.10.3"
 
 [dev-dependencies]
 insta = { version = "1.17.1", features = ["redactions"] }

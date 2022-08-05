@@ -142,6 +142,12 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let genesis = builder.build();
 
             genesis.save(dir.join(SUI_GENESIS_FILENAME))?;
+
+            println!("Successfully built {SUI_GENESIS_FILENAME}");
+            println!(
+                "{SUI_GENESIS_FILENAME} sha3-256: {}",
+                hex::encode(genesis.sha3())
+            );
         }
 
         CeremonyCommand::VerifyAndSign { key_file } => {
@@ -176,6 +182,12 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
             let hex_name = encode_bytes_hex(&AuthorityPublicKeyBytes::from(keypair.public()));
             fs::write(signature_dir.join(hex_name), signature)?;
+
+            println!("Successfully verified {SUI_GENESIS_FILENAME}");
+            println!(
+                "{SUI_GENESIS_FILENAME} sha3-256: {}",
+                hex::encode(built_genesis.sha3())
+            );
         }
 
         CeremonyCommand::Finalize => {
@@ -222,6 +234,12 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     "found extra signatures from entities not in the validator set"
                 ));
             }
+
+            println!("Successfully finalized Genesis!");
+            println!(
+                "{SUI_GENESIS_FILENAME} sha3-256: {}",
+                hex::encode(genesis.sha3())
+            );
         }
     }
 
