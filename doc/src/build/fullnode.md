@@ -276,7 +276,9 @@ information about our nodes.
 
 ## Resolving errors 
 #### Error 98/99
-You should restart your server ```shell $ shutdown -r now  ``` and after that will run Restart your Sui fullnode  ```shell
-    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
-    ```
+If you receive an error with code 98 or 99, you should restart your server using the following command:
+`$ shutdown -r now` 
+
+Then, restart your Sui fullnode:
+`$ cargo run --release --bin sui-node -- --config-path fullnode.yaml`
 
