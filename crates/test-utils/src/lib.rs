@@ -5,6 +5,7 @@ pub mod messages;
 pub mod network;
 pub mod objects;
 pub mod transaction;
+pub mod preset;
 use rand::{rngs::StdRng, SeedableRng};
 use sui_types::{
     base_types::SuiAddress,

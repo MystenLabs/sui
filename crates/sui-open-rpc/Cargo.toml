@@ -26,7 +26,6 @@ sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
-sui-test-data = { path = "../sui-test-data" }
 test-utils = { path = "../test-utils" }
 rand = "0.7.3"
 

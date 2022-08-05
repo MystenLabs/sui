@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::{Parser, ValueHint};
 
 use sui_config::genesis_config::GenesisConfig;
-use sui_test_data::create_test_data;
+use test_utils::preset::create_test_data;
 use test_utils::network::{start_rpc_test_network_with_fullnode, TestNetwork};
 
 /// Start a Sui validator and fullnode for easy testing.
@@ -21,9 +21,9 @@ struct Args {
     #[clap(long)]
     with_preset_data: bool,
 
-    /// Port to start the RPC server on
-    #[clap(long, default_value = "9000")]
-    port: u16,
+    /// Port to start the Gateway RPC server on
+    #[clap(long, default_value = "5001")]
+    gateway_rpc_port: u16,
 }
 
 #[tokio::main]
@@ -37,7 +37,7 @@ async fn main() -> Result<()> {
         create_test_data(&network).await?;
     }
 
-    println!("RPC URL: {}", network.rpc_url);
+    println!("Gateway RPC URL: {}", network.rpc_url);
 
     let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
     loop {
@@ -56,7 +56,7 @@ async fn create_network(args: &Args) -> Result<TestNetwork, anyhow::Error> {
         Some(GenesisConfig::for_local_testing()),
         1,
         config_dir,
-        Some(args.port),
+        Some(args.gateway_rpc_port),
     )
     .await?;
 

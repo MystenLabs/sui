@@ -7274,7 +7274,6 @@ dependencies = [
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
- "sui-test-data",
  "sui-types",
  "test-utils",
  "tokio",
@@ -7399,25 +7398,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sui-test-data"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "hyper",
- "move-package",
- "serde 1.0.141",
- "serde_json",
- "sui",
- "sui-config",
- "sui-json",
- "sui-json-rpc",
- "sui-json-rpc-types",
- "sui-types",
- "test-utils",
- "workspace-hack 0.1.0",
-]
-
-[[package]]
 name = "sui-test-validator"
 version = "0.0.0"
 dependencies = [
@@ -7437,7 +7417,6 @@ dependencies = [
  "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
- "sui-test-data",
  "sui-types",
  "test-utils",
  "tokio",
@@ -7800,18 +7779,21 @@ dependencies = [
  "anyhow",
  "bcs",
  "futures",
+ "hyper",
  "jsonrpsee-http-client",
  "move-core-types",
  "move-package",
  "once_cell",
  "prometheus",
  "rand 0.7.3",
+ "serde 1.0.141",
  "serde_json",
  "sui",
  "sui-adapter",
  "sui-config",
  "sui-core",
  "sui-framework",
+ "sui-json",
  "sui-json-rpc",
  "sui-json-rpc-types",
  "sui-node",

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 
 use hyper::body::Buf;
 use hyper::{Body, Client, Method, Request};
@@ -24,7 +25,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::SuiSignature;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::SUI_FRAMEWORK_ADDRESS;
-use test_utils::network::TestNetwork;
+use crate::network::TestNetwork;
 
 #[derive(Serialize)]
 pub struct ObjectResponseSample {
@@ -57,7 +58,7 @@ pub async fn create_test_data(
     let working_dir = network.network.dir();
     let config = working_dir.join(SUI_CLIENT_CONFIG);
 
-    let mut context = WalletContext::new(&config)?;
+    let mut context = WalletContext::new(&config).await?;
     let address = context.config.accounts.first().cloned().unwrap();
 
     context.gateway.sync_account_state(address).await?;
@@ -113,9 +114,8 @@ pub async fn create_test_data(
 async fn create_package_object_response(
     context: &mut WalletContext,
 ) -> Result<(GetObjectDataResponse, TransactionResponse), anyhow::Error> {
-    let package_path = ["sui_programmability", "examples", "move_tutorial"]
-        .into_iter()
-        .collect();
+    let mut package_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    package_path.push("../../sui_programmability/examples/move_tutorial");
     let build_config = BuildConfig::default();
     let result = SuiClientCommands::Publish {
         package_path,
