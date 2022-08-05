@@ -13,6 +13,10 @@ use narwhal_crypto::traits::ToFromBytes;
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
+pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
+pub const INVALID_SIGNATURE: u64 = 1;
+
+/// Native implemention of ecrecover in public Move API, see crypto.move for specifications.
 pub fn ecrecover(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
@@ -31,8 +35,8 @@ pub fn ecrecover(
                 cost,
                 smallvec![Value::vector_u8(pubkey.as_bytes().to_vec())],
             )),
-            Err(_) => Ok(NativeResult::err(cost, 0)),
+            Err(_) => Ok(NativeResult::err(cost, FAIL_TO_RECOVER_PUBKEY)),
         },
-        Err(_) => Ok(NativeResult::err(cost, 0)),
+        Err(_) => Ok(NativeResult::err(cost, INVALID_SIGNATURE)),
     }
 }

@@ -24,7 +24,7 @@ module sui::crypto_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 0)]
+    #[expected_failure(abort_code = 1)]
     fun test_ecrecover_pubkey_invalid_sig() {
         let hashed_msg = vector[0];
         // incorrect length sig
