@@ -168,7 +168,7 @@
       },
       {
         "label": "Talk with Sui",
-        "fileName": "build/comms/index",
+        "fileName": "build/comms",
         "title": "Talk with Sui",
         "items": [
           {
