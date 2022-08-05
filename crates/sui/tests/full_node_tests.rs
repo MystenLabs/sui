@@ -10,6 +10,7 @@ use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
 use sui_types::sui_framework_address_concat_string;
+use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
 use tokio::sync::Mutex;
 use tokio::time::timeout;
@@ -491,8 +492,12 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
     let (node, _jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
-    let quorum_driver = node.quorum_driver();
-    let mut rx = node.subscribe_to_quorum_driver_effects();
+    let quorum_driver = node
+        .quorum_driver()
+        .expect("Fullnode should have quorum driver toggled on.");
+    let mut rx = node
+        .subscribe_to_quorum_driver_effects()
+        .expect("Fullnode should have quorum driver toggled on.");
 
     let mut txns = make_transactions_with_wallet_context(&mut context, 3).await;
     assert!(
@@ -580,4 +585,14 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
         .unwrap_or_else(|e| panic!("Fullnode does not know about the txn {:?} that was executed with ImmediateReturn: {:?}", digest, e));
 
     Ok(())
+}
+
+/// Test a validator node does not have quorum driver
+#[tokio::test]
+async fn test_validator_node_has_no_quorum_driver() {
+    let configs = test_and_configure_authority_configs(1);
+    let validator_config = &configs.validator_configs()[0];
+    let node = SuiNode::start(validator_config).await.unwrap();
+    assert!(node.quorum_driver().is_none());
+    assert!(node.subscribe_to_quorum_driver_effects().is_err());
 }

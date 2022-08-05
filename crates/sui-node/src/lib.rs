@@ -56,7 +56,7 @@ pub struct SuiNode {
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
     active: Option<Arc<ActiveAuthority<NetworkAuthorityClient>>>,
-    quorum_driver_handler: QuorumDriverHandler<NetworkAuthorityClient>,
+    quorum_driver_handler: Option<QuorumDriverHandler<NetworkAuthorityClient>>,
 }
 
 impl SuiNode {
@@ -143,12 +143,16 @@ impl SuiNode {
             authority_clients,
             AuthAggMetrics::new(&prometheus_registry),
         );
-        let quorum_driver_handler = QuorumDriverHandler::new(net.clone());
 
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
         let is_full_node = !is_validator;
 
+        let quorum_driver_handler = if is_full_node {
+            Some(QuorumDriverHandler::new(net.clone()))
+        } else {
+            None
+        };
         let should_start_follower = is_full_node || config.enable_gossip;
 
         let mut active = None;
@@ -271,14 +275,20 @@ impl SuiNode {
         self.active.clone()
     }
 
-    pub fn quorum_driver(&self) -> Arc<QuorumDriver<NetworkAuthorityClient>> {
-        self.quorum_driver_handler.clone_quorum_driver()
+    pub fn quorum_driver(&self) -> Option<Arc<QuorumDriver<NetworkAuthorityClient>>> {
+        self.quorum_driver_handler
+            .as_ref()
+            .map(|qdh| qdh.clone_quorum_driver())
     }
 
     pub fn subscribe_to_quorum_driver_effects(
         &self,
-    ) -> tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)> {
-        self.quorum_driver_handler.subscribe()
+    ) -> Result<tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>>
+    {
+        self.quorum_driver_handler
+            .as_ref()
+            .map(|qdh| qdh.subscribe())
+            .ok_or_else(|| anyhow::anyhow!("Quorum Driver is not enabled in this node."))
     }
 
     //TODO watch/wait on all the components
