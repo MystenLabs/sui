@@ -124,7 +124,6 @@ where
             digest: OnceCell::new(),
             data,
             auth_signature: AuthorityQuorumSignInfo::<S>::new_with_signatures(
-                committee.epoch,
                 signatures
                     .into_iter()
                     .map(|v| (v.authority, v.signature))

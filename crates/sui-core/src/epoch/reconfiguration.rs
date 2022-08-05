@@ -20,7 +20,7 @@ use sui_types::messages::{
     SignedTransaction,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use tracing::{debug, error, info, warn};
+use tracing::{debug, error, info};
 use typed_store::Map;
 
 #[async_trait]
@@ -141,6 +141,8 @@ where
                 ?epoch,
                 "Failed to obtain certificate for the next epoch: {:?}", err
             );
+            // TODO: Instead of actively waiting in a loop, we could instead use a notification
+            // pattern.
             tokio::time::sleep(WAIT_BETWEEN_EPOCH_QUERY_RETRY).await;
         }
 
