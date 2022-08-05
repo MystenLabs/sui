@@ -3,7 +3,7 @@
 
 use std::str::FromStr;
 use sui_sdk::{
-    crypto::SuiKeystore,
+    crypto::KeystoreType,
     types::{
         base_types::{ObjectID, SuiAddress},
         crypto::Signature,
@@ -31,7 +31,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .await?;
 
     // Get signer from keystore
-    let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+    let keystore = KeystoreType::File(keystore_path).init()?;
     let signer = keystore.signer(my_address);
 
     // Sign the transaction

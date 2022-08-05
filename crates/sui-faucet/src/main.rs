@@ -171,8 +171,8 @@ async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
     info!("Initialize wallet from config path: {:?}", wallet_conf);
     let mut context = WalletContext::new(&wallet_conf).await?;
     let address = context
-        .config
-        .accounts
+        .keystore
+        .addresses()
         .first()
         .cloned()
         .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;

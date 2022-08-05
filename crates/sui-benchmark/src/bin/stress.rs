@@ -25,7 +25,6 @@ use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::gateway_state::GatewayState;
 use sui_node::metrics;
 use sui_node::SuiNode;
-use sui_sdk::crypto::Keystore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use tokio::sync::OnceCell;
@@ -44,7 +43,7 @@ use sui_benchmark::workloads::workload::Payload;
 use sui_benchmark::workloads::workload::Workload;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_quorum_driver::QuorumDriverHandler;
-use sui_sdk::crypto::SuiKeystore;
+use sui_sdk::crypto::FileBasedKeystore;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::{AccountKeyPair, EmptySignInfo};
@@ -620,7 +619,7 @@ async fn main() -> Result<()> {
                     &opts.keystore_path
                 ))
             })?;
-        let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+        let keystore = FileBasedKeystore::load_or_create(&keystore_path)?;
         let keypair = keystore
             .key_pairs()
             .iter()

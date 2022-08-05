@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::{Deserialize, Serialize};
-use serde_with::{hex::Hex, serde_as};
+use serde_with::serde_as;
 use std::fmt::{Display, Formatter, Write};
 use sui_sdk::crypto::KeystoreType;
 use sui_types::base_types::*;
@@ -17,8 +17,6 @@ use sui_sdk::ClientType;
 #[serde_as]
 #[derive(Serialize, Deserialize)]
 pub struct SuiClientConfig {
-    #[serde_as(as = "Vec<Hex>")]
-    pub accounts: Vec<SuiAddress>,
     pub keystore: KeystoreType,
     pub gateway: ClientType,
     pub active_address: Option<SuiAddress>,
@@ -30,7 +28,11 @@ impl Display for SuiClientConfig {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
 
-        writeln!(writer, "Managed addresses : {}", self.accounts.len())?;
+        writeln!(
+            writer,
+            "Managed addresses : {}",
+            self.keystore.init().unwrap().addresses().len()
+        )?;
         write!(writer, "Active address: ")?;
         match self.active_address {
             Some(r) => writeln!(writer, "{}", r)?,

@@ -1,16 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use clap::*;
 use std::fs;
 use std::path::{Path, PathBuf};
-use sui_sdk::crypto::{Keystore, SuiKeystore};
+
+use anyhow::anyhow;
+use clap::*;
+use tracing::info;
+
+use sui_sdk::crypto::SuiKeystore;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits};
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
-use tracing::info;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
@@ -34,10 +36,13 @@ pub enum KeyToolCommand {
         #[clap(long)]
         data: String,
     },
+    Import {
+        mnemonic_phrase: String,
+    },
 }
 
 impl KeyToolCommand {
-    pub fn execute(self, keystore: SuiKeystore) -> Result<(), anyhow::Error> {
+    pub fn execute(self, keystore: &mut SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate => {
                 let (_address, keypair): (_, AccountKeyPair) = get_key_pair();
@@ -62,11 +67,11 @@ impl KeyToolCommand {
                     "Sui Address", "Public Key (Base64)"
                 );
                 println!("{}", ["-"; 91].join(""));
-                for keypair in keystore.key_pairs() {
+                for pub_key in keystore.keys() {
                     println!(
                         " {0: ^42} | {1: ^45} ",
-                        Into::<SuiAddress>::into(keypair.public()),
-                        Base64::encode(keypair.public().as_ref()),
+                        Into::<SuiAddress>::into(&pub_key),
+                        Base64::encode(&pub_key),
                     );
                 }
             }
@@ -90,6 +95,10 @@ impl KeyToolCommand {
                 info!("Flag Base64: {}", flag);
                 info!("Public Key Base64: {}", pub_key);
                 info!("Signature : {}", signature);
+            }
+            KeyToolCommand::Import { mnemonic_phrase } => {
+                let address = keystore.import_from_mnemonic(&mnemonic_phrase)?;
+                info!("Key imported for address [{address}]");
             }
         }
 

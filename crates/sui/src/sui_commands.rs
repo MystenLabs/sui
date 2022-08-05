@@ -21,7 +21,7 @@ use sui_config::{
     sui_config_dir, Config, PersistedConfig, SUI_CLIENT_CONFIG, SUI_FULLNODE_CONFIG,
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
-use sui_sdk::crypto::{KeystoreType, SuiKeystore};
+use sui_sdk::crypto::KeystoreType;
 use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::Swarm;
 use sui_types::crypto::KeypairTraits;
@@ -243,13 +243,10 @@ impl SuiCommand {
                         .build()
                 };
 
-                let mut accounts = Vec::new();
-                let mut keystore = SuiKeystore::default();
+                let mut keystore = KeystoreType::File(keystore_path.clone()).init().unwrap();
 
                 for key in &network_config.account_keys {
-                    let address = key.public().into();
-                    accounts.push(address);
-                    keystore.add_key(address, key.copy())?;
+                    keystore.add_key(key.copy())?;
                 }
 
                 network_config.genesis.save(&genesis_path)?;
@@ -261,12 +258,10 @@ impl SuiCommand {
                 network_config.save(&network_path)?;
                 info!("Network config file is stored in {:?}.", network_path);
 
-                keystore.set_path(&keystore_path);
-                keystore.save()?;
                 info!("Client keystore is stored in {:?}.", keystore_path);
 
                 // Use the first address if any
-                let active_address = accounts.get(0).copied();
+                let active_address = keystore.keys().get(0).map(|k| k.into());
 
                 let validator_set = network_config.validator_set();
 
@@ -285,7 +280,6 @@ impl SuiCommand {
                 };
 
                 let wallet_config = SuiClientConfig {
-                    accounts,
                     keystore: KeystoreType::File(keystore_path),
                     gateway: ClientType::Embedded(wallet_gateway_config),
                     active_address,
@@ -314,8 +308,8 @@ impl SuiCommand {
             SuiCommand::KeyTool { keystore_path, cmd } => {
                 let keystore_path =
                     keystore_path.unwrap_or(sui_config_dir()?.join(SUI_KEYSTORE_FILENAME));
-                let keystore = SuiKeystore::load_or_create(&keystore_path)?;
-                cmd.execute(keystore)
+                let mut keystore = KeystoreType::File(keystore_path).init()?;
+                cmd.execute(&mut keystore)
             }
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
@@ -360,7 +354,7 @@ impl SuiCommand {
 
 // Sync all accounts on start up.
 async fn sync_accounts(context: &mut WalletContext) -> Result<(), anyhow::Error> {
-    for address in context.config.accounts.clone() {
+    for address in context.keystore.addresses().clone() {
         SuiClientCommands::SyncClientState {
             address: Some(address),
         }
@@ -403,9 +397,10 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
                 .unwrap_or(&sui_config_dir()?)
                 .join(SUI_KEYSTORE_FILENAME);
             let keystore = KeystoreType::File(keystore_path);
-            let new_address = keystore.init()?.add_random_key()?;
+            let (new_address, phrase) = keystore.init()?.generate_new_key()?;
+            println!("Generated new keypair for address [{new_address}]");
+            println!("Secret Recovery Phrase : [{phrase}]");
             SuiClientConfig {
-                accounts: vec![new_address],
                 keystore,
                 gateway: ClientType::RPC(url),
                 active_address: Some(new_address),

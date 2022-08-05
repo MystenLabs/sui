@@ -3,7 +3,7 @@
 
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
-use signature::{Error, Signer};
+use signature::Signer;
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
@@ -11,10 +11,14 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
+
+use bip39::Mnemonic;
+use rand::rngs::adapter::ReadRng;
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    get_key_pair, get_key_pair_from_rng, AccountKeyPair, EncodeDecodeBase64, KeypairTraits,
+    get_key_pair_from_rng, AccountKeyPair, AccountPublicKey, EncodeDecodeBase64, KeypairTraits,
     Signature,
 };
 
@@ -23,21 +27,22 @@ use sui_types::crypto::{
 // This will work on user signatures, but not suitable for authority signatures.
 pub enum KeystoreType {
     File(PathBuf),
-    InMem,
+    InMem(usize),
 }
 
-pub trait Keystore: Send + Sync {
+pub trait AccountKeystore: Send + Sync {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error>;
-    fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error>;
     fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error>;
-    fn key_pairs(&self) -> Vec<&AccountKeyPair>;
+    fn keys(&self) -> Vec<AccountPublicKey>;
 }
 
 impl KeystoreType {
-    pub fn init(&self) -> Result<Box<dyn Keystore>, anyhow::Error> {
+    pub fn init(&self) -> Result<SuiKeystore, anyhow::Error> {
         Ok(match self {
-            KeystoreType::File(path) => Box::new(SuiKeystore::load_or_create(path)?),
-            KeystoreType::InMem => Box::new(InMemKeystore::new(0)),
+            KeystoreType::File(path) => SuiKeystore::from(FileBasedKeystore::load_or_create(path)?),
+            KeystoreType::InMem(initial_key_number) => {
+                SuiKeystore::from(InMemKeystore::new(*initial_key_number))
+            }
         })
     }
 }
@@ -51,7 +56,7 @@ impl Display for KeystoreType {
                 write!(writer, "Keystore Path : {:?}", path)?;
                 write!(f, "{}", writer)
             }
-            KeystoreType::InMem => {
+            KeystoreType::InMem(_) => {
                 writeln!(writer, "Keystore Type : InMem")?;
                 write!(f, "{}", writer)
             }
@@ -60,12 +65,12 @@ impl Display for KeystoreType {
 }
 
 #[derive(Serialize, Deserialize, Default)]
-pub struct SuiKeystore {
+pub struct FileBasedKeystore {
     keys: BTreeMap<SuiAddress, AccountKeyPair>,
     path: Option<PathBuf>,
 }
 
-impl Keystore for SuiKeystore {
+impl AccountKeystore for FileBasedKeystore {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
         self.keys
             .get(address)
@@ -75,13 +80,6 @@ impl Keystore for SuiKeystore {
             .try_sign(msg)
     }
 
-    fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        let (address, keypair): (_, AccountKeyPair) = get_key_pair();
-        self.keys.insert(address, keypair);
-        self.save()?;
-        Ok(address)
-    }
-
     fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error> {
         let address: SuiAddress = keypair.public().into();
         self.keys.insert(address, keypair);
@@ -89,29 +87,27 @@ impl Keystore for SuiKeystore {
         Ok(())
     }
 
-    fn key_pairs(&self) -> Vec<&AccountKeyPair> {
-        self.keys.values().collect()
+    fn keys(&self) -> Vec<AccountPublicKey> {
+        self.keys.values().map(|key| key.public().clone()).collect()
     }
 }
 
-impl SuiKeystore {
+impl FileBasedKeystore {
     pub fn load_or_create(path: &Path) -> Result<Self, anyhow::Error> {
-        let keys: Vec<AccountKeyPair> = if path.exists() {
+        let keys = if path.exists() {
             let reader = BufReader::new(File::open(path)?);
             let kp_strings: Vec<String> = serde_json::from_reader(reader)?;
             kp_strings
                 .iter()
-                .map(|kpstr| AccountKeyPair::decode_base64(kpstr))
-                .collect::<Result<Vec<_>, _>>()
+                .map(|kpstr| {
+                    let key = AccountKeyPair::decode_base64(kpstr);
+                    key.map(|k| (k.public().into(), k))
+                })
+                .collect::<Result<BTreeMap<_, _>, _>>()
                 .map_err(|_| anyhow::anyhow!("Invalid Keypair file"))?
         } else {
-            Vec::new()
+            BTreeMap::new()
         };
-
-        let keys = keys
-            .into_iter()
-            .map(|key| (key.public().into(), key))
-            .collect();
 
         Ok(Self {
             keys,
@@ -138,31 +134,85 @@ impl SuiKeystore {
         Ok(())
     }
 
-    pub fn add_key(
-        &mut self,
-        address: SuiAddress,
-        keypair: AccountKeyPair,
-    ) -> Result<(), anyhow::Error> {
-        self.keys.insert(address, keypair);
-        Ok(())
+    pub fn key_pairs(&self) -> Vec<&AccountKeyPair> {
+        self.keys.values().collect()
+    }
+}
+
+pub struct SuiKeystore(Box<dyn AccountKeystore>);
+
+impl SuiKeystore {
+    fn from<S: AccountKeystore + 'static>(keystore: S) -> Self {
+        Self(Box::new(keystore))
+    }
+
+    pub fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error> {
+        self.0.add_key(keypair)
+    }
+
+    pub fn generate_new_key(&mut self) -> Result<(SuiAddress, String), anyhow::Error> {
+        let mnemonic = Mnemonic::generate(12)?;
+        let seed = mnemonic.to_seed("");
+        let mut rng = RngWrapper(ReadRng::new(&seed));
+        let (address, kp) = get_key_pair_from_rng(&mut rng);
+        self.0.add_key(kp)?;
+        Ok((address, mnemonic.to_string()))
+    }
+
+    pub fn keys(&self) -> Vec<AccountPublicKey> {
+        self.0.keys()
     }
 
     pub fn addresses(&self) -> Vec<SuiAddress> {
-        self.keys.keys().cloned().collect()
+        self.keys().iter().map(|k| k.into()).collect()
     }
 
     pub fn signer(&self, signer: SuiAddress) -> impl Signer<Signature> + '_ {
-        SuiKeystoreSigner::new(self, signer)
+        KeystoreSigner::new(&*self.0, signer)
+    }
+
+    pub fn import_from_mnemonic(&mut self, phrase: &str) -> Result<SuiAddress, anyhow::Error> {
+        let seed = &Mnemonic::from_str(phrase).unwrap().to_seed("");
+        let mut rng = RngWrapper(ReadRng::new(seed));
+        let (address, kp) = get_key_pair_from_rng(&mut rng);
+        self.0.add_key(kp)?;
+        Ok(address)
+    }
+
+    pub fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
+        self.0.sign(address, msg)
     }
 }
 
-struct SuiKeystoreSigner<'a> {
-    keystore: &'a SuiKeystore,
+/// wrapper for adding CryptoRng and RngCore impl to ReadRng.
+struct RngWrapper<'a>(ReadRng<&'a [u8]>);
+
+impl rand::CryptoRng for RngWrapper<'_> {}
+impl rand::RngCore for RngWrapper<'_> {
+    fn next_u32(&mut self) -> u32 {
+        self.0.next_u32()
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        self.0.next_u64()
+    }
+
+    fn fill_bytes(&mut self, dest: &mut [u8]) {
+        self.0.fill_bytes(dest)
+    }
+
+    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
+        self.0.try_fill_bytes(dest)
+    }
+}
+
+struct KeystoreSigner<'a> {
+    keystore: &'a dyn AccountKeystore,
     address: SuiAddress,
 }
 
-impl<'a> SuiKeystoreSigner<'a> {
-    pub fn new(keystore: &'a SuiKeystore, account: SuiAddress) -> Self {
+impl<'a> KeystoreSigner<'a> {
+    pub fn new(keystore: &'a dyn AccountKeystore, account: SuiAddress) -> Self {
         Self {
             keystore,
             address: account,
@@ -170,18 +220,18 @@ impl<'a> SuiKeystoreSigner<'a> {
     }
 }
 
-impl Signer<Signature> for SuiKeystoreSigner<'_> {
-    fn try_sign(&self, msg: &[u8]) -> Result<Signature, Error> {
+impl Signer<Signature> for KeystoreSigner<'_> {
+    fn try_sign(&self, msg: &[u8]) -> Result<Signature, signature::Error> {
         self.keystore.sign(&self.address, msg)
     }
 }
 
 #[derive(Serialize, Deserialize, Default)]
-pub struct InMemKeystore {
+struct InMemKeystore {
     keys: BTreeMap<SuiAddress, AccountKeyPair>,
 }
 
-impl Keystore for InMemKeystore {
+impl AccountKeystore for InMemKeystore {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
         self.keys
             .get(address)
@@ -191,20 +241,14 @@ impl Keystore for InMemKeystore {
             .try_sign(msg)
     }
 
-    fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        let (address, keypair): (_, AccountKeyPair) = get_key_pair();
-        self.keys.insert(address, keypair);
-        Ok(address)
-    }
-
     fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error> {
         let address: SuiAddress = keypair.public().into();
         self.keys.insert(address, keypair);
         Ok(())
     }
 
-    fn key_pairs(&self) -> Vec<&AccountKeyPair> {
-        self.keys.values().collect()
+    fn keys(&self) -> Vec<AccountPublicKey> {
+        self.keys.values().map(|key| key.public().clone()).collect()
     }
 }
 
@@ -219,20 +263,16 @@ impl InMemKeystore {
     }
 }
 
-impl Keystore for Box<dyn Keystore> {
+impl AccountKeystore for Box<dyn AccountKeystore> {
     fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
         (**self).sign(address, msg)
-    }
-
-    fn add_random_key(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        (**self).add_random_key()
     }
 
     fn add_key(&mut self, keypair: AccountKeyPair) -> Result<(), anyhow::Error> {
         (**self).add_key(keypair)
     }
 
-    fn key_pairs(&self) -> Vec<&AccountKeyPair> {
-        (**self).key_pairs()
+    fn keys(&self) -> Vec<AccountPublicKey> {
+        (**self).keys()
     }
 }

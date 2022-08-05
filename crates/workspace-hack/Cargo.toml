@@ -52,9 +52,11 @@ beef = { version = "0.5", features = ["impl_serde", "serde"] }
 better_any = { version = "0.1", default-features = false }
 bimap = { version = "0.6", features = ["std"] }
 bincode = { version = "1", default-features = false }
+bip39 = { git = "https://github.com/patrickkuo/rust-bip39.git", rev = "a76fe8310416555e6383b42b8acc4eb93c7bcc89", features = ["rand", "serde", "std", "unicode-normalization"] }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
-bitcoin_hashes = { version = "0.11", default-features = false }
+bitcoin_hashes-a6292c17cd707f01 = { package = "bitcoin_hashes", version = "0.11", default-features = false }
+bitcoin_hashes-274715c4dabd11b0 = { package = "bitcoin_hashes", version = "0.9", features = ["std"] }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
 blake2 = { version = "0.9", features = ["std"] }
@@ -386,14 +388,24 @@ quick-error-dff4ba8e3ae991db = { package = "quick-error", version = "1", default
 quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default-features = false }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
 radix_trie = { version = "0.2", default-features = false }
+rand-3b31131e45eafb45 = { package = "rand", version = "0.6", features = ["alloc", "rand_os", "std"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "rand_pcg", "small_rng", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha = { version = "0.3", features = ["std"] }
+rand_chacha-c65f7effa3be6d31 = { package = "rand_chacha", version = "0.1", default-features = false }
+rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
+rand_core-468e82937335b1c9 = { package = "rand_core", version = "0.3", default-features = false }
+rand_core-9fbad63c4bcf4a8f = { package = "rand_core", version = "0.4", default-features = false, features = ["alloc", "std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
-rand_pcg = { version = "0.2", default-features = false }
-rand_xorshift = { version = "0.3", default-features = false }
+rand_hc = { version = "0.1", default-features = false }
+rand_isaac = { version = "0.1", default-features = false }
+rand_jitter = { version = "0.1", default-features = false, features = ["std"] }
+rand_os = { version = "0.1", default-features = false }
+rand_pcg-c65f7effa3be6d31 = { package = "rand_pcg", version = "0.1", default-features = false }
+rand_pcg-6f8ce4dd05d13bba = { package = "rand_pcg", version = "0.2", default-features = false }
+rand_xorshift-c65f7effa3be6d31 = { package = "rand_xorshift", version = "0.1", default-features = false }
+rand_xorshift-468e82937335b1c9 = { package = "rand_xorshift", version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }
@@ -615,7 +627,8 @@ async-trait = { version = "0.1", default-features = false }
 atoi = { version = "0.4", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
-autocfg = { version = "1", default-features = false }
+autocfg-c65f7effa3be6d31 = { package = "autocfg", version = "0.1", default-features = false }
+autocfg-dff4ba8e3ae991db = { package = "autocfg", version = "1", default-features = false }
 axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
 axum-core = { version = "0.2", default-features = false }
 backoff = { version = "0.4", features = ["futures", "futures-core", "pin-project-lite", "tokio", "tokio_1"] }
@@ -630,9 +643,11 @@ better_typeid_derive = { version = "0.1", default-features = false }
 bimap = { version = "0.6", features = ["std"] }
 bincode = { version = "1", default-features = false }
 bindgen = { version = "0.59", default-features = false, features = ["runtime"] }
+bip39 = { git = "https://github.com/patrickkuo/rust-bip39.git", rev = "a76fe8310416555e6383b42b8acc4eb93c7bcc89", features = ["rand", "serde", "std", "unicode-normalization"] }
 bit-set = { version = "0.5", features = ["std"] }
 bit-vec = { version = "0.6", default-features = false, features = ["std"] }
-bitcoin_hashes = { version = "0.11", default-features = false }
+bitcoin_hashes-a6292c17cd707f01 = { package = "bitcoin_hashes", version = "0.11", default-features = false }
+bitcoin_hashes-274715c4dabd11b0 = { package = "bitcoin_hashes", version = "0.9", features = ["std"] }
 bitflags = { version = "1" }
 bitmaps = { version = "2", features = ["std"] }
 blake2 = { version = "0.9", features = ["std"] }
@@ -1017,14 +1032,24 @@ quick-error-f595c2ba2a3f28df = { package = "quick-error", version = "2", default
 quote-3b31131e45eafb45 = { package = "quote", version = "0.6", features = ["proc-macro"] }
 quote-dff4ba8e3ae991db = { package = "quote", version = "1", features = ["proc-macro"] }
 radix_trie = { version = "0.2", default-features = false }
+rand-3b31131e45eafb45 = { package = "rand", version = "0.6", features = ["alloc", "rand_os", "std"] }
 rand-ca01ad9e24f5d932 = { package = "rand", version = "0.7", features = ["alloc", "getrandom", "getrandom_package", "libc", "rand_pcg", "small_rng", "std"] }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["alloc", "getrandom", "libc", "rand_chacha", "small_rng", "std", "std_rng"] }
-rand_chacha = { version = "0.3", features = ["std"] }
+rand_chacha-c65f7effa3be6d31 = { package = "rand_chacha", version = "0.1", default-features = false }
+rand_chacha-468e82937335b1c9 = { package = "rand_chacha", version = "0.3", features = ["std"] }
+rand_core-468e82937335b1c9 = { package = "rand_core", version = "0.3", default-features = false }
+rand_core-9fbad63c4bcf4a8f = { package = "rand_core", version = "0.4", default-features = false, features = ["alloc", "std"] }
 rand_core-d8f496e17d97b5cb = { package = "rand_core", version = "0.5", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-features = false, features = ["alloc", "getrandom", "std"] }
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
-rand_pcg = { version = "0.2", default-features = false }
-rand_xorshift = { version = "0.3", default-features = false }
+rand_hc = { version = "0.1", default-features = false }
+rand_isaac = { version = "0.1", default-features = false }
+rand_jitter = { version = "0.1", default-features = false, features = ["std"] }
+rand_os = { version = "0.1", default-features = false }
+rand_pcg-c65f7effa3be6d31 = { package = "rand_pcg", version = "0.1", default-features = false }
+rand_pcg-6f8ce4dd05d13bba = { package = "rand_pcg", version = "0.2", default-features = false }
+rand_xorshift-c65f7effa3be6d31 = { package = "rand_xorshift", version = "0.1", default-features = false }
+rand_xorshift-468e82937335b1c9 = { package = "rand_xorshift", version = "0.3", default-features = false }
 rand_xoshiro = { version = "0.6", default-features = false }
 rayon = { version = "1", default-features = false }
 rayon-core = { version = "1", default-features = false }

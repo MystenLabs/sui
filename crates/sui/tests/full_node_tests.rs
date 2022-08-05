@@ -40,8 +40,8 @@ use test_utils::network::setup_network_and_wallet;
 async fn transfer_coin(
     context: &mut WalletContext,
 ) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
-    let sender = context.config.accounts.get(0).cloned().unwrap();
-    let receiver = context.config.accounts.get(1).cloned().unwrap();
+    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let receiver = context.keystore.addresses().get(1).cloned().unwrap();
 
     let object_refs = context.gateway.get_objects_owned_by_address(sender).await?;
     let object_to_send = object_refs.get(1).unwrap().object_id;
@@ -131,7 +131,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config).await?;
 
-    let sender = context.config.accounts.get(0).cloned().unwrap();
+    let sender = context.keystore.addresses().get(0).cloned().unwrap();
 
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
 
@@ -150,7 +150,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
 
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config).await?;
-    let sender = context.config.accounts.get(0).cloned().unwrap();
+    let sender = context.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
     let effects = increment_counter(&context, sender, None, package_ref, counter_id).await;
     let digest = effects.certificate.transaction_digest;
@@ -298,7 +298,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
 
     let mut futures = Vec::new();
 
-    let sender = context.config.accounts.get(0).cloned().unwrap();
+    let sender = context.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
 
     let context = Arc::new(Mutex::new(context));
@@ -310,7 +310,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
         tokio::task::spawn(async move {
             let (sender, object_to_split) = {
                 let context = &mut context.lock().await;
-                let address = context.config.accounts[i];
+                let address = context.keystore.addresses()[i];
                 SuiClientCommands::SyncClientState {
                     address: Some(address),
                 }
@@ -318,7 +318,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 .await
                 .unwrap();
 
-                let sender = context.config.accounts.get(0).cloned().unwrap();
+                let sender = context.keystore.addresses().get(0).cloned().unwrap();
 
                 let coins = context.gas_objects(sender).await.unwrap();
                 let object_to_split = coins.first().unwrap().1.reference.to_object_ref();
