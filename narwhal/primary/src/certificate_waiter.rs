@@ -12,16 +12,14 @@ use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use store::Store;
 use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        oneshot, watch,
-    },
+    sync::{oneshot, watch},
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{error, info};
 use types::{
     error::{DagError, DagResult},
+    metered_channel::{Receiver, Sender},
     Certificate, CertificateDigest, HeaderDigest, ReconfigureNotification, Round,
 };
 

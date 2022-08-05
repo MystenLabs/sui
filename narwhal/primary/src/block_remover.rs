@@ -14,15 +14,13 @@ use network::{PrimaryToWorkerNetwork, UnreliableNetwork};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use store::{rocks::TypedStoreError, Store};
 use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        oneshot, watch,
-    },
+    sync::{mpsc, oneshot, watch},
     task::JoinHandle,
     time::timeout,
 };
 use tracing::{debug, error, info, instrument, warn};
 use types::{
+    metered_channel::{Receiver, Sender},
     BatchDigest, BlockRemoverError, BlockRemoverErrorKind, BlockRemoverResult, Certificate,
     CertificateDigest, Header, HeaderDigest, PrimaryWorkerMessage, ReconfigureNotification,
 };
@@ -41,7 +39,7 @@ pub enum BlockRemoverCommand {
         // the block ids to remove
         ids: Vec<CertificateDigest>,
         // the channel to communicate the results
-        sender: Sender<BlockRemoverResult<RemoveBlocksResponse>>,
+        sender: mpsc::Sender<BlockRemoverResult<RemoveBlocksResponse>>,
     },
 }
 
@@ -91,6 +89,7 @@ pub struct DeleteBatchMessage {
 /// # use config::WorkerId;
 /// # use tempfile::tempdir;
 /// # use primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, PayloadToken};
+/// # use test_utils::test_channel;
 /// # use types::{BatchDigest, Certificate, CertificateDigest, HeaderDigest, Header};
 /// # use prometheus::Registry;
 /// # use consensus::metrics::ConsensusMetrics;
@@ -115,9 +114,9 @@ pub struct DeleteBatchMessage {
 ///     let headers_store = Store::new(headers_map);
 ///     let payload_store = Store::new(payload_map);
 ///
-///     let (tx_commands, rx_commands) = channel(1);
-///     let (tx_delete_batches, rx_delete_batches) = channel(1);
-///     let (tx_removed_certificates, _rx_removed_certificates) = channel(1);
+///     let (tx_commands, rx_commands) = test_utils::test_channel!(1);
+///     let (tx_delete_batches, rx_delete_batches) = test_utils::test_channel!(1);
+///     let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(1);
 ///     let (tx_delete_block_result, mut rx_delete_block_result) = channel(1);
 ///
 ///     let name = Ed25519PublicKey::default();
@@ -125,7 +124,7 @@ pub struct DeleteBatchMessage {
 ///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 ///     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 ///     // A dag with genesis for the committee
-///     let (tx_new_certificates, rx_new_certificates) = channel(1);
+///     let (tx_new_certificates, rx_new_certificates) = test_utils::test_channel!(1);
 ///     let dag = Arc::new(Dag::new(&committee, rx_new_certificates, consensus_metrics).1);
 ///     // Populate genesis in the Dag
 ///     join_all(
@@ -212,7 +211,7 @@ pub struct BlockRemover {
     /// Holds the senders that are pending to be notified for
     /// a removal request.
     map_tx_removal_results:
-        HashMap<RequestKey, Vec<Sender<BlockRemoverResult<RemoveBlocksResponse>>>>,
+        HashMap<RequestKey, Vec<mpsc::Sender<BlockRemoverResult<RemoveBlocksResponse>>>>,
 
     map_tx_worker_removal_results: HashMap<RequestKey, oneshot::Sender<DeleteBatchResult>>,
 
@@ -363,7 +362,7 @@ impl BlockRemover {
 
     /// Helper method to broadcast the result_to_send to all the senders.
     async fn unreliable_broadcast(
-        senders: Vec<Sender<BlockRemoverResult<RemoveBlocksResponse>>>,
+        senders: Vec<mpsc::Sender<BlockRemoverResult<RemoveBlocksResponse>>>,
         result_to_send: BlockRemoverResult<RemoveBlocksResponse>,
     ) {
         let futures: Vec<_> = senders

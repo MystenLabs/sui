@@ -20,16 +20,14 @@ use std::{
 };
 use store::Store;
 use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        oneshot, watch,
-    },
+    sync::{oneshot, watch},
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, error, info};
 use types::{
     error::{DagError, DagResult},
+    metered_channel::{Receiver, Sender},
     BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, ReconfigureNotification,
     Round,
 };

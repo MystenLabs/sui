@@ -15,12 +15,9 @@ use mockall::*;
 use std::time::Duration;
 use store::Store;
 use thiserror::Error;
-use tokio::{
-    sync::mpsc::{channel, Sender},
-    time::timeout,
-};
+use tokio::{sync::mpsc::channel, time::timeout};
 use tracing::{debug, error, instrument, trace};
-use types::{Certificate, CertificateDigest, PrimaryMessage};
+use types::{metered_channel, Certificate, CertificateDigest, PrimaryMessage};
 
 #[cfg(test)]
 #[path = "tests/handler_tests.rs"]
@@ -99,12 +96,12 @@ pub trait Handler {
 /// process them and causally complete their history.
 pub struct BlockSynchronizerHandler {
     /// Channel to send commands to the block_synchronizer.
-    tx_block_synchronizer: Sender<Command>,
+    tx_block_synchronizer: metered_channel::Sender<Command>,
 
     /// Channel to send the fetched certificates to Core for
     /// further processing, validation and possibly causal
     /// completion.
-    tx_core: Sender<PrimaryMessage>,
+    tx_core: metered_channel::Sender<PrimaryMessage>,
 
     /// The store that holds the certificates.
     certificate_store: Store<CertificateDigest, Certificate>,
@@ -116,8 +113,8 @@ pub struct BlockSynchronizerHandler {
 
 impl BlockSynchronizerHandler {
     pub fn new(
-        tx_block_synchronizer: Sender<Command>,
-        tx_core: Sender<PrimaryMessage>,
+        tx_block_synchronizer: metered_channel::Sender<Command>,
+        tx_core: metered_channel::Sender<PrimaryMessage>,
         certificate_store: Store<CertificateDigest, Certificate>,
         certificate_deliver_timeout: Duration,
     ) -> Self {

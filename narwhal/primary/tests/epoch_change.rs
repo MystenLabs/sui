@@ -10,7 +10,7 @@ use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{collections::BTreeMap, sync::Arc};
 use test_utils::{keys, make_authority, pure_committee_from_keys, temp_dir};
-use tokio::sync::{mpsc::channel, watch};
+use tokio::sync::watch;
 use types::{ReconfigureNotification, WorkerPrimaryMessage};
 
 /// The epoch changes but the stake distribution and network addresses stay the same.
@@ -32,9 +32,11 @@ async fn test_simple_epoch_change() {
         let name = keypair.public().clone();
         let signer = keypair;
 
-        let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+        let (tx_new_certificates, rx_new_certificates) =
+            test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
         rx_channels.push(rx_new_certificates);
-        let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+        let (tx_feedback, rx_feedback) =
+            test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         tx_channels.push(tx_feedback.clone());
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee_0.clone());
@@ -138,9 +140,11 @@ async fn test_partial_committee_change() {
         let name = keypair.public().clone();
         let signer = keypair;
 
-        let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+        let (tx_new_certificates, rx_new_certificates) =
+            test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
         epoch_0_rx_channels.push(rx_new_certificates);
-        let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+        let (tx_feedback, rx_feedback) =
+            test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         epoch_0_tx_channels.push(tx_feedback.clone());
         let initial_committee = ReconfigureNotification::NewEpoch(committee_0.clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
@@ -214,9 +218,11 @@ async fn test_partial_committee_change() {
         let name = keypair.public().clone();
         let signer = keypair;
 
-        let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+        let (tx_new_certificates, rx_new_certificates) =
+            test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
         epoch_1_rx_channels.push(rx_new_certificates);
-        let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+        let (tx_feedback, rx_feedback) =
+            test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         epoch_1_tx_channels.push(tx_feedback.clone());
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee_1.clone());
@@ -290,9 +296,11 @@ async fn test_restart_with_new_committee_change() {
         let name = keypair.public().clone();
         let signer = keypair;
 
-        let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+        let (tx_new_certificates, rx_new_certificates) =
+            test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
         rx_channels.push(rx_new_certificates);
-        let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+        let (tx_feedback, rx_feedback) =
+            test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         tx_channels.push(tx_feedback.clone());
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee_0.clone());
@@ -361,9 +369,11 @@ async fn test_restart_with_new_committee_change() {
             let name = keypair.public().clone();
             let signer = keypair;
 
-            let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+            let (tx_new_certificates, rx_new_certificates) =
+                test_utils::test_channel!(CHANNEL_CAPACITY);
             rx_channels.push(rx_new_certificates);
-            let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+            let (tx_feedback, rx_feedback) =
+                test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
             tx_channels.push(tx_feedback.clone());
 
             let initial_committee = ReconfigureNotification::NewEpoch(new_committee.clone());
@@ -440,9 +450,11 @@ async fn test_simple_committee_update() {
         let name = keypair.public().clone();
         let signer = keypair;
 
-        let (tx_new_certificates, rx_new_certificates) = channel(CHANNEL_CAPACITY);
+        let (tx_new_certificates, rx_new_certificates) =
+            test_utils::test_channel!(CHANNEL_CAPACITY);
         rx_channels.push(rx_new_certificates);
-        let (tx_feedback, rx_feedback) = channel(CHANNEL_CAPACITY);
+        let (tx_feedback, rx_feedback) =
+            test_utils::test_committed_certificates_channel!(CHANNEL_CAPACITY);
         tx_channels.push(tx_feedback.clone());
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee_0.clone());

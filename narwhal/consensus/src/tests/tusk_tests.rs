@@ -68,8 +68,8 @@ async fn commit_one() {
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = channel(1);
-    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = channel(1);
 
     let committee = mock_committee(&keys[..]);
@@ -132,8 +132,8 @@ async fn dead_node() {
     let (mut certificates, _) = test_utils::make_optimal_certificates(1..=9, &genesis, &keys);
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = channel(1);
-    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = channel(1);
 
     let committee = mock_committee(&keys[..]);
@@ -240,8 +240,8 @@ async fn not_enough_support() {
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = channel(1);
-    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = channel(1);
 
     let committee = mock_committee(&keys[..]);
@@ -322,8 +322,8 @@ async fn missing_leader() {
     certificates.push_back(certificate);
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = channel(1);
-    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = channel(1);
 
     let committee = mock_committee(&keys[..]);
@@ -383,8 +383,8 @@ async fn epoch_change() {
     let mut committee = mock_committee(&keys[..]);
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_waiter, rx_waiter) = channel(1);
-    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, mut rx_output) = channel(1);
 
     let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());
@@ -462,8 +462,8 @@ async fn restart_with_new_committee() {
     // Run for a few epochs.
     for epoch in 0..5 {
         // Spawn the consensus engine and sink the primary channel.
-        let (tx_waiter, rx_waiter) = channel(1);
-        let (tx_primary, mut rx_primary) = channel(1);
+        let (tx_waiter, rx_waiter) = test_utils::test_channel!(1);
+        let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
         let (tx_output, mut rx_output) = channel(1);
 
         let initial_committee = ReconfigureNotification::NewEpoch(committee.clone());

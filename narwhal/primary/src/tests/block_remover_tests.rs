@@ -25,23 +25,23 @@ use test_utils::{
 };
 use tokio::{
     sync::{
-        mpsc::{channel, Sender},
+        mpsc::{self},
         watch,
     },
     task::JoinHandle,
     time::{sleep, timeout},
 };
-use types::{BatchDigest, Certificate, ReconfigureNotification};
+use types::{metered_channel, BatchDigest, Certificate, ReconfigureNotification};
 
 #[tokio::test]
 async fn test_successful_blocks_delete() {
     // GIVEN
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (_tx_consensus, rx_consensus) = channel(1);
-    let (tx_removed_certificates, mut rx_removed_certificates) = channel(10);
-    let (tx_commands, rx_commands) = channel(10);
-    let (tx_remove_block, mut rx_remove_block) = channel(1);
-    let (tx_delete_batches, rx_delete_batches) = channel(10);
+    let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
+    let (tx_removed_certificates, mut rx_removed_certificates) = test_utils::test_channel!(10);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
+    let (tx_remove_block, mut rx_remove_block) = mpsc::channel(1);
+    let (tx_delete_batches, rx_delete_batches) = test_utils::test_channel!(10);
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
@@ -201,11 +201,11 @@ async fn test_successful_blocks_delete() {
 async fn test_timeout() {
     // GIVEN
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (tx_commands, rx_commands) = channel(10);
-    let (tx_remove_block, mut rx_remove_block) = channel(1);
-    let (_tx_consensus, rx_consensus) = channel(1);
-    let (_tx_delete_batches, rx_delete_batches) = channel(10);
-    let (tx_removed_certificates, _rx_removed_certificates) = channel(10);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
+    let (tx_remove_block, mut rx_remove_block) = mpsc::channel(1);
+    let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
+    let (_tx_delete_batches, rx_delete_batches) = test_utils::test_channel!(10);
+    let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(10);
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
@@ -339,10 +339,10 @@ async fn test_timeout() {
 async fn test_unlocking_pending_requests() {
     // GIVEN
     let (header_store, certificate_store, payload_store) = create_db_stores();
-    let (_tx_commands, rx_commands) = channel(10);
-    let (_tx_consensus, rx_consensus) = channel(1);
-    let (_tx_delete_batches, rx_delete_batches) = channel(10);
-    let (tx_removed_certificates, _rx_removed_certificates) = channel(10);
+    let (_tx_commands, rx_commands) = test_utils::test_channel!(10);
+    let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
+    let (_tx_delete_batches, rx_delete_batches) = test_utils::test_channel!(10);
+    let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(10);
 
     // AND the necessary keys
     let (name, committee) = resolve_name_and_committee();
@@ -409,7 +409,7 @@ async fn test_unlocking_pending_requests() {
 
     // AND send the removal command
     let get_mock_sender = || {
-        let (tx, _) = channel(1);
+        let (tx, _) = mpsc::channel(1);
         tx
     };
 
@@ -455,7 +455,7 @@ async fn test_unlocking_pending_requests() {
 pub fn worker_listener(
     address: multiaddr::Multiaddr,
     expected_batch_ids: Vec<BatchDigest>,
-    tx_delete_batches: Sender<DeleteBatchResult>,
+    tx_delete_batches: metered_channel::Sender<DeleteBatchResult>,
 ) -> JoinHandle<()> {
     println!("[{}] Setting up server", &address);
     let mut recv = PrimaryToWorkerMockServer::spawn(address.clone());

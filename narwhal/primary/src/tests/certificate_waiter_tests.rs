@@ -18,7 +18,7 @@ use std::{
     time::Duration,
 };
 use test_utils::{certificate, committee, fixture_headers_round, keys};
-use tokio::sync::{mpsc::channel, watch};
+use tokio::sync::watch;
 use types::{Certificate, PrimaryMessage, ReconfigureNotification, Round};
 
 #[tokio::test]
@@ -31,21 +31,21 @@ async fn process_certificate_missing_parents_in_reverse() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
     // synchronizer to header waiter
-    let (tx_sync_headers, rx_sync_headers) = channel(1);
+    let (tx_sync_headers, rx_sync_headers) = test_utils::test_channel!(1);
     // synchronizer to certificate waiter
-    let (tx_sync_certificates, rx_sync_certificates) = channel(1);
+    let (tx_sync_certificates, rx_sync_certificates) = test_utils::test_channel!(1);
     // primary messages
-    let (tx_primary_messages, rx_primary_messages) = channel(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
     // header waiter to primary
-    let (tx_headers_loopback, rx_headers_loopback) = channel(1);
+    let (tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     // certificate waiter to primary
-    let (tx_certificates_loopback, rx_certificates_loopback) = channel(1);
+    let (tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     // proposer back to the core
-    let (_tx_headers, rx_headers) = channel(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
     // core -> consensus, we store the output of process_certificate here, a small channel limit may backpressure the test into failure
-    let (tx_consensus, _rx_consensus) = channel(100);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(100);
     // core -> proposers, byproduct of certificate processing, a small channel limit could backpressure the test into failure
-    let (tx_parents, _rx_parents) = channel(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
 
     // Create test stores.
     let (header_store, certificates_store, payload_store) = create_db_stores();
@@ -174,21 +174,21 @@ async fn process_certificate_check_gc_fires() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
     // synchronizer to header waiter
-    let (tx_sync_headers, rx_sync_headers) = channel(1);
+    let (tx_sync_headers, rx_sync_headers) = test_utils::test_channel!(1);
     // synchronizer to certificate waiter
-    let (tx_sync_certificates, rx_sync_certificates) = channel(1);
+    let (tx_sync_certificates, rx_sync_certificates) = test_utils::test_channel!(1);
     // primary messages
-    let (tx_primary_messages, rx_primary_messages) = channel(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
     // header waiter to primary
-    let (tx_headers_loopback, rx_headers_loopback) = channel(1);
+    let (tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
     // certificate waiter to primary
-    let (tx_certificates_loopback, rx_certificates_loopback) = channel(1);
+    let (tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
     // proposer back to the core
-    let (_tx_headers, rx_headers) = channel(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
     // core -> consensus, we store the output of process_certificate here, a small channel limit may backpressure the test into failure
-    let (tx_consensus, _rx_consensus) = channel(100);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(100);
     // core -> proposers, byproduct of certificate processing, a small channel limit could backpressure the test into failure
-    let (tx_parents, _rx_parents) = channel(100);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
 
     // Signal consensus round
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);

@@ -7,12 +7,11 @@ use crypto::{traits::EncodeDecodeBase64, PublicKey};
 use network::{PrimaryNetwork, UnreliableNetwork};
 use store::{Store, StoreError};
 use thiserror::Error;
-use tokio::{
-    sync::{mpsc::Receiver, watch},
-    task::JoinHandle,
-};
+use tokio::{sync::watch, task::JoinHandle};
 use tracing::{error, info, instrument};
-use types::{BatchDigest, Certificate, CertificateDigest, ReconfigureNotification};
+use types::{
+    metered_channel::Receiver, BatchDigest, Certificate, CertificateDigest, ReconfigureNotification,
+};
 
 #[cfg(test)]
 #[path = "tests/helper_tests.rs"]

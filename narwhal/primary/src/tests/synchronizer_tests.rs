@@ -6,7 +6,6 @@ use crypto::{traits::KeyPair, Hash};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
 use test_utils::{committee, keys, make_optimal_signed_certificates};
-use tokio::sync::mpsc::channel;
 use types::Certificate;
 
 #[tokio::test]
@@ -19,9 +18,9 @@ async fn deliver_certificate_using_dag() {
     let committee = committee(None);
 
     let (_, certificates_store, payload_store) = create_db_stores();
-    let (tx_header_waiter, _rx_header_waiter) = channel(1);
-    let (tx_certificate_waiter, _rx_certificate_waiter) = channel(1);
-    let (_tx_consensus, rx_consensus) = channel(1);
+    let (tx_header_waiter, _rx_header_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
+    let (_tx_consensus, rx_consensus) = test_utils::test_channel!(1);
 
     let consensus_metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
@@ -72,8 +71,8 @@ async fn deliver_certificate_using_store() {
     let committee = committee(None);
 
     let (_, certificates_store, payload_store) = create_db_stores();
-    let (tx_header_waiter, _rx_header_waiter) = channel(1);
-    let (tx_certificate_waiter, _rx_certificate_waiter) = channel(1);
+    let (tx_header_waiter, _rx_header_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, _rx_certificate_waiter) = test_utils::test_channel!(1);
 
     let mut synchronizer = Synchronizer::new(
         name,
@@ -123,8 +122,8 @@ async fn deliver_certificate_not_found_parents() {
     let committee = committee(None);
 
     let (_, certificates_store, payload_store) = create_db_stores();
-    let (tx_header_waiter, _rx_header_waiter) = channel(1);
-    let (tx_certificate_waiter, mut rx_certificate_waiter) = channel(1);
+    let (tx_header_waiter, _rx_header_waiter) = test_utils::test_channel!(1);
+    let (tx_certificate_waiter, mut rx_certificate_waiter) = test_utils::test_channel!(1);
 
     let mut synchronizer = Synchronizer::new(
         name,

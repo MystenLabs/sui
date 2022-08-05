@@ -11,15 +11,14 @@ use crate::{
 use crypto::Hash;
 use std::{collections::HashSet, time::Duration};
 use test_utils::{certificate, fixture_header_with_payload};
-use tokio::sync::mpsc::channel;
 use types::{Certificate, CertificateDigest, PrimaryMessage};
 
 #[tokio::test]
 async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
-    let (tx_block_synchronizer, rx_block_synchronizer) = channel(1);
-    let (tx_core, _rx_core) = channel(1);
+    let (tx_block_synchronizer, rx_block_synchronizer) = test_utils::test_channel!(1);
+    let (tx_core, _rx_core) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,
@@ -67,8 +66,8 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
 async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
-    let (tx_block_synchronizer, rx_block_synchronizer) = channel(1);
-    let (tx_core, mut rx_core) = channel(1);
+    let (tx_block_synchronizer, rx_block_synchronizer) = test_utils::test_channel!(1);
+    let (tx_core, mut rx_core) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,
@@ -154,8 +153,8 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
 async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
-    let (tx_block_synchronizer, rx_block_synchronizer) = channel(1);
-    let (tx_core, _rx_core) = channel(1);
+    let (tx_block_synchronizer, rx_block_synchronizer) = test_utils::test_channel!(1);
+    let (tx_core, _rx_core) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,
@@ -223,8 +222,8 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
 async fn test_synchronize_block_payload() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let (tx_block_synchronizer, rx_block_synchronizer) = channel(1);
-    let (tx_core, _rx_core) = channel(1);
+    let (tx_block_synchronizer, rx_block_synchronizer) = test_utils::test_channel!(1);
+    let (tx_core, _rx_core) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,
@@ -291,8 +290,8 @@ async fn test_synchronize_block_payload() {
 async fn test_call_methods_with_empty_input() {
     // GIVEN
     let (_, certificate_store, _) = create_db_stores();
-    let (tx_block_synchronizer, _) = channel(1);
-    let (tx_core, _rx_core) = channel(1);
+    let (tx_block_synchronizer, _) = test_utils::test_channel!(1);
+    let (tx_core, _rx_core) = test_utils::test_channel!(1);
 
     let synchronizer = BlockSynchronizerHandler {
         tx_block_synchronizer,

@@ -17,14 +17,14 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 use tokio::{
-    sync::{mpsc::Receiver, oneshot, watch},
+    sync::{oneshot, watch},
     task::JoinHandle,
     time::timeout,
 };
 use tracing::{debug, error, info, instrument, warn};
 use types::{
-    BatchDigest, BatchMessage, BlockError, BlockErrorKind, BlockResult, Certificate,
-    CertificateDigest, Header, PrimaryWorkerMessage, ReconfigureNotification,
+    metered_channel::Receiver, BatchDigest, BatchMessage, BlockError, BlockErrorKind, BlockResult,
+    Certificate, CertificateDigest, Header, PrimaryWorkerMessage, ReconfigureNotification,
 };
 use Result::*;
 
@@ -124,6 +124,7 @@ type RequestKey = Vec<u8>;
 /// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}};
 /// # use types::{BatchMessage, BatchDigest, CertificateDigest, Batch};
 /// # use mockall::*;
+/// # use test_utils::test_channel;
 /// # use types::ReconfigureNotification;
 /// # use crypto::traits::VerifyingKey;
 /// # use async_trait::async_trait;
@@ -152,8 +153,8 @@ type RequestKey = Vec<u8>;
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
-///     let (tx_commands, rx_commands) = channel(1);
-///     let (tx_batches, rx_batches) = channel(1);
+///     let (tx_commands, rx_commands) = test_utils::test_channel!(1);
+///     let (tx_batches, rx_batches) = test_utils::test_channel!(1);
 ///     let (tx_get_block, mut rx_get_block) = oneshot::channel();
 ///
 ///     let name = Ed25519PublicKey::default();

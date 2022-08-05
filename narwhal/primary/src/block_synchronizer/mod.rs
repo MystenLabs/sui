@@ -34,7 +34,8 @@ use tokio::{
 };
 use tracing::{debug, error, info, instrument, trace, warn};
 use types::{
-    BatchDigest, Certificate, CertificateDigest, PrimaryWorkerMessage, ReconfigureNotification,
+    metered_channel, BatchDigest, Certificate, CertificateDigest, PrimaryWorkerMessage,
+    ReconfigureNotification,
 };
 
 #[cfg(test)]
@@ -159,14 +160,14 @@ pub struct BlockSynchronizer {
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
 
     /// Receive the commands for the synchronizer
-    rx_commands: Receiver<Command>,
+    rx_commands: metered_channel::Receiver<Command>,
 
     /// Receive the requested list of certificates through this channel
-    rx_certificate_responses: Receiver<CertificatesResponse>,
+    rx_certificate_responses: metered_channel::Receiver<CertificatesResponse>,
 
     /// Receive the availability for the requested certificates through this
     /// channel
-    rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse>,
+    rx_payload_availability_responses: metered_channel::Receiver<PayloadAvailabilityResponse>,
 
     /// Pending block requests either for header or payload type
     pending_requests: HashMap<PendingIdentifier, Vec<ResultSender>>,
@@ -204,9 +205,9 @@ impl BlockSynchronizer {
         name: PublicKey,
         committee: Committee,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_commands: Receiver<Command>,
-        rx_certificate_responses: Receiver<CertificatesResponse>,
-        rx_payload_availability_responses: Receiver<PayloadAvailabilityResponse>,
+        rx_commands: metered_channel::Receiver<Command>,
+        rx_certificate_responses: metered_channel::Receiver<CertificatesResponse>,
+        rx_payload_availability_responses: metered_channel::Receiver<PayloadAvailabilityResponse>,
         network: PrimaryNetwork,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         certificate_store: Store<CertificateDigest, Certificate>,

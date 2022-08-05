@@ -5,7 +5,6 @@ use super::*;
 use crypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{committee, keys};
-use tokio::sync::mpsc::channel;
 
 #[tokio::test]
 async fn propose_empty() {
@@ -15,9 +14,9 @@ async fn propose_empty() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
-    let (_tx_parents, rx_parents) = channel(1);
-    let (_tx_our_digests, rx_our_digests) = channel(1);
-    let (tx_headers, mut rx_headers) = channel(1);
+    let (_tx_parents, rx_parents) = test_utils::test_channel!(1);
+    let (_tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
+    let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
@@ -51,9 +50,9 @@ async fn propose_payload() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
-    let (_tx_parents, rx_parents) = channel(1);
-    let (tx_our_digests, rx_our_digests) = channel(1);
-    let (tx_headers, mut rx_headers) = channel(1);
+    let (_tx_parents, rx_parents) = test_utils::test_channel!(1);
+    let (tx_our_digests, rx_our_digests) = test_utils::test_channel!(1);
+    let (tx_headers, mut rx_headers) = test_utils::test_channel!(1);
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 

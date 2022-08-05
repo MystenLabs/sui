@@ -4,9 +4,9 @@
 use crate::primary::PayloadToken;
 use config::WorkerId;
 use store::Store;
-use tokio::{sync::mpsc::Receiver, task::JoinHandle};
+use tokio::task::JoinHandle;
 use tracing::info;
-use types::BatchDigest;
+use types::{metered_channel::Receiver, BatchDigest};
 
 /// Receives batches' digests of other authorities. These are only needed to verify incoming
 /// headers (i.e.. make sure we have their payload).

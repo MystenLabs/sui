@@ -13,9 +13,9 @@ use consensus::dag::Dag;
 use crypto::PublicKey;
 use multiaddr::Multiaddr;
 use std::{sync::Arc, time::Duration};
-use tokio::{sync::mpsc::Sender, task::JoinHandle};
+use tokio::task::JoinHandle;
 use tracing::{error, info};
-use types::{ConfigurationServer, ProposerServer, ValidatorServer};
+use types::{metered_channel::Sender, ConfigurationServer, ProposerServer, ValidatorServer};
 
 mod configuration;
 pub mod metrics;

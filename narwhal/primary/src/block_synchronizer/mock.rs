@@ -2,12 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::{BlockHeader, BlockSynchronizeResult, Command};
 use crypto::Hash;
+use prometheus::IntGauge;
 use std::collections::HashMap;
-use tokio::sync::{
-    mpsc::{channel, Receiver, Sender},
-    oneshot,
-};
-use types::CertificateDigest;
+use tokio::sync::oneshot;
+use types::{metered_channel, CertificateDigest};
 
 #[derive(Debug)]
 enum Core {
@@ -41,10 +39,10 @@ struct MockBlockSynchronizerCore {
 
     /// Channel to receive the messages that are supposed to be sent to the
     /// block synchronizer.
-    rx_commands: Receiver<Command>,
+    rx_commands: metered_channel::Receiver<Command>,
 
     /// Channel to receive the commands to mock the requests.
-    rx_core: Receiver<Core>,
+    rx_core: metered_channel::Receiver<Core>,
 }
 
 impl MockBlockSynchronizerCore {
@@ -152,12 +150,13 @@ impl MockBlockSynchronizerCore {
 /// eliminating the need to wire in the actual BlockSynchronizer when needed
 /// for other components.
 pub struct MockBlockSynchronizer {
-    tx_core: Sender<Core>,
+    tx_core: metered_channel::Sender<Core>,
 }
 
 impl MockBlockSynchronizer {
-    pub fn new(rx_commands: Receiver<Command>) -> Self {
-        let (tx_core, rx_core) = channel(1);
+    pub fn new(rx_commands: metered_channel::Receiver<Command>) -> Self {
+        let mock_counter = IntGauge::new("MOCK_COUNTER", "mock counter").unwrap();
+        let (tx_core, rx_core) = metered_channel::channel(1, &mock_counter);
 
         let mut core = MockBlockSynchronizerCore {
             block_headers_expected_requests: HashMap::new(),

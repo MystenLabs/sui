@@ -17,15 +17,13 @@ use test_utils::{
     fixture_header_with_payload, keys, resolve_name_and_committee, PrimaryToWorkerMockServer,
 };
 use tokio::{
-    sync::{
-        mpsc::{channel, Sender},
-        oneshot, watch,
-    },
+    sync::{oneshot, watch},
     task::JoinHandle,
     time::{sleep, timeout, Duration},
 };
 use types::{
-    Batch, BatchDigest, BatchMessage, Certificate, CertificateDigest, ReconfigureNotification,
+    metered_channel, Batch, BatchDigest, BatchMessage, Certificate, CertificateDigest,
+    ReconfigureNotification,
 };
 
 #[tokio::test]
@@ -41,9 +39,9 @@ async fn test_successfully_retrieve_block() {
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = channel(1);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
     let (tx_get_block, rx_get_block) = oneshot::channel();
-    let (tx_batch_messages, rx_batch_messages) = channel(10);
+    let (tx_batch_messages, rx_batch_messages) = test_utils::test_channel!(10);
 
     // AND "mock" the batch responses
     let mut expected_batch_messages = HashMap::new();
@@ -213,9 +211,9 @@ async fn test_successfully_retrieve_multiple_blocks() {
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = channel(1);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
     let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
-    let (tx_batch_messages, rx_batch_messages) = channel(10);
+    let (tx_batch_messages, rx_batch_messages) = test_utils::test_channel!(10);
 
     // AND spin up a worker node
     let worker_address = committee
@@ -303,8 +301,8 @@ async fn test_one_pending_request_for_block_at_time() {
 
     // AND
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = channel(1);
-    let (_, rx_batch_messages) = channel(1);
+    let (_, rx_commands) = test_utils::test_channel!(1);
+    let (_, rx_batch_messages) = test_utils::test_channel!(1);
 
     let get_mock_sender = || {
         let (tx, _) = oneshot::channel();
@@ -380,8 +378,8 @@ async fn test_unlocking_pending_get_block_request_after_response() {
 
     // AND spawn a new blocks waiter
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = channel(1);
-    let (_, rx_batch_messages) = channel(1);
+    let (_, rx_commands) = test_utils::test_channel!(1);
+    let (_, rx_batch_messages) = test_utils::test_channel!(1);
 
     // AND mock the responses of the BlockSynchronizer
     let mut mock_handler = MockHandler::new();
@@ -449,9 +447,9 @@ async fn test_batch_timeout() {
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = channel(1);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
     let (tx_get_block, rx_get_block) = oneshot::channel();
-    let (_, rx_batch_messages) = channel(10);
+    let (_, rx_batch_messages) = test_utils::test_channel!(10);
 
     // AND mock the responses of the BlockSynchronizer
     let mut mock_handler = MockHandler::new();
@@ -517,9 +515,9 @@ async fn test_return_error_when_certificate_is_missing() {
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = channel(1);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
     let (tx_get_block, rx_get_block) = oneshot::channel();
-    let (_, rx_batch_messages) = channel(10);
+    let (_, rx_batch_messages) = test_utils::test_channel!(10);
 
     // AND mock the responses of the BlockSynchronizer
     let mut mock_handler = MockHandler::new();
@@ -579,9 +577,9 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     // AND spawn a new blocks waiter
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = channel(1);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(1);
     let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
-    let (_, rx_batch_messages) = channel(10);
+    let (_, rx_batch_messages) = test_utils::test_channel!(10);
 
     // AND mock the responses of the BlockSynchronizer
     let mut mock_handler = MockHandler::new();
@@ -643,7 +641,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
 pub fn worker_listener(
     address: multiaddr::Multiaddr,
     expected_batches: HashMap<BatchDigest, BatchMessage>,
-    tx_batch_messages: Sender<BatchResult>,
+    tx_batch_messages: metered_channel::Sender<BatchResult>,
 ) -> JoinHandle<()> {
     let mut recv = PrimaryToWorkerMockServer::spawn(address);
     tokio::spawn(async move {

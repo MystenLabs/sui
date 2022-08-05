@@ -16,10 +16,7 @@ use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
     resolve_name_and_committee, temp_dir, PrimaryToPrimaryMockServer, CERTIFICATES_CF, PAYLOAD_CF,
 };
-use tokio::{
-    sync::{mpsc::channel, watch},
-    time::timeout,
-};
+use tokio::{sync::watch, time::timeout};
 use tracing_test::traced_test;
 use types::{BatchDigest, Certificate, CertificateDigest, ReconfigureNotification};
 
@@ -32,7 +29,7 @@ async fn test_process_certificates_stream_mode() {
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
-    let (tx_primaries, rx_primaries) = channel(10);
+    let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     // AND a helper
     let _helper_handle = Helper::spawn(
@@ -108,7 +105,7 @@ async fn test_process_certificates_batch_mode() {
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
-    let (tx_primaries, rx_primaries) = channel(10);
+    let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     // AND a helper
     let _helper_handle = Helper::spawn(
@@ -205,7 +202,7 @@ async fn test_process_payload_availability_success() {
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
-    let (tx_primaries, rx_primaries) = channel(10);
+    let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     // AND a helper
     let _helper_handle = Helper::spawn(
@@ -321,7 +318,7 @@ async fn test_process_payload_availability_when_failures() {
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
-    let (tx_primaries, rx_primaries) = channel(10);
+    let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     // AND a helper
     let _helper_handle = Helper::spawn(

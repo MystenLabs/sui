@@ -11,15 +11,13 @@ use std::{
 };
 use store::Store;
 use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        watch,
-    },
+    sync::{mpsc::Sender, watch},
     task::JoinHandle,
 };
 use tracing::{info, instrument};
 use types::{
-    Certificate, CertificateDigest, ConsensusStore, ReconfigureNotification, Round, StoreResult,
+    metered_channel, Certificate, CertificateDigest, ConsensusStore, ReconfigureNotification,
+    Round, StoreResult,
 };
 
 /// The representation of the DAG in memory.
@@ -189,9 +187,9 @@ pub struct Consensus<ConsensusProtocol> {
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
-    rx_primary: Receiver<Certificate>,
+    rx_primary: metered_channel::Receiver<Certificate>,
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
-    tx_primary: Sender<Certificate>,
+    tx_primary: metered_channel::Sender<Certificate>,
     /// Outputs the sequence of ordered certificates to the application layer.
     tx_output: Sender<ConsensusOutput>,
 
@@ -216,8 +214,8 @@ where
         store: Arc<ConsensusStore>,
         cert_store: Store<CertificateDigest, Certificate>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_primary: Receiver<Certificate>,
-        tx_primary: Sender<Certificate>,
+        rx_primary: metered_channel::Receiver<Certificate>,
+        tx_primary: metered_channel::Sender<Certificate>,
         tx_output: Sender<ConsensusOutput>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,

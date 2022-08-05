@@ -18,7 +18,7 @@ impl PrimaryNetworkMetrics {
         Self {
             network_available_tasks: register_int_gauge_vec_with_registry!(
                 "primary_network_available_tasks",
-                "The number of available tasks to run in the network connector",
+                "The number of available tasks to run in the primary2primary network connector",
                 &["module", "network", "address"],
                 registry
             )
@@ -49,8 +49,8 @@ impl WorkerNetworkMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
             network_available_tasks: register_int_gauge_vec_with_registry!(
-                "worker_network_concurrent_tasks",
-                "The number of available tasks to run in the network connector",
+                "worker_network_available_tasks",
+                "The number of available tasks to run in the worker2worker network connector",
                 &["module", "network", "address"],
                 registry
             )

@@ -9,8 +9,8 @@ use crypto::{
     KeyPair, PublicKey,
 };
 use executor::{ExecutionState, Executor, ExecutorOutput, SerializedTransaction, SubscriberResult};
-use primary::{NetworkModel, PayloadToken, Primary};
-use prometheus::Registry;
+use primary::{NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
+use prometheus::{IntGauge, Registry};
 use std::{fmt::Debug, sync::Arc};
 use store::{
     reopen,
@@ -19,15 +19,15 @@ use store::{
 };
 use tokio::{
     sync::{
-        mpsc::{channel, Receiver, Sender},
+        mpsc::{channel, Sender},
         watch,
     },
     task::JoinHandle,
 };
 use tracing::debug;
 use types::{
-    BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header, HeaderDigest,
-    ReconfigureNotification, Round, SequenceNumber, SerializedBatchMessage,
+    metered_channel, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header,
+    HeaderDigest, ReconfigureNotification, Round, SequenceNumber, SerializedBatchMessage,
 };
 use worker::{metrics::initialise_metrics, Worker};
 
@@ -132,8 +132,23 @@ impl Node {
         let initial_committee = ReconfigureNotification::NewEpoch((**committee.load()).clone());
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
-        let (tx_new_certificates, rx_new_certificates) = channel(Self::CHANNEL_CAPACITY);
-        let (tx_consensus, rx_consensus) = channel(Self::CHANNEL_CAPACITY);
+        // These gauge is porcelain: do not modify it without also modifying `primary::metrics::PrimaryChannelMetrics::replace_registered_new_certificates_metric`
+        // This hack avoids a cyclic dependency in the initialization of consensus and primary
+        let new_certificates_counter = IntGauge::new(
+            PrimaryChannelMetrics::NAME_NEW_CERTS,
+            PrimaryChannelMetrics::DESC_NEW_CERTS,
+        )
+        .unwrap();
+        let (tx_new_certificates, rx_new_certificates) =
+            metered_channel::channel(Self::CHANNEL_CAPACITY, &new_certificates_counter);
+
+        let committed_certificates_counter = IntGauge::new(
+            PrimaryChannelMetrics::NAME_COMMITTED_CERTS,
+            PrimaryChannelMetrics::DESC_COMMITTED_CERTS,
+        )
+        .unwrap();
+        let (tx_consensus, rx_consensus) =
+            metered_channel::channel(Self::CHANNEL_CAPACITY, &committed_certificates_counter);
 
         // Compute the public key of this authority.
         let name = keypair.public().clone();
@@ -189,7 +204,7 @@ impl Node {
             store.header_store.clone(),
             store.certificate_store.clone(),
             store.payload_store.clone(),
-            /* tx_consensus */ tx_new_certificates,
+            tx_new_certificates,
             /* rx_consensus */ rx_consensus,
             /* dag */ dag,
             network_model,
@@ -227,8 +242,8 @@ impl Node {
         parameters: Parameters,
         execution_state: Arc<State>,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
-        rx_new_certificates: Receiver<Certificate>,
-        tx_feedback: Sender<Certificate>,
+        rx_new_certificates: metered_channel::Receiver<Certificate>,
+        tx_feedback: metered_channel::Sender<Certificate>,
         tx_confirmation: Sender<(
             SubscriberResult<<State as ExecutionState>::Outcome>,
             SerializedTransaction,

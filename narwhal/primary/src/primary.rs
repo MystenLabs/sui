@@ -27,22 +27,18 @@ use crypto::{
 use multiaddr::{Multiaddr, Protocol};
 use network::{metrics::Metrics, PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
-use std::{collections::HashMap, net::Ipv4Addr, sync::Arc, time::Duration};
+use std::{collections::HashMap, net::Ipv4Addr, sync::Arc};
 use store::Store;
-use tokio::{
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        watch,
-    },
-    task::JoinHandle,
-};
+use tokio::{sync::watch, task::JoinHandle};
 use tonic::{Request, Response, Status};
-use tracing::{info, log::error};
+use tracing::info;
 use types::{
-    error::DagError, BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate,
-    CertificateDigest, Empty, Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer,
-    ReconfigureNotification, WorkerInfoResponse, WorkerPrimaryError, WorkerPrimaryMessage,
-    WorkerToPrimary, WorkerToPrimaryServer,
+    error::DagError,
+    metered_channel::{channel, Receiver, Sender},
+    BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate, CertificateDigest, Empty,
+    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
+    WorkerInfoResponse, WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary,
+    WorkerToPrimaryServer,
 };
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
@@ -63,6 +59,7 @@ pub struct Primary;
 impl Primary {
     const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
+    // Spawns the primary and returns the JoinHandles of its tasks, as well as a metered receiver for the Consensus.
     pub fn spawn<Signatory: Signer<Signature> + Send + 'static>(
         name: PublicKey,
         signer: Signatory,
@@ -79,106 +76,87 @@ impl Primary {
         tx_committed_certificates: Sender<Certificate>,
         registry: &Registry,
     ) -> Vec<JoinHandle<()>> {
-        let (tx_others_digests, rx_others_digests) = channel(CHANNEL_CAPACITY);
-        let (tx_our_digests, rx_our_digests) = channel(CHANNEL_CAPACITY);
-        let (tx_parents, rx_parents) = channel(CHANNEL_CAPACITY);
-        let (tx_headers, rx_headers) = channel(CHANNEL_CAPACITY);
-        let (tx_sync_headers, rx_sync_headers) = channel(CHANNEL_CAPACITY);
-        let (tx_sync_certificates, rx_sync_certificates) = channel(CHANNEL_CAPACITY);
-        let (tx_headers_loopback, rx_headers_loopback) = channel(CHANNEL_CAPACITY);
-        let (tx_certificates_loopback, rx_certificates_loopback) = channel(CHANNEL_CAPACITY);
-        let (tx_primary_messages, rx_primary_messages) = channel(CHANNEL_CAPACITY);
-        let (tx_helper_requests, rx_helper_requests) = channel(CHANNEL_CAPACITY);
-        let (tx_get_block_commands, rx_get_block_commands) = channel(CHANNEL_CAPACITY);
-        let (tx_batches, rx_batches) = channel(CHANNEL_CAPACITY);
-        let (tx_block_removal_commands, rx_block_removal_commands) = channel(CHANNEL_CAPACITY);
-        let (tx_batch_removal, rx_batch_removal) = channel(CHANNEL_CAPACITY);
-        let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) =
-            channel(CHANNEL_CAPACITY);
-        let (tx_certificate_responses, rx_certificate_responses) = channel(CHANNEL_CAPACITY);
-        let (tx_payload_availability_responses, rx_payload_availability_responses) =
-            channel(CHANNEL_CAPACITY);
-        let (tx_state_handler, rx_state_handler) = channel(CHANNEL_CAPACITY);
-        let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
-
-        // Monitor of channel capacity
-        let mon_tx_others_digests = tx_others_digests.clone();
-        let mon_tx_our_digests = tx_our_digests.clone();
-        let mon_tx_parents = tx_parents.clone();
-        let mon_tx_headers = tx_headers.clone();
-        let mon_tx_sync_headers = tx_sync_headers.clone();
-        let mon_tx_sync_certificates = tx_sync_certificates.clone();
-        let mon_tx_headers_loopback = tx_headers_loopback.clone();
-        let mon_tx_certificates_loopback = tx_certificates_loopback.clone();
-        let mon_tx_primary_messages = tx_primary_messages.clone();
-        let mon_tx_helper_requests = tx_helper_requests.clone();
-        let mon_tx_get_block_commands = tx_get_block_commands.clone();
-        let mon_tx_batches = tx_batches.clone();
-        let mon_tx_block_removal_commands = tx_block_removal_commands.clone();
-        let mon_tx_batch_removal = tx_batch_removal.clone();
-        let mon_tx_block_synchronizer_commands = tx_block_synchronizer_commands.clone();
-        let mon_tx_certificate_responses = tx_certificate_responses.clone();
-        let mon_tx_payload_availability_responses = tx_payload_availability_responses.clone();
-        let mon_tx_state_handler = tx_state_handler.clone();
-        let mut mon_rx_reconfigure = tx_reconfigure.subscribe();
-
-        let channel_stats_handle = tokio::task::spawn(async move {
-            loop {
-                let timer = tokio::time::sleep(Duration::from_secs(5));
-                tokio::pin!(timer);
-
-                tokio::select! {
-                        () = &mut timer => {
-                            // Dump channel capacities every 5 seconds
-                            let capacities = vec![
-                                mon_tx_others_digests.capacity(),
-                                mon_tx_our_digests.capacity(),
-                                mon_tx_parents.capacity(),
-                                mon_tx_headers.capacity(),
-                                mon_tx_sync_headers.capacity(),
-                                mon_tx_sync_certificates.capacity(),
-                                mon_tx_headers_loopback.capacity(),
-                                mon_tx_certificates_loopback.capacity(),
-                                mon_tx_primary_messages.capacity(),
-                                mon_tx_helper_requests.capacity(),
-                                mon_tx_get_block_commands.capacity(),
-                                mon_tx_batches.capacity(),
-                                mon_tx_block_removal_commands.capacity(),
-                                mon_tx_batch_removal.capacity(),
-                                mon_tx_block_synchronizer_commands.capacity(),
-                                mon_tx_certificate_responses.capacity(),
-                                mon_tx_payload_availability_responses.capacity(),
-                                mon_tx_state_handler.capacity(),
-                            ];
-
-                            if capacities.iter().any(|c| *c == 0) {
-                                error!("Primary Channel Capacities: {:?}", capacities);
-                            } else {
-                                info!("Primary Channel Capacities: {:?}", capacities);
-                            }
-                        },
-
-                    // Check whether the committee changed.
-                    result = mon_rx_reconfigure.changed() => {
-                        result.expect("Committee channel dropped");
-                        let message = mon_rx_reconfigure.borrow().clone();
-                        if let ReconfigureNotification::Shutdown = message {
-                            return;
-                        }
-                    }
-                }
-            }
-        });
-
         // Write the parameters to the logs.
         parameters.tracing();
 
         // Initialize the metrics
         let metrics = initialise_metrics(registry);
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
+        let mut primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
         let primary_endpoint_metrics = metrics.primary_endpoint_metrics.unwrap();
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
         let network_metrics = Arc::new(metrics.network_metrics.unwrap());
+
+        let (tx_others_digests, rx_others_digests) =
+            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_others_digests);
+        let (tx_our_digests, rx_our_digests) =
+            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_our_digests);
+        let (tx_parents, rx_parents) =
+            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_parents);
+        let (tx_headers, rx_headers) =
+            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_headers);
+        let (tx_sync_headers, rx_sync_headers) =
+            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_sync_headers);
+        let (tx_sync_certificates, rx_sync_certificates) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_sync_certificates,
+        );
+        let (tx_headers_loopback, rx_headers_loopback) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_headers_loopback,
+        );
+        let (tx_certificates_loopback, rx_certificates_loopback) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_certificates_loopback,
+        );
+        let (tx_primary_messages, rx_primary_messages) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_primary_messages,
+        );
+        let (tx_helper_requests, rx_helper_requests) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_helper_requests,
+        );
+        let (tx_get_block_commands, rx_get_block_commands) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_get_block_commands,
+        );
+        let (tx_batches, rx_batches) =
+            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_batches);
+        let (tx_block_removal_commands, rx_block_removal_commands) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_block_removal_commands,
+        );
+        let (tx_batch_removal, rx_batch_removal) =
+            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_batch_removal);
+        let (tx_block_synchronizer_commands, rx_block_synchronizer_commands) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_block_synchronizer_commands,
+        );
+        let (tx_certificate_responses, rx_certificate_responses) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_certificate_responses,
+        );
+        let (tx_payload_availability_responses, rx_payload_availability_responses) = channel(
+            CHANNEL_CAPACITY,
+            &primary_channel_metrics.tx_payload_availability_responses,
+        );
+        let (tx_state_handler, rx_state_handler) =
+            channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_state_handler);
+
+        // we need to hack the gauge from this consensus channel into the primary registry
+        // This avoids a cyclic dependency in the initialization of consensus and primary
+        // TODO: this (tx_committed_certificates, rx_consensus) channel pair name is highly counterintuitive: see initialization in node and rename(?)
+        let committed_certificates_gauge = tx_committed_certificates.gauge().clone();
+        primary_channel_metrics.replace_registered_committed_certificates_metric(
+            registry,
+            Box::new(committed_certificates_gauge),
+        );
+        let new_certificates_gauge = tx_consensus.gauge().clone();
+        primary_channel_metrics
+            .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
+
+        let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
         let our_workers = committee
             .load()
@@ -462,7 +440,6 @@ impl Primary {
         );
 
         let mut handles = vec![
-            channel_stats_handle,
             primary_receiver_handle,
             worker_receiver_handle,
             core_handle,

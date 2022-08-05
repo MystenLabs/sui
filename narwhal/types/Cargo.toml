@@ -13,6 +13,8 @@ blake2 = "0.9"
 bytes = "1.2.1"
 derive_builder = "0.11.2"
 ed25519-dalek = "1.0.1"
+futures = "0.3.21"
+prometheus = "0.13.1"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
 prost = "0.10.4"
@@ -30,6 +32,7 @@ config = { path = "../config" }
 crypto = { path = "../crypto" }
 dag = { path = "../dag" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
 
 
 [dev-dependencies]

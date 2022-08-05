@@ -19,7 +19,7 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::instrument;
-use types::{Certificate, CertificateDigest, Round};
+use types::{metered_channel, Certificate, CertificateDigest, Round};
 
 use crate::{metrics::ConsensusMetrics, DEFAULT_CHANNEL_SIZE};
 
@@ -36,7 +36,7 @@ pub mod dag_tests;
 struct InnerDag {
     /// Receives new certificates from the primary. The primary should send us new certificates only
     /// if it already sent us its whole history.
-    rx_primary: Receiver<Certificate>,
+    rx_primary: metered_channel::Receiver<Certificate>,
 
     /// Receives new commands for the Dag.
     rx_commands: Receiver<DagCommand>,
@@ -102,7 +102,7 @@ enum DagCommand {
 impl InnerDag {
     fn new(
         committee: &Committee,
-        rx_primary: Receiver<Certificate>,
+        rx_primary: metered_channel::Receiver<Certificate>,
         rx_commands: Receiver<DagCommand>,
         dag: NodeDag<Certificate>,
         vertices: RwLock<BTreeMap<(PublicKey, Round), CertificateDigest>>,
@@ -340,7 +340,7 @@ impl InnerDag {
 impl Dag {
     pub fn new(
         committee: &Committee,
-        rx_primary: Receiver<Certificate>,
+        rx_primary: metered_channel::Receiver<Certificate>,
         metrics: Arc<ConsensusMetrics>,
     ) -> (JoinHandle<()>, Self) {
         let (tx_commands, rx_commands) = tokio::sync::mpsc::channel(DEFAULT_CHANNEL_SIZE);

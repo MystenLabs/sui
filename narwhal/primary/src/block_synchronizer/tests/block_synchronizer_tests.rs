@@ -24,7 +24,7 @@ use test_utils::{
     resolve_name_and_committee, PrimaryToPrimaryMockServer,
 };
 use tokio::{
-    sync::{mpsc::channel, watch},
+    sync::{mpsc, watch},
     task::JoinHandle,
     time::{sleep, timeout},
 };
@@ -44,9 +44,9 @@ async fn test_successful_headers_synchronization() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = channel(10);
-    let (tx_certificate_responses, rx_certificate_responses) = channel(10);
-    let (_, rx_payload_availability_responses) = channel(10);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
+    let (tx_certificate_responses, rx_certificate_responses) = test_utils::test_channel!(10);
+    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
@@ -86,7 +86,7 @@ async fn test_successful_headers_synchronization() {
     );
 
     // AND the channel to respond to
-    let (tx_synchronize, mut rx_synchronize) = channel(10);
+    let (tx_synchronize, mut rx_synchronize) = mpsc::channel(10);
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
@@ -200,9 +200,10 @@ async fn test_successful_payload_synchronization() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = channel(10);
-    let (_tx_certificate_responses, rx_certificate_responses) = channel(10);
-    let (tx_payload_availability_responses, rx_payload_availability_responses) = channel(10);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
+    let (_tx_certificate_responses, rx_certificate_responses) = test_utils::test_channel!(10);
+    let (tx_payload_availability_responses, rx_payload_availability_responses) =
+        test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
@@ -242,7 +243,7 @@ async fn test_successful_payload_synchronization() {
     );
 
     // AND the channel to respond to
-    let (tx_synchronize, mut rx_synchronize) = channel(10);
+    let (tx_synchronize, mut rx_synchronize) = mpsc::channel(10);
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
@@ -389,9 +390,9 @@ async fn test_multiple_overlapping_requests() {
     let (name, committee) = resolve_name_and_committee();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = channel(10);
-    let (_, rx_certificate_responses) = channel(10);
-    let (_, rx_payload_availability_responses) = channel(10);
+    let (_, rx_commands) = test_utils::test_channel!(10);
+    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
+    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
@@ -433,7 +434,7 @@ async fn test_multiple_overlapping_requests() {
 
     // ResultSender
     let get_mock_sender = || {
-        let (tx, _) = channel(10);
+        let (tx, _) = mpsc::channel(10);
         tx
     };
 
@@ -508,9 +509,9 @@ async fn test_timeout_while_waiting_for_certificates() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_commands, rx_commands) = channel(10);
-    let (_, rx_certificate_responses) = channel(10);
-    let (_, rx_payload_availability_responses) = channel(10);
+    let (tx_commands, rx_commands) = test_utils::test_channel!(10);
+    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
+    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
 
     // AND some random block ids
     let block_ids: Vec<CertificateDigest> = (0..10)
@@ -540,7 +541,7 @@ async fn test_timeout_while_waiting_for_certificates() {
     );
 
     // AND the channel to respond to
-    let (tx_synchronize, mut rx_synchronize) = channel(10);
+    let (tx_synchronize, mut rx_synchronize) = mpsc::channel(10);
 
     // WHEN
     tx_commands
@@ -598,9 +599,9 @@ async fn test_reply_with_certificates_already_in_storage() {
     let key = keys(None).pop().unwrap();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = channel(10);
-    let (_, rx_certificate_responses) = channel(10);
-    let (_, rx_payload_availability_responses) = channel(10);
+    let (_, rx_commands) = test_utils::test_channel!(10);
+    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
+    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
 
     let synchronizer = BlockSynchronizer {
         name,
@@ -647,7 +648,7 @@ async fn test_reply_with_certificates_already_in_storage() {
     }
 
     // AND create a dummy sender/receiver
-    let (tx, mut rx) = channel(10);
+    let (tx, mut rx) = mpsc::channel(10);
 
     // WHEN
     let missing_certificates = synchronizer
@@ -691,9 +692,9 @@ async fn test_reply_with_payload_already_in_storage() {
     let key = keys(None).pop().unwrap();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = channel(10);
-    let (_, rx_certificate_responses) = channel(10);
-    let (_, rx_payload_availability_responses) = channel(10);
+    let (_, rx_commands) = test_utils::test_channel!(10);
+    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
+    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
 
     let synchronizer = BlockSynchronizer {
         name,
@@ -744,7 +745,7 @@ async fn test_reply_with_payload_already_in_storage() {
     }
 
     // AND create a dummy sender/receiver
-    let (tx, mut rx) = channel(10);
+    let (tx, mut rx) = mpsc::channel(10);
 
     // WHEN
     let missing_certificates = synchronizer
@@ -792,9 +793,9 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     let name = key.public().clone();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (_, rx_commands) = channel(10);
-    let (_, rx_certificate_responses) = channel(10);
-    let (_, rx_payload_availability_responses) = channel(10);
+    let (_, rx_commands) = test_utils::test_channel!(10);
+    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
+    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
 
     let synchronizer = BlockSynchronizer {
         name: name.clone(),
@@ -844,7 +845,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     }
 
     // AND create a dummy sender/receiver
-    let (tx, mut rx) = channel(10);
+    let (tx, mut rx) = mpsc::channel(10);
 
     // WHEN
     let missing_certificates = synchronizer

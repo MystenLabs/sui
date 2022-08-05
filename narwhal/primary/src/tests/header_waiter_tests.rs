@@ -12,10 +12,7 @@ use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
 use test_utils::{fixture_header_with_payload, resolve_name_and_committee};
-use tokio::{
-    sync::{mpsc::channel, watch},
-    time::timeout,
-};
+use tokio::{sync::watch, time::timeout};
 use types::{BatchDigest, ReconfigureNotification, Round};
 
 #[tokio::test]
@@ -26,8 +23,8 @@ async fn successfully_synchronize_batches() {
     let gc_depth: Round = 1;
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_synchronizer, rx_synchronizer) = channel(10);
-    let (tx_core, mut rx_core) = channel(10);
+    let (tx_synchronizer, rx_synchronizer) = test_utils::test_channel!(10);
+    let (tx_core, mut rx_core) = test_utils::test_channel!(10);
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 

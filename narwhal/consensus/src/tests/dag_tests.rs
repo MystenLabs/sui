@@ -9,7 +9,6 @@ use crypto::{traits::KeyPair, Hash};
 use dag::node_dag::NodeDagError;
 use std::sync::Arc;
 use test_utils::make_optimal_certificates;
-use tokio::sync::mpsc::channel;
 use types::Certificate;
 
 use crate::metrics::ConsensusMetrics;
@@ -33,7 +32,7 @@ async fn inner_dag_insert_one() {
     let (mut certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
 
     // set up a Dag
-    let (tx_cert, rx_cert) = channel(1);
+    let (tx_cert, rx_cert) = test_utils::test_channel!(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     Dag::new(&committee, rx_cert, metrics);
 
@@ -58,7 +57,7 @@ async fn test_dag_read_notify() {
     let (mut certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
     let certs = certificates.clone().into_iter().map(|c| (c.digest(), c));
     // set up a Dag
-    let (_tx_cert, rx_cert) = channel(1);
+    let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let arc = Arc::new(Dag::new(&committee, rx_cert, metrics));
     let cloned = arc.clone();
@@ -93,7 +92,7 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
         .collect::<BTreeSet<_>>();
 
     // set up a Dag
-    let (_tx_cert, rx_cert) = channel(1);
+    let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (_, dag) = Dag::new(&committee, rx_cert, metrics);
 
@@ -144,7 +143,7 @@ async fn test_dag_compresses_empty_blocks() {
         .collect::<BTreeSet<_>>();
 
     // set up a Dag
-    let (_tx_cert, rx_cert) = channel(1);
+    let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (_, dag) = Dag::new(&committee, rx_cert, metrics);
 
@@ -212,7 +211,7 @@ async fn test_dag_rounds_after_compression() {
         .collect::<BTreeSet<_>>();
 
     // set up a Dag
-    let (_tx_cert, rx_cert) = channel(1);
+    let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (_, dag) = Dag::new(&committee, rx_cert, metrics);
 
@@ -262,7 +261,7 @@ async fn dag_mutation_failures() {
     let (certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
 
     // set up a Dag
-    let (_tx_cert, rx_cert) = channel(1);
+    let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (_handle, dag) = Dag::new(&committee, rx_cert, metrics);
     let mut certs_to_insert = certificates.clone();
@@ -331,7 +330,7 @@ async fn dag_insert_one_and_rounds_node_read() {
     let (certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
 
     // set up a Dag
-    let (_tx_cert, rx_cert) = channel(1);
+    let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (_handle, dag) = Dag::new(&committee, rx_cert, metrics);
     let mut certs_to_insert = certificates.clone();
@@ -379,7 +378,7 @@ async fn dag_insert_and_remove_reads() {
     let (mut certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
 
     // set up a Dag
-    let (_tx_cert, rx_cert) = channel(1);
+    let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
     let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
     let (_handle, dag) = Dag::new(&committee, rx_cert, metrics);
 

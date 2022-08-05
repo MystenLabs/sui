@@ -9,7 +9,6 @@ use test_utils::{
     certificate, committee, fixture_batch_with_transactions, header, headers, keys, votes,
     PrimaryToPrimaryMockServer,
 };
-use tokio::sync::mpsc::channel;
 use types::{Header, Vote};
 
 #[tokio::test]
@@ -24,14 +23,14 @@ async fn process_header() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_sync_headers, _rx_sync_headers) = channel(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
-    let (tx_primary_messages, rx_primary_messages) = channel(1);
-    let (_tx_headers_loopback, rx_headers_loopback) = channel(1);
-    let (_tx_certificates_loopback, rx_certificates_loopback) = channel(1);
-    let (_tx_headers, rx_headers) = channel(1);
-    let (tx_consensus, _rx_consensus) = channel(1);
-    let (tx_parents, _rx_parents) = channel(1);
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     // Create test stores.
@@ -114,14 +113,14 @@ async fn process_header_missing_parent() {
     let signature_service = SignatureService::new(kp);
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
-    let (tx_sync_headers, _rx_sync_headers) = channel(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
-    let (tx_primary_messages, rx_primary_messages) = channel(1);
-    let (_tx_headers_loopback, rx_headers_loopback) = channel(1);
-    let (_tx_certificates_loopback, rx_certificates_loopback) = channel(1);
-    let (_tx_headers, rx_headers) = channel(1);
-    let (tx_consensus, _rx_consensus) = channel(1);
-    let (tx_parents, _rx_parents) = channel(1);
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     // Create test stores.
@@ -190,14 +189,14 @@ async fn process_header_missing_payload() {
     let signature_service = SignatureService::new(kp);
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
-    let (tx_sync_headers, _rx_sync_headers) = channel(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
-    let (tx_primary_messages, rx_primary_messages) = channel(1);
-    let (_tx_headers_loopback, rx_headers_loopback) = channel(1);
-    let (_tx_certificates_loopback, rx_certificates_loopback) = channel(1);
-    let (_tx_headers, rx_headers) = channel(1);
-    let (tx_consensus, _rx_consensus) = channel(1);
-    let (tx_parents, _rx_parents) = channel(1);
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     // Create test stores.
@@ -279,14 +278,14 @@ async fn process_votes() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_sync_headers, _rx_sync_headers) = channel(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
-    let (tx_primary_messages, rx_primary_messages) = channel(1);
-    let (_tx_headers_loopback, rx_headers_loopback) = channel(1);
-    let (_tx_certificates_loopback, rx_certificates_loopback) = channel(1);
-    let (_tx_headers, rx_headers) = channel(1);
-    let (tx_consensus, _rx_consensus) = channel(1);
-    let (tx_parents, _rx_parents) = channel(1);
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     // Create test stores.
@@ -373,14 +372,14 @@ async fn process_certificates() {
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
-    let (tx_sync_headers, _rx_sync_headers) = channel(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
-    let (tx_primary_messages, rx_primary_messages) = channel(3);
-    let (_tx_headers_loopback, rx_headers_loopback) = channel(1);
-    let (_tx_certificates_loopback, rx_certificates_loopback) = channel(1);
-    let (_tx_headers, rx_headers) = channel(1);
-    let (tx_consensus, mut rx_consensus) = channel(3);
-    let (tx_parents, mut rx_parents) = channel(1);
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, mut rx_consensus) = test_utils::test_channel!(3);
+    let (tx_parents, mut rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     // Create test stores.
@@ -478,14 +477,14 @@ async fn shutdown_core() {
 
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_sync_headers, _rx_sync_headers) = channel(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
-    let (_tx_primary_messages, rx_primary_messages) = channel(1);
-    let (_tx_headers_loopback, rx_headers_loopback) = channel(1);
-    let (_tx_certificates_loopback, rx_certificates_loopback) = channel(1);
-    let (_tx_headers, rx_headers) = channel(1);
-    let (tx_consensus, _rx_consensus) = channel(1);
-    let (tx_parents, _rx_parents) = channel(1);
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (_tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     // Create test stores.
@@ -545,14 +544,14 @@ async fn reconfigure_core() {
     // All the channels to interface with the core.
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_sync_headers, _rx_sync_headers) = channel(1);
-    let (tx_sync_certificates, _rx_sync_certificates) = channel(1);
-    let (tx_primary_messages, rx_primary_messages) = channel(1);
-    let (_tx_headers_loopback, rx_headers_loopback) = channel(1);
-    let (_tx_certificates_loopback, rx_certificates_loopback) = channel(1);
-    let (_tx_headers, rx_headers) = channel(1);
-    let (tx_consensus, _rx_consensus) = channel(1);
-    let (tx_parents, _rx_parents) = channel(1);
+    let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
+    let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
+    let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
+    let (_tx_headers_loopback, rx_headers_loopback) = test_utils::test_channel!(1);
+    let (_tx_certificates_loopback, rx_certificates_loopback) = test_utils::test_channel!(1);
+    let (_tx_headers, rx_headers) = test_utils::test_channel!(1);
+    let (tx_consensus, _rx_consensus) = test_utils::test_channel!(1);
+    let (tx_parents, _rx_parents) = test_utils::test_channel!(1);
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     // Create test stores.

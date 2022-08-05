@@ -6,16 +6,14 @@ use config::{Committee, Epoch, WorkerId};
 use crypto::{Digest, Hash as _, PublicKey, Signature, SignatureService};
 use std::{cmp::Ordering, sync::Arc};
 use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        watch,
-    },
+    sync::watch,
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, info};
 use types::{
     error::{DagError, DagResult},
+    metered_channel::{Receiver, Sender},
     BatchDigest, Certificate, Header, ReconfigureNotification, Round,
 };
 

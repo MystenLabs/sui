@@ -4,8 +4,10 @@ use crate::EndpointMetrics;
 use mysten_network::metrics::MetricsCallbackProvider;
 use network::{metrics, metrics::PrimaryNetworkMetrics};
 use prometheus::{
+    core::{AtomicI64, GenericGauge},
     default_registry, register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, HistogramVec, IntCounterVec, IntGaugeVec, Registry,
+    register_int_gauge_vec_with_registry, register_int_gauge_with_registry, HistogramVec,
+    IntCounterVec, IntGauge, IntGaugeVec, Registry,
 };
 use std::time::Duration;
 use tonic::Code;
@@ -14,6 +16,7 @@ use tonic::Code;
 pub(crate) struct Metrics {
     pub(crate) endpoint_metrics: Option<EndpointMetrics>,
     pub(crate) primary_endpoint_metrics: Option<PrimaryEndpointMetrics>,
+    pub(crate) primary_channel_metrics: Option<PrimaryChannelMetrics>,
     pub(crate) node_metrics: Option<PrimaryMetrics>,
     pub(crate) network_metrics: Option<PrimaryNetworkMetrics>,
 }
@@ -26,6 +29,9 @@ pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     // The metrics used for the primary-to-primary communication node endpoints
     let primary_endpoint_metrics = PrimaryEndpointMetrics::new(metrics_registry);
 
+    // The metrics used for measuring the occupancy of the channels in the primary
+    let primary_channel_metrics = PrimaryChannelMetrics::new(metrics_registry);
+
     // Essential/core metrics across the primary node
     let node_metrics = PrimaryMetrics::new(metrics_registry);
 
@@ -35,8 +41,206 @@ pub(crate) fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
     Metrics {
         node_metrics: Some(node_metrics),
         endpoint_metrics: Some(endpoint_metrics),
+        primary_channel_metrics: Some(primary_channel_metrics),
         primary_endpoint_metrics: Some(primary_endpoint_metrics),
         network_metrics: Some(network_metrics),
+    }
+}
+
+#[derive(Clone)]
+pub struct PrimaryChannelMetrics {
+    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::PayloadReceiver`
+    pub tx_others_digests: IntGauge,
+    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::Proposer`
+    pub tx_our_digests: IntGauge,
+    /// occupancy of the channel from the `primary::Core` to the `primary::Proposer`
+    pub tx_parents: IntGauge,
+    /// occupancy of the channel from the `primary::Proposer` to the `primary::Core`
+    pub tx_headers: IntGauge,
+    /// occupancy of the channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`
+    pub tx_sync_headers: IntGauge,
+    /// occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`
+    pub tx_sync_certificates: IntGauge,
+    /// occupancy of the channel from the `primary::HeaderWaiter` to the `primary::Core`
+    pub tx_headers_loopback: IntGauge,
+    /// occupancy of the channel from the `primary::CertificateWaiter` to the `primary::Core`    
+    pub tx_certificates_loopback: IntGauge,
+    /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`
+    pub tx_primary_messages: IntGauge,
+    /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
+    pub tx_helper_requests: IntGauge,
+    /// occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockWaiter`
+    pub tx_get_block_commands: IntGauge,
+    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`
+    pub tx_batches: IntGauge,
+    /// occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`
+    pub tx_block_removal_commands: IntGauge,
+    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`
+    pub tx_batch_removal: IntGauge,
+    /// occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
+    pub tx_block_synchronizer_commands: IntGauge,
+    /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`
+    pub tx_certificate_responses: IntGauge,
+    /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`
+    pub tx_payload_availability_responses: IntGauge,
+    /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
+    pub tx_state_handler: IntGauge,
+    /// occupancy of the channel from the reconfigure notification to most components.
+    pub tx_reconfigure: IntGauge,
+    /// occupancy of the channel from the `Consensus` to the `primary::Core`
+    pub tx_committed_certificates: IntGauge,
+    /// occupancy of the channel from the `primary::Core` to the `Consensus`
+    pub tx_new_certificates: IntGauge,
+}
+
+impl PrimaryChannelMetrics {
+    // The consistent use of this constant in the below, as well as in `node::spawn_primary` is load-bearing, see `replace_registered_committed_certificates_metric`.
+    pub const NAME_COMMITTED_CERTS: &'static str = "tx_committed_certificates";
+    pub const DESC_COMMITTED_CERTS: &'static str =
+        "occupancy of the channel from the `Consensus` to the `primary::Core`";
+    // The consistent use of this constant in the below, as well as in `node::spawn_primary` is load-bearing, see `replace_registered_new_certificates_metric`.
+    pub const NAME_NEW_CERTS: &'static str = "tx_new_certificates";
+    pub const DESC_NEW_CERTS: &'static str =
+        "occupancy of the channel from the `primary::Core` to the `Consensus`";
+
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            tx_others_digests: register_int_gauge_with_registry!(
+                "tx_others_digests",
+                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::PayloadReceiver`",
+                registry
+            ).unwrap(),
+            tx_our_digests: register_int_gauge_with_registry!(
+                "tx_our_digests",
+                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::Proposer`",
+                registry
+            ).unwrap(),
+            tx_parents: register_int_gauge_with_registry!(
+                "tx_parents",
+                "occupancy of the channel from the `primary::Core` to the `primary::Proposer`",
+                registry
+            ).unwrap(),
+            tx_headers: register_int_gauge_with_registry!(
+                "tx_headers",
+                "occupancy of the channel from the `primary::Proposer` to the `primary::Core`",
+                registry
+            ).unwrap(),
+            tx_sync_headers: register_int_gauge_with_registry!(
+                "tx_sync_headers",
+                "occupancy of the channel from the `primary::Synchronizer` to the `primary::HeaderWaiter`",
+                registry
+            ).unwrap(),
+            tx_sync_certificates: register_int_gauge_with_registry!(
+                "tx_sync_certificates",
+                "occupancy of the channel from the `primary::Synchronizer` to the `primary::CertificaterWaiter`",
+                registry
+            ).unwrap(),
+            tx_headers_loopback: register_int_gauge_with_registry!(
+                "tx_headers_loopback",
+                "occupancy of the channel from the `primary::HeaderWaiter` to the `primary::Core`",
+                registry
+            ).unwrap(),
+            tx_certificates_loopback: register_int_gauge_with_registry!(
+                "tx_certificates_loopback",
+                "occupancy of the channel from the `primary::CertificateWaiter` to the `primary::Core`",
+                registry
+            ).unwrap(),
+            tx_primary_messages: register_int_gauge_with_registry!(
+                "tx_primary_messages",
+                "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`",
+                registry
+            ).unwrap(),
+            tx_helper_requests: register_int_gauge_with_registry!(
+                "tx_helper_requests",
+                "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`",
+                registry
+            ).unwrap(),
+            tx_get_block_commands: register_int_gauge_with_registry!(
+                "tx_get_block_commands",
+                "occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockWaiter`",
+                registry
+            ).unwrap(),
+            tx_batches: register_int_gauge_with_registry!(
+                "tx_batches",
+                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`",
+                registry
+            ).unwrap(),
+            tx_block_removal_commands: register_int_gauge_with_registry!(
+                "tx_block_removal_commands",
+                "occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockRemover`",
+                registry
+            ).unwrap(),
+            tx_batch_removal: register_int_gauge_with_registry!(
+                "tx_batch_removal",
+                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockRemover`",
+                registry
+            ).unwrap(),
+            tx_block_synchronizer_commands: register_int_gauge_with_registry!(
+                "tx_block_synchronizer_commands",
+                "occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
+                registry
+            ).unwrap(),
+            tx_certificate_responses: register_int_gauge_with_registry!(
+                "tx_certificate_responses",
+                "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`",
+                registry
+            ).unwrap(),
+            tx_payload_availability_responses: register_int_gauge_with_registry!(
+                "tx_payload_availability_responses",
+                "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`",
+                registry
+            ).unwrap(),
+            tx_state_handler: register_int_gauge_with_registry!(
+                "tx_state_handler",
+                "occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`",
+                registry
+            ).unwrap(),
+            tx_reconfigure: register_int_gauge_with_registry!(
+                "tx_reconfigure",
+                "occupancy of the channel from the reconfigure notification to most components.",
+                registry
+            ).unwrap(),
+            tx_committed_certificates: register_int_gauge_with_registry!(
+                Self::NAME_COMMITTED_CERTS,
+                Self::DESC_COMMITTED_CERTS,
+                registry
+            ).unwrap(),
+            tx_new_certificates: register_int_gauge_with_registry!(
+                Self::NAME_NEW_CERTS,
+                Self::DESC_NEW_CERTS,
+                registry
+            ).unwrap(),
+        }
+    }
+
+    pub fn replace_registered_new_certificates_metric(
+        &mut self,
+        registry: &Registry,
+        collector: Box<GenericGauge<AtomicI64>>,
+    ) {
+        let new_certificates_counter =
+            IntGauge::new(Self::NAME_NEW_CERTS, Self::DESC_NEW_CERTS).unwrap();
+        // TODO: Sanity-check by hashing the descs against one another
+        registry
+            .unregister(Box::new(new_certificates_counter.clone()))
+            .unwrap();
+        registry.register(collector).unwrap();
+        self.tx_new_certificates = new_certificates_counter;
+    }
+
+    pub fn replace_registered_committed_certificates_metric(
+        &mut self,
+        registry: &Registry,
+        collector: Box<GenericGauge<AtomicI64>>,
+    ) {
+        let committed_certificates_counter =
+            IntGauge::new(Self::NAME_COMMITTED_CERTS, Self::DESC_COMMITTED_CERTS).unwrap();
+        // TODO: Sanity-check by hashing the descs against one another
+        registry
+            .unregister(Box::new(committed_certificates_counter.clone()))
+            .unwrap();
+        registry.register(collector).unwrap();
+        self.tx_committed_certificates = committed_certificates_counter;
     }
 }
 

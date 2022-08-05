@@ -12,6 +12,7 @@ use prometheus::Registry;
 use std::collections::{BTreeSet, VecDeque};
 use test_utils::{keys, make_consensus_store, mock_committee};
 use tokio::sync::mpsc::{channel, Receiver, Sender};
+use types::metered_channel;
 
 /// Make enough certificates to commit a leader.
 pub fn commit_certificates() -> VecDeque<Certificate> {
@@ -36,7 +37,7 @@ pub fn commit_certificates() -> VecDeque<Certificate> {
 /// Spawn the consensus core and the subscriber handler. Also add to storage enough certificates to
 /// commit a leader (as if they were added by the Primary).
 pub async fn spawn_node(
-    rx_waiter: Receiver<Certificate>,
+    rx_waiter: metered_channel::Receiver<Certificate>,
     rx_client: Receiver<ConsensusSyncRequest>,
     tx_client: Sender<ConsensusOutput>,
 ) -> (watch::Sender<ReconfigureNotification>, Vec<JoinHandle<()>>) {
@@ -64,7 +65,7 @@ pub async fn spawn_node(
     certificate_store.write_all(to_store).await.unwrap();
 
     // Spawn the consensus engine and sink the primary channel.
-    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
     let (tx_output, rx_output) = channel(1);
     let gc_depth = 50;
     let tusk = Tusk::new(committee.clone(), consensus_store.clone(), gc_depth);
@@ -131,7 +132,7 @@ pub async fn order_stream(
 
 #[tokio::test]
 async fn subscribe() {
-    let (tx_consensus_input, rx_consensus_input) = channel(1);
+    let (tx_consensus_input, rx_consensus_input) = test_utils::test_channel!(1);
     let (tx_consensus_to_client, mut rx_consensus_to_client) = channel(1);
     let (_tx_client_to_consensus, rx_client_to_consensus) = channel(1);
 
@@ -161,7 +162,7 @@ async fn subscribe() {
 
 #[tokio::test]
 async fn subscribe_sync() {
-    let (tx_consensus_input, rx_consensus_input) = channel(1);
+    let (tx_consensus_input, rx_consensus_input) = test_utils::test_channel!(1);
     let (tx_consensus_to_client, mut rx_consensus_to_client) = channel(1);
     let (tx_client_to_consensus, rx_client_to_consensus) = channel(1);
 
@@ -212,7 +213,7 @@ async fn subscribe_sync() {
 
 #[tokio::test]
 async fn restart() {
-    let (tx_consensus_input, rx_consensus_input) = channel(1);
+    let (tx_consensus_input, rx_consensus_input) = test_utils::test_channel!(1);
     let (tx_consensus_to_client, mut rx_consensus_to_client) = channel(1);
     let (_tx_client_to_consensus, rx_client_to_consensus) = channel(1);
 

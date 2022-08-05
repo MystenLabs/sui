@@ -7,8 +7,9 @@ use consensus::dag::Dag;
 use crypto::{Hash as _, PublicKey};
 use std::{collections::HashMap, sync::Arc};
 use store::Store;
-use tokio::sync::mpsc::Sender;
-use types::{error::DagResult, BatchDigest, Certificate, CertificateDigest, Header};
+use types::{
+    error::DagResult, metered_channel::Sender, BatchDigest, Certificate, CertificateDigest, Header,
+};
 
 #[cfg(test)]
 #[path = "tests/synchronizer_tests.rs"]
