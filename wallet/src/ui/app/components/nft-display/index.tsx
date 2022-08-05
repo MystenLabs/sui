@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-import { isSuiMoveObject } from '@mysten/sui.js';
+import { isSuiMoveObject, getObjectId, getObjectFields } from '@mysten/sui.js';
 import cl from 'classnames';
 
 import ExplorerLink from '_components/explorer-link';
@@ -28,8 +28,11 @@ function NFTDisplayCard({
     wideview,
 }: NFTsProps) {
     const imgUrl = useMediaUrl(nftobj.data);
-    const nftFields = isSuiMoveObject(nftobj.data) ? nftobj.data.fields : null;
+    const nftFields = isSuiMoveObject(nftobj.data)
+        ? getObjectFields(nftobj.data)
+        : null;
     const fileExtentionType = useFileExtentionType(nftFields?.url || '');
+    const ObjectID = getObjectId(nftobj.reference);
 
     const wideviewSection = (
         <div className={st.nftfields}>
@@ -39,11 +42,11 @@ function NFTDisplayCard({
     );
     const defaultSection = (
         <>
-            {expandable && nftFields?.info.id ? (
+            {expandable && ObjectID ? (
                 <div className={st.expandable}>
                     <ExplorerLink
                         type={ExplorerLinkType.object}
-                        objectID={nftFields?.info.id}
+                        objectID={ObjectID}
                         showIcon={false}
                         className={st['explorer-link']}
                     >
