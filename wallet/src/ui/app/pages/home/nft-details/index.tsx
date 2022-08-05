@@ -3,9 +3,10 @@
 
 import { isSuiMoveObject } from '@mysten/sui.js';
 import cl from 'classnames';
-import { useMemo } from 'react';
-import { Navigate, useSearchParams, Link } from 'react-router-dom';
+import { useMemo, useState, useCallback } from 'react';
+import { Navigate, useSearchParams } from 'react-router-dom';
 
+import TransferNFTCard from './transfer-nft';
 import BottomMenuLayout, {
     Content,
     Menu,
@@ -23,37 +24,48 @@ import {
 } from '_hooks';
 import { accountNftsSelector } from '_redux/slices/account';
 
+import type { SuiObject } from '@mysten/sui.js';
+
 import st from './NFTDetails.module.scss';
 
 function NFTDetailsPage() {
     const [searchParams] = useSearchParams();
+    const [startNFTTransfer, setStartNFTTransfer] = useState<boolean>(false);
+    const [selectedNFT, setSelectedNFT] = useState<SuiObject | null>(null);
     const objectId = useMemo(
         () => searchParams.get('objectId'),
         [searchParams]
     );
 
-    let selectedNFT;
     let nftFields;
     const nftCollections = useAppSelector(accountNftsSelector);
-    if (nftCollections && nftCollections.length) {
-        selectedNFT = nftCollections.filter(
+
+    const activeNFT = useMemo(() => {
+        const r = nftCollections.filter(
             (nftItems) => nftItems.reference.objectId === objectId
         )[0];
-    }
+        setSelectedNFT(r);
+        return r;
+    }, [nftCollections, objectId]);
 
-    if (selectedNFT) {
-        nftFields = isSuiMoveObject(selectedNFT.data)
-            ? selectedNFT.data.fields
+    if (activeNFT) {
+        nftFields = isSuiMoveObject(activeNFT.data)
+            ? activeNFT.data.fields
             : null;
     }
+
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
 
+    const startNFTTransferHandler = useCallback(() => {
+        setStartNFTTransfer(true);
+    }, []);
+
     const shortAddress = useMiddleEllipsis(nftFields?.info.id, 10, 6);
     const fileExtentionType = useFileExtentionType(nftFields?.url || '');
 
-    if (!objectId || (!loadingBalance && !selectedNFT)) {
+    if (!objectId || (!loadingBalance && !selectedNFT && !startNFTTransfer)) {
         return <Navigate to="/nfts" replace={true} />;
     }
 
@@ -81,56 +93,56 @@ function NFTDetailsPage() {
         </div>
     );
 
+    const NFTdetailsContent = (
+        <div className={st.container}>
+            <PageTitle
+                title={nftFields?.name}
+                backLink="/nfts"
+                className={st.pageTitle}
+                hideBackLabel={true}
+            />
+            <BottomMenuLayout>
+                <Content>
+                    <section className={st.nftDetail}>
+                        {selectedNFT && (
+                            <NFTDisplayCard
+                                nftobj={selectedNFT}
+                                size="large"
+                                expandable={true}
+                            />
+                        )}
+                        {NFTDetails}
+                    </section>
+                </Content>
+                <Menu stuckClass={st.shadow} className={st.shadow}>
+                    <button
+                        onClick={startNFTTransferHandler}
+                        className={cl(
+                            'btn',
+                            st.action,
+                            st.sendNftBtn,
+                            'primary'
+                        )}
+                    >
+                        <Icon
+                            icon={SuiIcons.ArrowLeft}
+                            className={cl(st.arrowActionIcon, st.angledArrow)}
+                        />
+                        Send NFT
+                    </button>
+                </Menu>
+            </BottomMenuLayout>
+        </div>
+    );
+
     return (
-        <>
-            {selectedNFT ? (
-                <div className={st.container}>
-                    <PageTitle
-                        title={nftFields?.name}
-                        backLink="/nfts"
-                        className={st.pageTitle}
-                    />
-                    <BottomMenuLayout>
-                        <Content>
-                            <section className={st.nftDetail}>
-                                <NFTDisplayCard
-                                    nftobj={selectedNFT}
-                                    size="large"
-                                    expandable={true}
-                                />
-                                {NFTDetails}
-                            </section>
-                        </Content>
-                        <Menu stuckClass={st.shadow} className={st.shadow}>
-                            <Link
-                                to={`/send-nft?${new URLSearchParams({
-                                    objectId: selectedNFT.reference.objectId,
-                                }).toString()}`}
-                                className={cl(
-                                    'btn',
-                                    st.action,
-                                    st.sendNftBtn,
-                                    'neutral'
-                                )}
-                            >
-                                <Icon
-                                    icon={SuiIcons.ArrowLeft}
-                                    className={cl(
-                                        st.arrowActionIcon,
-                                        st.angledArrow
-                                    )}
-                                />
-                                Send NFT
-                            </Link>
-                        </Menu>
-                    </BottomMenuLayout>
-                </div>
+        <Loading loading={loadingBalance}>
+            {objectId && startNFTTransfer ? (
+                <TransferNFTCard objectId={objectId} />
             ) : (
-                <Loading loading={loadingBalance}>
-                    <></>
-                </Loading>
+                NFTdetailsContent
             )}
-        </>
+        </Loading>
     );
 }
 

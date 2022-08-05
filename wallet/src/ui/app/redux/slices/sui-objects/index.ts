@@ -69,6 +69,7 @@ export const transferSuiNFT = createAsyncThunk<
             data.recipientAddress,
             data.transferCost
         );
+
         await dispatch(fetchAllOwnedObjects());
         const txn = getTransactionEffectsResponse(txRes);
 

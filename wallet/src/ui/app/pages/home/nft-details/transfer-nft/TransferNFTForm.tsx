@@ -89,6 +89,14 @@ function TransferNFTForm({
                         name="to"
                         component="div"
                     />
+                    {isValid && (
+                        <div className={st.validAddress}>
+                            <Icon
+                                icon={SuiIcons.Checkmark}
+                                className={st.checkmark}
+                            />
+                        </div>
+                    )}
                     {BigInt(gasBalance) < DEFAULT_NFT_TRANSFER_GAS_FEE && (
                         <div className={st.error}>
                             * Insufficient balance to cover transfer cost

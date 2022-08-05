@@ -54,7 +54,7 @@
 
             &::placeholder {
                 color: colors.$gray-65;
-                line-height: 150%;
+                line-height: 200%;
             }
         }
     }
@@ -100,6 +100,18 @@
     color: colors.$gray-80;
     margin: auto;
     margin-bottom: 10px;
+}
+
+.valid-address {
+    position: absolute;
+    margin-top: 67px;
+    margin-right: 24vw;
+    right: 0;
+
+    i {
+        color: colors.$success;
+        font-size: 8px;
+    }
 }
 
 .error {

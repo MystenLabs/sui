@@ -34,9 +34,12 @@
         text-decoration: none;
         font-weight: 500;
         font-size: 13px;
-        padding-top: 5px;
+        padding-top: 10px;
         color: colors.$gray-100;
         width: 100%;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
     }
 
     .expandable {
@@ -68,6 +71,7 @@
         width: 100%;
         justify-content: space-between;
         flex-flow: row-reverse;
+        gap: 10px;
 
         .img {
             width: 50px;
@@ -76,12 +80,19 @@
 
         .nftfields {
             padding-top: 0;
+            height: 49px;
+            display: flex;
+            flex-flow: column;
+            justify-content: center;
         }
 
         .nft-name {
             text-transform: capitalize;
             color: colors.$gray-100;
             margin-bottom: 4px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
 
             @include utils.typography('nft-title');
         }
