@@ -65,5 +65,5 @@ export { default as TokensPage } from './tokens';
 export { default as TransactionDetailsPage } from './transaction-details';
 export { default as TransactionsPage } from './transactions';
 export { default as TransferCoinPage } from './transfer-coin';
-export { default as TransferNFTPage } from './transfer-nft';
+export { default as NFTDetailsPage } from './nft-details';
 export { default as StakeNew } from './stake-new';

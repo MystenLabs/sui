@@ -20,6 +20,17 @@
     &.primary {
         background: colors.$cta-blue;
         color: colors.$white;
+
+        &[disabled] {
+            cursor: initial;
+            color: colors.$white;
+            background: colors.$sui-steel-blue;
+            opacity: 0.5;
+
+            i {
+                color: colors.$white;
+            }
+        }
     }
 
     &.small {

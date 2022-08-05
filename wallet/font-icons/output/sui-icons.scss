@@ -14,39 +14,45 @@ url('./sui-icons.svg#sui-icons') format('svg');
       -moz-osx-font-smoothing: grayscale;
 }
 
-.sui-icons-apps:before { content: "\ea01"; }
-.sui-icons-arrow-left:before { content: "\ea02"; }
-.sui-icons-arrow-right:before { content: "\ea03"; }
-.sui-icons-clipboard:before { content: "\ea04"; }
-.sui-icons-close:before { content: "\ea05"; }
-.sui-icons-coins:before { content: "\ea06"; }
-.sui-icons-globe:before { content: "\ea07"; }
-.sui-icons-hand-coins:before { content: "\ea08"; }
-.sui-icons-history:before { content: "\ea09"; }
-.sui-icons-logout:before { content: "\ea0a"; }
-.sui-icons-nfts:before { content: "\ea0b"; }
-.sui-icons-percentage-polygon:before { content: "\ea0c"; }
-.sui-icons-person:before { content: "\ea0d"; }
-.sui-icons-sui-chevron-right:before { content: "\ea0e"; }
-.sui-icons-sui-logo-icon:before { content: "\ea0f"; }
-.sui-icons-sui-logo-txt:before { content: "\ea10"; }
-.sui-icons-tokens:before { content: "\ea11"; }
+.sui-icons-Info:before { content: "\ea01"; }
+.sui-icons-Preview:before { content: "\ea02"; }
+.sui-icons-apps:before { content: "\ea03"; }
+.sui-icons-arrow-left:before { content: "\ea04"; }
+.sui-icons-arrow-right:before { content: "\ea05"; }
+.sui-icons-checkmark:before { content: "\ea06"; }
+.sui-icons-clipboard:before { content: "\ea07"; }
+.sui-icons-close:before { content: "\ea08"; }
+.sui-icons-coins:before { content: "\ea09"; }
+.sui-icons-globe:before { content: "\ea0a"; }
+.sui-icons-hand-coins:before { content: "\ea0b"; }
+.sui-icons-history:before { content: "\ea0c"; }
+.sui-icons-logout:before { content: "\ea0d"; }
+.sui-icons-nfts:before { content: "\ea0e"; }
+.sui-icons-percentage-polygon:before { content: "\ea0f"; }
+.sui-icons-person:before { content: "\ea10"; }
+.sui-icons-sui-chevron-right:before { content: "\ea11"; }
+.sui-icons-sui-logo-icon:before { content: "\ea12"; }
+.sui-icons-sui-logo-txt:before { content: "\ea13"; }
+.sui-icons-tokens:before { content: "\ea14"; }
 
-$sui-icons-apps: "\ea01";
-$sui-icons-arrow-left: "\ea02";
-$sui-icons-arrow-right: "\ea03";
-$sui-icons-clipboard: "\ea04";
-$sui-icons-close: "\ea05";
-$sui-icons-coins: "\ea06";
-$sui-icons-globe: "\ea07";
-$sui-icons-hand-coins: "\ea08";
-$sui-icons-history: "\ea09";
-$sui-icons-logout: "\ea0a";
-$sui-icons-nfts: "\ea0b";
-$sui-icons-percentage-polygon: "\ea0c";
-$sui-icons-person: "\ea0d";
-$sui-icons-sui-chevron-right: "\ea0e";
-$sui-icons-sui-logo-icon: "\ea0f";
-$sui-icons-sui-logo-txt: "\ea10";
-$sui-icons-tokens: "\ea11";
+$sui-icons-Info: "\ea01";
+$sui-icons-Preview: "\ea02";
+$sui-icons-apps: "\ea03";
+$sui-icons-arrow-left: "\ea04";
+$sui-icons-arrow-right: "\ea05";
+$sui-icons-checkmark: "\ea06";
+$sui-icons-clipboard: "\ea07";
+$sui-icons-close: "\ea08";
+$sui-icons-coins: "\ea09";
+$sui-icons-globe: "\ea0a";
+$sui-icons-hand-coins: "\ea0b";
+$sui-icons-history: "\ea0c";
+$sui-icons-logout: "\ea0d";
+$sui-icons-nfts: "\ea0e";
+$sui-icons-percentage-polygon: "\ea0f";
+$sui-icons-person: "\ea10";
+$sui-icons-sui-chevron-right: "\ea11";
+$sui-icons-sui-logo-icon: "\ea12";
+$sui-icons-sui-logo-txt: "\ea13";
+$sui-icons-tokens: "\ea14";
 

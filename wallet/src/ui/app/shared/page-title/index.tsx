@@ -11,22 +11,32 @@ import st from './PageTitle.module.scss';
 
 export type PageTitleProps = {
     title: string;
+    stats?: string;
     backLink?: string;
     className?: string;
+    hideBackLabel?: boolean;
 };
 
-function PageTitle({ title, backLink, className }: PageTitleProps) {
+function PageTitle({
+    title,
+    backLink,
+    className,
+    stats,
+    hideBackLabel,
+}: PageTitleProps) {
     const withBackLink = !!backLink;
     return (
         <div className={cl(st.container, className)}>
             {backLink ? (
                 <Link to={backLink} className={st.back}>
                     <Icon icon={SuiIcons.ArrowLeft} className={st.backIcon} />{' '}
-                    <span className={st.backText}>Back</span>
+                    {!hideBackLabel && (
+                        <span className={st.backText}>Back</span>
+                    )}
                 </Link>
             ) : null}
             <h1 className={cl(st.title, { [st.withBackLink]: withBackLink })}>
-                {title}
+                {title} {stats && <span className={st.stats}>{stats}</span>}
             </h1>
         </div>
     );

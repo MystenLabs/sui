@@ -59,3 +59,8 @@ body {
         color: #707070;
     }
 }
+
+input:focus,
+textarea {
+    outline: none !important;
+}

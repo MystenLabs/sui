@@ -1,0 +1,180 @@
+@use '_utils';
+@use '_values/colors';
+
+.nft-response {
+    margin-top: 20px;
+
+    .success-text,
+    .failed-text {
+        color: colors.$gray-100;
+        text-align: center;
+        margin-bottom: 20px;
+
+        @include utils.typography('stats/text-lg');
+    }
+
+    .failed-text {
+        margin-bottom: 10px;
+    }
+
+    .success-icon,
+    .failed-icon {
+        position: relative;
+        width: 46px;
+        height: 46px;
+        display: flex;
+        justify-content: center;
+        margin: auto;
+        border-radius: 50%;
+        margin-bottom: 10px;
+    }
+
+    .failed-icon {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        color: colors.$white;
+        font-size: 16px;
+        border: 2px dotted #f05252;
+
+        .icon-bg {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #f05252;
+        }
+    }
+
+    .error-message {
+        color: colors.$gray-80;
+        text-align: center;
+        margin-bottom: 20px;
+
+        @include utils.typography('stats/text-sm');
+    }
+
+    .success-icon {
+        border: 2px dotted colors.$sui-steel-blue;
+
+        .angled-arrow {
+            height: 15px;
+            margin: auto !important;
+            color: #589aea !important;
+
+            @include utils.angled-arrow;
+        }
+    }
+}
+
+.response-card {
+    background-color: colors.$gray-40;
+    border-radius: 10px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding: 5px;
+
+    .tx-info {
+        border-top: 1px solid colors.$gray-50;
+        border-bottom: 1px solid colors.$gray-50;
+        padding: 10px 0;
+        display: flex;
+        flex-flow: column;
+        gap: 10px;
+        margin: 10px;
+        word-break: break-all;
+        margin-bottom: 0;
+
+        @include utils.typography('table/text-sm');
+
+        .tx-info-label {
+            color: colors.$gray-75;
+            display: flex;
+            gap: 10px;
+
+            &::before {
+                content: '';
+                background-image: url('_assets/images/Start.svg');
+                background-size: 12px 12px;
+                height: 12px;
+                width: 12px;
+                display: flex;
+                align-items: center;
+                z-index: 5;
+            }
+
+            &::after {
+                content: '';
+                position: absolute;
+                margin-left: 5px;
+                margin-top: 4px;
+                height: 20px;
+                border: 1px dashed colors.$sui-steel-blue;
+                border-right: none;
+                border-bottom: none;
+                z-index: 1;
+            }
+        }
+
+        .tx-info-value {
+            color: colors.$gray-100;
+            font-size: 13px;
+            line-height: 18px;
+            display: flex;
+            gap: 10px;
+            overflow-wrap: break-word;
+            font-family: 'Space Mono', ui-monospace, monospace;
+
+            &::before {
+                content: '';
+                background-size: 12px 12px;
+                background-repeat: no-repeat;
+                height: 16px;
+                width: 16px;
+                margin-top: 3px;
+                z-index: 5;
+            }
+
+            &.failed::before {
+                background-image: url('_assets/images/Fail.svg');
+            }
+
+            &.success::before {
+                background-image: url('_assets/images/Done.svg');
+            }
+        }
+    }
+
+    .tx-date,
+    .tx-fees {
+        display: flex;
+        gap: 10px;
+        margin: 10px;
+        justify-content: space-between;
+        @include utils.typography('table/text-lg');
+
+        .tx-info-label {
+            color: colors.$gray-80;
+        }
+
+        .tx-info-value {
+            color: colors.$gray-85;
+        }
+    }
+
+    &::after {
+        content: '';
+        background-image: url('_assets/images/nft-detail-bg.png');
+        background-repeat: no-repeat;
+        background-position: center bottom;
+        background-size: 100%;
+        width: 104%;
+        height: 15px;
+        display: flex;
+        left: -5px;
+        top: 12px;
+        position: relative;
+    }
+}
