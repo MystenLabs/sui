@@ -77,6 +77,11 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_fragment_control_delay: IntGauge,
 }
 
+const MAX_DELAY_MULTIPLIER: u64 = 100;
+fn weighted_average_half(old_average: u64, new_value: u64) -> u64 {
+    (500 * old_average + 500 * new_value) / 1000
+}
+
 pub type OptArcConsensusAdapterMetrics = Option<Arc<ConsensusAdapterMetrics>>;
 
 impl ConsensusAdapterMetrics {
@@ -319,11 +324,12 @@ impl ConsensusAdapter {
         if should_submit {
             let past_ms = now.elapsed().as_millis() as u64;
             let current_delay = self.delay_ms.load(Ordering::Relaxed);
-            let new_delay = (500 * current_delay + 500 * past_ms) / 1000;
+            let new_delay = weighted_average_half(past_ms, current_delay);
             // clip to a max delay, 100x the self.max_delay. 100x is arbitrary
             // but all we really need here is some max so that we do not wait for ever
             // in case consensus if dead.
-            let new_delay = new_delay.min((self.max_delay.as_millis() as u64) * 100);
+            let new_delay =
+                new_delay.min((self.max_delay.as_millis() as u64) * MAX_DELAY_MULTIPLIER);
 
             // Store the latest latency
             self.opt_metrics.as_ref().map(|metrics| {
@@ -637,7 +643,7 @@ impl CheckpointConsensusAdapter {
 
                     // Update the latency estimate using a weigted average
                     // But also cap it upwards by max_latency
-                    latency_estimate = u64::min(500 * latency_estimate + 500 * latency_ms / 1000, max_latency);
+                    latency_estimate = max_latency.min(weighted_average_half(latency_estimate, latency_ms));
 
                     // Record the latest consensus latency estimate for fragments
                     self.opt_metrics.as_ref().map(|metrics| {
