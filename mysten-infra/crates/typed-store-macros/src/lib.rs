@@ -151,8 +151,6 @@ pub fn derive_dbmap_utils(input: TokenStream) -> TokenStream {
                 db_options: Option<rocksdb::Options>,
             ) -> Self {
                 let path = &path;
-                let db_options = db_options.unwrap_or_default().clone();
-
                 let db = {
                     let opt_cfs: &[(&str, &rocksdb::Options)] = &[
                         #(
@@ -161,9 +159,9 @@ pub fn derive_dbmap_utils(input: TokenStream) -> TokenStream {
                     ];
 
                     if let Some(p) = with_secondary_path {
-                        typed_store::rocks::open_cf_opts_secondary(path, Some(&p), Some(db_options), opt_cfs)
+                        typed_store::rocks::open_cf_opts_secondary(path, Some(&p), db_options, opt_cfs)
                     } else {
-                        typed_store::rocks::open_cf_opts(path, Some(db_options), opt_cfs)
+                        typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
                     }
                 }.expect("Cannot open DB.");
 
