@@ -23,7 +23,7 @@ pub use state::ExecutionIndices;
 
 use crate::{batch_loader::BatchLoader, core::Core, subscriber::Subscriber};
 use async_trait::async_trait;
-use config::{Committee, SharedCommittee};
+use config::SharedCommittee;
 use consensus::{ConsensusOutput, ConsensusSyncRequest};
 use crypto::PublicKey;
 use serde::de::DeserializeOwned;
@@ -67,7 +67,7 @@ pub trait ExecutionState {
         consensus_output: &ConsensusOutput,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<Committee>), Self::Error>;
+    ) -> Result<Self::Outcome, Self::Error>;
 
     /// Simple guardrail ensuring there is a single instance using the state
     /// to call `handle_consensus_transaction`. Many instances may read the state,

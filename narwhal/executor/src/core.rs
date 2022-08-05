@@ -6,7 +6,6 @@ use crate::{
     state::ExecutionIndices,
     ExecutionState, ExecutorOutput, SerializedTransaction,
 };
-use config::Committee;
 use consensus::ConsensusOutput;
 use std::{fmt::Debug, sync::Arc};
 use store::Store;
@@ -178,15 +177,7 @@ where
                     .await;
 
                 let (bail, result) = match result {
-                    Ok((outcome, committee)) => {
-                        if let Some(_committee) = committee {
-                            // TODO: Do we really need to receive back the committee here? We will know
-                            // once we try to integrate Narwhal with Sui. #580
-                            // todo!();
-                        }
-
-                        (None, Ok(outcome))
-                    }
+                    outcome @ Ok(..) => (None, outcome),
 
                     // We may want to log the errors that are the user's fault (i.e., that are neither
                     // our fault or the fault of consensus) for debug purposes. It is safe to continue
@@ -224,7 +215,7 @@ where
         serialized: SerializedTransaction,
         total_transactions: usize,
         total_batches: usize,
-    ) -> SubscriberResult<(<State as ExecutionState>::Outcome, Option<Committee>)> {
+    ) -> SubscriberResult<<State as ExecutionState>::Outcome> {
         // Compute the next expected indices. Those will be persisted upon transaction execution
         // and are only used for crash-recovery.
         self.execution_indices

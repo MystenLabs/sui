@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
-use config::Committee;
 use consensus::ConsensusOutput;
 use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use thiserror::Error;
@@ -20,8 +19,8 @@ impl ExecutionState for SimpleExecutionState {
         _consensus_output: &ConsensusOutput,
         _execution_indices: ExecutionIndices,
         _transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<Committee>), Self::Error> {
-        Ok((Vec::default(), None))
+    ) -> Result<Self::Outcome, Self::Error> {
+        Ok(Vec::default())
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
@@ -58,9 +57,5 @@ impl ExecutionStateError for SimpleExecutionError {
             Self::ServerError => true,
             Self::ClientError => false,
         }
-    }
-
-    fn to_string(&self) -> String {
-        ToString::to_string(&self)
     }
 }

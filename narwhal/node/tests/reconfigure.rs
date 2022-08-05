@@ -54,7 +54,7 @@ impl ExecutionState for SimpleExecutionState {
         _consensus_output: &ConsensusOutput,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<Committee>), Self::Error> {
+    ) -> Result<Self::Outcome, Self::Error> {
         // Change epoch every few certificates. Note that empty certificates are not provided to
         // this function (they are immediately skipped).
         let mut epoch = self.committee.lock().unwrap().epoch();
@@ -80,7 +80,7 @@ impl ExecutionState for SimpleExecutionState {
                 .unwrap();
         }
 
-        Ok((epoch, None))
+        Ok(epoch)
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
@@ -111,10 +111,6 @@ impl ExecutionStateError for SimpleExecutionError {
             Self::ServerError => true,
             Self::ClientError => false,
         }
-    }
-
-    fn to_string(&self) -> String {
-        ToString::to_string(&self)
     }
 }
 

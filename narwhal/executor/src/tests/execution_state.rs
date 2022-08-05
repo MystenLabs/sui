@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use async_trait::async_trait;
-use config::Committee;
 use consensus::ConsensusOutput;
 
 use futures::executor::block_on;
@@ -48,7 +47,7 @@ impl ExecutionState for TestState {
         _consensus_output: &ConsensusOutput,
         execution_indices: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<Committee>), Self::Error> {
+    ) -> Result<Self::Outcome, Self::Error> {
         if transaction == MALFORMED_TRANSACTION {
             Err(Self::Error::ClientError)
         } else if transaction == KILLER_TRANSACTION {
@@ -57,7 +56,7 @@ impl ExecutionState for TestState {
             self.store
                 .write(Self::INDICES_ADDRESS, execution_indices)
                 .await;
-            Ok((Vec::default(), None))
+            Ok(Vec::default())
         }
     }
 
@@ -114,9 +113,5 @@ impl ExecutionStateError for TestStateError {
             Self::ServerError => true,
             Self::ClientError => false,
         }
-    }
-
-    fn to_string(&self) -> String {
-        ToString::to_string(&self)
     }
 }
