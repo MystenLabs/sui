@@ -574,6 +574,22 @@ impl AuthoritySignInfoTrait for EmptySignInfo {
     }
 }
 
+pub fn add_to_verification_obligation_and_verify<S, T>(
+    sig: &S,
+    data: &T,
+    committee: &Committee,
+) -> SuiResult
+where
+    S: AuthoritySignInfoTrait,
+    T: Signable<Vec<u8>>,
+{
+    let mut obligation = VerificationObligation::default();
+    let idx = obligation.add_message(data);
+    sig.add_to_verification_obligation(committee, &mut obligation, idx)?;
+    obligation.verify_all()?;
+    Ok(())
+}
+
 #[derive(Clone, Debug, Eq, Serialize, Deserialize)]
 pub struct AuthoritySignInfo {
     pub epoch: EpochId,
@@ -582,11 +598,7 @@ pub struct AuthoritySignInfo {
 }
 impl AuthoritySignInfoTrait for AuthoritySignInfo {
     fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
-        let mut obligation = VerificationObligation::default();
-        let idx = obligation.add_message(data);
-        self.add_to_verification_obligation(committee, &mut obligation, idx)?;
-        obligation.verify_all()?;
-        Ok(())
+        add_to_verification_obligation_and_verify(self, data, committee)
     }
 
     fn add_to_verification_obligation(
@@ -677,11 +689,7 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
     for AuthorityQuorumSignInfo<STRONG_THRESHOLD>
 {
     fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult<()> {
-        let mut obligation = VerificationObligation::default();
-        let message_index = obligation.add_message(data);
-        self.add_to_verification_obligation(committee, &mut obligation, message_index)?;
-        obligation.verify_all()?;
-        Ok(())
+        add_to_verification_obligation_and_verify(self, data, committee)
     }
 
     fn add_to_verification_obligation(
