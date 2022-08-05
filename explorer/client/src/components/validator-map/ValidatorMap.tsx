@@ -21,7 +21,7 @@ type NodeList = [
     region: string,
     country: string,
     loc: string,
-    alpha2: string,
+    alpha2: string
 ][];
 
 type CountryNodes = Record<string, { count: number; name: string }>;
