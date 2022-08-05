@@ -30,7 +30,7 @@ img.largeimage {
 }
 
 span.cross {
-    @apply text-offwhite bg-sui-grey-100 z-50 h-[30px] w-[30px] self-start
+    @apply text-offwhite bg-sui-grey-100 z-20 h-[30px] w-[30px] self-start
   flex justify-center items-center rounded-[50px] cursor-pointer  text-2xl
   absolute  bottom-[60px] left-0 right-0 mx-auto 
   sm:block sm:ml-2 sm:mr-0 sm:static;
@@ -38,7 +38,7 @@ span.cross {
 
 div.filetype,
 div.caption {
-    @apply text-offwhite z-50 text-center sm:text-left text-2xl font-semibold mt-5;
+    @apply relative text-offwhite z-50 text-center sm:text-left text-2xl font-semibold mt-5;
 }
 
 div.filetype {
