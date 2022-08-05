@@ -98,6 +98,7 @@ pub async fn start_test_network_with_fullnodes(
     Ok(swarm)
 }
 
+// TODO make a buidler for this...
 pub async fn setup_network_and_wallet() -> Result<(Swarm, WalletContext, SuiAddress), anyhow::Error>
 {
     let swarm = start_test_network(None).await?;

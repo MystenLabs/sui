@@ -25,6 +25,7 @@ use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::gateway_state::GatewayState;
 use sui_node::metrics;
 use sui_node::SuiNode;
+use sui_sdk::crypto::Keystore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use tokio::sync::OnceCell;

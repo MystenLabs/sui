@@ -1444,6 +1444,12 @@ pub struct SuiObjectInfo {
     pub previous_transaction: TransactionDigest,
 }
 
+impl SuiObjectInfo {
+    pub fn to_object_ref(&self) -> ObjectRef {
+        (self.object_id, self.version, self.digest)
+    }
+}
+
 impl From<ObjectInfo> for SuiObjectInfo {
     fn from(info: ObjectInfo) -> Self {
         Self {
