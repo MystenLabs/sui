@@ -62,9 +62,18 @@ div.metadata > p {
     @apply text-sui-grey-80 text-[13px] leading-[12px];
 }
 
-.previewmedia {
-    @apply bg-inherit border-0 p-0 mt-[20px] cursor-pointer text-[14px] leading-[13px] 
+.desktoppreviewmedia,
+.mobilepreviewmedia {
+    @apply bg-inherit border-0 p-0 cursor-pointer text-[14px] leading-[13px] 
   text-sui-grey-80 font-semibold tracking-[-0.02em];
+}
+
+.desktoppreviewmedia {
+    @apply mt-5 hidden sm:block;
+}
+
+.mobilepreviewmedia {
+    @apply block sm:hidden w-full mt-1;
 }
 
 div.display {

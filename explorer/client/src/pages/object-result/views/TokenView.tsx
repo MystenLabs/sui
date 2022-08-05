@@ -154,6 +154,12 @@ function TokenView({ data }: { data: DataType }) {
                                     setImageFullScreen,
                                 ]}
                             />
+                            <button
+                                onClick={handlePreviewClick}
+                                className={styles.mobilepreviewmedia}
+                            >
+                                Preview Media <PreviewMediaIcon />
+                            </button>
                         </div>
                         <div className={styles.metadata}>
                             {name && <h2 className={styles.header}>{name}</h2>}
@@ -162,7 +168,7 @@ function TokenView({ data }: { data: DataType }) {
                             )}
                             <button
                                 onClick={handlePreviewClick}
-                                className={styles.previewmedia}
+                                className={styles.desktoppreviewmedia}
                             >
                                 Preview Media <PreviewMediaIcon />
                             </button>
