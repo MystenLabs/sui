@@ -3,7 +3,7 @@
 }
 
 .container {
-    @apply p-6 flex md:flex-col items-end md:items-start justify-between gap-8 relative z-10 pointer-events-none;
+    @apply p-6 flex flex-col items-start sm:items-end sm:flex-row md:flex-col md:items-start justify-between gap-8 relative z-10 pointer-events-none;
 }
 
 .contents {
@@ -19,7 +19,7 @@
 }
 
 .button {
-    @apply p-2 text-sui-grey-80 border border-solid border-sui-grey-55 text-sm font-semibold rounded-md inline-flex items-center gap-2 no-underline pointer-events-auto;
+    @apply p-2 text-sui-grey-80 border border-solid border-sui-grey-55 text-sm font-semibold rounded-md inline-flex items-center gap-2 no-underline pointer-events-auto whitespace-nowrap;
 }
 
 .mapcontainer {
