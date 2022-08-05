@@ -8,6 +8,8 @@ use async_trait::async_trait;
 #[allow(unused_imports)]
 use std::collections::HashSet;
 
+use crate::metrics::FaucetMetrics;
+use prometheus::Registry;
 use sui::client_commands::WalletContext;
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionKind, SuiTransferSui, TransactionEffectsResponse,
@@ -31,12 +33,16 @@ pub struct SimpleFaucet {
     active_address: SuiAddress,
     producer: Mutex<Sender<ObjectID>>,
     consumer: Mutex<Receiver<ObjectID>>,
+    metrics: FaucetMetrics,
 }
 
 const DEFAULT_GAS_BUDGET: u64 = 1000;
 
 impl SimpleFaucet {
-    pub async fn new(mut wallet: WalletContext) -> Result<Self, FaucetError> {
+    pub async fn new(
+        mut wallet: WalletContext,
+        prometheus_registry: &Registry,
+    ) -> Result<Self, FaucetError> {
         let active_address = wallet
             .active_address()
             .map_err(|err| FaucetError::Wallet(err.to_string()))?;
@@ -61,11 +67,14 @@ impl SimpleFaucet {
 
         info!("Using coins: {:?}", coins);
 
+        let metrics = FaucetMetrics::new(prometheus_registry);
+
         Ok(Self {
             wallet,
             active_address,
             producer: Mutex::new(producer),
             consumer: Mutex::new(consumer),
+            metrics,
         })
     }
 
@@ -94,6 +103,7 @@ impl SimpleFaucet {
         &self,
         amounts: &[u64],
         to: SuiAddress,
+        uuid: Uuid,
     ) -> Result<Vec<(TransactionDigest, ObjectID, u64, ObjectID)>, FaucetError> {
         let number_of_coins = amounts.len();
         let coins = self.select_coins(number_of_coins).await;
@@ -107,6 +117,7 @@ impl SimpleFaucet {
                     to,
                     DEFAULT_GAS_BUDGET,
                     *amount,
+                    uuid,
                 )
             })
             .collect();
@@ -165,6 +176,7 @@ impl SimpleFaucet {
         recipient: SuiAddress,
         budget: u64,
         amount: u64,
+        uuid: Uuid,
     ) -> Result<TransactionEffectsResponse, anyhow::Error> {
         let context = &self.wallet;
 
@@ -175,7 +187,7 @@ impl SimpleFaucet {
         let signature = context.keystore.sign(&signer, &data.to_bytes())?;
 
         let tx = Transaction::new(data, signature);
-        info!(tx_digest = ?tx.digest(), recipient = ?recipient, coin_id = ?coin_id, "Broadcasting transfer obj txn");
+        info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");
         let response = context
             .gateway
             .execute_transaction(tx)
@@ -219,8 +231,23 @@ impl Faucet for SimpleFaucet {
         amounts: &[u64],
     ) -> Result<FaucetReceipt, FaucetError> {
         info!(?recipient, uuid = ?id, "Getting faucet requests");
-        let results = self.transfer_gases(amounts, recipient).await?;
-        info!(uuid = ?id, ?recipient, ?results, "Transfer txn succeeded");
+
+        self.metrics.total_requests_received.inc();
+        self.metrics.current_requests_in_flight.inc();
+
+        let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
+            metrics.current_requests_in_flight.dec();
+            info!(?metrics);
+        });
+
+        let timer = self.metrics.process_latency.start_timer();
+
+        let results = self.transfer_gases(amounts, recipient, id).await?;
+
+        let elapsed = timer.stop_and_record();
+
+        info!(uuid = ?id, ?recipient, ?results, "Transfer txn succeeded in {} secs", elapsed);
+        self.metrics.total_requests_succeeded.inc();
 
         Ok(FaucetReceipt {
             sent: results
@@ -247,7 +274,8 @@ mod tests {
     async fn simple_faucet_basic_interface_should_work() {
         telemetry_subscribers::init_for_testing();
         let (_network, context, _address) = setup_network_and_wallet().await.unwrap();
-        let faucet = SimpleFaucet::new(context).await.unwrap();
+        let prom_registry = prometheus::Registry::new();
+        let faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
         test_basic_interface(faucet).await;
     }
 
@@ -265,7 +293,8 @@ mod tests {
             other => panic!("Expect SuiClientCommandResult::Gas, but got {:?}", other),
         };
         let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
-        let mut faucet = SimpleFaucet::new(context).await.unwrap();
+        let prom_registry = prometheus::Registry::new();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
         let candidates = faucet.drain_gas_queue(gases.len()).await;
         assert_eq!(
@@ -290,7 +319,8 @@ mod tests {
         };
         let gases = HashSet::from_iter(gases.into_iter().map(|gas| *gas.id()));
 
-        let mut faucet = SimpleFaucet::new(context).await.unwrap();
+        let prom_registry = prometheus::Registry::new();
+        let mut faucet = SimpleFaucet::new(context, &prom_registry).await.unwrap();
 
         let number_of_coins = gases.len();
         let amounts = &vec![1; number_of_coins];

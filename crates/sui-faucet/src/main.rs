@@ -59,6 +59,8 @@ struct AppState<F = SimpleFaucet> {
     // TODO: add counter
 }
 
+const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // initialize tracing
@@ -84,8 +86,14 @@ async fn main() -> Result<(), anyhow::Error> {
         ..
     } = config;
 
+    let prom_binding = PROM_PORT_ADDR.parse().unwrap();
+    info!("Starting Prometheus HTTP endpoint at {}", prom_binding);
+    let prometheus_registry = sui_node::metrics::start_prometheus_server(prom_binding);
+
     let app_state = Arc::new(AppState {
-        faucet: SimpleFaucet::new(context).await.unwrap(),
+        faucet: SimpleFaucet::new(context, &prometheus_registry)
+            .await
+            .unwrap(),
         config,
     });
 
