@@ -5,6 +5,8 @@ use rocksdb::Options;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, error::Error, path::PathBuf};
 
+use crate::rocks::default_rocksdb_options;
+
 pub trait Map<'a, K, V>
 where
     K: Serialize + DeserializeOwned + ?Sized,
@@ -142,7 +144,7 @@ pub trait DBMapTableUtil {
         cache_capacity: usize,
         point_lookup: bool,
     ) -> rocksdb::Options {
-        let mut options = db_options.unwrap_or_default();
+        let mut options = db_options.unwrap_or_else(default_rocksdb_options);
 
         // One common issue when running tests on Mac is that the default ulimit is too low,
         // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
