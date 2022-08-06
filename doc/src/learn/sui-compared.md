@@ -58,7 +58,7 @@ Unlike most existing blockchain systems (and as the reader may have guessed from
 
 [Narwhal and Tusk](architecture/consensus.md) represent the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reaches throughputs more than 130,000 transactions per second on a WAN, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
 
-The [Narwhal mempool](https://github.com/MystenLabs/narwhal) offers a high-throughput data availability engine and a scaled architecture, splitting the disk I/O and networking requirements across several workers. And Tusk consensus a zero-message overhead consensus algorithm, leveraging graph traversals.
+The [Narwhal mempool](https://github.com/MystenLabs/narwhal) offers a high-throughput data availability engine and a scaled architecture, splitting the disk I/O and networking requirements across several workers. And Tusk is a zero-message overhead consensus algorithm, leveraging graph traversals.
 
 ## Where Sui excels
 
