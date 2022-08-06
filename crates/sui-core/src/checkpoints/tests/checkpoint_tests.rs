@@ -11,7 +11,6 @@ use crate::{
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::LocalAuthorityClient,
 };
-use narwhal_config::Epoch;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duration};
@@ -27,7 +26,6 @@ use sui_types::{
 };
 
 use crate::authority_aggregator::AuthAggMetrics;
-use crate::epoch::epoch_store::EpochStore;
 use parking_lot::Mutex;
 
 pub struct TestCausalOrderPendCertNoop;

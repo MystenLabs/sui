@@ -18,9 +18,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::SuiError, messages::*};
 
 #[cfg(test)]
-use sui_types::{
-    base_types::ObjectID, committee::Committee, crypto::AuthorityKeyPair, object::Object,
-};
+use sui_types::{committee::Committee, crypto::AuthorityKeyPair, object::Object};
 
 use crate::epoch::reconfiguration::Reconfigurable;
 use sui_network::tonic::transport::Channel;
@@ -357,17 +355,7 @@ impl AuthorityAPI for LocalAuthorityClient {
 
 impl LocalAuthorityClient {
     #[cfg(test)]
-    pub async fn new(
-        committee: Committee,
-        address: AuthorityPublicKeyBytes,
-        secret: AuthorityKeyPair,
-        genesis: &Genesis,
-    ) -> Self {
-        use crate::authority::AuthorityStore;
-        use crate::checkpoints::CheckpointStore;
-        use parking_lot::Mutex;
-        use std::{env, fs};
-
+    pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
         let state =
             AuthorityState::new_for_testing(committee, &secret, None, Some(genesis), None).await;
         Self {
@@ -379,12 +367,11 @@ impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new_with_objects(
         committee: Committee,
-        address: AuthorityPublicKeyBytes,
         secret: AuthorityKeyPair,
         objects: Vec<Object>,
         genesis: &Genesis,
     ) -> Self {
-        let client = Self::new(committee, address, secret, genesis).await;
+        let client = Self::new(committee, secret, genesis).await;
 
         for object in objects {
             client.state.insert_genesis_object(object).await;

@@ -70,7 +70,6 @@ pub async fn init_local_authorities_with_genesis(
     for (authority_name, secret) in key_pairs {
         let client = LocalAuthorityClient::new_with_objects(
             committee.clone(),
-            authority_name,
             secret,
             genesis.objects().to_owned(),
             genesis,
