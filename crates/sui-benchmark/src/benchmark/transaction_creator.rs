@@ -61,16 +61,22 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
     // Make certificate
     let committee = network_config.committee();
     let mut sigs: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    // TODO: Why iterating from 0 to quorum_threshold??
-    for i in 0..committee.quorum_threshold() {
+    let mut total_stake = 0;
+    for i in 0..network_config.validator_configs().len() {
         let secx = network_config
             .validator_configs()
             .get(i as usize)
             .unwrap()
             .key_pair();
+
         let pubx: AuthorityPublicKeyBytes = secx.public().into();
         let sig = AuthoritySignature::new(&tx.data, secx);
+        let authority_weight = committee.weight(&pubx);
         sigs.push((pubx, sig));
+        total_stake += authority_weight;
+        if total_stake >= committee.quorum_threshold() {
+            break;
+        }
     }
     let mut certificate =
         CertifiedTransaction::new_with_signatures(tx.clone(), sigs, &committee).unwrap();
