@@ -41,13 +41,13 @@ type TxResponse = {
     address?: string;
     gasFee?: number;
     date?: number;
+    txId?: string;
     status: 'success' | 'failure';
 } | null;
 
 const initTxResponse: TxResponse = null;
 
 interface TransferProps {
-    // nftObj?: SuiObject;
     objectId: ObjectId;
 }
 
@@ -116,6 +116,7 @@ function TransferNFTCard({ objectId }: TransferProps) {
                     address: to,
                     gasFee: resp.gasFee,
                     date: resp?.timestamp_ms,
+                    txId: resp?.txId,
                     status: resp.status === 'success' ? 'success' : 'failure',
                 }));
                 resetForm();
@@ -175,6 +176,7 @@ function TransferNFTCard({ objectId }: TransferProps) {
                                 : null
                         }
                         errorMessage={sendError}
+                        txId={txResponse.txId}
                         gasFee={txResponse.gasFee}
                     >
                         {nftObj.data && (

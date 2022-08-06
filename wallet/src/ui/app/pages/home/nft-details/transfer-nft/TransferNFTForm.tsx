@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
+import { ErrorMessage, Form, Field, useFormikContext } from 'formik';
 import { useEffect, useRef, memo, useCallback } from 'react';
+import TextareaAutosize from 'react-textarea-autosize';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
@@ -64,14 +65,16 @@ function TransferNFTForm({
                         )}
                     >
                         <div className={st.textarea}>
-                            <Field
-                                as="textarea"
-                                name="to"
-                                rows="1"
-                                col="30"
-                                placeholder="Enter Address"
-                                className={st.input}
-                            />
+                            <Field as="div" id="to" placeholder="Enter Address">
+                                <TextareaAutosize
+                                    maxRows={2}
+                                    minRows={1}
+                                    name="to"
+                                    value={to}
+                                    placeholder="Enter Address"
+                                    className={st.input}
+                                />
+                            </Field>
                         </div>
                         <div
                             onClick={clearAddress}
@@ -109,7 +112,7 @@ function TransferNFTForm({
                             mode="primary"
                             type="submit"
                             disabled={!isValid || isSubmitting}
-                            className={cl(st.action, 'btn')}
+                            className={cl(st.action, 'btn', st.sendNftBtn)}
                         >
                             Send NFT Now
                             {isSubmitting ? (

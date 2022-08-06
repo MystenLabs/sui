@@ -3,6 +3,8 @@
 
 import cl from 'classnames';
 
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
 
@@ -14,6 +16,7 @@ type TxResponseProps = {
     children?: ReactNode;
     gasFee?: number;
     date?: string | null;
+    txId?: string;
     address?: string;
     errorMessage?: string | null;
     status: 'success' | 'failure';
@@ -25,6 +28,7 @@ function TxResponseCard({
     gasFee,
     date,
     address,
+    txId,
     status,
     errorMessage,
 }: TxResponseProps) {
@@ -72,9 +76,7 @@ function TxResponseCard({
 
                     {gasFee && (
                         <div className={st.txFees}>
-                            <div className={st.txInfoLabel}>
-                                Estimated Gas Fee
-                            </div>
+                            <div className={st.txInfoLabel}>Gas Fee</div>
                             <div className={st.walletInfoValue}>
                                 {gasFee} {GAS_SYMBOL}
                             </div>
@@ -84,6 +86,27 @@ function TxResponseCard({
                         <div className={st.txDate}>
                             <div className={st.txInfoLabel}>Date</div>
                             <div className={st.walletInfoValue}>{date}</div>
+                        </div>
+                    )}
+                    {txId && (
+                        <div className={st.explorerLink}>
+                            <ExplorerLink
+                                type={ExplorerLinkType.transaction}
+                                transactionID={txId}
+                                title="View on Sui Explorer"
+                                className={st['explorer-link']}
+                                showIcon={false}
+                            >
+                                View in Explorer
+                                <Icon
+                                    icon={SuiIcons.ArrowLeft}
+                                    className={cl(
+                                        st.arrowActionIcon,
+                                        st.angledArrow,
+                                        st.iconExplorer
+                                    )}
+                                />
+                            </ExplorerLink>
                         </div>
                     )}
                 </div>

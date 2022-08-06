@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSuiMoveObject } from '@mysten/sui.js';
+import { getObjectId } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useMemo, useState, useCallback } from 'react';
 import { Navigate, useSearchParams } from 'react-router-dom';
@@ -17,66 +17,39 @@ import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import NFTDisplayCard from '_components/nft-display';
-import {
-    useAppSelector,
-    useFileExtentionType,
-    useMiddleEllipsis,
-} from '_hooks';
+import { useAppSelector, useMiddleEllipsis, useNFTBasicData } from '_hooks';
 import { accountNftsSelector } from '_redux/slices/account';
 
 import type { SuiObject } from '@mysten/sui.js';
+import type { ButtonHTMLAttributes } from 'react';
 
 import st from './NFTDetails.module.scss';
 
-function NFTDetailsPage() {
-    const [searchParams] = useSearchParams();
-    const [startNFTTransfer, setStartNFTTransfer] = useState<boolean>(false);
-    const [selectedNFT, setSelectedNFT] = useState<SuiObject | null>(null);
-    const objectId = useMemo(
-        () => searchParams.get('objectId'),
-        [searchParams]
+const TRUNCATE_MAX_LENGTH = 10;
+const TRUNCATE_PREFIX_LENGTH = 6;
+function NFTdetailsContent({
+    nft,
+    onClick,
+}: {
+    nft: SuiObject;
+    onClick?: ButtonHTMLAttributes<HTMLButtonElement>['onClick'];
+}) {
+    const { nftObjectID, nftFields, fileExtentionType } = useNFTBasicData(nft);
+
+    const shortAddress = useMiddleEllipsis(
+        nftObjectID,
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_PREFIX_LENGTH
     );
 
-    let nftFields;
-    const nftCollections = useAppSelector(accountNftsSelector);
-
-    const activeNFT = useMemo(() => {
-        const r = nftCollections.filter(
-            (nftItems) => nftItems.reference.objectId === objectId
-        )[0];
-        setSelectedNFT(r);
-        return r;
-    }, [nftCollections, objectId]);
-
-    if (activeNFT) {
-        nftFields = isSuiMoveObject(activeNFT.data)
-            ? activeNFT.data.fields
-            : null;
-    }
-
-    const loadingBalance = useAppSelector(
-        ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
-    );
-
-    const startNFTTransferHandler = useCallback(() => {
-        setStartNFTTransfer(true);
-    }, []);
-
-    const shortAddress = useMiddleEllipsis(nftFields?.info.id, 10, 6);
-    const fileExtentionType = useFileExtentionType(nftFields?.url || '');
-
-    if (!objectId || (!loadingBalance && !selectedNFT && !startNFTTransfer)) {
-        return <Navigate to="/nfts" replace={true} />;
-    }
-
-    const NFTDetails = nftFields && (
+    const NFTDetails = (
         <div className={st.nftDetails}>
             <div className={st.nftItemDetail}>
                 <div className={st.label}>Object ID</div>
                 <div className={st.value}>
                     <ExplorerLink
                         type={ExplorerLinkType.address}
-                        address={nftFields.info.id}
+                        address={nftObjectID}
                         title="View on Sui Explorer"
                         className={st.explorerLink}
                         showIcon={false}
@@ -86,14 +59,18 @@ function NFTDetailsPage() {
                 </div>
             </div>
 
-            <div className={st.nftItemDetail}>
-                <div className={st.label}>Media Type</div>
-                <div className={st.value}>{fileExtentionType}</div>
-            </div>
+            {fileExtentionType.name !== '' && (
+                <div className={st.nftItemDetail}>
+                    <div className={st.label}>Media Type</div>
+                    <div className={st.value}>
+                        {fileExtentionType?.name} {fileExtentionType.type}
+                    </div>
+                </div>
+            )}
         </div>
     );
 
-    const NFTdetailsContent = (
+    return (
         <div className={st.container}>
             <PageTitle
                 title={nftFields?.name}
@@ -104,19 +81,17 @@ function NFTDetailsPage() {
             <BottomMenuLayout>
                 <Content>
                     <section className={st.nftDetail}>
-                        {selectedNFT && (
-                            <NFTDisplayCard
-                                nftobj={selectedNFT}
-                                size="large"
-                                expandable={true}
-                            />
-                        )}
+                        <NFTDisplayCard
+                            nftobj={nft}
+                            size="large"
+                            expandable={true}
+                        />
                         {NFTDetails}
                     </section>
                 </Content>
                 <Menu stuckClass={st.shadow} className={st.shadow}>
                     <button
-                        onClick={startNFTTransferHandler}
+                        onClick={onClick}
                         className={cl(
                             'btn',
                             st.action,
@@ -134,13 +109,48 @@ function NFTDetailsPage() {
             </BottomMenuLayout>
         </div>
     );
+}
+
+function NFTDetailsPage() {
+    const [searchParams] = useSearchParams();
+    const [startNFTTransfer, setStartNFTTransfer] = useState<boolean>(false);
+    const [selectedNFT, setSelectedNFT] = useState<SuiObject | null>(null);
+    const objectId = useMemo(
+        () => searchParams.get('objectId'),
+        [searchParams]
+    );
+
+    const nftCollections = useAppSelector(accountNftsSelector);
+
+    const activeNFT = useMemo(() => {
+        const selectedNFT = nftCollections.filter(
+            (nftItem) => getObjectId(nftItem.reference) === objectId
+        )[0];
+        setSelectedNFT(selectedNFT);
+        return selectedNFT;
+    }, [nftCollections, objectId]);
+
+    const loadingBalance = useAppSelector(
+        ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
+    );
+
+    const startNFTTransferHandler = useCallback(() => {
+        setStartNFTTransfer(true);
+    }, []);
+
+    if (!objectId || (!loadingBalance && !selectedNFT && !startNFTTransfer)) {
+        return <Navigate to="/nfts" replace={true} />;
+    }
 
     return (
         <Loading loading={loadingBalance}>
             {objectId && startNFTTransfer ? (
                 <TransferNFTCard objectId={objectId} />
             ) : (
-                NFTdetailsContent
+                <NFTdetailsContent
+                    nft={activeNFT}
+                    onClick={startNFTTransferHandler}
+                />
             )}
         </Loading>
     );

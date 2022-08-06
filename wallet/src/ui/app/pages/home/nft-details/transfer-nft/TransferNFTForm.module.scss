@@ -54,7 +54,6 @@
 
             &::placeholder {
                 color: colors.$gray-65;
-                line-height: 200%;
             }
         }
     }
@@ -104,9 +103,8 @@
 
 .valid-address {
     position: absolute;
-    margin-top: 67px;
-    margin-right: 24vw;
-    right: 0;
+    margin-top: 66px;
+    margin-left: 115px;
 
     i {
         color: colors.$success;
@@ -157,6 +155,13 @@
     .action,
     .done {
         width: 100%;
+    }
+
+    .send-nft-btn {
+        &:visited,
+        &:active {
+            color: colors.$gray-50;
+        }
     }
 
     .done {
