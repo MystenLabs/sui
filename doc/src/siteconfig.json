@@ -126,13 +126,17 @@
         "name": "See what's New",
         "sublist": [
           {
+            "name": "Make Rust SDK Calls",
+            "url": "/build/rust-sdk"
+          },
+          {
+            "name": "Run Windows, Linux, macOS",
+            "url": "/build/install#supported-oses"
+          },
+          {
             "name": "Apply to be a Validator",
             "url": "https://sui.io/resources-sui/validator-registration-open/",
             "external": true
-          },
-          {
-            "name": "Use Almost Any OS",
-            "url": "/build/install#supported-oses"
           },
           {
             "name": "Try Sui Wallet Browser Extension",
@@ -147,10 +151,6 @@
             "name": "Use Move VSCode Plugin",
             "url": "https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin",
             "external": true
-          },
-          {
-            "name": "Run a Fullnode",
-            "url": "/build/fullnode"
           }
         ]
       },

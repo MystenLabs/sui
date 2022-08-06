@@ -14,12 +14,12 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 The following list includes the recent updates to Sui and the documentation:
 
+* Interact with the Sui network using our new [Rust SDK](../build/rust-sdk.md), a collection of Rust language [JSON-RPC wrapper and crypto utilities](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk).
+* Sui now supports development using [Microsoft Windows 11, macOS, and Linux](../build/install.md#supported-oses). See [install Sui](../build/install.md#prerequisites) for the prerequisites of each operating system.
 * You can now [register to participate](https://airtable.com/shr3phh3FCZYhZUDF) in [Sui Incentivized Testnet as a validator](https://sui.io/resources-sui/validator-registration-open/)!
 * This site is now available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for  [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
-* Sui now supports development using [Microsoft Windows 11, macOS, and Linux](../build/install.md#supported-oses). See [install Sui](../build/install.md#prerequisites) for the prerequisites of each operating system.
 * `sui::id` is now `sui::object` and `VersionedID` is now `Info`. Use the [Object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) that has [replaced the former ID.move.](https://github.com/MystenLabs/sui/pull/3241)
 * Find a list of [single-writer apps](../learn/single-writer-apps.md) that would benefit from Sui's advantages in handling [simple transactions](../learn/how-sui-works.md#simple-transactions).
-* Sui [version 0.6.1](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.1) released to DevNet. See the [#sui-release-notes](https://discord.com/channels/916379725201563759/974444055259910174) channel in Discord for details on this and prior releases.
 * Install the [Sui Wallet Browser Extension](../explore/wallet-browser.md) to create NFTs, transfer coins, and carry out common transactions in a Chrome tab.
 
 For a complete view of all changes in the Sui `devnet` branch, see:

@@ -35,12 +35,17 @@ Export a local user variable to store the hardcoded hostname + port that the loc
 export SUI_RPC_HOST=http://127.0.0.1:5001
 ```
 
+## Sui software development kits
+
+You may sign transactions and interact with the Sui network using:
+
+* the [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
+* the [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
+
 ## Sui JSON-RPC API
 
 In the following sections we will show how to use Sui's JSON-RPC API with
 the `curl` command.
-
-> **Tip:** If your application is written in JavaScript or TypeScript, follow the [TypeScript SDK documentation](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
 
 ## Sui JSON-RPC methods
 
