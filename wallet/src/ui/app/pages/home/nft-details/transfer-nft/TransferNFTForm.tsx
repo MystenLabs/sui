@@ -32,8 +32,6 @@ function TransferNFTForm({
         isValid,
         dirty,
         values: { to, amount },
-        // validateField,
-        // handleChange,
         setFieldValue,
     } = useFormikContext<FormValues>();
 

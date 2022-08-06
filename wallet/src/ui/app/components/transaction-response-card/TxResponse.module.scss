@@ -164,6 +164,28 @@
         }
     }
 
+    .explorer-link {
+        margin: 10px;
+        color: colors.$sui-dark-blue;
+
+        @include utils.typography('table/title-sm');
+
+        a {
+            text-decoration: none;
+            color: colors.$sui-dark-blue;
+            margin: 0;
+
+            i {
+                transform: rotate(135deg);
+                font-weight: 300;
+                position: absolute;
+                margin-left: 5px;
+                font-size: 10px;
+                color: colors.$sui-steel-blue;
+            }
+        }
+    }
+
     &::after {
         content: '';
         background-image: url('_assets/images/nft-detail-bg.png');
