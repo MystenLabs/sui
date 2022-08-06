@@ -34,6 +34,7 @@ url('./sui-icons.svg#sui-icons') format('svg');
 .sui-icons-sui-logo-icon:before { content: "\ea12"; }
 .sui-icons-sui-logo-txt:before { content: "\ea13"; }
 .sui-icons-tokens:before { content: "\ea14"; }
+.sui-icons-version-icon:before { content: "\ea15"; }
 
 $sui-icons-Info: "\ea01";
 $sui-icons-Preview: "\ea02";
@@ -55,4 +56,5 @@ $sui-icons-sui-chevron-right: "\ea11";
 $sui-icons-sui-logo-icon: "\ea12";
 $sui-icons-sui-logo-txt: "\ea13";
 $sui-icons-tokens: "\ea14";
+$sui-icons-version-icon: "\ea15";
 
