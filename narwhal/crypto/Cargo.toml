@@ -34,7 +34,7 @@ blake2 = "0.9"
 blst = "0.3.10"
 once_cell = "1.13.0"
 readonly = "0.2.2"
-serde_bytes = "0.11.6"
+serde_bytes = "0.11.7"
 digest = "0.10.3"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
