@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Link } from 'react-router-dom';
+import Browser from 'webextension-polyfill';
 
 import Item from './item';
 import { API_ENV_TO_INFO } from '_app/ApiProvider';
@@ -21,6 +22,8 @@ function MenuList() {
     const shortenAddress = useMiddleEllipsis(address, 10, 7);
     const apiEnv = useAppSelector((state) => state.app.apiEnv);
     const networkName = API_ENV_TO_INFO[apiEnv].name;
+    const version = Browser.runtime.getManifest().version;
+
     return (
         <div className={st.container}>
             <Link to={accountUrl} className={st.item}>
@@ -53,6 +56,14 @@ function MenuList() {
                     indicator="link-45deg"
                 />
             </ExternalLink>
+            <div className={st.item}>
+                <Item
+                    // TODO: import and use the icon from Figma
+                    icon={SuiIcons.Info}
+                    title="Wallet version"
+                    subtitle={'v' + version}
+                />
+            </div>
         </div>
     );
 }
