@@ -368,39 +368,8 @@ impl LocalAuthorityClient {
         use parking_lot::Mutex;
         use std::{env, fs};
 
-        // Random directory
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        let secret = Arc::pin(secret);
-
-        let mut store_path = path.clone();
-        store_path.push("store");
-        let store = Arc::new(AuthorityStore::open(&store_path, None));
-        let mut checkpoints_path = path.clone();
-        checkpoints_path.push("checkpoints");
-        let checkpoints = CheckpointStore::open(
-            &checkpoints_path,
-            None,
-            committee.epoch,
-            address,
-            secret.clone(),
-        )
-        .expect("Should not fail to open local checkpoint DB");
-
-        let state = AuthorityState::new(
-            committee.clone(),
-            address,
-            secret.clone(),
-            store,
-            None,
-            None,
-            Some(Arc::new(Mutex::new(checkpoints))),
-            genesis,
-            &prometheus::Registry::new(),
-        )
-        .await;
+        let state =
+            AuthorityState::new_for_testing(committee, &secret, None, Some(genesis), None).await;
         Self {
             state: Arc::new(state),
             fault_config: LocalAuthorityClientFaultConfig::default(),

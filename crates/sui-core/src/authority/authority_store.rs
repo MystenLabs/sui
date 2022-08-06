@@ -18,8 +18,6 @@ use sui_storage::{
 };
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-use sui_types::messages::AuthenticatedEpoch;
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::{Owner, OBJECT_START_VERSION};
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use tokio::sync::Notify;
@@ -1319,71 +1317,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let result = bcs::from_bytes::<SuiSystemState>(move_object.contents())
             .expect("Sui System State object deserialization cannot fail");
         Ok(result)
-    }
-
-    // Epoch related functions
-
-    pub fn init_genesis_epoch(&self, genesis_committee: Committee) -> SuiResult {
-        assert_eq!(genesis_committee.epoch, 0);
-        let epoch_data = AuthenticatedEpoch::Genesis(GenesisEpoch::new(genesis_committee));
-        self.tables.epochs.insert(&0, &epoch_data)?;
-        Ok(())
-    }
-
-    /// This function should be called at the end of the epoch identified by `epoch`,
-    /// and after this call, we expect that the node's committee has changed
-    /// to `new_committee`.
-    pub fn sign_new_epoch(
-        &self,
-        new_committee: Committee,
-        authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
-        next_checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult {
-        let cur_epoch = new_committee.epoch;
-        let latest_epoch = self.get_latest_authenticated_epoch();
-        fp_ensure!(
-            latest_epoch.epoch() + 1 == cur_epoch,
-            SuiError::from("Unexpected new epoch number")
-        );
-
-        let signed_epoch = SignedEpoch::new(
-            new_committee,
-            authority,
-            secret,
-            next_checkpoint,
-            latest_epoch.epoch_info(),
-        );
-        self.tables
-            .epochs
-            .insert(&cur_epoch, &AuthenticatedEpoch::Signed(signed_epoch))?;
-        Ok(())
-    }
-
-    pub fn store_epoch_cert(&self, cert: CertifiedEpoch) -> SuiResult {
-        Ok(self.tables.epochs.insert(
-            &cert.epoch_info.epoch(),
-            &AuthenticatedEpoch::Certified(cert),
-        )?)
-    }
-
-    pub fn get_authenticated_epoch(
-        &self,
-        epoch_id: &EpochId,
-    ) -> SuiResult<Option<AuthenticatedEpoch>> {
-        Ok(self.tables.epochs.get(epoch_id)?)
-    }
-
-    pub fn get_latest_authenticated_epoch(&self) -> AuthenticatedEpoch {
-        self.tables
-            .epochs
-            .iter()
-            .skip_to_last()
-            .next()
-            // unwrap safe because we guarantee there is at least a genesis epoch
-            // when initializing the store.
-            .unwrap()
-            .1
     }
 }
 

@@ -1583,12 +1583,6 @@ async fn test_store_revert_state_update() {
 }
 
 // helpers
-#[cfg(test)]
-fn init_store() -> Arc<AuthorityStore> {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("authority_db");
-    Arc::new(AuthorityStore::open(&path, None))
-}
 
 #[cfg(test)]
 pub async fn init_state() -> AuthorityState {
@@ -1612,20 +1606,7 @@ pub async fn init_state_with_committee(
         }
     };
 
-    let store = init_store();
-
-    AuthorityState::new(
-        committee,
-        authority_key.public().into(),
-        Arc::pin(authority_key),
-        store,
-        None,
-        None,
-        None,
-        &sui_config::genesis::Genesis::get_default_genesis(),
-        &prometheus::Registry::new(),
-    )
-    .await
+    AuthorityState::new_for_testing(committee, &authority_key, None, None, None).await
 }
 
 #[cfg(test)]

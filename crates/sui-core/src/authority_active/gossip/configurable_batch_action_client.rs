@@ -67,24 +67,7 @@ impl ConfigurableBatchActionClient {
         address: AuthorityPublicKeyBytes,
         secret: AuthorityKeyPair,
     ) -> Self {
-        // Random directory
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        let store = Arc::new(AuthorityStore::open(&path, None));
-        let state = AuthorityState::new(
-            committee.clone(),
-            address,
-            Arc::pin(secret),
-            store,
-            None,
-            None,
-            None,
-            &sui_config::genesis::Genesis::get_default_genesis(),
-            &prometheus::Registry::new(),
-        )
-        .await;
+        let state = AuthorityState::new_for_testing(committee, &secret, None, None, None).await;
 
         ConfigurableBatchActionClient {
             state: Arc::new(state),

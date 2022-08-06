@@ -19,6 +19,7 @@ use std::{
     time::Duration,
 };
 use sui_core::authority::*;
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_types::{
     base_types::{SuiAddress, *},
     committee::*,
@@ -28,6 +29,7 @@ use sui_types::{
 };
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
+use typed_store::traits::DBMapTableUtil;
 
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
 
@@ -100,7 +102,9 @@ impl ValidatorPreparer {
 
                 // Create a random directory to store the DB
                 let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
+                let epoch_path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
                 let auth_state = make_authority_state(
+                    &epoch_path,
                     &path,
                     db_cpus as i32,
                     &committee,
@@ -258,6 +262,7 @@ pub fn get_multithread_runtime() -> Runtime {
 
 fn make_authority_state(
     store_path: &Path,
+    epoch_store_path: &Path,
     db_cpus: i32,
     committee: &Committee,
     pubx: &AuthorityPublicKeyBytes,
@@ -280,6 +285,10 @@ fn make_authority_state(
     // opts.set_manual_wal_flush(true);
 
     let store = Arc::new(AuthorityStore::open(store_path, Some(opts)));
+    let epoch_store = Arc::new(EpochStore::open_tables_read_write(
+        epoch_store_path.to_path_buf(),
+        None,
+    ));
     (
         Runtime::new().unwrap().block_on(async {
             AuthorityState::new(
@@ -287,6 +296,7 @@ fn make_authority_state(
                 *pubx,
                 Arc::pin(secx),
                 store.clone(),
+                epoch_store,
                 None,
                 None,
                 None,

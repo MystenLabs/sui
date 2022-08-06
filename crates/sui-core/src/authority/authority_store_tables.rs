@@ -92,9 +92,4 @@ pub struct AuthorityStoreTables<S> {
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     pub(crate) last_consensus_index: DBMap<u64, ExecutionIndices>,
-
-    /// Map from each epoch ID to the epoch information. The epoch is either signed by this node,
-    /// or is certified (signed by a quorum).
-    #[options(optimization = "point_lookup")]
-    pub(crate) epochs: DBMap<EpochId, AuthenticatedEpoch>,
 }
