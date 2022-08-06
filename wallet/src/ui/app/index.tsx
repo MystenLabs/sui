@@ -47,7 +47,7 @@ const App = () => {
     }, [location, dispatch]);
     return (
         <Routes>
-            <Route path="/" element={<HomePage />}>
+            <Route path="/*" element={<HomePage />}>
                 <Route
                     index
                     element={<Navigate to="/tokens" replace={true} />}
