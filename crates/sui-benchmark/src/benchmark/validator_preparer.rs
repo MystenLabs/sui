@@ -11,7 +11,7 @@ use multiaddr::Multiaddr;
 use rocksdb::Options;
 use std::{
     env, fs, panic,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Child, Command},
     sync::Arc,
     thread,
@@ -29,7 +29,6 @@ use sui_types::{
 };
 use tokio::runtime::{Builder, Runtime};
 use tracing::{error, info};
-use typed_store::traits::DBMapTableUtil;
 
 pub const VALIDATOR_BINARY_NAME: &str = "validator";
 
@@ -100,12 +99,7 @@ impl ValidatorPreparer {
                 let validator_config = &network_config.validator_configs()[0];
                 let committee = network_config.committee();
 
-                // Create a random directory to store the DB
-                let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
-                let epoch_path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
                 let auth_state = make_authority_state(
-                    &epoch_path,
-                    &path,
                     db_cpus as i32,
                     &committee,
                     &validator_config.public_key(),
@@ -261,15 +255,15 @@ pub fn get_multithread_runtime() -> Runtime {
 }
 
 fn make_authority_state(
-    store_path: &Path,
-    epoch_store_path: &Path,
     db_cpus: i32,
     committee: &Committee,
     pubx: &AuthorityPublicKeyBytes,
     secx: AuthorityKeyPair,
 ) -> (AuthorityState, Arc<AuthorityStore>) {
-    fs::create_dir(&store_path).unwrap();
-    info!("Open database on path: {:?}", store_path.as_os_str());
+    // Create a random directory to store the DB
+    let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+    info!("Open database on path: {:?}", path.as_os_str());
 
     let mut opts = Options::default();
     opts.increase_parallelism(db_cpus);
@@ -284,11 +278,8 @@ fn make_authority_state(
     // manually.
     // opts.set_manual_wal_flush(true);
 
-    let store = Arc::new(AuthorityStore::open(store_path, Some(opts)));
-    let epoch_store = Arc::new(EpochStore::open_tables_read_write(
-        epoch_store_path.to_path_buf(),
-        None,
-    ));
+    let store = Arc::new(AuthorityStore::open(&path.join("store"), Some(opts)));
+    let epoch_store = Arc::new(EpochStore::new(path.join("epochs")));
     (
         Runtime::new().unwrap().block_on(async {
             AuthorityState::new(
