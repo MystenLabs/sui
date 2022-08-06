@@ -24,7 +24,8 @@ A lot of transactions do not have complex interdependencies with other, arbitrar
 
 Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model](../build/objects.md) and leveraging [Move](../build/move/index.md)'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
 
-This doesn't mean that Sui as a platform never orders transactions with respect to each other, or that it allows owners to only affect their owned microcosm of objects. Sui will also process transactions that have an effect on some shared state, in a rigorous, consensus-ordered manner. They're just not the default use case.
+This doesn't mean that Sui as a platform never orders transactions with respect to each other, or that it allows owners to affect only their owned microcosm of objects. Sui also processes transactions that have an effect on some shared state in a rigorous, consensus-ordered manner. They're just not the default use case. See the [State-of-the-art consensus](#state-of-the-art-consensus) section for details on the [Narwhal and Tusk consensus engine](architecture/consensus.md).
+
 
 ## A collaborative approach to transaction submission
 
@@ -52,6 +53,12 @@ As a consequence, a Sui validator -- or any other validator with a copy of the s
 ## Causal order vs. total order
 
 Unlike most existing blockchain systems (and as the reader may have guessed from the description of write requests above), Sui does not always impose a total order on the transactions submitted by clients, with shared objects being the exception. Instead, many transactions are *causally* ordered--if a transaction `T1` produces output objects `O1` that are used as input objects in a transaction `T2`, a validator must execute `T1` before it executes `T2`. Note that `T2` need not use these objects directly for a causal relationship to exist--e.g., `T1` might produce output objects which are then used by `T3`, and `T2` might use `T3`'s output objects. However, transactions with no causal relationship can be processed by Sui validators in any order.
+
+## State-of-the-art consensus
+
+[Narwhal and Tusk](architecture/consensus.md) represent the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reaches throughputs more than 130,000 transactions per second on a WAN, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
+
+The [Narwhal mempool](https://github.com/MystenLabs/narwhal) offers a high-throughput data availability engine and a scaled architecture, splitting the disk I/O and networking requirements across several workers. And Tusk is a zero-message overhead consensus algorithm, leveraging graph traversals.
 
 ## Where Sui excels
 
@@ -119,3 +126,5 @@ Sui uses the state commitment that arrives upon epoch change. Sui requires a sin
 ## Conclusion
 
 In summary, Sui offers many performance and usability gains at the cost of some complexity in less simple use cases. Direct sender transactions excel in Sui. And the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus supports more complex use cases seamlessly.
+
+Complex smart contracts may benefit from shared objects where more than one user can mutate those objects (following smart contract specific rules). In this case, Sui totally orders all transactions involving shared objects using a [consensus](architecture/consensus.md) protocol. Sui uses a novel peer-reviewed consensus protocol based on [Narwhal](https://github.com/MystenLabs/narwhal). This is state-of-the-art in terms of both performance and robustness.
