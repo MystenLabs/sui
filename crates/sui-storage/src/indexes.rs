@@ -4,7 +4,10 @@
 //! IndexStore supports creation of various ancillary indexes of state in SuiDataStore.
 //! The main user of this data is the explorer.
 
+use rocksdb::Options;
 use serde::{de::DeserializeOwned, Serialize};
+use std::path::Path;
+use typed_store::reopen;
 use typed_store_macros::DBMapUtils;
 
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -19,26 +22,23 @@ use typed_store::rocks::DBMap;
 use typed_store::traits::DBMapTableUtil;
 use typed_store::traits::Map;
 
+use crate::default_db_options;
+
 #[derive(DBMapUtils)]
 pub struct IndexStore {
     /// Index from sui address to transactions initiated by that address.
-    #[options(cache_capacity = 1_000_000)]
     transactions_from_addr: DBMap<(SuiAddress, TxSequenceNumber), TransactionDigest>,
 
     /// Index from sui address to transactions that were sent to that address.
-    #[options(cache_capacity = 1_000_000)]
     transactions_to_addr: DBMap<(SuiAddress, TxSequenceNumber), TransactionDigest>,
 
     /// Index from object id to transactions that used that object id as input.
-    #[options(cache_capacity = 1_000_000)]
     transactions_by_input_object_id: DBMap<(ObjectID, TxSequenceNumber), TransactionDigest>,
 
     /// Index from object id to transactions that modified/created that object id.
-    #[options(cache_capacity = 1_000_000)]
     transactions_by_mutated_object_id: DBMap<(ObjectID, TxSequenceNumber), TransactionDigest>,
 
     /// Index from package id, module and function identifier to transactions that used that moce function call as input.
-    #[options(cache_capacity = 1_000_000)]
     transactions_by_move_function:
         DBMap<(ObjectID, String, String, TxSequenceNumber), TransactionDigest>,
 
@@ -46,11 +46,55 @@ pub struct IndexStore {
     /// **milliseconds** since epoch 1/1/1970). A transaction digest is subjectively time stamped
     /// on a node according to the local machine time, so it varies across nodes.
     /// The timestamping happens when the node sees a txn certificate for the first time.
-    #[options(optimization = "point_lookup", cache_capacity = 1_000_000)]
     timestamps: DBMap<TransactionDigest, u64>,
 }
 
 impl IndexStore {
+    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
+        let (options, point_lookup) = default_db_options(db_options, Some(1_000_000));
+
+        let db = {
+            let path = &path;
+            let db_options = Some(options.clone());
+            let opt_cfs: &[(&str, &rocksdb::Options)] = &[
+                ("transactions_from_addr", &options),
+                ("transactions_to_addr", &options),
+                ("transactions_by_input_object_id", &options),
+                ("transactions_by_mutated_object_id", &options),
+                ("transactions_by_move_function", &options),
+                ("timestamps", &point_lookup),
+            ];
+            typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
+        }
+        .expect("Cannot open DB.");
+
+        let (
+            transactions_from_addr,
+            transactions_to_addr,
+            transactions_by_input_object_id,
+            transactions_by_mutated_object_id,
+            transactions_by_move_function,
+            timestamps,
+        ) = reopen!(
+            &db,
+            "transactions_from_addr"; <(SuiAddress, TxSequenceNumber), TransactionDigest>,
+            "transactions_to_addr"; <(SuiAddress, TxSequenceNumber), TransactionDigest>,
+            "transactions_by_input_object_id"; <(ObjectID, TxSequenceNumber), TransactionDigest>,
+            "transactions_by_mutated_object_id"; <(ObjectID, TxSequenceNumber), TransactionDigest>,
+            "transactions_by_move_function"; <(ObjectID, String, String, TxSequenceNumber), TransactionDigest>,
+            "timestamps";<TransactionDigest, u64>
+        );
+
+        Self {
+            transactions_from_addr,
+            transactions_to_addr,
+            transactions_by_input_object_id,
+            transactions_by_mutated_object_id,
+            transactions_by_move_function,
+            timestamps,
+        }
+    }
+
     pub fn index_tx<'a>(
         &self,
         sender: SuiAddress,

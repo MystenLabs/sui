@@ -39,7 +39,6 @@ use sui_types::{
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::{debug, info};
-use typed_store::traits::DBMapTableUtil;
 
 use crate::{
     authority::AuthorityState,
@@ -164,11 +163,8 @@ impl<A> ActiveAuthority<A> {
         let follower_db_path = working_dir.path().join("follower_db");
         let sync_db_path = working_dir.path().join("node_sync_db");
 
-        let follower_store = Arc::new(FollowerStore::open_tables_read_write(
-            follower_db_path,
-            None,
-        ));
-        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(sync_db_path, None));
+        let follower_store = Arc::new(FollowerStore::open(follower_db_path)?);
+        let node_sync_store = Arc::new(NodeSyncStore::open(sync_db_path)?);
         Self::new(authority, node_sync_store, follower_store, net)
     }
 

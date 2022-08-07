@@ -7,11 +7,14 @@
 
 use async_trait::async_trait;
 
-use crate::mutex_table::{LockGuard, MutexTable};
+use crate::{
+    default_db_options,
+    mutex_table::{LockGuard, MutexTable},
+};
 use serde::{de::DeserializeOwned, Serialize};
-use std::fmt::Debug;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::{fmt::Debug, path::Path};
 use sui_types::base_types::TransactionDigest;
 use typed_store::traits::DBMapTableUtil;
 use typed_store_macros::DBMapUtils;
@@ -160,6 +163,32 @@ pub struct DBWriteAheadLogTables<C> {
     retry_count: DBMap<TransactionDigest, u32>,
 }
 
+impl<C> DBWriteAheadLogTables<C>
+where
+    C: Serialize + DeserializeOwned + Debug,
+{
+    pub fn open<P: AsRef<Path>>(path: P) -> Self {
+        let (options, _) = default_db_options(None, None);
+        let db = {
+            let path = &path;
+            let db_options = Some(options.clone());
+            let opt_cfs: &[(&str, &rocksdb::Options)] = &[
+                ("tx_write_ahead_log", &options),
+                ("tx_retry_count", &options),
+            ];
+            typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
+        }
+        .expect("Cannot open DB.");
+
+        let log: DBMap<TransactionDigest, C> =
+            DBMap::reopen(&db, Some("tx_write_ahead_log")).expect("Cannot open CF.");
+        let retry_count: DBMap<TransactionDigest, u32> =
+            DBMap::reopen(&db, Some("tx_retry_count")).expect("Cannot open CF.");
+
+        Self { log, retry_count }
+    }
+}
+
 // A WriteAheadLog implementation built on rocksdb.
 pub struct DBWriteAheadLog<C> {
     tables: DBWriteAheadLogTables<C>,
@@ -179,7 +208,7 @@ where
     C: Serialize + DeserializeOwned + Debug,
 {
     pub fn new(path: PathBuf) -> Self {
-        let tables = DBWriteAheadLogTables::open_tables_read_write(path, None);
+        let tables = DBWriteAheadLogTables::open(path);
 
         // Read in any digests that were left in the log, e.g. due to a crash.
         //

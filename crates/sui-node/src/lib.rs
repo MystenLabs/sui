@@ -40,7 +40,6 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_types::crypto::KeypairTraits;
-use typed_store::traits::DBMapTableUtil;
 
 pub mod admin;
 pub mod metrics;
@@ -91,16 +90,13 @@ impl SuiNode {
         let index_store = if config.consensus_config().is_some() {
             None
         } else {
-            Some(Arc::new(IndexStore::open_tables_read_write(
+            Some(Arc::new(IndexStore::open(
                 config.db_path().join("indexes"),
                 None,
             )))
         };
 
-        let follower_store = Arc::new(FollowerStore::open_tables_read_write(
-            config.db_path().join("follower_db"),
-            None,
-        ));
+        let follower_store = Arc::new(FollowerStore::open(config.db_path().join("follower_db"))?);
 
         let event_store = if config.enable_event_processing {
             let path = config.db_path().join("events.db");
@@ -159,10 +155,8 @@ impl SuiNode {
 
         let (gossip_handle, execute_driver_handle, checkpoint_process_handle) =
             if should_start_follower {
-                let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
-                    config.db_path().join("node_sync_db"),
-                    None,
-                ));
+                let pending_store =
+                    Arc::new(NodeSyncStore::open(config.db_path().join("node_sync_db"))?);
 
                 let active_authority = Arc::new(ActiveAuthority::new(
                     state.clone(),

@@ -13,6 +13,7 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::{collections::HashSet, path::Path, sync::Arc};
+use sui_storage::default_db_options;
 use sui_types::messages_checkpoint::CheckpointProposal;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -27,6 +28,8 @@ use sui_types::{
     },
 };
 use tracing::{debug, error, info};
+use typed_store::reopen;
+use typed_store::rocks::open_cf_opts;
 use typed_store::traits::DBMapTableUtil;
 use typed_store::{
     rocks::{DBBatch, DBMap},
@@ -90,7 +93,6 @@ pub enum FragmentInternalError {
 pub struct CheckpointStoreTables {
     /// The list of all transaction/effects that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
-    #[options(optimization = "point_lookup")]
     pub transactions_to_checkpoint:
         DBMap<ExecutionDigests, (CheckpointSequenceNumber, TxSequenceNumber)>,
 
@@ -103,11 +105,9 @@ pub struct CheckpointStoreTables {
     /// The set of transaction/effects this authority has processed but have not yet been
     /// included in a checkpoint, and their sequence number in the local sequence
     /// of this authority.
-    #[options(optimization = "point_lookup")]
     pub extra_transactions: DBMap<ExecutionDigests, TxSequenceNumber>,
 
     /// The list of checkpoint, along with their authentication information
-    #[options(optimization = "point_lookup")]
     pub checkpoints: DBMap<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
 
     // --- Logic related to fragments on the way to making checkpoints
@@ -115,7 +115,6 @@ pub struct CheckpointStoreTables {
     // A list of own fragments indexed by the other node that the fragment connects
     // to. These are used for the local node to potentially reconstruct the full
     // transaction set.
-    #[options(optimization = "point_lookup")]
     pub local_fragments: DBMap<AuthorityName, CheckpointFragment>,
 
     /// Store the fragments received in order, the counter is purely internal,
@@ -125,8 +124,57 @@ pub struct CheckpointStoreTables {
     pub fragments: DBMap<ExecutionIndices, CheckpointFragment>,
 
     /// A single entry table to store locals.
-    #[options(optimization = "point_lookup")]
     pub locals: DBMap<DBLabel, CheckpointLocals>,
+}
+
+impl CheckpointStoreTables {
+    pub fn open<P: AsRef<Path>>(path: P, db_options: Option<Options>) -> Self {
+        let (options, point_lookup) = default_db_options(db_options, None);
+
+        let db = open_cf_opts(
+            &path,
+            Some(options.clone()),
+            &[
+                ("transactions_to_checkpoint", &point_lookup),
+                ("checkpoint_contents", &options),
+                ("extra_transactions", &point_lookup),
+                ("checkpoints", &point_lookup),
+                ("local_fragments", &point_lookup),
+                ("fragments", &options),
+                ("locals", &point_lookup),
+            ],
+        )
+        .expect("Cannot open DB.");
+
+        let (
+            transactions_to_checkpoint,
+            checkpoint_contents,
+            extra_transactions,
+            checkpoints,
+            local_fragments,
+            fragments,
+            locals,
+        ) = reopen! (
+            &db,
+            "transactions_to_checkpoint";<ExecutionDigests,(CheckpointSequenceNumber, TxSequenceNumber)>,
+            "checkpoint_contents";<CheckpointSequenceNumber,CheckpointContents>,
+            "extra_transactions";<ExecutionDigests,TxSequenceNumber>,
+            "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
+            "local_fragments";<AuthorityName, CheckpointFragment>,
+            "fragments";<ExecutionIndices, CheckpointFragment>,
+            "locals";<DBLabel, CheckpointLocals>
+        );
+
+        CheckpointStoreTables {
+            transactions_to_checkpoint,
+            checkpoint_contents,
+            extra_transactions,
+            checkpoints,
+            local_fragments,
+            fragments,
+            locals,
+        }
+    }
 }
 
 pub struct CheckpointStore {
@@ -252,7 +300,7 @@ impl CheckpointStore {
             secret,
             memory_locals: None,
             sender: None,
-            tables: CheckpointStoreTables::open_tables_read_write(path.to_path_buf(), db_options),
+            tables: CheckpointStoreTables::open(path, db_options),
         };
 
         // Initialize the locals

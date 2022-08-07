@@ -26,7 +26,7 @@ use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, trace};
 use typed_store::rocks::{DBBatch, DBMap};
-use typed_store::traits::{DBMapTableUtil, Map};
+use typed_store::traits::Map;
 
 pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<EmptySignInfo>;
@@ -69,7 +69,7 @@ pub struct SuiDataStore<S> {
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Open an authority store by directory path
     pub fn open(path: &Path, db_options: Option<Options>) -> Self {
-        let tables = AuthorityStoreTables::open_tables_read_write(path.to_path_buf(), db_options);
+        let tables = AuthorityStoreTables::open_read_write(path, db_options);
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
         // subdir of the data store directory
