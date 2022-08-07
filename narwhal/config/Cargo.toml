@@ -17,7 +17,7 @@ arc-swap = { version = "1.5.1", features = ["serde"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-insta = "1.17.1"
+insta = "1.17.2"
 rand = "0.8.5"
 tempfile = "3.3.0"
 tracing-test = "0.2.3"
