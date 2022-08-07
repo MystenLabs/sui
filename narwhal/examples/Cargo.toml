@@ -11,11 +11,11 @@ name = "demo_client"
 path = "src/demo_client.rs"
 
 [dependencies]
+base64 = "0.13.0"
 clap = "2.34"
-tonic = "0.7.2"
 prost = "0.10.4"
 tokio = { version = "1.20.1", features = ["macros", "rt-multi-thread"] }
-base64 = "0.13.0"
+tonic = "0.7.2"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [build-dependencies]

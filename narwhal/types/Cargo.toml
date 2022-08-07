@@ -14,6 +14,7 @@ bytes = "1.2.1"
 derive_builder = "0.11.2"
 ed25519-dalek = "1.0.1"
 futures = "0.3.21"
+indexmap = { version = "1.9.1", features = ["serde"] }
 prometheus = "0.13.1"
 proptest = "1.0.0"
 proptest-derive = "0.3.0"
@@ -26,23 +27,20 @@ thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = { version = "0.7.2", features = ["tls"] }
-indexmap = { version = "1.9.1", features = ["serde"] }
 
 config = { path = "../config" }
 crypto = { path = "../crypto" }
 dag = { path = "../dag" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
-
-
 [dev-dependencies]
+criterion = "0.3.6"
 hex = "0.4.3"
 serde_test = "1.0.142"
-criterion = "0.3.6"
 
 [build-dependencies]
-rustversion = "1.0.9"
 prost-build = "0.10.4"
+rustversion = "1.0.9"
 tonic-build = { version = "0.7.2", features = [ "prost", "transport" ] }
 
 [features]

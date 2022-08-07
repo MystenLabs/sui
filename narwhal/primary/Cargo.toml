@@ -14,11 +14,14 @@ bincode = "1.3.3"
 blake2 = "0.9"
 bytes = "1.2.1"
 config = { path = "../config" }
+dashmap = "5.3.4"
 derive_builder = "0.11.2"
-ed25519-dalek = "1.0.1"
+dhat = { version = "0.3.0", optional = true }
 futures = "0.3.21"
 itertools = "0.10.3"
 multiaddr = "0.14.0"
+once_cell = "1.13.0"
+prometheus = "0.13.1"
 prost = "0.10.4"
 rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.142", features = ["derive"] }
@@ -28,35 +31,31 @@ tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = "0.7.2"
 tower = "0.4.13"
 tracing = "0.1.36"
-dhat = { version = "0.3.0", optional = true }
 
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
 network = { path = "../network" }
 types = { path = "../types" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
-prometheus = "0.13.1"
-once_cell = "1.13.0"
-dashmap = "5.3.4"
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 arc-swap = { version = "1.5.1", features = ["serde"] }
+async-trait = "0.1.57"
+executor = { path = "../executor" }
+indexmap = { version = "1.9.1", features = ["serde"] }
 itertools = "0.10.3"
 mockall = "0.11.2"
 node = { path = "../node" }
+telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 tempfile = "3.3.0"
 test_utils = { path = "../test_utils" }
-tracing-test = "0.2.3"
-worker = { path = "../worker" }
-async-trait = "0.1.57"
-executor = { path = "../executor" }
 thiserror = "1.0.32"
 tracing = "0.1.36"
-telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
-indexmap = { version = "1.9.1", features = ["serde"] }
+tracing-test = "0.2.3"
+worker = { path = "../worker" }
 
 [features]
 benchmark = []

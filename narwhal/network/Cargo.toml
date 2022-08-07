@@ -7,25 +7,25 @@ edition = "2021"
 publish = false
 
 [dependencies]
+anyhow = "1.0.59"
 async-trait = "0.1.57"
+backoff = { version = "0.4.0", features = ["tokio"] }
 bytes = "1.2.1"
+crypto = { path = "../crypto" }
 futures = "0.3.21"
+multiaddr = "0.14.0"
+prometheus = "0.13.1"
 rand = { version = "0.8.5", features = ["small_rng"] }
 thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["rt", "net", "sync", "macros", "time"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
+tonic = { version = "0.7.2", features = ["tls"] }
 tracing = "0.1.36"
 types = { path = "../types" }
-crypto = { path = "../crypto" }
-tonic = { version = "0.7.2", features = ["tls"] }
-backoff = { version = "0.4.0", features = ["tokio"] }
-multiaddr = "0.14.0"
-anyhow = "1.0.59"
-prometheus = "0.13.1"
 
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
-workspace-hack = { version = "0.1", path = "../workspace-hack" }
 serde = "1.0.142"
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 bincode = "1.3.3"
