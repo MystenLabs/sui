@@ -271,3 +271,7 @@ export function registerTypes(b: typeof bcs): typeof bcs {
 
   return b;
 }
+
+// For commonjs scenario need to figure out how to do it differently
+const suiBCS = registerTypes(bcs);
+export { suiBCS as bcs };

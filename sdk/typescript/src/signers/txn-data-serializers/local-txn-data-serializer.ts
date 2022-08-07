@@ -3,14 +3,13 @@
 
 import { Base64DataBuffer } from '../../serialization/base64';
 import {
+  bcs,
   CallArg,
   MoveCallTx,
-  registerTypes,
   SuiAddress,
   TransactionData,
   TypeTag,
 } from '../../types';
-import { bcs as BCS } from '@mysten/bcs';
 import {
   MoveCallTransaction,
   MergeCoinTransaction,
@@ -21,10 +20,6 @@ import {
   TxnDataSerializer,
 } from './txn-data-serializer';
 import { Provider } from '../../providers/provider';
-
-// For commonjs scenario need to figure out how to do it differently
-const bcs = registerTypes(BCS);
-export { bcs };
 
 export class LocalTxnDataSerializer implements TxnDataSerializer {
   /**
