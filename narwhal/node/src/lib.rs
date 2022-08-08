@@ -1,9 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Parameters, SharedCommittee, WorkerId};
-use consensus::{
-    bullshark::Bullshark, dag::Dag, metrics::ConsensusMetrics, Consensus, SubscriberHandler,
-};
+use consensus::{bullshark::Bullshark, dag::Dag, metrics::ConsensusMetrics, Consensus};
 use crypto::{
     traits::{KeyPair as _, VerifyingKey},
     KeyPair, PublicKey,
@@ -257,8 +255,6 @@ impl Node {
         State::Error: Debug,
     {
         let (tx_sequence, rx_sequence) = channel(Self::CHANNEL_CAPACITY);
-        let (tx_consensus_to_client, rx_consensus_to_client) = channel(Self::CHANNEL_CAPACITY);
-        let (tx_client_to_consensus, rx_client_to_consensus) = channel(Self::CHANNEL_CAPACITY);
         let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
 
         // Spawn the consensus core who only sequences transactions.
@@ -280,18 +276,6 @@ impl Node {
             parameters.gc_depth,
         );
 
-        // The subscriber handler receives the ordered sequence from consensus and feed them
-        // to the executor. The executor has its own state and data store who may crash
-        // independently of the narwhal node.
-        let subscriber_handles = SubscriberHandler::spawn(
-            store.consensus_store.clone(),
-            store.certificate_store.clone(),
-            tx_reconfigure.subscribe(),
-            rx_sequence,
-            /* rx_client */ rx_client_to_consensus,
-            /* tx_client */ tx_consensus_to_client,
-        );
-
         // Spawn the client executing the transactions. It can also synchronize with the
         // subscriber handler if it missed some transactions.
         let executor_handles = Executor::spawn(
@@ -300,8 +284,7 @@ impl Node {
             store.batch_store.clone(),
             execution_state,
             tx_reconfigure,
-            /* rx_consensus */ rx_consensus_to_client,
-            /* tx_consensus */ tx_client_to_consensus,
+            /* rx_consensus */ rx_sequence,
             /* tx_output */ tx_confirmation,
         )
         .await?;
@@ -309,7 +292,6 @@ impl Node {
         Ok(executor_handles
             .into_iter()
             .chain(std::iter::once(consensus_handles))
-            .chain(std::iter::once(subscriber_handles))
             .collect())
     }
 

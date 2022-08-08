@@ -1,15 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{
-    bail,
-    errors::{SubscriberError, SubscriberResult},
-};
-use consensus::{ConsensusOutput, ConsensusSyncRequest};
+use crate::errors::{SubscriberError, SubscriberResult};
+use consensus::ConsensusOutput;
 use futures::{
     future::try_join_all,
     stream::{FuturesOrdered, StreamExt},
 };
-use std::cmp::Ordering;
 use store::Store;
 use tokio::{
     sync::{
@@ -19,16 +15,15 @@ use tokio::{
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{BatchDigest, ReconfigureNotification, SequenceNumber, SerializedBatchMessage};
+use types::{BatchDigest, ReconfigureNotification, SerializedBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/subscriber_tests.rs"]
 pub mod subscriber_tests;
 
-/// The `Subscriber` receives certificates sequenced by the consensus and execute every
-/// transaction it references. We assume that the messages we receives from consensus has
-/// already been authenticated (ie. they really come from a trusted consensus node) and
-/// integrity-validated (ie. no corrupted messages).
+/// The `Subscriber` receives certificates sequenced by the consensus and waits until the
+/// `BatchLoader` downloaded all the transactions references by the certificates; it then
+/// forward the certificates to the Executor Core.
 pub struct Subscriber {
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
     store: Store<BatchDigest, SerializedBatchMessage>,
@@ -36,15 +31,11 @@ pub struct Subscriber {
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// A channel to receive consensus messages.
     rx_consensus: Receiver<ConsensusOutput>,
-    /// A channel to send sync request to consensus for missed messages.
-    tx_consensus: Sender<ConsensusSyncRequest>,
     /// A channel to the batch loader to download transaction's data.
     tx_batch_loader: Sender<ConsensusOutput>,
     /// A channel to send the complete and ordered list of consensus outputs to the executor. This
     /// channel is used once all transactions data are downloaded.
     tx_executor: Sender<ConsensusOutput>,
-    /// The index of the next expected consensus output.
-    next_consensus_index: SequenceNumber,
 }
 
 impl Subscriber {
@@ -54,113 +45,21 @@ impl Subscriber {
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_consensus: Receiver<ConsensusOutput>,
-        tx_consensus: Sender<ConsensusSyncRequest>,
         tx_batch_loader: Sender<ConsensusOutput>,
         tx_executor: Sender<ConsensusOutput>,
-        next_consensus_index: SequenceNumber,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
                 store,
                 rx_reconfigure,
                 rx_consensus,
-                tx_consensus,
                 tx_batch_loader,
                 tx_executor,
-                next_consensus_index,
             }
             .run()
             .await
             .expect("Failed to run subscriber")
         })
-    }
-
-    /// Synchronize with the consensus in case we missed part of its output sequence.
-    /// It is safety-critical that we process the consensus' outputs in the complete
-    /// and right order. This function reads the consensus outputs out of a stream and
-    /// return them in the right order.
-    async fn synchronize(
-        &mut self,
-        last_known_client_index: SequenceNumber,
-        last_known_server_index: SequenceNumber,
-    ) -> SubscriberResult<Vec<ConsensusOutput>> {
-        // Send a sync request.
-        let request = ConsensusSyncRequest {
-            missing: (last_known_client_index + 1..=last_known_server_index),
-        };
-        self.tx_consensus
-            .send(request)
-            .await
-            .map_err(|_| SubscriberError::ConsensusConnectionDropped)?;
-
-        // Read the replies.
-        let mut next_ordinary_sequence = last_known_server_index + 1;
-        let mut next_catchup_sequence = last_known_client_index + 1;
-        let mut buffer = Vec::new();
-        let mut sequence = Vec::new();
-        loop {
-            let output = match self.rx_consensus.recv().await {
-                Some(x) => x,
-                None => bail!(SubscriberError::ConsensusConnectionDropped),
-            };
-            let consensus_index = output.consensus_index;
-
-            if consensus_index == next_ordinary_sequence {
-                buffer.push(output);
-                next_ordinary_sequence += 1;
-            } else if consensus_index == next_catchup_sequence {
-                sequence.push(output);
-                next_catchup_sequence += 1;
-            } else {
-                bail!(SubscriberError::UnexpectedConsensusIndex(consensus_index));
-            }
-
-            if consensus_index == last_known_server_index {
-                break;
-            }
-        }
-
-        sequence.extend(buffer);
-        Ok(sequence)
-    }
-
-    /// Process a single consensus output message. If we realize we are missing part of the sequence,
-    /// we first sync every missing output and return them on the right order.
-    async fn handle_consensus_message(
-        &mut self,
-        message: &ConsensusOutput,
-    ) -> SubscriberResult<Vec<ConsensusOutput>> {
-        let consensus_index = message.consensus_index;
-
-        // Check that the latest consensus index is as expected; otherwise synchronize.
-        let need_to_sync = match self.next_consensus_index.cmp(&consensus_index) {
-            Ordering::Greater => {
-                // That is fine, it may happen when the consensus node crashes and recovers.
-                debug!("Consensus index of authority bigger than expected");
-                return Ok(Vec::default());
-            }
-            Ordering::Less => {
-                debug!("Subscriber is synchronizing missed consensus output messages");
-                true
-            }
-            Ordering::Equal => false,
-        };
-
-        // Send the certificate to the batch loader to download all transactions' data.
-        self.tx_batch_loader
-            .send(message.clone())
-            .await
-            .expect("Failed to send message ot batch loader");
-
-        // Synchronize missing consensus outputs if we need to.
-        if need_to_sync {
-            let last_known_client_index = self.next_consensus_index;
-            let last_known_server_index = message.consensus_index;
-            self.synchronize(last_known_client_index, last_known_server_index)
-                .await
-        } else {
-            Ok(vec![message.clone()])
-        }
     }
 
     /// Wait for particular data to become available in the storage and then returns.
@@ -185,29 +84,28 @@ impl Subscriber {
             tokio::select! {
                 // Receive the ordered sequence of consensus messages from a consensus node.
                 Some(message) = self.rx_consensus.recv() => {
-                    // Process the consensus message (synchronize missing messages, download transaction data).
-                    let sequence = self.handle_consensus_message(&message).await?;
+                    // Send the certificate to the batch loader to download all transactions' data.
+                    self.tx_batch_loader
+                        .send(message.clone())
+                        .await
+                        .expect("Failed to send message ot batch loader");
 
-                    // Update the latest consensus index. The state will atomically persist the change when
-                    // executing the transaction. It is important to increment the consensus index before
-                    // deserializing the transaction data because the consensus core will increment its own
-                    // index regardless of deserialization or other application-specific failures.
-                    self.next_consensus_index += sequence.len() as SequenceNumber;
-
-                    // Wait for the transaction data to be available in the store. We will then execute the transactions.
-                    for message in sequence {
-                        let digests = message.certificate.header.payload.keys().cloned().collect();
-                        let future = Self::waiter(digests, self.store.clone(), message);
-                        waiting.push(future);
-                    }
+                    // Wait for the transaction data to be available in the store. This will happen for sure because
+                    // the primary already successfully processed the certificate. This implies that the primary notified
+                    // its worker to download any missing batch. We may however have to wait for these batch be available
+                    // on our workers. Once all batches are available, we forward the certificate o the Executor Core.
+                    let digests = message.certificate.header.payload.keys().cloned().collect();
+                    let future = Self::waiter(digests, self.store.clone(), message);
+                    waiting.push(future);
                 },
 
                 // Receive here consensus messages for which we have downloaded all transactions data.
-                Some(message) = waiting.next() => self
-                    .tx_executor
-                    .send(message?)
-                    .await
-                    .map_err(|_| SubscriberError::ExecutorConnectionDropped)?,
+                Some(message) = waiting.next() => {
+                    if self.tx_executor.send(message?).await.is_err() {
+                        debug!("Executor core is shutting down");
+                        return Ok(());
+                    }
+                },
 
                 // Check whether the committee changed.
                 result = self.rx_reconfigure.changed() => {

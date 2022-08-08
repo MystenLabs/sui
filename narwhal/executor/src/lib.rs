@@ -14,17 +14,13 @@ mod fixtures;
 #[path = "tests/execution_state.rs"]
 mod execution_state;
 
-#[cfg(test)]
-#[path = "tests/sequencer.rs"]
-mod sequencer;
-
 pub use errors::{ExecutionStateError, SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
 
 use crate::{batch_loader::BatchLoader, core::Core, subscriber::Subscriber};
 use async_trait::async_trait;
 use config::SharedCommittee;
-use consensus::{ConsensusOutput, ConsensusSyncRequest};
+use consensus::ConsensusOutput;
 use crypto::PublicKey;
 use serde::de::DeserializeOwned;
 use std::{fmt::Debug, sync::Arc};
@@ -100,7 +96,6 @@ impl Executor {
         execution_state: Arc<State>,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_consensus: Receiver<ConsensusOutput>,
-        tx_consensus: Sender<ConsensusSyncRequest>,
         tx_output: Sender<ExecutorOutput<State>>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
@@ -117,19 +112,13 @@ impl Executor {
             SubscriberError::OnlyOneConsensusClientPermitted
         );
 
-        // Load the subscriber state from storage.
-        let execution_indices = execution_state.load_execution_indices().await?;
-        let next_consensus_index = execution_indices.next_certificate_index;
-
         // Spawn the subscriber.
         let subscriber_handle = Subscriber::spawn(
             store.clone(),
             tx_reconfigure.subscribe(),
             rx_consensus,
-            tx_consensus,
             tx_batch_loader,
             tx_executor,
-            next_consensus_index,
         );
 
         // Spawn the executor's core.

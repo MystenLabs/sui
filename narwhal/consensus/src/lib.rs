@@ -11,14 +11,12 @@ pub mod bullshark;
 pub mod consensus;
 pub mod dag;
 pub mod metrics;
-pub mod subscriber;
 pub mod tusk;
 mod utils;
 
-pub use crate::{consensus::Consensus, subscriber::SubscriberHandler};
+pub use crate::consensus::Consensus;
 
 use serde::{Deserialize, Serialize};
-use std::ops::RangeInclusive;
 use types::{Certificate, SequenceNumber};
 
 /// The default channel size used in the consensus and subscriber logic.
@@ -31,11 +29,4 @@ pub struct ConsensusOutput {
     pub certificate: Certificate,
     /// The (global) index associated with this certificate.
     pub consensus_index: SequenceNumber,
-}
-
-/// The message sent by the client to sync missing chunks of the output sequence.
-#[derive(Serialize, Deserialize, Debug)]
-pub struct ConsensusSyncRequest {
-    /// The sequence numbers of the missing consensus outputs.
-    pub missing: RangeInclusive<SequenceNumber>,
 }

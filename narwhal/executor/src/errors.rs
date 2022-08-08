@@ -4,7 +4,6 @@ use config::WorkerId;
 use std::fmt::Debug;
 use store::StoreError;
 use thiserror::Error;
-use types::SequenceNumber;
 
 #[macro_export]
 macro_rules! bail {
@@ -31,12 +30,6 @@ pub enum SubscriberError {
 
     #[error("Consensus referenced unexpected worker id {0}")]
     UnexpectedWorkerId(WorkerId),
-
-    #[error("Unexpected consensus index number {0}")]
-    UnexpectedConsensusIndex(SequenceNumber),
-
-    #[error("The client-consensus connection dropped")]
-    ConsensusConnectionDropped,
 
     #[error("Connection with the transaction executor dropped")]
     ExecutorConnectionDropped,
