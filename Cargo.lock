@@ -6916,7 +6916,6 @@ dependencies = [
  "strum_macros",
  "sui-config",
  "sui-core",
- "sui-gateway",
  "sui-json-rpc-types",
  "sui-node",
  "sui-quorum-driver",
@@ -7056,10 +7055,7 @@ name = "sui-cost"
 version = "0.1.0"
 dependencies = [
  "move-binary-format",
- "move-bytecode-utils",
  "move-core-types",
- "move-disassembler",
- "move-ir-types",
  "move-vm-types",
  "once_cell",
  "workspace-hack 0.1.0",
@@ -7505,7 +7501,6 @@ dependencies = [
  "tonic",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=d965a5a795dcdb4d1c7964acf556bc249fdc58aa)",
- "typed-store-macros",
  "workspace-hack 0.1.0",
  "zeroize",
 ]
