@@ -135,7 +135,7 @@ pub static COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
 // Bytecode, cost, and whether or not it's depends on size of operand
 fn bytecode_costs() -> Vec<(Bytecode, GasCost, bool)> {
     use Bytecode::*;
-    return vec![
+    vec![
         //
         // Arith, Logical and Comparative Instrs
         //
@@ -364,5 +364,5 @@ fn bytecode_costs() -> Vec<(Bytecode, GasCost, bool)> {
             GasCost::new(572, 1),
             false,
         ),
-    ];
+    ]
 }
