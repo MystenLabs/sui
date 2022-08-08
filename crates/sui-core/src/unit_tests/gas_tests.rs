@@ -419,6 +419,7 @@ async fn test_move_call_gas() -> SuiResult {
     let gas_used_before_vm_exec = gas_status.summary(true).gas_used();
     // The gas cost to execute the function in Move VM.
     // Hard code it here since it's difficult to mock that in test.
+    // If a new native move module/function is modified, this value may need to be increased due to the increase of sui framework package
     const MOVE_VM_EXEC_COST: u64 = 17006;
     gas_status.charge_vm_exec_test_only(MOVE_VM_EXEC_COST)?;
     let created_object = authority_state
