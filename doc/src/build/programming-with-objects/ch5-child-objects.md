@@ -67,7 +67,7 @@ public entry fun add_child(parent: &mut Parent, child: Child) {
     transfer::transfer_to_object(child, parent);
 }
 ```
-This function takes `child` by value, fills the `child` field of `parent` with the `ID` of the `Child` object, and calls `transfer_to_object` to transfer the `child` object to the `parent`.
+This function takes the `Child` object by value, fills the `child` field of `parent` with the `ID` of the `Child` object, and calls `transfer_to_object` to transfer the `Child` object to the `parent`.
 At the end of the `add_child` call, we have the following ownership relationship:
 1. Sender account address (still) owns a `Parent` object.
 2. The `Parent` object owns a `Child` object.
@@ -80,7 +80,7 @@ public fun transfer_to_object_id<T: key>(
     owner_id: &mut UID,
 );
 ```
-To use this API, we don't need to create a parent object yet; we need only the `UID` of the parent object, which can be created in advance through `object::new(ctx)`. The function requres a mutable reference to the parent `UID` for two reasons. (1) it prevents children from being added to immutable objects (more on that later). (2) it gives the module that defines the parent object more control. Namely, it can expose a function to get an immutable reference to the `&UID` without worrying about external caller adding child objects.
+To use this API, we don't need to create a parent object yet; we need only the `UID` of the parent object, which can be created in advance through `object::new(ctx)`. The function requires a mutable reference to the parent `UID` for two reasons. (1) it prevents children from being added to immutable objects (more on that later). (2) it gives the module that defines the parent object more control. Namely, it can expose a function to get an immutable reference to the `&UID` without worrying about external caller adding child objects.
 
 Let's see how this is used in action. First we define another object type that has a non-optional child field:
 ```rust
@@ -204,7 +204,7 @@ public entry fun remove_child(parent: &mut Parent, child: Child, ctx: &mut TxCon
     transfer::transfer(child, tx_context::sender(ctx));
 }
 ```
-In the above function, the `ID` of the child is extracted from the `parent` object. This is not necessary for the code to run, but is necessary to maintain the invariant that our `Parent` contains a valid `ID` of its child. After that, we transfer the `child` like any other object.
+In the above function, the `ID` of the child is extracted from the `parent` object. This is not necessary for the code to run, but is necessary to maintain the invariant that all of our `Parent` objects contain a valid `ID` of its child (if it has one). After that, we transfer the `child` like any other object.
 
 #### transfer_to_object
 Another way to transfer a child object is to transfer it to another parent. Like we did when transferring to an address, we can use the API we are already familiar with from above:
@@ -225,12 +225,12 @@ public entry fun transfer_child(parent: &mut Parent, child: Child, new_parent: &
 Similar to `remove_child`, the `child` object must be passed explicitly by-value in the arguments. First, we extract the existing child `ID` and use it to fill the `child` field of the `new_parent`. Then we use `transfer_to_object` as expected. Note, we can ensure that `new_parent` does not already have a child object. If it did, `option::fill` would abort, thus preventing any change from occurring as a result of this transaction.
 
 ### Delete Child Objects
-Deleting child objects is similarly straight foward, and no different from deleting normal objects, except that the parent object must be present as an argument to the initial `entry` function.
+Deleting child objects is similarly straight forward, and no different from deleting normal objects, except that the parent object must be present as an argument to the initial `entry` function.
 With this in mind, we can either:
 1. First transfer this child object to an account address, which makes this object a regular account-owned object instead of a child object, and hence can be deleted normally.
 2. Delete the child object directly
 
-The first case is an application of two concepts already covered, i.e. transfering a child object and deleting an account-owned object. So let's look at the second case, deleting the child directly:
+The first case is an application of two concepts already covered, i.e. transferring a child object and deleting an account-owned object. So let's look at the second case, deleting the child directly:
 ```rust
 public entry fun delete_parent_and_child(parent: Parent, child: Child) {
     let Parent { id: parent_id, child: _ } = parent;
@@ -239,7 +239,7 @@ public entry fun delete_parent_and_child(parent: Parent, child: Child) {
     object::delete(id);
 }
 ```
-After we unpacked the `parent` object we are able to extract the parent's `id` (bound to `parent_id`) and the ID of the child in the option, `child`. Since `ID` has the `drop` ability, the `Option<ID>` also has the `drop` ability. This means we can discard the value and have done so by not binding it to a local variable with `child: _`. We then also unpack the `child` object to obtain the its `id`. We delete `UID`s with `object::delete`. Note that these deletions can happen in any order, but Move's type system ensures that both must be deleted by the end of the function, since `UID` does not have `drop`.
+After we unpacked the `Parent` object we are able to extract the parent's `id` (bound to `parent_id`) and the ID of the child in the option, `child`. Since `ID` has the `drop` ability, the `Option<ID>` also has the `drop` ability. This means we can discard the value and have done so by not binding it to a local variable with `child: _`. We then also unpack the `child` object to obtain the its `id`. We delete both `UID`s with `object::delete`. Note that these deletions can happen in any order, and Move's type system ensures that both must be deleted by the end of the function, since `UID` does not have `drop`.
 
 ### Delete Parent Objects
 
