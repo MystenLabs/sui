@@ -102,8 +102,8 @@ pub async fn submit_move_transaction(
         .move_call(
             sender,
             package_ref.0,
-            module.into(),
-            function.into(),
+            module,
+            function,
             vec![], // type_args
             arguments,
             gas_object,

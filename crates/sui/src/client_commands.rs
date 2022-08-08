@@ -769,8 +769,8 @@ pub async fn call_move(
         .move_call(
             sender,
             package,
-            module.to_string(),
-            function.to_string(),
+            module,
+            function,
             type_args
                 .into_iter()
                 .map(|arg| arg.try_into())
