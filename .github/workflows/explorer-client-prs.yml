@@ -43,3 +43,17 @@ jobs:
       - name: Build
         working-directory: ./explorer/client
         run: yarn build
+  end_to_end:
+    name: End-to-end tests
+    needs: diff
+    if: needs.diff.outputs.isClient == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Run e2e tests
+        uses: cypress-io/github-action@v4
+        with:
+          build: yarn build
+          start: yarn start
+          working-directory: ./explorer/client
