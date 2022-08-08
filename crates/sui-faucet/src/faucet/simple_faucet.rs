@@ -233,6 +233,7 @@ impl SimpleFaucet {
     ) -> Result<TransactionData, anyhow::Error> {
         self.wallet
             .gateway
+            .transaction_builder()
             .transfer_sui(signer, coin_id, budget, recipient, Some(amount))
             .await
             .map_err(|e| {

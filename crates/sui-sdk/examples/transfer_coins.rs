@@ -14,7 +14,7 @@ use sui_sdk::{
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_http_client("https://gateway.devnet.sui.io:443")?;
+    let sui = SuiClient::new_rpc_client("https://gateway.devnet.sui.io:443", None).await?;
     // Load keystore from ~/.sui/sui_config/sui.keystore
     let keystore_path = match dirs::home_dir() {
         Some(v) => v.join(".sui").join("sui_config").join("sui.keystore"),

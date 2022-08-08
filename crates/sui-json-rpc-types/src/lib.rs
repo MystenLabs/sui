@@ -702,6 +702,12 @@ impl SuiMoveObject for SuiRawMoveObject {
     }
 }
 
+impl SuiRawMoveObject {
+    pub fn deserialize<'a, T: Deserialize<'a>>(&'a self) -> Result<T, anyhow::Error> {
+        Ok(bcs::from_bytes(self.bcs_bytes.as_slice())?)
+    }
+}
+
 impl TryFrom<&SuiParsedObject> for GasCoin {
     type Error = SuiError;
     fn try_from(object: &SuiParsedObject) -> Result<Self, Self::Error> {
@@ -805,7 +811,7 @@ impl Display for SuiParsedPublishResponse {
 pub type GetObjectDataResponse = SuiObjectRead<SuiParsedMoveObject>;
 pub type GetRawObjectDataResponse = SuiObjectRead<SuiRawMoveObject>;
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
 #[serde(tag = "status", content = "details", rename = "ObjectRead")]
 pub enum SuiObjectRead<T: SuiMoveObject> {
     Exists(SuiObject<T>),

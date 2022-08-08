@@ -138,7 +138,7 @@ async fn create_response_sample() -> Result<
     let mut context = WalletContext::new(&config).await?;
     let address = context.keystore.addresses().first().cloned().unwrap();
 
-    context.gateway.sync_account_state(address).await?;
+    context.gateway.sync_client_state(address).await?;
 
     // Create coin response
     let coins = context

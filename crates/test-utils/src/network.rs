@@ -155,13 +155,13 @@ pub async fn start_rpc_test_network_with_fullnode(
         PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
     let rpc_url = format!("http://{}", server_addr);
     let accounts = wallet_conf.keystore.init()?.addresses();
-    wallet_conf.gateway = ClientType::RPC(rpc_url.clone());
+    wallet_conf.gateway = ClientType::RPC(rpc_url.clone(), None);
     wallet_conf
         .persisted(&working_dir.join(SUI_CLIENT_CONFIG))
         .save()?;
 
     let http_client = HttpClientBuilder::default().build(rpc_url.clone())?;
-    let gateway_client = SuiClient::new_http_client(&rpc_url)?;
+    let gateway_client = SuiClient::new_rpc_client(&rpc_url, None).await?;
     Ok(TestNetwork {
         network,
         _rpc_server: rpc_server_handle,

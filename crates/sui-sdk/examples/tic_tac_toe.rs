@@ -32,7 +32,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
-        client: SuiClient::new_http_client(&opts.rpc_server_url)?,
+        client: SuiClient::new_rpc_client(&opts.rpc_server_url, None).await?,
         keystore,
     };
 
@@ -68,7 +68,7 @@ impl TicTacToe {
         let player_o = player_o.unwrap_or_else(|| self.keystore.addresses()[1]);
 
         // Force a sync of signer's state in gateway.
-        self.client.sync_account_state(player_x).await?;
+        self.client.sync_client_state(player_x).await?;
 
         // Create a move call transaction using the TransactionBuilder API.
         let create_game_call = self
@@ -225,14 +225,12 @@ impl TicTacToe {
     async fn fetch_game_state(&self, game_id: ObjectID) -> Result<TicTacToeState, anyhow::Error> {
         // Get the raw BCS serialised move object data
         let current_game = self.client.read_api().get_raw_object(game_id).await?;
-        let current_game_bytes = current_game
+        current_game
             .object()?
             .data
             .try_as_move()
-            .map(|m| &m.bcs_bytes)
-            .unwrap();
-        // Deserialize the data bytes into TicTacToeState struct
-        Ok(bcs::from_bytes(current_game_bytes)?)
+            .unwrap()
+            .deserialize()
     }
 }
 

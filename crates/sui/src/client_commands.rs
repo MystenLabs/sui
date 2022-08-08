@@ -398,7 +398,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::SyncClientState { address } => {
                 let address = address.unwrap_or(context.active_address()?);
-                context.gateway.sync_account_state(address).await?;
+                context.gateway.sync_client_state(address).await?;
                 SuiClientCommandResult::SyncClientState
             }
             SuiClientCommands::NewAddress => {
@@ -466,7 +466,7 @@ impl SuiClientCommands {
 
                 if let Some(gateway) = &gateway {
                     // TODO: handle embedded gateway
-                    context.config.gateway = ClientType::RPC(gateway.clone());
+                    context.config.gateway = ClientType::RPC(gateway.clone(), None);
                     context.config.save()?;
                 }
 

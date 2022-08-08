@@ -28,7 +28,9 @@ impl WalletClient {
 
         let fullnode_url = String::from(cluster.fullnode_url());
         info!("Use fullnode: {}", &fullnode_url);
-        let fullnode_client = SuiClient::new_http_client(&fullnode_url).unwrap();
+        let fullnode_client = SuiClient::new_rpc_client(&fullnode_url, None)
+            .await
+            .unwrap();
 
         Self {
             wallet_context,
@@ -59,7 +61,7 @@ impl WalletClient {
 
     pub async fn sync_account_state(&self) -> Result<(), anyhow::Error> {
         self.get_gateway()
-            .sync_account_state(self.get_wallet_address())
+            .sync_client_state(self.get_wallet_address())
             .await
     }
 
