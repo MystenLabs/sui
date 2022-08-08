@@ -18,6 +18,7 @@ use crate::authority::*;
 use crate::safe_client::SafeClient;
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::epoch::epoch_store::EpochStore;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use futures::stream;
@@ -54,11 +55,16 @@ pub(crate) async fn init_state(
     authority_key: AuthorityKeyPair,
     store: Arc<AuthorityStore>,
 ) -> AuthorityState {
+    let dir = env::temp_dir();
+    let epoch_path = dir.join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&epoch_path).unwrap();
+    let epoch_store = Arc::new(EpochStore::new(epoch_path));
     AuthorityState::new(
         committee,
         authority_key.public().into(),
         Arc::pin(authority_key),
         store,
+        epoch_store,
         None,
         None,
         None,
@@ -758,19 +764,8 @@ async fn test_safe_batch_stream() {
     authorities.insert(public_key_bytes, 1);
     let committee = Committee::new(0, authorities).unwrap();
     // Create an authority
-    let store = Arc::new(AuthorityStore::open(&path, None));
-    let state = AuthorityState::new(
-        committee.clone(),
-        public_key_bytes,
-        Arc::pin(authority_key),
-        store.clone(),
-        None,
-        None,
-        None,
-        &sui_config::genesis::Genesis::get_default_genesis(),
-        &prometheus::Registry::new(),
-    )
-    .await;
+    let store = Arc::new(AuthorityStore::open(&path.join("store"), None));
+    let state = init_state(committee.clone(), authority_key, store).await;
 
     // Happy path:
     let auth_client = TrustworthyAuthorityClient::new(state);
@@ -805,20 +800,10 @@ async fn test_safe_batch_stream() {
 
     // Byzantine cases:
     let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
-    let public_key_bytes_b = authority_key.public().into();
-    let state_b = AuthorityState::new(
-        committee.clone(),
-        public_key_bytes_b,
-        Arc::pin(authority_key),
-        store,
-        None,
-        None,
-        None,
-        &sui_config::genesis::Genesis::get_default_genesis(),
-        &prometheus::Registry::new(),
-    )
-    .await;
+    let state_b =
+        AuthorityState::new_for_testing(committee.clone(), &authority_key, None, None, None).await;
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);
+    let public_key_bytes_b = authority_key.public().into();
     let safe_client_from_byzantine = SafeClient::new(
         auth_client_from_byzantine,
         committee.clone(),

@@ -944,49 +944,15 @@ fn checkpoint_integration() {
 
 #[tokio::test]
 async fn test_batch_to_checkpointing() {
-    // Create a random directory to store the DB
-    let dir = env::temp_dir();
-    let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-    fs::create_dir(&path).unwrap();
-
     // Create an authority
     // Make a test key pair
     let seed = [1u8; 32];
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
 
-    let mut store_path = path.clone();
-    store_path.push("store");
-    let store = Arc::new(AuthorityStore::open(&store_path, None));
-
-    let mut checkpoints_path = path.clone();
-    checkpoints_path.push("checkpoints");
-
-    let secret = Arc::pin(authority_key);
-    let checkpoints = Arc::new(Mutex::new(
-        CheckpointStore::open(
-            &checkpoints_path,
-            None,
-            committee.epoch,
-            secret.public().into(),
-            secret.clone(),
-        )
-        .unwrap(),
-    ));
-
-    let state = AuthorityState::new(
-        committee,
-        secret.public().into(),
-        secret,
-        store.clone(),
-        None,
-        None,
-        Some(checkpoints.clone()),
-        &sui_config::genesis::Genesis::get_default_genesis(),
-        &prometheus::Registry::new(),
-    )
-    .await;
-    let authority_state = Arc::new(state);
+    let authority_state = Arc::new(
+        AuthorityState::new_for_testing(committee.clone(), &authority_key, None, None, None).await,
+    );
 
     let inner_state = authority_state.clone();
     let _join = tokio::task::spawn(async move {
@@ -1003,10 +969,18 @@ async fn test_batch_to_checkpointing() {
         let t2 = &authority_state.batch_notifier.ticket().expect("ok");
         let t3 = &authority_state.batch_notifier.ticket().expect("ok");
 
-        store.side_sequence(t1.seq(), &ExecutionDigests::random());
-        store.side_sequence(t3.seq(), &ExecutionDigests::random());
-        store.side_sequence(t2.seq(), &ExecutionDigests::random());
-        store.side_sequence(t0.seq(), &ExecutionDigests::random());
+        authority_state
+            .database
+            .side_sequence(t1.seq(), &ExecutionDigests::random());
+        authority_state
+            .database
+            .side_sequence(t3.seq(), &ExecutionDigests::random());
+        authority_state
+            .database
+            .side_sequence(t2.seq(), &ExecutionDigests::random());
+        authority_state
+            .database
+            .side_sequence(t0.seq(), &ExecutionDigests::random());
     }
 
     // Get transactions in order then batch.
@@ -1032,7 +1006,15 @@ async fn test_batch_to_checkpointing() {
     assert!(matches!(rx.recv().await.unwrap(), UpdateItem::Batch(_)));
 
     // Now once we have a batch we should also have stuff in the checkpoint
-    assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 4);
+    assert_eq!(
+        authority_state
+            .checkpoints
+            .as_ref()
+            .unwrap()
+            .lock()
+            .next_transaction_sequence_expected(),
+        4
+    );
 
     // When we close the sending channel we also also end the service task
     authority_state.batch_notifier.close();
@@ -1052,31 +1034,19 @@ async fn test_batch_to_checkpointing_init_crash() {
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
 
-    let mut store_path = path.clone();
-    store_path.push("store");
-
-    let mut checkpoints_path = path.clone();
-    checkpoints_path.push("checkpoints");
-
-    let secret = Arc::pin(authority_key);
-
     // Scope to ensure all variables are dropped
     {
-        let store = Arc::new(AuthorityStore::open(&store_path, None));
-
-        let state = AuthorityState::new(
-            committee.clone(),
-            secret.public().into(),
-            secret.clone(),
-            store.clone(),
-            None,
-            None,
-            None,
-            &sui_config::genesis::Genesis::get_default_genesis(),
-            &prometheus::Registry::new(),
-        )
-        .await;
-        let authority_state = Arc::new(state);
+        // TODO: May need to set checkpoint store to be None.
+        let authority_state = Arc::new(
+            AuthorityState::new_for_testing(
+                committee.clone(),
+                &authority_key,
+                Some(path.clone()),
+                None,
+                None,
+            )
+            .await,
+        );
 
         let inner_state = authority_state.clone();
         let _join = tokio::task::spawn(async move {
@@ -1097,10 +1067,18 @@ async fn test_batch_to_checkpointing_init_crash() {
             let t2 = &authority_state.batch_notifier.ticket().expect("ok");
             let t3 = &authority_state.batch_notifier.ticket().expect("ok");
 
-            store.side_sequence(t1.seq(), &ExecutionDigests::random());
-            store.side_sequence(t3.seq(), &ExecutionDigests::random());
-            store.side_sequence(t2.seq(), &ExecutionDigests::random());
-            store.side_sequence(t0.seq(), &ExecutionDigests::random());
+            authority_state
+                .database
+                .side_sequence(t1.seq(), &ExecutionDigests::random());
+            authority_state
+                .database
+                .side_sequence(t3.seq(), &ExecutionDigests::random());
+            authority_state
+                .database
+                .side_sequence(t2.seq(), &ExecutionDigests::random());
+            authority_state
+                .database
+                .side_sequence(t0.seq(), &ExecutionDigests::random());
         }
 
         // Get transactions in order then batch.
@@ -1131,38 +1109,21 @@ async fn test_batch_to_checkpointing_init_crash() {
 
     // Scope to ensure all variables are dropped
     {
-        let store = Arc::new(AuthorityStore::open(&store_path, None));
+        let authority_state = Arc::new(
+            AuthorityState::new_for_testing(committee, &authority_key, Some(path), None, None)
+                .await,
+        );
 
-        let checkpoints = Arc::new(Mutex::new(
-            CheckpointStore::open(
-                &checkpoints_path,
-                None,
-                committee.epoch,
-                secret.public().into(),
-                secret.clone(),
-            )
-            .unwrap(),
-        ));
-
-        // Start with no transactions
-        assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 0);
-
-        let state = AuthorityState::new(
-            committee,
-            secret.public().into(),
-            secret,
-            store.clone(),
-            None,
-            None,
-            Some(checkpoints.clone()),
-            &sui_config::genesis::Genesis::get_default_genesis(),
-            &prometheus::Registry::new(),
-        )
-        .await;
-        let authority_state = Arc::new(state);
-
-        // But init feeds the transactions in
-        assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 4);
+        // Init feeds the transactions in
+        assert_eq!(
+            authority_state
+                .checkpoints
+                .as_ref()
+                .unwrap()
+                .lock()
+                .next_transaction_sequence_expected(),
+            4
+        );
 
         // When we close the sending channel we also also end the service task
         authority_state.batch_notifier.close();
@@ -1636,56 +1597,22 @@ pub async fn checkpoint_tests_setup(
     let mut authorities = Vec::new();
 
     // Make all authorities and their services.
-    let genesis = sui_config::genesis::Genesis::get_default_genesis();
     for k in &keys {
-        let dir = env::temp_dir();
-        let path = dir.join(format!("SC_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        let mut store_path = path.clone();
-        store_path.push("store");
-
-        let mut checkpoints_path = path.clone();
-        checkpoints_path.push("checkpoints");
-
-        let secret = Arc::pin(k.copy());
-
-        // Make a checkpoint store:
-
-        let store = Arc::new(AuthorityStore::open(&store_path, None));
-
-        let mut checkpoint = CheckpointStore::open(
-            &checkpoints_path,
-            None,
-            committee.epoch,
-            secret.public().into(),
-            secret.clone(),
-        )
-        .unwrap();
-
-        checkpoint
-            .set_consensus(Box::new(sender.clone()))
-            .expect("No issues");
-        let checkpoint = Arc::new(Mutex::new(checkpoint));
-        let authority = AuthorityState::new(
-            committee.clone(),
-            secret.public().into(),
-            secret,
-            store.clone(),
-            None,
-            None,
-            Some(checkpoint.clone()),
-            &genesis,
-            &prometheus::Registry::new(),
-        )
-        .await;
+        let authority = Arc::new(
+            AuthorityState::new_for_testing(
+                committee.clone(),
+                k,
+                None,
+                None,
+                Some(Box::new(sender.clone())),
+            )
+            .await,
+        );
 
         // Add objects for testing
         authority
             .insert_genesis_objects_bulk_unsafe(&genesis_objects_ref[..])
             .await;
-
-        let authority = Arc::new(authority);
 
         let inner_state = authority.clone();
         let _join =
@@ -1693,8 +1620,9 @@ pub async fn checkpoint_tests_setup(
                 async move { inner_state.run_batch_service(1000, batch_interval).await },
             );
 
+        let checkpoint = authority.checkpoints.as_ref().unwrap().clone();
         authorities.push(TestAuthority {
-            store,
+            store: authority.database.clone(),
             authority,
             checkpoint,
         });
