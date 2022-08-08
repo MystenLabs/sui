@@ -445,8 +445,8 @@ async fn test_batch_store_retrieval() {
         .expect("Retrieval failed!");
 
     assert_eq!(4, batches.len());
-    assert_eq!(10, batches.first().unwrap().batch.next_sequence_number);
-    assert_eq!(40, batches.last().unwrap().batch.next_sequence_number);
+    assert_eq!(10, batches.first().unwrap().data().next_sequence_number);
+    assert_eq!(40, batches.last().unwrap().data().next_sequence_number);
 
     assert_eq!(30, transactions.len());
 
@@ -456,8 +456,8 @@ async fn test_batch_store_retrieval() {
         .expect("Retrieval failed!");
 
     assert_eq!(2, batches.len());
-    assert_eq!(50, batches.first().unwrap().batch.next_sequence_number);
-    assert_eq!(60, batches.last().unwrap().batch.next_sequence_number);
+    assert_eq!(50, batches.first().unwrap().data().next_sequence_number);
+    assert_eq!(60, batches.last().unwrap().data().next_sequence_number);
 
     assert_eq!(10, transactions.len());
 
@@ -467,8 +467,8 @@ async fn test_batch_store_retrieval() {
         .expect("Retrieval failed!");
 
     assert_eq!(3, batches.len());
-    assert_eq!(30, batches.first().unwrap().batch.next_sequence_number);
-    assert_eq!(50, batches.last().unwrap().batch.next_sequence_number);
+    assert_eq!(30, batches.first().unwrap().data().next_sequence_number);
+    assert_eq!(50, batches.last().unwrap().data().next_sequence_number);
 
     assert_eq!(20, transactions.len());
 
@@ -478,8 +478,8 @@ async fn test_batch_store_retrieval() {
         .expect("Retrieval failed!");
 
     assert_eq!(3, batches.len());
-    assert_eq!(90, batches.first().unwrap().batch.next_sequence_number);
-    assert_eq!(115, batches.last().unwrap().batch.next_sequence_number);
+    assert_eq!(90, batches.first().unwrap().data().next_sequence_number);
+    assert_eq!(115, batches.last().unwrap().data().next_sequence_number);
 
     assert_eq!(25, transactions.len());
 
@@ -489,7 +489,7 @@ async fn test_batch_store_retrieval() {
         .expect("Retrieval failed!");
 
     assert_eq!(1, batches.len());
-    assert_eq!(115, batches.first().unwrap().batch.next_sequence_number);
+    assert_eq!(115, batches.first().unwrap().data().next_sequence_number);
 
     assert_eq!(5, transactions.len());
 

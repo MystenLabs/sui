@@ -149,7 +149,7 @@ async fn test_subscription() {
         match item {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                 num_batches += 1;
-                if signed_batch.batch.next_sequence_number >= 34 {
+                if signed_batch.data().next_sequence_number >= 34 {
                     break;
                 }
             }
@@ -200,7 +200,7 @@ async fn test_subscription() {
         match item {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                 num_batches += 1;
-                if signed_batch.batch.next_sequence_number >= 112 {
+                if signed_batch.data().next_sequence_number >= 112 {
                     break;
                 }
             }
@@ -258,9 +258,9 @@ async fn test_subscription() {
         if let Some(data) = resp.next().await {
             match data.expect("No error expected here") {
                 BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                    println!("Batch(next={})", signed_batch.batch.next_sequence_number);
+                    println!("Batch(next={})", signed_batch.data().next_sequence_number);
                     num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 129 {
+                    if signed_batch.data().next_sequence_number >= 129 {
                         break;
                     }
                 }
@@ -356,7 +356,7 @@ async fn test_subscription_safe_client() {
         match data.expect("Bad response") {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                 num_batches += 1;
-                if signed_batch.batch.next_sequence_number >= 34 {
+                if signed_batch.data().next_sequence_number >= 34 {
                     break;
                 }
             }
@@ -411,9 +411,9 @@ async fn test_subscription_safe_client() {
     while let Some(data) = stream1.next().await {
         match &data.expect("No error") {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                println!("Batch(next={})", signed_batch.batch.next_sequence_number);
+                println!("Batch(next={})", signed_batch.data().next_sequence_number);
                 num_batches += 1;
-                if signed_batch.batch.next_sequence_number >= 112 {
+                if signed_batch.data().next_sequence_number >= 112 {
                     break;
                 }
             }
@@ -469,7 +469,7 @@ async fn test_subscription_safe_client() {
             match data.expect("Bad response") {
                 BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                     num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 129 {
+                    if signed_batch.data().next_sequence_number >= 129 {
                         break;
                     }
                 }

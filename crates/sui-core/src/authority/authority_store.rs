@@ -1204,7 +1204,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .batches
             .iter()
             .skip_prior_to(&start)?
-            .take_while(|(_seq, batch)| batch.batch.initial_sequence_number < end)
+            .take_while(|(_seq, batch)| batch.data().initial_sequence_number < end)
             .map(|(_, batch)| batch)
             .collect();
 
@@ -1226,12 +1226,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let first_seq = batches
             .first()
             .ok_or(SuiError::NoBatchesFoundError)?
-            .batch
+            .data()
             .next_sequence_number;
         let mut last_seq = batches
             .last()
             .unwrap() // if the first exists the last exists too
-            .batch
+            .data()
             .next_sequence_number;
 
         let mut in_sequence = last_seq;

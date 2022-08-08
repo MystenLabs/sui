@@ -252,7 +252,7 @@ impl<C> SafeClient<C> {
             let reconstructed_batch = AuthorityBatch::make_next(prev_batch, transactions)?;
 
             fp_ensure!(
-                reconstructed_batch == signed_batch.batch,
+                &reconstructed_batch == signed_batch.data(),
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address,
                     reason: "Inconsistent batch".to_string()
@@ -550,8 +550,8 @@ where
                             Some(Err(err))
                         } else {
                             // Insert a fresh vector for the new batch of transactions
-                            let _ =
-                                txs_and_last_batch.insert((Vec::new(), signed_batch.batch.clone()));
+                            let _ = txs_and_last_batch
+                                .insert((Vec::new(), signed_batch.data().clone()));
                             Some(batch_info_item)
                         }
                     }

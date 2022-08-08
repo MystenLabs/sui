@@ -261,7 +261,7 @@ pub async fn follow(authority_client: NetworkAuthorityClient, download_txes: boo
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => {
                         info!(
                             "Client received batch up to sequence {}",
-                            _signed_batch.batch.next_sequence_number
+                            _signed_batch.data().next_sequence_number
                         );
                     }
                     Err(err) => {
