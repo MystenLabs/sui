@@ -14,7 +14,7 @@ chrono = "0.4.0"
 futures = "0.3.21"
 bytes = "1.2.1"
 serde = { version = "1.0.141", features = ["derive"] }
-serde_json = "1.0.79"
+serde_json = "1.0.83"
 serde_with = "1.14.0"
 tokio = { version = "1.20.1", features = ["full", "tracing", "test-util"] }
 tokio-stream = { version = "0.1.8", features = ["sync", "net"] }
