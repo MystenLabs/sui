@@ -12,7 +12,6 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ReactComponent as BackArrow } from '../../assets/SVGIcons/back-arrow-dark.svg';
 import { ReactComponent as ContentIcon } from '../../assets/SVGIcons/closed-content.svg';
 import tablestyle from '../../components/table/TableCard.module.css';
 import { NetworkContext } from '../../context';
@@ -249,7 +248,6 @@ function GroupView({ results }: { results: resultType }) {
 
     const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
 
-    if (isGroup) {
         return (
             <>
                 <table
@@ -263,7 +261,7 @@ function GroupView({ results }: { results: resultType }) {
                             <th>Balance</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <>
                         {uniqueTypes
                             .slice(
                                 (currentPage - 1) * ITEMS_PER_PAGE,
@@ -274,9 +272,9 @@ function GroupView({ results }: { results: resultType }) {
                                     ({ Type }) => Type === typeV
                                 );
                                 return (
+                                  <tbody key={typeV}>
                                     <tr
-                                        key={typeV}
-                                        onClick={shrinkObjList(subObjList)}
+                                        onClick={isGroup ? shrinkObjList(subObjList) : goBack}
                                     >
                                         <td className={styles.tablespacing}>
                                             <span className={styles.icon}>
@@ -302,9 +300,17 @@ function GroupView({ results }: { results: resultType }) {
                                                 : ''}
                                         </td>
                                     </tr>
+                                  {!isGroup &&
+                                    subObjList.map((subObj, index) => 
+                                      <React.Fragment key={`${typeV}${index}`}>
+                                      <tr><td>Object ID</td><td>{subObj.id}</td></tr>
+                                      <tr><td>Balance</td><td>{subObj.balance?.toString()}</td></tr>
+                                      </React.Fragment>
+                                    )
+                                  }</tbody>
                                 );
                             })}
-                    </tbody>
+                    </>
                 </table>
                 <Pagination
                     totalItems={uniqueTypes.length}
@@ -314,24 +320,7 @@ function GroupView({ results }: { results: resultType }) {
                 />
             </>
         );
-    } else {
-        return (
-            <div>
-                <div className={styles.coinheading}>
-                    <button onClick={goBack}>
-                        <BackArrow /> Go Back
-                    </button>
-                    <h2>{handleCoinType(subObjs[0].Type)}</h2>
-                </div>
-                <PaginationLogic
-                    results={subObjs}
-                    viewComponentFn={viewFn}
-                    itemsPerPage={ITEMS_PER_PAGE}
-                />
-            </div>
-        );
-    }
-}
+    } 
 
 function OwnedObjectView({ results }: { results: resultType }) {
     return (
