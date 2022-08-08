@@ -229,12 +229,20 @@ describe('End-to-end Tests', () => {
             cy.visit(`/addresses/${address}`);
 
             //Back and First buttons are disabled:
-            cy.get('[data-testid="backBtn"]').filter(':visible').should('be.disabled');
-            cy.get('[data-testid="firstBtn"]').filter(':visible').should('be.disabled');
+            cy.get('[data-testid="backBtn"]')
+                .filter(':visible')
+                .should('be.disabled');
+            cy.get('[data-testid="firstBtn"]')
+                .filter(':visible')
+                .should('be.disabled');
 
             //Next and Last buttons are not disabled:
-            cy.get('[data-testid="nextBtn"]').filter(':visible').should('be.enabled');
-            cy.get('[data-testid="lastBtn"]').filter(':visible').should('be.enabled');
+            cy.get('[data-testid="nextBtn"]')
+                .filter(':visible')
+                .should('be.enabled');
+            cy.get('[data-testid="lastBtn"]')
+                .filter(':visible')
+                .should('be.enabled');
         });
     });
 

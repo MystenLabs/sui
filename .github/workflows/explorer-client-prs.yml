@@ -64,6 +64,5 @@ jobs:
         uses: cypress-io/github-action@v4
         with:
           install-command: yarn --frozen-lockfile
-          build: yarn build
           start: yarn start:static
           working-directory: ./explorer/client
