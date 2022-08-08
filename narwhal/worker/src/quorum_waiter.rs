@@ -5,15 +5,11 @@ use config::{Committee, Stake, WorkerId};
 use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::{CancelOnDropHandler, MessageResult, ReliableNetwork, WorkerNetwork};
-use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        watch,
-    },
-    task::JoinHandle,
-};
+use tokio::{sync::watch, task::JoinHandle};
 use types::{
-    error::DagError, Batch, ReconfigureNotification, SerializedBatchMessage, WorkerMessage,
+    error::DagError,
+    metered_channel::{Receiver, Sender},
+    Batch, ReconfigureNotification, SerializedBatchMessage, WorkerMessage,
 };
 
 #[cfg(test)]

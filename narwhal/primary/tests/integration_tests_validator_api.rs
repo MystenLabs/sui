@@ -29,7 +29,7 @@ use types::{
     SerializedBatchMessage, Transaction, ValidatorClient,
 };
 use worker::{
-    metrics::{Metrics, WorkerEndpointMetrics, WorkerMetrics},
+    metrics::{Metrics, WorkerChannelMetrics, WorkerEndpointMetrics, WorkerMetrics},
     Worker, WorkerMessage,
 };
 
@@ -131,6 +131,7 @@ async fn test_get_collections() {
     let registry = Registry::new();
     let metrics = Metrics {
         worker_metrics: Some(WorkerMetrics::new(&registry)),
+        channel_metrics: Some(WorkerChannelMetrics::new(&registry)),
         endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
         network_metrics: Some(WorkerNetworkMetrics::new(&registry)),
     };
@@ -343,6 +344,7 @@ async fn test_remove_collections() {
     let registry = Registry::new();
     let metrics = Metrics {
         worker_metrics: Some(WorkerMetrics::new(&registry)),
+        channel_metrics: Some(WorkerChannelMetrics::new(&registry)),
         endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
         network_metrics: Some(WorkerNetworkMetrics::new(&registry)),
     };
@@ -902,6 +904,7 @@ async fn test_get_collections_with_missing_certificates() {
     let registry_1 = Registry::new();
     let metrics_1 = Metrics {
         worker_metrics: Some(WorkerMetrics::new(&registry_1)),
+        channel_metrics: Some(WorkerChannelMetrics::new(&registry_1)),
         endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry_1)),
         network_metrics: Some(WorkerNetworkMetrics::new(&registry_1)),
     };
@@ -944,6 +947,7 @@ async fn test_get_collections_with_missing_certificates() {
     let registry_2 = Registry::new();
     let metrics_2 = Metrics {
         worker_metrics: Some(WorkerMetrics::new(&registry_2)),
+        channel_metrics: Some(WorkerChannelMetrics::new(&registry_2)),
         endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry_2)),
         network_metrics: Some(WorkerNetworkMetrics::new(&registry_2)),
     };

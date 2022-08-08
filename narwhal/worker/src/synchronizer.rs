@@ -14,15 +14,13 @@ use std::{
 };
 use store::{Store, StoreError};
 use tokio::{
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        watch,
-    },
+    sync::{mpsc, watch},
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, error};
 use types::{
+    metered_channel::{Receiver, Sender},
     BatchDigest, ReconfigureNotification, Round, SerializedBatchMessage, WorkerMessage,
     WorkerPrimaryError, WorkerPrimaryMessage,
 };
@@ -60,7 +58,7 @@ pub struct Synchronizer {
     /// Keeps the digests (of batches) that are waiting to be processed by the primary. Their
     /// processing will resume when we get the missing batches in the store or we no longer need them.
     /// It also keeps the round number and a time stamp (`u128`) of each request we sent.
-    pending: HashMap<BatchDigest, (Round, Sender<()>, u128)>,
+    pending: HashMap<BatchDigest, (Round, mpsc::Sender<()>, u128)>,
     /// Send reconfiguration update to other tasks.
     tx_reconfigure: watch::Sender<ReconfigureNotification>,
     /// Output channel to send out the batch requests.
@@ -113,7 +111,7 @@ impl Synchronizer {
         missing: BatchDigest,
         store: Store<BatchDigest, SerializedBatchMessage>,
         deliver: BatchDigest,
-        mut handler: Receiver<()>,
+        mut handler: mpsc::Receiver<()>,
     ) -> Result<Option<BatchDigest>, StoreError> {
         tokio::select! {
             result = store.notify_read(missing) => {
@@ -164,7 +162,7 @@ impl Synchronizer {
 
                             // Add the digest to the waiter.
                             let deliver = digest;
-                            let (tx_cancel, rx_cancel) = channel(1);
+                            let (tx_cancel, rx_cancel) = mpsc::channel(1);
                             let fut = Self::waiter(digest, self.store.clone(), deliver, rx_cancel);
                             waiting.push(fut);
                             self.pending.insert(digest, (self.round, tx_cancel, now));

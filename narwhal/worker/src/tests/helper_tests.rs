@@ -13,8 +13,8 @@ use types::BatchDigest;
 
 #[tokio::test]
 async fn worker_batch_reply() {
-    let (tx_worker_request, rx_worker_request) = channel(1);
-    let (_tx_client_request, rx_client_request) = channel(1);
+    let (tx_worker_request, rx_worker_request) = test_utils::test_channel!(1);
+    let (_tx_client_request, rx_client_request) = test_utils::test_channel!(1);
     let requestor = keys(None).pop().unwrap().public().clone();
     let id = 0;
     let committee = committee(None).clone();
@@ -62,8 +62,8 @@ async fn worker_batch_reply() {
 
 #[tokio::test]
 async fn client_batch_reply() {
-    let (_tx_worker_request, rx_worker_request) = channel(1);
-    let (tx_client_request, rx_client_request) = channel(1);
+    let (_tx_worker_request, rx_worker_request) = test_utils::test_channel!(1);
+    let (tx_client_request, rx_client_request) = test_utils::test_channel!(1);
     let id = 0;
     let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =

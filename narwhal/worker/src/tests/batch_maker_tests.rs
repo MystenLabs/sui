@@ -3,15 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use test_utils::{committee, transaction};
-use tokio::sync::mpsc::channel;
 
 #[tokio::test]
 async fn make_batch() {
     let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_transaction, rx_transaction) = channel(1);
-    let (tx_message, mut rx_message) = channel(1);
+    let (tx_transaction, rx_transaction) = test_utils::test_channel!(1);
+    let (tx_message, mut rx_message) = test_utils::test_channel!(1);
 
     // Spawn a `BatchMaker` instance.
     let _batch_maker_handle = BatchMaker::spawn(
@@ -40,8 +39,8 @@ async fn batch_timeout() {
     let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
-    let (tx_transaction, rx_transaction) = channel(1);
-    let (tx_message, mut rx_message) = channel(1);
+    let (tx_transaction, rx_transaction) = test_utils::test_channel!(1);
+    let (tx_message, mut rx_message) = test_utils::test_channel!(1);
 
     // Spawn a `BatchMaker` instance.
     let _batch_maker_handle = BatchMaker::spawn(

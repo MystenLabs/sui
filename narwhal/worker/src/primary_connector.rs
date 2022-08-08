@@ -5,11 +5,8 @@ use config::Committee;
 use crypto::PublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
 use network::{ReliableNetwork, WorkerToPrimaryNetwork};
-use tokio::{
-    sync::{mpsc::Receiver, watch},
-    task::JoinHandle,
-};
-use types::{ReconfigureNotification, WorkerPrimaryMessage};
+use tokio::{sync::watch, task::JoinHandle};
+use types::{metered_channel::Receiver, ReconfigureNotification, WorkerPrimaryMessage};
 
 /// The maximum number of digests kept in memory waiting to be sent to the primary.
 pub const MAX_PENDING_DIGESTS: usize = 10_000;

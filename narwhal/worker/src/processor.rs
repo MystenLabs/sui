@@ -4,17 +4,13 @@
 
 use config::WorkerId;
 use store::Store;
-use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        watch,
-    },
-    task::JoinHandle,
-};
+use tokio::{sync::watch, task::JoinHandle};
 use tracing::error;
 use types::{
-    error::DagError, serialized_batch_digest, BatchDigest, ReconfigureNotification,
-    SerializedBatchMessage, WorkerPrimaryMessage,
+    error::DagError,
+    metered_channel::{Receiver, Sender},
+    serialized_batch_digest, BatchDigest, ReconfigureNotification, SerializedBatchMessage,
+    WorkerPrimaryMessage,
 };
 
 #[cfg(test)]

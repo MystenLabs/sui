@@ -2,8 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    batch_maker::BatchMaker, helper::Helper, primary_connector::PrimaryConnector,
-    processor::Processor, quorum_waiter::QuorumWaiter, synchronizer::Synchronizer,
+    batch_maker::BatchMaker, helper::Helper, metrics::WorkerChannelMetrics,
+    primary_connector::PrimaryConnector, processor::Processor, quorum_waiter::QuorumWaiter,
+    synchronizer::Synchronizer,
 };
 use async_trait::async_trait;
 use bytes::Bytes;
@@ -16,19 +17,18 @@ use primary::PrimaryWorkerMessage;
 use std::{net::Ipv4Addr, pin::Pin, sync::Arc};
 use store::Store;
 use tokio::{
-    sync::{
-        mpsc::{channel, Sender},
-        watch,
-    },
+    sync::{mpsc, watch},
     task::JoinHandle,
 };
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
-    error::DagError, BatchDigest, BincodeEncodedPayload, ClientBatchRequest, Empty,
-    PrimaryToWorker, PrimaryToWorkerServer, ReconfigureNotification, SerializedBatchMessage,
-    Transaction, TransactionProto, Transactions, TransactionsServer, WorkerPrimaryMessage,
-    WorkerToWorker, WorkerToWorkerServer,
+    error::DagError,
+    metered_channel::{channel, Sender},
+    BatchDigest, BincodeEncodedPayload, ClientBatchRequest, Empty, PrimaryToWorker,
+    PrimaryToWorkerServer, ReconfigureNotification, SerializedBatchMessage, Transaction,
+    TransactionProto, Transactions, TransactionsServer, WorkerPrimaryMessage, WorkerToWorker,
+    WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -77,9 +77,10 @@ impl Worker {
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
         let network_metrics = Arc::new(metrics.network_metrics.unwrap());
+        let channel_metrics: Arc<WorkerChannelMetrics> = Arc::new(metrics.channel_metrics.unwrap());
 
         // Spawn all worker tasks.
-        let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY);
+        let (tx_primary, rx_primary) = channel(CHANNEL_CAPACITY, &channel_metrics.tx_primary);
 
         let initial_committee = (*(*(*committee).load()).clone()).clone();
         let (tx_reconfigure, rx_reconfigure) =
@@ -88,18 +89,21 @@ impl Worker {
         let client_flow_handles = worker.handle_clients_transactions(
             &tx_reconfigure,
             tx_primary.clone(),
+            channel_metrics.clone(),
             endpoint_metrics,
             network_metrics.clone(),
         );
         let worker_flow_handles = worker.handle_workers_messages(
             &tx_reconfigure,
             tx_primary.clone(),
+            channel_metrics.clone(),
             network_metrics.clone(),
         );
         let primary_flow_handles = worker.handle_primary_messages(
             tx_reconfigure,
             tx_primary,
             node_metrics,
+            channel_metrics,
             network_metrics,
         );
 
@@ -131,9 +135,11 @@ impl Worker {
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         node_metrics: Arc<WorkerMetrics>,
+        channel_metrics: Arc<WorkerChannelMetrics>,
         network_metrics: Arc<WorkerNetworkMetrics>,
     ) -> Vec<JoinHandle<()>> {
-        let (tx_synchronizer, rx_synchronizer) = channel(CHANNEL_CAPACITY);
+        let (tx_synchronizer, rx_synchronizer) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_synchronizer);
 
         // Receive incoming messages from our primary.
         let address = self
@@ -182,12 +188,16 @@ impl Worker {
         &self,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
+        channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
         network_metrics: Arc<WorkerNetworkMetrics>,
     ) -> Vec<JoinHandle<()>> {
-        let (tx_batch_maker, rx_batch_maker) = channel(CHANNEL_CAPACITY);
-        let (tx_quorum_waiter, rx_quorum_waiter) = channel(CHANNEL_CAPACITY);
-        let (tx_processor, rx_processor) = channel(CHANNEL_CAPACITY);
+        let (tx_batch_maker, rx_batch_maker) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_batch_maker);
+        let (tx_quorum_waiter, rx_quorum_waiter) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_quorum_waiter);
+        let (tx_client_processor, rx_client_processor) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_client_processor);
 
         // We first receive clients' transactions from the network.
         let address = self
@@ -229,7 +239,7 @@ impl Worker {
             (*(*(*self.committee).load()).clone()).clone(),
             tx_reconfigure.subscribe(),
             /* rx_message */ rx_quorum_waiter,
-            /* tx_batch */ tx_processor,
+            /* tx_batch */ tx_client_processor,
             worker_network,
         );
 
@@ -239,7 +249,7 @@ impl Worker {
             self.id,
             self.store.clone(),
             tx_reconfigure.subscribe(),
-            /* rx_batch */ rx_processor,
+            /* rx_batch */ rx_client_processor,
             /* tx_digest */ tx_primary,
             /* own_batch */ true,
         );
@@ -262,11 +272,15 @@ impl Worker {
         &self,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
+        channel_metrics: Arc<WorkerChannelMetrics>,
         network_metrics: Arc<WorkerNetworkMetrics>,
     ) -> Vec<JoinHandle<()>> {
-        let (tx_worker_helper, rx_worker_helper) = channel(CHANNEL_CAPACITY);
-        let (tx_client_helper, rx_client_helper) = channel(CHANNEL_CAPACITY);
-        let (tx_processor, rx_processor) = channel(CHANNEL_CAPACITY);
+        let (tx_worker_helper, rx_worker_helper) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_helper);
+        let (tx_client_helper, rx_client_helper) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_client_helper);
+        let (tx_worker_processor, rx_worker_processor) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_processor);
 
         // Receive incoming messages from other workers.
         let address = self
@@ -281,7 +295,7 @@ impl Worker {
         let worker_handle = WorkerReceiverHandler {
             tx_worker_helper,
             tx_client_helper,
-            tx_processor,
+            tx_processor: tx_worker_processor,
         }
         .spawn(
             address.clone(),
@@ -310,7 +324,7 @@ impl Worker {
             self.id,
             self.store.clone(),
             tx_reconfigure.subscribe(),
-            /* rx_batch */ rx_processor,
+            /* rx_batch */ rx_worker_processor,
             /* tx_digest */ tx_primary,
             /* own_batch */ false,
         );
@@ -403,7 +417,7 @@ impl Transactions for TxReceiverHandler {
 #[derive(Clone)]
 struct WorkerReceiverHandler {
     tx_worker_helper: Sender<(Vec<BatchDigest>, PublicKey)>,
-    tx_client_helper: Sender<(Vec<BatchDigest>, Sender<SerializedBatchMessage>)>,
+    tx_client_helper: Sender<(Vec<BatchDigest>, mpsc::Sender<SerializedBatchMessage>)>,
     tx_processor: Sender<SerializedBatchMessage>,
 }
 
@@ -487,7 +501,7 @@ impl WorkerToWorker for WorkerReceiverHandler {
 
         // TODO [issue #7]: Do some accounting to prevent bad actors from use all our
         // resources (in this case allocate a gigantic channel).
-        let (sender, receiver) = channel(missing.len());
+        let (sender, receiver) = mpsc::channel(missing.len());
 
         self.tx_client_helper
             .send((missing, sender))

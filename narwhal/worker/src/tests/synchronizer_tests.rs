@@ -9,13 +9,13 @@ use test_utils::{
     batch, batch_digest, batches, committee, keys, open_batch_store, serialize_batch_message,
     WorkerToWorkerMockServer,
 };
-use tokio::{sync::mpsc::channel, time::timeout};
+use tokio::time::timeout;
 use types::serialized_batch_digest;
 
 #[tokio::test]
 async fn synchronize() {
-    let (tx_message, rx_message) = channel(1);
-    let (tx_primary, _) = channel(1);
+    let (tx_message, rx_message) = test_utils::test_channel!(1);
+    let (tx_primary, _) = test_utils::test_channel!(1);
 
     let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
@@ -65,8 +65,8 @@ async fn synchronize() {
 
 #[tokio::test]
 async fn test_successful_request_batch() {
-    let (tx_message, rx_message) = channel(1);
-    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_message, rx_message) = test_utils::test_channel!(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
 
     let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
@@ -128,8 +128,8 @@ async fn test_successful_request_batch() {
 
 #[tokio::test]
 async fn test_request_batch_not_found() {
-    let (tx_message, rx_message) = channel(1);
-    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_message, rx_message) = test_utils::test_channel!(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
 
     let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();
@@ -190,8 +190,8 @@ async fn test_request_batch_not_found() {
 
 #[tokio::test]
 async fn test_successful_batch_delete() {
-    let (tx_message, rx_message) = channel(1);
-    let (tx_primary, mut rx_primary) = channel(1);
+    let (tx_message, rx_message) = test_utils::test_channel!(1);
+    let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
 
     let mut keys = keys(None);
     let name = keys.pop().unwrap().public().clone();

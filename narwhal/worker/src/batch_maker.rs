@@ -5,14 +5,15 @@ use config::Committee;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
 use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        watch,
-    },
+    sync::watch,
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
-use types::{error::DagError, Batch, ReconfigureNotification, Transaction};
+use types::{
+    error::DagError,
+    metered_channel::{Receiver, Sender},
+    Batch, ReconfigureNotification, Transaction,
+};
 
 #[cfg(test)]
 #[path = "tests/batch_maker_tests.rs"]

@@ -39,6 +39,7 @@ async fn handle_clients_transactions() {
     let registry = Registry::new();
     let metrics = Metrics {
         worker_metrics: Some(WorkerMetrics::new(&registry)),
+        channel_metrics: Some(WorkerChannelMetrics::new(&registry)),
         endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
         network_metrics: Some(WorkerNetworkMetrics::new(&registry)),
     };
@@ -118,6 +119,7 @@ async fn handle_client_batch_request() {
     let registry = Registry::new();
     let metrics = Metrics {
         worker_metrics: Some(WorkerMetrics::new(&registry)),
+        channel_metrics: Some(WorkerChannelMetrics::new(&registry)),
         endpoint_metrics: Some(WorkerEndpointMetrics::new(&registry)),
         network_metrics: Some(WorkerNetworkMetrics::new(&registry)),
     };

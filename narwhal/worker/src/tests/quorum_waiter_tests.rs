@@ -5,12 +5,11 @@ use super::*;
 use crate::worker::WorkerMessage;
 use crypto::traits::KeyPair;
 use test_utils::{batch, committee, keys, WorkerToWorkerMockServer};
-use tokio::sync::mpsc::channel;
 
 #[tokio::test]
 async fn wait_for_quorum() {
-    let (tx_message, rx_message) = channel(1);
-    let (tx_batch, mut rx_batch) = channel(1);
+    let (tx_message, rx_message) = test_utils::test_channel!(1);
+    let (tx_batch, mut rx_batch) = test_utils::test_channel!(1);
     let myself = keys(None).pop().unwrap().public().clone();
 
     let committee = committee(None).clone();
