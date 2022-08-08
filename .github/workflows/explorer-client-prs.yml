@@ -51,9 +51,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: "yarn"
+          cache-dependency-path: ./explorer/client/yarn.lock
+      - name: Build TS sdk
+        working-directory: ./sdk/typescript
+        run: yarn install; yarn build
       - name: Run e2e tests
         uses: cypress-io/github-action@v4
         with:
+          install-command: yarn --frozen-lockfile
           build: yarn build
           start: yarn start
           working-directory: ./explorer/client
