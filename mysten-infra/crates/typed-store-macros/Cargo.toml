@@ -19,7 +19,7 @@ anyhow = { version = "1.0.58", features = ["backtrace"] }
 typed-store = {path = "../typed-store"}
 tokio = { version = "1.20.0", features = ["sync", "macros", "rt"] }
 tempfile = "3.3.0"
-rocksdb = { version = "0.18.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
+rocksdb = { version = "0.19.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
 fdlimit = "0.2.1"
 pre = "0.2.0"
 
