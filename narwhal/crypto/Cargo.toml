@@ -7,7 +7,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-anyhow = { version = "1.0.60", features = ["backtrace"] }
+anyhow = { version = "1.0.59", features = ["backtrace"] }
 ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
 base64ct = { version = "1.5.1", features = ["alloc"] }
 ed25519-consensus = { version = "2.0.1", features = ["serde"] }
