@@ -3,12 +3,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::epoch::epoch_store::EpochStore;
 use futures::StreamExt;
 use prometheus::core::{GenericCounter, GenericGauge};
 use prometheus::{
     register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
     IntGaugeVec,
 };
+use std::sync::Arc;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
@@ -77,7 +79,7 @@ impl SafeClientMetrics {
 #[derive(Clone)]
 pub struct SafeClient<C> {
     authority_client: C,
-    committee: Committee,
+    epoch_store: Arc<EpochStore>,
     address: AuthorityPublicKeyBytes,
 
     metrics_total_requests_handle_transaction_and_effects_info_request:
@@ -101,7 +103,7 @@ pub struct SafeClient<C> {
 impl<C> SafeClient<C> {
     pub fn new(
         authority_client: C,
-        committee: Committee,
+        epoch_store: Arc<EpochStore>,
         address: AuthorityPublicKeyBytes,
         safe_client_metrics: SafeClientMetrics,
     ) -> Self {
@@ -145,7 +147,7 @@ impl<C> SafeClient<C> {
 
         Self {
             authority_client,
-            committee,
+            epoch_store,
             address,
 
             metrics_total_requests_handle_transaction_and_effects_info_request,
@@ -170,6 +172,16 @@ impl<C> SafeClient<C> {
         &mut self.authority_client
     }
 
+    fn get_committee(&self, epoch_id: &EpochId) -> SuiResult<Committee> {
+        match self.epoch_store.get_authenticated_epoch(epoch_id)? {
+            Some(epoch_info) => Ok(epoch_info.into_epoch_info().into_committee()),
+            None => Err(SuiError::InvalidAuthenticatedEpoch(format!(
+                "Epoch info not found in the store for epoch {:?}",
+                epoch_id
+            ))),
+        }
+    }
+
     // Here we centralize all checks for transaction info responses
     fn check_transaction_response(
         &self,
@@ -179,7 +191,8 @@ impl<C> SafeClient<C> {
     ) -> SuiResult {
         if let Some(signed_transaction) = &response.signed_transaction {
             // Check the transaction signature
-            signed_transaction.verify(&self.committee)?;
+            signed_transaction
+                .verify(&self.get_committee(&signed_transaction.auth_sign_info.epoch)?)?;
             // Check it has the right signer
             fp_ensure!(
                 signed_transaction.auth_sign_info.authority == self.address,
@@ -200,7 +213,7 @@ impl<C> SafeClient<C> {
 
         if let Some(certificate) = &response.certified_transaction {
             // Check signatures and quorum
-            certificate.verify(&self.committee)?;
+            certificate.verify(&self.get_committee(&certificate.auth_sign_info.epoch)?)?;
             // Check it's the right transaction
             fp_ensure!(
                 certificate.digest() == digest,
@@ -213,7 +226,7 @@ impl<C> SafeClient<C> {
 
         if let Some(signed_effects) = &response.signed_effects {
             // Check signature
-            signed_effects.verify(&self.committee)?;
+            signed_effects.verify(&self.get_committee(&signed_effects.auth_signature.epoch)?)?;
             // Check it has the right signer
             fp_ensure!(
                 signed_effects.auth_signature.authority == self.address,
@@ -253,7 +266,7 @@ impl<C> SafeClient<C> {
     ) -> SuiResult {
         // If we get a certificate make sure it is a valid certificate
         if let Some(certificate) = &response.parent_certificate {
-            certificate.verify(&self.committee)?;
+            certificate.verify(&self.get_committee(&certificate.auth_sign_info.epoch)?)?;
         }
 
         // Check the right object ID and version is returned
@@ -318,7 +331,8 @@ impl<C> SafeClient<C> {
             };
 
             if let Some(signed_transaction) = &object_and_lock.lock {
-                signed_transaction.verify(&self.committee)?;
+                signed_transaction
+                    .verify(&self.get_committee(&signed_transaction.auth_sign_info.epoch)?)?;
                 // Check it has the right signer
                 fp_ensure!(
                     signed_transaction.auth_sign_info.authority == self.address,
@@ -344,7 +358,7 @@ impl<C> SafeClient<C> {
         )>,
     ) -> SuiResult {
         // check the signature of the batch
-        signed_batch.verify(&self.committee)?;
+        signed_batch.verify(&self.get_committee(&signed_batch.auth_signature.epoch)?)?;
 
         // ensure transactions enclosed match requested range
 
@@ -562,9 +576,6 @@ where
         request: &CheckpointRequest,
         response: &CheckpointResponse,
     ) -> SuiResult {
-        // Verify signatures
-        response.verify(&self.committee)?;
-
         // Verify response data was correct for request
         match &request.request_type {
             CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
@@ -572,7 +583,15 @@ where
                 {
                     // Checks that the sequence number is correct.
                     self.verify_checkpoint_sequence(*seq, checkpoint)?;
-                    self.verify_contents_exist(request.detail, checkpoint, &response.detail)
+                    self.verify_contents_exist(request.detail, checkpoint, &response.detail)?;
+                    // Verify signature.
+                    match checkpoint {
+                        Some(c) => {
+                            let epoch_id = c.summary().epoch;
+                            c.verify(&self.get_committee(&epoch_id)?, response.detail.as_ref())
+                        }
+                        None => Ok(()),
+                    }
                 } else {
                     Err(SuiError::from(
                         "Invalid AuthorityCheckpointInfo type in the response",
@@ -582,9 +601,25 @@ where
             CheckpointRequestType::CheckpointProposal => {
                 if let AuthorityCheckpointInfo::CheckpointProposal {
                     proposal,
-                    prev_cert: _,
+                    prev_cert,
                 } = &response.info
                 {
+                    // Verify signature.
+                    if let Some(signed_proposal) = proposal {
+                        let committee =
+                            self.get_committee(&signed_proposal.auth_signature.epoch)?;
+                        signed_proposal.verify(&committee, response.detail.as_ref())?;
+                        if signed_proposal.summary.sequence_number > 0 {
+                            let cert = prev_cert.as_ref().ok_or_else(|| {
+                                SuiError::from("No checkpoint cert provided along with proposal")
+                            })?;
+                            cert.verify(&committee, None)?;
+                            fp_ensure!(
+                                signed_proposal.summary.sequence_number - 1 == cert.summary.sequence_number,
+                                SuiError::from("Checkpoint proposal sequence number inconsistent with previous cert")
+                            );
+                        }
+                    }
                     self.verify_contents_exist(request.detail, proposal, &response.detail)
                 } else {
                     Err(SuiError::from(
@@ -704,17 +739,12 @@ where
                 );
                 Ok(())
             }
-            (_, Some(AuthenticatedEpoch::Genesis(_))) => {
-                // TODO: Verify the epoch data using genesis committee
-                Ok(())
+            (_, Some(AuthenticatedEpoch::Genesis(g))) => g.verify(&self.get_committee(&0)?),
+            (_, Some(AuthenticatedEpoch::Signed(s))) => {
+                s.verify(&self.get_committee(&s.auth_sign_info.epoch)?)
             }
-            (_, Some(AuthenticatedEpoch::Signed(_))) => {
-                // TODO: Verify the epoch data using previous committee
-                Ok(())
-            }
-            (_, Some(AuthenticatedEpoch::Certified(_))) => {
-                // TODO: Verify the epoch data using previous committee
-                Ok(())
+            (_, Some(AuthenticatedEpoch::Certified(c))) => {
+                c.verify(&self.get_committee(&c.auth_sign_info.epoch)?)
             }
         }
     }

@@ -57,6 +57,7 @@ use sui_json_rpc_types::{
 };
 use sui_types::error::SuiError::ConflictingTransaction;
 
+use crate::epoch::epoch_store::EpochStore;
 use tap::TapFallible;
 
 #[cfg(test)]
@@ -176,7 +177,7 @@ pub struct GatewayState<A> {
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
     pub fn new(
-        path: &Path,
+        base_path: &Path,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         prometheus_registry: &Registry,
@@ -188,6 +189,7 @@ impl<A> GatewayState<A> {
             path,
             AuthorityAggregator::new(
                 committee,
+                epoch_store,
                 authority_clients,
                 auth_agg_metrics,
                 safe_client_metrics,
@@ -197,18 +199,17 @@ impl<A> GatewayState<A> {
     }
 
     pub fn new_with_authorities(
-        path: &Path,
+        gateway_store: Arc<GatewayStore>,
         authorities: AuthorityAggregator<A>,
         metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
-        let store = Arc::new(GatewayStore::open(path, None));
-        let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
+        let next_tx_seq_number = AtomicU64::new(gateway_store.next_sequence_number()?);
         Ok(Self {
-            store: store.clone(),
+            store: gateway_store.clone(),
             authorities,
             next_tx_seq_number,
             metrics,
-            module_cache: SyncModuleCache::new(ResolverWrapper(store)),
+            module_cache: SyncModuleCache::new(ResolverWrapper(gateway_store)),
         })
     }
 

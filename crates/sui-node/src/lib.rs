@@ -81,7 +81,7 @@ impl SuiNode {
         let secret = Arc::pin(config.key_pair().copy());
         let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
-        let epoch_store = Arc::new(EpochStore::new(config.db_path().join("epochs")));
+        let epoch_store = Arc::new(EpochStore::new(config.db_path().join("epochs"), &committee));
 
         let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
             &config.db_path().join("checkpoints"),
@@ -116,11 +116,10 @@ impl SuiNode {
 
         let state = Arc::new(
             AuthorityState::new(
-                committee,
                 config.public_key(),
                 secret,
                 store,
-                epoch_store,
+                epoch_store.clone(),
                 index_store.clone(),
                 event_store,
                 Some(checkpoint_store),
@@ -144,6 +143,7 @@ impl SuiNode {
         }?;
         let net = AuthorityAggregator::new(
             state.clone_committee(),
+            epoch_store,
             authority_clients,
             AuthAggMetrics::new(&prometheus_registry),
             SafeClientMetrics::new(&prometheus_registry),

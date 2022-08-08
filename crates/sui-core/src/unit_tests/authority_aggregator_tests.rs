@@ -85,9 +85,11 @@ pub async fn init_local_authorities_with_genesis(
         serial_authority_request_timeout: Duration::from_secs(1),
         serial_authority_request_interval: Duration::from_secs(1),
     };
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
     (
         AuthorityAggregator::new_with_timeouts(
             committee,
+            epoch_store,
             clients,
             AuthAggMetrics::new_for_tests(),
             SafeClientMetrics::new_for_tests(),
@@ -983,9 +985,11 @@ async fn test_quorum_once_with_timeout() {
     }
 
     let committee = Committee::new(0, authorities).unwrap();
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
 
     let agg = AuthorityAggregator::new_with_timeouts(
         committee,
+        epoch_store,
         clients,
         AuthAggMetrics::new_for_tests(),
         SafeClientMetrics::new_for_tests(),

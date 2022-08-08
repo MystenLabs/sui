@@ -1824,6 +1824,10 @@ impl EpochInfo {
         &self.committee
     }
 
+    pub fn into_committee(self) -> Committee {
+        self.committee
+    }
+
     pub fn first_checkpoint(&self) -> &CheckpointSequenceNumber {
         &self.first_checkpoint
     }
@@ -1857,7 +1861,7 @@ impl GenesisEpoch {
         }
     }
 
-    pub fn verify(&self, genesis_committee: Committee) -> SuiResult {
+    pub fn verify(&self, genesis_committee: &Committee) -> SuiResult {
         fp_ensure!(
             self.epoch_info.first_checkpoint == 0,
             SuiError::InvalidAuthenticatedEpoch(
@@ -1869,7 +1873,7 @@ impl GenesisEpoch {
             SuiError::InvalidAuthenticatedEpoch("Genesis epoch must be epoch 0".to_string())
         );
         fp_ensure!(
-            self.epoch_info.committee == genesis_committee,
+            &self.epoch_info.committee == genesis_committee,
             SuiError::InvalidAuthenticatedEpoch("Genesis epoch committee mismatch".to_string())
         );
         Ok(())
@@ -1976,6 +1980,14 @@ impl AuthenticatedEpoch {
             Self::Signed(s) => &s.epoch_info,
             Self::Certified(c) => &c.epoch_info,
             Self::Genesis(g) => &g.epoch_info,
+        }
+    }
+
+    pub fn into_epoch_info(self) -> EpochInfo {
+        match self {
+            Self::Signed(s) => s.epoch_info,
+            Self::Certified(c) => c.epoch_info,
+            Self::Genesis(g) => g.epoch_info,
         }
     }
 }
