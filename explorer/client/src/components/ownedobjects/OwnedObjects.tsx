@@ -258,6 +258,7 @@ function GroupView({ results }: { results: resultType }) {
                     <thead>
                         <tr>
                             <th>Type</th>
+                            <th>Objects</th>
                             <th>Balance</th>
                         </tr>
                     </thead>
@@ -278,6 +279,9 @@ function GroupView({ results }: { results: resultType }) {
                                     >
                                         <td className={styles.tablespacing}>
                                             {handleCoinType(typeV)}
+                                        </td>
+                                        <td className={styles.tablespacing}>
+                                            {subObjList.length}
                                         </td>
                                         <td className={styles.tablespacing}>
                                             {subObjList[0]._isCoin &&

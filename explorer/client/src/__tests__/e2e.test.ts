@@ -376,10 +376,15 @@ describe('End-to-end Tests', () => {
                     .with(coinGroup(1).field(1))
                     .get.textContent()
             ).toBe('0x2::USD::USD');
-
             expect(
                 await cssInteract(page)
                     .with(coinGroup(1).field(2))
+                    .get.textContent()
+            ).toBe('2');
+
+            expect(
+                await cssInteract(page)
+                    .with(coinGroup(1).field(3))
                     .get.textContent()
             ).toBe('9007199254740993');
 
@@ -391,7 +396,13 @@ describe('End-to-end Tests', () => {
 
             expect(
                 await cssInteract(page)
-                    .with(coinGroup(2).field(2))
+                    .with(coinGroup(1).field(2))
+                    .get.textContent()
+            ).toBe('2');
+
+            expect(
+                await cssInteract(page)
+                    .with(coinGroup(2).field(3))
                     .get.textContent()
             ).toBe('200');
         });
