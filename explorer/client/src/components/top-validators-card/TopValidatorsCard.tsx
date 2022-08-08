@@ -17,9 +17,9 @@ import {
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
 import theme from '../../styles/theme.module.css';
+import { truncate } from '../../utils/stringUtils';
 
 import styles from './TopValidatorsCard.module.css';
-import { truncate } from '../../utils/stringUtils';
 
 export const STATE_DEFAULT: ValidatorState = {
     delegation_reward: 0,
