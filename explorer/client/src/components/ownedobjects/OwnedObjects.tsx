@@ -230,51 +230,54 @@ function OwnedObjectLayout({ results }: { results: resultType }) {
 }
 
 function GroupView({ results }: { results: resultType }) {
-    const [subObjs, setSubObjs] = useState(DATATYPE_DEFAULT);
+    const CLOSED_TYPE_STRING = '';
 
-    const [isGroup, setIsGroup] = useState(true);
+    const [openedType, setOpenedType] = useState(CLOSED_TYPE_STRING);
 
     const [currentPage, setCurrentPage] = useState(1);
 
-    const shrinkObjList = useCallback(
-        (subObjList) => () => {
-            setIsGroup(false);
-            setSubObjs(subObjList);
+    const openThisType = useCallback(
+        (thisType: string) => () => {
+            setOpenedType(thisType);
         },
         []
     );
 
-    const goBack = useCallback(() => setIsGroup(true), []);
+    const goBack = useCallback(() => setOpenedType(CLOSED_TYPE_STRING), []);
 
     const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
 
-        return (
-            <>
-                <table
-                    id="groupCollection"
-                    className={`${styles.groupview} ${tablestyle.table}`}
-                >
-                    <thead>
-                        <tr>
-                            <th>Type</th>
-                            <th>Objects</th>
-                            <th>Balance</th>
-                        </tr>
-                    </thead>
-                    <>
-                        {uniqueTypes
-                            .slice(
-                                (currentPage - 1) * ITEMS_PER_PAGE,
-                                currentPage * ITEMS_PER_PAGE
-                            )
-                            .map((typeV) => {
-                                const subObjList = results.filter(
-                                    ({ Type }) => Type === typeV
-                                );
-                                return (
-                                  <tbody key={typeV}>
+    return (
+        <>
+            <table
+                id="groupCollection"
+                className={`${styles.groupview} ${tablestyle.table}`}
+            >
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Objects</th>
+                        <th>Balance</th>
+                    </tr>
+                </thead>
+                <>
+                    {uniqueTypes
+                        .slice(
+                            (currentPage - 1) * ITEMS_PER_PAGE,
+                            currentPage * ITEMS_PER_PAGE
+                        )
+                        .map((typeV) => {
+                            const subObjList = results.filter(
+                                ({ Type }) => Type === typeV
+                            );
+                            return (
+                                <tbody key={typeV}>
                                     <tr
-                                        onClick={isGroup ? shrinkObjList(subObjList) : goBack}
+                                        onClick={
+                                            openedType === typeV
+                                                ? goBack
+                                                : openThisType(typeV)
+                                        }
                                     >
                                         <td className={styles.tablespacing}>
                                             <span className={styles.icon}>
@@ -300,27 +303,37 @@ function GroupView({ results }: { results: resultType }) {
                                                 : ''}
                                         </td>
                                     </tr>
-                                  {!isGroup &&
-                                    subObjList.map((subObj, index) => 
-                                      <React.Fragment key={`${typeV}${index}`}>
-                                      <tr><td>Object ID</td><td>{subObj.id}</td></tr>
-                                      <tr><td>Balance</td><td>{subObj.balance?.toString()}</td></tr>
-                                      </React.Fragment>
-                                    )
-                                  }</tbody>
-                                );
-                            })}
-                    </>
-                </table>
-                <Pagination
-                    totalItems={uniqueTypes.length}
-                    itemsPerPage={ITEMS_PER_PAGE}
-                    currentPage={currentPage}
-                    onPagiChangeFn={setCurrentPage}
-                />
-            </>
-        );
-    } 
+                                    {openedType === typeV &&
+                                        subObjList.map((subObj, index) => (
+                                            <React.Fragment
+                                                key={`${typeV}${index}`}
+                                            >
+                                                <tr>
+                                                    <td>Object ID</td>
+                                                    <td>{subObj.id}</td>
+                                                </tr>
+                                                <tr>
+                                                    <td>Balance</td>
+                                                    <td>
+                                                        {subObj.balance?.toString()}
+                                                    </td>
+                                                </tr>
+                                            </React.Fragment>
+                                        ))}
+                                </tbody>
+                            );
+                        })}
+                </>
+            </table>
+            <Pagination
+                totalItems={uniqueTypes.length}
+                itemsPerPage={ITEMS_PER_PAGE}
+                currentPage={currentPage}
+                onPagiChangeFn={setCurrentPage}
+            />
+        </>
+    );
+}
 
 function OwnedObjectView({ results }: { results: resultType }) {
     return (
