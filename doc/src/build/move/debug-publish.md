@@ -3,21 +3,21 @@ title: Debug and Publish the Sui Move Package
 ---
 
 ## Debugging a package
-At the moment there isn't a yet debugger for Move. To help with debugging, however, you could use `Std::Debug` module to print out arbitrary value. To do so, first import the `Debug` module:
+At the moment there isn't a yet debugger for Move. To help with debugging, however, you could use `std::debug` module to print out arbitrary value. To do so, first import the `debug` module:
 ```
-use Std::Debug;
+use std::debug;
 ```
 Then in places where you want to print out a value `v`, regardless of its type, simply do:
 ```
-Debug::print(&v);
+debug::print(&v);
 ```
 or the following if v is already a reference:
 ```
-Debug::print(v);
+debug::print(v);
 ```
-`Debug` module also provides a function to print out the current stacktrace:
+The `debug` module also provides a function to print out the current stacktrace:
 ```
-Debug::print_stack_trace();
+debug::print_stack_trace();
 ```
 Alternatively, any call to `abort` or assertion failure will also print the stacktrace at the point of failure.
 
