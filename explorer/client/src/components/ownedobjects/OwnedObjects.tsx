@@ -13,6 +13,7 @@ import React, {
 import { useNavigate } from 'react-router-dom';
 
 import { ReactComponent as BackArrow } from '../../assets/SVGIcons/back-arrow-dark.svg';
+import { ReactComponent as ContentIcon } from '../../assets/SVGIcons/closed-content.svg';
 import tablestyle from '../../components/table/TableCard.module.css';
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
@@ -278,6 +279,9 @@ function GroupView({ results }: { results: resultType }) {
                                         onClick={shrinkObjList(subObjList)}
                                     >
                                         <td className={styles.tablespacing}>
+                                            <span className={styles.icon}>
+                                                <ContentIcon />
+                                            </span>
                                             {handleCoinType(typeV)}
                                         </td>
                                         <td className={styles.tablespacing}>

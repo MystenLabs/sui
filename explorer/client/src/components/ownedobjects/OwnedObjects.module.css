@@ -86,3 +86,7 @@
 .fail {
     @apply text-red-600 font-sans font-semibold mt-2;
 }
+
+.icon {
+    @apply mx-[6px];
+}
