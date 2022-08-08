@@ -339,7 +339,7 @@ function LatestTxCard({ ...data }: RecentTx) {
             />
         ) : (
             <TabFooter stats={stats}>
-                <Link className={styles.moretxbtn} to={`/`}>
+                <Link className={styles.moretxbtn} to="/transactions">
                     More Transactions <ContentForwardArrowDark />
                 </Link>
             </TabFooter>
