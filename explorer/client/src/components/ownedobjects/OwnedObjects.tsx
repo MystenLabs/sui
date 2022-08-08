@@ -247,6 +247,9 @@ function GroupView({ results }: { results: resultType }) {
 
     const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
 
+    // Switching the page closes any open group:
+    useEffect(() => {setOpenedType(CLOSED_TYPE_STRING)}, [currentPage]);
+
     return (
         <>
             <table
