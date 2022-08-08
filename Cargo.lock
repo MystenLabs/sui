@@ -7186,6 +7186,8 @@ dependencies = [
  "jsonrpsee",
  "jsonrpsee-core",
  "jsonrpsee-proc-macros",
+ "move-binary-format",
+ "move-core-types",
  "prometheus",
  "serde 1.0.141",
  "signature",

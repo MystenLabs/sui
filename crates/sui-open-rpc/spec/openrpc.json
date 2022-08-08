@@ -306,6 +306,48 @@
       ]
     },
     {
+      "name": "sui_getMoveFunctionArgTypes",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return the argument types of a Move function, based on normalized Type.",
+      "params": [
+        {
+          "name": "object_id",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "module",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "function",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "Vec<MoveFunctionArgType>",
+        "required": true,
+        "schema": {
+          "type": "array",
+          "items": {
+            "$ref": "#/components/schemas/MoveFunctionArgType"
+          }
+        }
+      }
+    },
+    {
       "name": "sui_getObject",
       "tags": [
         {
@@ -2487,6 +2529,28 @@
           }
         }
       },
+      "MoveFunctionArgType": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "Pure"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "Object"
+            ],
+            "properties": {
+              "Object": {
+                "$ref": "#/components/schemas/ObjectValueKind"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
       "MoveObject": {
         "type": "object",
         "required": [
@@ -2776,6 +2840,14 @@
             ]
           }
         }
+      },
+      "ObjectValueKind": {
+        "type": "string",
+        "enum": [
+          "ByImmutableReference",
+          "ByMutableReference",
+          "ByValue"
+        ]
       },
       "Owner": {
         "oneOf": [

@@ -5,7 +5,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse,
+    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
     RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo, SuiTypeTag,
     TransactionBytes, TransactionEffectsResponse, TransactionResponse,
 };
@@ -105,6 +105,16 @@ pub trait RpcReadApi {
 #[open_rpc(namespace = "sui", tag = "Full Node API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcFullNodeReadApi {
+    /// Return the argument types of a Move function,
+    /// based on normalized Type.
+    #[method(name = "getMoveFunctionArgTypes")]
+    async fn get_move_function_arg_types(
+        &self,
+        object_id: ObjectID,
+        module: String,
+        function: String,
+    ) -> RpcResult<Vec<MoveFunctionArgType>>;
+
     /// Return list of transactions for a specified input object.
     #[method(name = "getTransactionsByInputObject")]
     async fn get_transactions_by_input_object(
