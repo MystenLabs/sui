@@ -79,9 +79,11 @@ pub trait ConsensusSender: Send + Sync + 'static {
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum FragmentInternalError {
+    #[error("Error processing fragment{0}")]
     Error(SuiError),
+    #[error("Error processing fragment, retrying")]
     Retry(Box<CheckpointFragment>),
 }
 
