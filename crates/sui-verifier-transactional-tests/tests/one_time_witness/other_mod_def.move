@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// invalid, characteristic type candidate used in a different module
+// invalid, one-time witness type candidate used in a different module
 
 //# init --addresses test1=0x0 test2=0x0
 

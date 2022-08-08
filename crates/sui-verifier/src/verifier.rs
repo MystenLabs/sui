@@ -7,8 +7,8 @@ use move_binary_format::file_format::CompiledModule;
 use sui_types::error::ExecutionError;
 
 use crate::{
-    char_type_verifier, entry_points_verifier, global_storage_access_verifier, id_leak_verifier,
-    private_generics, struct_with_key_verifier,
+    entry_points_verifier, global_storage_access_verifier, id_leak_verifier,
+    one_time_witness_verifier, private_generics, struct_with_key_verifier,
 };
 
 /// Helper for a "canonical" verification of a module.
@@ -18,5 +18,5 @@ pub fn verify_module(module: &CompiledModule) -> Result<(), ExecutionError> {
     id_leak_verifier::verify_module(module)?;
     private_generics::verify_module(module)?;
     entry_points_verifier::verify_module(module)?;
-    char_type_verifier::verify_module(module)
+    one_time_witness_verifier::verify_module(module)
 }
