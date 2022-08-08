@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::bail;
-use sui_json_rpc_types::{GetObjectDataResponse, SuiEvent, SuiObject, SuiParsedMoveObject};
+use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiEvent, SuiObject, SuiParsedData};
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -65,7 +65,7 @@ impl ObjectChecker {
             .into_gas_coin()
     }
 
-    pub async fn check_into_sui_object(self, client: &SuiClient) -> SuiObject<SuiParsedMoveObject> {
+    pub async fn check_into_sui_object(self, client: &SuiClient) -> SuiObject<SuiParsedData> {
         self.check(client).await.unwrap().into_sui_object()
     }
 
@@ -118,14 +118,11 @@ impl ObjectChecker {
 
 pub struct CheckerResultObject {
     gas_coin: Option<GasCoin>,
-    sui_object: Option<SuiObject<SuiParsedMoveObject>>,
+    sui_object: Option<SuiObject<SuiParsedData>>,
 }
 
 impl CheckerResultObject {
-    pub fn new(
-        gas_coin: Option<GasCoin>,
-        sui_object: Option<SuiObject<SuiParsedMoveObject>>,
-    ) -> Self {
+    pub fn new(gas_coin: Option<GasCoin>, sui_object: Option<SuiObject<SuiParsedData>>) -> Self {
         Self {
             gas_coin,
             sui_object,
@@ -134,7 +131,7 @@ impl CheckerResultObject {
     pub fn into_gas_coin(self) -> GasCoin {
         self.gas_coin.unwrap()
     }
-    pub fn into_sui_object(self) -> SuiObject<SuiParsedMoveObject> {
+    pub fn into_sui_object(self) -> SuiObject<SuiParsedData> {
         self.sui_object.unwrap()
     }
 }

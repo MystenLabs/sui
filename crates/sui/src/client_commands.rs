@@ -16,10 +16,9 @@ use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
-use tracing::info;
-
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
 };
@@ -34,6 +33,7 @@ use sui_types::{
     messages::Transaction,
     SUI_FRAMEWORK_ADDRESS,
 };
+use tracing::info;
 
 use crate::config::{Config, PersistedConfig, SuiClientConfig};
 

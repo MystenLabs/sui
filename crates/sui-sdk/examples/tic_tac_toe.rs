@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
+use sui_json_rpc_types::SuiData;
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::{
     crypto::SuiKeystore,
@@ -77,8 +78,8 @@ impl TicTacToe {
             .move_call(
                 player_x,
                 self.game_package_id,
-                "shared_tic_tac_toe".to_string(),
-                "create_game".to_string(),
+                "shared_tic_tac_toe",
+                "create_game",
                 vec![],
                 vec![
                     SuiJsonValue::from_str(&player_x.to_string())?,
@@ -166,8 +167,8 @@ impl TicTacToe {
                 .move_call(
                     my_identity,
                     self.game_package_id,
-                    "shared_tic_tac_toe".to_string(),
-                    "place_mark".to_string(),
+                    "shared_tic_tac_toe",
+                    "place_mark",
                     vec![],
                     vec![
                         SuiJsonValue::from_str(&game_state.info.object_id().to_hex_literal())?,

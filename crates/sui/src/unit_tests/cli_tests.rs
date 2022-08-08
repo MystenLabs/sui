@@ -20,7 +20,7 @@ use sui_config::{
     SUI_GATEWAY_CONFIG, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
+use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiParsedObject, SuiTransactionEffects};
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
 use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, SuiKeyPair};

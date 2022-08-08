@@ -265,7 +265,7 @@ pub async fn new_wallet_context_from_cluster(
         .unwrap();
     SuiClientConfig {
         keystore,
-        gateway: ClientType::RPC(rpc_url.into()),
+        gateway: ClientType::RPC(rpc_url.into(), None),
         active_address: Some(address),
     }
     .persisted(&wallet_config_path)

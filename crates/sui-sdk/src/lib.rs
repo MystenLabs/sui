@@ -32,8 +32,8 @@ use sui_json_rpc::api::WalletSyncApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse,
-    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo, SuiTypeTag,
-    TransactionEffectsResponse, TransactionResponse,
+    RPCTransactionRequestParams, SuiData, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo,
+    SuiTypeTag, TransactionEffectsResponse, TransactionResponse,
 };
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
@@ -107,6 +107,7 @@ impl TransactionBuilder {
         &self,
         signer: SuiAddress,
         budget: u64,
+        input_objects: Vec<ObjectID>,
     ) -> Result<ObjectRef, anyhow::Error> {
         let objs = self.read_api.get_objects_owned_by_address(signer).await?;
         let gas_objs = objs
@@ -117,7 +118,7 @@ impl TransactionBuilder {
             let response = self.read_api.get_raw_object(obj.object_id).await?;
             let obj = response.object()?;
             let gas: GasCoin = bcs::from_bytes(&obj.data.try_as_move().unwrap().bcs_bytes)?;
-            if gas.value() >= budget {
+            if !input_objects.contains(&obj.id()) && gas.value() >= budget {
                 return Ok(obj.reference.to_object_ref());
             }
         }
@@ -136,7 +137,7 @@ impl TransactionBuilder {
         let gas = if let Some(gas) = gas {
             self.read_api.get_object_ref(gas).await?
         } else {
-            self.select_gas(signer, gas_budget).await?
+            self.select_gas(signer, gas_budget, vec![object_id]).await?
         };
         Ok(TransactionData::new_transfer(
             recipient, object, signer, gas, gas_budget,
@@ -227,7 +228,7 @@ impl TransactionBuilder {
         let gas = if let Some(gas) = gas {
             self.read_api.get_object_ref(gas).await?
         } else {
-            self.select_gas(sender, gas_budget).await?
+            self.select_gas(sender, gas_budget, vec![]).await?
         };
         Ok(TransactionData::new_module(
             sender,
