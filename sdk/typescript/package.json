@@ -71,8 +71,7 @@
     "jayson": "^3.6.6",
     "js-sha3": "^0.8.0",
     "lossless-json": "^1.0.5",
-    "tweetnacl": "^1.0.3",
-    "util": "^0.12.4"
+    "tweetnacl": "^1.0.3"
   },
   "resolutions": {
     "tsdx/**/node-notifier": "10.0.0"
