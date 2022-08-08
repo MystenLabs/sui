@@ -1,13 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo, SuiTypeTag,
-    TransactionBytes, TransactionEffectsResponse, TransactionResponse,
+    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTypeTag, TransactionBytes,
+    TransactionEffectsResponse, TransactionResponse,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -110,10 +113,43 @@ pub trait RpcFullNodeReadApi {
     #[method(name = "getMoveFunctionArgTypes")]
     async fn get_move_function_arg_types(
         &self,
-        object_id: ObjectID,
+        package: ObjectID,
         module: String,
         function: String,
     ) -> RpcResult<Vec<MoveFunctionArgType>>;
+
+    /// Return structured representations of all modules in the given package
+    #[method(name = "getNormalizedMoveModulesByPackage")]
+    async fn get_normalized_move_modules_by_package(
+        &self,
+        package: ObjectID,
+    ) -> RpcResult<BTreeMap<String, SuiMoveNormalizedModule>>;
+
+    /// Return a structured representation of Move module
+    #[method(name = "getNormalizedMoveModule")]
+    async fn get_normalized_move_module(
+        &self,
+        package: ObjectID,
+        module_name: String,
+    ) -> RpcResult<SuiMoveNormalizedModule>;
+
+    /// Return a structured representation of Move struct
+    #[method(name = "getNormalizedMoveStruct")]
+    async fn get_normalized_move_struct(
+        &self,
+        package: ObjectID,
+        module_name: String,
+        struct_name: String,
+    ) -> RpcResult<SuiMoveNormalizedStruct>;
+
+    /// Return a structured representation of Move function
+    #[method(name = "getNormalizedMoveFunction")]
+    async fn get_normalized_move_function(
+        &self,
+        package: ObjectID,
+        module_name: String,
+        function_name: String,
+    ) -> RpcResult<SuiMoveNormalizedFunction>;
 
     /// Return list of transactions for a specified input object.
     #[method(name = "getTransactionsByInputObject")]

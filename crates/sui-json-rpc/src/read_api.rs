@@ -8,14 +8,16 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
-use move_binary_format::normalized::Type;
+use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiObjectInfo,
-    SuiTransactionEffects, TransactionEffectsResponse,
+    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects,
+    TransactionEffectsResponse,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -125,6 +127,62 @@ impl SuiRpcModule for ReadApi {
 
 #[async_trait]
 impl RpcFullNodeReadApiServer for FullNodeApi {
+    async fn get_normalized_move_modules_by_package(
+        &self,
+        package: ObjectID,
+    ) -> RpcResult<BTreeMap<String, SuiMoveNormalizedModule>> {
+        let modules = get_move_modules_by_package(self, package).await?;
+        Ok(modules
+            .into_iter()
+            .map(|(name, module)| (name, module.into()))
+            .collect::<BTreeMap<String, SuiMoveNormalizedModule>>())
+    }
+
+    async fn get_normalized_move_module(
+        &self,
+        package: ObjectID,
+        module_name: String,
+    ) -> RpcResult<SuiMoveNormalizedModule> {
+        let module = get_move_module(self, package, module_name).await?;
+        Ok(module.into())
+    }
+
+    async fn get_normalized_move_struct(
+        &self,
+        package: ObjectID,
+        module_name: String,
+        struct_name: String,
+    ) -> RpcResult<SuiMoveNormalizedStruct> {
+        let module = get_move_module(self, package, module_name).await?;
+        let structs = module.structs;
+        let identifier = Identifier::new(struct_name.as_str()).map_err(|e| anyhow!("{e}"))?;
+        Ok(match structs.get(&identifier) {
+            Some(struct_) => Ok(struct_.clone().into()),
+            None => Err(anyhow!(
+                "No struct was found with struct name {}",
+                struct_name
+            )),
+        }?)
+    }
+
+    async fn get_normalized_move_function(
+        &self,
+        package: ObjectID,
+        module_name: String,
+        function_name: String,
+    ) -> RpcResult<SuiMoveNormalizedFunction> {
+        let module = get_move_module(self, package, module_name).await?;
+        let functions = module.exposed_functions;
+        let identifier = Identifier::new(function_name.as_str()).map_err(|e| anyhow!("{e}"))?;
+        Ok(match functions.get(&identifier) {
+            Some(function) => Ok(function.clone().into()),
+            None => Err(anyhow!(
+                "No function was found with function name {}",
+                function_name
+            )),
+        }?)
+    }
+
     async fn get_move_function_arg_types(
         &self,
         package: ObjectID,
@@ -228,4 +286,37 @@ impl SuiRpcModule for FullNodeApi {
     fn rpc_doc_module() -> Module {
         crate::api::RpcFullNodeReadApiOpenRpc::module_doc()
     }
+}
+
+pub async fn get_move_module(
+    fullnode_api: &FullNodeApi,
+    package: ObjectID,
+    module_name: String,
+) -> RpcResult<NormalizedModule> {
+    let normalized = get_move_modules_by_package(fullnode_api, package).await?;
+    Ok(match normalized.get(&module_name) {
+        Some(module) => Ok(module.clone()),
+        None => Err(anyhow!("No module found with module name {}", module_name)),
+    }?)
+}
+
+pub async fn get_move_modules_by_package(
+    fullnode_api: &FullNodeApi,
+    package: ObjectID,
+) -> RpcResult<BTreeMap<String, NormalizedModule>> {
+    let object_read = fullnode_api
+        .state
+        .get_object_read(&package)
+        .await
+        .map_err(|e| anyhow!("{e}"))?;
+
+    Ok(match object_read {
+        ObjectRead::Exists(_obj_ref, object, _layout) => match object.data {
+            Data::Package(p) => {
+                normalize_modules(p.serialized_module_map().values()).map_err(|e| anyhow!("{e}"))
+            }
+            _ => Err(anyhow!("Object is not a package with ID {}", package)),
+        },
+        _ => Err(anyhow!("Package object does not exist with ID {}", package)),
+    }?)
 }

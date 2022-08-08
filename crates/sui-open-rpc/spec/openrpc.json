@@ -315,7 +315,7 @@
       "description": "Return the argument types of a Move function, based on normalized Type.",
       "params": [
         {
-          "name": "object_id",
+          "name": "package",
           "required": true,
           "schema": {
             "$ref": "#/components/schemas/ObjectID"
@@ -344,6 +344,144 @@
           "items": {
             "$ref": "#/components/schemas/MoveFunctionArgType"
           }
+        }
+      }
+    },
+    {
+      "name": "sui_getNormalizedMoveFunction",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return a structured representation of Move function",
+      "params": [
+        {
+          "name": "package",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "module_name",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "function_name",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiMoveNormalizedFunction",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiMoveNormalizedFunction"
+        }
+      }
+    },
+    {
+      "name": "sui_getNormalizedMoveModule",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return a structured representation of Move module",
+      "params": [
+        {
+          "name": "package",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "module_name",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiMoveNormalizedModule",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiMoveNormalizedModule"
+        }
+      }
+    },
+    {
+      "name": "sui_getNormalizedMoveModulesByPackage",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return structured representations of all modules in the given package",
+      "params": [
+        {
+          "name": "package",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        }
+      ],
+      "result": {
+        "name": "BTreeMap<String,SuiMoveNormalizedModule>",
+        "required": true,
+        "schema": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/components/schemas/SuiMoveNormalizedModule"
+          }
+        }
+      }
+    },
+    {
+      "name": "sui_getNormalizedMoveStruct",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Return a structured representation of Move struct",
+      "params": [
+        {
+          "name": "package",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "module_name",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "struct_name",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "result": {
+        "name": "SuiMoveNormalizedStruct",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/SuiMoveNormalizedStruct"
         }
       }
     },
@@ -3074,6 +3212,285 @@
         }
       },
       "SuiJsonValue": {},
+      "SuiMoveAbility": {
+        "type": "string",
+        "enum": [
+          "Copy",
+          "Drop",
+          "Store",
+          "Key"
+        ]
+      },
+      "SuiMoveAbilitySet": {
+        "type": "object",
+        "required": [
+          "abilities"
+        ],
+        "properties": {
+          "abilities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveAbility"
+            }
+          }
+        }
+      },
+      "SuiMoveModuleId": {
+        "type": "object",
+        "required": [
+          "address",
+          "name"
+        ],
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "SuiMoveNormalizedField": {
+        "type": "object",
+        "required": [
+          "name",
+          "type_"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "type_": {
+            "$ref": "#/components/schemas/SuiMoveNormalizedType"
+          }
+        }
+      },
+      "SuiMoveNormalizedFunction": {
+        "type": "object",
+        "required": [
+          "is_entry",
+          "parameters",
+          "return_",
+          "type_parameters",
+          "visibility"
+        ],
+        "properties": {
+          "is_entry": {
+            "type": "boolean"
+          },
+          "parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveNormalizedType"
+            }
+          },
+          "return_": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveNormalizedType"
+            }
+          },
+          "type_parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveAbilitySet"
+            }
+          },
+          "visibility": {
+            "$ref": "#/components/schemas/SuiMoveVisibility"
+          }
+        }
+      },
+      "SuiMoveNormalizedModule": {
+        "type": "object",
+        "required": [
+          "address",
+          "exposed_functions",
+          "file_format_version",
+          "friends",
+          "name",
+          "structs"
+        ],
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "exposed_functions": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SuiMoveNormalizedFunction"
+            }
+          },
+          "file_format_version": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0.0
+          },
+          "friends": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveModuleId"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "structs": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/SuiMoveNormalizedStruct"
+            }
+          }
+        }
+      },
+      "SuiMoveNormalizedStruct": {
+        "type": "object",
+        "required": [
+          "abilities",
+          "fields",
+          "type_parameters"
+        ],
+        "properties": {
+          "abilities": {
+            "$ref": "#/components/schemas/SuiMoveAbilitySet"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveNormalizedField"
+            }
+          },
+          "type_parameters": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiMoveStructTypeParameter"
+            }
+          }
+        }
+      },
+      "SuiMoveNormalizedType": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "Bool",
+              "U8",
+              "U64",
+              "U128",
+              "Address",
+              "Signer"
+            ]
+          },
+          {
+            "type": "object",
+            "required": [
+              "Struct"
+            ],
+            "properties": {
+              "Struct": {
+                "type": "object",
+                "required": [
+                  "address",
+                  "module",
+                  "name",
+                  "type_arguments"
+                ],
+                "properties": {
+                  "address": {
+                    "type": "string"
+                  },
+                  "module": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "type_arguments": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/SuiMoveNormalizedType"
+                    }
+                  }
+                }
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Vector"
+            ],
+            "properties": {
+              "Vector": {
+                "$ref": "#/components/schemas/SuiMoveNormalizedType"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "TypeParameter"
+            ],
+            "properties": {
+              "TypeParameter": {
+                "type": "integer",
+                "format": "uint16",
+                "minimum": 0.0
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Reference"
+            ],
+            "properties": {
+              "Reference": {
+                "$ref": "#/components/schemas/SuiMoveNormalizedType"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "MutableReference"
+            ],
+            "properties": {
+              "MutableReference": {
+                "$ref": "#/components/schemas/SuiMoveNormalizedType"
+              }
+            },
+            "additionalProperties": false
+          }
+        ]
+      },
+      "SuiMoveStructTypeParameter": {
+        "type": "object",
+        "required": [
+          "constraints",
+          "is_phantom"
+        ],
+        "properties": {
+          "constraints": {
+            "$ref": "#/components/schemas/SuiMoveAbilitySet"
+          },
+          "is_phantom": {
+            "type": "boolean"
+          }
+        }
+      },
+      "SuiMoveVisibility": {
+        "type": "string",
+        "enum": [
+          "Private",
+          "Public",
+          "Friend"
+        ]
+      },
       "TransactionBytes": {
         "type": "object",
         "required": [

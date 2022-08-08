@@ -7211,6 +7211,7 @@ dependencies = [
  "colored",
  "either",
  "itertools",
+ "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",
  "schemars",
