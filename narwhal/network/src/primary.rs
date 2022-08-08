@@ -73,6 +73,15 @@ impl PrimaryNetwork {
             }
         }
     }
+
+    pub fn cleanup<'a, I>(&mut self, to_remove: I)
+    where
+        I: IntoIterator<Item = &'a Multiaddr>,
+    {
+        for address in to_remove {
+            self.clients.remove(address);
+        }
+    }
 }
 
 impl BaseNetwork for PrimaryNetwork {
@@ -181,6 +190,15 @@ impl PrimaryToWorkerNetwork {
     fn update_metrics(&self) {
         if let Some(m) = &self.metrics {
             m.set_network_available_tasks(self.executor.available_capacity() as i64, None);
+        }
+    }
+
+    pub fn cleanup<'a, I>(&mut self, to_remove: I)
+    where
+        I: IntoIterator<Item = &'a Multiaddr>,
+    {
+        for address in to_remove {
+            self.clients.remove(address);
         }
     }
 }

@@ -529,13 +529,20 @@ impl Core {
 
     /// Update the committee and cleanup internal state.
     fn change_epoch(&mut self, committee: Committee) {
-        self.committee = committee;
+        // Cleanup the network.
+        self.network
+            .cleanup(self.committee.network_diff(&committee));
 
+        // Cleanup internal state.
         self.last_voted.clear();
         self.processing.clear();
         self.certificates_aggregators.clear();
         self.cancel_handlers.clear();
 
+        // Update the committee
+        self.committee = committee;
+
+        // Cleanup the synchronizer
         self.synchronizer.update_genesis(&self.committee);
     }
 
@@ -591,6 +598,10 @@ impl Core {
                             self.change_epoch(new_committee);
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            // Cleanup the network.
+                            self.network.cleanup(self.committee.network_diff(&new_committee));
+
+                            // Update the committee.
                             self.committee = new_committee;
                         },
                         ReconfigureNotification::Shutdown => return

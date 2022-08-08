@@ -204,6 +204,7 @@ impl Synchronizer {
                         // Reconfigure this task and update the shared committee.
                         let shutdown = match &message {
                             ReconfigureNotification::NewEpoch(new_committee) => {
+                                self.network.cleanup(self.committee.load().network_diff(new_committee));
                                 self.committee.swap(Arc::new(new_committee.clone()));
 
                                 self.pending.clear();
@@ -214,6 +215,7 @@ impl Synchronizer {
                                 false
                             }
                             ReconfigureNotification::UpdateCommittee(new_committee) => {
+                                self.network.cleanup(self.committee.load().network_diff(new_committee));
                                 self.committee.swap(Arc::new(new_committee.clone()));
 
                                 tracing::debug!("Committee updated to {}", self.committee);

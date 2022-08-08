@@ -74,6 +74,15 @@ impl WorkerNetwork {
             }
         }
     }
+
+    pub fn cleanup<'a, I>(&mut self, to_remove: I)
+    where
+        I: IntoIterator<Item = &'a Multiaddr>,
+    {
+        for address in to_remove {
+            self.clients.remove(address);
+        }
+    }
 }
 
 impl BaseNetwork for WorkerNetwork {

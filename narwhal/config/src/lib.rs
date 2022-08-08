@@ -13,7 +13,7 @@ use crypto::{traits::EncodeDecodeBase64, PublicKey};
 use multiaddr::Multiaddr;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     fs::{self, OpenOptions},
     io::{BufWriter, Write as _},
     ops::Deref,
@@ -448,6 +448,44 @@ impl Committee {
                     .find(|(worker_id, _)| worker_id == &id)
                     .map(|(_, addresses)| (name.deref().clone(), addresses.clone()))
             })
+            .collect()
+    }
+
+    /// Return all the network addresses in the committee.
+    fn get_all_network_addresses(&self) -> HashSet<&Multiaddr> {
+        self.authorities
+            .values()
+            .flat_map(|authority| {
+                std::iter::once(&authority.primary.primary_to_primary)
+                    .chain(std::iter::once(&authority.primary.worker_to_primary))
+                    .chain(
+                        authority
+                            .workers
+                            .values()
+                            .map(|address| &address.transactions),
+                    )
+                    .chain(
+                        authority
+                            .workers
+                            .values()
+                            .map(|address| &address.worker_to_worker),
+                    )
+                    .chain(
+                        authority
+                            .workers
+                            .values()
+                            .map(|address| &address.primary_to_worker),
+                    )
+            })
+            .collect()
+    }
+
+    /// Return the network addresses that are present in the current committee but that are absent
+    /// from the new committee (provided as argument).
+    pub fn network_diff<'a>(&'a self, other: &'a Self) -> HashSet<&Multiaddr> {
+        self.get_all_network_addresses()
+            .difference(&other.get_all_network_addresses())
+            .cloned()
             .collect()
     }
 

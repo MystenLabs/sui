@@ -116,15 +116,12 @@ impl QuorumWaiter {
                                 result.expect("Committee channel dropped");
                                 let message = self.rx_reconfigure.borrow().clone();
                                 match message {
-                                    ReconfigureNotification::NewEpoch(new_committee) => {
-                                        self.committee = new_committee;
-                                        tracing::debug!("Dropping batch: committee updated to {}", self.committee);
-                                        break; // Don't wait for acknowledgements.
-                                    },
-                                    ReconfigureNotification::UpdateCommittee(new_committee) => {
-                                        self.committee = new_committee;
-                                        tracing::debug!("Dropping batch: committee updated to {}", self.committee);
-                                        break; // Don't wait for acknowledgements.
+                                    ReconfigureNotification::NewEpoch(new_committee)
+                                        | ReconfigureNotification::UpdateCommittee(new_committee) => {
+                                            self.network.cleanup(self.committee.network_diff(&new_committee));
+                                            self.committee = new_committee;
+                                            tracing::debug!("Dropping batch: committee updated to {}", self.committee);
+                                            break; // Don't wait for acknowledgements.
                                     },
                                     ReconfigureNotification::Shutdown => return
                                 }

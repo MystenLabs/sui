@@ -134,6 +134,11 @@ impl HeaderWaiter {
 
     /// Update the committee and cleanup internal state.
     fn change_epoch(&mut self, committee: Committee) {
+        self.primary_network
+            .cleanup(self.committee.network_diff(&committee));
+        self.worker_network
+            .cleanup(self.committee.network_diff(&committee));
+
         self.committee = committee;
 
         self.pending.clear();
@@ -330,6 +335,8 @@ impl HeaderWaiter {
                             self.change_epoch(new_committee);
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
+                            self.primary_network.cleanup(self.committee.network_diff(&new_committee));
+                            self.worker_network.cleanup(self.committee.network_diff(&new_committee));
                             self.committee = new_committee;
                         },
                         ReconfigureNotification::Shutdown => return

@@ -106,6 +106,9 @@ impl NodeRestarter {
             join_all(worker_cancel_handles).await;
             tracing::debug!("Committee reconfiguration message successfully sent");
 
+            // Cleanup the network.
+            worker_network.cleanup(committee.network_diff(&new_committee));
+
             // Wait for the components to shut down.
             join_all(handles.drain(..)).await;
             tracing::debug!("All tasks successfully exited");
