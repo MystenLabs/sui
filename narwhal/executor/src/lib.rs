@@ -14,15 +14,20 @@ mod fixtures;
 #[path = "tests/execution_state.rs"]
 mod execution_state;
 
+mod metrics;
+
 pub use errors::{ExecutionStateError, SubscriberError, SubscriberResult};
 use multiaddr::{Multiaddr, Protocol};
 pub use state::ExecutionIndices;
 
-use crate::{batch_loader::BatchLoader, core::Core, subscriber::Subscriber};
+use crate::{
+    batch_loader::BatchLoader, core::Core, metrics::ExecutorMetrics, subscriber::Subscriber,
+};
 use async_trait::async_trait;
 use config::SharedCommittee;
 use consensus::ConsensusOutput;
 use crypto::PublicKey;
+use prometheus::Registry;
 use serde::de::DeserializeOwned;
 use std::{
     borrow::Cow,
@@ -33,14 +38,11 @@ use std::{
 };
 use store::Store;
 use tokio::{
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        watch,
-    },
+    sync::{mpsc::Sender, watch},
     task::JoinHandle,
 };
 use tracing::info;
-use types::{BatchDigest, ReconfigureNotification, SerializedBatchMessage};
+use types::{metered_channel, BatchDigest, ReconfigureNotification, SerializedBatchMessage};
 
 /// Default inter-task channel size.
 pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
@@ -102,16 +104,21 @@ impl Executor {
         store: Store<BatchDigest, SerializedBatchMessage>,
         execution_state: Arc<State>,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
-        rx_consensus: Receiver<ConsensusOutput>,
+        rx_consensus: metered_channel::Receiver<ConsensusOutput>,
         tx_output: Sender<ExecutorOutput<State>>,
+        registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
         State::Outcome: Send + 'static,
         State::Error: Debug,
     {
-        let (tx_batch_loader, rx_batch_loader) = channel(DEFAULT_CHANNEL_SIZE);
-        let (tx_executor, rx_executor) = channel(DEFAULT_CHANNEL_SIZE);
+        let metrics = ExecutorMetrics::new(registry);
+
+        let (tx_batch_loader, rx_batch_loader) =
+            metered_channel::channel(DEFAULT_CHANNEL_SIZE, &metrics.tx_batch_loader);
+        let (tx_executor, rx_executor) =
+            metered_channel::channel(DEFAULT_CHANNEL_SIZE, &metrics.tx_executor);
 
         // Ensure there is a single consensus client modifying the execution state.
         ensure!(

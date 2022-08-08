@@ -10,10 +10,7 @@ use std::{
     sync::Arc,
 };
 use store::Store;
-use tokio::{
-    sync::{mpsc::Sender, watch},
-    task::JoinHandle,
-};
+use tokio::{sync::watch, task::JoinHandle};
 use tracing::{info, instrument};
 use types::{
     metered_channel, Certificate, CertificateDigest, ConsensusStore, ReconfigureNotification,
@@ -191,7 +188,7 @@ pub struct Consensus<ConsensusProtocol> {
     /// Outputs the sequence of ordered certificates to the primary (for cleanup and feedback).
     tx_primary: metered_channel::Sender<Certificate>,
     /// Outputs the sequence of ordered certificates to the application layer.
-    tx_output: Sender<ConsensusOutput>,
+    tx_output: metered_channel::Sender<ConsensusOutput>,
 
     /// The (global) consensus index. We assign one index to each sequenced certificate. this is
     /// helpful for clients.
@@ -216,7 +213,7 @@ where
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_primary: metered_channel::Receiver<Certificate>,
         tx_primary: metered_channel::Sender<Certificate>,
-        tx_output: Sender<ConsensusOutput>,
+        tx_output: metered_channel::Sender<ConsensusOutput>,
         protocol: Protocol,
         metrics: Arc<ConsensusMetrics>,
         gc_depth: Round,

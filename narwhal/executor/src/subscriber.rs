@@ -7,15 +7,9 @@ use futures::{
     stream::{FuturesOrdered, StreamExt},
 };
 use store::Store;
-use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        watch,
-    },
-    task::JoinHandle,
-};
+use tokio::{sync::watch, task::JoinHandle};
 use tracing::debug;
-use types::{BatchDigest, ReconfigureNotification, SerializedBatchMessage};
+use types::{metered_channel, BatchDigest, ReconfigureNotification, SerializedBatchMessage};
 
 #[cfg(test)]
 #[path = "tests/subscriber_tests.rs"]
@@ -30,12 +24,12 @@ pub struct Subscriber {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// A channel to receive consensus messages.
-    rx_consensus: Receiver<ConsensusOutput>,
+    rx_consensus: metered_channel::Receiver<ConsensusOutput>,
     /// A channel to the batch loader to download transaction's data.
-    tx_batch_loader: Sender<ConsensusOutput>,
+    tx_batch_loader: metered_channel::Sender<ConsensusOutput>,
     /// A channel to send the complete and ordered list of consensus outputs to the executor. This
     /// channel is used once all transactions data are downloaded.
-    tx_executor: Sender<ConsensusOutput>,
+    tx_executor: metered_channel::Sender<ConsensusOutput>,
 }
 
 impl Subscriber {
@@ -44,9 +38,9 @@ impl Subscriber {
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_consensus: Receiver<ConsensusOutput>,
-        tx_batch_loader: Sender<ConsensusOutput>,
-        tx_executor: Sender<ConsensusOutput>,
+        rx_consensus: metered_channel::Receiver<ConsensusOutput>,
+        tx_batch_loader: metered_channel::Sender<ConsensusOutput>,
+        tx_executor: metered_channel::Sender<ConsensusOutput>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {

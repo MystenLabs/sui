@@ -20,8 +20,8 @@ use tokio::{
 };
 use tracing::{error, warn};
 use types::{
-    serialized_batch_digest, BatchDigest, BincodeEncodedPayload, ClientBatchRequest,
-    ReconfigureNotification, SerializedBatchMessage, WorkerToWorkerClient,
+    metered_channel, serialized_batch_digest, BatchDigest, BincodeEncodedPayload,
+    ClientBatchRequest, ReconfigureNotification, SerializedBatchMessage, WorkerToWorkerClient,
 };
 
 /// Download transactions data from the consensus workers and notifies the called when the job is done.
@@ -31,7 +31,7 @@ pub struct BatchLoader {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receive consensus outputs for which to download the associated transaction data.
-    rx_input: Receiver<ConsensusOutput>,
+    rx_input: metered_channel::Receiver<ConsensusOutput>,
     /// The network addresses of the consensus workers.
     addresses: HashMap<WorkerId, Multiaddr>,
     /// A map of connections with the consensus workers.
@@ -44,7 +44,7 @@ impl BatchLoader {
     pub fn spawn(
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_input: Receiver<ConsensusOutput>,
+        rx_input: metered_channel::Receiver<ConsensusOutput>,
         addresses: HashMap<WorkerId, Multiaddr>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {

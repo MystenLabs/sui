@@ -1,7 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Parameters, SharedCommittee, WorkerId};
-use consensus::{bullshark::Bullshark, dag::Dag, metrics::ConsensusMetrics, Consensus};
+use consensus::{
+    bullshark::Bullshark,
+    dag::Dag,
+    metrics::{ChannelMetrics, ConsensusMetrics},
+    Consensus,
+};
 use crypto::{
     traits::{KeyPair as _, VerifyingKey},
     KeyPair, PublicKey,
@@ -16,10 +21,7 @@ use store::{
     Store,
 };
 use tokio::{
-    sync::{
-        mpsc::{channel, Sender},
-        watch,
-    },
+    sync::{mpsc::Sender, watch},
     task::JoinHandle,
 };
 use tracing::debug;
@@ -254,8 +256,11 @@ impl Node {
         State::Outcome: Send + 'static,
         State::Error: Debug,
     {
-        let (tx_sequence, rx_sequence) = channel(Self::CHANNEL_CAPACITY);
         let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
+        let channel_metrics = ChannelMetrics::new(registry);
+
+        let (tx_sequence, rx_sequence) =
+            metered_channel::channel(Self::CHANNEL_CAPACITY, &channel_metrics.tx_sequence);
 
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
@@ -286,6 +291,7 @@ impl Node {
             tx_reconfigure,
             /* rx_consensus */ rx_sequence,
             /* tx_output */ tx_confirmation,
+            registry,
         )
         .await?;
 

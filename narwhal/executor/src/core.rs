@@ -10,14 +10,14 @@ use consensus::ConsensusOutput;
 use std::{fmt::Debug, sync::Arc};
 use store::Store;
 use tokio::{
-    sync::{
-        mpsc::{Receiver, Sender},
-        watch,
-    },
+    sync::{mpsc::Sender, watch},
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{Batch, BatchDigest, ReconfigureNotification, SequenceNumber, SerializedBatchMessage};
+use types::{
+    metered_channel, Batch, BatchDigest, ReconfigureNotification, SequenceNumber,
+    SerializedBatchMessage,
+};
 use worker::WorkerMessage;
 
 #[cfg(test)]
@@ -36,7 +36,7 @@ pub struct Core<State: ExecutionState> {
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Receive ordered consensus output to execute.
-    rx_subscriber: Receiver<ConsensusOutput>,
+    rx_subscriber: metered_channel::Receiver<ConsensusOutput>,
     /// Outputs executed transactions.
     tx_output: Sender<ExecutorOutput<State>>,
     /// The indices ensuring we do not execute twice the same transaction.
@@ -61,7 +61,7 @@ where
         store: Store<BatchDigest, SerializedBatchMessage>,
         execution_state: Arc<State>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        rx_subscriber: Receiver<ConsensusOutput>,
+        rx_subscriber: metered_channel::Receiver<ConsensusOutput>,
         tx_output: Sender<ExecutorOutput<State>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {

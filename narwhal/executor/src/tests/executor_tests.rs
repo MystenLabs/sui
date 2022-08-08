@@ -13,7 +13,7 @@ use types::Certificate;
 
 #[tokio::test]
 async fn execute_transactions() {
-    let (tx_executor, rx_executor) = channel(10);
+    let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
@@ -60,7 +60,7 @@ async fn execute_transactions() {
 
 #[tokio::test]
 async fn execute_empty_certificate() {
-    let (tx_executor, rx_executor) = channel(10);
+    let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
@@ -116,7 +116,7 @@ async fn execute_empty_certificate() {
 
 #[tokio::test]
 async fn execute_malformed_transactions() {
-    let (tx_executor, rx_executor) = channel(10);
+    let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
@@ -178,7 +178,7 @@ async fn execute_malformed_transactions() {
 
 #[tokio::test]
 async fn internal_error_execution() {
-    let (tx_executor, rx_executor) = channel(10);
+    let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
@@ -230,7 +230,7 @@ async fn internal_error_execution() {
 
 #[tokio::test]
 async fn crash_recovery() {
-    let (tx_executor, rx_executor) = channel(10);
+    let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
     let committee = committee(None);
@@ -291,7 +291,7 @@ async fn crash_recovery() {
     assert_eq!(execution_state.get_execution_indices().await, expected);
 
     // Reboot the executor.
-    let (tx_executor, rx_executor) = channel(10);
+    let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(reconfigure_notification);
 
