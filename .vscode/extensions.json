@@ -1,6 +1,6 @@
 {
   "recommendations": [
-		"move.move-analyzer",
+    "move.move-analyzer",
     "rust-lang.rust-analyzer",
     "esbenp.prettier-vscode"
   ]
