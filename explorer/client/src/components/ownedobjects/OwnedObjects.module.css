@@ -2,10 +2,6 @@
     @apply border-collapse;
 }
 
-.groupview tbody tr {
-    @apply cursor-pointer hover:bg-[#6FBCF01A] h-[33px];
-}
-
 .layout {
     @apply flex flex-wrap mt-0;
 }
@@ -37,10 +33,6 @@
     @apply p-1 lg:w-[47%] rounded-md;
 }
 
-.ownedcoins > div.objectbox {
-    @apply cursor-pointer hover:border-sui-grey-80 border-solid border-sui-grey-40;
-}
-
 .coinheading + .ownedobjects > .objectbox {
     @apply bg-sui-grey-40;
 }
@@ -57,10 +49,6 @@
 
 .coinfield > div:nth-child(2) {
     @apply col-span-8;
-}
-
-.coinheading > button {
-    @apply font-sans text-sui-dark hover:text-offblack bg-offwhite border-0 cursor-pointer text-sm;
 }
 
 .fillerbox {
@@ -89,4 +77,17 @@
 
 .icon {
     @apply mx-[6px];
+}
+
+.openedgroup {
+    @apply bg-sui-grey-40;
+}
+
+.closedgroup,
+.openedgroup {
+    @apply cursor-pointer h-[33px];
+}
+
+.openedgroup > tr:first-child {
+    @apply text-sui-grey-100;
 }

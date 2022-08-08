@@ -248,7 +248,9 @@ function GroupView({ results }: { results: resultType }) {
     const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
 
     // Switching the page closes any open group:
-    useEffect(() => {setOpenedType(CLOSED_TYPE_STRING)}, [currentPage]);
+    useEffect(() => {
+        setOpenedType(CLOSED_TYPE_STRING);
+    }, [currentPage]);
 
     return (
         <>
@@ -274,7 +276,14 @@ function GroupView({ results }: { results: resultType }) {
                                 ({ Type }) => Type === typeV
                             );
                             return (
-                                <tbody key={typeV}>
+                                <tbody
+                                    key={typeV}
+                                    className={
+                                        openedType === typeV
+                                            ? styles.openedgroup
+                                            : styles.closedgroup
+                                    }
+                                >
                                     <tr
                                         onClick={
                                             openedType === typeV
@@ -313,11 +322,13 @@ function GroupView({ results }: { results: resultType }) {
                                             >
                                                 <tr>
                                                     <td>Object ID</td>
-                                                    <td>{subObj.id}</td>
+                                                    <td colSpan={2}>
+                                                        {subObj.id}
+                                                    </td>
                                                 </tr>
                                                 <tr>
                                                     <td>Balance</td>
-                                                    <td>
+                                                    <td colSpan={2}>
                                                         {subObj.balance?.toString()}
                                                     </td>
                                                 </tr>
