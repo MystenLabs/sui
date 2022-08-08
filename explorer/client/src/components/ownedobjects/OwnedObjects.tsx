@@ -35,6 +35,7 @@ import {
 } from '../../utils/stringUtils';
 import DisplayBox from '../displaybox/DisplayBox';
 import Longtext from '../longtext/Longtext';
+import Pagination from '../pagination/Pagination';
 import PaginationLogic from '../pagination/PaginationLogic';
 
 import styles from './OwnedObjects.module.css';
@@ -233,6 +234,8 @@ function GroupView({ results }: { results: resultType }) {
 
     const [isGroup, setIsGroup] = useState(true);
 
+    const [currentPage, setCurrentPage] = useState(1);
+
     const shrinkObjList = useCallback(
         (subObjList) => () => {
             setIsGroup(false);
@@ -247,43 +250,61 @@ function GroupView({ results }: { results: resultType }) {
 
     if (isGroup) {
         return (
-            <table
-                id="groupCollection"
-                className={`${styles.groupview} ${tablestyle.table}`}
-            >
-                <thead>
-                    <tr>
-                        <th>Type</th>
-                        <th>Balance</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {uniqueTypes.map((typeV) => {
-                        const subObjList = results.filter(
-                            ({ Type }) => Type === typeV
-                        );
-                        return (
-                            <tr key={typeV} onClick={shrinkObjList(subObjList)}>
-                                <td className={styles.tablespacing}>
-                                    {handleCoinType(typeV)}
-                                </td>
-                                <td className={styles.tablespacing}>
-                                    {subObjList[0]._isCoin &&
-                                    subObjList.every(
-                                        (el) => el.balance !== undefined
-                                    )
-                                        ? `${subObjList.reduce(
-                                              (prev, current) =>
-                                                  prev.add(current.balance!),
-                                              Coin.getZero()
-                                          )}`
-                                        : ''}
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
+            <>
+                <table
+                    id="groupCollection"
+                    className={`${styles.groupview} ${tablestyle.table}`}
+                >
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {uniqueTypes
+                            .slice(
+                                (currentPage - 1) * ITEMS_PER_PAGE,
+                                currentPage * ITEMS_PER_PAGE
+                            )
+                            .map((typeV) => {
+                                const subObjList = results.filter(
+                                    ({ Type }) => Type === typeV
+                                );
+                                return (
+                                    <tr
+                                        key={typeV}
+                                        onClick={shrinkObjList(subObjList)}
+                                    >
+                                        <td className={styles.tablespacing}>
+                                            {handleCoinType(typeV)}
+                                        </td>
+                                        <td className={styles.tablespacing}>
+                                            {subObjList[0]._isCoin &&
+                                            subObjList.every(
+                                                (el) => el.balance !== undefined
+                                            )
+                                                ? `${subObjList.reduce(
+                                                      (prev, current) =>
+                                                          prev.add(
+                                                              current.balance!
+                                                          ),
+                                                      Coin.getZero()
+                                                  )}`
+                                                : ''}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                    </tbody>
+                </table>
+                <Pagination
+                    totalItems={uniqueTypes.length}
+                    itemsPerPage={ITEMS_PER_PAGE}
+                    currentPage={currentPage}
+                    onPagiChangeFn={setCurrentPage}
+                />
+            </>
         );
     } else {
         return (
