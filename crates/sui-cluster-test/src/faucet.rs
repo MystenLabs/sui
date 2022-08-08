@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::{
-    config::{ClusterTestOpt, Env},
+    cluster::{new_wallet_context_from_cluster, Cluster},
     helper::ObjectChecker,
     wallet_client::WalletClient,
 };
@@ -10,25 +10,41 @@ use async_trait::async_trait;
 use clap::*;
 use std::collections::HashMap;
 use std::sync::Arc;
-use sui_faucet::FaucetResponse;
-use sui_types::{base_types::encode_bytes_hex, gas_coin::GasCoin, object::Owner};
+use sui_faucet::{CoinInfo, Faucet, FaucetResponse, SimpleFaucet};
+use sui_types::crypto::KeypairTraits;
+use sui_types::{
+    base_types::{encode_bytes_hex, SuiAddress},
+    gas_coin::GasCoin,
+    object::Owner,
+};
 use tokio::time::{sleep, Duration};
-use tracing::{debug, info};
+use tracing::{debug, info, info_span, Instrument};
+use uuid::Uuid;
 
 pub struct FaucetClientFactory;
 
 impl FaucetClientFactory {
-    pub fn create(
-        options: &ClusterTestOpt,
-        faucet_url: Option<String>,
+    pub async fn new_from_cluster(
+        cluster: &(dyn Cluster + Sync + Send),
     ) -> Arc<dyn FaucetClient + Sync + Send> {
-        match (&options.env, faucet_url) {
-            (Env::NewLocal, None) => Arc::new(DummyFaucetClient::new()),
-            (Env::DevNet, Some(url)) => Arc::new(RemoteFaucetClient::new(url)),
-            (Env::Continuous, Some(url)) => Arc::new(RemoteFaucetClient::new(url)),
-            (Env::Staging, Some(url)) => Arc::new(RemoteFaucetClient::new(url)),
-            (Env::CustomRemote, Some(url)) => Arc::new(RemoteFaucetClient::new(url)),
-            _ => panic!("Unallowed combination of parameters."),
+        match cluster.remote_faucet_url() {
+            Some(url) => Arc::new(RemoteFaucetClient::new(url.into())),
+            // If faucet_url is none, it's a local cluster
+            None => {
+                let key = cluster
+                    .local_faucet_key()
+                    .expect("Expect local faucet key for local cluster")
+                    .copy();
+                let wallet_context = new_wallet_context_from_cluster(cluster, key)
+                    .instrument(info_span!("init_wallet_context_for_faucet"))
+                    .await;
+
+                let prom_registry = prometheus::Registry::new();
+                let simple_faucet = SimpleFaucet::new(wallet_context, &prom_registry)
+                    .await
+                    .unwrap();
+                Arc::new(LocalFaucetClient::new(simple_faucet))
+            }
         }
     }
 }
@@ -57,7 +73,7 @@ impl RemoteFaucetClient {
 
 #[async_trait]
 impl FaucetClient for RemoteFaucetClient {
-    /// Request test SUI coins from facuet.
+    /// Request test SUI coins from faucet.
     /// It also verifies the effects are observed by gateway/fullnode.
     async fn request_sui_coins(
         &self,
@@ -86,20 +102,8 @@ impl FaucetClient for RemoteFaucetClient {
 
         sleep(Duration::from_secs(2)).await;
 
-        let gas_coins = futures::future::join_all(
-            response
-                .transferred_gas_objects
-                .iter()
-                .map(|coin_info| {
-                    ObjectChecker::new(coin_info.id)
-                        .owner(Owner::AddressOwner(address))
-                        .check_into_gas_coin(client.get_fullnode())
-                })
-                .collect::<Vec<_>>(),
-        )
-        .await
-        .into_iter()
-        .collect::<Vec<_>>();
+        let gas_coins =
+            into_gas_coin_with_owner_check(response.transferred_gas_objects, address, client).await;
 
         let minimum_coins = minimum_coins.unwrap_or(5);
 
@@ -114,34 +118,34 @@ impl FaucetClient for RemoteFaucetClient {
     }
 }
 
-/// A dummy faucet that does nothing, suitable for local cluster testing
-/// where gas coins are prepared in genesis
-pub struct DummyFaucetClient {}
+/// A local faucet that holds some coins since genesis
+pub struct LocalFaucetClient {
+    simple_faucet: SimpleFaucet,
+}
 
-impl DummyFaucetClient {
-    fn new() -> Self {
-        info!("Use dummy faucet");
-        Self {}
+impl LocalFaucetClient {
+    fn new(simple_faucet: SimpleFaucet) -> Self {
+        info!("Use local faucet");
+        Self { simple_faucet }
     }
 }
 #[async_trait]
-impl FaucetClient for DummyFaucetClient {
-    /// Dummy faucet client does not request coins from a real faucet.
-    /// Instead it just syncs all gas objects for the address.
+impl FaucetClient for LocalFaucetClient {
     async fn request_sui_coins(
         &self,
         client: &WalletClient,
         minimum_coins: Option<usize>,
     ) -> Result<Vec<GasCoin>, anyhow::Error> {
-        let wallet = client.get_wallet();
         let address = client.get_wallet_address();
-        client.sync_account_state().await?;
-        let gas_coins = wallet
-            .gas_objects(address)
-            .await?
-            .iter()
-            .map(|(_amount, o)| GasCoin::try_from(o).unwrap())
-            .collect::<Vec<_>>();
+        let receipt = self
+            .simple_faucet
+            .send(Uuid::new_v4(), address, &[50000; 5])
+            .await
+            .unwrap_or_else(|err| panic!("Failed to get gas tokens with error: {}", err));
+
+        sleep(Duration::from_secs(2)).await;
+
+        let gas_coins = into_gas_coin_with_owner_check(receipt.sent, address, client).await;
 
         let minimum_coins = minimum_coins.unwrap_or(5);
 
@@ -154,4 +158,24 @@ impl FaucetClient for DummyFaucetClient {
 
         Ok(gas_coins)
     }
+}
+
+async fn into_gas_coin_with_owner_check(
+    coin_info: Vec<CoinInfo>,
+    owner: SuiAddress,
+    client: &WalletClient,
+) -> Vec<GasCoin> {
+    futures::future::join_all(
+        coin_info
+            .iter()
+            .map(|coin_info| {
+                ObjectChecker::new(coin_info.id)
+                    .owner(Owner::AddressOwner(owner))
+                    .check_into_gas_coin(client.get_fullnode())
+            })
+            .collect::<Vec<_>>(),
+    )
+    .await
+    .into_iter()
+    .collect::<Vec<_>>()
 }

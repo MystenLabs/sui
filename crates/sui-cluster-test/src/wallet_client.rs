@@ -1,16 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::cluster::new_wallet_context_from_cluster;
+
 use super::Cluster;
 use sui::client_commands::WalletContext;
-use sui::config::{Config, SuiClientConfig};
-use sui_config::SUI_KEYSTORE_FILENAME;
-use sui_sdk::crypto::KeystoreType;
-use sui_sdk::{ClientType, SuiClient};
+use sui_sdk::SuiClient;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{KeypairTraits, Signature};
 use sui_types::messages::TransactionData;
-use tracing::info;
+use tracing::{info, info_span, Instrument};
 
 pub struct WalletClient {
     wallet_context: WalletContext,
@@ -20,38 +19,12 @@ pub struct WalletClient {
 
 #[allow(clippy::borrowed_box)]
 impl WalletClient {
-    pub async fn new_from_cluster(cluster: &Box<dyn Cluster + Sync + Send>) -> Self {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let wallet_config_path = temp_dir.path().join("client.yaml");
-        let rpc_url = cluster.rpc_url();
-        info!("Use gateway: {}", &rpc_url);
-        let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
-        let keystore = KeystoreType::File(keystore_path);
-        let key_pair = cluster.user_key();
-        let address: SuiAddress = key_pair.public().into();
-        keystore.init().unwrap().add_key(key_pair).unwrap();
-        SuiClientConfig {
-            keystore,
-            gateway: ClientType::RPC(rpc_url.into()),
-            active_address: Some(address),
-        }
-        .persisted(&wallet_config_path)
-        .save()
-        .unwrap();
-
-        info!(
-            "Initialize wallet from config path: {:?}",
-            wallet_config_path
-        );
-
-        let wallet_context = WalletContext::new(&wallet_config_path)
-            .await
-            .unwrap_or_else(|e| {
-                panic!(
-                    "Failed to init wallet context from path {:?}, error: {e}",
-                    wallet_config_path
-                )
-            });
+    pub async fn new_from_cluster(cluster: &(dyn Cluster + Sync + Send)) -> Self {
+        let key = cluster.user_key();
+        let address: SuiAddress = key.public().into();
+        let wallet_context = new_wallet_context_from_cluster(cluster, key)
+            .instrument(info_span!("init_wallet_context_for_test_user"))
+            .await;
 
         let fullnode_url = String::from(cluster.fullnode_url());
         info!("Use fullnode: {}", &fullnode_url);
