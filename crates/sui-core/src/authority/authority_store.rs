@@ -31,9 +31,10 @@ pub type GatewayStore = SuiDataStore<EmptySignInfo>;
 
 pub type InternalSequenceNumber = u64;
 
-type CertLockGuard<'a> = LockGuard<'a>;
+pub struct CertLockGuard(LockGuard);
 
 const NUM_SHARDS: usize = 4096;
+const SHARD_SIZE: usize = 128;
 
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
@@ -90,10 +91,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         Self {
             wal,
-
             lock_service,
-            mutex_table: MutexTable::new(NUM_SHARDS),
-
+            mutex_table: MutexTable::new(NUM_SHARDS, SHARD_SIZE),
             next_pending_seq,
             pending_notifier: Arc::new(Notify::new()),
             tables,
@@ -125,11 +124,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Acquire the lock for a tx without writing to the WAL.
-    pub async fn acquire_tx_lock<'a, 'b>(
-        &'a self,
-        digest: &'b TransactionDigest,
-    ) -> CertLockGuard<'a> {
-        self.wal.acquire_lock(digest).await
+    pub async fn acquire_tx_lock<'a, 'b>(&'a self, digest: &'b TransactionDigest) -> CertLockGuard {
+        CertLockGuard(self.wal.acquire_lock(digest).await)
     }
 
     // TODO: Async retry method, using tokio-retry crate.
@@ -271,9 +267,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// A function that acquires all locks associated with the objects (in order to avoid deadlocks).
-    async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard<'a>> {
+    async fn acquire_locks<'a, 'b>(&'a self, input_objects: &'b [ObjectRef]) -> Vec<LockGuard> {
         self.mutex_table
-            .acquire_locks(input_objects.iter().map(|(_, _, digest)| digest))
+            .acquire_locks(input_objects.iter().map(|(_, _, digest)| *digest))
             .await
     }
 
