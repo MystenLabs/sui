@@ -50,15 +50,15 @@ function DisplayBox({
 
     const [isFullScreen, setIsFullScreen] = modalImage || [];
 
-    // When image is clicked this is communicated outside the component:
+    // When the image is clicked, indicating that it should be full screen, this is communicated outside the component:
     useEffect(() => {
         if (setIsFullScreen) {
             setIsFullScreen(hasClickedImage);
         }
     }, [hasClickedImage, setIsFullScreen]);
 
-    // When a signal that the image should be full screen is received, this is
-    // implemented:
+    // When a button is clicked outside the component that signals that the image should be fullscreen,
+    // this useEffect uses that signal to force the image to go full screen:
     useEffect(() => {
         if (isFullScreen) {
             setHasClickedImage(isFullScreen);
