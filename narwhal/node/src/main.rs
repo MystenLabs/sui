@@ -8,12 +8,12 @@
     rust_2021_compatibility
 )]
 
-use anyhow::{Context, Result};
 use arc_swap::ArcSwap;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerId};
 use crypto::{generate_production_keypair, traits::KeyPair as _, KeyPair};
 use executor::{SerializedTransaction, SubscriberResult};
+use eyre::Context;
 use futures::future::join_all;
 use node::{
     execution_state::SimpleExecutionState,
@@ -33,7 +33,7 @@ use tracing_subscriber::filter::{EnvFilter, LevelFilter};
 static ALLOC: dhat::Alloc = dhat::Alloc;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), eyre::Report> {
     let matches = App::new(crate_name!())
         .version(crate_version!())
         .about("A research implementation of Narwhal and Tusk.")
@@ -126,7 +126,7 @@ async fn main() -> Result<()> {
 }
 
 // Runs either a worker or a primary.
-async fn run(matches: &ArgMatches<'_>) -> Result<()> {
+async fn run(matches: &ArgMatches<'_>) -> Result<(), eyre::Report> {
     let key_file = matches.value_of("keys").unwrap();
     let committee_file = matches.value_of("committee").unwrap();
     let parameters_file = matches.value_of("parameters");

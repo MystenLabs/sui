@@ -68,12 +68,12 @@ impl<T, const N: usize> Default for PublicKeyBytes<T, N> {
 }
 
 impl<T: VerifyingKey, const N: usize> FromStr for PublicKeyBytes<T, N> {
-    type Err = anyhow::Error;
+    type Err = eyre::Report;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let s = s.strip_prefix("0x").unwrap_or(s);
         let value = hex::decode(s)?;
-        Self::from_bytes(&value[..]).map_err(|_| anyhow::anyhow!("byte deserialization failed"))
+        Self::from_bytes(&value[..]).map_err(|_| eyre::eyre!("byte deserialization failed"))
     }
 }
 

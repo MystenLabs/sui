@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use arc_swap::ArcSwap;
 use consensus::{
     bullshark::Bullshark,
     consensus::{ConsensusProtocol, ConsensusState},
@@ -36,7 +35,7 @@ pub fn process_certificates(c: &mut Criterion) {
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
         let (certificates, _next_parents) = make_optimal_certificates(1..=rounds, &genesis, &keys);
-        let committee = Arc::new(ArcSwap::from_pointee(mock_committee(&keys)));
+        let committee = mock_committee(&keys);
 
         let store_path = temp_dir();
         let store = make_consensus_store(&store_path);

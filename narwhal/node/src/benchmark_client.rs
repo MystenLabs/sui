@@ -1,9 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use anyhow::{Context, Result};
 use bytes::{BufMut as _, BytesMut};
 use clap::{crate_name, crate_version, App, AppSettings};
+use eyre::Context;
 use futures::{future::join_all, StreamExt};
 use rand::Rng;
 use tokio::{
@@ -16,7 +16,7 @@ use types::{TransactionProto, TransactionsClient};
 use url::Url;
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> Result<(), eyre::Report> {
     let matches = App::new(crate_name!())
         .version(crate_version!())
         .about("Benchmark client for Narwhal and Tusk.")
@@ -105,7 +105,7 @@ struct Client {
 }
 
 impl Client {
-    pub async fn send(&self) -> Result<()> {
+    pub async fn send(&self) -> Result<(), eyre::Report> {
         // We are distributing the transactions that need to be sent
         // within a second to sub-buckets. The precision here represents
         // the number of such buckets within the period of 1 second.
@@ -119,7 +119,7 @@ impl Client {
         let burst = self.rate / PRECISION;
 
         if burst == 0 {
-            return Err(anyhow::Error::msg(format!(
+            return Err(eyre::Report::msg(format!(
                 "Transaction rate is too low, should be at least {} tx/s and multiples of {}",
                 PRECISION, PRECISION
             )));
@@ -127,7 +127,7 @@ impl Client {
 
         // The transaction size must be at least 16 bytes to ensure all txs are different.
         if self.size < 9 {
-            return Err(anyhow::Error::msg(
+            return Err(eyre::Report::msg(
                 "Transaction size must be at least 9 bytes",
             ));
         }

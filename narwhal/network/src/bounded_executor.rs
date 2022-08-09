@@ -299,8 +299,8 @@ mod test {
         })
     }
 
-    async fn always_failing() -> Result<(), backoff::Error<anyhow::Error>> {
-        Err(Into::into(anyhow::anyhow!("oops")))
+    async fn always_failing() -> Result<(), backoff::Error<eyre::Report>> {
+        Err(Into::into(eyre::eyre!("oops")))
     }
 
     fn panic_after<T, F>(d: Duration, f: F) -> T

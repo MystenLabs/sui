@@ -156,7 +156,7 @@ impl ReliableNetwork for PrimaryNetwork {
                 client.send_message(message).await.map_err(|e| {
                     // this returns a backoff::Error::Transient
                     // so that if tonic::Status is returned, we retry
-                    Into::<backoff::Error<anyhow::Error>>::into(anyhow::Error::from(e))
+                    Into::<backoff::Error<eyre::Report>>::into(eyre::Report::from(e))
                 })
             }
         };

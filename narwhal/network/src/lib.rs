@@ -25,7 +25,7 @@ pub use crate::{
 };
 
 // the result of our network messages
-pub type MessageResult = Result<tonic::Response<types::Empty>, anyhow::Error>;
+pub type MessageResult = Result<tonic::Response<types::Empty>, eyre::Report>;
 
 /// This adapter will make a [`tokio::task::JoinHandle`] abort its handled task when the handle is dropped.
 #[derive(Debug)]

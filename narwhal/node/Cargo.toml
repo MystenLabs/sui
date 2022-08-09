@@ -6,7 +6,6 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.59"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 async-trait = "0.1.57"
 bincode = "1.3.3"
@@ -40,6 +39,7 @@ prometheus = "0.13.1"
 types = { path = "../types" }
 worker = { path = "../worker" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+eyre = "0.6.8"
 
 [dev-dependencies]
 ed25519-dalek = "1.0.1"
