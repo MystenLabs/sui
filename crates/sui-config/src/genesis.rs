@@ -486,6 +486,7 @@ pub fn generate_genesis_system_object(
 
     let mut pubkeys = Vec::new();
     let mut network_pubkeys = Vec::new();
+    let mut proof_of_possessions = Vec::new();
     let mut sui_addresses = Vec::new();
     let mut network_addresses = Vec::new();
     let mut names = Vec::new();
@@ -495,6 +496,7 @@ pub fn generate_genesis_system_object(
     for validator in committee {
         pubkeys.push(validator.public_key());
         network_pubkeys.push(validator.network_key());
+        proof_of_possessions.push(validator.proof_of_possession());
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
         names.push(validator.name().to_owned().into_bytes());
@@ -511,6 +513,7 @@ pub fn generate_genesis_system_object(
         vec![
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
             CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
@@ -571,6 +574,7 @@ mod test {
             delegation: 0,
             gas_price: 1,
             network_address: utils::new_network_address(),
+            proof_of_possession: generate_proof_of_possession(&key),
             narwhal_primary_to_primary: utils::new_network_address(),
             narwhal_worker_to_primary: utils::new_network_address(),
             narwhal_primary_to_worker: utils::new_network_address(),

@@ -16,7 +16,7 @@ use std::{
 use sui_types::{
     base_types::encode_bytes_hex,
     crypto::{
-        get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
+        generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
         KeypairTraits, PublicKey, SuiKeyPair,
     },
 };
@@ -124,6 +124,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     name,
                     public_key,
                     network_key,
+                    proof_of_possession: generate_proof_of_possession(&validator.key_pair),
                     stake,
                     delegation: 0, // no delegation yet at genesis
                     gas_price: validator.gas_price,

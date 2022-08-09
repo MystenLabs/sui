@@ -16,6 +16,7 @@ num_enum = "0.5.7"
 once_cell = "1.13.1"
 sha3 = "0.10.1"
 curve25519-dalek-ng = "4.1.1"
+blst = "0.3.10"
 
 sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }

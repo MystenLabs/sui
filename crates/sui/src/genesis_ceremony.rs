@@ -14,8 +14,8 @@ use sui_config::{
 use sui_types::{
     base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress},
     crypto::{
-        AuthorityKeyPair, AuthorityPublicKey, AuthorityPublicKeyBytes, AuthoritySignature,
-        KeypairTraits, SuiKeyPair, ToFromBytes,
+        generate_proof_of_possession, AuthorityKeyPair, AuthorityPublicKey,
+        AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits, SuiKeyPair, ToFromBytes,
     },
     object::Object,
 };
@@ -118,6 +118,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 name,
                 public_key: keypair.public().into(),
                 network_key: network_keypair.public(),
+                proof_of_possession: generate_proof_of_possession(&keypair),
                 stake: 1,
                 delegation: 0,
                 gas_price: 1,
@@ -278,6 +279,7 @@ mod test {
                     name: format!("validator-{i}"),
                     public_key: keypair.public().into(),
                     network_key: keypair.public().clone().into(),
+                    proof_of_possession: generate_proof_of_possession(&keypair),
                     stake: 1,
                     delegation: 0,
                     gas_price: 1,

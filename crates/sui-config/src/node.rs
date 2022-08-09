@@ -17,6 +17,7 @@ use sui_types::committee::StakeUnit;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::crypto::AuthoritySignature;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
@@ -171,6 +172,7 @@ pub struct ValidatorInfo {
     pub name: String,
     pub public_key: AuthorityPublicKeyBytes,
     pub network_key: AccountsPublicKey,
+    pub proof_of_possession: AuthoritySignature,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
     pub gas_price: u64,
@@ -199,6 +201,10 @@ impl ValidatorInfo {
 
     pub fn network_key(&self) -> &AccountsPublicKey {
         &self.network_key
+    }
+
+    pub fn proof_of_possession(&self) -> AuthoritySignature {
+        self.proof_of_possession.clone()
     }
 
     pub fn stake(&self) -> StakeUnit {

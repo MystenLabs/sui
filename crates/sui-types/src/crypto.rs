@@ -48,8 +48,15 @@ pub type AccountPublicKey = Ed25519PublicKey;
 pub type AccountPrivateKey = Ed25519PrivateKey;
 pub type AccountSignature = Ed25519Signature;
 
-// TODO: fix below.
-#[allow(clippy::large_enum_variant)]
+pub const PROOF_OF_POSSESSION_DOMAIN: &[u8] = b"mizu";
+
+pub fn generate_proof_of_possession<K: KeypairTraits>(keypair: &K) -> <K as KeypairTraits>::Sig {
+    let mut domain_with_pk: Vec<u8> = Vec::new();
+    domain_with_pk.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
+    domain_with_pk.extend_from_slice(keypair.public().as_bytes());
+    keypair.sign(&domain_with_pk[..])
+}
+
 #[derive(Debug)]
 pub enum SuiKeyPair {
     Ed25519SuiKeyPair(Ed25519KeyPair),

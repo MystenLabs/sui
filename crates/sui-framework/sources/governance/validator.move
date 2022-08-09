@@ -12,6 +12,7 @@ module sui::validator {
     use sui::stake::Stake;
     use sui::epoch_time_lock::EpochTimeLock;
     use std::option::Option;
+    use sui::crypto::Self;
 
     friend sui::genesis;
     friend sui::sui_system;
@@ -34,6 +35,8 @@ module sui::validator {
         /// The public key bytes corresponding to the private key that the validator
         /// uses to establish TLS connections
         network_pubkey_bytes: vector<u8>, 
+        /// This is a proof that the validator has ownership of the private key
+        proof_of_possession: vector<u8>,
         /// A unique human-readable name of this validator.
         name: vector<u8>,
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
@@ -74,10 +77,13 @@ module sui::validator {
         gas_price: u64,
     }
 
+    const PROOF_OF_POSSESSION_DOMAIN: vector<u8> = vector[109, 105, 122, 117];
+
     public(friend) fun new(
         sui_address: address,
         pubkey_bytes: vector<u8>,
         network_pubkey_bytes: vector<u8>,
+        proof_of_possession: vector<u8>,
         name: vector<u8>,
         net_address: vector<u8>,
         stake: Balance<SUI>,
@@ -90,6 +96,10 @@ module sui::validator {
             vector::length(&net_address) <= 128 && vector::length(&name) <= 128 && vector::length(&pubkey_bytes) <= 128,
             0
         );
+        assert!(
+            crypto::ed25519_verify_with_domain(proof_of_possession, pubkey_bytes, pubkey_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
+            0
+        );
         // Check that the name is human-readable.
         ascii::string(copy name);
         let stake_amount = balance::value(&stake);
@@ -99,6 +109,7 @@ module sui::validator {
                 sui_address,
                 pubkey_bytes,
                 network_pubkey_bytes,
+                proof_of_possession,
                 name,
                 net_address,
                 next_epoch_stake: stake_amount,

@@ -311,3 +311,39 @@ pub fn scalar_from_bytes(
         smallvec![Value::vector_u8(scalar.as_bytes().to_vec())],
     ))
 }
+
+/// Native implemention of ed25519_verify in public Move API, see crypto.move for specifications.
+pub fn ed25519_verify(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 3);
+
+    let msg = pop_arg!(args, Vec<u8>);
+    let public_key_bytes = pop_arg!(args, Vec<u8>);
+    let signature_bytes = pop_arg!(args, Vec<u8>);
+
+    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+
+    let signature = match <narwhal_crypto::ed25519::Ed25519Signature as ToFromBytes>::from_bytes(
+        &signature_bytes,
+    ) {
+        Ok(signature) => signature,
+        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    };
+
+    let public_key = match <narwhal_crypto::ed25519::Ed25519PublicKey as ToFromBytes>::from_bytes(
+        &public_key_bytes,
+    ) {
+        Ok(public_key) => public_key,
+        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    };
+
+    match public_key.verify(&msg, &signature) {
+        Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
+        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    }
+}

@@ -36,6 +36,7 @@ pub struct ValidatorMetadata {
     pub sui_address: AccountAddress,
     pub pubkey_bytes: Vec<u8>,
     pub network_pubkey_bytes: Vec<u8>,
+    pub proof_of_possession_bytes: Vec<u8>,
     pub name: Vec<u8>,
     pub net_address: Vec<u8>,
     pub next_epoch_stake: u64,
