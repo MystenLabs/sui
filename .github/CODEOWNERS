@@ -1,4 +1,7 @@
+/crates/sui-types/src/crypto.rs @huitseeker
+/crates/sui-sdk/src/crypto.rs @huitseeker @patrickkuo
+
 *.md @Clay-Mysten @randall-Mysten
 
-# When snapshot changes, most likely we will need to recreate genesis blobs.
-sui-config/tests/snapshot_tests.rs @tharbert 
+# When snapshot changes, most likely we will need to recreate the genesis blob.
+/crates/sui-config/tests/snapshot_tests.rs @tharbert @huitseeker
