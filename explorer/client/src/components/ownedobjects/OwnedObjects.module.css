@@ -2,6 +2,27 @@
     @apply border-collapse;
 }
 
+.groupview td {
+    @apply p-0 text-sui-grey-90;
+}
+
+.closedgroup tr td {
+    @apply cursor-pointer;
+}
+
+.openedgroup tr td {
+    @apply bg-sui-grey-40;
+}
+
+.icon {
+    @apply pr-[6px] pl-[12px];
+}
+
+.groupview tr td:first-child,
+.groupview tr td:last-child {
+    @apply w-[26px];
+}
+
 .layout {
     @apply flex flex-wrap mt-0;
 }
@@ -75,19 +96,34 @@
     @apply text-red-600 font-sans font-semibold mt-2;
 }
 
-.icon {
-    @apply mx-[6px];
+.openedgroup tr:first-child td {
+    @apply text-sui-grey-100 cursor-pointer;
 }
 
-.openedgroup {
-    @apply bg-sui-grey-40;
+.openedgroup tr:not(:first-child) {
+    @apply text-sui-grey-80;
 }
 
-.closedgroup,
-.openedgroup {
-    @apply cursor-pointer h-[33px];
+.openedgroup tr:first-child td:first-child {
+    @apply rounded-tl-md;
+}
+
+.openedgroup tr:first-child td:last-child {
+    @apply rounded-tr-md;
+}
+
+.openedgroup tr:last-child td:first-child {
+    @apply rounded-bl-md;
+}
+
+.openedgroup tr:last-child td:last-child {
+    @apply rounded-br-md;
 }
 
 .openedgroup > tr:first-child {
     @apply text-sui-grey-100;
+}
+
+.openedgroup tr:first-child td:not(:first-child):not(:last-child) {
+    @apply border-solid border-0 border-b border-sui-grey-45;
 }
