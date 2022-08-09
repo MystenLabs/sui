@@ -8,7 +8,7 @@ use prometheus::Registry;
 use std::option::Option::None;
 use std::{sync::Arc, time::Duration};
 use sui_config::NodeConfig;
-use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
+use sui_core::authority_active::checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl};
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
 use sui_core::{
@@ -178,12 +178,19 @@ impl SuiNode {
                 if is_validator {
                     // TODO: get degree from config file.
                     let degree = 4;
+                    let checkpoint_control = CheckpointProcessControl {
+                        long_pause_between_checkpoints: Duration::from_secs(
+                            config.checkpoint_duration,
+                        ),
+                        ..Default::default()
+                    };
                     (
                         Some(active_authority.clone().spawn_gossip_process(degree).await),
                         Some(active_authority.clone().spawn_execute_process().await),
                         Some(
                             active_authority
-                                .spawn_checkpoint_process(
+                                .spawn_checkpoint_process_with_config(
+                                    checkpoint_control,
                                     CheckpointMetrics::new(&prometheus_registry),
                                     config.enable_reconfig,
                                 )

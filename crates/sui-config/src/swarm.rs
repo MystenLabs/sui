@@ -78,6 +78,7 @@ impl NetworkConfig {
             enable_event_processing: true,
             enable_gossip: true,
             enable_reconfig: false,
+            checkpoint_duration: crate::node::default_checkpoint_duration(),
             genesis: validator_config.genesis.clone(),
         }
     }

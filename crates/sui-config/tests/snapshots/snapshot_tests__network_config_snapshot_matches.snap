@@ -36,6 +36,7 @@ validator_configs:
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
+    checkpoint-duration: 120
     genesis:
       genesis: "[fake genesis]"
   - key-pair: 2kFZfFFXSI13JOA/uNhKN2pDuPQVGKEcw4e2abLuZYZ15BdN1YgiVICG8XsDfOyw7oZRa30TQAqAyFa0va9/4Q==
@@ -71,6 +72,7 @@ validator_configs:
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
+    checkpoint-duration: 120
     genesis:
       genesis: "[fake genesis]"
   - key-pair: nwfnvlVROHqYupd8cy0IDcsPKaBI42VpEsZTPjLueu1jHBVB86S/RNTYlwYVZKqElddm9hkaP/YVYgA/GEuMZQ==
@@ -106,6 +108,7 @@ validator_configs:
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
+    checkpoint-duration: 120
     genesis:
       genesis: "[fake genesis]"
   - key-pair: KbchdpzmTkPVcTOwdNg51THtHyhRCvtFrOEKH0t5TW++raBhJseNmLShpp9u5hiWlPD0dRU42oJPGtyLFKG1Yg==
@@ -141,6 +144,7 @@ validator_configs:
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
+    checkpoint-duration: 120
     genesis:
       genesis: "[fake genesis]"
   - key-pair: LQmg5mMmbOGuftEIGWigdY5xjpl702LGsMNGNKmgs10ccMiRpjRoGJDfb8SqO5TSEAuhWgfHiheQi24y3xkNSw==
@@ -176,6 +180,7 @@ validator_configs:
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
+    checkpoint-duration: 120
     genesis:
       genesis: "[fake genesis]"
   - key-pair: ASc3aB97XQ8oHjr95Fi8HnPS0xPJz5TAX/NxYkCiSPIfevXxsJEf9GgdcOIY8NqzmaqCNm1l12Xy+2rPYQEvSA==
@@ -211,6 +216,7 @@ validator_configs:
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
+    checkpoint-duration: 120
     genesis:
       genesis: "[fake genesis]"
   - key-pair: EyCgWNezVmvVINqqPtK/CsW4sSD7hSdzw2OXNLRckaRA9LsfqzzA5P2RKivmFTX5XcMFaP6QRsKuxgtVFJIytg==
@@ -246,6 +252,7 @@ validator_configs:
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
+    checkpoint-duration: 120
     genesis:
       genesis: "[fake genesis]"
 account_keys:

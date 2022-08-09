@@ -159,6 +159,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     enable_event_processing: false,
                     enable_gossip: true,
                     enable_reconfig: false,
+                    checkpoint_duration: crate::node::default_checkpoint_duration(),
                     genesis: crate::node::Genesis::new(genesis.clone()),
                 }
             })

@@ -51,6 +51,10 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_reconfig: bool,
 
+    /// The duration of a checkpoint, in seconds.
+    #[serde(default = "default_checkpoint_duration")]
+    pub checkpoint_duration: u64,
+
     pub genesis: Genesis,
 }
 
@@ -80,6 +84,11 @@ pub fn default_json_rpc_address() -> SocketAddr {
 pub fn default_websocket_address() -> Option<SocketAddr> {
     use std::net::{IpAddr, Ipv4Addr};
     Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9001))
+}
+
+// Eventually this will be about 600s (i.e. 10mins), for now we use 2mins to stress test it.
+pub fn default_checkpoint_duration() -> u64 {
+    120
 }
 
 impl Config for NodeConfig {}
