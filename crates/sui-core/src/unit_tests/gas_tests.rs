@@ -406,7 +406,9 @@ async fn test_move_call_gas() -> SuiResult {
         expected_gas_balance,
     );
 
-    // Mimic the gas charge behavior and cross check the result with above.
+    // Mimic the gas charge behavior and cross check the result with above. Do not include
+    // computation cost calculation as it would require hard-coding a constant representing VM
+    // execution cost which is quite fragile.
     let mut gas_status = SuiGasStatus::new_with_budget(GAS_VALUE_FOR_TESTING, 1, 1);
     gas_status.charge_min_tx_gas()?;
     let package_object = authority_state
@@ -417,11 +419,6 @@ async fn test_move_call_gas() -> SuiResult {
         package_object.object_size_for_gas_metering() + gas_object.object_size_for_gas_metering(),
     )?;
     let gas_used_before_vm_exec = gas_status.summary(true).gas_used();
-    // The gas cost to execute the function in Move VM.
-    // Hard code it here since it's difficult to mock that in test.
-    // If a new native move module/function is modified, this value may need to be increased due to the increase of sui framework package
-    const MOVE_VM_EXEC_COST: u64 = 16006;
-    gas_status.charge_vm_exec_test_only(MOVE_VM_EXEC_COST)?;
     let created_object = authority_state
         .get_object(&effects.created[0].0 .0)
         .await?
@@ -434,7 +431,6 @@ async fn test_move_call_gas() -> SuiResult {
     )?;
 
     let new_cost = gas_status.summary(true);
-    assert_eq!(gas_cost.computation_cost, new_cost.computation_cost,);
     assert_eq!(gas_cost.storage_cost, new_cost.storage_cost);
     // This is the total amount of storage cost paid. We will use this
     // to check if we get back the same amount of rebate latter.
