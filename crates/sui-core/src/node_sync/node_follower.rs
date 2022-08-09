@@ -577,6 +577,7 @@ where
             let node_sync_store = self.node_sync_store.clone();
             let req = req.clone();
             tokio::task::spawn(async move {
+                // tx.send() will notify all waiters waiting on the download.
                 if let Err(error) = tx.send(
                     Self::download_impl(authorities_with_cert, aggregator, &req, node_sync_store)
                         .await,
