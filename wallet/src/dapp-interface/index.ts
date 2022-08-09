@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { DAppInterface } from './DAppInterface';
+import './StandardDAppInterface';
 
 Object.defineProperty(window, 'suiWallet', {
     enumerable: false,

@@ -75,6 +75,7 @@
     "dependencies": {
         "@mysten/sui.js": "file:../sdk/typescript",
         "@reduxjs/toolkit": "^1.8.3",
+        "@solana/wallet-standard": "^0.1.0-alpha.2",
         "bip39-light": "^1.0.7",
         "bootstrap-icons": "^1.9.1",
         "buffer": "^6.0.3",
