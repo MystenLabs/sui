@@ -37,7 +37,7 @@ arrayvec-d8f496e17d97b5cb = { package = "arrayvec", version = "0.5", features = 
 arrayvec-ca01ad9e24f5d932 = { package = "arrayvec", version = "0.7", features = ["std"] }
 async-lock = { version = "2", default-features = false }
 async-stream = { version = "0.3", default-features = false }
-atoi = { version = "0.4", default-features = false }
+atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 axum = { version = "0.5", features = ["form", "http1", "json", "matched-path", "original-uri", "query", "serde_json", "serde_urlencoded", "tower-log"] }
@@ -100,8 +100,8 @@ console = { version = "0.15", default-features = false }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
-crc = { version = "2", default-features = false }
-crc-catalog = { version = "1", default-features = false }
+crc = { version = "3", default-features = false }
+crc-catalog = { version = "2", default-features = false }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
@@ -145,6 +145,7 @@ dirs-next = { version = "2", default-features = false }
 dirs-sys = { version = "0.3", default-features = false }
 dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
+dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 dyn-clone = { version = "1", default-features = false }
 ecdsa = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
@@ -203,7 +204,7 @@ hakari = { version = "0.10", default-features = false, features = ["cli-support"
 half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
-hashlink = { version = "0.7", default-features = false }
+hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicode", "unicode-segmentation"] }
@@ -425,8 +426,7 @@ rocksdb = { version = "0.18", features = ["bzip2", "lz4", "multi-threaded-cf", "
 rust-ini = { version = "0.13", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
 rustc-hash = { version = "1", features = ["std"] }
-rustls-cdcf2f9584511fe6 = { package = "rustls", version = "0.19", features = ["dangerous_configuration", "log", "logging"] }
-rustls-56bd22fc3884b12 = { package = "rustls", version = "0.20", default-features = false, features = ["log", "logging", "tls12"] }
+rustls = { version = "0.20", features = ["dangerous_configuration", "log", "logging", "tls12"] }
 rustls-native-certs = { version = "0.6", default-features = false }
 rustls-pemfile = { version = "1", default-features = false }
 rusty-fork = { version = "0.3", default-features = false, features = ["timeout", "wait-timeout"] }
@@ -435,8 +435,7 @@ ryu = { version = "1", default-features = false }
 same-file = { version = "1", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
 scopeguard = { version = "1", features = ["use_std"] }
-sct-3b31131e45eafb45 = { package = "sct", version = "0.6", default-features = false }
-sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = false }
+sct = { version = "0.7", default-features = false }
 sec1 = { version = "0.3", features = ["alloc", "base16ct", "der", "generic-array", "pkcs8", "point", "subtle", "zeroize"] }
 secp256k1 = { version = "0.24", features = ["alloc", "bitcoin_hashes", "global-context", "rand", "rand-std", "recovery", "std"] }
 secp256k1-sys = { version = "0.6", default-features = false, features = ["alloc", "recovery", "std"] }
@@ -478,9 +477,9 @@ soketto = { version = "0.7" }
 spin = { version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct"] }
 sqlformat = { version = "0.1", default-features = false }
-sqlx = { version = "0.5", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
-sqlx-core = { version = "0.5", default-features = false, features = ["_rt-tokio", "_tls-rustls", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "sha2", "sqlite", "tokio-stream", "webpki", "webpki-roots"] }
-sqlx-rt = { version = "0.5", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
+sqlx = { version = "0.6", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
+sqlx-core = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "any", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "rustls-pemfile", "sha2", "sqlite", "tokio-stream", "webpki-roots"] }
+sqlx-rt = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
 stable_deref_trait = { version = "1", features = ["alloc", "std"] }
 static_assertions = { version = "1", default-features = false }
 stringprep = { version = "0.1", default-features = false }
@@ -522,8 +521,7 @@ tinyvec_macros = { version = "0.1", default-features = false }
 tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util", "libc", "macros", "memchr", "mio", "net", "num_cpus", "once_cell", "parking_lot", "process", "rt", "rt-multi-thread", "signal", "signal-hook-registry", "socket2", "sync", "test-util", "time", "tokio-macros", "tracing"] }
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
-tokio-rustls-3c51e837cfc5589a = { package = "tokio-rustls", version = "0.22", default-features = false }
-tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23", features = ["logging", "tls12"] }
+tokio-rustls = { version = "0.23", features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "tokio-util"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "tracing"] }
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
@@ -584,10 +582,8 @@ want = { version = "0.3", default-features = false }
 wasm-bindgen = { version = "0.2", features = ["serde", "serde-serialize", "serde_json", "spans", "std"] }
 wasm-bindgen-futures = { version = "0.4", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["BinaryType", "Blob", "CloseEvent", "Document", "Element", "ErrorEvent", "Event", "EventTarget", "FileReader", "History", "HtmlElement", "HtmlHeadElement", "Location", "MessageEvent", "Node", "ProgressEvent", "WebSocket", "Window"] }
-webpki-647d43efb71741da = { package = "webpki", version = "0.21", features = ["std", "trust_anchor_util"] }
-webpki-3c51e837cfc5589a = { package = "webpki", version = "0.22", default-features = false, features = ["alloc", "std"] }
-webpki-roots-647d43efb71741da = { package = "webpki-roots", version = "0.21", default-features = false }
-webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
+webpki = { version = "0.22", default-features = false, features = ["alloc", "std"] }
+webpki-roots = { version = "0.22", default-features = false }
 worker = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", default-features = false, features = ["benchmark"] }
 workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", default-features = false }
 yaml-rust = { version = "0.4", default-features = false }
@@ -624,7 +620,7 @@ async-recursion = { version = "1", default-features = false }
 async-stream = { version = "0.3", default-features = false }
 async-stream-impl = { version = "0.3", default-features = false }
 async-trait = { version = "0.1", default-features = false }
-atoi = { version = "0.4", default-features = false }
+atoi = { version = "1", default-features = false }
 atomicwrites = { version = "0.3", default-features = false }
 atty = { version = "0.2", default-features = false }
 autocfg-c65f7effa3be6d31 = { package = "autocfg", version = "0.1", default-features = false }
@@ -698,8 +694,8 @@ console = { version = "0.15", default-features = false }
 const-oid = { version = "0.9", default-features = false }
 constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
-crc = { version = "2", default-features = false }
-crc-catalog = { version = "1", default-features = false }
+crc = { version = "3", default-features = false }
+crc-catalog = { version = "2", default-features = false }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
@@ -753,7 +749,7 @@ dirs-next = { version = "2", default-features = false }
 dirs-sys = { version = "0.3", default-features = false }
 dirs-sys-next = { version = "0.1", default-features = false }
 dissimilar = { version = "1", default-features = false }
-dotenv = { version = "0.15", default-features = false }
+dotenvy = { version = "0.15", default-features = false }
 downcast = { version = "0.11", features = ["std"] }
 dyn-clone = { version = "1", default-features = false }
 ecdsa = { version = "0.14", default-features = false, features = ["alloc", "arithmetic", "der", "digest", "hazmat", "pkcs8", "rfc6979", "sign", "std", "verify"] }
@@ -814,7 +810,7 @@ hakari = { version = "0.10", default-features = false, features = ["cli-support"
 half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
-hashlink = { version = "0.7", default-features = false }
+hashlink = { version = "0.8", default-features = false }
 hdrhistogram = { version = "7", default-features = false }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicode", "unicode-segmentation"] }
@@ -1074,8 +1070,7 @@ rustc-hash = { version = "1", features = ["std"] }
 rustc_version-6f8ce4dd05d13bba = { package = "rustc_version", version = "0.2", default-features = false }
 rustc_version-468e82937335b1c9 = { package = "rustc_version", version = "0.3", default-features = false }
 rustc_version-9fbad63c4bcf4a8f = { package = "rustc_version", version = "0.4", default-features = false }
-rustls-cdcf2f9584511fe6 = { package = "rustls", version = "0.19", features = ["dangerous_configuration", "log", "logging"] }
-rustls-56bd22fc3884b12 = { package = "rustls", version = "0.20", default-features = false, features = ["log", "logging", "tls12"] }
+rustls = { version = "0.20", features = ["dangerous_configuration", "log", "logging", "tls12"] }
 rustls-native-certs = { version = "0.6", default-features = false }
 rustls-pemfile = { version = "1", default-features = false }
 rustversion = { version = "1", default-features = false }
@@ -1087,8 +1082,7 @@ same-file = { version = "1", default-features = false }
 schemars = { version = "0.8", features = ["derive", "either", "schemars_derive"] }
 schemars_derive = { version = "0.8", default-features = false }
 scopeguard = { version = "1", features = ["use_std"] }
-sct-3b31131e45eafb45 = { package = "sct", version = "0.6", default-features = false }
-sct-ca01ad9e24f5d932 = { package = "sct", version = "0.7", default-features = false }
+sct = { version = "0.7", default-features = false }
 sec1 = { version = "0.3", features = ["alloc", "base16ct", "der", "generic-array", "pkcs8", "point", "subtle", "zeroize"] }
 secp256k1 = { version = "0.24", features = ["alloc", "bitcoin_hashes", "global-context", "rand", "rand-std", "recovery", "std"] }
 secp256k1-sys = { version = "0.6", default-features = false, features = ["alloc", "recovery", "std"] }
@@ -1139,10 +1133,10 @@ soketto = { version = "0.7" }
 spin = { version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct"] }
 sqlformat = { version = "0.1", default-features = false }
-sqlx = { version = "0.5", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
-sqlx-core = { version = "0.5", default-features = false, features = ["_rt-tokio", "_tls-rustls", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "sha2", "sqlite", "tokio-stream", "webpki", "webpki-roots"] }
-sqlx-macros = { version = "0.5", default-features = false, features = ["_rt-tokio", "migrate", "runtime-tokio-rustls", "sha2", "sqlite"] }
-sqlx-rt = { version = "0.5", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
+sqlx = { version = "0.6", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
+sqlx-core = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "any", "crc", "flume", "futures-executor", "libsqlite3-sys", "migrate", "runtime-tokio-rustls", "rustls", "rustls-pemfile", "sha2", "sqlite", "tokio-stream", "webpki-roots"] }
+sqlx-macros = { version = "0.6", default-features = false, features = ["_rt-tokio", "migrate", "runtime-tokio-rustls", "sha2", "sqlite"] }
+sqlx-rt = { version = "0.6", default-features = false, features = ["_rt-tokio", "_tls-rustls", "once_cell", "runtime-tokio-rustls", "tokio", "tokio-rustls"] }
 stable_deref_trait = { version = "1", features = ["alloc", "std"] }
 static_assertions = { version = "1", default-features = false }
 stringprep = { version = "0.1", default-features = false }
@@ -1192,8 +1186,7 @@ tokio = { version = "1", features = ["bytes", "fs", "full", "io-std", "io-util",
 tokio-io-timeout = { version = "1", default-features = false }
 tokio-macros = { version = "1", default-features = false }
 tokio-retry = { version = "0.3", default-features = false }
-tokio-rustls-3c51e837cfc5589a = { package = "tokio-rustls", version = "0.22", default-features = false }
-tokio-rustls-2b5c6dc72f624058 = { package = "tokio-rustls", version = "0.23", features = ["logging", "tls12"] }
+tokio-rustls = { version = "0.23", features = ["logging", "tls12"] }
 tokio-stream = { version = "0.1", features = ["fs", "net", "sync", "time", "tokio-util"] }
 tokio-util = { version = "0.7", features = ["codec", "compat", "futures-io", "tracing"] }
 toml = { version = "0.5", features = ["indexmap", "preserve_order"] }
@@ -1270,10 +1263,8 @@ wasm-bindgen-macro = { version = "0.2", default-features = false, features = ["s
 wasm-bindgen-macro-support = { version = "0.2", default-features = false, features = ["spans"] }
 wasm-bindgen-shared = { version = "0.2", default-features = false }
 web-sys = { version = "0.3", default-features = false, features = ["BinaryType", "Blob", "CloseEvent", "Document", "Element", "ErrorEvent", "Event", "EventTarget", "FileReader", "History", "HtmlElement", "HtmlHeadElement", "Location", "MessageEvent", "Node", "ProgressEvent", "WebSocket", "Window"] }
-webpki-647d43efb71741da = { package = "webpki", version = "0.21", features = ["std", "trust_anchor_util"] }
-webpki-3c51e837cfc5589a = { package = "webpki", version = "0.22", default-features = false, features = ["alloc", "std"] }
-webpki-roots-647d43efb71741da = { package = "webpki-roots", version = "0.21", default-features = false }
-webpki-roots-3c51e837cfc5589a = { package = "webpki-roots", version = "0.22", default-features = false }
+webpki = { version = "0.22", default-features = false, features = ["alloc", "std"] }
+webpki-roots = { version = "0.22", default-features = false }
 which = { version = "4", default-features = false }
 worker = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", default-features = false, features = ["benchmark"] }
 workspace-hack = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", default-features = false }
