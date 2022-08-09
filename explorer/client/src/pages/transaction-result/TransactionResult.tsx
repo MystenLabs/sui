@@ -161,7 +161,6 @@ const TransactionResultAPI = ({ id }: { id: string }) => {
 
 const TransactionResultStatic = ({ id }: { id: string }) => {
     const entry = findDataFromID(id, undefined);
-    console.log('static tx entry', entry);
     try {
         return (
             <TransactionResultLoaded
