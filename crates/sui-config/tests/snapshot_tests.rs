@@ -102,6 +102,7 @@ fn network_config_snapshot_matches() {
         validator_config.json_rpc_address = fake_socket;
         validator_config.metrics_address = fake_socket;
         validator_config.admin_interface_port = 8888;
+        let metrics_addr: Multiaddr = "/ip4/127.0.0.1/tcp/1234".parse().unwrap();
         if let Some(consensus_config) = validator_config.consensus_config.as_mut() {
             consensus_config.consensus_address = Multiaddr::empty();
             consensus_config.consensus_db_path = PathBuf::from("/tmp/foo/");
@@ -112,7 +113,7 @@ fn network_config_snapshot_matches() {
             consensus_config
                 .narwhal_config
                 .prometheus_metrics
-                .socket_addr = fake_socket;
+                .socket_addr = metrics_addr
         }
     }
     assert_yaml_snapshot!(network_config, {
