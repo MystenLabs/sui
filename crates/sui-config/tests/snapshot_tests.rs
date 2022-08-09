@@ -28,7 +28,8 @@ use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{
-    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
+    generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+    AuthorityPublicKeyBytes,
 };
 
 #[test]
@@ -67,10 +68,13 @@ fn populated_genesis_snapshot_matches() {
         .unwrap();
     let key: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
     let network_key: AccountKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let account_key: AccountKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
     let validator = ValidatorInfo {
         name: "0".into(),
-        public_key: key.public().into(),
+        protocol_key: key.public().into(),
+        account_key: account_key.public().clone().into(),
         network_key: network_key.public().clone().into(),
+        proof_of_possession: generate_proof_of_possession(&key, account_key.public().into()),
         stake: 1,
         delegation: 0,
         gas_price: 1,

@@ -277,7 +277,7 @@ impl GatewayState<NetworkAuthorityClient> {
                 .connect_lazy(authority.network_address())
                 .unwrap();
             let client = NetworkAuthorityClient::new(channel, net_metrics.clone());
-            authority_clients.insert(authority.public_key(), client);
+            authority_clients.insert(authority.protocol_key(), client);
         }
         authority_clients
     }

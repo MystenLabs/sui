@@ -48,7 +48,20 @@ pub type AccountPublicKey = Ed25519PublicKey;
 pub type AccountPrivateKey = Ed25519PrivateKey;
 pub type AccountSignature = Ed25519Signature;
 
-// TODO: fix below.
+pub const PROOF_OF_POSSESSION_DOMAIN: &[u8] = b"kosk";
+
+// Creates a proof that the keypair is possesed, as well as binds this proof to a specific SuiAddress.
+pub fn generate_proof_of_possession<K: KeypairTraits>(
+    keypair: &K,
+    address: SuiAddress,
+) -> <K as KeypairTraits>::Sig {
+    let mut domain_with_pk: Vec<u8> = Vec::new();
+    domain_with_pk.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
+    domain_with_pk.extend_from_slice(keypair.public().as_bytes());
+    domain_with_pk.extend_from_slice(address.as_ref());
+    keypair.sign(&domain_with_pk[..])
+}
+
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum SuiKeyPair {
@@ -269,7 +282,7 @@ impl PublicKey {
 #[serde_as]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct AuthorityPublicKeyBytes(
-    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; AuthorityPublicKey::LENGTH + 1],
+    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; AuthorityPublicKey::LENGTH],
 );
 
 impl AuthorityPublicKeyBytes {
@@ -287,18 +300,13 @@ impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
     type Error = signature::Error;
 
     fn try_from(bytes: AuthorityPublicKeyBytes) -> Result<AuthorityPublicKey, Self::Error> {
-        if AuthorityPublicKey::SIGNATURE_SCHEME.flag() != bytes.as_ref()[0] {
-            return Err(signature::Error::new());
-        }
-        AuthorityPublicKey::from_bytes(&bytes.as_ref()[1..]).map_err(|_| signature::Error::new())
+        AuthorityPublicKey::from_bytes(bytes.as_ref()).map_err(|_| signature::Error::new())
     }
 }
 
 impl From<&AuthorityPublicKey> for AuthorityPublicKeyBytes {
     fn from(pk: &AuthorityPublicKey) -> AuthorityPublicKeyBytes {
-        let mut bytes_with_flag = vec![AuthorityPublicKey::SIGNATURE_SCHEME.flag()];
-        bytes_with_flag.extend_from_slice(pk.as_ref());
-        AuthorityPublicKeyBytes::from_bytes(bytes_with_flag.as_ref()).unwrap()
+        AuthorityPublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
     }
 }
 
@@ -322,7 +330,7 @@ impl Display for AuthorityPublicKeyBytes {
 
 impl ToFromBytes for AuthorityPublicKeyBytes {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let bytes: [u8; AuthorityPublicKey::LENGTH + 1] =
+        let bytes: [u8; AuthorityPublicKey::LENGTH] =
             bytes.try_into().map_err(signature::Error::from_source)?;
         Ok(AuthorityPublicKeyBytes(bytes))
     }
@@ -330,7 +338,7 @@ impl ToFromBytes for AuthorityPublicKeyBytes {
 
 impl AuthorityPublicKeyBytes {
     /// This ensures it's impossible to construct an instance with other than registered lengths
-    pub fn new(bytes: [u8; AuthorityPublicKey::LENGTH + 1]) -> AuthorityPublicKeyBytes
+    pub fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
 where {
         AuthorityPublicKeyBytes(bytes)
     }
@@ -339,7 +347,7 @@ where {
     // see [#34](https://github.com/MystenLabs/narwhal/issues/34)
     #[allow(dead_code)]
     fn default() -> Self {
-        Self([0u8; AuthorityPublicKey::LENGTH + 1])
+        Self([0u8; AuthorityPublicKey::LENGTH])
     }
 }
 

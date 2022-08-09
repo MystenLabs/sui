@@ -106,7 +106,7 @@ pub fn test_authority_aggregator(
         .iter()
         .map(|config| {
             (
-                config.public_key(),
+                config.protocol_key(),
                 NetworkAuthorityClient::connect_lazy(
                     config.network_address(),
                     Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),

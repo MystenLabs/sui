@@ -14,8 +14,9 @@ module sui::governance_test_utils {
     public fun create_validator_for_testing(
         addr: address, init_stake_amount: u64, ctx: &mut TxContext
     ): Validator {
-        validator::new(
+        validator::new_for_testing(
             addr,
+            x"FF",
             x"FF",
             x"FF",
             b"ValidatorName",

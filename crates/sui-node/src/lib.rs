@@ -80,13 +80,13 @@ impl SuiNode {
         );
         let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
 
-        info!(node =? config.public_key(),
+        info!(node =? config.protocol_public_key(),
             "Initializing sui-node listening on {}", config.network_address
         );
 
         let genesis = config.genesis()?;
 
-        let secret = Arc::pin(config.key_pair().copy());
+        let secret = Arc::pin(config.protocol_key_pair().copy());
         let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
         let epoch_store = Arc::new(EpochStore::new(
@@ -99,7 +99,7 @@ impl SuiNode {
             &config.db_path().join("checkpoints"),
             None,
             committee.epoch,
-            config.public_key(),
+            config.protocol_public_key(),
             secret.clone(),
         )?));
 
@@ -130,7 +130,7 @@ impl SuiNode {
 
         let state = Arc::new(
             AuthorityState::new(
-                config.public_key(),
+                config.protocol_public_key(),
                 secret,
                 store,
                 epoch_store.clone(),

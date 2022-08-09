@@ -45,6 +45,11 @@ pub enum KeyToolCommand {
     Import {
         mnemonic_phrase: String,
     },
+    /// This is a temporary helper function to ensure that testnet genesis does not break while
+    /// we transition towards BLS signatures.
+    LoadKeypair {
+        file: PathBuf,
+    },
 }
 
 impl KeyToolCommand {
@@ -115,6 +120,23 @@ impl KeyToolCommand {
             KeyToolCommand::Import { mnemonic_phrase } => {
                 let address = keystore.import_from_mnemonic(&mnemonic_phrase)?;
                 info!("Key imported for address [{address}]");
+            }
+
+            KeyToolCommand::LoadKeypair { file } => {
+                let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
+
+                match res {
+                    Ok(keypair) => {
+                        println!("Account Keypair: {}", keypair.encode_base64());
+                        println!("Network Keypair: {}", keypair.encode_base64());
+                        if let SuiKeyPair::Ed25519SuiKeyPair(kp) = keypair {
+                            println!("Protocol Keypair: {}", kp.encode_base64());
+                        };
+                    }
+                    Err(e) => {
+                        println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                    }
+                }
             }
         }
 

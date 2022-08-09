@@ -11,7 +11,8 @@ use signature::Signer;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_types::crypto::{
-    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, SuiKeyPair,
+    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair,
+    AuthorityPublicKeyBytes, SuiKeyPair,
 };
 use sui_types::crypto::{KeypairTraits, Signature};
 
@@ -49,11 +50,17 @@ pub async fn init_local_authorities(
     for i in 0..committee_size {
         let key_pair: AuthorityKeyPair = get_key_pair().1;
         let authority_name = key_pair.public().into();
+        let account_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
         let network_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
         let validator_info = ValidatorInfo {
             name: format!("validator-{i}"),
-            public_key: authority_name,
+            protocol_key: authority_name,
+            account_key: account_key_pair.public(),
             network_key: network_key_pair.public(),
+            proof_of_possession: generate_proof_of_possession(
+                &key_pair,
+                (&account_key_pair.public()).into(),
+            ),
             stake: 1,
             delegation: 0,
             gas_price: 1,
