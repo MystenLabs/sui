@@ -8,6 +8,8 @@ import {
     getTransferObjectTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
+    getTransferSuiTransaction,
+    getMoveCallTransaction,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
@@ -27,6 +29,11 @@ export type TxResultState = {
     txGas: number;
     kind: TransactionKindName | undefined;
     From: string;
+    Amount?: number;
+    timestamp_ms?: number;
+    url?: string;
+    description?: string;
+    name?: string;
 };
 
 interface TransactionManualState {
@@ -72,7 +79,7 @@ export const getTransactionsByAddress = createAsyncThunk<
         if (!transactions || !transactions.length) {
             return [];
         }
-        //getTransactionWithEffectsBatch
+
         const resp = await api.instance.fullNode
             .getTransactionWithEffectsBatch(deduplicate(transactions))
             .then((txEffs) => {
@@ -90,10 +97,24 @@ export const getTransactionsByAddress = createAsyncThunk<
                             if (txns.length > 1) {
                                 return null;
                             }
+
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
+                            //TODO: Get Object data from transferObject
+                            const moveCall =
+                                txKind === 'Call'
+                                    ? getMoveCallTransaction(txn)
+                                    : undefined;
+
+                            const tranferSui =
+                                txKind === 'TransferSui'
+                                    ? getTransferSuiTransaction(txn)
+                                    : null;
                             const recipient =
-                                getTransferObjectTransaction(txn)?.recipient;
+                                txKind === 'TransferSui'
+                                    ? tranferSui?.recipient
+                                    : getTransferObjectTransaction(txn)
+                                          ?.recipient;
 
                             return {
                                 seq,
@@ -102,6 +123,18 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
                                 From: res.data.sender,
+                                timestamp_ms: txEff.timestamp_ms,
+                                ...(tranferSui?.amount
+                                    ? { Amount: tranferSui.amount }
+                                    : {}),
+                                ...(moveCall &&
+                                Array.isArray(moveCall.arguments)
+                                    ? {
+                                          url: moveCall.arguments[2],
+                                          description: moveCall.arguments[1],
+                                          name: moveCall.arguments[0],
+                                      }
+                                    : {}),
                                 ...(recipient
                                     ? {
                                           To: recipient,
