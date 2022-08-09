@@ -47,6 +47,10 @@ fn genesis_config_snapshot_matches() {
     assert_yaml_snapshot!(genesis_config);
 }
 
+// If a Move change breaks the test below, it is because related Move functions are included
+// in the genesis blob. The test failure can be fixed by updating the snapshot / blob.
+// Also, folks in the file's CODEWOWNERS should be notified about the change. They may need to
+// re-create the genesis blob.
 #[test]
 fn empty_genesis_snapshot_matches() {
     let genesis = Builder::new().build();
