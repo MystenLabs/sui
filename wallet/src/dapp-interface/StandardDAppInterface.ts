@@ -1,18 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    CIPHER_DEFAULT,
-    VERSION_1_0_0
-} from '@solana/wallet-standard';
+import { CIPHER_DEFAULT, VERSION_1_0_0 } from '@solana/wallet-standard';
 import { filter, lastValueFrom, map, take, type Observable } from 'rxjs';
 
 import { WindowMessageStream } from '_messaging/WindowMessageStream';
 import { isErrorPayload, type Payload } from '_payloads';
 import { createMessage } from '_src/shared/messaging/messages';
-import {
-    ALL_PERMISSION_TYPES,
-} from '_src/shared/messaging/messages/payloads/permissions';
+import { ALL_PERMISSION_TYPES } from '_src/shared/messaging/messages/payloads/permissions';
 
 import type {
     AllWalletAccountMethodNames,
@@ -24,15 +19,16 @@ import type {
     WalletAccountMethod,
     WalletEventNames,
     WalletEvents,
-
     SignAndSendTransactionInput,
     SignAndSendTransactionOutput,
-    WalletAccountMethodNames} from '@solana/wallet-standard';
+    WalletAccountMethodNames,
+} from '@solana/wallet-standard';
 import type { GetAccount } from '_src/shared/messaging/messages/payloads/account/GetAccount';
 import type { GetAccountResponse } from '_src/shared/messaging/messages/payloads/account/GetAccountResponse';
 import type {
     AcquirePermissionsRequest,
-    AcquirePermissionsResponse} from '_src/shared/messaging/messages/payloads/permissions';
+    AcquirePermissionsResponse,
+} from '_src/shared/messaging/messages/payloads/permissions';
 import type {
     ExecuteTransactionRequest,
     ExecuteTransactionResponse,
@@ -82,6 +78,10 @@ function send<
     );
 }
 
+export type SuiWalletChain =
+    | typeof CHAIN_SUI_DEVNET
+    | typeof CHAIN_SUI_LOCALNET;
+
 export class SuiWallet implements Wallet<SuiWalletAccount> {
     readonly name = 'Sui Wallet';
     readonly icon =
@@ -89,8 +89,7 @@ export class SuiWallet implements Wallet<SuiWalletAccount> {
     readonly version = VERSION_1_0_0;
 
     // TODO: Figure out how to handle multi-environment chains:
-    // @ts-expect-error: Types here are annoying
-    readonly chains = [CHAIN_SUI_DEVNET];
+    readonly chains: SuiWalletChain[] = [CHAIN_SUI_DEVNET];
 
     #listeners: { [E in WalletEventNames]?: WalletEvents[E][] } = {};
     #accounts: SuiWalletAccount[] = [];
@@ -200,10 +199,8 @@ export class SuiWallet implements Wallet<SuiWalletAccount> {
     }
 }
 
-export type SuiWalletChain = typeof CHAIN_SUI_LOCALNET;
-
 export class SuiWalletAccount implements WalletAccount {
-    readonly chain = CHAIN_SUI_DEVNET;
+    readonly chain: SuiWalletChain = CHAIN_SUI_DEVNET;
 
     #address: string;
 
