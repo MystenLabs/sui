@@ -237,7 +237,6 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     };
 
     const txEventData = txdata.events?.map(eventToDisplay);
-    console.log('txdata', txdata, txEventData);
 
     let eventTitles: string[] = [];
     const txEventDisplay = txEventData?.map((ed) => {
