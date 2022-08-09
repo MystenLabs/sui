@@ -76,7 +76,8 @@ pub fn execute<
         .filter_map(|arg| match arg {
             CallArg::Pure(_) => None,
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
-            | CallArg::Object(ObjectArg::SharedObject(id)) => {
+            | CallArg::Object(ObjectArg::SharedObject(id))
+            | CallArg::Object(ObjectArg::QuasiSharedObject(id)) => {
                 Some((*id, state_view.read_object(id)?))
             }
         })
@@ -987,6 +988,9 @@ pub fn resolve_and_type_check(
                 CallArg::Object(ObjectArg::SharedObject(id)) => {
                     InputObjectKind::SharedMoveObject(id)
                 }
+                CallArg::Object(ObjectArg::QuasiSharedObject(id)) => {
+                    InputObjectKind::QuasiSharedMoveObject(id)
+                }
             };
 
             let id = object_kind.object_id();
@@ -1001,8 +1005,12 @@ pub fn resolve_and_type_check(
                     return Err(ExecutionErrorKind::InvariantViolation.into());
                 }
             };
-            match object_kind {
-                InputObjectKind::ImmOrOwnedMoveObject(_) if object.is_shared() => {
+            match (object_kind, &object.owner) {
+                (
+                    InputObjectKind::ImmOrOwnedMoveObject(_),
+                    Owner::Immutable | Owner::AddressOwner(_) | Owner::ObjectOwner(_),
+                ) => (),
+                (InputObjectKind::ImmOrOwnedMoveObject(_), Owner::Shared) => {
                     let error = format!(
                         "Argument at index {} populated with shared object id {} \
                         but an immutable or owned object was expected",
@@ -1016,7 +1024,11 @@ pub fn resolve_and_type_check(
                         error,
                     ));
                 }
-                InputObjectKind::SharedMoveObject(_) if !object.is_shared() => {
+                (InputObjectKind::SharedMoveObject(_), Owner::Shared) => (),
+                (
+                    InputObjectKind::SharedMoveObject(_),
+                    Owner::Immutable | Owner::AddressOwner(_) | Owner::ObjectOwner(_),
+                ) => {
                     let error = format!(
                         "Argument at index {} populated with an immutable or owned object id {} \
                         but an shared object was expected",
@@ -1030,7 +1042,27 @@ pub fn resolve_and_type_check(
                         error,
                     ));
                 }
-                _ => (),
+                (InputObjectKind::QuasiSharedMoveObject(_), Owner::ObjectOwner(_)) => (),
+                (
+                    InputObjectKind::QuasiSharedMoveObject(_),
+                    Owner::Shared | Owner::Immutable | Owner::AddressOwner(_),
+                ) => {
+                    // we check that the root ancestor is a shared object in the
+                    // authority
+                    let error = format!(
+                        "Argument at index {} populated with an shared, immutable, or address-owned object id {} \
+                        but an object-owned object was expected",
+                        idx, id
+                    );
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::entry_argument_error(
+                            idx,
+                            EntryArgumentErrorKind::ObjectKindMismatch,
+                        ),
+                        error,
+                    ));
+                }
+                (InputObjectKind::MovePackage(_), _) => unreachable!(),
             }
 
             let move_object = match &object.data {
@@ -1150,7 +1182,9 @@ fn check_shared_object_rules(
         .iter()
         .map(|(id, obj)| (*id, obj.borrow().owner))
         .collect();
-    let ancestor_map = ObjectRootAncestorMap::new(&object_owner_map)?;
+    let ancestor_map =
+        ObjectRootAncestorMap::new(&object_owner_map).expect("ownership should be well formed");
+
     let by_value_object_owned = object_owner_map
         .iter()
         .filter_map(|(id, owner)| match owner {

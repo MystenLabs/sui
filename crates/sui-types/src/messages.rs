@@ -58,6 +58,10 @@ pub enum ObjectArg {
     ImmOrOwnedObject(ObjectRef),
     // A Move object that's shared and mutable.
     SharedObject(ObjectID),
+    // Child object of shared object. Such object will appear to be owned object in the store,
+    // but since it's owned by a shared object, it can be used by anyone, hence behaves similar
+    // to a shared object.
+    QuasiSharedObject(ObjectID),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -135,7 +139,8 @@ impl SingleTransactionKind {
             Self::Call(MoveCall { arguments, .. }) => {
                 Either::Left(arguments.iter().filter_map(|arg| match arg {
                     CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
-                    CallArg::Object(ObjectArg::SharedObject(id)) => Some(id),
+                    CallArg::Object(ObjectArg::SharedObject(id))
+                    | CallArg::Object(ObjectArg::QuasiSharedObject(id)) => Some(id),
                 }))
             }
             _ => Either::Right(std::iter::empty()),
@@ -169,6 +174,9 @@ impl SingleTransactionKind {
                     }
                     CallArg::Object(ObjectArg::SharedObject(id)) => {
                         Some(InputObjectKind::SharedMoveObject(*id))
+                    }
+                    CallArg::Object(ObjectArg::QuasiSharedObject(id)) => {
+                        Some(InputObjectKind::QuasiSharedMoveObject(*id))
                     }
                 })
                 .chain([InputObjectKind::MovePackage(package.0)])
@@ -1552,6 +1560,8 @@ pub enum InputObjectKind {
     ImmOrOwnedMoveObject(ObjectRef),
     // A Move object that's shared and mutable.
     SharedMoveObject(ObjectID),
+    // A Move object whose root ancestor is a shared object.
+    QuasiSharedMoveObject(ObjectID),
 }
 
 impl InputObjectKind {
@@ -1560,6 +1570,7 @@ impl InputObjectKind {
             Self::MovePackage(id) => *id,
             Self::ImmOrOwnedMoveObject((id, _, _)) => *id,
             Self::SharedMoveObject(id) => *id,
+            Self::QuasiSharedMoveObject(id) => *id,
         }
     }
 
@@ -1567,15 +1578,16 @@ impl InputObjectKind {
         match self {
             Self::MovePackage(..) => OBJECT_START_VERSION,
             Self::ImmOrOwnedMoveObject((_, version, _)) => *version,
-            Self::SharedMoveObject(..) => OBJECT_START_VERSION,
+            Self::SharedMoveObject(..) | Self::QuasiSharedMoveObject(..) => OBJECT_START_VERSION,
         }
     }
 
     pub fn object_not_found_error(&self) -> SuiError {
         match *self {
             Self::MovePackage(package_id) => SuiError::DependentPackageNotFound { package_id },
-            Self::ImmOrOwnedMoveObject((object_id, _, _)) => SuiError::ObjectNotFound { object_id },
-            Self::SharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
+            Self::ImmOrOwnedMoveObject((object_id, _, _))
+            | Self::SharedMoveObject(object_id)
+            | Self::QuasiSharedMoveObject(object_id) => SuiError::ObjectNotFound { object_id },
         }
     }
 }
@@ -1610,7 +1622,8 @@ impl InputObjects {
                         Some(*object_ref)
                     }
                 }
-                InputObjectKind::SharedMoveObject(_) => None,
+                InputObjectKind::SharedMoveObject(_)
+                | InputObjectKind::QuasiSharedMoveObject(_) => None,
             })
             .collect();
 
@@ -1625,7 +1638,13 @@ impl InputObjects {
     pub fn filter_shared_objects(&self) -> Vec<ObjectRef> {
         self.objects
             .iter()
-            .filter(|(kind, _)| matches!(kind, InputObjectKind::SharedMoveObject(_)))
+            .filter(|(kind, _)| {
+                matches!(
+                    kind,
+                    InputObjectKind::SharedMoveObject(_)
+                        | InputObjectKind::QuasiSharedMoveObject(_)
+                )
+            })
             .map(|(_, obj)| obj.compute_object_reference())
             .collect()
     }
@@ -1649,7 +1668,10 @@ impl InputObjects {
                         Some(*object_ref)
                     }
                 }
-                InputObjectKind::SharedMoveObject(_) => Some(object.compute_object_reference()),
+                InputObjectKind::SharedMoveObject(_)
+                | InputObjectKind::QuasiSharedMoveObject(_) => {
+                    Some(object.compute_object_reference())
+                }
             })
             .collect()
     }

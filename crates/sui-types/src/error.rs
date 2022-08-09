@@ -64,6 +64,10 @@ pub enum SuiError {
     UnsupportedSharedObjectError,
     #[error("Object used as shared is not shared.")]
     NotSharedObjectError,
+    #[error("The object {object_id} is specified to be a direct or transitive child of a shared object, but it's not: {reason}")]
+    NotQuasiSharedObject { object_id: ObjectID, reason: String },
+    #[error("Object used as immutable or owned, but it's not: {reason}")]
+    NotImmutableOrOwnedObject { object_id: ObjectID, reason: String },
     #[error("An object that's owned by another object cannot be deleted or wrapped. It must be transferred to an account address first before deletion")]
     DeleteObjectOwnedObject,
     #[error("The shared locks for this transaction have not yet been set.")]

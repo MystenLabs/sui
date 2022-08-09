@@ -18,7 +18,9 @@ use sui_core::{
     safe_client::SafeClientMetrics,
 };
 use sui_node::SuiNode;
-use sui_types::{committee::Committee, object::Object};
+use sui_types::{
+    base_types::ObjectID, committee::Committee, messages::ObjectInfoRequest, object::Object,
+};
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -132,4 +134,16 @@ pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
         Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
     )
     .unwrap()
+}
+
+pub async fn get_latest_object(config: &ValidatorInfo, object_id: ObjectID) -> Option<Object> {
+    use sui_core::authority_client::AuthorityAPI;
+    get_client(config)
+        .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+            object_id, None,
+        ))
+        .await
+        .unwrap()
+        .object()
+        .cloned()
 }
