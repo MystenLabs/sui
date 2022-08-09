@@ -129,7 +129,7 @@ fn verify_valid_signature() {
     // Get a keypair.
     let kp = keys().pop().unwrap();
 
-    // Make signature.
+    // Sign over raw message, hashed to keccak256.
     let message: &[u8] = b"Hello, world!";
     let digest = message.digest();
 
@@ -137,6 +137,38 @@ fn verify_valid_signature() {
 
     // Verify the signature.
     assert!(kp.public().verify(&digest.0, &signature).is_ok());
+}
+
+#[test]
+fn verify_valid_signature_against_hashed_msg() {
+    // Get a keypair.
+    let kp = keys().pop().unwrap();
+
+    // Sign over raw message (hashed to keccak256 internally).
+    let message: &[u8] = b"Hello, world!";
+    let signature = kp.sign(message);
+
+    // Verify the signature against hashed message.
+    assert!(kp
+        .public()
+        .verify_hashed(
+            <sha3::Keccak256 as sha3::digest::Digest>::digest(message).as_slice(),
+            &signature
+        )
+        .is_ok());
+}
+
+#[test]
+fn verify_hashed_failed_if_message_unhashed() {
+    // Get a keypair.
+    let kp = keys().pop().unwrap();
+
+    // Sign over raw message (hashed to keccak256 internally).
+    let message: &[u8] = &[0u8; 1];
+    let signature = kp.sign(message);
+
+    // Verify the signature against unhashed msg fails.
+    assert!(kp.public().verify_hashed(message, &signature).is_err());
 }
 
 #[test]
