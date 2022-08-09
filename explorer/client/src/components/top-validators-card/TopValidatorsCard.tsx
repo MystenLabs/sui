@@ -12,13 +12,12 @@ import {
     getTabFooter,
     getValidatorState,
     processValidators,
-    sortValidatorsByStake,
-    stakeColumn,
     ValidatorLoadFail,
     type ValidatorState,
 } from '../../pages/validators/Validators';
 import { mockState } from '../../pages/validators/mockData';
 import theme from '../../styles/theme.module.css';
+import { truncate } from '../../utils/stringUtils';
 
 import styles from './TopValidatorsCard.module.css';
 
@@ -86,22 +85,23 @@ export const TopValidatorsCardAPI = (): JSX.Element => {
 };
 
 function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
-    const totalStake = state.validators.fields.total_validator_stake;
-    // sort by order of descending stake
-    sortValidatorsByStake(state.validators.fields.active_validators);
-
     const validatorsData = processValidators(
-        state.validators.fields.active_validators,
-        totalStake
+        state.validators.fields.active_validators
     );
 
     // map the above data to match the table - combine stake and stake percent
     const tableData = {
         data: validatorsData.map((validator) => ({
             name: validator.name,
-            stake: stakeColumn(validator),
-            delegation: validator.delegation_count,
             position: validator.position,
+            address: (
+                <Longtext
+                    text={validator.address}
+                    alttext={truncate(validator.address, 14)}
+                    category={'addresses'}
+                    isLink={true}
+                />
+            ),
         })),
         columns: [
             {
@@ -113,12 +113,8 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                 accessorKey: 'name',
             },
             {
-                headerLabel: 'STAKE',
-                accessorKey: 'stake',
-            },
-            {
-                headerLabel: 'Delegators',
-                accessorKey: 'delegation',
+                headerLabel: 'Address',
+                accessorKey: 'address',
             },
         ],
     };
