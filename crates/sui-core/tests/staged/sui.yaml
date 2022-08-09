@@ -26,11 +26,13 @@ AuthorityBatch:
         TUPLEARRAY:
           CONTENT: U8
           SIZE: 32
+AuthorityPublicKeyBytes:
+  NEWTYPESTRUCT: BYTES
 AuthoritySignInfo:
   STRUCT:
     - epoch: U64
     - authority:
-        TYPENAME: PublicKeyBytes
+        TYPENAME: AuthorityPublicKeyBytes
     - signature:
         TYPENAME: Ed25519Signature
 CallArg:
@@ -92,6 +94,12 @@ EntryArgumentErrorKind:
       UnsupportedPureArg: UNIT
     5:
       ArityMismatch: UNIT
+Envelope:
+  STRUCT:
+    - data:
+        TYPENAME: AuthorityBatch
+    - auth_signature:
+        TYPENAME: AuthoritySignInfo
 ExecutionDigests:
   STRUCT:
     - transaction:
@@ -226,6 +234,8 @@ MoveObject:
     - type_:
         TYPENAME: StructTag
     - has_public_transfer: BOOL
+    - version:
+        TYPENAME: SequenceNumber
     - contents: BYTES
 MovePackage:
   STRUCT:
@@ -323,18 +333,8 @@ Owner:
       Shared: UNIT
     3:
       Immutable: UNIT
-PublicKeyBytes:
-  NEWTYPESTRUCT: BYTES
 SequenceNumber:
   NEWTYPESTRUCT: U64
-Signature:
-  NEWTYPESTRUCT: BYTES
-SignedBatch:
-  STRUCT:
-    - batch:
-        TYPENAME: AuthorityBatch
-    - auth_signature:
-        TYPENAME: AuthoritySignInfo
 SingleTransactionKind:
   ENUM:
     0:
@@ -449,5 +449,5 @@ UpdateItem:
     1:
       Batch:
         NEWTYPE:
-          TYPENAME: SignedBatch
+          TYPENAME: Envelope
 

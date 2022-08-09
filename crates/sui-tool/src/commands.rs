@@ -63,11 +63,20 @@ pub enum ToolCommand {
         #[clap(long = "no-header", help = "don't show header in concise output")]
         no_header: bool,
     },
+
+    #[clap(name = "fetch-transaction")]
+    FetchTransaction {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+
+        #[clap(long, help = "The object ID to fetch")]
+        digest: TransactionDigest,
+    },
     /// Tool to read validator & gateway db.
     #[clap(name = "db-tool")]
     DbTool {
         /// Path of the DB to read
-        #[clap(long = "db_path")]
+        #[clap(long = "db-path")]
         db_path: String,
         #[clap(subcommand)]
         cmd: Option<DbToolCommand>,
@@ -422,6 +431,20 @@ impl ToolCommand {
                 } else {
                     println!("{}", VerboseObjectOutput(output));
                 }
+            }
+            ToolCommand::FetchTransaction { genesis, digest } => {
+                let clients = make_clients(genesis)?;
+
+                let responses = join_all(clients.iter().map(|(name, client)| async {
+                    let result = client
+                        .handle_transaction_info_request(TransactionInfoRequest {
+                            transaction_digest: digest,
+                        })
+                        .await;
+                    (*name, result)
+                }))
+                .await;
+                println!("{:#?}", responses);
             }
             ToolCommand::DbTool { db_path, cmd } => {
                 let path = PathBuf::from(db_path);

@@ -7,9 +7,9 @@ publish = false
 edition = "2021"
 
 [dependencies]
-arc-swap = "1.5.0"
-tokio = { version = "1.20.0", features = ["full"] }
-tracing = "0.1.35"
+arc-swap = "1.5.1"
+tokio = { version = "1.20.1", features = ["full"] }
+tracing = "0.1.36"
 
 sui-core = { path = "../sui-core" }
 sui-types = { path = "../sui-types" }

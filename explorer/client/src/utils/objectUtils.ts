@@ -51,3 +51,6 @@ export function getOwnerStr(owner: ObjectOwner | string): string {
     }
     return owner;
 }
+
+export const checkIsPropertyType = (value: any) =>
+    ['number', 'string'].includes(typeof value);

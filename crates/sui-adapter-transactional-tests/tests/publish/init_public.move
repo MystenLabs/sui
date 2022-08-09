@@ -7,19 +7,19 @@
 // initializer not valid due to public visibility
 
 module Test::M1 {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
     use sui::transfer;
 
     struct Object has key, store {
-        info: Info,
+        id: UID,
         value: u64,
     }
 
     // public initializer - should not be executed
     public fun init(ctx: &mut TxContext) {
         let value = 42;
-        let singleton = Object { info: object::new(ctx), value };
+        let singleton = Object { id: object::new(ctx), value };
         transfer::transfer(singleton, tx_context::sender(ctx))
     }
 }

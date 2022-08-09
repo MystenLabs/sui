@@ -14,12 +14,12 @@ use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
+use crate::examples::RpcExampleProvider;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui::client_commands::{EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_NAME, EXAMPLE_NFT_URL};
 use sui_config::genesis_config::GenesisConfig;
 use sui_config::SUI_CLIENT_CONFIG;
 use sui_json::SuiJsonValue;
-use sui_json_rpc::api::EventReadApiOpenRpc;
 use sui_json_rpc::api::EventStreamingApiOpenRpc;
 use sui_json_rpc::api::RpcReadApiClient;
 use sui_json_rpc::api::RpcTransactionBuilderClient;
@@ -30,13 +30,16 @@ use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, TransactionBytes, TransactionEffectsResponse,
-    TransactionResponse,
+    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiObjectInfo, TransactionBytes,
+    TransactionEffectsResponse, TransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::crypto::SuiSignature;
+use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::{start_rpc_test_network, TestNetwork};
+
+mod examples;
 
 #[derive(Debug, Parser, Clone, Copy, ArgEnum)]
 enum Action {
@@ -57,6 +60,8 @@ struct Options {
 
 const FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/spec/openrpc.json",);
 
+const MOVE_SAMPLE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/samples/move.json",);
+
 const OBJECT_SAMPLE_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/samples/objects.json",);
 
 const TRANSACTION_SAMPLE_FILE_PATH: &str =
@@ -76,14 +81,18 @@ async fn main() {
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());
     open_rpc.add_module(EventStreamingApiOpenRpc::module_doc());
-    open_rpc.add_module(EventReadApiOpenRpc::module_doc());
+    // TODO: Re-enable this when event read API is ready
+    //open_rpc.add_module(EventReadApiOpenRpc::module_doc());
     open_rpc.add_module(GatewayWalletSyncApiImpl::rpc_doc_module());
+
+    open_rpc.add_examples(RpcExampleProvider::new().examples());
 
     match options.action {
         Action::Print => {
             let content = serde_json::to_string_pretty(&open_rpc).unwrap();
             println!("{content}");
-            let (objects, txs, addresses) = create_response_sample().await.unwrap();
+            let (move_info, objects, txs, addresses) = create_response_sample().await.unwrap();
+            println!("{}", serde_json::to_string_pretty(&move_info).unwrap());
             println!("{}", serde_json::to_string_pretty(&objects).unwrap());
             println!("{}", serde_json::to_string_pretty(&txs).unwrap());
             println!("{}", serde_json::to_string_pretty(&addresses).unwrap());
@@ -92,7 +101,10 @@ async fn main() {
             let content = serde_json::to_string_pretty(&open_rpc).unwrap();
             let mut f = File::create(FILE_PATH).unwrap();
             writeln!(f, "{content}").unwrap();
-            let (objects, txs, addresses) = create_response_sample().await.unwrap();
+            let (move_info, objects, txs, addresses) = create_response_sample().await.unwrap();
+            let content = serde_json::to_string_pretty(&move_info).unwrap();
+            let mut f = File::create(MOVE_SAMPLE_FILE_PATH).unwrap();
+            writeln!(f, "{content}").unwrap();
             let content = serde_json::to_string_pretty(&objects).unwrap();
             let mut f = File::create(OBJECT_SAMPLE_FILE_PATH).unwrap();
             writeln!(f, "{content}").unwrap();
@@ -113,6 +125,7 @@ async fn main() {
 
 async fn create_response_sample() -> Result<
     (
+        MoveResponseSample,
         ObjectResponseSample,
         TransactionResponseSample,
         BTreeMap<SuiAddress, Vec<SuiObjectInfo>>,
@@ -123,8 +136,8 @@ async fn create_response_sample() -> Result<
     let working_dir = network.network.dir();
     let config = working_dir.join(SUI_CLIENT_CONFIG);
 
-    let mut context = WalletContext::new(&config)?;
-    let address = context.config.accounts.first().cloned().unwrap();
+    let mut context = WalletContext::new(&config).await?;
+    let address = context.keystore.addresses().first().cloned().unwrap();
 
     context.gateway.sync_account_state(address).await?;
 
@@ -138,10 +151,13 @@ async fn create_response_sample() -> Result<
         .get_object(coins.first().unwrap().object_id)
         .await?;
 
+    let example_move_function_arg_types = create_move_function_arg_type_response()?;
+
     let (example_nft_tx, example_nft) = get_nft_response(&mut context).await?;
     let (move_package, publish) = create_package_object_response(&mut context).await?;
     let (hero_package, hero) = create_hero_response(&mut context, &coins).await?;
     let transfer = create_transfer_response(&mut context, address, &coins).await?;
+    let transfer_sui = create_transfer_sui_response(&mut context, address, &coins).await?;
     let coin_split = create_coin_split_response(&mut context, &coins).await?;
     let error = create_error_response(address, hero_package, context, &network).await?;
 
@@ -156,6 +172,10 @@ async fn create_response_sample() -> Result<
         owned_objects.insert(account, objects);
     }
 
+    let move_info = MoveResponseSample {
+        move_function_arg_types: example_move_function_arg_types,
+    };
+
     let objects = ObjectResponseSample {
         example_nft,
         coin,
@@ -166,12 +186,22 @@ async fn create_response_sample() -> Result<
     let txs = TransactionResponseSample {
         move_call: example_nft_tx,
         transfer,
+        transfer_sui,
         coin_split,
         publish,
         error,
     };
 
-    Ok((objects, txs, owned_objects))
+    Ok((move_info, objects, txs, owned_objects))
+}
+
+fn create_move_function_arg_type_response() -> Result<Vec<MoveFunctionArgType>, anyhow::Error> {
+    Ok(vec![
+        MoveFunctionArgType::Pure,
+        MoveFunctionArgType::Object(ObjectValueKind::ByImmutableReference),
+        MoveFunctionArgType::Object(ObjectValueKind::ByMutableReference),
+        MoveFunctionArgType::Object(ObjectValueKind::ByValue),
+    ])
 }
 
 async fn create_package_object_response(
@@ -216,6 +246,32 @@ async fn create_transfer_response(
     .execute(context)
     .await?;
     if let SuiClientCommandResult::Transfer(_, certificate, effects) = response {
+        Ok(TransactionResponse::EffectResponse(
+            TransactionEffectsResponse {
+                certificate,
+                effects,
+                timestamp_ms: None,
+            },
+        ))
+    } else {
+        panic!()
+    }
+}
+
+async fn create_transfer_sui_response(
+    context: &mut WalletContext,
+    address: SuiAddress,
+    coins: &[SuiObjectInfo],
+) -> Result<TransactionResponse, anyhow::Error> {
+    let response = SuiClientCommands::TransferSui {
+        to: address,
+        sui_coin_object_id: coins.first().unwrap().object_id,
+        gas_budget: 1000,
+        amount: Some(10),
+    }
+    .execute(context)
+    .await?;
+    if let SuiClientCommandResult::TransferSui(certificate, effects) = response {
         Ok(TransactionResponse::EffectResponse(
             TransactionEffectsResponse {
                 certificate,
@@ -306,9 +362,10 @@ async fn create_error_response(
     let signature = context
         .keystore
         .sign(&address, &response.tx_bytes.to_vec()?)?;
-    let signature_byte = Base64::encode(signature.signature_bytes());
-    let pub_key = Base64::encode(signature.public_key_bytes());
-    let tx_data = response.tx_bytes.encoded();
+    let sig_scheme = signature.scheme();
+    let signature_byte = Base64::from_bytes(signature.signature_bytes());
+    let pub_key = Base64::from_bytes(signature.public_key_bytes());
+    let tx_data = response.tx_bytes;
 
     let client = Client::new();
     let request = Request::builder()
@@ -316,10 +373,11 @@ async fn create_error_response(
         .method(Method::POST)
         .header("Content-Type", "application/json")
         .body(Body::from(format!(
-            "{{ \"jsonrpc\": \"2.0\",\"method\": \"sui_executeTransaction\",\"params\": [\"{}\", \"{}\", \"{}\"],\"id\": 1 }}",
-            tx_data,
-            signature_byte,
-            pub_key
+            "{{ \"jsonrpc\": \"2.0\",\"method\": \"sui_executeTransaction\",\"params\": [{}, {}, {}, {}],\"id\": 1 }}",
+            json![tx_data],
+            json![sig_scheme],
+            json![signature_byte],
+            json![pub_key]
         )))?;
 
     let res = client.request(request).await?;
@@ -391,6 +449,11 @@ async fn get_nft_response(
 }
 
 #[derive(Serialize)]
+struct MoveResponseSample {
+    pub move_function_arg_types: Vec<MoveFunctionArgType>,
+}
+
+#[derive(Serialize)]
 struct ObjectResponseSample {
     pub example_nft: GetObjectDataResponse,
     pub coin: GetObjectDataResponse,
@@ -402,6 +465,7 @@ struct ObjectResponseSample {
 struct TransactionResponseSample {
     pub move_call: TransactionResponse,
     pub transfer: TransactionResponse,
+    pub transfer_sui: TransactionResponse,
     pub coin_split: TransactionResponse,
     pub publish: TransactionResponse,
     pub error: Value,

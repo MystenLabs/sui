@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::PublicKey;
+use crate::crypto::AuthorityPublicKey;
 use crate::error::{SuiError, SuiResult};
 use itertools::Itertools;
 use rand_latest::rngs::OsRng;
@@ -23,7 +23,7 @@ pub struct Committee {
     pub total_votes: StakeUnit,
     // Note: this is a derived structure, no need to store.
     #[serde(skip)]
-    expanded_keys: HashMap<AuthorityName, PublicKey>,
+    expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
     #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
     #[serde(skip)]
@@ -76,10 +76,10 @@ impl Committee {
     pub fn load_inner(
         voting_rights: &[(AuthorityName, StakeUnit)],
     ) -> (
-        HashMap<AuthorityName, PublicKey>,
+        HashMap<AuthorityName, AuthorityPublicKey>,
         HashMap<AuthorityName, usize>,
     ) {
-        let expanded_keys: HashMap<AuthorityName, PublicKey> = voting_rights
+        let expanded_keys: HashMap<AuthorityName, AuthorityPublicKey> = voting_rights
             .iter()
             // TODO: Verify all code path to make sure we always have valid public keys.
             // e.g. when a new validator is registering themself on-chain.
@@ -120,7 +120,7 @@ impl Committee {
         self.epoch
     }
 
-    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<PublicKey> {
+    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<AuthorityPublicKey> {
         match self.expanded_keys.get(authority) {
             // TODO: Check if this is unnecessary copying.
             Some(v) => Ok(v.clone()),
@@ -231,7 +231,7 @@ impl Committee {
         let mut total = 0;
         for (v, s, a) in items {
             total += s;
-            if threshold < total {
+            if threshold <= total {
                 return (a, v);
             }
         }
@@ -272,14 +272,14 @@ impl PartialEq for Committee {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::crypto::get_key_pair;
+    use crate::crypto::{get_key_pair, AuthorityKeyPair};
     use narwhal_crypto::traits::KeyPair;
 
     #[test]
     fn test_shuffle_by_weight() {
-        let (_, sec1) = get_key_pair();
-        let (_, sec2) = get_key_pair();
-        let (_, sec3) = get_key_pair();
+        let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
         let a1: AuthorityName = sec1.public().into();
         let a2: AuthorityName = sec2.public().into();
         let a3: AuthorityName = sec3.public().into();
@@ -322,5 +322,35 @@ mod test {
 
         let res = committee.shuffle_by_stake(None, Some(&BTreeSet::new()));
         assert_eq!(0, res.len());
+    }
+
+    #[test]
+    fn test_robust_value() {
+        let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec4): (_, AuthorityKeyPair) = get_key_pair();
+        let a1: AuthorityName = sec1.public().into();
+        let a2: AuthorityName = sec2.public().into();
+        let a3: AuthorityName = sec3.public().into();
+        let a4: AuthorityName = sec4.public().into();
+
+        let mut authorities = BTreeMap::new();
+        authorities.insert(a1, 1);
+        authorities.insert(a2, 1);
+        authorities.insert(a3, 1);
+        authorities.insert(a4, 1);
+        let committee = Committee::new(0, authorities).unwrap();
+        let items = vec![(a1, 666), (a2, 1), (a3, 2), (a4, 0)];
+        assert_eq!(
+            committee.robust_value(items.into_iter(), committee.quorum_threshold()),
+            (a3, 2)
+        );
+
+        let items = vec![(a1, "a"), (a2, "b"), (a3, "c"), (a4, "d")];
+        assert_eq!(
+            committee.robust_value(items.into_iter(), committee.quorum_threshold()),
+            (a3, "c")
+        );
     }
 }

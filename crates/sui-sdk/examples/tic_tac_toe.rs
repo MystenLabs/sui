@@ -11,15 +11,15 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
+use sui_sdk::crypto::KeystoreType;
 use sui_sdk::{
-    crypto::{Keystore, SuiKeystore},
+    crypto::SuiKeystore,
     json::SuiJsonValue,
     types::{
         base_types::{ObjectID, SuiAddress},
-        crypto::SignableBytes,
-        id::Info,
-        messages::TransactionData,
-        sui_serde::Base64,
+        crypto::Signature,
+        id::UID,
+        messages::Transaction,
     },
     SuiClient,
 };
@@ -28,7 +28,7 @@ use sui_sdk::{
 async fn main() -> Result<(), anyhow::Error> {
     let opts: TicTacToeOpts = TicTacToeOpts::parse();
     let keystore_path = opts.keystore_path.unwrap_or_else(default_keystore_path);
-    let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+    let keystore = KeystoreType::File(keystore_path).init()?;
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
@@ -88,21 +88,16 @@ impl TicTacToe {
             )
             .await?;
 
-        // Sign the transaction.
-        let transaction_bytes = create_game_call.tx_bytes.to_vec()?;
+        // Get signer from keystore
+        let signer = self.keystore.signer(player_x);
 
-        // You can do some extra verification here to make sure the transaction created is correct before signing.
-        let _transaction = TransactionData::from_signable_bytes(&transaction_bytes)?;
-
-        // Create a signature using the keystore.
-        let signature = self.keystore.sign(&player_x, &transaction_bytes)?;
-        let signature_base64 = Base64::from_bytes(signature.signature_bytes());
-        let pub_key = Base64::from_bytes(signature.public_key_bytes());
+        // Sign the transaction
+        let signature = Signature::new(&create_game_call, &signer);
 
         // Execute the transaction.
         let response = self
             .client
-            .execute_transaction(create_game_call.tx_bytes, signature_base64, pub_key)
+            .execute_transaction(Transaction::new(create_game_call, signature))
             .await?;
 
         // We know `create_game` move function will create 1 object.
@@ -183,16 +178,16 @@ impl TicTacToe {
                 )
                 .await?;
 
-            // Sign the transaction.
-            let transaction_bytes = place_mark_call.tx_bytes.to_vec()?;
-            let signature = self.keystore.sign(&my_identity, &transaction_bytes)?;
-            let signature_base64 = Base64::from_bytes(signature.signature_bytes());
-            let pub_key = Base64::from_bytes(signature.public_key_bytes());
+            // Get signer from keystore
+            let signer = self.keystore.signer(my_identity);
+
+            // Sign the transaction
+            let signature = Signature::new(&place_mark_call, &signer);
 
             // Execute the transaction.
             let response = self
                 .client
-                .execute_transaction(place_mark_call.tx_bytes, signature_base64, pub_key)
+                .execute_transaction(Transaction::new(place_mark_call, signature))
                 .await?;
 
             // Print any execution error.
@@ -303,7 +298,7 @@ enum TicTacToeCommand {
 // Data structure mirroring move object `games::shared_tic_tac_toe::TicTacToe` for deserialization.
 #[derive(Deserialize, Debug)]
 struct TicTacToeState {
-    info: Info,
+    info: UID,
     gameboard: Vec<Vec<u8>>,
     cur_turn: u8,
     game_status: u8,

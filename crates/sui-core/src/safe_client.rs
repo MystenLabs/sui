@@ -5,7 +5,7 @@
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use futures::StreamExt;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
     AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointContents, CheckpointRequest,
     CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
@@ -15,17 +15,22 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::*,
 };
-use tracing::{info, warn};
+use tap::TapFallible;
+use tracing::info;
 
 #[derive(Clone)]
 pub struct SafeClient<C> {
     authority_client: C,
     committee: Committee,
-    address: PublicKeyBytes,
+    address: AuthorityPublicKeyBytes,
 }
 
 impl<C> SafeClient<C> {
-    pub fn new(authority_client: C, committee: Committee, address: PublicKeyBytes) -> Self {
+    pub fn new(
+        authority_client: C,
+        committee: Committee,
+        address: AuthorityPublicKeyBytes,
+    ) -> Self {
         Self {
             authority_client,
             committee,
@@ -56,14 +61,16 @@ impl<C> SafeClient<C> {
             fp_ensure!(
                 signed_transaction.auth_sign_info.authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
+                    authority: self.address,
+                    reason: "Unexpected validator address in the signed tx signature".to_string()
                 }
             );
             // Check it's the right transaction
             fp_ensure!(
                 signed_transaction.digest() == digest,
                 SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
+                    authority: self.address,
+                    reason: "Unexpected digest in the signed tx".to_string()
                 }
             );
         }
@@ -75,7 +82,8 @@ impl<C> SafeClient<C> {
             fp_ensure!(
                 certificate.digest() == digest,
                 SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
+                    authority: self.address,
+                    reason: "Unexpected digest in the certified tx".to_string()
                 }
             );
         }
@@ -87,14 +95,17 @@ impl<C> SafeClient<C> {
             fp_ensure!(
                 signed_effects.auth_signature.authority == self.address,
                 SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
+                    authority: self.address,
+                    reason: "Unexpected validator address in the signed effects signature"
+                        .to_string()
                 }
             );
             // Checks it concerns the right tx
             fp_ensure!(
                 signed_effects.effects.transaction_digest == *digest,
                 SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
+                    authority: self.address,
+                    reason: "Unexpected tx digest in the signed effects".to_string()
                 }
             );
             // check that the effects digest is correct.
@@ -102,7 +113,8 @@ impl<C> SafeClient<C> {
                 fp_ensure!(
                     signed_effects.digest() == effects_digest,
                     SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address
+                        authority: self.address,
+                        reason: "Effects digest does not match with expected digest".to_string()
                     }
                 );
             }
@@ -126,7 +138,8 @@ impl<C> SafeClient<C> {
             fp_ensure!(
                 object_id == &request.object_id,
                 SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
+                    authority: self.address,
+                    reason: "Object ID mismatch".to_string()
                 }
             );
             if let ObjectInfoRequestKind::PastObjectInfo(requested_version) = &request.request_kind
@@ -134,7 +147,8 @@ impl<C> SafeClient<C> {
                 fp_ensure!(
                     version == requested_version,
                     SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address
+                        authority: self.address,
+                        reason: "Object version mismatch".to_string()
                     }
                 );
             }
@@ -148,7 +162,10 @@ impl<C> SafeClient<C> {
                     ObjectInfoRequestKind::LatestObjectInfo(_)
                 ),
                 SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
+                    authority: self.address,
+                    reason:
+                        "Object and lock data returned when request kind is not LatestObjectInfo"
+                            .to_string()
                 }
             );
 
@@ -159,7 +176,9 @@ impl<C> SafeClient<C> {
                     fp_ensure!(
                         object_and_lock.object.compute_object_reference() == obj_ref,
                         SuiError::ByzantineAuthoritySuspicion {
-                            authority: self.address
+                            authority: self.address,
+                            reason: "Requested object reference mismatch with returned object"
+                                .to_string()
                         }
                     );
                 }
@@ -169,6 +188,8 @@ impl<C> SafeClient<C> {
                     // Otherwise the authority has inconsistent data.
                     return Err(SuiError::ByzantineAuthoritySuspicion {
                         authority: self.address,
+                        reason: "Object returned without the object reference in response"
+                            .to_string(),
                     });
                 }
             };
@@ -179,7 +200,9 @@ impl<C> SafeClient<C> {
                 fp_ensure!(
                     signed_transaction.auth_sign_info.authority == self.address,
                     SuiError::ByzantineAuthoritySuspicion {
-                        authority: self.address
+                        authority: self.address,
+                        reason: "Unexpected validator address in the signed tx signature"
+                            .to_string()
                     }
                 );
             }
@@ -229,9 +252,10 @@ impl<C> SafeClient<C> {
             let reconstructed_batch = AuthorityBatch::make_next(prev_batch, transactions)?;
 
             fp_ensure!(
-                reconstructed_batch == signed_batch.batch,
+                &reconstructed_batch == signed_batch.data(),
                 SuiError::ByzantineAuthoritySuspicion {
-                    authority: self.address
+                    authority: self.address,
+                    reason: "Inconsistent batch".to_string()
                 }
             );
         }
@@ -241,7 +265,8 @@ impl<C> SafeClient<C> {
 
     /// This function is used by the higher level authority logic to report an
     /// error that could be due to this authority.
-    pub fn report_client_error(&self, error: SuiError) {
+    /// TODO: Get rid of this. https://github.com/MystenLabs/sui/issues/3740
+    pub fn report_client_error(&self, error: &SuiError) {
         info!(?error, authority =? self.address, "Client error");
     }
 }
@@ -298,10 +323,26 @@ where
             .handle_transaction(transaction)
             .await?;
         if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
-            self.report_client_error(err.clone());
+            self.report_client_error(&err);
             return Err(err);
         }
         Ok(transaction_info)
+    }
+
+    fn verify_certificate_response(
+        &self,
+        digest: &TransactionDigest,
+        response: &TransactionInfoResponse,
+    ) -> SuiResult {
+        fp_ensure!(
+            response.signed_effects.is_some(),
+            SuiError::ByzantineAuthoritySuspicion {
+                authority: self.address,
+                reason: "An Ok response from handle_certificate must contain signed effects"
+                    .to_string()
+            }
+        );
+        self.check_transaction_response(digest, None, response)
     }
 
     /// Execute a certificate.
@@ -315,8 +356,8 @@ where
             .handle_certificate(certificate)
             .await?;
 
-        if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
-            self.report_client_error(err.clone());
+        if let Err(err) = self.verify_certificate_response(&digest, &transaction_info) {
+            self.report_client_error(&err);
             return Err(err);
         }
         Ok(transaction_info)
@@ -340,7 +381,7 @@ where
             .handle_object_info_request(request.clone())
             .await?;
         if let Err(err) = self.check_object_response(&request, &response) {
-            self.report_client_error(err.clone());
+            self.report_client_error(&err);
             return Err(err);
         }
         Ok(response)
@@ -358,7 +399,7 @@ where
             .await?;
 
         if let Err(err) = self.check_transaction_response(&digest, None, &transaction_info) {
-            self.report_client_error(err.clone());
+            self.report_client_error(&err);
             return Err(err);
         }
         Ok(transaction_info)
@@ -379,7 +420,7 @@ where
             Some(&digests.effects),
             &transaction_info,
         ) {
-            self.report_client_error(err.clone());
+            self.report_client_error(&err);
             return Err(err);
         }
         Ok(transaction_info)
@@ -465,17 +506,12 @@ where
             .authority_client
             .handle_checkpoint(request.clone())
             .await?;
-        if let Err(err) = self.verify_checkpoint_response(&request, &resp) {
-            warn!(
-                "Potential byzantine validator {} due to: {:?}",
-                self.address, err
-            );
-            Err(SuiError::ByzantineAuthoritySuspicion {
-                authority: self.address,
-            })
-        } else {
-            Ok(resp)
-        }
+        self.verify_checkpoint_response(&request, &resp)
+            .map_err(|err| {
+                self.report_client_error(&err);
+                err
+            })?;
+        Ok(resp)
     }
 
     /// Handle Batch information requests for this authority.
@@ -510,12 +546,12 @@ where
                             signed_batch,
                             txs_and_last_batch,
                         ) {
-                            client.report_client_error(err.clone());
+                            client.report_client_error(&err);
                             Some(Err(err))
                         } else {
                             // Insert a fresh vector for the new batch of transactions
-                            let _ =
-                                txs_and_last_batch.insert((Vec::new(), signed_batch.batch.clone()));
+                            let _ = txs_and_last_batch
+                                .insert((Vec::new(), signed_batch.data().clone()));
                             Some(batch_info_item)
                         }
                     }
@@ -524,9 +560,11 @@ where
                         // And here we insert the tuple into the batch.
                         match txs_and_last_batch {
                             None => {
-                                let err =
-                                    SuiError::ByzantineAuthoritySuspicion { authority: address };
-                                client.report_client_error(err.clone());
+                                let err = SuiError::ByzantineAuthoritySuspicion {
+                                    authority: address,
+                                    reason: "Stream does not start with a batch".to_string(),
+                                };
+                                client.report_client_error(&err);
                                 Some(Err(err))
                             }
                             Some(txs) => {
@@ -544,5 +582,57 @@ where
             },
         ));
         Ok(Box::pin(stream))
+    }
+
+    fn verify_epoch(
+        &self,
+        requested_epoch_id: Option<EpochId>,
+        response: &EpochResponse,
+    ) -> SuiResult {
+        if let Some(epoch) = &response.epoch_info {
+            fp_ensure!(
+                requested_epoch_id.is_none() || requested_epoch_id == Some(epoch.epoch()),
+                SuiError::InvalidEpochResponse("Responded epoch number mismatch".to_string())
+            );
+        }
+        match (requested_epoch_id, &response.epoch_info) {
+            (None, None) => Err(SuiError::InvalidEpochResponse(
+                "Latest epoch must not be None".to_string(),
+            )),
+            (Some(epoch_id), None) => {
+                fp_ensure!(
+                    epoch_id != 0,
+                    SuiError::InvalidEpochResponse("Genesis epoch must be available".to_string())
+                );
+                Ok(())
+            }
+            (_, Some(AuthenticatedEpoch::Genesis(_))) => {
+                // TODO: Verify the epoch data using genesis committee
+                Ok(())
+            }
+            (_, Some(AuthenticatedEpoch::Signed(_))) => {
+                // TODO: Verify the epoch data using previous committee
+                Ok(())
+            }
+            (_, Some(AuthenticatedEpoch::Certified(_))) => {
+                // TODO: Verify the epoch data using previous committee
+                Ok(())
+            }
+        }
+    }
+
+    pub async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        let epoch_id = request.epoch_id;
+        let authority = self.address;
+        let response = self.authority_client.handle_epoch(request).await?;
+        self.verify_epoch(epoch_id, &response)
+            .map_err(|err| SuiError::ByzantineAuthoritySuspicion {
+                authority,
+                reason: err.to_string(),
+            })
+            .tap_err(|err| {
+                self.report_client_error(err);
+            })?;
+        Ok(response)
     }
 }

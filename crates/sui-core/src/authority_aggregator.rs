@@ -20,7 +20,7 @@ use sui_types::{
         CheckpointContents, CheckpointRequest, CheckpointResponse,
     },
 };
-use tracing::{debug, info, instrument, trace, Instrument};
+use tracing::{debug, error, info, instrument, trace, Instrument};
 
 use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
@@ -278,7 +278,7 @@ where
                     processed_certificates.insert(cert_digest);
                     continue;
                 }
-                Err(SuiError::LockErrors { .. }) => {}
+                Err(SuiError::ObjectErrors { .. }) => {}
                 Err(e) => return Err(e),
             }
 
@@ -488,8 +488,8 @@ where
                         let source_client = &self.authority_clients[&source_authority];
                         let destination_client = &self.authority_clients[&destination_authority];
 
-                        source_client.report_client_error(inner_err.clone());
-                        destination_client.report_client_error(inner_err);
+                        source_client.report_client_error(&inner_err);
+                        destination_client.report_client_error(&inner_err);
 
                         debug!(
                             ?source_authority,
@@ -1182,24 +1182,11 @@ where
             .await
     }
 
-    /// Takes a transaction, brings all authorities up to date with the versions of the
-    /// objects needed, and then submits the transaction to make a certificate.
+    /// Submits the transaction to a quorum of validators to make a certificate.
     pub async fn process_transaction(
         &self,
         transaction: Transaction,
     ) -> Result<CertifiedTransaction, SuiError> {
-        // Find out which objects are required by this transaction and
-        // ensure they are synced on authorities.
-        let required_ids: Vec<ObjectID> = transaction
-            .data
-            .input_objects()?
-            .iter()
-            .map(|o| o.object_id())
-            .collect();
-
-        let (_active_objects, _deleted_objects) =
-            self.sync_all_given_objects(&required_ids).await?;
-
         // Now broadcast the transaction to all authorities.
         let threshold = self.committee.quorum_threshold();
         let validity = self.committee.validity_threshold();
@@ -1278,7 +1265,6 @@ where
                                     self.metrics.num_bad_stake.observe(state.bad_stake as f64);
                                     state.certificate =
                                         Some(CertifiedTransaction::new_with_signatures(
-                                            self.committee.epoch(),
                                             transaction_ref.clone(),
                                             state.signatures.clone(),
                                             &self.committee,
@@ -1442,7 +1428,7 @@ where
                         // LockErrors indicate the authority may be out-of-date.
                         // We only attempt to update authority and retry if we are seeing LockErrors.
                         // For any other error, we stop here and return.
-                        if !matches!(res, Err(SuiError::LockErrors { .. })) {
+                        if !matches!(res, Err(SuiError::ObjectErrors { .. })) {
                             debug!(
                                 tx_digest = ?tx_digest,
                                 ?name,
@@ -1506,14 +1492,7 @@ where
                                     ));
                                 }
                             }
-                            maybe_err => {
-                                // Returning Ok but without signed effects is unexpected.
-                                let err = match maybe_err {
-                                    Err(err) => err,
-                                    Ok(_) => SuiError::ByzantineAuthoritySuspicion {
-                                        authority: name,
-                                    }
-                                };
+                            Err(err) => {
                                 state.errors.push(err);
                                 state.bad_stake += weight;
                                 if state.bad_stake > validity {
@@ -1525,6 +1504,7 @@ where
                                     return Err(SuiError::QuorumFailedToExecuteCertificate { errors: state.errors });
                                 }
                             }
+                            _ => { unreachable!("SafeClient should have ruled out this case") }
                         }
                         Ok(ReduceOutput::Continue(state))
                     })
@@ -1555,12 +1535,7 @@ where
                     good_stake = stake,
                     "Found an effect with good stake over threshold"
                 );
-                return CertifiedTransactionEffects::new(
-                    certificate.auth_sign_info.epoch,
-                    effects,
-                    signatures,
-                    &self.committee,
-                );
+                return CertifiedTransactionEffects::new(effects, signatures, &self.committee);
             }
         }
 
@@ -1619,7 +1594,12 @@ where
                     if effects.effects.is_object_mutated_here(obj_ref) {
                         is_ok = true;
                     } else {
-                        // TODO: Report a byzantine fault here
+                        // TODO: Throw a byzantine fault here
+                        error!(
+                            ?object_id,
+                            ?tx_digest,
+                            "get_object_info_execute. Byzantine failure!"
+                        );
                         continue;
                     }
                 }
@@ -1823,7 +1803,13 @@ where
                             if authorities.is_some() {
                                 // The caller is passing in authorities that have claimed to have the
                                 // cert and effects, so if they now say they don't, they're byzantine.
-                                Err(SuiError::ByzantineAuthoritySuspicion { authority })
+                                Err(SuiError::ByzantineAuthoritySuspicion {
+                                    authority,
+                                    reason: format!(
+                                        "Validator claimed to have the cert and effects for tx {:?} but did not return them when queried",
+                                        digests.transaction,
+                                    )
+                                })
                             } else {
                                 Err(SuiError::TransactionNotFound {
                                     digest: digests.transaction,
@@ -1910,18 +1896,11 @@ where
                                     return Ok(ReduceOutput::End(state));
                                 }
                             }
-
-                            // validator returned OK but did not give us an effects
-                            Ok(_) => {
-                                info!(?name, "peer failed to return effects");
-                                state.errors.push((
-                                    name,
-                                    SuiError::ByzantineAuthoritySuspicion { authority: name },
-                                ));
-                            }
-
                             Err(e) => {
                                 state.errors.push((name, e));
+                            }
+                            _ => {
+                                unreachable!("SafeClient should have ruled out this case")
                             }
                         }
 

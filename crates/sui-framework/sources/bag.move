@@ -10,7 +10,7 @@
 /// Bag is different from the Collection type in that Collection
 /// only supports owning objects of the same type.
 module sui::bag {
-    use sui::object::{Self, ID, Info};
+    use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
@@ -32,13 +32,13 @@ module sui::bag {
     const DEFAULT_MAX_CAPACITY: u64 = 65536;
 
     struct Bag has key {
-        info: Info,
+        id: UID,
         objects: VecSet<ID>,
         max_capacity: u64,
     }
 
     struct Item<T: store> has key {
-        info: Info,
+        id: UID,
         value: T,
     }
 
@@ -51,7 +51,7 @@ module sui::bag {
     public fun new_with_max_capacity(ctx: &mut TxContext, max_capacity: u64): Bag {
         assert!(max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0, EInvalidMaxCapacity);
         Bag {
-            info: object::new(ctx),
+            id: object::new(ctx),
             objects: vec_set::empty(),
             max_capacity,
         }
@@ -70,9 +70,9 @@ module sui::bag {
     /// Add a new object to the Bag.
     public fun add<T: store>(c: &mut Bag, value: T, ctx: &mut TxContext): TypedID<Item<T>> {
         assert!(size(c) + 1 <= c.max_capacity, EMaxCapacityExceeded);
-        let info = object::new(ctx);
-        vec_set::insert(&mut c.objects, *object::info_id(&info));
-        let item = Item { info, value };
+        let id = object::new(ctx);
+        vec_set::insert(&mut c.objects, object::uid_to_inner(&id));
+        let item = Item { id, value };
         let item_id = typed_id::new(&item);
         transfer::transfer_to_object(item, c);
         item_id
@@ -86,9 +86,9 @@ module sui::bag {
     /// Remove and return the object from the Bag.
     /// Abort if the object is not found.
     public fun remove<T: store>(c: &mut Bag, item: Item<T>): T {
-        let Item { info, value } = item;
-        vec_set::remove(&mut c.objects, object::info_id(&info));
-        object::delete(info);
+        let Item { id, value } = item;
+        vec_set::remove(&mut c.objects, &object::uid_to_inner(&id));
+        object::delete(id);
         value
     }
 
@@ -109,7 +109,7 @@ module sui::bag {
 
     public fun transfer_to_object_id(
         obj: Bag,
-        owner_id: &Info,
+        owner_id: &UID,
     ) {
         transfer::transfer_to_object_id(obj, owner_id)
     }

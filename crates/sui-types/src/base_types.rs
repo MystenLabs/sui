@@ -26,7 +26,7 @@ use sha2::Sha512;
 use sha3::Sha3_256;
 
 use crate::committee::EpochId;
-use crate::crypto::{PublicKey, PublicKeyBytes};
+use crate::crypto::{AuthorityPublicKey, AuthorityPublicKeyBytes, KeypairTraits, SuiPublicKey};
 use crate::error::ExecutionError;
 use crate::error::ExecutionErrorKind;
 use crate::error::SuiError;
@@ -67,7 +67,7 @@ pub type VersionNumber = SequenceNumber;
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct UserData(pub Option<[u8; 32]>);
 
-pub type AuthorityName = PublicKeyBytes;
+pub type AuthorityName = AuthorityPublicKeyBytes;
 
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, JsonSchema)]
@@ -145,8 +145,7 @@ impl SuiAddress {
         S: serde::ser::Serializer,
     {
         serializer.serialize_str(
-            &*key
-                .map(|addr| encode_bytes_hex(&addr))
+            &key.map(|addr| encode_bytes_hex(&addr))
                 .unwrap_or_else(|| "".to_string()),
         )
     }
@@ -183,10 +182,11 @@ impl TryFrom<Vec<u8>> for SuiAddress {
     }
 }
 
-impl From<&PublicKeyBytes> for SuiAddress {
-    fn from(pkb: &PublicKeyBytes) -> Self {
+impl From<&AuthorityPublicKeyBytes> for SuiAddress {
+    fn from(pkb: &AuthorityPublicKeyBytes) -> Self {
         let mut hasher = Sha3_256::default();
-        hasher.update(pkb.as_ref());
+        hasher.update(&[AuthorityPublicKey::SIGNATURE_SCHEME.flag()]);
+        hasher.update(pkb);
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
@@ -195,10 +195,11 @@ impl From<&PublicKeyBytes> for SuiAddress {
     }
 }
 
-impl From<&PublicKey> for SuiAddress {
-    fn from(pkb: &PublicKey) -> Self {
+impl<T: SuiPublicKey> From<&T> for SuiAddress {
+    fn from(pk: &T) -> Self {
         let mut hasher = Sha3_256::default();
-        hasher.update(pkb.as_ref());
+        hasher.update(&[T::SIGNATURE_SCHEME.flag()]);
+        hasher.update(pk);
         let g_arr = hasher.finalize();
 
         let mut res = [0u8; SUI_ADDRESS_LENGTH];
@@ -481,8 +482,11 @@ impl ObjectDigest {
     }
 }
 
-pub fn get_new_address() -> SuiAddress {
-    crate::crypto::get_key_pair().0
+pub fn get_new_address<K: KeypairTraits>() -> SuiAddress
+where
+    <K as KeypairTraits>::PubKey: SuiPublicKey,
+{
+    crate::crypto::get_key_pair::<K>().0
 }
 
 pub fn bytes_as_hex<B, S>(bytes: B, serializer: S) -> Result<S::Ok, S::Error>
@@ -930,11 +934,21 @@ impl FromStr for SuiAddress {
     }
 }
 
-impl std::str::FromStr for ObjectID {
+impl FromStr for ObjectID {
     type Err = ObjectIDParseError;
 
     fn from_str(s: &str) -> Result<Self, ObjectIDParseError> {
         // Try to match both the literal (0xABC..) and the normal (ABC)
         Self::from_hex(s).or_else(|_| Self::from_hex_literal(s))
+    }
+}
+
+impl FromStr for TransactionDigest {
+    type Err = base64ct::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut result = [0u8; TRANSACTION_DIGEST_LENGTH];
+        base64ct::Base64::decode(s, &mut result)?;
+        Ok(TransactionDigest(result))
     }
 }

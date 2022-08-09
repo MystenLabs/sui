@@ -3,15 +3,10 @@
 
 use anyhow::Result;
 use futures::TryFutureExt;
-use jsonrpsee::http_server::HttpServerHandle;
-use jsonrpsee::ws_server::WsServerHandle;
-use multiaddr::Multiaddr;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::option::Option::None;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
-use tracing::info;
-
+use std::{sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
@@ -19,25 +14,34 @@ use sui_core::authority_server::ValidatorService;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_active::ActiveAuthority,
-    authority_client::NetworkAuthorityClient,
+    authority_client::{
+        make_network_authority_client_sets_from_genesis,
+        make_network_authority_client_sets_from_system_state, NetworkAuthorityClient,
+    },
     checkpoints::CheckpointStore,
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
-use sui_json_rpc::JsonRpcServerBuilder;
 use sui_network::api::ValidatorServer;
+use sui_quorum_driver::{QuorumDriver, QuorumDriverHandler};
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     follower_store::FollowerStore,
     node_sync_store::NodeSyncStore,
     IndexStore,
 };
-use sui_types::crypto::ToFromBytes;
+use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
+use tracing::info;
 
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
+use sui_json_rpc::http_server::HttpServerHandle;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_types::crypto::{KeypairTraits, PublicKeyBytes};
+use sui_json_rpc::ws_server::WsServerHandle;
+use sui_json_rpc::JsonRpcServerBuilder;
+use sui_types::crypto::KeypairTraits;
+use typed_store::traits::DBMapTableUtil;
 
 pub mod admin;
 pub mod metrics;
@@ -53,6 +57,7 @@ pub struct SuiNode {
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
     active: Option<Arc<ActiveAuthority<NetworkAuthorityClient>>>,
+    quorum_driver_handler: Option<QuorumDriverHandler<NetworkAuthorityClient>>,
 }
 
 impl SuiNode {
@@ -74,10 +79,11 @@ impl SuiNode {
 
         let secret = Arc::pin(config.key_pair().copy());
         let committee = genesis.committee()?;
-        let store = Arc::new(AuthorityStore::open(config.db_path().join("store"), None));
+        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
+        let epoch_store = Arc::new(EpochStore::new(config.db_path().join("epochs")));
 
         let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
-            config.db_path().join("checkpoints"),
+            &config.db_path().join("checkpoints"),
             None,
             committee.epoch,
             config.public_key(),
@@ -87,13 +93,16 @@ impl SuiNode {
         let index_store = if config.consensus_config().is_some() {
             None
         } else {
-            Some(Arc::new(IndexStore::open(
+            Some(Arc::new(IndexStore::open_tables_read_write(
                 config.db_path().join("indexes"),
                 None,
             )))
         };
 
-        let follower_store = Arc::new(FollowerStore::open(config.db_path().join("follower_db"))?);
+        let follower_store = Arc::new(FollowerStore::open_tables_read_write(
+            config.db_path().join("follower_db"),
+            None,
+        ));
 
         let event_store = if config.enable_event_processing {
             let path = config.db_path().join("events.db");
@@ -110,6 +119,7 @@ impl SuiNode {
                 config.public_key(),
                 secret,
                 store,
+                epoch_store,
                 index_store.clone(),
                 event_store,
                 Some(checkpoint_store),
@@ -119,55 +129,43 @@ impl SuiNode {
             .await,
         );
 
+        let mut net_config = mysten_network::config::Config::new();
+        net_config.connect_timeout = Some(Duration::from_secs(5));
+        net_config.request_timeout = Some(Duration::from_secs(5));
+        net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
+
+        let sui_system_state = state.get_sui_system_state_object().await?;
+
+        let authority_clients = if config.enable_reconfig && sui_system_state.epoch > 0 {
+            make_network_authority_client_sets_from_system_state(&sui_system_state, &net_config)
+        } else {
+            make_network_authority_client_sets_from_genesis(genesis, &net_config)
+        }?;
+        let net = AuthorityAggregator::new(
+            state.clone_committee(),
+            authority_clients,
+            AuthAggMetrics::new(&prometheus_registry),
+        );
+
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
-        let is_node = !is_validator;
+        let is_full_node = !is_validator;
 
-        let should_start_follower = is_node || config.enable_gossip;
+        let quorum_driver_handler = if is_full_node {
+            Some(QuorumDriverHandler::new(net.clone()))
+        } else {
+            None
+        };
+        let should_start_follower = is_full_node || config.enable_gossip;
 
         let mut active = None;
 
         let (gossip_handle, execute_driver_handle, checkpoint_process_handle) =
             if should_start_follower {
-                let mut net_config = mysten_network::config::Config::new();
-                net_config.connect_timeout = Some(Duration::from_secs(5));
-                net_config.request_timeout = Some(Duration::from_secs(5));
-                net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
-
-                let mut authority_clients = BTreeMap::new();
-
-                let sui_system_state = state.get_sui_system_state_object().await?;
-
-                if config.enable_reconfig && sui_system_state.epoch > 0 {
-                    // Create NetworkAuthorityClient with this epoch's network information
-                    let epoch_validators = &sui_system_state.validators.active_validators;
-
-                    for validator in epoch_validators {
-                        let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
-                        let channel = net_config.connect_lazy(&address)?;
-                        let client = NetworkAuthorityClient::new(channel);
-                        let name: &[u8] = &validator.metadata.name;
-                        let public_key_bytes = PublicKeyBytes::from_bytes(name)?;
-                        authority_clients.insert(public_key_bytes, client);
-                    }
-                } else {
-                    // Create NetworkAuthorityClient with the genesis set
-                    for validator in genesis.validator_set() {
-                        let channel = net_config
-                            .connect_lazy(validator.network_address())
-                            .unwrap();
-                        let client = NetworkAuthorityClient::new(channel);
-                        authority_clients.insert(validator.public_key(), client);
-                    }
-                }
-                let net = AuthorityAggregator::new(
-                    state.clone_committee(),
-                    authority_clients,
-                    AuthAggMetrics::new(&prometheus_registry),
-                );
-
-                let pending_store =
-                    Arc::new(NodeSyncStore::open(config.db_path().join("node_sync_db"))?);
+                let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
+                    config.db_path().join("node_sync_db"),
+                    None,
+                ));
 
                 let active_authority = Arc::new(ActiveAuthority::new(
                     state.clone(),
@@ -264,6 +262,7 @@ impl SuiNode {
             _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,
             active,
+            quorum_driver_handler,
         };
 
         info!("SuiNode started!");
@@ -277,6 +276,22 @@ impl SuiNode {
 
     pub fn active(&self) -> Option<Arc<ActiveAuthority<NetworkAuthorityClient>>> {
         self.active.clone()
+    }
+
+    pub fn quorum_driver(&self) -> Option<Arc<QuorumDriver<NetworkAuthorityClient>>> {
+        self.quorum_driver_handler
+            .as_ref()
+            .map(|qdh| qdh.clone_quorum_driver())
+    }
+
+    pub fn subscribe_to_quorum_driver_effects(
+        &self,
+    ) -> Result<tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>>
+    {
+        self.quorum_driver_handler
+            .as_ref()
+            .map(|qdh| qdh.subscribe())
+            .ok_or_else(|| anyhow::anyhow!("Quorum Driver is not enabled in this node."))
     }
 
     //TODO watch/wait on all the components

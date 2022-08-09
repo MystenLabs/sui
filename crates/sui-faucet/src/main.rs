@@ -10,13 +10,14 @@ use axum::{
 };
 use clap::Parser;
 use http::Method;
+use std::env;
 use std::{
     borrow::Cow,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     sync::Arc,
     time::Duration,
 };
-use sui::client_commands::{SuiClientCommands, WalletContext};
+use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tower::ServiceBuilder;
@@ -24,8 +25,7 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::{info, warn};
 use uuid::Uuid;
 
-// TODO: Increase this once we use multiple gas objects
-const CONCURRENCY_LIMIT: usize = 1;
+const CONCURRENCY_LIMIT: usize = 30;
 
 #[derive(Parser)]
 #[clap(
@@ -59,12 +59,20 @@ struct AppState<F = SimpleFaucet> {
     // TODO: add counter
 }
 
+const PROM_PORT_ADDR: &str = "0.0.0.0:9184";
+
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     // initialize tracing
     let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
         .with_env()
         .init();
+
+    let max_concurrency = match env::var("MAX_CONCURRENCY") {
+        Ok(val) => val.parse::<usize>().unwrap(),
+        _ => CONCURRENCY_LIMIT,
+    };
+    info!("Max concurrency: {max_concurrency}.");
 
     let context = create_wallet_context().await?;
 
@@ -78,8 +86,14 @@ async fn main() -> Result<(), anyhow::Error> {
         ..
     } = config;
 
+    let prom_binding = PROM_PORT_ADDR.parse().unwrap();
+    info!("Starting Prometheus HTTP endpoint at {}", prom_binding);
+    let prometheus_registry = sui_node::metrics::start_prometheus_server(prom_binding);
+
     let app_state = Arc::new(AppState {
-        faucet: SimpleFaucet::new(context).await.unwrap(),
+        faucet: SimpleFaucet::new(context, &prometheus_registry)
+            .await
+            .unwrap(),
         config,
     });
 
@@ -97,7 +111,7 @@ async fn main() -> Result<(), anyhow::Error> {
                 .layer(HandleErrorLayer::new(handle_error))
                 .layer(cors)
                 .buffer(request_buffer_size)
-                .concurrency_limit(CONCURRENCY_LIMIT)
+                .concurrency_limit(max_concurrency)
                 .timeout(Duration::from_secs(timeout_in_seconds))
                 .layer(Extension(app_state))
                 .into_inner(),
@@ -152,26 +166,9 @@ async fn request_gas(
 }
 
 async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
-    // Create Wallet context.
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
-    let mut context = WalletContext::new(&wallet_conf)?;
-    let address = context
-        .config
-        .accounts
-        .first()
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;
-
-    info!(?address, "Sync client states");
-    // Sync client to retrieve objects from the network.
-    SuiClientCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await
-    .map_err(|err| anyhow::anyhow!("Fail to sync client state: {}", err))?;
-    Ok(context)
+    WalletContext::new(&wallet_conf).await
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {

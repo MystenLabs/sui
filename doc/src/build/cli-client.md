@@ -1,5 +1,5 @@
 ---
-title: Sui CLI Quick Start
+title: Use Sui CLI to Start and Manage Network
 ---
 
 Welcome to the Sui tutorial on the Sui CLI developed

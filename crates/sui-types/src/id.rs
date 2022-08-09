@@ -1,10 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    base_types::{ObjectID, SequenceNumber},
-    SUI_FRAMEWORK_ADDRESS,
-};
+use crate::{base_types::ObjectID, SUI_FRAMEWORK_ADDRESS};
 use move_core_types::{
     ident_str,
     identifier::IdentStr,
@@ -15,15 +12,13 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 pub const OBJECT_MODULE_NAME: &IdentStr = ident_str!("object");
-pub const INFO_STRUCT_NAME: &IdentStr = ident_str!("Info");
+pub const UID_STRUCT_NAME: &IdentStr = ident_str!("UID");
 pub const ID_STRUCT_NAME: &IdentStr = ident_str!("ID");
 
 /// Rust version of the Move sui::object::Info type
 #[derive(Debug, Serialize, Deserialize, JsonSchema, Clone, Eq, PartialEq)]
-pub struct Info {
+pub struct UID {
     pub id: ID,
-    pub version: u64,
-    // pub child_count: Option<u64>,
 }
 
 /// Rust version of the Move sui::object::ID type
@@ -33,12 +28,10 @@ pub struct ID {
     pub bytes: ObjectID,
 }
 
-impl Info {
-    pub fn new(bytes: ObjectID, version: SequenceNumber) -> Self {
+impl UID {
+    pub fn new(bytes: ObjectID) -> Self {
         Self {
             id: { ID { bytes } },
-            version: version.value(),
-            // child_count: None,
         }
     }
 
@@ -46,17 +39,13 @@ impl Info {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             module: OBJECT_MODULE_NAME.to_owned(),
-            name: INFO_STRUCT_NAME.to_owned(),
+            name: UID_STRUCT_NAME.to_owned(),
             type_params: Vec::new(),
         }
     }
 
     pub fn object_id(&self) -> &ObjectID {
         &self.id.bytes
-    }
-
-    pub fn version(&self) -> SequenceNumber {
-        SequenceNumber::from(self.version)
     }
 
     pub fn to_bcs_bytes(&self) -> Vec<u8> {
@@ -66,17 +55,10 @@ impl Info {
     pub fn layout() -> MoveStructLayout {
         MoveStructLayout::WithTypes {
             type_: Self::type_(),
-            fields: vec![
-                MoveFieldLayout::new(
-                    ident_str!("id").to_owned(),
-                    MoveTypeLayout::Struct(ID::layout()),
-                ),
-                MoveFieldLayout::new(ident_str!("version").to_owned(), MoveTypeLayout::U64),
-                // MoveFieldLayout::new(
-                //     ident_str!("child_count").to_owned(),
-                //     MoveTypeLayout::Vector(Box::new(MoveTypeLayout::U64)),
-                // ),
-            ],
+            fields: vec![MoveFieldLayout::new(
+                ident_str!("id").to_owned(),
+                MoveTypeLayout::Struct(ID::layout()),
+            )],
         }
     }
 }

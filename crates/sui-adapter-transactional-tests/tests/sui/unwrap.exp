@@ -9,7 +9,8 @@ written: object(103)
 
 task 2 'view-object'. lines 11-11:
 Owner: Account Address ( A )
-Contents: sui::object_basics::Object {info: sui::object::Info {id: sui::object::ID {bytes: fake(104)}, version: 1u64}, value: 10u64}
+Version: 1
+Contents: sui::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(104)}}, value: 10u64}
 
 task 3 'run'. lines 13-13:
 created: object(106)
@@ -22,4 +23,5 @@ deleted: object(106)
 
 task 5 'view-object'. lines 17-17:
 Owner: Account Address ( A )
-Contents: sui::object_basics::Object {info: sui::object::Info {id: sui::object::ID {bytes: fake(104)}, version: 3u64}, value: 10u64}
+Version: 2
+Contents: sui::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(104)}}, value: 10u64}

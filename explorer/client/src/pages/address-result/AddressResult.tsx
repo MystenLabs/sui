@@ -5,11 +5,11 @@ import { useParams } from 'react-router-dom';
 
 import { ReactComponent as AddressIcon } from '../../assets/AddressIcon.svg';
 import ErrorResult from '../../components/error-result/ErrorResult';
+import GoBack from '../../components/goback/GoBack';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transactions-for-id/TxForID';
-
-import styles from './AddressResult.module.css';
+import resultheaderstyle from '../../styles/resultheader.module.css';
 
 type DataType = {
     id: string;
@@ -30,12 +30,13 @@ function AddressResult() {
 
     if (addressID !== undefined) {
         return (
-            <div className={styles.results} id="textResults">
-                <div className={styles.addressid}>
-                    <span>
+            <>
+                <div className={resultheaderstyle.btmborder}>
+                    <GoBack />
+                    <div className={resultheaderstyle.category}>
                         <AddressIcon /> Address
-                    </span>
-                    <div id="addressID">
+                    </div>
+                    <div className={resultheaderstyle.address} id="addressID">
                         <Longtext
                             text={addressID}
                             category="addresses"
@@ -53,7 +54,7 @@ function AddressResult() {
                     <h1>Transactions</h1>
                     <TxForID id={addressID} category="address" />
                 </div>
-            </div>
+            </>
         );
     } else {
         return <ErrorResult id={addressID} errorMsg={'Something went wrong'} />;

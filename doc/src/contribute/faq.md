@@ -24,16 +24,15 @@ Use these online resources:
 
 ### What does Sui offer over other blockchains?
 
-Sui offers ease of development, a developer interface, fast transaction speeds, a sane object model, and better security. Sui calls the consensus protocol only for transactions affecting objects owned by multiple accounts. This means simple transactions complete almost immediately.
+Sui offers ease of development, a developer interface, fast transaction speeds, a sane object model, and better security. Sui calls the [consensus protocol](../learn/architecture/consensus.md) only for transactions affecting objects owned by multiple accounts. This means simple transactions complete almost immediately.
 
 See these resources on the [Sui Developer Portal](https://docs.sui.io/) for the complete story on why we built Sui:
-
-
 
 * [Why Move?](../learn/why-move)
 * [How Sui Move differs from Core Move](../learn/sui-move-diffs.md)
 * [How Sui Works](../learn/how-sui-works.md)
 * [Sui Compared to Other Blockchains](../learn/sui-compared.md)
+* [Narwhal and Tusk, Sui's Consensus Engine](../learn/architecture/consensus.md)
 
 
 ### Is Sui based on Diem?
@@ -128,12 +127,16 @@ Not currently. Packages are immutable objects, and this property is relied upon 
 
 ### Is there any information on node architecture and running validators on Sui?
 
+Yes! You can now [register to participate](https://airtable.com/shr3phh3FCZYhZUDF) in [Sui Incentivized Testnet as a validator](https://sui.io/resources-sui/validator-registration-open/)!
+
 Section four in the [Sui Smart Contract Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper is the best reference for node architecture.
 
 See the instructions to [run a Sui Fullnode](../build/fullnode.md).
 
 
 ### Can I run a Sui validator node?
+
+You can now [register to participate](https://airtable.com/shr3phh3FCZYhZUDF) in [Sui Incentivized Testnet as a validator](https://sui.io/resources-sui/validator-registration-open/)!
 
 We have a public [Sui Devnet](../explore/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
 

@@ -45,7 +45,7 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
                 match items {
                     // Upon receiving a batch
                     Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(batch)) )) => {
-                        max_seq = Some(batch.batch.next_sequence_number);
+                        max_seq = Some(batch.data().next_sequence_number);
                         info!(?max_seq, "Received Batch");
                     }
                     // Upon receiving a transaction digest we store it, if it is not processed already.

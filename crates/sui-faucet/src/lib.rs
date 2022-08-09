@@ -3,6 +3,7 @@
 
 mod errors;
 mod faucet;
+mod metrics;
 mod requests;
 mod responses;
 

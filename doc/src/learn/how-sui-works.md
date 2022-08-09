@@ -52,11 +52,11 @@ Sui validators agree on and execute transactions in parallel with high throughpu
 
 This section is written for a technical audience wishing to gain more insight about how Sui achieves its main performance and security objectives.
 
-Sui assumes the typical blockchain transaction is a user-to-user transfer or asset manipulation and optimizes for that scenario. As a result, Sui distinguishes between two types of assets (i) owned objects that can only be modified by its specific owner, and (ii) shared objects that have no specific owners and can be modified by more than one user. This distinction allows a design that forgoes consensus for simple transactions involving only owned objects to achieve very low latency.
+Sui assumes the typical blockchain transaction is a user-to-user transfer or asset manipulation and optimizes for that scenario. As a result, Sui distinguishes between two types of assets (i) owned objects that can be modified only by their specific owner, and (ii) shared objects that have no specific owners and can be modified by more than one user. This distinction allows for a design that achieves very low latency by forgoing [consensus](architecture/consensus.md) for simple transactions involving only owned objects.
 
 Sui mitigates a major hindrance to blockchain growth: [head-of-line blocking](https://en.wikipedia.org/wiki/Head-of-line_blocking). Blockchain nodes maintain an accumulator that represents the state of the entire blockchain, such as the latest certified transactions. Nodes participate in a consensus protocol to add an update to that state reflecting the transaction’s modification to blocks (add, remove, mutate). That consensus protocol leads to an agreement on the state of the blockchain before the increment, the validity and suitability of the state update itself, and the state of the blockchain after the increment. On a periodic basis, these increments are collected in the accumulator.
 
-In Sui, this consensus protocol is required only when the transaction involves shared objects. For this, Sui offers the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus. When shared objects are involved, the Sui validators play the role of more active validators in other blockchains to totally order the transaction with respect to other transactions accessing shared objects.
+In Sui, this [consensus](architecture/consensus.md)  protocol is required only when the transaction involves shared objects. For this, Sui offers the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus. When shared objects are involved, the Sui validators play the role of more active validators in other blockchains to totally order the transaction with respect to other transactions accessing shared objects.
 
 Because Sui focuses on managing specific objects rather than a single aggregation of state, it also reports on them in a unique way: (i) every object in Sui has a unique version number, and (ii) every new version is created from a transaction that may involve several dependencies, themselves versioned objects.
 
@@ -91,7 +91,9 @@ While those steps demand more of the sender, performing them efficiently can sti
 
 ## Complex contracts
 
-Complex smart contracts may benefit from shared objects where more than one user can mutate those objects (following smart contract specific rules). In this case, Sui totally orders all transactions involving shared objects using a consensus protocol. Sui uses a novel peer-reviewed consensus protocol based on [Narwhal](https://arxiv.org/abs/2105.11827). This is state-of-the-art in terms of both performance and robustness.
+Complex smart contracts may benefit from shared objects where more than one user can mutate those objects (following smart contract specific rules). In this case, Sui totally orders all transactions involving shared objects using a [consensus](architecture/consensus.md) protocol. Sui uses a novel peer-reviewed consensus protocol based on [Narwhal](https://github.com/MystenLabs/narwhal). This is state-of-the-art in terms of both performance and robustness.
+
+The Narwhal mempool offers a high-throughput data availability engine and a scaled architecture, splitting the disk I/O and networking requirements across several workers. And Tusk offers a zero-message overhead consensus algorithm, leveraging graph traversals.
 
 Transactions involving shared objects also contain at least one owned object to pay for gas fees. It is thus essential to carefully compose the protocol dealing with owned objects with the protocol sequencing the transaction to guarantee Sui’s security properties. When shared objects are involved, transaction submission follows these steps:
 

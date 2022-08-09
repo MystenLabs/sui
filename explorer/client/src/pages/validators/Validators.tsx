@@ -123,14 +123,6 @@ export function getValidatorState(network: string): Promise<ValidatorState> {
         });
 }
 
-export function sortValidatorsByStake(validators: Validator[]) {
-    validators.sort((a: Validator, b: Validator): number => {
-        if (a.fields.stake_amount < b.fields.stake_amount) return 1;
-        if (a.fields.stake_amount > b.fields.stake_amount) return -1;
-        return 0;
-    });
-}
-
 const ValidatorPageResult = (): JSX.Element => {
     const { state } = useLocation();
 
@@ -145,26 +137,7 @@ const ValidatorPageResult = (): JSX.Element => {
     );
 };
 
-export function stakeColumn(validator: {
-    stake: BigInt;
-    stakePercent: number;
-}): JSX.Element {
-    return (
-        <div>
-            {' '}
-            {validator.stake.toString()}{' '}
-            <span className={styles.stakepercent}>
-                {' '}
-                {validator.stakePercent.toFixed(2)} %
-            </span>
-        </div>
-    );
-}
-
-export const getStakePercent = (stake: bigint, total: bigint): number =>
-    Number(BigInt(stake) * BigInt(100)) / Number(total);
-
-export function processValidators(set: Validator[], totalStake: bigint) {
+export function processValidators(set: Validator[]) {
     return set.map((av, i) => {
         const rawName = av.fields.metadata.fields.name;
         const name = textDecoder.decode(
@@ -173,9 +146,6 @@ export function processValidators(set: Validator[], totalStake: bigint) {
         return {
             name: name,
             address: av.fields.metadata.fields.sui_address,
-            stake: av.fields.stake_amount,
-            stakePercent: getStakePercent(av.fields.stake_amount, totalStake),
-            delegation_count: av.fields.delegation_count || 0,
             position: i + 1,
         };
     });
@@ -191,19 +161,12 @@ export function getTabFooter(count: number) {
 }
 
 function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
-    const totalStake = state.validators.fields.total_validator_stake;
-    // sort by order of descending stake
-    sortValidatorsByStake(state.validators.fields.active_validators);
-
     const validatorsData = processValidators(
-        state.validators.fields.active_validators,
-        totalStake
+        state.validators.fields.active_validators
     );
 
-    let cumulativeStakePercent = 0;
     const tableData = {
         data: validatorsData.map((validator) => {
-            cumulativeStakePercent += validator.stakePercent;
             return {
                 name: validator.name,
                 address: (
@@ -214,14 +177,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                         isLink={true}
                     />
                 ),
-                stake: stakeColumn(validator),
-                cumulativeStake: (
-                    <span className={styles.stakepercent}>
-                        {' '}
-                        {cumulativeStakePercent.toFixed(2)} %
-                    </span>
-                ),
-                delegation: validator.delegation_count,
                 position: validator.position,
             };
         }),
@@ -233,18 +188,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
             {
                 headerLabel: 'Name',
                 accessorKey: 'name',
-            },
-            {
-                headerLabel: 'STAKE',
-                accessorKey: 'stake',
-            },
-            {
-                headerLabel: 'Cumulative Stake',
-                accessorKey: 'cumulativeStake',
-            },
-            {
-                headerLabel: 'Delegators',
-                accessorKey: 'delegation',
             },
             {
                 headerLabel: 'Address',
@@ -266,7 +209,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                             category="validators"
                             isLink={false}
                             isCopyButton={false}
-                            /*showIconButton={true}*/
                             alttext=""
                         />
                     </TabFooter>

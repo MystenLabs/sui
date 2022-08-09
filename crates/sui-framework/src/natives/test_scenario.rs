@@ -3,6 +3,7 @@
 
 use crate::EventType;
 use core::panic;
+use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, value::MoveTypeLayout};
 use move_vm_runtime::native_functions::NativeContext;
@@ -52,7 +53,7 @@ struct OwnedObj {
 // This will require extending NativeContext with a function to map `Type` (which is just an index
 // into the module's StructHandle table for structs) to something human-readable like `TypeTag`.
 // TODO: add a native function that prints the log of transfers, deletes, wraps for debugging purposes
-type Inventory = BTreeMap<ObjectID, OwnedObj>;
+type Inventory = LinkedHashMap<ObjectID, OwnedObj>;
 
 /// Return the object ID involved in an event.
 /// This depends on the value format for each event type.

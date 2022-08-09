@@ -1,32 +1,30 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use super::{authority_store_tables::StoreTables, *};
+use super::{authority_store_tables::AuthorityStoreTables, *};
 use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::fmt::Debug;
 use std::iter;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
+use std::{fmt::Debug, path::PathBuf};
 use sui_storage::{
     mutex_table::{LockGuard, MutexTable},
     write_ahead_log::{DBWriteAheadLog, WriteAheadLog},
     LockService,
 };
-use sui_types::base_types::SequenceNumber;
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
-use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::object::{Owner, OBJECT_START_VERSION};
+use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, trace};
 use typed_store::rocks::{DBBatch, DBMap};
-use typed_store::traits::Map;
+use typed_store::traits::{DBMapTableUtil, Map};
 
 pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<EmptySignInfo>;
@@ -40,28 +38,6 @@ const NUM_SHARDS: usize = 4096;
 /// The key where the latest consensus index is stored in the database.
 // TODO: Make a single table (e.g., called `variables`) storing all our lonely variables in one place.
 const LAST_CONSENSUS_INDEX_ADDR: u64 = 0;
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
-pub enum AuthenticatedEpoch {
-    Signed(SignedEpoch),
-    Certified(CertifiedEpoch),
-}
-
-impl AuthenticatedEpoch {
-    pub fn epoch(&self) -> EpochId {
-        match self {
-            Self::Signed(s) => s.epoch_info.epoch(),
-            Self::Certified(c) => c.epoch_info.epoch(),
-        }
-    }
-
-    pub fn epoch_info(&self) -> &EpochInfo {
-        match self {
-            Self::Signed(s) => &s.epoch_info,
-            Self::Certified(c) => &c.epoch_info,
-        }
-    }
-}
 
 /// ALL_OBJ_VER determines whether we want to store all past
 /// versions of every object in the store. Authority doesn't store
@@ -85,21 +61,21 @@ pub struct SuiDataStore<S> {
     // A notifier for new pending certificates
     pending_notifier: Arc<Notify>,
 
-    pub(crate) tables: StoreTables<S>,
+    pub(crate) tables: AuthorityStoreTables<S>,
 }
 
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Open an authority store by directory path
-    pub fn open<P: AsRef<Path> + Clone>(path: P, db_options: Option<Options>) -> Self {
-        let tables = StoreTables::open_read_write(path.clone(), db_options);
+    pub fn open(path: &Path, db_options: Option<Options>) -> Self {
+        let tables = AuthorityStoreTables::open_tables_read_write(path.to_path_buf(), db_options);
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
         // subdir of the data store directory
-        let lockdb_path = path.as_ref().join("lockdb");
+        let lockdb_path: PathBuf = path.join("lockdb");
         let lock_service =
             LockService::new(lockdb_path, None).expect("Could not initialize lockdb");
 
-        let wal_path = path.as_ref().join("recovery_log");
+        let wal_path = path.join("recovery_log");
         let wal = Arc::new(DBWriteAheadLog::new(wal_path));
 
         // Get the last sequence item
@@ -607,9 +583,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     ///
     /// Internally it checks that all locks for active inputs are at the correct
     /// version, and then writes locks, objects, certificates, parents atomically.
-    pub async fn update_state<BackingPackageStore>(
+    pub async fn update_state(
         &self,
-        temporary_store: TemporaryStore<BackingPackageStore>,
+        inner_temporary_store: InnerTemporaryStore,
         certificate: &CertifiedTransaction,
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
@@ -628,7 +604,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         self.sequence_tx(
             write_batch,
-            temporary_store,
+            inner_temporary_store,
             transaction_digest,
             proposed_seq,
             effects,
@@ -643,16 +619,16 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Persist temporary storage to DB for genesis modules
-    pub async fn update_objects_state_for_genesis<BackingPackageStore>(
+    pub async fn update_objects_state_for_genesis(
         &self,
-        temporary_store: TemporaryStore<BackingPackageStore>,
+        inner_temporary_store: InnerTemporaryStore,
         transaction_digest: TransactionDigest,
     ) -> Result<(), SuiError> {
         debug_assert_eq!(transaction_digest, TransactionDigest::genesis());
         let write_batch = self.tables.certificates.batch();
         self.batch_update_objects(
             write_batch,
-            temporary_store,
+            inner_temporary_store,
             transaction_digest,
             UpdateType::Genesis,
         )
@@ -693,9 +669,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             std::iter::once((transaction_digest, &certificate)),
         )?;
 
+        let inner_temporary_store = temporary_store.into_inner();
         self.sequence_tx(
             write_batch,
-            temporary_store,
+            inner_temporary_store,
             transaction_digest,
             proposed_seq,
             &effects,
@@ -704,10 +681,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         .await
     }
 
-    async fn sequence_tx<BackingPackageStore>(
+    async fn sequence_tx(
         &self,
         write_batch: DBBatch,
-        temporary_store: TemporaryStore<BackingPackageStore>,
+        inner_temporary_store: InnerTemporaryStore,
         transaction_digest: &TransactionDigest,
         proposed_seq: TxSequenceNumber,
         effects: &TransactionEffectsEnvelope<S>,
@@ -717,7 +694,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let assigned_seq = self
             .batch_update_objects(
                 write_batch,
-                temporary_store,
+                inner_temporary_store,
                 *transaction_digest,
                 UpdateType::Transaction(proposed_seq, *effects_digest),
             )
@@ -753,14 +730,19 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     }
 
     /// Helper function for updating the objects in the state
-    async fn batch_update_objects<BackingPackageStore>(
+    async fn batch_update_objects(
         &self,
         mut write_batch: DBBatch,
-        temporary_store: TemporaryStore<BackingPackageStore>,
+        inner_temporary_store: InnerTemporaryStore,
         transaction_digest: TransactionDigest,
         update_type: UpdateType,
     ) -> SuiResult<Option<TxSequenceNumber>> {
-        let (objects, active_inputs, written, deleted, _events) = temporary_store.into_inner();
+        let InnerTemporaryStore {
+            objects,
+            mutable_inputs: active_inputs,
+            written,
+            deleted,
+        } = inner_temporary_store;
         trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
 
@@ -1062,7 +1044,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .iter()
             .map(|(id, version, _)| ((digest, *id), *version))
             .collect();
-        info!(?sequenced, "locking");
+        debug!(?sequenced, "Shared object locks sequenced from effects");
 
         let mut write_batch = self.tables.assigned_object_versions.batch();
         write_batch = write_batch.insert_batch(&self.tables.assigned_object_versions, sequenced)?;
@@ -1220,7 +1202,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .batches
             .iter()
             .skip_prior_to(&start)?
-            .take_while(|(_seq, batch)| batch.batch.initial_sequence_number < end)
+            .take_while(|(_seq, batch)| batch.data().initial_sequence_number < end)
             .map(|(_, batch)| batch)
             .collect();
 
@@ -1242,12 +1224,12 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let first_seq = batches
             .first()
             .ok_or(SuiError::NoBatchesFoundError)?
-            .batch
+            .data()
             .next_sequence_number;
         let mut last_seq = batches
             .last()
             .unwrap() // if the first exists the last exists too
-            .batch
+            .data()
             .next_sequence_number;
 
         let mut in_sequence = last_seq;
@@ -1336,61 +1318,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .expect("Sui System State object deserialization cannot fail");
         Ok(result)
     }
-
-    // Epoch related functions
-
-    /// This function should be called at the end of the epoch identified by `epoch`,
-    /// and after this call, we expect that the node's committee has changed
-    /// to `next_epoch_committee`.
-    pub fn sign_new_epoch(
-        &self,
-        epoch: EpochId,
-        next_epoch_committee: Committee,
-        authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
-        last_checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult {
-        let latest_epoch = self.get_latest_authenticated_epoch();
-        match latest_epoch {
-            Some(a) => {
-                fp_ensure!(
-                    a.epoch() + 1 == epoch,
-                    SuiError::from("Unexpected new epoch number")
-                );
-            }
-            None => {
-                fp_ensure!(
-                    epoch == 0,
-                    SuiError::from("Could not find previous epoch information")
-                );
-            }
-        }
-
-        let signed_epoch = SignedEpoch::new(
-            epoch,
-            next_epoch_committee,
-            authority,
-            secret,
-            last_checkpoint,
-        )?;
-
-        let mut writer = self.tables.epochs.batch();
-        writer = writer.insert_batch(
-            &self.tables.epochs,
-            iter::once((epoch, AuthenticatedEpoch::Signed(signed_epoch))),
-        )?;
-        writer.write()?;
-        Ok(())
-    }
-
-    pub fn get_latest_authenticated_epoch(&self) -> Option<AuthenticatedEpoch> {
-        self.tables
-            .epochs
-            .iter()
-            .skip_to_last()
-            .next()
-            .map(|(_, a)| a)
-    }
 }
 
 impl SuiDataStore<AuthoritySignInfo> {
@@ -1426,6 +1353,14 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> BackingPackageStore
             );
         }
         Ok(package)
+    }
+}
+
+impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> ParentSync for SuiDataStore<S> {
+    fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
+        Ok(self
+            .get_latest_parent_entry(object_id)?
+            .map(|(obj_ref, _)| obj_ref))
     }
 }
 
@@ -1476,7 +1411,7 @@ impl ObjectKey {
 
 impl From<ObjectRef> for ObjectKey {
     fn from(object_ref: ObjectRef) -> Self {
-        (&object_ref).into()
+        ObjectKey::from(&object_ref)
     }
 }
 

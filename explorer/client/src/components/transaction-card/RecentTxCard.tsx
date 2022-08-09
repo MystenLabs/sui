@@ -3,7 +3,7 @@
 
 import * as Sentry from '@sentry/react';
 import cl from 'classnames';
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
@@ -221,8 +221,16 @@ function LatestTxCard({ ...data }: RecentTx) {
     const [network] = useContext(NetworkContext);
     const [searchParams, setSearchParams] = useSearchParams();
 
-    const [pageIndex, setpageIndex] = useState(
+    const [pageIndex, setPageIndex] = useState(
         parseInt(searchParams.get('p') || '1', 10) || 1
+    );
+
+    const handlePageChange = useCallback(
+        (newPage: number) => {
+            setPageIndex(newPage);
+            setSearchParams({ p: newPage.toString() });
+        },
+        [setSearchParams]
     );
 
     // update the page index when the user clicks on the pagination buttons
@@ -231,10 +239,6 @@ function LatestTxCard({ ...data }: RecentTx) {
         // If pageIndex is greater than maxTxPage, set to maxTxPage
         const maxTxPage = Math.ceil(count / txPerPage);
         const pg = pageIndex > maxTxPage ? maxTxPage : pageIndex;
-        setpageIndex(pg);
-        pageIndex > 1
-            ? setSearchParams({ p: pg.toString() })
-            : setSearchParams({});
 
         getRecentTransactions(network, count, txPerPage, pg)
             .then(async (resp: any) => {
@@ -299,7 +303,7 @@ function LatestTxCard({ ...data }: RecentTx) {
                 totalItems={count}
                 itemsPerPage={txPerPage}
                 updateItemsPerPage={setTxPerPage}
-                onPagiChangeFn={setpageIndex}
+                onPagiChangeFn={handlePageChange}
                 currentPage={pageIndex}
                 stats={stats}
             />

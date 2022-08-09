@@ -46,8 +46,8 @@ macro_rules! exit_main {
 #[allow(clippy::large_enum_variant)]
 pub enum SuiError {
     // Object misuse issues
-    #[error("Error acquiring lock for object(s): {:?}", errors)]
-    LockErrors { errors: Vec<SuiError> },
+    #[error("Error checking transaction input objects: {:?}", errors)]
+    ObjectErrors { errors: Vec<SuiError> },
     #[error("Attempt to transfer an object that's not owned.")]
     TransferUnownedError,
     #[error("Attempt to transfer an object that does not have public transfer. Object transfer must be done instead using a distinct Move function call.")]
@@ -79,6 +79,8 @@ pub enum SuiError {
     // Signature verification
     #[error("Signature is not valid: {}", error)]
     InvalidSignature { error: String },
+    #[error("Sender Signature must be verified separately from Authority Signature")]
+    SenderSigUnbatchable,
     #[error("Value was not signed by the correct sender: {}", error)]
     IncorrectSigner { error: String },
     #[error("Value was not signed by a known authority")]
@@ -288,10 +290,11 @@ pub enum SuiError {
     AuthorityInformationUnavailable,
     #[error("Failed to update authority.")]
     AuthorityUpdateFailure,
-    #[error(
-        "We have received cryptographic level of evidence that authority {authority:?} is faulty in a Byzantine manner."
-    )]
-    ByzantineAuthoritySuspicion { authority: AuthorityName },
+    #[error("Validator {authority:?} is faulty in a Byzantine manner: {reason:?}")]
+    ByzantineAuthoritySuspicion {
+        authority: AuthorityName,
+        reason: String,
+    },
     #[error(
         "Sync from authority failed. From {xsource:?} to {destination:?}, digest {tx_digest:?}: {error:?}",
     )]
@@ -338,6 +341,8 @@ pub enum SuiError {
     InconsistentGatewayResult { error: String },
     #[error("Invalid transaction range query to the gateway: {:?}", error)]
     GatewayInvalidTxRangeQuery { error: String },
+    #[error("Gateway checking transaction validity failed: {:?}", error)]
+    GatewayTransactionPrepError { error: String },
 
     // Errors related to the authority-consensus interface.
     #[error("Authority state can be modified by a single consensus client at the time")]
@@ -392,6 +397,12 @@ pub enum SuiError {
 
     #[error("Invalid committee composition")]
     InvalidCommittee(String),
+
+    #[error("Invalid authenticated epoch: {0}")]
+    InvalidAuthenticatedEpoch(String),
+
+    #[error("Invalid epoch request response: {0}")]
+    InvalidEpochResponse(String),
 }
 
 pub type SuiResult<T = ()> = Result<T, SuiError>;

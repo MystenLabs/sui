@@ -14,11 +14,10 @@ use std::{fs, path::Path};
 use sui_adapter::adapter;
 use sui_adapter::adapter::MoveVM;
 use sui_adapter::in_memory_storage::InMemoryStorage;
-use sui_adapter::temporary_store::TemporaryStore;
+use sui_adapter::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::crypto::PublicKey;
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
@@ -61,7 +60,7 @@ impl Genesis {
         )
     }
 
-    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee<PublicKey> {
+    pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee {
         let narwhal_committee = self
             .validator_set
             .iter()
@@ -138,6 +137,16 @@ impl Genesis {
     pub fn to_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).expect("failed to serialize genesis")
     }
+
+    pub fn sha3(&self) -> [u8; 32] {
+        use digest::Digest;
+        use std::io::Write;
+
+        let mut digest = sha3::Sha3_256::default();
+        digest.write_all(&self.to_bytes()).unwrap();
+        let hash = digest.finalize();
+        hash.into()
+    }
 }
 
 impl Serialize for Genesis {
@@ -202,7 +211,7 @@ impl<'de> Deserialize<'de> for Genesis {
 
 pub struct Builder {
     objects: BTreeMap<ObjectID, Object>,
-    validators: BTreeMap<PublicKeyBytes, ValidatorInfo>,
+    validators: BTreeMap<AuthorityPublicKeyBytes, ValidatorInfo>,
 }
 
 impl Default for Builder {
@@ -433,7 +442,7 @@ fn process_package(
 
     debug_assert!(ctx.digest() == TransactionDigest::genesis());
     let mut temporary_store =
-        TemporaryStore::new(&store, InputObjects::new(filtered), ctx.digest());
+        TemporaryStore::new(&*store, InputObjects::new(filtered), ctx.digest());
     let package_id = ObjectID::from(*modules[0].self_id().address());
     let natives = native_functions.clone();
     let mut gas_status = SuiGasStatus::new_unmetered();
@@ -452,7 +461,9 @@ fn process_package(
         &mut gas_status,
     )?;
 
-    let (_objects, _mutable_inputs, written, deleted, _events) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -467,7 +478,7 @@ pub fn generate_genesis_system_object(
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
     let mut temporary_store =
-        TemporaryStore::new(&store, InputObjects::new(vec![]), genesis_digest);
+        TemporaryStore::new(&*store, InputObjects::new(vec![]), genesis_digest);
 
     let mut pubkeys = Vec::new();
     let mut sui_addresses = Vec::new();
@@ -500,7 +511,9 @@ pub fn generate_genesis_system_object(
         genesis_ctx,
     )?;
 
-    let (_objects, _mutable_inputs, written, deleted, _events) = temporary_store.into_inner();
+    let InnerTemporaryStore {
+        written, deleted, ..
+    } = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -515,7 +528,7 @@ mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
     use narwhal_crypto::traits::KeyPair;
-    use sui_types::crypto::get_key_pair_from_rng;
+    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
 
     #[test]
     fn roundtrip() {
@@ -535,9 +548,7 @@ mod test {
             .generate_accounts(&mut rand::rngs::OsRng)
             .unwrap();
 
-        let mut builder = Builder::new().add_objects(objects);
-
-        let key = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
             public_key: key.public().into(),
@@ -551,8 +562,7 @@ mod test {
             narwhal_consensus_address: utils::new_network_address(),
         };
 
-        builder = builder.add_validator(validator);
-
+        let builder = Builder::new().add_objects(objects).add_validator(validator);
         builder.save(dir.path()).unwrap();
         Builder::load(dir.path()).unwrap();
     }

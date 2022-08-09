@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::fmt::{Display, Formatter};
 use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
-use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
+use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
@@ -237,10 +238,32 @@ impl CheckpointSummary {
     }
 }
 
+impl Display for CheckpointSummary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {} }}",
+            self.epoch,
+            self.sequence_number,
+            hex::encode(&self.content_digest),
+        )
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointSummaryEnvelope<S> {
     pub summary: CheckpointSummary,
     pub auth_signature: S,
+}
+
+impl Display for SignedCheckpointSummary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "SignedCheckpointSummary {{ summary: {}, signature: {} }}",
+            self.summary, self.auth_signature,
+        )
+    }
 }
 
 pub type SignedCheckpointSummary = CheckpointSummaryEnvelope<AuthoritySignInfo>;
@@ -317,6 +340,16 @@ impl SignedCheckpointSummary {
 
 pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo>;
 
+impl Display for CertifiedCheckpointSummary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "CertifiedCheckpointSummary {{ summary: {}, signature: {} }}",
+            self.summary, self.auth_signature,
+        )
+    }
+}
+
 impl CertifiedCheckpointSummary {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.
     pub fn aggregate(
@@ -337,7 +370,6 @@ impl CertifiedCheckpointSummary {
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
             auth_signature: AuthorityWeakQuorumSignInfo::new_with_signatures(
-                committee.epoch,
                 signed_checkpoints
                     .into_iter()
                     .map(|v| (v.auth_signature.authority, v.auth_signature.signature))

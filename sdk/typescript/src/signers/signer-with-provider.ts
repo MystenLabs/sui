@@ -13,6 +13,7 @@ import {
   MergeCoinTransaction,
   SplitCoinTransaction,
   TransferObjectTransaction,
+  TransferSuiTransaction,
   TxnDataSerializer,
   PublishTransaction,
 } from './txn-data-serializers/txn-data-serializer';
@@ -61,9 +62,19 @@ export abstract class SignerWithProvider implements Signer {
     const sig = await this.signData(txBytes);
     return await this.provider.executeTransaction(
       txBytes.toString(),
+      sig.signatureScheme,
       sig.signature.toString(),
       sig.pubKey.toString()
     );
+  }
+
+  /**
+   * Trigger gateway to sync account state related to the address,
+   * based on the account state on validators.
+   */
+  async syncAccountState(): Promise<any> {
+    const address = await this.getAddress();
+    return await this.provider.syncAccountState(address);
   }
 
   /**
@@ -74,6 +85,20 @@ export abstract class SignerWithProvider implements Signer {
   ): Promise<TransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newTransferObject(
+      signerAddress,
+      transaction
+    );
+    return await this.signAndExecuteTransaction(txBytes);
+  }
+
+  /**
+   * Serialize and Sign a `TransferSui` transaction and submit to the Gateway for execution
+   */
+  async transferSui(
+    transaction: TransferSuiTransaction
+  ): Promise<TransactionResponse> {
+    const signerAddress = await this.getAddress();
+    const txBytes = await this.serializer.newTransferSui(
       signerAddress,
       transaction
     );
@@ -122,9 +147,7 @@ export abstract class SignerWithProvider implements Signer {
     return await this.signAndExecuteTransaction(txBytes);
   }
 
-  async publish(
-    transaction: PublishTransaction
-  ): Promise<TransactionResponse> {
+  async publish(transaction: PublishTransaction): Promise<TransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPublish(
       signerAddress,

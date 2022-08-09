@@ -23,6 +23,7 @@ pub mod event;
 pub mod gas;
 pub mod gas_coin;
 pub mod id;
+pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;
 pub mod move_package;
@@ -53,4 +54,8 @@ const fn get_hex_address_two() -> AccountAddress {
     let mut addr = [0u8; AccountAddress::LENGTH];
     addr[AccountAddress::LENGTH - 1] = 2u8;
     AccountAddress::new(addr)
+}
+
+pub fn sui_framework_address_concat_string(suffix: &str) -> String {
+    format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
 }

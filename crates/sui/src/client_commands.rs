@@ -16,17 +16,17 @@ use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
+use tracing::info;
+
+use sui_framework::build_move_package_to_bytes;
+use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GetObjectDataResponse, MergeCoinResponse, PublishResponse, SplitCoinResponse, SuiObjectInfo,
     SuiParsedObject,
 };
-use tracing::info;
-
-use sui_core::gateway_state::GatewayClient;
-use sui_framework::build_move_package_to_bytes;
-use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
-use sui_sdk::crypto::Keystore;
+use sui_sdk::crypto::SuiKeystore;
+use sui_sdk::{ClientType, SuiClient};
 use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
@@ -36,7 +36,7 @@ use sui_types::{
     SUI_FRAMEWORK_ADDRESS,
 };
 
-use crate::config::{Config, GatewayType, PersistedConfig, SuiClientConfig};
+use crate::config::{Config, PersistedConfig, SuiClientConfig};
 
 pub const EXAMPLE_NFT_NAME: &str = "Example NFT";
 pub const EXAMPLE_NFT_DESCRIPTION: &str = "An NFT created by the Sui Command Line Tool";
@@ -331,7 +331,7 @@ impl SuiClientCommands {
 
                 let data = context
                     .gateway
-                    .public_transfer_object(from, object_id, gas, gas_budget, to)
+                    .transfer_object(from, object_id, gas, gas_budget, to)
                     .await?;
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
@@ -377,7 +377,7 @@ impl SuiClientCommands {
             }
 
             SuiClientCommands::Addresses => {
-                SuiClientCommandResult::Addresses(context.config.accounts.clone())
+                SuiClientCommandResult::Addresses(context.keystore.addresses())
             }
 
             SuiClientCommands::Objects { address } => {
@@ -401,10 +401,8 @@ impl SuiClientCommands {
                 SuiClientCommandResult::SyncClientState
             }
             SuiClientCommands::NewAddress => {
-                let address = context.keystore.add_random_key()?;
-                context.config.accounts.push(address);
-                context.config.save()?;
-                SuiClientCommandResult::NewAddress(address)
+                let (address, phrase) = context.keystore.generate_new_key()?;
+                SuiClientCommandResult::NewAddress((address, phrase))
             }
             SuiClientCommands::Gas { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -458,7 +456,7 @@ impl SuiClientCommands {
             }
             SuiClientCommands::Switch { address, gateway } => {
                 if let Some(addr) = address {
-                    if !context.config.accounts.contains(&addr) {
+                    if !context.keystore.addresses().contains(&addr) {
                         return Err(anyhow!("Address {} not managed by wallet", addr));
                     }
                     context.config.active_address = Some(addr);
@@ -467,7 +465,7 @@ impl SuiClientCommands {
 
                 if let Some(gateway) = &gateway {
                     // TODO: handle embedded gateway
-                    context.config.gateway = GatewayType::RPC(gateway.clone());
+                    context.config.gateway = ClientType::RPC(gateway.clone());
                     context.config.save()?;
                 }
 
@@ -525,12 +523,12 @@ impl SuiClientCommands {
 
 pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
-    pub keystore: Box<dyn Keystore>,
-    pub gateway: GatewayClient,
+    pub keystore: SuiKeystore,
+    pub gateway: SuiClient,
 }
 
 impl WalletContext {
-    pub fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
+    pub async fn new(config_path: &Path) -> Result<Self, anyhow::Error> {
         let config: SuiClientConfig = PersistedConfig::read(config_path).map_err(|err| {
             err.context(format!(
                 "Cannot open wallet config file at {:?}",
@@ -539,16 +537,16 @@ impl WalletContext {
         })?;
         let config = config.persisted(config_path);
         let keystore = config.keystore.init()?;
-        let gateway = config.gateway.init()?;
+        let client = config.gateway.init().await?;
         let context = Self {
             config,
             keystore,
-            gateway,
+            gateway: client,
         };
         Ok(context)
     }
     pub fn active_address(&mut self) -> Result<SuiAddress, anyhow::Error> {
-        if self.config.accounts.is_empty() {
+        if self.keystore.addresses().is_empty() {
             return Err(anyhow!(
                 "No managed addresses. Create new address with `new-address` command."
             ));
@@ -559,7 +557,7 @@ impl WalletContext {
         self.config.active_address = Some(
             self.config
                 .active_address
-                .unwrap_or(*self.config.accounts.get(0).unwrap()),
+                .unwrap_or(*self.keystore.addresses().get(0).unwrap()),
         );
 
         Ok(self.config.active_address.unwrap())
@@ -680,28 +678,19 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
-            SuiClientCommandResult::NewAddress(address) => {
-                writeln!(writer, "Created new keypair for address : {}", &address)?;
+            SuiClientCommandResult::NewAddress((address, recovery_phrase)) => {
+                writeln!(writer, "Created new keypair for address : [{address}]")?;
+                writeln!(writer, "Secret Recovery Phrase : [{recovery_phrase}]")?;
             }
             SuiClientCommandResult::Gas(gases) => {
                 // TODO: generalize formatting of CLI
-                writeln!(
-                    writer,
-                    " {0: ^42} | {1: ^10} | {2: ^11}",
-                    "Object ID", "Version", "Gas Value"
-                )?;
+                writeln!(writer, " {0: ^42} | {1: ^11}", "Object ID", "Gas Value")?;
                 writeln!(
                     writer,
                     "----------------------------------------------------------------------"
                 )?;
                 for gas in gases {
-                    writeln!(
-                        writer,
-                        " {0: ^42} | {1: ^10} | {2: ^11}",
-                        gas.id(),
-                        u64::from(gas.version()),
-                        gas.value()
-                    )?;
+                    writeln!(writer, " {0: ^42} | {1: ^11}", gas.id(), gas.value())?;
                 }
             }
             SuiClientCommandResult::SplitCoin(response) => {
@@ -846,7 +835,7 @@ pub enum SuiClientCommandResult {
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,
-    NewAddress(SuiAddress),
+    NewAddress((SuiAddress, String)),
     Gas(Vec<GasCoin>),
     SplitCoin(SplitCoinResponse),
     MergeCoin(MergeCoinResponse),

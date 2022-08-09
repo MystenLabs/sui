@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { memo, useState, useCallback, useEffect } from 'react';
+import { memo, useState, useCallback, useEffect, useRef } from 'react';
 
 import { numberSuffix } from '../../utils/numberUtil';
 
@@ -30,14 +30,16 @@ function Pagination({
     // Connects pageIndex to input page value
 
     const [pageIndex, setPageIndex] = useState(currentPage - 1);
+    const previousPageIndex = useRef(pageIndex);
 
     useEffect(() => {
         setPageIndex(currentPage - 1);
     }, [currentPage]);
 
     useEffect(() => {
-        if (onPagiChangeFn) {
-            onPagiChangeFn(pageIndex + 1);
+        if (pageIndex !== previousPageIndex.current) {
+            previousPageIndex.current = pageIndex;
+            onPagiChangeFn?.(pageIndex + 1);
         }
     }, [pageIndex, onPagiChangeFn]);
 

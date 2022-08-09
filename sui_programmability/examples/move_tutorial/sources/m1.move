@@ -2,17 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module my_first_package::m1 {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
     struct Sword has key, store {
-        info: Info,
+        id: UID,
         magic: u64,
         strength: u64,
     }
 
     struct Forge has key, store {
-        info: Info,
+        id: UID,
         swords_created: u64,
     }
 
@@ -21,7 +21,7 @@ module my_first_package::m1 {
         use sui::transfer;
         use sui::tx_context;
         let admin = Forge {
-            info: object::new(ctx),
+            id: object::new(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher
@@ -45,7 +45,7 @@ module my_first_package::m1 {
         use sui::transfer;
         // create a sword
         let sword = Sword {
-            info: object::new(ctx),
+            id: object::new(ctx),
             magic: magic,
             strength: strength,
         };
@@ -139,7 +139,7 @@ module my_first_package::m1 {
 
         // create a sword
         let sword = Sword {
-            info: object::new(&mut ctx),
+            id: object::new(&mut ctx),
             magic: 42,
             strength: 7,
         };

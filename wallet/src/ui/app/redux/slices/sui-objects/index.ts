@@ -1,7 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { getObjectExistsResponse } from '@mysten/sui.js';
+import {
+    getObjectExistsResponse,
+    getTotalGasUsed,
+    getTransactionEffectsResponse,
+    getTransactionDigest,
+} from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -52,20 +57,38 @@ export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     }
 );
 
+type NFTTxResponse = {
+    timestamp_ms?: number;
+    status?: string;
+    gasFee?: number;
+    txId?: string;
+};
+
 export const transferSuiNFT = createAsyncThunk<
-    void,
+    NFTTxResponse,
     { nftId: ObjectId; recipientAddress: SuiAddress; transferCost: number },
     AppThunkConfig
 >(
     'transferSuiNFT',
     async (data, { extra: { api, keypairVault }, dispatch }) => {
-        await ExampleNFT.TransferNFT(
+        const txRes = await ExampleNFT.TransferNFT(
             api.getSignerInstance(keypairVault.getKeyPair()),
             data.nftId,
             data.recipientAddress,
             data.transferCost
         );
+
         await dispatch(fetchAllOwnedObjects());
+        const txn = getTransactionEffectsResponse(txRes);
+        const txnDigest = txn ? getTransactionDigest(txn.certificate) : null;
+        const txnResp = {
+            timestamp_ms: txn?.timestamp_ms,
+            status: txn?.effects?.status?.status,
+            gasFee: txn ? getTotalGasUsed(txn) : 0,
+            txId: txnDigest,
+        };
+
+        return txnResp as NFTTxResponse;
     }
 );
 interface SuiObjectsManualState {

@@ -2,8 +2,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +24,8 @@ use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use tracing::{debug, error, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
+use sui_config::gateway::GatewayConfig;
+use sui_config::ValidatorInfo;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::{Data, ObjectFormatOptions, Owner};
 use sui_types::{
@@ -38,6 +41,7 @@ use sui_types::{
 
 use crate::authority::ResolverWrapper;
 use crate::authority_aggregator::AuthAggMetrics;
+use crate::authority_client::NetworkAuthorityClient;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -171,7 +175,7 @@ pub struct GatewayState<A> {
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
     pub fn new(
-        path: PathBuf,
+        path: &Path,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         prometheus_registry: &Registry,
@@ -186,7 +190,7 @@ impl<A> GatewayState<A> {
     }
 
     pub fn new_with_authorities(
-        path: PathBuf,
+        path: &Path,
         authorities: AuthorityAggregator<A>,
         metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
@@ -220,6 +224,48 @@ impl<A> GatewayState<A> {
     #[cfg(test)]
     pub fn store(&self) -> &Arc<GatewayStore> {
         &self.store
+    }
+}
+
+impl GatewayState<NetworkAuthorityClient> {
+    pub fn create_client(
+        config: &GatewayConfig,
+        prometheus_registry: Option<&Registry>,
+    ) -> Result<GatewayClient, anyhow::Error> {
+        let committee = Self::make_committee(config)?;
+        let authority_clients = Self::make_authority_clients(config);
+        let default_registry = Registry::new();
+        let prometheus_registry = prometheus_registry.unwrap_or(&default_registry);
+        Ok(Arc::new(GatewayState::new(
+            &config.db_folder_path,
+            committee,
+            authority_clients,
+            prometheus_registry,
+        )?))
+    }
+
+    pub fn make_committee(config: &GatewayConfig) -> SuiResult<Committee> {
+        Committee::new(
+            config.epoch,
+            ValidatorInfo::voting_rights(&config.validator_set),
+        )
+    }
+
+    pub fn make_authority_clients(
+        config: &GatewayConfig,
+    ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
+        let mut authority_clients = BTreeMap::new();
+        let mut network_config = mysten_network::config::Config::new();
+        network_config.connect_timeout = Some(config.send_timeout);
+        network_config.request_timeout = Some(config.recv_timeout);
+        for authority in &config.validator_set {
+            let channel = network_config
+                .connect_lazy(authority.network_address())
+                .unwrap();
+            let client = NetworkAuthorityClient::new(channel);
+            authority_clients.insert(authority.public_key(), client);
+        }
+        authority_clients
     }
 }
 
@@ -438,7 +484,7 @@ where
                 | TypeTag::U128
                 | TypeTag::Address
                 | TypeTag::Signer => (),
-                TypeTag::Vector(inner) => used_packages(packages, &**inner),
+                TypeTag::Vector(inner) => used_packages(packages, inner),
                 TypeTag::Struct(StructTag {
                     address,
                     type_params,
@@ -517,10 +563,7 @@ where
     /// Make sure all objects in the input exist in the gateway store.
     /// If any object does not exist in the store, give it a chance
     /// to download from authorities.
-    async fn sync_input_objects_with_authorities(
-        &self,
-        transaction: &Transaction,
-    ) -> Result<(), anyhow::Error> {
+    async fn sync_input_objects_with_authorities(&self, transaction: &Transaction) -> SuiResult {
         let input_objects = transaction.data.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
@@ -602,16 +645,15 @@ where
         Ok((new_certificate, effects))
     }
 
-    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
-    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
-    async fn execute_transaction_impl(
+    /// Checks the transaction input and set locks.
+    /// If success, returns the input objects and owned objects in the input.
+    async fn prepare_transaction(
         &self,
-        transaction: Transaction,
-        is_last_retry: bool,
-    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+        transaction: &Transaction,
+    ) -> SuiResult<(InputObjects, Vec<ObjectRef>)> {
         transaction.verify()?;
 
-        self.sync_input_objects_with_authorities(&transaction)
+        self.sync_input_objects_with_authorities(transaction)
             .await?;
 
         // Getting the latest system state for gas information
@@ -621,7 +663,7 @@ where
             .await?;
 
         let (_gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.store, &transaction).await?;
+            transaction_input_checker::check_transaction_input(&self.store, transaction).await?;
 
         let owned_objects = input_objects.filter_owned_objects();
         if let Err(err) = self
@@ -650,10 +692,26 @@ where
                         .await?;
                 }
                 _ => {
-                    return Err(err.into());
+                    return Err(err);
                 }
             }
         }
+        Ok((input_objects, owned_objects))
+    }
+
+    /// Execute (or retry) a transaction and execute the Confirmation Transaction.
+    /// Update local object states using newly created certificate and ObjectInfoResponse from the Confirmation step.
+    async fn execute_transaction_impl(
+        &self,
+        transaction: Transaction,
+        is_last_retry: bool,
+    ) -> Result<(CertifiedTransaction, CertifiedTransactionEffects), anyhow::Error> {
+        let (input_objects, owned_objects) =
+            self.prepare_transaction(&transaction)
+                .await
+                .map_err(|err| SuiError::GatewayTransactionPrepError {
+                    error: ToString::to_string(&err),
+                })?;
 
         let exec_result = self
             .execute_transaction_impl_inner(input_objects, transaction)
@@ -695,10 +753,28 @@ where
         let result = self.authorities.get_object_info_execute(object_id).await?;
         if let ObjectRead::Exists(obj_ref, object, _) = &result {
             let local_object = self.store.get_object(&object_id)?;
-            if local_object.is_none()
-                // We only update local object if the validator version is newer.
-                || local_object.unwrap().version() < obj_ref.1
-            {
+            let should_update = match local_object {
+                None => true, // Local store doesn't have it.
+                Some(local_obj) => {
+                    let local_obj_ref = local_obj.compute_object_reference();
+                    match local_obj_ref.1.cmp(&obj_ref.1) {
+                        Ordering::Greater => false, // Local version is more up-to-date
+                        Ordering::Less => true,
+                        Ordering::Equal => {
+                            if local_obj_ref.2 != obj_ref.2 {
+                                error!(
+                                    "Inconsistent object digest. Local store: {:?}, on-chain: {:?}",
+                                    local_obj_ref, obj_ref
+                                );
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    }
+                }
+            };
+            if should_update {
                 self.store.insert_object_direct(*obj_ref, object).await?;
             }
         }

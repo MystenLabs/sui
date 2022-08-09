@@ -16,7 +16,7 @@ export const SUI_ADDRESS_VALIDATION = Yup.string()
     .test(
         'is-sui-address',
         // eslint-disable-next-line no-template-curly-in-string
-        '${value} is not a valid Sui address',
+        'Invalid address. Please check again.',
         (value) => isValidSuiAddress(value)
     )
     .label("Recipient's address");

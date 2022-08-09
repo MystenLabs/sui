@@ -7,7 +7,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use serde_json::json;
 
-use crate::base_types::{SequenceNumber, SuiAddress, TransactionDigest};
+use crate::base_types::{SuiAddress, TransactionDigest};
 use crate::event::{Event, EventEnvelope};
 use crate::event::{EventType, TransferType};
 use crate::event_filter::{EventFilter, Filter};
@@ -19,12 +19,14 @@ use crate::{ObjectID, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 fn test_move_event_filter() {
     let event_coin_id = ObjectID::random();
     // Create a test move event, borrowing GasCoin as the MoveEvent object.
+    // TODO this is a bit of a nonsensical test as GasCoin does not implement drop, but it likely
+    // doesn't matter as we just are testing a BCS type + value
     let move_event = Event::MoveEvent {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("test_module")),
         sender: SuiAddress::random_for_testing_only(),
         type_: GasCoin::type_(),
-        contents: GasCoin::new(event_coin_id, SequenceNumber::new(), 10000).to_bcs_bytes(),
+        contents: GasCoin::new(event_coin_id, 10000).to_bcs_bytes(),
     };
     let envelope = EventEnvelope {
         timestamp: 0,

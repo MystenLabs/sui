@@ -5,10 +5,10 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferObjectTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, PublishResponse, SuiPackage, TransactionResponse } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, TransferObjectTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, TransactionEffectsResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, MergeCoinResponse, SplitCoinResponse, PublishResponse, SuiPackage, TransactionResponse, TransferSuiTransaction } from "./index";
 import { BN } from "bn.js";
 import { Base64DataBuffer } from "./serialization/base64";
-import { PublicKey } from "./cryptography/publickey";
+import { PublicKey, SignatureScheme } from "./cryptography/publickey";
 
 export function isEd25519KeypairData(obj: any, _argumentName?: string): obj is Ed25519KeypairData {
     return (
@@ -53,6 +53,13 @@ export function isPublicKeyData(obj: any, _argumentName?: string): obj is Public
     )
 }
 
+export function isSignatureScheme(obj: any, _argumentName?: string): obj is SignatureScheme {
+    return (
+        (obj === "ED25519" ||
+            obj === "Secp256k1")
+    )
+}
+
 export function isTransferObjectTransaction(obj: any, _argumentName?: string): obj is TransferObjectTransaction {
     return (
         (obj !== null &&
@@ -63,6 +70,19 @@ export function isTransferObjectTransaction(obj: any, _argumentName?: string): o
             isTransactionDigest(obj.gasPayment) as boolean) &&
         isSequenceNumber(obj.gasBudget) as boolean &&
         isTransactionDigest(obj.recipient) as boolean
+    )
+}
+
+export function isTransferSuiTransaction(obj: any, _argumentName?: string): obj is TransferSuiTransaction {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.suiObjectId) as boolean &&
+        isSequenceNumber(obj.gasBudget) as boolean &&
+        isTransactionDigest(obj.recipient) as boolean &&
+        (typeof obj.amount === "undefined" ||
+            isSequenceNumber(obj.amount) as boolean)
     )
 }
 
@@ -138,6 +158,7 @@ export function isTxnDataSerializer(obj: any, _argumentName?: string): obj is Tx
             typeof obj === "object" ||
             typeof obj === "function") &&
         typeof obj.newTransferObject === "function" &&
+        typeof obj.newTransferSui === "function" &&
         typeof obj.newMoveCall === "function" &&
         typeof obj.newMergeCoin === "function" &&
         typeof obj.newSplitCoin === "function" &&
@@ -150,6 +171,7 @@ export function isSignaturePubkeyPair(obj: any, _argumentName?: string): obj is 
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
+        isSignatureScheme(obj.signatureScheme) as boolean &&
         obj.signature instanceof Base64DataBuffer &&
         obj.pubKey instanceof PublicKey
     )

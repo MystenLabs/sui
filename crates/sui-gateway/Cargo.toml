@@ -8,14 +8,14 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
-async-trait = "0.1.53"
-serde = { version = "1.0.140", features = ["derive"] }
-tracing = "0.1.35"
-tokio = { version = "1.20.0", features = ["full"] }
+async-trait = "0.1.57"
+serde = { version = "1.0.141", features = ["derive"] }
+tracing = "0.1.36"
+tokio = { version = "1.20.1", features = ["full"] }
 futures = "0.3.21"
 prometheus = "0.13.1"
 clap = { version = "3.1.17", features = ["derive"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
@@ -23,16 +23,16 @@ sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-json-rpc = { path = "../sui-json-rpc" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
-sui-sdk = { path = "../sui-sdk" }
 sui-node = { path = "../sui-node" }
 
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 test-utils = { path = "../test-utils" }
 sui-framework = { path = "../sui-framework" }
+sui-sdk = { path = "../sui-sdk" }
 
 [[bin]]
 name = "rpc-server"

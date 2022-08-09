@@ -6,6 +6,7 @@ import { combineReducers } from '@reduxjs/toolkit';
 import account from './slices/account';
 import app from './slices/app';
 import permissions from './slices/permissions';
+import selectedNft from './slices/selected-nft';
 import suiObjects from './slices/sui-objects';
 import transactionRequests from './slices/transaction-requests';
 import transactions from './slices/transactions';
@@ -19,6 +20,7 @@ const rootReducer = combineReducers({
     txresults,
     permissions,
     transactionRequests,
+    selectedNft,
 });
 
 export type RootState = ReturnType<typeof rootReducer>;

@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
-use crate::authority::AuthorityStore;
 use crate::authority_aggregator::authority_aggregator_tests::*;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
@@ -13,17 +12,16 @@ use std::borrow::Borrow;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::sync::Once;
-use std::{env, fs};
 use sui_adapter::genesis;
 use sui_types::base_types::*;
 use sui_types::batch::{AuthorityBatch, SignedBatch, UpdateItem};
 use sui_types::committee::Committee;
-use sui_types::crypto::{get_key_pair, KeyPair, PublicKeyBytes};
+use sui_types::crypto::{get_key_pair, AuthorityKeyPair};
 use sui_types::error::SuiError;
 use sui_types::messages::{
     AccountInfoRequest, AccountInfoResponse, BatchInfoRequest, BatchInfoResponseItem,
-    CertifiedTransaction, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-    TransactionInfoRequest, TransactionInfoResponse,
+    CertifiedTransaction, EpochRequest, EpochResponse, ObjectInfoRequest, ObjectInfoResponse,
+    Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
 use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
 use sui_types::object::Object;
@@ -62,25 +60,8 @@ pub struct ConfigurableBatchActionClient {
 
 impl ConfigurableBatchActionClient {
     #[cfg(test)]
-    pub async fn new(committee: Committee, address: PublicKeyBytes, secret: KeyPair) -> Self {
-        // Random directory
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        let store = Arc::new(AuthorityStore::open(path.clone(), None));
-        let state = AuthorityState::new(
-            committee.clone(),
-            address,
-            Arc::pin(secret),
-            store,
-            None,
-            None,
-            None,
-            &sui_config::genesis::Genesis::get_default_genesis(),
-            &prometheus::Registry::new(),
-        )
-        .await;
+    pub async fn new(committee: Committee, secret: AuthorityKeyPair) -> Self {
+        let state = AuthorityState::new_for_testing(committee, &secret, None, None, None).await;
 
         ConfigurableBatchActionClient {
             state: Arc::new(state),
@@ -197,9 +178,15 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
 
     async fn handle_checkpoint(
         &self,
-        _request: CheckpointRequest,
+        request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        todo!();
+        let state = self.state.clone();
+        state.handle_checkpoint_request(&request)
+    }
+
+    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        let state = self.state.clone();
+        state.handle_epoch_request(&request)
     }
 }
 
@@ -212,9 +199,10 @@ pub async fn init_configurable_authorities(
     Vec<ExecutionDigests>,
 ) {
     use narwhal_crypto::traits::KeyPair;
+    use sui_types::crypto::AccountKeyPair;
 
     let authority_count = 4;
-    let (addr1, key1) = get_key_pair();
+    let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let mut gas_objects = Vec::new();
     for _i in 0..authority_action.len() {
         gas_objects.push(Object::with_owner_for_testing(addr1));
@@ -230,7 +218,7 @@ pub async fn init_configurable_authorities(
     let mut key_pairs = Vec::new();
     let mut voting_rights = BTreeMap::new();
     for _ in 0..authority_count {
-        let (_, key_pair) = get_key_pair();
+        let (_, key_pair): (_, AuthorityKeyPair) = get_key_pair();
         let authority_name = key_pair.public().into();
         voting_rights.insert(authority_name, 1);
         key_pairs.push((authority_name, key_pair));
@@ -242,8 +230,7 @@ pub async fn init_configurable_authorities(
     let mut names = Vec::new();
     let mut states = Vec::new();
     for ((authority_name, secret), objects) in key_pairs.into_iter().zip(genesis_objects) {
-        let client =
-            ConfigurableBatchActionClient::new(committee.clone(), authority_name, secret).await;
+        let client = ConfigurableBatchActionClient::new(committee.clone(), secret).await;
         for object in objects {
             client.state.insert_genesis_object(object).await;
         }

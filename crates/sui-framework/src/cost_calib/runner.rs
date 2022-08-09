@@ -1,16 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::HashMap, io::BufWriter, path::Path};
-
+use crate::natives;
 use move_cli::base::test::UnitTestResult;
-
 use move_package::BuildConfig;
 use move_unit_test::UnitTestingConfig;
-
-use crate::natives;
+use std::{collections::HashMap, io::BufWriter, path::Path};
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 const MAX_UNIT_TEST_INSTRUCTIONS: u64 = 1_000_000_000;
+const CALIB_TEST_FILTER: &str = "calibrate";
+const CALIB_TEST_PREFIX: &str = "test_calibrate_";
+const CALIB_TEST_BASELINE_SUFFIX: &str = "__baseline";
+const FRAMEWORK_SOURCES_RELATIVE_PATH: &str = "../../crates/sui-framework/sources";
 
 #[derive(Debug)]
 pub struct CalibTestResult {
@@ -36,9 +38,7 @@ pub fn run_calib_tests(
     config: Option<UnitTestingConfig>,
     runs: usize,
 ) -> HashMap<String, Vec<(f32, f32)>> {
-    use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
-
-    let pkg_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../crates/sui-framework/sources");
+    let pkg_path = Path::new(env!("CARGO_MANIFEST_DIR")).join(FRAMEWORK_SOURCES_RELATIVE_PATH);
 
     let config = config
         .unwrap_or_else(|| UnitTestingConfig::default_with_bound(Some(MAX_UNIT_TEST_INSTRUCTIONS)));
@@ -55,7 +55,7 @@ pub fn run_calib_tests(
             UnitTestingConfig {
                 report_stacktrace_on_abort: true,
                 report_statistics: true,
-                filter: Some("calibrate".to_string()),
+                filter: Some(CALIB_TEST_FILTER.to_string()),
                 num_threads: 1,
                 ..config
             },
@@ -83,7 +83,8 @@ pub fn run_calib_tests(
 }
 
 pub fn extract_calib(s: String) -> Vec<CalibTestResult> {
-    let lines = s.split('\n').filter(|x| x.starts_with("│ 0x2::"));
+    let test_output_prefix = format!("│ 0x{}::", SUI_FRAMEWORK_ADDRESS.short_str_lossless());
+    let lines = s.split('\n').filter(|x| x.starts_with(&test_output_prefix));
 
     let mut mp = HashMap::new();
 
@@ -92,7 +93,7 @@ pub fn extract_calib(s: String) -> Vec<CalibTestResult> {
         let name = tokens[1]
             .trim()
             .to_owned()
-            .split("test_calibrate_")
+            .split(CALIB_TEST_PREFIX)
             .nth(1)
             .unwrap()
             .to_owned();
@@ -106,7 +107,7 @@ pub fn extract_calib(s: String) -> Vec<CalibTestResult> {
 
     for (name, val) in &mp {
         let name = name.to_owned();
-        let name_baseline = name.clone() + "__baseline";
+        let name_baseline = name.clone() + CALIB_TEST_BASELINE_SUFFIX;
 
         if mp.contains_key(&name_baseline) {
             // Remove pair from the map

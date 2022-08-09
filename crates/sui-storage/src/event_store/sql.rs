@@ -7,6 +7,7 @@ use super::*;
 
 use async_trait::async_trait;
 use serde_json::{json, Value};
+use sqlx::ConnectOptions;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use strum::{EnumMessage, IntoEnumIterator};
@@ -17,7 +18,7 @@ use sqlx::{
 };
 use sui_types::error::SuiError;
 use sui_types::event::Event;
-use tracing::{debug, info, warn};
+use tracing::{debug, info, log, warn};
 
 /// Maximum number of events one can ask for right now
 const MAX_LIMIT: usize = 5000;
@@ -88,9 +89,10 @@ impl SqlEventStore {
     /// Creates or opens a new SQLite database at a specific path
     pub async fn new_from_file(db_path: &Path) -> Result<Self, SuiError> {
         // TODO: configure other SQLite options
-        let options = SqliteConnectOptions::new()
+        let mut options = SqliteConnectOptions::new()
             .filename(db_path)
             .create_if_missing(true);
+        options.log_statements(log::LevelFilter::Off);
         let pool = SqlitePool::connect_with(options)
             .await
             .map_err(convert_sqlx_err)?;
