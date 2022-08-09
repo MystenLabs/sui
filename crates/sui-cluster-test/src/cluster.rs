@@ -20,13 +20,13 @@ use tracing::info;
 
 const DEVNET_FAUCET_ADDR: &str = "https://faucet.devnet.sui.io:443";
 const STAGING_FAUCET_ADDR: &str = "https://faucet.staging.sui.io:443";
-const CONTINUOUS_FAUCET_ADDR: &str = "https://faucet.continuous.sui.io:443";
+const CONTINUOUS_FAUCET_ADDR: &str = "https://faucet.ci.sui.io:443";
 const DEVNET_GATEWAY_ADDR: &str = "https://gateway.devnet.sui.io:443";
 const STAGING_GATEWAY_ADDR: &str = "https://gateway.staging.sui.io:443";
-const CONTINUOUS_GATEWAY_ADDR: &str = "https://gateway.continuous.sui.io:443";
+const CONTINUOUS_GATEWAY_ADDR: &str = "https://gateway.ci.sui.io:443";
 const DEVNET_FULLNODE_ADDR: &str = "https://fullnode.devnet.sui.io:443";
 const STAGING_FULLNODE_ADDR: &str = "https://fullnode.staging.sui.io:443";
-const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.continuous.sui.io:443";
+const CONTINUOUS_FULLNODE_ADDR: &str = "https://fullnode.ci.sui.io:443";
 
 pub struct ClusterFactory;
 
