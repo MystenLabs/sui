@@ -4,62 +4,83 @@
 import cl from 'classnames';
 import { memo } from 'react';
 
-import ExplorerLink from '_components/explorer-link';
-import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
+import Icon, { SuiIcons } from '_components/icon';
 import { useMiddleEllipsis } from '_hooks';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
 import st from './TransactionsCard.module.scss';
 
+const TRUNCATE_MAX_LENGTH = 8;
+const TRUNCATE_PREFIX_LENGTH = 4;
+
 function TransactionCard({ txn }: { txn: TxResultState }) {
-    const toAddrStr = useMiddleEllipsis(txn.To || '', 20);
+    const toAddrStr = useMiddleEllipsis(
+        txn.To || '',
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_PREFIX_LENGTH
+    );
+    const fromAddrStr = useMiddleEllipsis(
+        txn.From || '',
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_PREFIX_LENGTH
+    );
+
+    const transferStatus = txn.status === 'success' ? 'Checkmark' : 'Close';
 
     return (
         <div className={st.card} key={txn.txId}>
-            <div>
-                Tx:{' '}
-                <ExplorerLink
-                    type={ExplorerLinkType.transaction}
-                    transactionID={txn.txId}
-                    title="View on Sui Explorer"
-                    className={st['explorer-link']}
-                >
-                    {useMiddleEllipsis(txn.txId || '', 20)}
-                </ExplorerLink>
+            <div className={st.cardIcon}>
+                <Icon
+                    icon={SuiIcons.ArrowLeft}
+                    className={cl(st.arrowActionIcon, st.angledArrow)}
+                />
             </div>
-            <div>TxType: {txn.kind} </div>
-            <div>
-                {' '}
-                Gas : {txn.txGas} | Status:{' '}
-                <span className={cl(st[txn.status.toLowerCase()], st.txstatus)}>
-                    {txn.status === 'success' ? '\u2714' : '\u2716'}{' '}
-                </span>
-            </div>
-            <div>
-                From:
-                <ExplorerLink
-                    type={ExplorerLinkType.address}
-                    address={txn.From}
-                    title="View on Sui Explorer"
-                    className={st.explorerLink}
-                >
-                    {useMiddleEllipsis(txn.From || '', 20)}
-                </ExplorerLink>
-            </div>
-            {txn?.To && (
-                <div>
-                    To:
-                    <ExplorerLink
-                        type={ExplorerLinkType.address}
-                        address={txn.To}
-                        title="View on Sui Explorer"
-                        className={st.explorerLink}
-                    >
-                        {toAddrStr}
-                    </ExplorerLink>
+            <div className={st.cardContent}>
+                <div className={st.txResult}>
+                    <div className={cl(st.txTypeName, st.kind)}>{txn.kind}</div>
+                    {txn?.timestamp_ms && (
+                        <div className={st.txTypeDate}>
+                            {new Date(txn.timestamp_ms).toDateString()}
+                        </div>
+                    )}
                 </div>
-            )}
+                <div className={st.txResult}>
+                    <div className={st.txTypeName}>
+                        {txn.kind !== 'Call' ? 'To' : 'From'}:{' '}
+                    </div>
+                    <div className={cl(st.txValue, st.txAddress)}>
+                        {txn.kind !== 'Call' ? toAddrStr : fromAddrStr}
+                        <span
+                            className={cl(
+                                st[txn.status.toLowerCase()],
+                                st.txstatus
+                            )}
+                        >
+                            <Icon icon={SuiIcons[transferStatus]} />
+                        </span>
+                    </div>
+                </div>
+            </div>
+            <div className={st.txTransferrd}>
+                {txn.Amount && (
+                    <>
+                        <div className={st.txTitle}>{txn.Amount} SUI</div>
+                        <div className={st.txValue}></div>
+                    </>
+                )}
+                {txn.url && (
+                    <div className={st.txImage}>
+                        <img
+                            src={txn.url.replace(
+                                /^ipfs:\/\//,
+                                'https://ipfs.io/ipfs/'
+                            )}
+                            alt="NFT"
+                        />
+                    </div>
+                )}
+            </div>
         </div>
     );
 }
