@@ -325,7 +325,11 @@ function GroupView({ results }: { results: resultType }) {
                                                     <td />
                                                     <td>Object ID</td>
                                                     <td colSpan={2}>
-                                                        {subObj.id}
+                                                        <Longtext
+                                                            text={subObj.id}
+                                                            category="objects"
+                                                            isCopyButton={false}
+                                                        />
                                                     </td>
                                                     <td />
                                                 </tr>
