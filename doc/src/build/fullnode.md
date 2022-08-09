@@ -129,13 +129,10 @@ to run a Sui fullnode using Docker, including [resetting the environment](https:
 
 ### Building from source
 
-Remember to install the required tools in your environment as
+1. Install the required tools in your environment as
 outlined in the [Prerequisites](../build/install.md#prerequisites) section if you
 haven't already. Make sure your entire toolchain stays up-to-date. If you encounter
 issues building and installing the Sui binaries, update all packages above and re-install.
-
-Then:
-
 1. Set up your fork of the Sui repository:
     1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
        and click the *Fork* button in the top right-hand corner of the screen.
