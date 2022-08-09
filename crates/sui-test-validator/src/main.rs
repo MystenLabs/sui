@@ -6,7 +6,6 @@ use anyhow::Result;
 use clap::{Parser, ValueHint};
 
 use sui_config::genesis_config::GenesisConfig;
-use test_utils::preset::create_test_data;
 use test_utils::network::{start_rpc_test_network_with_fullnode, TestNetwork};
 
 /// Start a Sui validator and fullnode for easy testing.
@@ -16,10 +15,6 @@ struct Args {
     /// Config directory that will be used to store network configuration
     #[clap(short, long, parse(from_os_str), value_hint = ValueHint::DirPath)]
     config: Option<std::path::PathBuf>,
-
-    /// If enabled, a set of test transactions will be executed to seed activity on the validator
-    #[clap(long)]
-    with_preset_data: bool,
 
     /// Port to start the Gateway RPC server on
     #[clap(long, default_value = "5001")]
@@ -31,11 +26,6 @@ async fn main() -> Result<()> {
     let args = Args::parse();
 
     let network = create_network(&args).await?;
-
-    if args.with_preset_data {
-        println!("Populating validator with preset data...");
-        create_test_data(&network).await?;
-    }
 
     println!("Gateway RPC URL: {}", network.rpc_url);
 
