@@ -112,6 +112,7 @@ impl EffectsStakeMap {
 
     pub fn forget_effects(&mut self, digests: &TransactionEffectsDigest) {
         self.effects_stake_map.remove(digests);
+        self.effects_vote_map.remove(digests);
     }
 }
 
