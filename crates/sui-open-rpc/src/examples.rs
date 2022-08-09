@@ -268,6 +268,7 @@ impl RpcExampleProvider {
             data: SuiRawData::MoveObject(SuiRawMoveObject {
                 type_: GasCoin::type_().to_string(),
                 has_public_transfer: object.has_public_transfer(),
+                version: object.version(),
                 bcs_bytes: object.into_contents(),
             }),
             owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),

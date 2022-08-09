@@ -99,6 +99,7 @@ impl TicTacToe {
         // Execute the transaction.
         let response = self
             .client
+            .quorum_driver()
             .execute_transaction(Transaction::new(create_game_call, signature))
             .await?;
 
@@ -189,6 +190,7 @@ impl TicTacToe {
             // Execute the transaction.
             let response = self
                 .client
+                .quorum_driver()
                 .execute_transaction(Transaction::new(place_mark_call, signature))
                 .await?;
 

@@ -471,6 +471,33 @@ pub struct SuiObject<T: SuiData> {
     pub reference: SuiObjectRef,
 }
 
+impl TryInto<Object> for SuiObject<SuiRawData> {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<Object, Self::Error> {
+        let data = match self.data {
+            SuiRawData::MoveObject(o) => {
+                let struct_tag = parse_struct_tag(o.type_())?;
+                Data::Move(unsafe {
+                    MoveObject::new_from_execution(
+                        struct_tag,
+                        o.has_public_transfer,
+                        o.version,
+                        o.bcs_bytes,
+                    )
+                })
+            }
+            SuiRawData::Package(p) => Data::Package(MovePackage::new(p.id, &p.module_map)),
+        };
+        Ok(Object {
+            data,
+            owner: self.owner,
+            previous_transaction: self.previous_transaction,
+            storage_rebate: self.storage_rebate,
+        })
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, JsonSchema, Eq, PartialEq, Ord, PartialOrd)]
 #[serde(rename_all = "camelCase", rename = "ObjectRef")]
 pub struct SuiObjectRef {
@@ -771,6 +798,7 @@ pub struct SuiRawMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
     pub has_public_transfer: bool,
+    pub version: SequenceNumber,
     #[serde_as(as = "Base64")]
     #[schemars(with = "Base64")]
     pub bcs_bytes: Vec<u8>,
@@ -781,6 +809,7 @@ impl From<MoveObject> for SuiRawMoveObject {
         Self {
             type_: o.type_.to_string(),
             has_public_transfer: o.has_public_transfer(),
+            version: o.version(),
             bcs_bytes: o.into_contents(),
         }
     }
@@ -794,6 +823,7 @@ impl SuiMoveObject for SuiRawMoveObject {
         Ok(Self {
             type_: object.type_.to_string(),
             has_public_transfer: object.has_public_transfer(),
+            version: object.version(),
             bcs_bytes: object.into_contents(),
         })
     }
@@ -813,10 +843,10 @@ impl SuiRawMoveObject {
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
 #[serde(rename = "RawMovePackage")]
 pub struct SuiRawMovePackage {
-    id: ObjectID,
+    pub id: ObjectID,
     #[schemars(with = "BTreeMap<String, Base64>")]
     #[serde_as(as = "BTreeMap<_, Base64>")]
-    module_map: BTreeMap<String, Vec<u8>>,
+    pub module_map: BTreeMap<String, Vec<u8>>,
 }
 
 impl From<MovePackage> for SuiRawMovePackage {

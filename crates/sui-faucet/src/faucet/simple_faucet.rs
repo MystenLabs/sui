@@ -263,7 +263,11 @@ impl SimpleFaucet {
 
         let tx = Transaction::new(data, signature);
         info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");
-        let response = context.gateway.execute_transaction(tx).await?;
+        let response = context
+            .gateway
+            .quorum_driver()
+            .execute_transaction(tx)
+            .await?;
         let effects = &response.effects;
         if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
             return Err(anyhow!("Error transferring object: {:#?}", effects.status));

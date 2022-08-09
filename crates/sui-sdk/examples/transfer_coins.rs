@@ -40,6 +40,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Execute the transaction
     let transaction_response = sui
+        .quorum_driver()
         .execute_transaction(Transaction::new(transfer_tx, signature))
         .await?;
 

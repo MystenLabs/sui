@@ -20,30 +20,29 @@ pub use sui_config::gateway;
 use sui_config::gateway::GatewayConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 pub use sui_json as json;
-use sui_json::SuiJsonValue;
 use sui_json_rpc::api::EventStreamingApiClient;
 use sui_json_rpc::api::QuorumDriverApiClient;
 use sui_json_rpc::api::RpcBcsApiClient;
 use sui_json_rpc::api::RpcFullNodeReadApiClient;
 use sui_json_rpc::api::RpcGatewayApiClient;
 use sui_json_rpc::api::RpcReadApiClient;
-use sui_json_rpc::api::RpcTransactionBuilderClient;
 use sui_json_rpc::api::WalletSyncApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
-    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse,
-    RPCTransactionRequestParams, SuiData, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo,
-    SuiTypeTag, TransactionEffectsResponse, TransactionResponse,
+    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, SuiEventEnvelope,
+    SuiEventFilter, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
 };
 pub use sui_types as types;
-use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
-use sui_types::crypto::SignableBytes;
-use sui_types::gas_coin::GasCoin;
-use sui_types::messages::{Transaction, TransactionData};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::crypto::SuiSignature;
+use sui_types::messages::Transaction;
 use sui_types::sui_serde::Base64;
 use types::messages::ExecuteTransactionRequestType;
 
+use crate::transaction_builder::TransactionBuilder;
+
 pub mod crypto;
+pub mod transaction_builder;
 
 pub struct SuiClient {
     api: Arc<SuiClientApi>,
@@ -51,6 +50,7 @@ pub struct SuiClient {
     read_api: Arc<ReadApi>,
     full_node_api: FullNodeApi,
     event_api: EventApi,
+    quorum_driver: QuorumDriver,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -84,223 +84,17 @@ impl SuiClient {
         let full_node_api = FullNodeApi(api.clone());
         let event_api = EventApi(api.clone());
         let transaction_builder = TransactionBuilder {
-            api: api.clone(),
             read_api: read_api.clone(),
         };
+        let quorum_driver = QuorumDriver(api.clone());
         SuiClient {
             api,
             transaction_builder,
             read_api,
             full_node_api,
             event_api,
+            quorum_driver,
         }
-    }
-}
-
-pub struct TransactionBuilder {
-    api: Arc<SuiClientApi>,
-    read_api: Arc<ReadApi>,
-}
-
-impl TransactionBuilder {
-    async fn select_gas(
-        &self,
-        signer: SuiAddress,
-        budget: u64,
-        input_objects: Vec<ObjectID>,
-    ) -> Result<ObjectRef, anyhow::Error> {
-        let objs = self.read_api.get_objects_owned_by_address(signer).await?;
-        let gas_objs = objs
-            .iter()
-            .filter(|obj| obj.type_ == GasCoin::type_().to_string());
-
-        for obj in gas_objs {
-            let response = self.read_api.get_raw_object(obj.object_id).await?;
-            let obj = response.object()?;
-            let gas: GasCoin = bcs::from_bytes(&obj.data.try_as_move().unwrap().bcs_bytes)?;
-            if !input_objects.contains(&obj.id()) && gas.value() >= budget {
-                return Ok(obj.reference.to_object_ref());
-            }
-        }
-        return Err(anyhow!("Cannot find gas coin for signer address [{signer}] with amount sufficient for the budget [{budget}]."));
-    }
-
-    pub async fn transfer_object(
-        &self,
-        signer: SuiAddress,
-        object_id: ObjectID,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-        recipient: SuiAddress,
-    ) -> anyhow::Result<TransactionData> {
-        let object = self.read_api.get_object_ref(object_id).await?;
-        let gas = if let Some(gas) = gas {
-            self.read_api.get_object_ref(gas).await?
-        } else {
-            self.select_gas(signer, gas_budget, vec![object_id]).await?
-        };
-        Ok(TransactionData::new_transfer(
-            recipient, object, signer, gas, gas_budget,
-        ))
-    }
-
-    pub async fn transfer_sui(
-        &self,
-        signer: SuiAddress,
-        sui_object_id: ObjectID,
-        gas_budget: u64,
-        recipient: SuiAddress,
-        amount: Option<u64>,
-    ) -> anyhow::Result<TransactionData> {
-        let object = self.read_api.get_object_ref(sui_object_id).await?;
-        Ok(TransactionData::new_transfer_sui(
-            recipient, signer, amount, object, gas_budget,
-        ))
-    }
-
-    pub async fn move_call(
-        &self,
-        signer: SuiAddress,
-        package_object_id: ObjectID,
-        module: &str,
-        function: &str,
-        type_arguments: Vec<SuiTypeTag>,
-        arguments: Vec<SuiJsonValue>,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
-        // let package = self.read_api.get_object_ref(package_object_id).await?;
-        // let gas = if let Some(gas) = gas {
-        //     self.read_api.get_object_ref(gas).await?
-        // } else {
-        //     self.select_gas(signer, gas_budget).await?
-        // };
-        // Ok(TransactionData::new_move_call(
-        //     signer,
-        //     package,
-        //     Identifier::from_str(module)?,
-        //     Identifier::from_str(function)?,
-        //     type_arguments,
-        //     gas,
-        //     arguments,
-        //     gas_budget,
-        // ))
-
-        Ok(match &*self.api {
-            SuiClientApi::Rpc(c, _) => {
-                let transaction_bytes = c
-                    .move_call(
-                        signer,
-                        package_object_id,
-                        module.to_string(),
-                        function.to_string(),
-                        type_arguments,
-                        arguments,
-                        gas,
-                        gas_budget,
-                    )
-                    .await?;
-                TransactionData::from_signable_bytes(&transaction_bytes.tx_bytes.to_vec()?)?
-            }
-            SuiClientApi::Embedded(c) => {
-                c.move_call(
-                    signer,
-                    package_object_id,
-                    module.to_string(),
-                    function.to_string(),
-                    type_arguments,
-                    arguments,
-                    gas,
-                    gas_budget,
-                )
-                .await?
-            }
-        })
-    }
-
-    pub async fn publish(
-        &self,
-        sender: SuiAddress,
-        compiled_modules: Vec<Vec<u8>>,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
-        let gas = if let Some(gas) = gas {
-            self.read_api.get_object_ref(gas).await?
-        } else {
-            self.select_gas(sender, gas_budget, vec![]).await?
-        };
-        Ok(TransactionData::new_module(
-            sender,
-            gas,
-            compiled_modules,
-            gas_budget,
-        ))
-    }
-
-    pub async fn split_coin(
-        &self,
-        signer: SuiAddress,
-        coin_object_id: ObjectID,
-        split_amounts: Vec<u64>,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
-        Ok(match &*self.api {
-            SuiClientApi::Rpc(c, _) => {
-                let transaction_bytes = c
-                    .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
-                    .await?;
-                TransactionData::from_signable_bytes(&transaction_bytes.tx_bytes.to_vec()?)?
-            }
-            SuiClientApi::Embedded(c) => {
-                c.split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
-                    .await?
-            }
-        })
-    }
-
-    pub async fn merge_coins(
-        &self,
-        signer: SuiAddress,
-        primary_coin: ObjectID,
-        coin_to_merge: ObjectID,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
-        Ok(match &*self.api {
-            SuiClientApi::Rpc(c, _) => {
-                let transaction_bytes = c
-                    .merge_coin(signer, primary_coin, coin_to_merge, gas, gas_budget)
-                    .await?;
-                TransactionData::from_signable_bytes(&transaction_bytes.tx_bytes.to_vec()?)?
-            }
-            SuiClientApi::Embedded(c) => {
-                c.merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
-                    .await?
-            }
-        })
-    }
-
-    pub async fn batch_transaction(
-        &self,
-        signer: SuiAddress,
-        single_transaction_params: Vec<RPCTransactionRequestParams>,
-        gas: Option<ObjectID>,
-        gas_budget: u64,
-    ) -> anyhow::Result<TransactionData> {
-        Ok(match &*self.api {
-            SuiClientApi::Rpc(c, _) => {
-                let transaction_bytes = c
-                    .batch_transaction(signer, single_transaction_params, gas, gas_budget)
-                    .await?;
-                TransactionData::from_signable_bytes(&transaction_bytes.tx_bytes.to_vec()?)?
-            }
-            SuiClientApi::Embedded(c) => {
-                c.batch_transaction(signer, single_transaction_params, gas, gas_budget)
-                    .await?
-            }
-        })
     }
 }
 
@@ -334,15 +128,6 @@ impl ReadApi {
             SuiClientApi::Rpc(c, _) => c.get_object(object_id).await?,
             SuiClientApi::Embedded(c) => c.get_object(object_id).await?,
         })
-    }
-
-    async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
-        Ok(self
-            .get_object(object_id)
-            .await?
-            .object()?
-            .reference
-            .to_object_ref())
     }
 
     pub async fn get_raw_object(
@@ -483,23 +268,9 @@ impl EventApi {
     }
 }
 
-impl SuiClient {
-    pub fn transaction_builder(&self) -> &TransactionBuilder {
-        &self.transaction_builder
-    }
+pub struct QuorumDriver(Arc<SuiClientApi>);
 
-    pub fn read_api(&self) -> &ReadApi {
-        &self.read_api
-    }
-
-    pub fn full_node_api(&self) -> &FullNodeApi {
-        &self.full_node_api
-    }
-
-    pub fn event_api(&self) -> &EventApi {
-        &self.event_api
-    }
-
+impl QuorumDriver {
     pub async fn execute_transaction(
         &self,
         tx: Transaction,
@@ -553,7 +324,24 @@ impl SuiClient {
             Self::Embedded(_c) => unimplemented!(),
         })
     }
+}
 
+impl SuiClient {
+    pub fn transaction_builder(&self) -> &TransactionBuilder {
+        &self.transaction_builder
+    }
+    pub fn read_api(&self) -> &ReadApi {
+        &self.read_api
+    }
+    pub fn full_node_api(&self) -> &FullNodeApi {
+        &self.full_node_api
+    }
+    pub fn event_api(&self) -> &EventApi {
+        &self.event_api
+    }
+    pub fn quorum_driver(&self) -> &QuorumDriver {
+        &self.quorum_driver
+    }
     pub async fn sync_client_state(&self, address: SuiAddress) -> anyhow::Result<()> {
         match &*self.api {
             SuiClientApi::Rpc(c, _) => c.sync_account_state(address).await?,

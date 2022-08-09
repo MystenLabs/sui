@@ -292,6 +292,7 @@ impl SuiClientCommands {
                 let signature = context.keystore.sign(&sender, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
 
@@ -336,6 +337,7 @@ impl SuiClientCommands {
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 let cert = response.certificate;
@@ -364,6 +366,7 @@ impl SuiClientCommands {
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 let cert = response.certificate;
@@ -431,6 +434,7 @@ impl SuiClientCommands {
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 SuiClientCommandResult::SplitCoin(response)
@@ -450,6 +454,7 @@ impl SuiClientCommands {
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
 
@@ -782,7 +787,11 @@ pub async fn call_move(
         .await?;
     let signature = context.keystore.sign(&sender, &data.to_bytes())?;
     let transaction = Transaction::new(data, signature);
-    let response = context.gateway.execute_transaction(transaction).await?;
+    let response = context
+        .gateway
+        .quorum_driver()
+        .execute_transaction(transaction)
+        .await?;
     let cert = response.certificate;
     let effects = response.effects;
 
