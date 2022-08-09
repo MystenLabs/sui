@@ -6,6 +6,10 @@
     @apply p-0 text-sui-grey-90;
 }
 
+.seconditem td {
+    @apply pb-[16px] bg-red-900;
+}
+
 .closedgroup tr td {
     @apply cursor-pointer;
 }
