@@ -17,9 +17,10 @@
 /// fail.
 module fungible_tokens::permissionless_mint {
     use sui::coin::{Self, TreasuryCap};
-    use sui::object::{Self, UID};
+    use sui::object::{Self, UID};    
     use sui::transfer;
     use sui::tx_context::TxContext;
+    use sui::types;
 
     const EBadWitness: u64 = 0;
 
@@ -31,7 +32,7 @@ module fungible_tokens::permissionless_mint {
     /// Create a unique treasury cap. The first argument to this function must be of one-time
     /// witness type, otherwise the function will abort.
     public fun create_treasury_cap<T: drop>(witness: T, ctx: &mut TxContext): UniqueTreasuryCap<T> {
-        assert!(object::is_one_time_witness(&witness), EBadWitness);
+        assert!(types::is_one_time_witness(&witness), EBadWitness);
         UniqueTreasuryCap {
             id: object::new(ctx),
             treasury_cap: coin::create_currency(witness, ctx),

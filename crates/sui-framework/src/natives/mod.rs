@@ -7,6 +7,7 @@ mod object;
 mod test_scenario;
 mod transfer;
 mod tx_context;
+mod types;
 
 use move_binary_format::errors::PartialVMError;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
@@ -24,7 +25,6 @@ pub fn all_natives(
         ("object", "bytes_to_address", object::bytes_to_address),
         ("object", "delete_impl", object::delete_impl),
         ("object", "borrow_uid", object::borrow_uid),
-        ("object", "is_one_time_witness", object::is_one_time_witness),
         (
             "test_scenario",
             "drop_object_for_testing",
@@ -65,6 +65,7 @@ pub fn all_natives(
             "new_signer_from_address",
             tx_context::new_signer_from_address,
         ),
+        ("types", "is_one_time_witness", types::is_one_time_witness),
     ];
     SUI_NATIVES
         .iter()
