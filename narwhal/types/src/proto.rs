@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 mod narwhal {
+    #![cfg_attr(beta, allow(clippy::derive_partial_eq_without_eq))]
     tonic::include_proto!("narwhal");
 }
 

@@ -3,3 +3,5 @@
 /executor/ @asonnino
 /examples/ @arun-koshy
 /network/ @bmwill
+/config/tests/snapshots/ @huitseeker
+/dag/ @huitseeker
