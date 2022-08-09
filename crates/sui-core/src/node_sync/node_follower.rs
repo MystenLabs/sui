@@ -585,6 +585,9 @@ where
             });
         }
 
+        // Lets notify here waiters, to clean up resources
+        let _ = self.pending_downloads.notify(tx_digest, Ok(())).await;
+
         rx.recv()
             .await
             .map_err(|e| SuiError::GenericAuthorityError {
