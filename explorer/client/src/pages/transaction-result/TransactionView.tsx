@@ -171,9 +171,10 @@ function ItemView({ data }: { data: TxItemView }) {
                 {data.content.map((item, index) => {
                     // handle sender -> recipient display in one line
                     let links: Link[] = [];
+                    let label = item.label;
                     if (Array.isArray(item)) {
-                        links = getAddressesLinks(item);
-                        item.label = 'Sender, Recipient';
+                      links = getAddressesLinks(item);
+                      label = 'Sender, Recipient';
                     }
 
                     return (
@@ -181,12 +182,12 @@ function ItemView({ data }: { data: TxItemView }) {
                             key={index}
                             className={cl(
                                 styles.itemviewcontentitem,
-                                !item.label && styles.singleitem
+                                label && styles.singleitem
                             )}
                         >
-                            {item.label && (
+                            {label && (
                                 <div className={styles.itemviewcontentlabel}>
-                                    {item.label}
+                                    {label}
                                 </div>
                             )}
                             <div
