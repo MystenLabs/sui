@@ -54,8 +54,13 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Show { file } => {
-                let keypair: AuthorityKeyPair = read_keypair_from_file(file)?;
-                println!("Public Key: {}", encode_bytes_hex(keypair.public()));
+                let res: Result<AuthorityKeyPair, anyhow::Error> = read_keypair_from_file(&file);
+                match res {
+                    Ok(keypair) => println!("Public Key: {}", encode_bytes_hex(keypair.public())),
+                    Err(e) => {
+                        println!("Failed to read keypair at path {:?} err: {:?}", file, e)
+                    }
+                }
             }
 
             KeyToolCommand::Unpack { keypair } => {
