@@ -38,6 +38,7 @@ use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::http_server::HttpServerHandle;
+use sui_json_rpc::quorum_driver_api::FullNodeQuorumDriverApi;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::ws_server::WsServerHandle;
@@ -64,6 +65,10 @@ pub struct SuiNode {
 
 impl SuiNode {
     pub async fn start(config: &NodeConfig) -> Result<SuiNode> {
+        // TODO: maybe have a config enum that takes care of this for us.
+        let is_validator = config.consensus_config().is_some();
+        let is_full_node = !is_validator;
+
         //
         // Start metrics server
         //
@@ -96,7 +101,7 @@ impl SuiNode {
             secret.clone(),
         )?));
 
-        let index_store = if config.consensus_config().is_some() {
+        let index_store = if is_validator {
             None
         } else {
             Some(Arc::new(IndexStore::open_tables_read_write(
@@ -155,10 +160,6 @@ impl SuiNode {
             AuthAggMetrics::new(&prometheus_registry),
             SafeClientMetrics::new(&prometheus_registry),
         );
-
-        // TODO: maybe have a config enum that takes care of this for us.
-        let is_validator = config.consensus_config().is_some();
-        let is_full_node = !is_validator;
 
         let quorum_driver_handler = if is_full_node {
             Some(QuorumDriverHandler::new(net.clone()))
@@ -262,8 +263,13 @@ impl SuiNode {
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let (json_rpc_service, ws_subscription_service) =
-            build_node_server(state.clone(), config, &prometheus_registry).await?;
+        let (json_rpc_service, ws_subscription_service) = build_node_server(
+            state.clone(),
+            &quorum_driver_handler,
+            config,
+            &prometheus_registry,
+        )
+        .await?;
 
         let node = Self {
             grpc_server,
@@ -318,6 +324,7 @@ impl SuiNode {
 
 pub async fn build_node_server(
     state: Arc<AuthorityState>,
+    quorum_driver_handler: &Option<QuorumDriverHandler<NetworkAuthorityClient>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
 ) -> Result<(Option<HttpServerHandle>, Option<WsServerHandle>)> {
@@ -325,12 +332,18 @@ pub async fn build_node_server(
     if config.consensus_config().is_some() {
         return Ok((None, None));
     }
-
     let mut server = JsonRpcServerBuilder::new(false, prometheus_registry)?;
 
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
     server.register_module(BcsApiImpl::new(state.clone()))?;
+
+    if let Some(quorum_driver_handler_) = quorum_driver_handler {
+        server.register_module(FullNodeQuorumDriverApi::new(
+            quorum_driver_handler_.clone_quorum_driver(),
+            state.module_cache.clone(),
+        ))?;
+    }
 
     if let Some(event_handler) = state.event_handler.clone() {
         server.register_module(EventReadApiImpl::new(state.clone(), event_handler))?;
