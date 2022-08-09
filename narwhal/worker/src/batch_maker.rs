@@ -1,9 +1,11 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::metrics::WorkerMetrics;
 use config::Committee;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
+use std::sync::Arc;
 use tokio::{
     sync::watch,
     task::JoinHandle,
@@ -37,6 +39,8 @@ pub struct BatchMaker {
     current_batch: Batch,
     /// Holds the size of the current batch (in bytes).
     current_batch_size: usize,
+    /// Metrics handler
+    node_metrics: Arc<WorkerMetrics>,
 }
 
 impl BatchMaker {
@@ -48,6 +52,7 @@ impl BatchMaker {
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_transaction: Receiver<Transaction>,
         tx_message: Sender<Batch>,
+        node_metrics: Arc<WorkerMetrics>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -59,6 +64,7 @@ impl BatchMaker {
                 tx_message,
                 current_batch: Batch(Vec::with_capacity(batch_size * 2)),
                 current_batch_size: 0,
+                node_metrics,
             }
             .run()
             .await;
@@ -77,7 +83,7 @@ impl BatchMaker {
                     self.current_batch_size += transaction.len();
                     self.current_batch.0.push(transaction);
                     if self.current_batch_size >= self.batch_size {
-                        self.seal().await;
+                        self.seal(false).await;
                         timer.as_mut().reset(Instant::now() + self.max_batch_delay);
                     }
                 },
@@ -85,7 +91,7 @@ impl BatchMaker {
                 // If the timer triggers, seal the batch even if it contains few transactions.
                 () = &mut timer => {
                     if !self.current_batch.0.is_empty() {
-                        self.seal().await;
+                        self.seal(true).await;
                     }
                     timer.as_mut().reset(Instant::now() + self.max_batch_delay);
                 }
@@ -114,8 +120,7 @@ impl BatchMaker {
     }
 
     /// Seal and broadcast the current batch.
-    async fn seal(&mut self) {
-        #[cfg(feature = "benchmark")]
+    async fn seal(&mut self, timeout: bool) {
         let size = self.current_batch_size;
 
         // Look for sample txs (they all start with 0) and gather their txs id (the next 8 bytes).
@@ -153,6 +158,13 @@ impl BatchMaker {
                 tracing::info!("Batch {:?} contains {} B", digest, size);
             }
         }
+
+        let reason = if timeout { "timeout" } else { "size_reached" };
+
+        self.node_metrics
+            .created_batch_size
+            .with_label_values(&[self.committee.epoch.to_string().as_str(), reason])
+            .observe(size as f64);
 
         // Send the batch through the deliver channel for further processing.
         if self.tx_message.send(batch).await.is_err() {

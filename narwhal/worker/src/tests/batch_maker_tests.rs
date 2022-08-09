@@ -2,6 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
+use prometheus::Registry;
 use test_utils::{committee, transaction};
 
 #[tokio::test]
@@ -11,6 +12,7 @@ async fn make_batch() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_transaction, rx_transaction) = test_utils::test_channel!(1);
     let (tx_message, mut rx_message) = test_utils::test_channel!(1);
+    let node_metrics = WorkerMetrics::new(&Registry::new());
 
     // Spawn a `BatchMaker` instance.
     let _batch_maker_handle = BatchMaker::spawn(
@@ -21,6 +23,7 @@ async fn make_batch() {
         rx_reconfiguration,
         rx_transaction,
         tx_message,
+        Arc::new(node_metrics),
     );
 
     // Send enough transactions to seal a batch.
@@ -41,6 +44,7 @@ async fn batch_timeout() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_transaction, rx_transaction) = test_utils::test_channel!(1);
     let (tx_message, mut rx_message) = test_utils::test_channel!(1);
+    let node_metrics = WorkerMetrics::new(&Registry::new());
 
     // Spawn a `BatchMaker` instance.
     let _batch_maker_handle = BatchMaker::spawn(
@@ -51,6 +55,7 @@ async fn batch_timeout() {
         rx_reconfiguration,
         rx_transaction,
         tx_message,
+        Arc::new(node_metrics),
     );
 
     // Do not send enough transactions to seal a batch.

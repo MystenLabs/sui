@@ -89,6 +89,7 @@ impl Worker {
         let client_flow_handles = worker.handle_clients_transactions(
             &tx_reconfigure,
             tx_primary.clone(),
+            node_metrics.clone(),
             channel_metrics.clone(),
             endpoint_metrics,
             network_metrics.clone(),
@@ -188,6 +189,7 @@ impl Worker {
         &self,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
+        node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
         network_metrics: Arc<WorkerNetworkMetrics>,
@@ -225,6 +227,7 @@ impl Worker {
             tx_reconfigure.subscribe(),
             /* rx_transaction */ rx_batch_maker,
             /* tx_message */ tx_quorum_waiter,
+            node_metrics,
         );
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards

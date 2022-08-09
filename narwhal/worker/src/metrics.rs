@@ -44,6 +44,8 @@ pub fn initialise_metrics(metrics_registry: &Registry) -> Metrics {
 pub struct WorkerMetrics {
     /// Number of elements pending elements in the worker synchronizer
     pub pending_elements_worker_synchronizer: IntGaugeVec,
+    /// Number of created batches from the batch_maker
+    pub created_batch_size: HistogramVec,
 }
 
 impl WorkerMetrics {
@@ -53,6 +55,13 @@ impl WorkerMetrics {
                 "pending_elements_worker_synchronizer",
                 "Number of pending elements in worker block synchronizer",
                 &["epoch"],
+                registry
+            )
+            .unwrap(),
+            created_batch_size: register_histogram_vec_with_registry!(
+                "created_batch_size",
+                "Size in bytes of the created batches",
+                &["epoch", "reason"],
                 registry
             )
             .unwrap(),
