@@ -345,16 +345,17 @@ where
                 let res = state.process_digest(sync_arg, permit).await;
                 if let Err(error) = &res {
                     error!(?sync_arg, "process_digest failed: {}", error);
-                } else {
-                    let digest = sync_arg.transaction_digest();
-                    trace!(?digest, "notifying waiters");
-                    state
-                        .pending_txes
-                        .notify(digest, ())
-                        .await
-                        .tap_err(|e| debug!(?digest, "{}", e))
-                        .ok();
                 }
+
+                // Notify waiters even if tx failed, to avoid leaking resources.
+                let digest = sync_arg.transaction_digest();
+                trace!(?digest, "notifying waiters");
+                state
+                    .pending_txes
+                    .notify(digest, ())
+                    .await
+                    .tap_err(|e| debug!(?digest, "{}", e))
+                    .ok();
 
                 if let Some(tx) = tx {
                     // Send status back to follower so that it knows whether to advance
@@ -584,9 +585,6 @@ where
                 }
             });
         }
-
-        // Lets notify here waiters, to clean up resources
-        let _ = self.pending_downloads.notify(tx_digest, Ok(())).await;
 
         rx.recv()
             .await
