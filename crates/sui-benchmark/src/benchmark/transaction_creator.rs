@@ -62,7 +62,7 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
     let committee = network_config.committee();
     let mut sigs: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     // TODO: Why iterating from 0 to quorum_threshold??
-    for i in 0..network_config.validator_configs().len() {
+    for i in 0..committee.quorum_threshold() {
         let secx = network_config
             .validator_configs()
             .get(i as usize)
