@@ -14,4 +14,8 @@ module sui::crypto {
     /// key, otherwise throw error. This is similar to ecrecover in Ethereum, can only be 
     /// applied to Secp256k1 signatures.
     public native fun ecrecover(signature: vector<u8>, hashed_msg: vector<u8>): vector<u8>;
+
+    /// @param data: arbitrary bytes data to hash
+    /// Hash the input bytes using keccak256 and returns 32 bytes.
+    public native fun keccak256(data: vector<u8>): vector<u8>;
 }

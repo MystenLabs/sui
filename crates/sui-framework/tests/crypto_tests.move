@@ -31,4 +31,13 @@ module sui::crypto_tests {
         let sig = vector[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         crypto::ecrecover(sig, hashed_msg);
     }
+
+    #[test]
+    fun test_keccak256_hash() {
+        let msg = b"hello world!";
+        let hashed_msg_bytes = vector[87, 202, 161, 118, 175, 26, 192, 67, 60, 93, 243, 14, 141, 171, 205, 46, 193, 175, 30, 146, 162, 110, 206, 213, 247, 25, 184, 132, 88, 119, 124, 214];
+
+        let hashed_msg = crypto::keccak256(msg);
+        assert!(hashed_msg == hashed_msg_bytes, 0);
+    }
 }
