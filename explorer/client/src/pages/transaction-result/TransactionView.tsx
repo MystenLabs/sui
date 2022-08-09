@@ -196,10 +196,8 @@ function ItemView({ data }: { data: TxItemView }) {
                                     item.monotypeClass && styles.mono
                                 )}
                             >
-                                {links.length > 1 ? (
+                                {links.length > 1 && (
                                     <TxAddresses content={links}></TxAddresses>
-                                ) : (
-                                    <></>
                                 )}
                                 {item.link ? (
                                     <Longtext
