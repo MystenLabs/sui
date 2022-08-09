@@ -7,6 +7,7 @@ use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use rpc_types::SuiExecuteTransactionResponse;
 use serde::Deserialize;
 use serde::Serialize;
 use std::fmt::Write;
@@ -15,6 +16,7 @@ use sui_config::gateway::GatewayConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
 use sui_json::SuiJsonValue;
 use sui_json_rpc::api::EventStreamingApiClient;
+use sui_json_rpc::api::QuorumDriverApiClient;
 use sui_json_rpc::api::RpcBcsApiClient;
 use sui_json_rpc::api::RpcFullNodeReadApiClient;
 use sui_json_rpc::api::RpcGatewayApiClient;
@@ -30,6 +32,7 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::SignableBytes;
 use sui_types::messages::{Transaction, TransactionData};
 use sui_types::sui_serde::Base64;
+use types::messages::ExecuteTransactionRequestType;
 
 pub mod crypto;
 
@@ -224,15 +227,50 @@ impl SuiClient {
         Ok(match &self {
             Self::Http(c) => {
                 let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
-                c.execute_transaction(tx_bytes, flag, signature, pub_key)
+                RpcGatewayApiClient::execute_transaction(c, tx_bytes, flag, signature, pub_key)
                     .await?
             }
             Self::Ws(c) => {
                 let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
-                c.execute_transaction(tx_bytes, flag, signature, pub_key)
+                RpcGatewayApiClient::execute_transaction(c, tx_bytes, flag, signature, pub_key)
                     .await?
             }
             Self::Embedded(c) => c.execute_transaction(tx).await?,
+        })
+    }
+
+    pub async fn execute_transaction_by_fullnode(
+        &self,
+        tx: Transaction,
+        request_type: ExecuteTransactionRequestType,
+    ) -> anyhow::Result<SuiExecuteTransactionResponse> {
+        Ok(match &self {
+            Self::Http(c) => {
+                let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
+                QuorumDriverApiClient::execute_transaction(
+                    c,
+                    tx_bytes,
+                    flag,
+                    signature,
+                    pub_key,
+                    request_type,
+                )
+                .await?
+            }
+            Self::Ws(c) => {
+                let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
+                QuorumDriverApiClient::execute_transaction(
+                    c,
+                    tx_bytes,
+                    flag,
+                    signature,
+                    pub_key,
+                    request_type,
+                )
+                .await?
+            }
+            // TODO do we want to support an embedded quorum driver?
+            Self::Embedded(_c) => unimplemented!(),
         })
     }
 

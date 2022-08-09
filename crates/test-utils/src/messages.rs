@@ -74,6 +74,7 @@ pub async fn get_account_and_objects(
 }
 
 /// A helper function to make Transactions with controlled accounts in WalletContext.
+/// Particularly, the wallet needs to own gas objects for transactions.
 /// However, if this function is called multiple times without any "sync" actions
 /// on gas object management, txns may fail and objects may be locked.
 ///
