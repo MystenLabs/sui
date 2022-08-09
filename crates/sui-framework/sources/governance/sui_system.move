@@ -94,6 +94,7 @@ module sui::sui_system {
     public entry fun request_add_validator(
         self: &mut SuiSystemState,
         pubkey_bytes: vector<u8>,
+        proof_of_possession: vector<u8>,
         name: vector<u8>,
         net_address: vector<u8>,
         stake: Coin<SUI>,
@@ -111,6 +112,7 @@ module sui::sui_system {
         let validator = validator::new(
             tx_context::sender(ctx),
             pubkey_bytes,
+            proof_of_possession,
             name,
             net_address,
             coin::into_balance(stake),

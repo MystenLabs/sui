@@ -19,6 +19,8 @@ pub fn all_natives(
 ) -> NativeFunctionTable {
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
         ("crypto", "ecrecover", crypto::ecrecover),
+        ("crypto", "keccak256", crypto::keccak256),
+        // ("crypto", "bls12381_verify", crypto::bls12381_verify),
         ("event", "emit", event::emit),
         ("object", "bytes_to_address", object::bytes_to_address),
         ("object", "delete_impl", object::delete_impl),

@@ -108,6 +108,7 @@ module sui::validator_set_tests {
         let init_stake = coin::into_balance(init_stake);
         validator::new(
             addr,
+            x"FF",
             vector[hint],
             vector[hint],
             vector[hint],

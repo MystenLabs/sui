@@ -29,6 +29,7 @@ module sui::genesis {
     /// all the information we need in the system.
     fun create(
         validator_pubkeys: vector<vector<u8>>,
+        validator_proof_of_possessions: vector<vector<u8>>,
         validator_sui_addresses: vector<address>,
         validator_names: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
@@ -49,6 +50,7 @@ module sui::genesis {
         let i = 0;
         while (i < count) {
             let sui_address = *vector::borrow(&validator_sui_addresses, i);
+            let proof_of_possession = *vector::borrow(&validator_proof_of_possessions, i);
             let pubkey = *vector::borrow(&validator_pubkeys, i);
             let name = *vector::borrow(&validator_names, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
@@ -56,6 +58,7 @@ module sui::genesis {
             vector::push_back(&mut validators, validator::new(
                 sui_address,
                 pubkey,
+                proof_of_possession,
                 name,
                 net_address,
                 balance::increase_supply(&mut sui_supply, stake),

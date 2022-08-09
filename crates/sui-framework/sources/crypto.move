@@ -14,4 +14,17 @@ module sui::crypto {
     /// key, otherwise throw error. This is similar to ecrecover in Ethereum, can only be 
     /// applied to Secp256k1 signatures.
     public native fun ecrecover(signature: vector<u8>, hashed_msg: vector<u8>): vector<u8>;
+    
+    // /// @param signature: A 48-bytes signature that is a point on G2 of the BLS12381 curve.
+    // /// @param public_key: A 96-bytes public key that is a point on G1 of the BLS12381 curve.
+    // /// @param msg: The message that we test the signature against.
+
+    // /// If the signature is a valid BLS12381 signature of the message and public key, return true.
+    // /// Otherwise, return false.
+    // public native fun bls12381_verify(signature: vector<u8>, public_key: vector<u8>, msg: vector<u8>): vector<u8>;
+
+    /// @param data: arbitrary bytes data to hash
+    /// Hash the input bytes using keccak256 and returns 32 bytes.
+    public native fun keccak256(data: vector<u8>): vector<u8>;
+
 }
