@@ -94,9 +94,11 @@ Debian distributions and tests against
 That said, you are welcome to run a Sui fullnode on the operating system of your
 choosing and submit changes to accommodate that environment.
 
-Before building, ensure the required tools are installed in your environment as
-outlined in the [Prerequisites](../build/install.md#prerequisites) section. Note,
-you will fork the Sui repository here rather than clone it as described in
+Before building, ensure the required tools are installed and updated in your environment as
+outlined in the [Prerequisites](../build/install.md#prerequisites) section. In particular,
+ensure [Rust](../build/install.md#rust) is up-to-date.
+
+Note, you will fork the Sui repository here rather than clone it as described in
 *Prerequisites*. So you can skip that step.
 
 If you are using Linux, install these extra dependencies. For example, in Ubuntu, run:
