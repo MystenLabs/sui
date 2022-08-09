@@ -173,8 +173,8 @@ function ItemView({ data }: { data: TxItemView }) {
                     let links: Link[] = [];
                     let label = item.label;
                     if (Array.isArray(item)) {
-                      links = getAddressesLinks(item);
-                      label = 'Sender, Recipient';
+                        links = getAddressesLinks(item);
+                        label = 'Sender, Recipient';
                     }
 
                     return (
