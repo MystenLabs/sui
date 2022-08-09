@@ -12,7 +12,7 @@ Follow the instructions to [install Sui binaries](install.md).
 
 ### Start local Sui network
 Follow the instructions to [create](cli-client.md#genesis) and [start](cli-client.md#starting-the-network) the Sui network.
-The genesis process will create a `gateway.conf` configuration file that will be used by the RPC server.
+The genesis process will create a `gateway.yaml` configuration file that will be used by the RPC server.
 
 ### Start local RPC server
 
@@ -22,10 +22,13 @@ $ rpc-server
 ```
 You will see output resembling:
 ```
-2022-04-25T11:06:40.147259Z  INFO rpc_server: Gateway config file path: ".sui/sui_config/gateway.conf"
-2022-04-25T11:06:40.147277Z  INFO rpc_server: AccessControl { allowed_hosts: Any, allowed_origins: None, allowed_headers: Any, continue_on_invalid_cors: false }
-2022-04-25T11:06:40.163568Z  INFO rpc_server: Available JSON-RPC methods : ["sui_moveCall", "sui_getTransaction", "sui_getObjectTypedInfo", "sui_getTotalTransactionNumber", "sui_getOwnedObjects", "sui_getObjectInfoRaw", "sui_transferObject", "sui_executeTransaction", "sui_mergeCoins", "sui_getRecentTransactions", "sui_getTransactionsInRange", "rpc.discover", "sui_splitCoin", "sui_publish", "sui_syncAccountState"]
-2022-04-25T11:06:40.163590Z  INFO rpc_server: Sui RPC Gateway listening on local_addr:127.0.0.1:5001
+2022-08-05T19:41:33.227478Z  INFO rpc_server: Gateway config file path config_path="/home/sui/.sui/sui_config/gateway.yaml"
+2022-08-05T19:41:33.227514Z  INFO rpc_server: Starting Prometheus HTTP endpoint at 0.0.0.0:9184
+2022-08-05T19:41:33.896152Z  INFO sui_storage::lock_service: LockService command processing loop started
+2022-08-05T19:41:33.896230Z  INFO sui_storage::lock_service: LockService queries processing loop started
+2022-08-05T19:41:34.615529Z  INFO sui_json_rpc: acl=AccessControl { allowed_hosts: Any, allowed_origins: None, allowed_headers: Any }
+2022-08-05T19:41:34.618762Z  INFO sui_json_rpc: Sui JSON-RPC server listening on 127.0.0.1:5001 local_addr=127.0.0.1:5001
+2022-08-05T19:41:34.618789Z  INFO sui_json_rpc: Available JSON-RPC methods : ["sui_moveCall", "sui_getTransaction", "sui_getObjectsOwnedByAddress", "sui_getTotalTransactionNumber", "sui_transferObject", "sui_transferSui", "sui_batchTransaction", "sui_executeTransaction", "sui_mergeCoins", "sui_getRecentTransactions", "sui_getTransactionsInRange", "sui_getObject", "sui_getObjectsOwnedByObject", "rpc.discover", "sui_splitCoin", "sui_getRawObject", "sui_publish", "sui_syncAccountState"]
 ```
 
 > **Note:** For additional logs, set `RUST_LOG=debug` before invoking `rpc-server`.
