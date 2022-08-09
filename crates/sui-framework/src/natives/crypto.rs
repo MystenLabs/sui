@@ -15,7 +15,6 @@ use std::collections::VecDeque;
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
-pub const INVALID_PUBLIC_KEY: u64 = 2;
 
 /// Native implemention of ecrecover in public Move API, see crypto.move for specifications.
 pub fn ecrecover(
@@ -42,24 +41,37 @@ pub fn ecrecover(
     }
 }
 
-/// Native implemention of keccak256 in public Move API, see crypto.move for specifications.
-pub fn keccak256(
+pub fn bls12381_verify(
     context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 1);
+    debug_assert!(args.len() == 3);
 
-    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
     let msg = pop_arg!(args, Vec<u8>);
-    Ok(NativeResult::ok(
-        cost,
-        smallvec![Value::vector_u8(
-            <sha3::Keccak256 as sha3::digest::Digest>::digest(msg)
-                .as_slice()
-                .to_vec()
-        )],
-    ))
+    let public_key_bytes = pop_arg!(args, Vec<u8>);
+    let signature_bytes = pop_arg!(args, Vec<u8>);
+
+    // TODO: implement native gas cost estimation
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+
+    let signature = match <narwhal_crypto::bls12381::BLS12381Signature as ToFromBytes>::from_bytes(
+        &signature_bytes,
+    ) {
+        Ok(signature) => signature,
+        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    };
+
+    let public_key = match <narwhal_crypto::bls12381::BLS12381PublicKey as ToFromBytes>::from_bytes(
+        &public_key_bytes,
+    ) {
+        Ok(public_key) => public_key,
+        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    };
+
+    match public_key.verify(&msg, &signature) {
+        Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
+        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    }
 }

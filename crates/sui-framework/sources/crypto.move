@@ -21,10 +21,5 @@ module sui::crypto {
 
     // /// If the signature is a valid BLS12381 signature of the message and public key, return true.
     // /// Otherwise, return false.
-    // public native fun bls12381_verify(signature: vector<u8>, public_key: vector<u8>, msg: vector<u8>): vector<u8>;
-
-    /// @param data: arbitrary bytes data to hash
-    /// Hash the input bytes using keccak256 and returns 32 bytes.
-    public native fun keccak256(data: vector<u8>): vector<u8>;
-
+    public native fun bls12381_verify(signature: vector<u8>, public_key: vector<u8>, msg: vector<u8>): bool; 
 }
