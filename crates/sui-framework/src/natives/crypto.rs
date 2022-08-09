@@ -53,7 +53,7 @@ pub fn bls12381_verify(
     let public_key_bytes = pop_arg!(args, Vec<u8>);
     let signature_bytes = pop_arg!(args, Vec<u8>);
 
-    // TODO: implement native gas cost estimation
+    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
 
     let signature = match <narwhal_crypto::bls12381::BLS12381Signature as ToFromBytes>::from_bytes(
