@@ -95,7 +95,7 @@ use sui_types::sui_system_state::SuiSystemState;
 
 pub mod authority_notifier;
 
-pub const MAX_ITEMS_LIMIT: u64 = 100_000;
+pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 const MAX_TX_RECOVERY_RETRY: u32 = 3;
@@ -927,9 +927,7 @@ impl AuthorityState {
         };
 
         // Ensure we are not doing too much work per request
-        if request.length > MAX_ITEMS_LIMIT {
-            return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
-        }
+        let length = std::cmp::min(request.length, MAX_ITEMS_LIMIT);
 
         // If we do not have a start, pick next sequence number that has
         // not yet been put into a batch.
@@ -942,7 +940,7 @@ impl AuthorityState {
                     .next_sequence_number
             }
         };
-        let end = start + request.length;
+        let end = start + length;
 
         let (batches, transactions) = self.database.batches_and_transactions(start, end)?;
 
