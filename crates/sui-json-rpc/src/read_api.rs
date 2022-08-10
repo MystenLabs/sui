@@ -17,7 +17,7 @@ use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_json_rpc_types::{
     GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiMoveNormalizedFunction,
     SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects,
-    TransactionEffectsResponse,
+    SuiTransactionResponse,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -105,12 +105,13 @@ impl RpcReadApiServer for ReadApi {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> RpcResult<TransactionEffectsResponse> {
+    ) -> RpcResult<SuiTransactionResponse> {
         let (cert, effects) = self.state.get_transaction(digest).await?;
-        Ok(TransactionEffectsResponse {
+        Ok(SuiTransactionResponse {
             certificate: cert.try_into()?,
             effects: SuiTransactionEffects::try_from(effects, &self.state.module_cache)?,
             timestamp_ms: self.state.get_timestamp_ms(&digest).await?,
+            parsed_data: None,
         })
     }
 }

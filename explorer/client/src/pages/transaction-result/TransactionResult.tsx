@@ -24,7 +24,7 @@ import TransactionView from './TransactionView';
 
 import type {
     CertifiedTransaction,
-    TransactionEffectsResponse,
+    SuiTransactionResponse,
     ExecutionStatusType,
     TransactionEffects,
     SuiObjectRef,
@@ -68,14 +68,14 @@ const initState: TxnState = {
 function fetchTransactionData(
     txId: string | undefined,
     network: Network | string
-): Promise<TransactionEffectsResponse> {
+): Promise<SuiTransactionResponse> {
     try {
         if (!txId) {
             throw new Error('No Txid found');
         }
         return rpc(network)
             .getTransactionWithEffects(txId)
-            .then((txEff: TransactionEffectsResponse) => txEff);
+            .then((txEff: SuiTransactionResponse) => txEff);
     } catch (error) {
         throw error;
     }
@@ -102,7 +102,7 @@ const FailedToGetTxResults = ({ id }: { id: string }) => (
 );
 
 const transformTransactionResponse = (
-    txObj: TransactionEffectsResponse,
+    txObj: SuiTransactionResponse,
     id: string
 ): TxnState => {
     return {
@@ -180,7 +180,7 @@ function TransactionResult() {
 
     const checkStateHasData = (
         state: any
-    ): state is { data: TransactionEffectsResponse } => {
+    ): state is { data: SuiTransactionResponse } => {
         return state !== null && 'data' in state;
     };
 

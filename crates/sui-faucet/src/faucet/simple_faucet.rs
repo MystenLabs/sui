@@ -12,7 +12,7 @@ use crate::metrics::FaucetMetrics;
 use prometheus::Registry;
 use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionKind, SuiTransferSui, TransactionEffectsResponse,
+    SuiExecutionStatus, SuiTransactionKind, SuiTransactionResponse, SuiTransferSui,
 };
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -185,7 +185,7 @@ impl SimpleFaucet {
         budget: u64,
         amount: u64,
         uuid: Uuid,
-    ) -> Result<TransactionEffectsResponse, anyhow::Error> {
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let context = &self.wallet;
 
         let data = context
@@ -196,11 +196,7 @@ impl SimpleFaucet {
 
         let tx = Transaction::new(data, signature);
         info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");
-        let response = context
-            .gateway
-            .execute_transaction(tx)
-            .await?
-            .to_effect_response()?;
+        let response = context.gateway.execute_transaction(tx).await?;
         let effects = &response.effects;
         if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
             return Err(anyhow!("Error transferring object: {:#?}", effects.status));

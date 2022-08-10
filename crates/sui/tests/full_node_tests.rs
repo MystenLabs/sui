@@ -21,8 +21,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletCont
 use sui_config::utils::get_available_port;
 use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
-    SplitCoinResponse, SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue,
-    SuiObjectRead,
+    SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue, SuiObjectRead,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
@@ -342,16 +341,14 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                     .unwrap()
                 };
 
-                owned_tx_digest = if let SuiClientCommandResult::SplitCoin(SplitCoinResponse {
-                    certificate,
-                    updated_gas,
-                    ..
-                }) = res
-                {
+                owned_tx_digest = if let SuiClientCommandResult::SplitCoin(resp) = res {
+                    let digest = resp.certificate.transaction_digest;
+                    let split_coin_resp =
+                        resp.parsed_data.unwrap().to_split_coin_response().unwrap();
                     // Re-use the same gas id next time to avoid O(n^2) fetches due to automatic
                     // gas selection.
-                    gas_object = Some(updated_gas.id());
-                    Some(certificate.transaction_digest)
+                    gas_object = Some(split_coin_resp.updated_gas.id());
+                    Some(digest)
                 } else {
                     panic!("transfer command did not return WalletCommandResult::Transfer");
                 };

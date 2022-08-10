@@ -47,7 +47,7 @@ async fn public_transfer_object(
     coin_object_id: ObjectID,
     gas_object_id: ObjectID,
     recipient: SuiAddress,
-) -> Result<TransactionEffectsResponse, anyhow::Error> {
+) -> Result<SuiTransactionResponse, anyhow::Error> {
     let data = gateway
         .public_transfer_object(
             signer,
@@ -61,8 +61,7 @@ async fn public_transfer_object(
     let signature = key.sign(&data.to_bytes());
     let result = gateway
         .execute_transaction(Transaction::new(data, signature))
-        .await?
-        .to_effect_response()?;
+        .await?;
     Ok(result)
 }
 
@@ -113,13 +112,7 @@ async fn test_move_call() {
         gas_object.compute_object_reference(),
     );
 
-    let effects = gateway
-        .execute_transaction(tx)
-        .await
-        .unwrap()
-        .to_effect_response()
-        .unwrap()
-        .effects;
+    let effects = gateway.execute_transaction(tx).await.unwrap().effects;
     assert!(effects.status.is_ok());
     assert_eq!(effects.mutated.len(), 1);
     assert_eq!(effects.created.len(), 1);
@@ -153,8 +146,6 @@ async fn test_publish() {
     gateway
         .execute_transaction(Transaction::new(data, signature))
         .await
-        .unwrap()
-        .to_publish_response()
         .unwrap();
 }
 
@@ -186,6 +177,8 @@ async fn test_coin_split() {
     let response = gateway
         .execute_transaction(Transaction::new(data, signature))
         .await
+        .unwrap()
+        .parsed_data
         .unwrap()
         .to_split_coin_response()
         .unwrap();
@@ -282,6 +275,8 @@ async fn test_coin_merge() {
         .execute_transaction(Transaction::new(data, signature))
         .await
         .unwrap()
+        .parsed_data
+        .unwrap()
         .to_merge_coin_response()
         .unwrap();
 
@@ -326,13 +321,7 @@ async fn test_recent_transactions() -> Result<(), anyhow::Error> {
         let response = gateway
             .execute_transaction(Transaction::new(data, signature))
             .await?;
-        digests.push((
-            cnt,
-            response
-                .to_effect_response()?
-                .certificate
-                .transaction_digest,
-        ));
+        digests.push((cnt, response.certificate.transaction_digest));
         cnt += 1;
         assert_eq!(gateway.get_total_transaction_number()?, cnt);
     }
@@ -450,13 +439,7 @@ async fn test_public_transfer_object_with_retry() {
         .fail_after_handle_confirmation = false;
 
     // Retry transaction, and this time it should succeed.
-    let effects = gateway
-        .execute_transaction(tx)
-        .await
-        .unwrap()
-        .to_effect_response()
-        .unwrap()
-        .effects;
+    let effects = gateway.execute_transaction(tx).await.unwrap().effects;
     let oref = effects.mutated_excluding_gas().next().unwrap();
     let updated_obj_ref = &oref.reference;
     let new_owner = &oref.owner;
@@ -536,6 +519,8 @@ async fn test_get_owner_object() {
         .execute_transaction(Transaction::new(data, signature))
         .await
         .unwrap()
+        .parsed_data
+        .unwrap()
         .to_publish_response()
         .unwrap();
 
@@ -558,8 +543,6 @@ async fn test_get_owner_object() {
     let response = gateway
         .execute_transaction(Transaction::new(data, signature))
         .await
-        .unwrap()
-        .to_effect_response()
         .unwrap();
     let parent = &response.effects.created.first().unwrap().reference;
     let data = gateway
@@ -579,8 +562,6 @@ async fn test_get_owner_object() {
     let response = gateway
         .execute_transaction(Transaction::new(data, signature))
         .await
-        .unwrap()
-        .to_effect_response()
         .unwrap();
     let child = &response.effects.created.first().unwrap().reference;
 
@@ -605,8 +586,6 @@ async fn test_get_owner_object() {
     gateway
         .execute_transaction(Transaction::new(data, signature))
         .await
-        .unwrap()
-        .to_effect_response()
         .unwrap();
 
     // Query get_objects_owned_by_object
@@ -731,8 +710,6 @@ async fn test_batch_transaction() {
     let effects = gateway
         .execute_transaction(Transaction::new(data, signature))
         .await
-        .unwrap()
-        .to_effect_response()
         .unwrap()
         .effects;
     assert_eq!(effects.created.len(), 1);

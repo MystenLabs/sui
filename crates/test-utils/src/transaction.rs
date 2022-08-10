@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
-use sui_json_rpc_types::{TransactionEffectsResponse, TransactionResponse};
+use sui_json_rpc_types::{SuiParsedTransactionResponse, SuiTransactionResponse};
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -76,7 +76,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
         .await
         .unwrap();
 
-    if let TransactionResponse::PublishResponse(resp) = resp {
+    if let Some(SuiParsedTransactionResponse::Publish(resp)) = resp.parsed_data {
         resp.package.to_object_ref()
     } else {
         panic!()
@@ -92,7 +92,7 @@ pub async fn submit_move_transaction(
     arguments: Vec<SuiJsonValue>,
     sender: SuiAddress,
     gas_object: Option<ObjectID>,
-) -> TransactionResponse {
+) -> SuiTransactionResponse {
     debug!(?package_ref, ?arguments, "move_transaction");
 
     let data = context
@@ -136,11 +136,10 @@ pub async fn publish_basics_package_and_make_counter(
     )
     .await;
 
-    let counter_id = if let TransactionResponse::EffectResponse(effects) = create_shared_obj_resp {
-        effects.effects.created[0].clone().reference.object_id
-    } else {
-        panic!()
-    };
+    let counter_id = create_shared_obj_resp.effects.created[0]
+        .clone()
+        .reference
+        .object_id;
     debug!(?counter_id);
     (package_ref, counter_id)
 }
@@ -151,7 +150,7 @@ pub async fn increment_counter(
     gas_object: Option<ObjectID>,
     package_ref: ObjectRef,
     counter_id: ObjectID,
-) -> TransactionEffectsResponse {
+) -> SuiTransactionResponse {
     let resp = submit_move_transaction(
         context,
         "counter",
@@ -162,11 +161,7 @@ pub async fn increment_counter(
         gas_object,
     )
     .await;
-    if let TransactionResponse::EffectResponse(effects) = resp {
-        effects
-    } else {
-        panic!()
-    }
+    resp
 }
 
 /// Submit a certificate containing only owned-objects to all authorities.

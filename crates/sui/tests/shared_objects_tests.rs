@@ -392,7 +392,7 @@ async fn shared_object_on_gateway() {
         .execute_transaction(create_counter_transaction)
         .await
         .unwrap();
-    let effects = resp.to_effect_response().unwrap().effects;
+    let effects = resp.effects;
     let shared_object_id = effects.created[0].reference.object_id;
     // We need to have one gas object left for the final value check.
     let last_gas_object = gas_objects.pop().unwrap();
@@ -454,7 +454,7 @@ async fn shared_object_on_gateway() {
             .execute_transaction(assert_value_transaction.clone())
             .await;
         if let Ok(response) = result {
-            let effects = response.to_effect_response().unwrap().effects;
+            let effects = response.effects;
             assert!(effects.status.is_ok());
             break;
         }
