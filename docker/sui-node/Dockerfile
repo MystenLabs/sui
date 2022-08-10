@@ -24,8 +24,6 @@ RUN sed -i '/crates\/workspace-hack/b; /crates/d' Cargo.toml \
 # with all dependencies built.
 FROM chef AS builder 
 ARG PROFILE=release
-# Enable frame pointers to assist in profiling/getting stack frames
-# ENV RUSTFLAGS "-Cforce-frame-pointsers=yes"
 COPY --from=planner /sui/Cargo.toml Cargo.toml
 COPY --from=planner /sui/Cargo.lock Cargo.lock
 COPY --from=planner /sui/crates/workspace-hack crates/workspace-hack
@@ -48,5 +46,8 @@ COPY --from=builder "/sui/target/$PROFILE/sui-node" /usr/local/bin
 
 ARG BUILD_DATE
 ARG GIT_REVISION
+# Enable automatic memory profiling.  Note: disabling this might lead to a panic
+ENV MALLOC_CONF prof:true
+ENV _RJEM_MALLOC_CONF prof:true
 LABEL build-date=$BUILD_DATE
 LABEL git-revision=$GIT_REVISION
