@@ -56,6 +56,7 @@ pub trait FaucetClient {
         &self,
         client: &WalletClient,
         minimum_coins: Option<usize>,
+        request_address: Option<SuiAddress>,
     ) -> Result<Vec<GasCoin>, anyhow::Error>;
 }
 
@@ -79,10 +80,11 @@ impl FaucetClient for RemoteFaucetClient {
         &self,
         client: &WalletClient,
         minimum_coins: Option<usize>,
+        request_address: Option<SuiAddress>,
     ) -> Result<Vec<GasCoin>, anyhow::Error> {
         let gas_url = format!("{}/gas", self.remote_url);
         debug!("Getting coin from remote faucet {}", gas_url);
-        let address = client.get_wallet_address();
+        let address = request_address.unwrap_or_else(|| client.get_wallet_address());
         let data = HashMap::from([("recipient", encode_bytes_hex(&address))]);
         let map = HashMap::from([("FixedAmountRequest", data)]);
 
@@ -135,8 +137,9 @@ impl FaucetClient for LocalFaucetClient {
         &self,
         client: &WalletClient,
         minimum_coins: Option<usize>,
+        request_address: Option<SuiAddress>,
     ) -> Result<Vec<GasCoin>, anyhow::Error> {
-        let address = client.get_wallet_address();
+        let address = request_address.unwrap_or_else(|| client.get_wallet_address());
         let receipt = self
             .simple_faucet
             .send(Uuid::new_v4(), address, &[50000; 5])
