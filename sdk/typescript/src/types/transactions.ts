@@ -292,3 +292,59 @@ export function getTotalGasUsed(data: SuiTransactionEffectsResponse): number {
     gasSummary.storageRebate
   );
 }
+
+/* --------------------------- TransactionResponse -------------------------- */
+
+export function getParsedSplitCoinResponse(
+  data: SuiTransactionEffectsResponse
+): SuiParsedSplitCoinResponse | undefined {
+  const parsed = data.parsed_data;
+  return parsed && 'SplitCoin' in parsed ? parsed.SplitCoin : undefined;
+}
+
+export function getParsedMergeCoinResponse(
+  data: SuiTransactionEffectsResponse
+): SuiParsedMergeCoinResponse | undefined {
+  const parsed = data.parsed_data;
+  return parsed && 'MergeCoin' in parsed ? parsed.MergeCoin : undefined;
+}
+
+export function getParsedPublishResponse(
+  data: SuiTransactionEffectsResponse
+): SuiParsedPublishResponse | undefined {
+  const parsed = data.parsed_data;
+  return parsed && 'Publish' in parsed ? parsed.Publish : undefined;
+}
+
+/**
+ * Get the updated coin after a merge.
+ * @param data the response for executing a merge coin transaction
+ * @returns the updated state of the primary coin after the merge
+ */
+export function getCoinAfterMerge(
+  data: SuiTransactionEffectsResponse
+): SuiObject | undefined {
+  return getParsedMergeCoinResponse(data)?.updatedCoin;
+}
+
+/**
+ * Get the updated coin after a split.
+ * @param data the response for executing a Split coin transaction
+ * @returns the updated state of the original coin object used for the split
+ */
+export function getCoinAfterSplit(
+  data: SuiTransactionEffectsResponse
+): SuiObject | undefined {
+  return getParsedSplitCoinResponse(data)?.updatedCoin;
+}
+
+/**
+ * Get the newly created coin after a split.
+ * @param data the response for executing a Split coin transaction
+ * @returns the updated state of the original coin object used for the split
+ */
+export function getNewlyCreatedCoinsAfterSplit(
+  data: SuiTransactionEffectsResponse
+): SuiObject[] | undefined {
+  return getParsedSplitCoinResponse(data)?.newCoins;
+}
