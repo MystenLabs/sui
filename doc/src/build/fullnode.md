@@ -92,11 +92,15 @@ Debian distributions and tests against
 [Ubuntu version 18.04 (Bionic Beaver)](https://releases.ubuntu.com/18.04/).
 
 That said, you are welcome to run a Sui fullnode on the operating system of your
-choosing and submit changes to accommodate that environment.
+choosing and submit changes to accommodate that environment. See [Install Sui](../build/install.md)
+for setup instructions for each operating system.
 
-Before building, ensure the required tools are installed and updated in your environment as
+Specifically, ensure the required tools are installed and updated in your environment as
 outlined in the [Prerequisites](../build/install.md#prerequisites) section. In particular,
 ensure [Rust](../build/install.md#rust) is up-to-date.
+
+Similarly, if you are using Windows Subsystem for Linux (WSL), install a fresh copy of
+[CLang/LLVM](https://releases.llvm.org/download.html), as described in [Prerequisites](../build/install.md#prerequisites).
 
 Note, you will fork the Sui repository here rather than clone it as described in
 *Prerequisites*. So you can skip that step.
@@ -115,6 +119,8 @@ If you are using Linux, install these extra dependencies. For example, in Ubuntu
     libclang-dev \
     cmake
 ```
+
+If you are using macOS or Windows Subsystem for Linux (WSL), the command will be similar. Remember to install [CLang](https://clang.llvm.org/) in WSL.
 
 ## Configuring your fullnode
 
