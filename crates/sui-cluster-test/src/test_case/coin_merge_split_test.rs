@@ -48,6 +48,8 @@ impl TestCaseImpl for CoinMergeSplitTest {
         let split_response = ctx
             .sign_and_execute(data, "coin split")
             .await
+            .parsed_data
+            .unwrap()
             .to_split_coin_response()
             .or_else(|e| bail!("Failed to execute SplitCoin: {e}"))?;
 
