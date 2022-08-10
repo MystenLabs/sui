@@ -11,9 +11,14 @@ use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use move_bytecode_utils::module_cache::SyncModuleCache;
+use move_core_types::language_storage::ModuleId;
+use move_core_types::resolver::ModuleResolver;
 use rpc_types::SuiExecuteTransactionResponse;
 use serde::Deserialize;
 use serde::Serialize;
+use tokio::runtime::Handle;
+use tokio::sync::RwLock;
 
 // re-export essential sui crates
 pub use sui_config::gateway;
@@ -30,19 +35,23 @@ use sui_json_rpc::api::WalletSyncApiClient;
 pub use sui_json_rpc_types as rpc_types;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, SuiEventEnvelope,
-    SuiEventFilter, SuiObjectInfo, TransactionEffectsResponse, TransactionResponse,
+    SuiEventFilter, SuiObjectInfo, SuiParsedObject, TransactionEffectsResponse,
+    TransactionResponse,
 };
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::SuiSignature;
 use sui_types::messages::Transaction;
+use sui_types::object::{Object, ObjectFormatOptions};
 use sui_types::sui_serde::Base64;
 use types::messages::ExecuteTransactionRequestType;
 
+use crate::client_state::ClientState;
 use crate::transaction_builder::TransactionBuilder;
 
+mod client_state;
 pub mod crypto;
-pub mod transaction_builder;
+mod transaction_builder;
 
 pub struct SuiClient {
     api: Arc<SuiClientApi>,
@@ -80,13 +89,21 @@ impl SuiClient {
     }
     fn new(api: SuiClientApi) -> Self {
         let api = Arc::new(api);
-        let read_api = Arc::new(ReadApi { api: api.clone() });
+        let state = Arc::new(RwLock::new(ClientState::default()));
+        let read_api = Arc::new(ReadApi {
+            api: api.clone(),
+            state: state.clone(),
+            module_cache: SyncModuleCache::new(ResolverWrapper(state.clone())),
+        });
         let full_node_api = FullNodeApi(api.clone());
         let event_api = EventApi(api.clone());
         let transaction_builder = TransactionBuilder {
             read_api: read_api.clone(),
         };
-        let quorum_driver = QuorumDriver(api.clone());
+        let quorum_driver = QuorumDriver {
+            api: api.clone(),
+            state,
+        };
         SuiClient {
             api,
             transaction_builder,
@@ -100,6 +117,8 @@ impl SuiClient {
 
 pub struct ReadApi {
     api: Arc<SuiClientApi>,
+    state: Arc<RwLock<ClientState>>,
+    module_cache: SyncModuleCache<ResolverWrapper<ClientState>>,
 }
 
 impl ReadApi {
@@ -124,9 +143,20 @@ impl ReadApi {
     }
 
     pub async fn get_object(&self, object_id: ObjectID) -> anyhow::Result<GetObjectDataResponse> {
-        Ok(match &*self.api {
-            SuiClientApi::Rpc(c, _) => c.get_object(object_id).await?,
-            SuiClientApi::Embedded(c) => c.get_object(object_id).await?,
+        Ok(match self.get_raw_object(object_id).await? {
+            GetRawObjectDataResponse::Exists(o) => {
+                let object: Object = o.try_into()?;
+                let layout = if let Some(type_) = object.data.type_() {
+                    // Make sure we have downloaded the package.
+                    self.get_raw_object(ObjectID::from(type_.address)).await?;
+                    object.get_layout(ObjectFormatOptions::default(), &self.module_cache)?
+                } else {
+                    None
+                };
+                GetObjectDataResponse::Exists(SuiParsedObject::try_from(object, layout)?)
+            }
+            GetRawObjectDataResponse::NotExists(id) => GetObjectDataResponse::NotExists(id),
+            GetRawObjectDataResponse::Deleted(oref) => GetObjectDataResponse::Deleted(oref),
         })
     }
 
@@ -134,9 +164,16 @@ impl ReadApi {
         &self,
         object_id: ObjectID,
     ) -> anyhow::Result<GetRawObjectDataResponse> {
-        Ok(match &*self.api {
-            SuiClientApi::Rpc(c, _) => c.get_raw_object(object_id).await?,
-            SuiClientApi::Embedded(c) => c.get_raw_object(object_id).await?,
+        let response = self.state.read().await.get_raw_object(object_id).cloned();
+        Ok(if let Some(response) = response {
+            response
+        } else {
+            let response = match &*self.api {
+                SuiClientApi::Rpc(c, _) => c.get_raw_object(object_id).await?,
+                SuiClientApi::Embedded(c) => c.get_raw_object(object_id).await?,
+            };
+            self.state.write().await.update_object(response.clone());
+            response
         })
     }
 
@@ -268,7 +305,10 @@ impl EventApi {
     }
 }
 
-pub struct QuorumDriver(Arc<SuiClientApi>);
+pub struct QuorumDriver {
+    api: Arc<SuiClientApi>,
+    state: Arc<RwLock<ClientState>>,
+}
 
 impl QuorumDriver {
     pub async fn execute_transaction(
@@ -322,7 +362,42 @@ impl QuorumDriver {
             }
             // TODO do we want to support an embedded quorum driver?
             Self::Embedded(_c) => unimplemented!(),
-        })
+        };
+        match &response {
+            TransactionResponse::EffectResponse(r) => {
+                let mut all_changes = r
+                    .effects
+                    .mutated
+                    .iter()
+                    .map(|oref| oref.reference.clone())
+                    .collect::<Vec<_>>();
+                all_changes.extend(r.effects.deleted.clone());
+                let all_changes = all_changes
+                    .iter()
+                    .map(|oref| oref.to_object_ref())
+                    .collect::<Vec<_>>();
+                self.state.write().await.update_refs(all_changes);
+            }
+            TransactionResponse::PublishResponse(r) => {
+                self.state
+                    .write()
+                    .await
+                    .update_refs(vec![r.updated_gas.reference.to_object_ref()]);
+            }
+            TransactionResponse::MergeCoinResponse(r) => {
+                self.state.write().await.update_refs(vec![
+                    r.updated_coin.reference.to_object_ref(),
+                    r.updated_gas.reference.to_object_ref(),
+                ]);
+            }
+            TransactionResponse::SplitCoinResponse(r) => {
+                self.state.write().await.update_refs(vec![
+                    r.updated_coin.reference.to_object_ref(),
+                    r.updated_gas.reference.to_object_ref(),
+                ]);
+            }
+        }
+        Ok(response)
     }
 }
 
@@ -398,5 +473,16 @@ impl ClientType {
                 SuiClient::new_rpc_client(url, ws_url.as_deref()).await?
             }
         })
+    }
+}
+
+pub struct ResolverWrapper<T: ModuleResolver>(pub Arc<RwLock<T>>);
+
+impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
+    type Error = T::Error;
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        let handle = Handle::current();
+        let _ = handle.enter();
+        futures::executor::block_on(self.0.read()).get_module(module_id)
     }
 }

@@ -376,7 +376,7 @@ impl TransactionBuilder {
     async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
         Ok(self
             .read_api
-            .get_object(object_id)
+            .get_raw_object(object_id)
             .await?
             .object()?
             .reference
