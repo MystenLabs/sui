@@ -7398,6 +7398,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-test-validator"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "clap 3.1.18",
+ "http",
+ "move-package",
+ "serde 1.0.142",
+ "serde_json",
+ "sui",
+ "sui-cluster-test",
+ "sui-faucet",
+ "sui-types",
+ "tokio",
+ "tower",
+ "tower-http",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
 name = "sui-tool"
 version = "0.6.2"
 dependencies = [

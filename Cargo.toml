@@ -25,6 +25,7 @@ members = [
     "crates/sui-storage",
     "crates/sui-swarm",
     "crates/sui-telemetry",
+    "crates/sui-test-validator",
     "crates/sui-tool",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
