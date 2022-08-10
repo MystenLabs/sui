@@ -113,6 +113,9 @@ impl<S> TemporaryStore<S> {
                 let mut object = self.input_objects[id].clone();
                 // Active input object must be Move object.
                 object.data.try_as_move_mut().unwrap().increment_version();
+                // We cannot update here but have to push to `to_be_updated` and update latter
+                // because the for loop is holding a reference to `self`, and calling
+                // `self.write_object` requires a mutable reference to `self`.
                 to_be_updated.push(object);
             }
         }
