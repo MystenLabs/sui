@@ -43,6 +43,7 @@ FROM debian:bullseye-slim AS runtime
 ARG PROFILE=release
 WORKDIR sui
 COPY --from=builder "/sui/target/$PROFILE/sui-node" /usr/local/bin
+RUN apt-get update && apt-get install -y binutils
 RUN strip --strip-debug /usr/local/bin/sui-node
 
 ARG BUILD_DATE
