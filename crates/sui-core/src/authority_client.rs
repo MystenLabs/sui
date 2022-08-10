@@ -9,6 +9,7 @@ use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use mysten_network::config::Config;
 use narwhal_crypto::traits::ToFromBytes;
+use prometheus::{register_histogram_with_registry, Histogram};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_config::genesis::Genesis;
@@ -74,6 +75,7 @@ pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoRespon
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
     client: ValidatorClient<tonic::transport::Channel>,
+    metrics: NetworkAuthorityClientMetrics,
 }
 
 impl NetworkAuthorityClient {
@@ -93,6 +95,7 @@ impl NetworkAuthorityClient {
     pub fn new(channel: tonic::transport::Channel) -> Self {
         Self {
             client: ValidatorClient::new(channel),
+            metrics: NetworkAuthorityClientMetrics::new(&prometheus::Registry::new()),
         }
     }
 
@@ -392,6 +395,123 @@ impl LocalAuthorityClient {
         Self {
             state,
             fault_config: LocalAuthorityClientFaultConfig::default(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct NetworkAuthorityClientMetrics {
+    pub handle_transaction_request_bytes: Histogram,
+    pub handle_transaction_response_bytes: Histogram,
+    pub handle_certificate_request_bytes: Histogram,
+    pub handle_certificate_response_bytes: Histogram,
+    pub handle_account_info_request_bytes: Histogram,
+    pub handle_account_info_response_bytes: Histogram,
+    pub handle_object_info_request_bytes: Histogram,
+    pub handle_object_info_response_bytes: Histogram,
+    pub handle_transaction_info_request_bytes: Histogram,
+    pub handle_transaction_info_response_bytes: Histogram,
+    pub handle_batch_stream_request_bytes: Histogram,
+    pub handle_batch_stream_response_bytes: Histogram,
+    pub handle_checkpoint_request_bytes: Histogram,
+    pub handle_checkpoint_response_bytes: Histogram,
+
+    pub batch_info_request_start_seq: Histogram,
+}
+
+impl NetworkAuthorityClientMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            handle_transaction_request_bytes: register_histogram_with_registry!(
+                "handle_transaction_request_bytes",
+                "Number of bytes sent by handle transaction request",
+                registry
+            )
+            .unwrap(),
+            handle_transaction_response_bytes: register_histogram_with_registry!(
+                "handle_transaction_response_bytes",
+                "Number of bytes sent by handle transaction response",
+                registry
+            )
+            .unwrap(),
+            handle_certificate_request_bytes: register_histogram_with_registry!(
+                "handle_certificate_request_bytes",
+                "Number of bytes sent by handle certrificate request",
+                registry
+            )
+            .unwrap(),
+            handle_certificate_response_bytes: register_histogram_with_registry!(
+                "handle_certificate_response_bytes",
+                "Number of bytes sent by handle certificate response",
+                registry
+            )
+            .unwrap(),
+            handle_account_info_request_bytes: register_histogram_with_registry!(
+                "handle_account_info_request_bytes",
+                "Number of bytes sent by handle account info request",
+                registry
+            )
+            .unwrap(),
+            handle_account_info_response_bytes: register_histogram_with_registry!(
+                "handle_account_info_response_bytes",
+                "Number of bytes sent by handle account info response",
+                registry
+            )
+            .unwrap(),
+            handle_object_info_request_bytes: register_histogram_with_registry!(
+                "handle_object_info_request_bytes",
+                "Number of bytes sent by handle object info request",
+                registry
+            )
+            .unwrap(),
+            handle_object_info_response_bytes: register_histogram_with_registry!(
+                "handle_object_info_response_bytes",
+                "Number of bytes sent by handle object info response",
+                registry
+            )
+            .unwrap(),
+            handle_transaction_info_request_bytes: register_histogram_with_registry!(
+                "handle_certificate_request_bytes",
+                "Number of bytes sent by handle transaction info request",
+                registry
+            )
+            .unwrap(),
+            handle_transaction_info_response_bytes: register_histogram_with_registry!(
+                "handle_transaction_info_response_bytes",
+                "Number of bytes sent by handle transaction info response",
+                registry
+            )
+            .unwrap(),
+            handle_batch_stream_request_bytes: register_histogram_with_registry!(
+                "handle_batch_stream_request_bytes",
+                "Number of bytes sent by handle batch stream request",
+                registry
+            )
+            .unwrap(),
+            handle_batch_stream_response_bytes: register_histogram_with_registry!(
+                "handle_batch_stream_response_bytes",
+                "Number of bytes sent by handle batch request",
+                registry
+            )
+            .unwrap(),
+            handle_checkpoint_request_bytes: register_histogram_with_registry!(
+                "handle_checkpoint_request_bytes",
+                "Number of bytes sent by handle checkpoint request",
+                registry
+            )
+            .unwrap(),
+            handle_checkpoint_response_bytes: register_histogram_with_registry!(
+                "handle_checkpoint_response_bytes",
+                "Number of bytes sent by handle checkpoint response",
+                registry
+            )
+            .unwrap(),
+            batch_info_request_start_seq: register_histogram_with_registry!(
+                "batch_info_request_start_seq",
+                "The start sequences of the batch info requests",
+                registry
+            )
+            .unwrap(),
         }
     }
 }
