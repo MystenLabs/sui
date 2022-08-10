@@ -1,40 +1,35 @@
 /* CSS for Coins */
 
 .groupview {
-    @apply border-collapse w-full text-left overflow-clip;
+    @apply w-full text-left;
 }
 
-.groupview thead th {
-    @apply uppercase font-semibold text-sui-grey-80 text-[12px] leading-[12px] py-[10px];
+.firstrow {
+    @apply grid uppercase font-semibold text-sui-grey-80 text-[12px] leading-[12px] py-[10px];
+
+    grid-template-columns: 35% 30% 35%;
 }
 
-.groupview tbody {
+.body {
     @apply text-[13px] leading-[12px];
 }
 
-.groupview td {
-    @apply py-[10px];
+.summary {
+    @apply grid py-[10px] cursor-pointer;
+
+    grid-template-columns: 5% 30% 30% 35%;
 }
 
-.closedgroup td {
-    @apply text-sui-grey-80 cursor-pointer;
+.openedgroup .summary {
+    @apply text-sui-grey-100;
 }
 
-.openedgroup td {
+.closedgroup {
+    @apply text-sui-grey-80 hover:bg-[#6fbcf014];
+}
+
+.openedgroup {
     @apply bg-sui-grey-40;
-}
-
-.groupview tr td:first-child,
-.groupview tr td:last-child {
-    @apply w-[5%];
-}
-
-.closedgroup tr:hover td {
-    @apply bg-[#6fbcf014];
-}
-
-.openedgroup tr:first-child {
-    @apply text-sui-grey-100 cursor-pointer;
 }
 
 .openedgroup tr:not(:first-child) td {

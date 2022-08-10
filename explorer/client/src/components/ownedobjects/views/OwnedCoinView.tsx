@@ -37,15 +37,13 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
 
     return (
         <>
-            <table id="groupCollection" className={styles.groupview}>
-                <thead>
-                    <tr>
-                        <th colSpan={2}>Type</th>
-                        <th>Objects</th>
-                        <th colSpan={2}>Balance</th>
-                    </tr>
-                </thead>
-                <>
+            <div id="groupCollection" className={styles.groupview}>
+                <div className={styles.firstrow}>
+                    <div>Type</div>
+                    <div>Objects</div>
+                    <div>Balance</div>
+                </div>
+                <div className={styles.body}>
                     {uniqueTypes
                         .slice(
                             (currentPage - 1) * ITEMS_PER_PAGE,
@@ -56,7 +54,7 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                                 ({ Type }) => Type === typeV
                             );
                             return (
-                                <tbody
+                                <div
                                     key={typeV}
                                     className={
                                         openedType === typeV
@@ -64,21 +62,22 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                                             : styles.closedgroup
                                     }
                                 >
-                                    <tr
+                                    <div
                                         onClick={
                                             openedType === typeV
                                                 ? goBack
                                                 : openThisType(typeV)
                                         }
+                                        className={styles.summary}
                                     >
-                                        <td>
+                                        <div>
                                             <span className={styles.icon}>
                                                 <ContentIcon />
                                             </span>
-                                        </td>
-                                        <td>{handleCoinType(typeV)}</td>
-                                        <td>{subObjList.length}</td>
-                                        <td>
+                                        </div>
+                                        <div>{handleCoinType(typeV)}</div>
+                                        <div>{subObjList.length}</div>
+                                        <div>
                                             {subObjList[0]._isCoin &&
                                             subObjList.every(
                                                 (el) => el.balance !== undefined
@@ -91,9 +90,8 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                                                       Coin.getZero()
                                                   )}`
                                                 : ''}
-                                        </td>
-                                        <td />
-                                    </tr>
+                                        </div>
+                                    </div>
                                     {openedType === typeV &&
                                         subObjList.map((subObj, index) => (
                                             <React.Fragment
@@ -121,11 +119,11 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                                                 </tr>
                                             </React.Fragment>
                                         ))}
-                                </tbody>
+                                </div>
                             );
                         })}
-                </>
-            </table>
+                </div>
+            </div>
             <Pagination
                 totalItems={uniqueTypes.length}
                 itemsPerPage={ITEMS_PER_PAGE}
