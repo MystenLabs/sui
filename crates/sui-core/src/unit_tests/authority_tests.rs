@@ -26,7 +26,7 @@ use sui_types::{
     crypto::{get_key_pair, Signature},
     crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     messages::Transaction,
-    object::{Owner, OBJECT_START_VERSION},
+    object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
@@ -735,6 +735,34 @@ async fn test_handle_transfer_transaction_double_spend() {
         .unwrap();
     // this is valid because our test authority should not change its certified transaction
     compare_transaction_info_responses(&signed_transaction, &double_spend_signed_transaction);
+}
+
+#[tokio::test]
+async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        Some(GAS_VALUE_FOR_TESTING),
+        object.compute_object_reference(),
+        200,
+    );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
+
+    let result = authority_state.handle_transaction(transaction).await;
+    assert!(matches!(
+        result.unwrap_err(),
+        SuiError::InsufficientGas { .. }
+    ));
 }
 
 #[tokio::test]
