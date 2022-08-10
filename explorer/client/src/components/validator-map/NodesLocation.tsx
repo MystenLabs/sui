@@ -9,9 +9,9 @@ interface Props {
 }
 
 // NOTE: This should be tweaked based on the average number of nodes in a location:
-const NODE_MULTIPLIER = 2;
-const MIN_NODE_SIZE = 3;
-const MAX_NODE_SIZE = 15;
+const NODE_MULTIPLIER = 3;
+const MIN_NODE_SIZE = 2;
+const MAX_NODE_SIZE = 7;
 
 export function NodesLocation({ node, projection }: Props) {
     const position = projection(node.location);

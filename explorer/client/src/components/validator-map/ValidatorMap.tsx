@@ -14,13 +14,13 @@ import styles from './ValidatorMap.module.css';
 
 const HOST = 'https://imgmod.sui.io';
 
-type NodeList = [
-    ip: string,
-    city: string,
-    region: string,
-    countryCode: string,
-    loc: string
-][];
+type NodeList = {
+    ip_address: string;
+    city: string;
+    region: string;
+    country: string;
+    location: string;
+}[];
 
 type CountryNodes = Record<string, { count: number; countryCode: string }>;
 
@@ -47,20 +47,20 @@ export default function ValidatorMap() {
         const nodeLocations: Record<string, NodeLocation> = {};
         const countryNodes: CountryNodes = {};
 
-        data.forEach(([, city, region, countryCode, loc]) => {
-            const key = `${city}-${region}-${countryCode}`;
+        data.forEach(({ city, region, country, location }) => {
+            const key = `${city}-${region}-${country}`;
 
-            countryNodes[countryCode] ??= {
+            countryNodes[country] ??= {
                 count: 0,
-                countryCode,
+                countryCode: country,
             };
-            countryNodes[countryCode].count += 1;
+            countryNodes[country].count += 1;
 
             nodeLocations[key] ??= {
                 count: 0,
                 city,
-                countryCode,
-                location: loc
+                countryCode: country,
+                location: location
                     .split(',')
                     .reverse()
                     .map((geo) => parseFloat(geo)) as [number, number],
