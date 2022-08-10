@@ -7,7 +7,9 @@ use crate::{
         BLS12381PublicKeyBytes, BLS12381Signature,
     },
     hkdf::hkdf_generate_from_ikm,
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey},
+    traits::{
+        AggregateAuthenticator, EncodeDecodeBase64, KeyPair, SigningKey, ToFromBytes, VerifyingKey,
+    },
 };
 use rand::{rngs::StdRng, SeedableRng as _};
 use sha3::Sha3_256;
@@ -399,4 +401,40 @@ async fn signature_service() {
 
     // Verify the signature we received.
     assert!(pk.verify(digest.as_ref(), &signature).is_ok());
+}
+
+// Checks if the private keys zeroed out
+#[test]
+fn test_sk_zeroization_on_drop() {
+    let ptr: *const u8;
+    let bytes_ptr: *const u8;
+
+    let mut sk_bytes = Vec::new();
+
+    {
+        let mut rng = StdRng::from_seed([9; 32]);
+        let kp = BLS12381KeyPair::generate(&mut rng);
+        let sk = kp.private();
+        sk_bytes.extend_from_slice(sk.as_ref());
+
+        ptr = std::ptr::addr_of!(sk.privkey) as *const u8;
+        bytes_ptr = &sk.as_ref()[0] as *const u8;
+
+        let sk_memory: &[u8] =
+            unsafe { ::std::slice::from_raw_parts(bytes_ptr, BLS12381PrivateKey::LENGTH) };
+        // Assert that this is equal to sk_bytes before deletion
+        assert_eq!(sk_memory, &sk_bytes[..]);
+    }
+
+    // Check that self.privkey is zeroized
+    unsafe {
+        for i in 0..BLS12381PrivateKey::LENGTH {
+            assert!(*ptr.add(i) == 0);
+        }
+    }
+
+    // Check that self.bytes is zeroized
+    let sk_memory: &[u8] =
+        unsafe { ::std::slice::from_raw_parts(bytes_ptr, BLS12381PrivateKey::LENGTH) };
+    assert_ne!(sk_memory, &sk_bytes[..]);
 }

@@ -13,6 +13,7 @@ use blst::min_sig as blst;
 
 use once_cell::sync::OnceCell;
 use rand::{rngs::OsRng, RngCore};
+use zeroize::Zeroize;
 
 use crate::{
     pubkey_bytes::PublicKeyBytes,
@@ -403,7 +404,7 @@ impl KeyPair for BLS12381KeyPair {
     }
 
     fn private(self) -> Self::PrivKey {
-        self.secret
+        BLS12381PrivateKey::from_bytes(self.secret.as_ref()).unwrap()
     }
 
     fn generate<R: rand::CryptoRng + rand::RngCore>(rng: &mut R) -> Self {
@@ -593,5 +594,34 @@ impl TryFrom<BLS12381PublicKeyBytes> for BLS12381PublicKey {
 impl From<&BLS12381PublicKey> for BLS12381PublicKeyBytes {
     fn from(pk: &BLS12381PublicKey) -> BLS12381PublicKeyBytes {
         BLS12381PublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
+    }
+}
+
+impl zeroize::Zeroize for BLS12381PrivateKey {
+    fn zeroize(&mut self) {
+        self.bytes.take().zeroize();
+        self.privkey.zeroize();
+    }
+}
+
+impl zeroize::ZeroizeOnDrop for BLS12381PrivateKey {}
+
+impl Drop for BLS12381PrivateKey {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl zeroize::Zeroize for BLS12381KeyPair {
+    fn zeroize(&mut self) {
+        self.secret.zeroize()
+    }
+}
+
+impl zeroize::ZeroizeOnDrop for BLS12381KeyPair {}
+
+impl Drop for BLS12381KeyPair {
+    fn drop(&mut self) {
+        self.zeroize();
     }
 }
