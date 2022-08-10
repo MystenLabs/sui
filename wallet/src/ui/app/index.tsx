@@ -16,6 +16,7 @@ import HomePage, {
     TransactionsPage,
     TransferCoinPage,
     NFTDetailsPage,
+    ReceiptPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -27,7 +28,7 @@ import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
 import { setNavVisibility } from '_redux/slices/app';
 
-const HIDDEN_MENU_PATHS = ['/stake-new', '/nft-details'];
+const HIDDEN_MENU_PATHS = ['/stake-new', '/nft-details', '/receipt'];
 
 const App = () => {
     const dispatch = useAppDispatch();
@@ -65,6 +66,7 @@ const App = () => {
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}
                 />
+                <Route path="receipt" element={<ReceiptPage />} />
             </Route>
             <Route path="welcome" element={<WelcomePage />} />
             <Route path="/initialize" element={<InitializePage />}>

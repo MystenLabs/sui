@@ -13,4 +13,5 @@ export { default as useOnClickOutside } from './useOnClickOutside';
 export { default as useOnKeyboardEvent } from './useOnKeyboardEvent';
 export { default as useFileExtentionType } from './useFileExtentionType';
 export { default as useNFTBasicData } from './useNFTBasicData';
+export { default as useFormatDate } from './useFormatDate';
 export { useObjectsState } from './useObjectsState';

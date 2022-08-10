@@ -1,12 +1,11 @@
 @use '_utils';
 @use '_values/colors';
 
-.nft-response {
+.txn-response {
     margin-top: 20px;
 
     .success-text,
     .failed-text {
-        color: colors.$gray-100;
         text-align: center;
         margin-bottom: 20px;
 
@@ -48,6 +47,19 @@
         }
     }
 
+    .amount {
+        font-weight: 600;
+        font-size: 24px;
+        line-height: 19px;
+        color: colors.$gray-100;
+        margin: 10px;
+
+        span {
+            color: colors.$gray-75;
+            font-size: 16px;
+        }
+    }
+
     .error-message {
         color: colors.$gray-80;
         text-align: center;
@@ -59,11 +71,14 @@
     .success-icon {
         border: 2px dotted colors.$sui-steel-blue;
 
-        .angled-arrow {
+        .angled-arrow,
+        .buy-icon {
             height: 15px;
             margin: auto !important;
             color: #589aea !important;
+        }
 
+        .angled-arrow {
             @include utils.angled-arrow;
         }
     }
@@ -198,5 +213,49 @@
         left: -5px;
         top: 12px;
         position: relative;
+    }
+}
+
+.wideview {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 10px;
+    border-radius: 10px;
+    justify-content: space-between;
+    flex-flow: row-reverse;
+    flex-direction: row;
+    gap: 10px;
+
+    .img {
+        height: 50px;
+        width: 50px;
+        object-fit: cover;
+        border-radius: 6px;
+    }
+
+    .nftfields {
+        padding-top: 0;
+        height: 49px;
+        display: flex;
+        flex-flow: column;
+        justify-content: center;
+    }
+
+    .nft-name {
+        text-transform: capitalize;
+        color: colors.$gray-100;
+        margin-bottom: 4px;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+
+        @include utils.typography('nft-title');
+    }
+
+    .nft-type {
+        color: colors.$gray-75;
+
+        @include utils.typography('table/text-lg');
     }
 }
