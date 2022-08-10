@@ -49,12 +49,12 @@ move-vm-runtime = { git = "https://github.com/move-language/move", rev = "790715
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa"}
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "fd070584b57304a8c7b94ee7af656a9375fc2095", package = "config" }
-narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "fd070584b57304a8c7b94ee7af656a9375fc2095", package = "consensus" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "fd070584b57304a8c7b94ee7af656a9375fc2095", package = "crypto", features=["copy_key"]}
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "fd070584b57304a8c7b94ee7af656a9375fc2095", package = "executor" }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "fd070584b57304a8c7b94ee7af656a9375fc2095", package = "types" }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "fd070584b57304a8c7b94ee7af656a9375fc2095", package = "node" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "62ca854677e6b2bce7412984519a48b3bd7e6e6e", package = "config" }
+narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "62ca854677e6b2bce7412984519a48b3bd7e6e6e", package = "consensus" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "62ca854677e6b2bce7412984519a48b3bd7e6e6e", package = "crypto", features=["copy_key"]}
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "62ca854677e6b2bce7412984519a48b3bd7e6e6e", package = "executor" }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "62ca854677e6b2bce7412984519a48b3bd7e6e6e", package = "types" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "62ca854677e6b2bce7412984519a48b3bd7e6e6e", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 thiserror = "1.0.32"
 

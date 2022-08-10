@@ -974,7 +974,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "arc-swap",
  "crypto",
@@ -983,7 +983,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tracing",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
 ]
 
 [[package]]
@@ -1005,7 +1005,7 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "arc-swap",
  "bincode",
@@ -1025,7 +1025,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
 ]
 
 [[package]]
@@ -1292,7 +1292,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "anyhow",
  "base64ct",
@@ -1312,7 +1312,7 @@ dependencies = [
  "serde_with 2.0.0",
  "signature",
  "tokio",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
  "zeroize",
 ]
 
@@ -1411,7 +1411,7 @@ dependencies = [
 [[package]]
 name = "dag"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "arc-swap",
  "crypto",
@@ -1422,7 +1422,7 @@ dependencies = [
  "rayon",
  "serde 1.0.141",
  "thiserror",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
 ]
 
 [[package]]
@@ -1932,7 +1932,7 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "async-trait",
  "bincode",
@@ -1957,7 +1957,7 @@ dependencies = [
  "typed-store",
  "types",
  "worker",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
 ]
 
 [[package]]
@@ -4205,7 +4205,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4224,7 +4224,7 @@ dependencies = [
  "tonic",
  "tracing",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
 ]
 
 [[package]]
@@ -4283,7 +4283,7 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -4314,7 +4314,7 @@ dependencies = [
  "types",
  "url",
  "worker",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
 ]
 
 [[package]]
@@ -5051,7 +5051,7 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -5083,7 +5083,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
 ]
 
 [[package]]
@@ -8180,7 +8180,7 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "base64",
  "bincode",
@@ -8208,7 +8208,7 @@ dependencies = [
  "tonic",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "typed-store",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
 ]
 
 [[package]]
@@ -8767,7 +8767,7 @@ dependencies = [
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8792,7 +8792,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
 ]
 
 [[package]]
@@ -9461,7 +9461,7 @@ dependencies = [
  "webpki-roots 0.22.3",
  "which",
  "worker",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e)",
  "yaml-rust",
  "zeroize",
  "zeroize_derive",
@@ -9471,7 +9471,7 @@ dependencies = [
 [[package]]
 name = "workspace-hack"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=fd070584b57304a8c7b94ee7af656a9375fc2095#fd070584b57304a8c7b94ee7af656a9375fc2095"
+source = "git+https://github.com/MystenLabs/narwhal?rev=62ca854677e6b2bce7412984519a48b3bd7e6e6e#62ca854677e6b2bce7412984519a48b3bd7e6e6e"
 dependencies = [
  "addr2line",
  "adler",
