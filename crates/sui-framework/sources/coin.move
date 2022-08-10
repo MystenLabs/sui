@@ -31,11 +31,6 @@ module sui::coin {
         balance::supply_value(&cap.total_supply)
     }
 
-    /// Wrap a `Supply` into a transferable `TreasuryCap`.
-    public fun treasury_from_supply<T>(total_supply: Supply<T>, ctx: &mut TxContext): TreasuryCap<T> {
-        TreasuryCap { id: object::new(ctx), total_supply }
-    }
-
     /// Unwrap `TreasuryCap` getting the `Supply`.
     public fun treasury_into_supply<T>(treasury: TreasuryCap<T>): Supply<T> {
         let TreasuryCap { id, total_supply } = treasury;
