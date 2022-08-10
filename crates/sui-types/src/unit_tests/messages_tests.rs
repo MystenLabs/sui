@@ -10,6 +10,8 @@ use narwhal_crypto::traits::KeyPair;
 use roaring::RoaringBitmap;
 
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
+use crate::crypto::Secp256k1SuiSignature;
+use crate::crypto::SuiKeyPair;
 use crate::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes};
 use crate::messages_checkpoint::CheckpointContents;
 use crate::messages_checkpoint::CheckpointSummary;
@@ -597,5 +599,93 @@ fn test_user_signature_committed_in_checkpoints() {
     assert_ne!(checkpoint_summary_a.digest(), checkpoint_summary_b.digest());
 
     // test non equality
-    assert_ne!(checkpoint_summary_a, checkpoint_summary_b)
+    assert_ne!(checkpoint_summary_a, checkpoint_summary_b);
+}
+
+#[test]
+fn verify_sender_signature_correctly_with_flag() {
+    // set up authorities
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
+    let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+    authorities.insert(sec1.public().into(), 1);
+    authorities.insert(sec2.public().into(), 0);
+    let committee = Committee::new(0, authorities).unwrap();
+
+    // create a receiver keypair with Secp256k1
+    let receiver_kp = SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1);
+    let receiver_address = (&receiver_kp.public()).into();
+
+    // create a sender keypair with Secp256k1
+    let sender_kp = SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1);
+
+    // create a sender keypair with Ed25519
+    let sender_kp_2 = SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1);
+
+    // creates transaction envelope with user signed Secp256k1 signature
+    let tx_data = TransactionData::new_transfer(
+        receiver_address,
+        random_object_ref(),
+        (&sender_kp.public()).into(),
+        random_object_ref(),
+        10000,
+    );
+
+    let transaction = Transaction::from_data(tx_data, &sender_kp);
+
+    // create tx also signed by authority
+    let signed_tx = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        AuthorityPublicKeyBytes::from(sec1.public()),
+        &sec1,
+    );
+
+    // signature contains the correct Secp256k1 flag
+    assert_eq!(
+        transaction.signed_data.tx_signature.scheme().flag(),
+        Secp256k1SuiSignature::SCHEME.flag()
+    );
+
+    // authority accepts signs tx after verification
+    assert!(signed_tx
+        .auth_sign_info
+        .verify(&transaction.signed_data, &committee)
+        .is_ok());
+
+    // creates transaction envelope with Ed25519 signature
+    let transaction_1 = Transaction::from_data(
+        TransactionData::new_transfer(
+            receiver_address,
+            random_object_ref(),
+            (&sender_kp_2.public()).into(),
+            random_object_ref(),
+            10000,
+        ),
+        &sender_kp_2,
+    );
+
+    let signed_tx_1 = SignedTransaction::new(
+        committee.epoch(),
+        transaction_1.clone(),
+        AuthorityPublicKeyBytes::from(sec1.public()),
+        &sec1,
+    );
+
+    // signature contains the correct Ed25519 flag
+    assert_eq!(
+        transaction_1.signed_data.tx_signature.scheme().flag(),
+        Ed25519SuiSignature::SCHEME.flag()
+    );
+
+    // signature verified
+    assert!(signed_tx_1
+        .auth_sign_info
+        .verify(&transaction_1.signed_data, &committee)
+        .is_ok());
+
+    assert!(signed_tx_1
+        .auth_sign_info
+        .verify(&transaction.signed_data, &committee)
+        .is_err());
 }

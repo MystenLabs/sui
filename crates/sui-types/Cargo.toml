@@ -36,6 +36,7 @@ strum = "^0.24"
 strum_macros = "^0.24"
 roaring = "0.9.0"
 enum_dispatch = "^0.3"
+eyre = "0.6.8"
 
 # This version is incompatible with ed25519-dalek
 rand_latest = { version = "0.8.5", package = "rand" }

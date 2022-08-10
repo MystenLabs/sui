@@ -7439,6 +7439,7 @@ dependencies = [
  "digest 0.10.3",
  "enum_dispatch",
  "executor",
+ "eyre",
  "hex",
  "hkdf",
  "itertools",
