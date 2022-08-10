@@ -4,4 +4,4 @@
 
 # This file is used in "porcelain" file comparison,
 # we don't want an equality to fail because of line endings.
-sui_core/tests/staged/sui.yaml text eol=lf
+crates/sui_core/tests/staged/sui.yaml text eol=lf
