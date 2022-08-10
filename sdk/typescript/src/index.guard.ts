@@ -153,7 +153,7 @@ export function isPublishTransaction(obj: any, _argumentName?: string): obj is P
             typeof obj === "function") &&
         Array.isArray(obj.compiledModules) &&
         obj.compiledModules.every((e: any) =>
-            isTransactionDigest(e) as boolean
+            e instanceof Buffer
         ) &&
         (typeof obj.gasPayment === "undefined" ||
             isTransactionDigest(obj.gasPayment) as boolean) &&

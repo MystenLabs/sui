@@ -154,7 +154,12 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
     try {
       const resp = await this.client.requestWithType(
         'sui_publish',
-        [signerAddress, t.compiledModules, t.gasPayment, t.gasBudget],
+        [
+          signerAddress,
+          t.compiledModules.map(m => m.toString()),
+          t.gasPayment,
+          t.gasBudget,
+        ],
         isTransactionBytes,
         this.skipDataValidation
       );

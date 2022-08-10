@@ -60,7 +60,29 @@ export interface MoveCallTransaction {
 }
 
 export interface PublishTransaction {
-  compiledModules: string[];
+  /**
+   * Transaction type used for publishing Move modules to the Sui.
+   * Should be already compiled using `sui-move`, example:
+   * ```
+   * $ sui move build
+   * $ cat build/project_name/bytecode_modules/module.mv
+   * ```
+   * In JS:
+   *
+   * ```
+   * // If you are using `RpcTxnDataSerializer`, change the following line to
+   * // `let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv', 'base64');`
+   * let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv');
+   *
+   * let bytes = Array.from(file);
+   * let modules = [ bytes ];
+   *
+   * // ... publish logic ...
+   * ```
+   *
+   * Each module should be represented as a sequence of bytes.
+   */
+  compiledModules: Buffer[];
   gasPayment?: ObjectId;
   gasBudget: number;
 }

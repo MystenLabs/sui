@@ -57,6 +57,22 @@ bcs.registerStructType('TransferObjectTx', {
 });
 
 /**
+ * Transaction type used for transferring Sui.
+ */
+export type TransferSuiTx = {
+  TransferSui: {
+    recipient: string;
+    amount: number | null;
+  };
+};
+
+bcs.registerStructType('TransferSuiTx', {
+  recipient: 'SuiAddress',
+  // TODO: figure out how to represent Option<u64> field
+  object_ref: 'u64',
+});
+
+/**
  * Transaction type used for publishing Move modules to the Sui.
  * Should be already compiled using `sui-move`, example:
  * ```

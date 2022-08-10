@@ -5,8 +5,8 @@ import { Base64DataBuffer } from '../../serialization/base64';
 import {
   bcs,
   CallArg,
-  MoveCallTx,
   SuiAddress,
+  Transaction,
   TransactionData,
   TypeTag,
 } from '../../types';
@@ -31,10 +31,29 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   constructor(private provider: Provider) {}
 
   async newTransferObject(
-    _signerAddress: SuiAddress,
-    _t: TransferObjectTransaction
+    signerAddress: SuiAddress,
+    t: TransferObjectTransaction
   ): Promise<Base64DataBuffer> {
-    throw new Error('Not implemented');
+    try {
+      const objectRef = await this.provider.getObjectRef(t.objectId);
+      const tx = {
+        TransferObject: {
+          recipient: t.recipient,
+          object_ref: objectRef!,
+        },
+      };
+      return await this.constructTransactionData(
+        tx,
+        // TODO: make `gasPayment` a required field in `TransferObjectTransaction`
+        t.gasPayment!,
+        t.gasBudget,
+        signerAddress
+      );
+    } catch (err) {
+      throw new Error(
+        `Error constructing a TransferObject transaction: ${err} with args ${t}`
+      );
+    }
   }
 
   async newTransferSui(
@@ -68,7 +87,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
         signerAddress
       );
     } catch (err) {
-      throw new Error(`Error executing a move call: ${err} with args ${t}`);
+      throw new Error(`Error constructing a move call: ${err} with args ${t}`);
     }
   }
 
@@ -87,14 +106,31 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   }
 
   async newPublish(
-    _signerAddress: SuiAddress,
-    _t: PublishTransaction
+    signerAddress: SuiAddress,
+    t: PublishTransaction
   ): Promise<Base64DataBuffer> {
-    throw new Error('Not implemented');
+    try {
+      const tx = {
+        Publish: {
+          modules: t.compiledModules.map(m => Array.from(m)),
+        },
+      };
+      return await this.constructTransactionData(
+        tx,
+        // TODO: make `gasPayment` a required field in `PublishTransaction`
+        t.gasPayment!,
+        t.gasBudget,
+        signerAddress
+      );
+    } catch (err) {
+      throw new Error(
+        `Error constructing a newPublishi transaction: ${err} with args ${t}`
+      );
+    }
   }
 
   private async constructTransactionData(
-    tx: MoveCallTx,
+    tx: Transaction,
     gasObjectId: string,
     gasBudget: number,
     signerAddress: SuiAddress
