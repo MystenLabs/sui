@@ -104,7 +104,7 @@ Note, you will fork the Sui repository here rather than clone it as described in
 If you are using Linux, install these extra dependencies. For example, in Ubuntu, run:
 ```shell
     $ apt-get update \
-    && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
     tzdata \
     git \
     ca-certificates \
