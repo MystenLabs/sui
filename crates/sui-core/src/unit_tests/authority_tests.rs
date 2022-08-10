@@ -1124,6 +1124,92 @@ async fn test_move_call_mutable_object_not_mutated() {
 }
 
 #[tokio::test]
+async fn test_move_call_insufficient_gas() {
+    // This test attempts to trigger a transaction execution that would fail due to insufficient gas.
+    // We want to ensure that even though the transaction failed to execute, all objects
+    // are mutated properly.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, recipient_key): (_, AccountKeyPair) = get_key_pair();
+    let object_id = ObjectID::random();
+    let gas_object_id1 = ObjectID::random();
+    let gas_object_id2 = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![
+        (sender, object_id),
+        (sender, gas_object_id1),
+        (recipient, gas_object_id2),
+    ])
+    .await;
+
+    // First execute a transaction successfully to obtain the amount of gas needed for this
+    // type of transaction.
+    // After this transaction, object_id will be owned by recipient.
+    let certified_transfer_transaction = init_certified_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        authority_state
+            .get_object(&object_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .compute_object_reference(),
+        authority_state
+            .get_object(&gas_object_id1)
+            .await
+            .unwrap()
+            .unwrap()
+            .compute_object_reference(),
+        &authority_state,
+    );
+    let effects = authority_state
+        .handle_certificate(certified_transfer_transaction)
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects;
+    let gas_used = effects.gas_used.gas_used();
+    let obj_ref = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .compute_object_reference();
+
+    // Now we try to construct a transaction with a smaller gas budget than required.
+    let data = TransactionData::new_transfer(
+        sender,
+        obj_ref,
+        recipient,
+        authority_state
+            .get_object(&gas_object_id2)
+            .await
+            .unwrap()
+            .unwrap()
+            .compute_object_reference(),
+        gas_used - 5,
+    );
+
+    let signature = Signature::new(&data, &recipient_key);
+    let transaction = Transaction::new(data, signature);
+
+    let tx_digest = *transaction.digest();
+    let response = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    let effects = response.signed_effects.unwrap().effects;
+    assert!(effects.status.is_err());
+    let obj = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(obj.previous_transaction, tx_digest);
+    assert_eq!(obj.version(), obj_ref.1.increment());
+    assert_eq!(obj.owner, recipient);
+}
+
+#[tokio::test]
 async fn test_move_call_delete() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();

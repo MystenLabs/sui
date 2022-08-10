@@ -669,7 +669,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             std::iter::once((transaction_digest, &certificate)),
         )?;
 
-        let inner_temporary_store = temporary_store.into_inner();
+        let (inner_temporary_store, _events) = temporary_store.into_inner();
         self.sequence_tx(
             write_batch,
             inner_temporary_store,

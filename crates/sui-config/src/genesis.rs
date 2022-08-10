@@ -461,9 +461,12 @@ fn process_package(
         &mut gas_status,
     )?;
 
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = temporary_store.into_inner();
+    let (
+        InnerTemporaryStore {
+            written, deleted, ..
+        },
+        _events,
+    ) = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -511,9 +514,12 @@ pub fn generate_genesis_system_object(
         genesis_ctx,
     )?;
 
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = temporary_store.into_inner();
+    let (
+        InnerTemporaryStore {
+            written, deleted, ..
+        },
+        _events,
+    ) = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
