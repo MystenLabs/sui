@@ -106,10 +106,11 @@ export type TransactionEffects = {
   dependencies?: TransactionDigest[];
 };
 
-export type TransactionEffectsResponse = {
+export type SuiTransactionEffectsResponse = {
   certificate: CertifiedTransaction;
   effects: TransactionEffects;
   timestamp_ms: number | null;
+  parsed_data: SuiParsedTransactionResponse | null;
 };
 
 export type GatewayTxSeqNumber = number;
@@ -140,21 +141,18 @@ export type TransactionBytes = {
   // TODO: Add input_objects field
 };
 
-export type MergeCoinResponse = {
-  certificate: CertifiedTransaction;
+export type SuiParsedMergeCoinResponse = {
   updatedCoin: SuiObject;
   updatedGas: SuiObject;
 };
 
-export type SplitCoinResponse = {
-  certificate: CertifiedTransaction;
+export type SuiParsedSplitCoinResponse = {
   updatedCoin: SuiObject;
   newCoins: SuiObject[];
   updatedGas: SuiObject;
 };
 
-export type PublishResponse = {
-  certificate: CertifiedTransaction;
+export type SuiParsedPublishResponse = {
   createdObjects: SuiObject[];
   package: SuiPackage;
   updatedGas: SuiObject;
@@ -166,18 +164,15 @@ export type SuiPackage = {
   version: number;
 };
 
-export type TransactionResponse =
+export type SuiParsedTransactionResponse =
   | {
-      EffectResponse: TransactionEffectsResponse;
+      SplitCoin: SuiParsedSplitCoinResponse;
     }
   | {
-      SplitCoinResponse: SplitCoinResponse;
+      MergeCoin: SuiParsedMergeCoinResponse;
     }
   | {
-      MergeCoinResponse: MergeCoinResponse;
-    }
-  | {
-      PublishResponse: PublishResponse;
+      Publish: SuiParsedPublishResponse;
     };
 
 /* -------------------------------------------------------------------------- */
@@ -266,93 +261,34 @@ export function getTransactionKindName(
 /* ----------------------------- ExecutionStatus ---------------------------- */
 
 export function getExecutionStatusType(
-  data: TransactionEffectsResponse
+  data: SuiTransactionEffectsResponse
 ): ExecutionStatusType {
   return getExecutionStatus(data).status;
 }
 
 export function getExecutionStatus(
-  data: TransactionEffectsResponse
+  data: SuiTransactionEffectsResponse
 ): ExecutionStatus {
   return data.effects.status;
 }
 
 export function getExecutionStatusError(
-  data: TransactionEffectsResponse
+  data: SuiTransactionEffectsResponse
 ): string | undefined {
   return getExecutionStatus(data).error;
 }
 
 export function getExecutionStatusGasSummary(
-  data: TransactionEffectsResponse
+  data: SuiTransactionEffectsResponse
 ): GasCostSummary {
   return data.effects.gasUsed;
 }
 
-export function getTotalGasUsed(data: TransactionEffectsResponse): number {
+export function getTotalGasUsed(data: SuiTransactionEffectsResponse): number {
   const gasSummary = getExecutionStatusGasSummary(data);
   return (
     gasSummary.computationCost +
     gasSummary.storageCost -
     gasSummary.storageRebate
   );
-}
-
-/* --------------------------- TransactionResponse -------------------------- */
-
-export function getTransactionEffectsResponse(
-  data: TransactionResponse
-): TransactionEffectsResponse | undefined {
-  return 'EffectResponse' in data ? data.EffectResponse : undefined;
-}
-
-export function getSplitCoinResponse(
-  data: TransactionResponse
-): SplitCoinResponse | undefined {
-  return 'SplitCoinResponse' in data ? data.SplitCoinResponse : undefined;
-}
-
-export function getMergeCoinResponse(
-  data: TransactionResponse
-): MergeCoinResponse | undefined {
-  return 'MergeCoinResponse' in data ? data.MergeCoinResponse : undefined;
-}
-
-export function getPublishResponse(
-  data: TransactionResponse
-): PublishResponse | undefined {
-  return 'PublishResponse' in data ? data.PublishResponse : undefined;
-}
-
-/**
- * Get the updated coin after a merge.
- * @param data the response for executing a merge coin transaction
- * @returns the updated state of the primary coin after the merge
- */
-export function getCoinAfterMerge(
-  data: TransactionResponse
-): SuiObject | undefined {
-  return getMergeCoinResponse(data)?.updatedCoin;
-}
-
-/**
- * Get the updated coin after a split.
- * @param data the response for executing a Split coin transaction
- * @returns the updated state of the original coin object used for the split
- */
-export function getCoinAfterSplit(
-  data: TransactionResponse
-): SuiObject | undefined {
-  return getSplitCoinResponse(data)?.updatedCoin;
-}
-
-/**
- * Get the newly created coin after a split.
- * @param data the response for executing a Split coin transaction
- * @returns the updated state of the original coin object used for the split
- */
-export function getNewlyCreatedCoinsAfterSplit(
-  data: TransactionResponse
-): SuiObject[] | undefined {
-  return getSplitCoinResponse(data)?.newCoins;
 }

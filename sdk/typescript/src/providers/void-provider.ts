@@ -9,7 +9,7 @@ import {
   GatewayTxSeqNumber,
   SuiObjectInfo,
   GetObjectDataResponse,
-  TransactionResponse,
+  SuiTransactionEffectsResponse,
   SuiObjectRef,
 } from '../types';
 import { Provider } from './provider';
@@ -46,7 +46,7 @@ export class VoidProvider extends Provider {
     _signatureScheme: SignatureScheme,
     _signature: string,
     _pubkey: string
-  ): Promise<TransactionResponse> {
+  ): Promise<SuiTransactionEffectsResponse> {
     throw this.newError('executeTransaction');
   }
 
