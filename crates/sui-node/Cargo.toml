@@ -17,6 +17,7 @@ tracing = "0.1.36"
 parking_lot = "0.12.1"
 futures = "0.3.21"
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa"}
+chrono = "0.4.0"
 
 sui-config = { path = "../sui-config" }
 sui-core = { path = "../sui-core" }
