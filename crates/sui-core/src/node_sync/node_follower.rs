@@ -331,11 +331,12 @@ where
         while let Some(DigestsMessage { sync_arg, tx }) = receiver.recv().await {
             let state = self.clone();
             let limit = limit.clone();
-            tokio::spawn(async move {
-                // hold semaphore permit until task completes. unwrap ok because we never close
-                // the semaphore in this context.
-                let permit = limit.acquire_owned().await.unwrap();
 
+            // hold semaphore permit until task completes. unwrap ok because we never close
+            // the semaphore in this context.
+            let permit = limit.acquire_owned().await.unwrap();
+
+            tokio::spawn(async move {
                 let res = state.process_digest(sync_arg, permit).await;
                 if let Err(error) = &res {
                     error!(?sync_arg, "process_digest failed: {}", error);
