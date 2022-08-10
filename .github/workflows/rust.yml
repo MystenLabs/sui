@@ -105,8 +105,8 @@ jobs:
     if: needs.diff.outputs.isRust == 'true'
     runs-on: [ubuntu-ghcloud]
     steps:
-      - uses: actions/checkout@v3
       - uses: arduino/setup-protoc@v1
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           components: clippy
