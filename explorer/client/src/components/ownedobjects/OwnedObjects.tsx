@@ -12,8 +12,6 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ReactComponent as ContentIcon } from '../../assets/SVGIcons/closed-content.svg';
-import tablestyle from '../../components/table/TableCard.module.css';
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -27,32 +25,19 @@ import {
     findDataFromID,
     findOwnedObjectsfromID,
 } from '../../utils/static/searchUtil';
-import {
-    handleCoinType,
-    transformURL,
-    trimStdLibPrefix,
-    truncate,
-} from '../../utils/stringUtils';
-import DisplayBox from '../displaybox/DisplayBox';
-import Longtext from '../longtext/Longtext';
-import Pagination from '../pagination/Pagination';
-import PaginationLogic from '../pagination/PaginationLogic';
+import { transformURL } from '../../utils/stringUtils';
+import { type DataType } from './OwnedObjectConstants';
+import OwnedObjectView from './views/OwnedObjectView';
 
+import styles from './views/OwnedObjects.module.css';
 
-const DATATYPE_DEFAULT: resultType = [
+const DATATYPE_DEFAULT: DataType = [
     {
         id: '',
         Type: '',
         _isCoin: false,
     },
 ];
-
-const ITEMS_PER_PAGE: number = 6;
-const alttextgen = (value: number | string | boolean | BN): string =>
-    truncate(String(value), 19);
-
-const lastRowHas2Elements = (itemList: any[]): boolean =>
-    itemList.length % 3 === 2;
 
 const NoOwnedObjects = () => (
     <div className={styles.fail}>Failed to find Owned Objects</div>
@@ -96,7 +81,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
 
         return (
             <NavigateFunctionContext.Provider value={navigateFn}>
-                <OwnedObjectLayout results={results} />
+                <OwnedObjectView results={results} />
             </NavigateFunctionContext.Provider>
         );
     } else {
@@ -162,148 +147,11 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
     if (isLoaded)
         return (
             <NavigateFunctionContext.Provider value={navigateFn}>
-                <OwnedObjectLayout results={results} />
+                <OwnedObjectView results={results} />
             </NavigateFunctionContext.Provider>
         );
 
     return <div className={styles.gray}>loading...</div>;
-}
-
-const viewFn = (results: any) => <OwnedObjectView results={results} />;
-
-
-
-function GroupView({ results }: { results: resultType }) {
-    const CLOSED_TYPE_STRING = '';
-
-    const [openedType, setOpenedType] = useState(CLOSED_TYPE_STRING);
-
-    const [currentPage, setCurrentPage] = useState(1);
-
-    const openThisType = useCallback(
-        (thisType: string) => () => {
-            setOpenedType(thisType);
-        },
-        []
-    );
-
-    const goBack = useCallback(() => setOpenedType(CLOSED_TYPE_STRING), []);
-
-    const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
-
-    // Switching the page closes any open group:
-    useEffect(() => {
-        setOpenedType(CLOSED_TYPE_STRING);
-    }, [currentPage]);
-
-    return (
-        <>
-            <table
-                id="groupCollection"
-                className={`${styles.groupview} ${tablestyle.table}`}
-            >
-                <thead>
-                    <tr>
-                        <th />
-                        <th>Type</th>
-                        <th>Objects</th>
-                        <th>Balance</th>
-                        <th />
-                    </tr>
-                </thead>
-                <>
-                    {uniqueTypes
-                        .slice(
-                            (currentPage - 1) * ITEMS_PER_PAGE,
-                            currentPage * ITEMS_PER_PAGE
-                        )
-                        .map((typeV) => {
-                            const subObjList = results.filter(
-                                ({ Type }) => Type === typeV
-                            );
-                            return (
-                                <tbody
-                                    key={typeV}
-                                    className={
-                                        openedType === typeV
-                                            ? styles.openedgroup
-                                            : styles.closedgroup
-                                    }
-                                >
-                                    <tr
-                                        onClick={
-                                            openedType === typeV
-                                                ? goBack
-                                                : openThisType(typeV)
-                                        }
-                                    >
-                                        <td>
-                                            <span className={styles.icon}>
-                                                <ContentIcon />
-                                            </span>
-                                        </td>
-                                        <td>{handleCoinType(typeV)}</td>
-                                        <td>{subObjList.length}</td>
-                                        <td>
-                                            {subObjList[0]._isCoin &&
-                                            subObjList.every(
-                                                (el) => el.balance !== undefined
-                                            )
-                                                ? `${subObjList.reduce(
-                                                      (prev, current) =>
-                                                          prev.add(
-                                                              current.balance!
-                                                          ),
-                                                      Coin.getZero()
-                                                  )}`
-                                                : ''}
-                                        </td>
-                                        <td />
-                                    </tr>
-                                    {openedType === typeV &&
-                                        subObjList.map((subObj, index) => (
-                                            <React.Fragment
-                                                key={`${typeV}${index}`}
-                                            >
-                                                <tr>
-                                                    <td />
-                                                    <td>Object ID</td>
-                                                    <td colSpan={2}>
-                                                        <Longtext
-                                                            text={subObj.id}
-                                                            category="objects"
-                                                            isCopyButton={false}
-                                                        />
-                                                    </td>
-                                                    <td />
-                                                </tr>
-                                                <tr
-                                                    className={
-                                                        styles.seconditem
-                                                    }
-                                                >
-                                                    <td />
-                                                    <td>Balance</td>
-                                                    <td colSpan={2}>
-                                                        {subObj.balance?.toString()}
-                                                    </td>
-                                                    <td />
-                                                </tr>
-                                            </React.Fragment>
-                                        ))}
-                                </tbody>
-                            );
-                        })}
-                </>
-            </table>
-            <Pagination
-                totalItems={uniqueTypes.length}
-                itemsPerPage={ITEMS_PER_PAGE}
-                currentPage={currentPage}
-                onPagiChangeFn={setCurrentPage}
-            />
-        </>
-    );
 }
 
 export default OwnedObject;

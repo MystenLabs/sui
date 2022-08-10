@@ -12,3 +12,4 @@ export type DataType = {
     balance?: BN;
 }[];
 
+export const ITEMS_PER_PAGE: number = 6;

@@ -1,10 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {type DataType} from '../OwnedObjectResultType';
-import styles from './OwnedObject.module.css';
+import PaginationLogic from '../../pagination/PaginationLogic';
+import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
+import OwnedCoinView from './OwnedCoinView';
+import OwnedNFTView from './OwnedNFTView';
 
-export function OwnedObjectLayout({ results }: { results: DataType}) {
+import styles from './OwnedObjects.module.css';
+
+const viewFn = (results: any) => <OwnedNFTView results={results} />;
+
+export default function OwnedObjectView({ results }: { results: DataType }) {
     const coin_results = results.filter(({ _isCoin }) => _isCoin);
     const other_results = results
         .filter(({ _isCoin }) => !_isCoin)
@@ -31,7 +37,7 @@ export function OwnedObjectLayout({ results }: { results: DataType}) {
                     <div className={styles.ownedobjectheader}>
                         <h2>Coins</h2>
                     </div>
-                    <GroupView results={coin_results} />
+                    <OwnedCoinView results={coin_results} />
                 </div>
             )}
             {other_results.length > 0 && (
