@@ -14,9 +14,6 @@ module sui::balance {
     /// For when trying to withdraw more than there is.
     const ENotEnough: u64 = 2;
 
-    /// For when a type passed to create_supply is not a one-time witness.
-    const EBadWitness: u64 = 3;
-
     /// A Supply of T. Used for minting and burning.
     /// Wrapped into a `TreasuryCap` in the `Coin` module.
     struct Supply<phantom T> has store {
@@ -42,8 +39,7 @@ module sui::balance {
     }
 
     /// Create a new supply for type T.
-    public fun create_supply<T: drop>(witness: T): Supply<T> {
-        assert!(sui::types::is_one_time_witness(witness), EBadWitness);
+    public fun create_supply<T: drop>(_: T): Supply<T> {
         Supply { value: 0 }
     }
 
