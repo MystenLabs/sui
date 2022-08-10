@@ -65,7 +65,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [self-hosted, self-hosted-arc]
+          - [ubuntu-ghcloud]
           - [windows-ghcloud]
       fail-fast: false
     steps:
@@ -94,7 +94,7 @@ jobs:
     strategy:
       matrix:
         os:
-          - [self-hosted, self-hosted-arc]
+          - [ubuntu-ghcloud]
           - [windows-ghcloud]
       fail-fast: false
     steps:
@@ -103,7 +103,7 @@ jobs:
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [self-hosted, self-hosted-arc]
+    runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1

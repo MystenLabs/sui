@@ -2,7 +2,7 @@ name: Wallet Extension PR checks
 on: pull_request
 jobs:
   diff:
-    runs-on: [self-hosted, self-hosted-arc]
+    runs-on: [ubuntu-ghcloud]
     outputs:
       isWalletExt: ${{ steps.diff.outputs.isWalletExt }}
     steps:
@@ -14,7 +14,7 @@ jobs:
     name: Lint, Test & Build
     needs: diff
     if: needs.diff.outputs.isWalletExt == 'true'
-    runs-on: [self-hosted, self-hosted-arc]
+    runs-on: [ubuntu-ghcloud]
     env:
       working-directory: ./wallet
     steps:
