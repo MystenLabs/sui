@@ -40,11 +40,9 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
             <table id="groupCollection" className={styles.groupview}>
                 <thead>
                     <tr>
-                        <th />
-                        <th>Type</th>
+                        <th colSpan={2}>Type</th>
                         <th>Objects</th>
-                        <th>Balance</th>
-                        <th />
+                        <th colSpan={2}>Balance</th>
                     </tr>
                 </thead>
                 <>
@@ -113,11 +111,7 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                                                     </td>
                                                     <td />
                                                 </tr>
-                                                <tr
-                                                    className={
-                                                        styles.seconditem
-                                                    }
-                                                >
+                                                <tr>
                                                     <td />
                                                     <td>Balance</td>
                                                     <td colSpan={2}>

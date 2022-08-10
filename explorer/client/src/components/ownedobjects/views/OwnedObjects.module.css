@@ -1,31 +1,91 @@
+/* CSS for Coins */
+
 .groupview {
-    @apply border-collapse;
+    @apply border-collapse w-full text-left;
+}
+
+.groupview thead th {
+    @apply uppercase font-semibold text-sui-grey-80 text-[12px] leading-[12px] py-[10px];
+}
+
+.groupview tbody {
+    @apply text-[13px] leading-[12px];
 }
 
 .groupview td {
-    @apply p-0 text-sui-grey-90;
+    @apply py-[10px];
 }
 
-.seconditem td {
-    @apply pb-[16px] bg-red-900;
+.closedgroup td {
+    @apply text-sui-grey-80 cursor-pointer;
 }
 
-.closedgroup tr td {
-    @apply cursor-pointer;
-}
-
-.openedgroup tr td {
+.openedgroup td {
     @apply bg-sui-grey-40;
-}
-
-.icon {
-    @apply pr-[6px] pl-[12px];
 }
 
 .groupview tr td:first-child,
 .groupview tr td:last-child {
     @apply w-[26px];
 }
+
+.closedgroup tr:hover td {
+    @apply bg-[#6fbcf014];
+}
+
+.openedgroup tr:first-child {
+    @apply text-sui-grey-100 cursor-pointer;
+}
+
+.openedgroup tr:not(:first-child) td {
+    @apply text-sui-grey-80;
+}
+
+.openedgroup tr:nth-child(2) td {
+    @apply pt-[14px];
+}
+
+.openedgroup tr:nth-child(even) td {
+    @apply pb-[10px];
+}
+
+.openedgroup tr:nth-child(odd):not(:first-child) td {
+    @apply pt-0;
+}
+
+.closedgroup tr:hover td:first-child {
+    @apply rounded-l-md;
+}
+
+.closedgroup tr:hover td:last-child {
+    @apply rounded-r-md;
+}
+
+.openedgroup tr:first-child td:first-child {
+    @apply rounded-tl-md;
+}
+
+.openedgroup tr:first-child td:last-child {
+    @apply rounded-tr-md;
+}
+
+.openedgroup tr:last-child td:first-child {
+    @apply rounded-bl-md;
+}
+
+.openedgroup tr:last-child td:last-child {
+    @apply rounded-br-md;
+}
+
+.openedgroup tr:first-child td:not(:first-child):not(:last-child) {
+    @apply border-solid border-0 border-b border-sui-grey-45;
+}
+
+.icon {
+    @apply pr-[6px] pl-[12px];
+}
+
+/* Other CSS */
 
 .layout {
     @apply flex flex-wrap mt-0;
@@ -98,36 +158,4 @@
 
 .fail {
     @apply text-red-600 font-sans font-semibold mt-2;
-}
-
-.openedgroup tr:first-child td {
-    @apply text-sui-grey-100 cursor-pointer;
-}
-
-.openedgroup tr:not(:first-child) {
-    @apply text-sui-grey-80;
-}
-
-.openedgroup tr:first-child td:first-child {
-    @apply rounded-tl-md;
-}
-
-.openedgroup tr:first-child td:last-child {
-    @apply rounded-tr-md;
-}
-
-.openedgroup tr:last-child td:first-child {
-    @apply rounded-bl-md;
-}
-
-.openedgroup tr:last-child td:last-child {
-    @apply rounded-br-md;
-}
-
-.openedgroup > tr:first-child {
-    @apply text-sui-grey-100;
-}
-
-.openedgroup tr:first-child td:not(:first-child):not(:last-child) {
-    @apply border-solid border-0 border-b border-sui-grey-45;
 }
