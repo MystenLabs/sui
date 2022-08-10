@@ -32,6 +32,10 @@ export default function ValidatorMap() {
             method: 'GET',
         });
 
+        if (!res.ok) {
+            return [];
+        }
+
         return res.json() as Promise<NodeList>;
     });
 
