@@ -109,7 +109,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                     isLink={false}
                     isCopyButton={false}
                 />
-            )
+            ),
         })),
         columns: [
             {

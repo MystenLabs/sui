@@ -187,7 +187,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                         isLink={false}
                         isCopyButton={false}
                     />
-                )
+                ),
             };
         }),
         columns: [
