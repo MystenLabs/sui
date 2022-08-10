@@ -1494,6 +1494,11 @@
     "@jridgewell/resolve-uri" "^3.0.3"
     "@jridgewell/sourcemap-codec" "^1.4.10"
 
+"@juggle/resize-observer@^3.3.1":
+  version "3.3.1"
+  resolved "https://registry.yarnpkg.com/@juggle/resize-observer/-/resize-observer-3.3.1.tgz#b50a781709c81e10701004214340f25475a171a0"
+  integrity sha512-zMM9Ds+SawiUkakS7y94Ymqx+S0ORzpG3frZirN3l+UlXUmSUR7hF4wxCVqW+ei94JzV5kt0uXBcoOEAuiydrw==
+
 "@leichtgewicht/ip-codec@^2.0.1":
   version "2.0.4"
   resolved "https://registry.yarnpkg.com/@leichtgewicht/ip-codec/-/ip-codec-2.0.4.tgz#b2ac626d6cb9c8718ab459166d4bb405b8ffa78b"
@@ -1801,6 +1806,20 @@
     "@svgr/plugin-svgo" "^5.5.0"
     loader-utils "^2.0.0"
 
+"@tanstack/query-core@^4.0.0-beta.1":
+  version "4.0.10"
+  resolved "https://registry.yarnpkg.com/@tanstack/query-core/-/query-core-4.0.10.tgz#cae6f818006616dc72c95c863592f5f68b47548a"
+  integrity sha512-9LsABpZXkWZHi4P1ozRETEDXQocLAxVzQaIhganxbNuz/uA3PsCAJxJTiQrknG5htLMzOF5MqM9G10e6DCxV1A==
+
+"@tanstack/react-query@^4.0.10":
+  version "4.0.10"
+  resolved "https://registry.yarnpkg.com/@tanstack/react-query/-/react-query-4.0.10.tgz#92c71a2632c06450d848d4964959bd216cde03c0"
+  integrity sha512-Wn5QhZUE5wvr6rGClV7KeQIUsdTmYR9mgmMZen7DSRWauHW2UTynFg3Kkf6pw+XlxxOLsyLWwz/Q6q1lSpM3TQ==
+  dependencies:
+    "@tanstack/query-core" "^4.0.0-beta.1"
+    "@types/use-sync-external-store" "^0.0.3"
+    use-sync-external-store "^1.2.0"
+
 "@tanstack/react-table@^8.1.4":
   version "8.2.6"
   resolved "https://registry.yarnpkg.com/@tanstack/react-table/-/react-table-8.2.6.tgz#a44855d1958d9e8fa7a34280f81f08d2ef7f8d4f"
@@ -1943,6 +1962,13 @@
   dependencies:
     "@types/node" "*"
 
+"@types/d3-geo@^1.11.1":
+  version "1.12.3"
+  resolved "https://registry.yarnpkg.com/@types/d3-geo/-/d3-geo-1.12.3.tgz#512ebe735cb1cdf5f87ad59608416e2e9e868c5a"
+  integrity sha512-yZbPb7/5DyL/pXkeOmZ7L5ySpuGr4H48t1cuALjnJy5sXQqmSSAYBiwa6Ya/XpWKX2rJqGDDubmh3nOaopOpeA==
+  dependencies:
+    "@types/geojson" "*"
+
 "@types/eslint-scope@^3.7.3":
   version "3.7.4"
   resolved "https://registry.yarnpkg.com/@types/eslint-scope/-/eslint-scope-3.7.4.tgz#37fc1223f0786c39627068a12e94d6e6fc61de16"
@@ -1992,6 +2018,11 @@
     "@types/express-serve-static-core" "^4.17.18"
     "@types/qs" "*"
     "@types/serve-static" "*"
+
+"@types/geojson@*":
+  version "7946.0.10"
+  resolved "https://registry.yarnpkg.com/@types/geojson/-/geojson-7946.0.10.tgz#6dfbf5ea17142f7f9a043809f1cd4c448cb68249"
+  integrity sha512-Nmh0K3iWQJzniTuPRcJn5hxXkfB1T1pgB89SBig5PlJQU5yocazeu4jATJlaA0GYFKWMqDdvYemoSnF2pXgLVA==
 
 "@types/graceful-fs@^4.1.2":
   version "4.1.5"
@@ -2066,7 +2097,7 @@
   resolved "https://registry.yarnpkg.com/@types/json5/-/json5-0.0.29.tgz#ee28707ae94e11d2b827bcbe5270bcea7f3e71ee"
   integrity sha512-dRLjCWHYg4oaA77cxO64oO+7JwCwnIzkZPdrrC71jQmQtlhM556pwKo5bUzqvZndkVbeFLIIi+9TC40JNF5hNQ==
 
-"@types/lodash@^4.14.159":
+"@types/lodash@^4.14.159", "@types/lodash@^4.14.172":
   version "4.14.182"
   resolved "https://registry.yarnpkg.com/@types/lodash/-/lodash-4.14.182.tgz#05301a4d5e62963227eaafe0ce04dd77c54ea5c2"
   integrity sha512-/THyiqyQAP9AfARo4pF+aCGcyiQ94tX/Is2I7HofNRqoYLgN1PBoOWu2/zTA5zMxzP5EFutMtWtGAFRKUe961Q==
@@ -2138,14 +2169,23 @@
   resolved "https://registry.yarnpkg.com/@types/range-parser/-/range-parser-1.2.4.tgz#cd667bcfdd025213aafb7ca5915a932590acdcdc"
   integrity sha512-EEhsLsD6UsDM1yFhAvy0Cjr6VwmpMWqFBCb9w07wVugF7w9nfajxLuVmngTIpgS6svCnm6Vaw+MZhoDCKnOfsw==
 
-"@types/react-dom@<18.0.0", "@types/react-dom@^17.0.11":
+"@types/react-dom@*", "@types/react-dom@17.x", "@types/react-dom@<18.0.0", "@types/react-dom@^17.0.11":
   version "17.0.17"
   resolved "https://registry.yarnpkg.com/@types/react-dom/-/react-dom-17.0.17.tgz#2e3743277a793a96a99f1bf87614598289da68a1"
   integrity sha512-VjnqEmqGnasQKV0CWLevqMTXBYG9GbwuE6x3VetERLh0cq2LTptFE73MrQi2S7GkKXCf2GgwItB/melLnxfnsg==
   dependencies:
     "@types/react" "^17"
 
-"@types/react@^17", "@types/react@^17.0.39":
+"@types/react@*", "@types/react@17.x", "@types/react@^17":
+  version "17.0.48"
+  resolved "https://registry.yarnpkg.com/@types/react/-/react-17.0.48.tgz#a4532a8b91d7b27b8768b6fc0c3bccb760d15a6c"
+  integrity sha512-zJ6IYlJ8cYYxiJfUaZOQee4lh99mFihBoqkOSEGV+dFi9leROW6+PgstzQ+w3gWTnUfskALtQPGHK6dYmPj+2A==
+  dependencies:
+    "@types/prop-types" "*"
+    "@types/scheduler" "*"
+    csstype "^3.0.2"
+
+"@types/react@^17.0.39":
   version "17.0.47"
   resolved "https://registry.yarnpkg.com/@types/react/-/react-17.0.47.tgz#4ee71aaf4c5a9e290e03aa4d0d313c5d666b3b78"
   integrity sha512-mk0BL8zBinf2ozNr3qPnlu1oyVTYq+4V7WA76RgxUAtf0Em/Wbid38KN6n4abEkvO4xMTBWmnP1FtQzgkEiJoA==
@@ -2205,10 +2245,30 @@
   dependencies:
     "@types/jest" "*"
 
+"@types/topojson-client@^3.1.1":
+  version "3.1.1"
+  resolved "https://registry.yarnpkg.com/@types/topojson-client/-/topojson-client-3.1.1.tgz#d1396b2e79f530ef69bb162523cddf94576bd5a9"
+  integrity sha512-E4/Z2Xg56kVLRzYWem/6uOKVcVNqqxEqlWM9qCG2tCV1BxuzvvXC02/ELoGJWgtKkQhfycBPlMFEuTFdA/YiTg==
+  dependencies:
+    "@types/geojson" "*"
+    "@types/topojson-specification" "*"
+
+"@types/topojson-specification@*":
+  version "1.0.2"
+  resolved "https://registry.yarnpkg.com/@types/topojson-specification/-/topojson-specification-1.0.2.tgz#e20df2c5a611e31f51d606473dbaccc1d90461c8"
+  integrity sha512-SGc1NdX9g3UGDp6S+p+uyG+Z8CehS51sUJ9bejA25Xgn2kkAguILk6J9nxXK+0M/mbTBN7ypMA7+4HVLNMJ8ag==
+  dependencies:
+    "@types/geojson" "*"
+
 "@types/trusted-types@^2.0.2":
   version "2.0.2"
   resolved "https://registry.yarnpkg.com/@types/trusted-types/-/trusted-types-2.0.2.tgz#fc25ad9943bcac11cceb8168db4f275e0e72e756"
   integrity sha512-F5DIZ36YVLE+PN+Zwws4kJogq47hNgX3Nx6WyDJ3kcplxyke3XIzB8uK5n/Lpm1HBsbGzd6nmGehL8cPekP+Tg==
+
+"@types/use-sync-external-store@^0.0.3":
+  version "0.0.3"
+  resolved "https://registry.yarnpkg.com/@types/use-sync-external-store/-/use-sync-external-store-0.0.3.tgz#b6725d5f4af24ace33b36fafd295136e75509f43"
+  integrity sha512-EwmlvuaxPNej9+T4v5AuBPJa2x2UOJVdjCtDHgcDqitUeOtjnJKJ+apYjVcAoBEMjKW1VVFGZLUb5+qqa09XFA==
 
 "@types/ws@^7.4.4":
   version "7.4.7"
@@ -2336,6 +2396,59 @@
   dependencies:
     "@typescript-eslint/types" "5.30.6"
     eslint-visitor-keys "^3.3.0"
+
+"@visx/bounds@2.10.0":
+  version "2.10.0"
+  resolved "https://registry.yarnpkg.com/@visx/bounds/-/bounds-2.10.0.tgz#cd0bdd7db924a5a2151174edce09f867aaeaf3af"
+  integrity sha512-rY7WFTIjQaXA8tFL45O2qbtSRkyF4yF75HiWz06F7BVmJ9UjF2qlomB3Y1z6gk6ZiFhwQ4zxABjOVjAQPLn7nQ==
+  dependencies:
+    "@types/react" "*"
+    "@types/react-dom" "*"
+    prop-types "^15.5.10"
+
+"@visx/geo@^2.10.0":
+  version "2.10.0"
+  resolved "https://registry.yarnpkg.com/@visx/geo/-/geo-2.10.0.tgz#6cda4079717505244fffc3c25505437276628779"
+  integrity sha512-YdhHagNQw0pW1jgLcEgqEqzXwfYQy0Y1UDeM96qZnM8Ki8/nGYGB2A5wnZO27mp290HnmYgmRJNpAEjp7erlTw==
+  dependencies:
+    "@types/d3-geo" "^1.11.1"
+    "@types/geojson" "*"
+    "@types/react" "*"
+    "@visx/group" "2.10.0"
+    classnames "^2.3.1"
+    d3-geo "^1.11.3"
+    prop-types "^15.5.10"
+
+"@visx/group@2.10.0":
+  version "2.10.0"
+  resolved "https://registry.yarnpkg.com/@visx/group/-/group-2.10.0.tgz#95839851832545621eb0d091866a61dafe552ae1"
+  integrity sha512-DNJDX71f65Et1+UgQvYlZbE66owYUAfcxTkC96Db6TnxV221VKI3T5l23UWbnMzwFBP9dR3PWUjjqhhF12N5pA==
+  dependencies:
+    "@types/react" "*"
+    classnames "^2.3.1"
+    prop-types "^15.6.2"
+
+"@visx/responsive@^2.10.0":
+  version "2.10.0"
+  resolved "https://registry.yarnpkg.com/@visx/responsive/-/responsive-2.10.0.tgz#3e5c5853c7b2b33481e99a64678063cef717de0b"
+  integrity sha512-NssDPpuUYp7hqVISuYkKZ5zk6ob0++RdTIaUjRcUdyFEbvzb9+zIb8QToOkvI90L2EC/MY4Jx0NpDbEe79GpAw==
+  dependencies:
+    "@juggle/resize-observer" "^3.3.1"
+    "@types/lodash" "^4.14.172"
+    "@types/react" "*"
+    lodash "^4.17.21"
+    prop-types "^15.6.1"
+
+"@visx/tooltip@^2.10.0":
+  version "2.10.0"
+  resolved "https://registry.yarnpkg.com/@visx/tooltip/-/tooltip-2.10.0.tgz#86d6a720af573dc9853d86d99ae35052bb1629f3"
+  integrity sha512-6Zrd79MIEfyuLBcZ1ypSeAkpQc8oLRNB7FQnegzl3Lje4LK5lJtuf5ST0mwK6G2Uv+GlOW9REJ6VK4gfAGkq9A==
+  dependencies:
+    "@types/react" "*"
+    "@visx/bounds" "2.10.0"
+    classnames "^2.3.1"
+    prop-types "^15.5.10"
+    react-use-measure "^2.0.4"
 
 "@webassemblyjs/ast@1.11.1":
   version "1.11.1"
@@ -3369,7 +3482,7 @@ combined-stream@^1.0.8:
   dependencies:
     delayed-stream "~1.0.0"
 
-commander@^2.20.0, commander@^2.20.3:
+commander@2, commander@^2.20.0, commander@^2.20.3:
   version "2.20.3"
   resolved "https://registry.yarnpkg.com/commander/-/commander-2.20.3.tgz#fd485e84c03eb4881c20722ba48035e8531aeb33"
   integrity sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==
@@ -3751,6 +3864,18 @@ cwd@^0.10.0:
     find-pkg "^0.1.2"
     fs-exists-sync "^0.1.0"
 
+d3-array@1:
+  version "1.2.4"
+  resolved "https://registry.yarnpkg.com/d3-array/-/d3-array-1.2.4.tgz#635ce4d5eea759f6f605863dbcfc30edc737f71f"
+  integrity sha512-KHW6M86R+FUPYGb3R5XiYjXPq7VzwxZ22buHhAEVG5ztoEcZZMLov530mmccaqA1GghZArjQV46fuc8kUqhhHw==
+
+d3-geo@^1.11.3:
+  version "1.12.1"
+  resolved "https://registry.yarnpkg.com/d3-geo/-/d3-geo-1.12.1.tgz#7fc2ab7414b72e59fbcbd603e80d9adc029b035f"
+  integrity sha512-XG4d1c/UJSEX9NfU02KwBL6BYPj8YKHxgBEw5om2ZnTRSbIcego6dhHwcxuSR3clxh0EpE38os1DVPOmnYtTPg==
+  dependencies:
+    d3-array "1"
+
 damerau-levenshtein@^1.0.8:
   version "1.0.8"
   resolved "https://registry.yarnpkg.com/damerau-levenshtein/-/damerau-levenshtein-1.0.8.tgz#b43d286ccbd36bc5b2f7ed41caf2d0aba1f8a6e7"
@@ -3764,6 +3889,11 @@ data-urls@^2.0.0:
     abab "^2.0.3"
     whatwg-mimetype "^2.3.0"
     whatwg-url "^8.0.0"
+
+debounce@^1.2.1:
+  version "1.2.1"
+  resolved "https://registry.yarnpkg.com/debounce/-/debounce-1.2.1.tgz#38881d8f4166a5c5848020c11827b834bcb3e0a5"
+  integrity sha512-XRRe6Glud4rd/ZGQfiV1ruXSfbvfJedlV9Y6zOlP+2K04vBYiJEte6stfFkCP03aMnY5tsipamumUjL14fofug==
 
 debug@2.6.9, debug@^2.6.0, debug@^2.6.9:
   version "2.6.9"
@@ -8023,7 +8153,7 @@ prompts@^2.0.1, prompts@^2.4.2:
     kleur "^3.0.3"
     sisteransi "^1.0.5"
 
-prop-types@^15.8.1:
+prop-types@^15.5.10, prop-types@^15.6.1, prop-types@^15.6.2, prop-types@^15.8.1:
   version "15.8.1"
   resolved "https://registry.yarnpkg.com/prop-types/-/prop-types-15.8.1.tgz#67d87bf1a694f48435cf332c24af10214a3140b5"
   integrity sha512-oj87CgZICdulUohogVAR7AjlC0327U4el4L6eAvOqCeudMDVU0NThNaV+b9Df4dXgSP1gXMTnPdhfe/2qDH5cg==
@@ -8287,6 +8417,13 @@ react-scripts@5.0.1:
     workbox-webpack-plugin "^6.4.1"
   optionalDependencies:
     fsevents "^2.3.2"
+
+react-use-measure@^2.0.4:
+  version "2.1.1"
+  resolved "https://registry.yarnpkg.com/react-use-measure/-/react-use-measure-2.1.1.tgz#5824537f4ee01c9469c45d5f7a8446177c6cc4ba"
+  integrity sha512-nocZhN26cproIiIduswYpV5y5lQpSQS1y/4KuvUCjSKmw7ZWIS/+g3aFnX3WdBkyuGUtTLif3UTqnLLhbDoQig==
+  dependencies:
+    debounce "^1.2.1"
 
 react@^17.0.2:
   version "17.0.2"
@@ -9475,6 +9612,13 @@ toidentifier@1.0.1:
   resolved "https://registry.yarnpkg.com/toidentifier/-/toidentifier-1.0.1.tgz#3be34321a88a820ed1bd80dfaa33e479fbb8dd35"
   integrity sha512-o5sSPKEkg/DIQNmH43V0/uerLrpzVedkUh8tGNvaeXpfpuwjKenlSox/2O/BTlZUtEe+JG7s5YhEz608PlAHRA==
 
+topojson-client@^3.1.0:
+  version "3.1.0"
+  resolved "https://registry.yarnpkg.com/topojson-client/-/topojson-client-3.1.0.tgz#22e8b1ed08a2b922feeb4af6f53b6ef09a467b99"
+  integrity sha512-605uxS6bcYxGXw9qi62XyrV6Q3xwbndjachmNxu8HWTtVPxZfEJN9fd/SZS1Q54Sn2y0TMyMxFj/cJINqGHrKw==
+  dependencies:
+    commander "2"
+
 tough-cookie@^4.0.0:
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/tough-cookie/-/tough-cookie-4.0.0.tgz#d822234eeca882f991f0f908824ad2622ddbece4"
@@ -9706,6 +9850,11 @@ uri-js@^4.2.2:
   integrity sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==
   dependencies:
     punycode "^2.1.0"
+
+use-sync-external-store@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/use-sync-external-store/-/use-sync-external-store-1.2.0.tgz#7dbefd6ef3fe4e767a0cf5d7287aacfb5846928a"
+  integrity sha512-eEgnFxGQ1Ife9bzYs6VLi8/4X6CObHMw9Qr9tPY43iKwsPw8xE8+EFsf/2cFZ5S3esXgpWgtSCtLNS41F+sKPA==
 
 util-deprecate@^1.0.1, util-deprecate@^1.0.2, util-deprecate@~1.0.1:
   version "1.0.2"

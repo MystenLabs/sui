@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import cl from 'classnames';
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState, useContext, lazy, Suspense } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
 import {
@@ -17,6 +17,10 @@ import {
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 
 import styles from './Home.module.css';
+
+const ValidatorMap = lazy(
+    () => import('../../components/validator-map/ValidatorMap')
+);
 
 const initState = { count: 0, loadState: 'pending' };
 const TXN_PER_PAGE = 15;
@@ -99,6 +103,9 @@ function HomeAPI() {
             </section>
             <section className="right-item">
                 <TopValidatorsCardAPI />
+                <Suspense fallback={null}>
+                    <ValidatorMap />
+                </Suspense>
             </section>
         </div>
     );
