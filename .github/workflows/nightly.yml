@@ -39,6 +39,7 @@ jobs:
           toolchain: beta
           components: clippy
           override: true
+      - uses: arduino/setup-protoc@v1
       # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
         run: cargo xclippy -D warnings
