@@ -40,7 +40,7 @@ export SUI_RPC_HOST=http://127.0.0.1:5001
 
 ## Sui software development kits
 
-You may sign transactions and interact with the Sui network using the:
+You can sign transactions and interact with the Sui network using any of the following:
 
 * [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
 * [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
