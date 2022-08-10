@@ -67,7 +67,7 @@ jsonrpsee = { version = "0.15.1", features = ["full"] }
 
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
-rand = "0.7.3"
+rand = "0.8.5"
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }

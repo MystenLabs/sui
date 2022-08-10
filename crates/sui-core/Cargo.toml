@@ -60,7 +60,7 @@ workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 clap = { version = "3.1.17", features = ["derive"] }
-rand = "0.7.3"
+rand = "0.8.5"
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 
 serde-reflection = "0.3.6"
