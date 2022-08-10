@@ -1,7 +1,7 @@
 /* CSS for Coins */
 
 .groupview {
-    @apply border-collapse w-full text-left;
+    @apply border-collapse w-full text-left overflow-clip;
 }
 
 .groupview thead th {
@@ -26,7 +26,7 @@
 
 .groupview tr td:first-child,
 .groupview tr td:last-child {
-    @apply w-[26px];
+    @apply w-[5%];
 }
 
 .closedgroup tr:hover td {
@@ -47,6 +47,10 @@
 
 .openedgroup tr:nth-child(even) td {
     @apply pb-[10px];
+}
+
+.groupview tr td:not(:first-child):not(:last-child) {
+    @apply w-[30%];
 }
 
 .openedgroup tr:nth-child(odd):not(:first-child) td {
@@ -92,7 +96,7 @@
 }
 
 .layout > div {
-    @apply sm:w-[600px];
+    @apply w-full sm:w-[600px];
 }
 
 .previewimage > div,
@@ -101,7 +105,7 @@
 }
 
 .layout > div:first-child {
-    @apply pr-[4vw] mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-sui-grey-45;
+    @apply sm:pr-[4vw] sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-sui-grey-45;
 }
 
 .ownedcoins,
