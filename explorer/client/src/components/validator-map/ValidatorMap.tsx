@@ -15,11 +15,11 @@ import styles from './ValidatorMap.module.css';
 const HOST = 'https://imgmod.sui.io';
 
 type NodeList = {
-    ip_address: string,
-    city: string,
-    region: string,
-    country: string,
-    location: string
+    ip_address: string;
+    city: string;
+    region: string;
+    country: string;
+    location: string;
 }[];
 
 type CountryNodes = Record<string, { count: number; countryCode: string }>;
