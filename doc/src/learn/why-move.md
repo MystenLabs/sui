@@ -2,7 +2,7 @@
 title: Why Move?
 ---
 
-In Sui, you write [Smart Contracts](../build/move.md) with the Move Programming language. This page links to key [Move](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) resources and compares the [Move](https://github.com/move-language/move/tree/main/language/documentation) and Solidity programming languages. For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
+In Sui, you write [Smart Contracts](../build/move/index.md) with the Move Programming language. This page links to key [Move](https://golden.com/wiki/Move_(programming_language)-MNA4DZ6) resources and compares the [Move](https://github.com/move-language/move/tree/main/language/documentation) and Solidity programming languages. For a full description of the issues with traditional smart contract languages, see the [Move Problem Statement](https://github.com/MystenLabs/awesome-move/blob/main/docs/problem_statement.md).
 
 ## Sui Move
 
