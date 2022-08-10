@@ -1690,11 +1690,4 @@ impl ExecutionStateError for FragmentInternalError {
             Self::Retry(..) => true,
         }
     }
-
-    fn to_string(&self) -> String {
-        match self {
-            Self::Error(sui_error) => format!("Failed to process checkpoint fragment {sui_error}"),
-            Self::Retry(fragment) => format!("Failed to sequence checkpoint fragment {fragment:?}"),
-        }
-    }
 }
