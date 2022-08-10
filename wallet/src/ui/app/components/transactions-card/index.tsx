@@ -27,14 +27,15 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
     );
 
     const transferStatus = txn.status === 'success' ? 'Checkmark' : 'Close';
+    const TxIcon = txn.isSender ? SuiIcons.ArrowLeft : SuiIcons.Buy;
+    const iconClassName = txn.isSender
+        ? cl(st.arrowActionIcon, st.angledArrow)
+        : cl(st.arrowActionIcon, st.buyIcon);
 
     return (
         <div className={st.card} key={txn.txId}>
             <div className={st.cardIcon}>
-                <Icon
-                    icon={SuiIcons.ArrowLeft}
-                    className={cl(st.arrowActionIcon, st.angledArrow)}
-                />
+                <Icon icon={TxIcon} className={iconClassName} />
             </div>
             <div className={st.cardContent}>
                 <div className={st.txResult}>
@@ -62,11 +63,11 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                     </div>
                 </div>
             </div>
-            <div className={st.txTransferrd}>
+            <div className={st.txTransferred}>
                 {txn.Amount && (
                     <>
-                        <div className={st.txTitle}>{txn.Amount} SUI</div>
-                        <div className={st.txValue}></div>
+                        <div className={st.txAmount}>{txn.Amount} SUI</div>
+                        <div className={st.txFiatValue}></div>
                     </>
                 )}
                 {txn.url && (

@@ -9,15 +9,17 @@ import {
     getExecutionStatusType,
     getTotalGasUsed,
     getTransferSuiTransaction,
-    getMoveCallTransaction,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+
+import { batchBetchObjects } from '_redux/slices/sui-objects';
 
 import type {
     GetTxnDigestsResponse,
     CertifiedTransaction,
     TransactionKindName,
     ExecutionStatusType,
+    TransactionEffectsResponse,
 } from '@mysten/sui.js';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -32,8 +34,10 @@ export type TxResultState = {
     Amount?: number;
     timestamp_ms?: number;
     url?: string;
+    objectId: string;
     description?: string;
     name?: string;
+    isSender?: boolean;
 };
 
 interface TransactionManualState {
@@ -65,7 +69,10 @@ export const getTransactionsByAddress = createAsyncThunk<
     AppThunkConfig
 >(
     'sui-transactions/get-transactions-by-address',
-    async (_, { getState, extra: { api } }): Promise<TxResultByAddress> => {
+    async (
+        _,
+        { getState, dispatch, extra: { api } }
+    ): Promise<TxResultByAddress> => {
         const address = getState().account.address;
 
         if (!address) {
@@ -82,7 +89,7 @@ export const getTransactionsByAddress = createAsyncThunk<
 
         const resp = await api.instance.fullNode
             .getTransactionWithEffectsBatch(deduplicate(transactions))
-            .then((txEffs) => {
+            .then(async (txEffs: TransactionEffectsResponse[]) => {
                 return (
                     txEffs
                         .map((txEff, i) => {
@@ -97,14 +104,8 @@ export const getTransactionsByAddress = createAsyncThunk<
                             if (txns.length > 1) {
                                 return null;
                             }
-
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
-                            //TODO: Get Object data from transferObject
-                            const moveCall =
-                                txKind === 'Call'
-                                    ? getMoveCallTransaction(txn)
-                                    : undefined;
 
                             const tranferSui =
                                 txKind === 'TransferSui'
@@ -116,6 +117,9 @@ export const getTransactionsByAddress = createAsyncThunk<
                                     : getTransferObjectTransaction(txn)
                                           ?.recipient;
 
+                            const txTransferObject =
+                                getTransferObjectTransaction(txn);
+
                             return {
                                 seq,
                                 txId: digest,
@@ -123,17 +127,17 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
                                 From: res.data.sender,
+                                ...(txTransferObject?.objectRef.objectId
+                                    ? {
+                                          objectId:
+                                              txTransferObject?.objectRef
+                                                  .objectId,
+                                      }
+                                    : {}),
                                 timestamp_ms: txEff.timestamp_ms,
+                                isSender: res.data.sender === address,
                                 ...(tranferSui?.amount
                                     ? { Amount: tranferSui.amount }
-                                    : {}),
-                                ...(moveCall &&
-                                Array.isArray(moveCall.arguments)
-                                    ? {
-                                          url: moveCall.arguments[2],
-                                          description: moveCall.arguments[1],
-                                          name: moveCall.arguments[0],
-                                      }
                                     : {}),
                                 ...(recipient
                                     ? {
@@ -148,7 +152,39 @@ export const getTransactionsByAddress = createAsyncThunk<
                         .sort((a, b) => b!.seq - a!.seq)
                 );
             });
-        return resp as TxResultByAddress;
+
+        // Get all objectId and batch fetch objects for transactions with objectIds
+        // remove duplicates
+        const objectIDs = [
+            ...new Set(
+                resp.filter((itm) => itm).map((itm) => itm?.objectId || '')
+            ),
+        ];
+
+        const getObjectBatch = await dispatch(batchBetchObjects(objectIDs));
+        const txObjects = getObjectBatch.payload;
+
+        const txnResp = resp.map((itm) => {
+            const objectTxObj =
+                txObjects && itm?.objectId && Array.isArray(txObjects)
+                    ? txObjects.find(
+                          (obj) => obj.reference.objectId === itm.objectId
+                      )
+                    : null;
+
+            return {
+                ...itm,
+                ...(objectTxObj
+                    ? {
+                          description: objectTxObj.data.fields.description,
+                          name: objectTxObj.data.fields.name,
+                          url: objectTxObj.data.fields.url,
+                      }
+                    : {}),
+            };
+        });
+
+        return txnResp as TxResultByAddress;
     }
 );
 
