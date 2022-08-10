@@ -117,7 +117,10 @@ jobs:
           path: ~/.cargo/registry/src/**/librocksdb-sys-*
       # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
-        run: cargo xclippy -D warnings
+        run: |
+          echo $PATH
+          which protoc
+          cargo xclippy -D warnings
 
   rustfmt:
     needs: diff
