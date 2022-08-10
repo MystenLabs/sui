@@ -5,11 +5,9 @@ import { useContext, useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
-import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import {
-    getTabFooter,
     getValidatorState,
     processValidators,
     ValidatorLoadFail,
@@ -132,8 +130,6 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
             },
         ],
     };
-
-    const tabsFooter = getTabFooter(validatorsData.length);
 
     return (
         <div className={styles.validators}>
