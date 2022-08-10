@@ -13,8 +13,8 @@
 /// https://github.com/move-language/move/blob/main/language/documentation/examples/experimental/coin-swap/sources/CoinSwap.move
 module defi::pool {
     use sui::object::{Self, UID};
-    use sui::coin::{Self, Coin, TreasuryCap};
-    use sui::balance::{Self, Balance};
+    use sui::coin::{Self, Coin};
+    use sui::balance::{Self, Supply, Balance};
     use sui::sui::SUI;
     use sui::transfer;
     use sui::math;
@@ -59,7 +59,7 @@ module defi::pool {
         id: UID,
         sui: Balance<SUI>,
         token: Balance<T>,
-        lsp_treasury: TreasuryCap<LSP<P, T>>,
+        lsp_supply: Supply<LSP<P, T>>,
         /// Fee Percent is denominated in basis points.
         fee_percent: u64
     }
@@ -104,18 +104,18 @@ module defi::pool {
 
         // Initial share of LSP is the sqrt(a) * sqrt(b)
         let share = math::sqrt(sui_amt) * math::sqrt(tok_amt);
-        let lsp_treasury = coin::create_currency(LSP<P, T> {}, ctx);
-        let lsp = coin::mint(&mut lsp_treasury, share, ctx);
+        let lsp_supply = balance::create_supply(LSP<P, T> {});
+        let lsp = balance::increase_supply(&mut lsp_supply, share);
 
         transfer::share_object(Pool {
             id: object::new(ctx),
             token: coin::into_balance(token),
             sui: coin::into_balance(sui),
-            lsp_treasury,
+            lsp_supply,
             fee_percent
         });
 
-        lsp
+        coin::from_balance(lsp, ctx)
     }
 
 
@@ -227,7 +227,8 @@ module defi::pool {
         assert!(sui_amt < MAX_POOL_VALUE, EPoolFull);
         assert!(tok_amt < MAX_POOL_VALUE, EPoolFull);
 
-        coin::mint(&mut pool.lsp_treasury, share_minted, ctx)
+        let balance = balance::increase_supply(&mut pool.lsp_supply, share_minted);
+        coin::from_balance(balance, ctx)
     }
 
     /// Entrypoint for the `remove_liquidity` method. Transfers
@@ -260,7 +261,7 @@ module defi::pool {
         let sui_removed = (sui_amt * lsp_amount) / lsp_supply;
         let tok_removed = (tok_amt * lsp_amount) / lsp_supply;
 
-        coin::burn(&mut pool.lsp_treasury, lsp);
+        balance::decrease_supply(&mut pool.lsp_supply, coin::into_balance(lsp));
 
         (
             coin::take(&mut pool.sui, sui_removed, ctx),
@@ -291,7 +292,7 @@ module defi::pool {
         (
             balance::value(&pool.sui),
             balance::value(&pool.token),
-            coin::total_supply(&pool.lsp_treasury)
+            balance::supply_value(&pool.lsp_supply)
         )
     }
 
