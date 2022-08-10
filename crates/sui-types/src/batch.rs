@@ -11,6 +11,8 @@ pub type TxSequenceNumber = u64;
 
 /// Either a freshly sequenced transaction/effects tuple of hashes or a batch
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+// TODO: fix below with a refactor.
+#[allow(clippy::large_enum_variant)]
 pub enum UpdateItem {
     Transaction((TxSequenceNumber, ExecutionDigests)),
     Batch(SignedBatch),

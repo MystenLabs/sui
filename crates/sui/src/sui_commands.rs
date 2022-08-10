@@ -35,6 +35,8 @@ use tracing::info;
     author,
     version
 )]
+// TODO: fix below with a refactor.
+#[allow(clippy::large_enum_variant)]
 pub enum SuiCommand {
     /// Start sui network.
     #[clap(name = "start")]
