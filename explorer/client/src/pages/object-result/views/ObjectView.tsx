@@ -1,15 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { extractName } from '../../../utils/objectUtils';
 import { type DataType } from '../ObjectResultType';
 import PkgView from './PkgView';
 import TokenView from './TokenView';
 import ObjHeader from './shared/ObjHeader';
 
 function ObjectView({ data }: { data: DataType }) {
-    const nameKeyValue = Object.entries(data.data?.contents)
-        .filter(([key, _]) => key === 'name')
-        .map(([_, value]) => value)[0];
+    const name = extractName(data.data?.contents);
 
     if (data.objType === 'Move Package') {
         return (
@@ -18,7 +17,7 @@ function ObjectView({ data }: { data: DataType }) {
                     data={{
                         objId: data.id,
                         objKind: 'Package',
-                        objName: nameKeyValue,
+                        objName: name,
                     }}
                 />
                 <PkgView data={data} />
@@ -31,10 +30,10 @@ function ObjectView({ data }: { data: DataType }) {
                     data={{
                         objId: data.id,
                         objKind: 'Object',
-                        objName: nameKeyValue,
+                        objName: name,
                     }}
                 />
-                <TokenView data={data} name={nameKeyValue} />
+                <TokenView data={data} />
             </>
         );
     }

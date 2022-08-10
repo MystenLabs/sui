@@ -2,8 +2,72 @@ div.imagebox {
     @apply h-full w-full flex items-center justify-center;
 }
 
-img.imagebox {
-    @apply object-scale-down w-[100%];
+img.smallimage {
+    @apply object-fill cursor-pointer rounded-[6px];
+}
+
+div.modalcontainer,
+div.detailsbg {
+    @apply fixed top-0 left-0 w-full h-full z-20;
+}
+
+@keyframes fadein {
+    0% {
+        opacity: 0;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+div.fade {
+    opacity: 0;
+    animation: fadein 0.3s linear forwards;
+}
+
+.modal {
+    @apply w-full h-full z-50 fixed left-0 top-0 text-center justify-center flex;
+}
+
+.fig {
+    @apply mt-auto mb-[60px] sm:my-auto sm:relative sm:left-[19px];
+}
+
+div.imageandcross {
+    @apply flex;
+}
+
+img.largeimage {
+    @apply max-w-[80vw] max-h-[80vh] z-50 self-start border-0;
+
+    border-radius: 6px !important;
+}
+
+span.cross {
+    @apply text-offwhite bg-sui-grey-100 z-20 h-[30px] w-[30px] 
+  flex justify-center items-center rounded-[50px] cursor-pointer  text-2xl mx-auto;
+}
+
+span.desktopcross {
+    @apply hidden sm:block sm:ml-[8px] sm:mr-0;
+}
+
+div.mobilecross {
+    @apply block mx-auto mt-[10vh] sm:hidden;
+}
+
+div.filetype,
+div.caption {
+    @apply relative text-offwhite z-50 text-center sm:text-left text-2xl font-semibold mt-5;
+}
+
+div.filetype {
+    @apply text-sm text-sui-grey-60 font-medium mt-0;
+}
+
+div.detailsbg {
+    @apply bg-sui-grey-100 z-20 opacity-[0.85];
 }
 
 .codebox {
