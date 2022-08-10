@@ -118,11 +118,7 @@ async fn faucet_request(
 ) -> impl IntoResponse {
     let result = state
         .faucet
-        .request_sui_coins(
-            &state.wallet_client,
-            Some(1),
-            Some(payload.recipient),
-        )
+        .request_sui_coins(&state.wallet_client, Some(1), Some(payload.recipient))
         .await;
 
     match result {

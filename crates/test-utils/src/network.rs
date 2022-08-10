@@ -32,22 +32,18 @@ const NUM_VALIDAOTR: usize = 4;
 pub async fn start_test_network(
     genesis_config: Option<GenesisConfig>,
 ) -> Result<Swarm, anyhow::Error> {
-    start_test_network_with_fullnodes(genesis_config, 0, None).await
+    start_test_network_with_fullnodes(genesis_config, 0).await
 }
 
 pub async fn start_test_network_with_fullnodes(
     genesis_config: Option<GenesisConfig>,
     fullnode_count: usize,
-    config_dir: Option<&Path>,
 ) -> Result<Swarm, anyhow::Error> {
     let mut builder: SwarmBuilder = Swarm::builder()
         .committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap())
         .with_fullnode_count(fullnode_count);
     if let Some(genesis_config) = genesis_config {
         builder = builder.initial_accounts_config(genesis_config);
-    }
-    if let Some(config_dir) = config_dir {
-        builder = builder.dir(config_dir);
     }
 
     let mut swarm = builder.build();
@@ -135,20 +131,18 @@ async fn start_rpc_gateway(
 pub async fn start_rpc_test_network(
     genesis_config: Option<GenesisConfig>,
 ) -> Result<TestNetwork, anyhow::Error> {
-    start_rpc_test_network_with_fullnode(genesis_config, 0, None, None).await
+    start_rpc_test_network_with_fullnode(genesis_config, 0, None).await
 }
 
 pub async fn start_rpc_test_network_with_fullnode(
     genesis_config: Option<GenesisConfig>,
     fullnode_count: usize,
-    config_dir: Option<&Path>,
-    port: Option<u16>,
+    gateway_port: Option<u16>,
 ) -> Result<TestNetwork, anyhow::Error> {
-    let network =
-        start_test_network_with_fullnodes(genesis_config, fullnode_count, config_dir).await?;
+    let network = start_test_network_with_fullnodes(genesis_config, fullnode_count).await?;
     let working_dir = network.dir();
     let (server_addr, rpc_server_handle) =
-        start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG), port).await?;
+        start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG), gateway_port).await?;
     let mut wallet_conf: SuiClientConfig =
         PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
     let rpc_url = format!("http://{}", server_addr);

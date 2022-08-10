@@ -154,10 +154,9 @@ impl Cluster for LocalNewCluster {
                 .port()
         });
 
-        let mut test_network =
-            start_rpc_test_network_with_fullnode(Some(genesis_config), 1, None, port)
-                .await
-                .unwrap_or_else(|e| panic!("Failed to start a local network, e: {e}"));
+        let mut test_network = start_rpc_test_network_with_fullnode(Some(genesis_config), 1, port)
+            .await
+            .unwrap_or_else(|e| panic!("Failed to start a local network, e: {e}"));
 
         // Use the wealthy account for faucet
         let faucet_key = test_network
