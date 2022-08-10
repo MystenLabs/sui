@@ -15,6 +15,7 @@
     justify-content: space-between;
     border-bottom: 1px solid colors.$gray-45;
     height: 64px;
+    cursor: pointer;
 
     .card-icon {
         position: relative;
@@ -45,10 +46,29 @@
         margin-left: 5px;
     }
 
-    .tx-transferrd {
+    .tx-transferred {
         display: flex;
         flex-flow: column;
-        align-items: end;
+        text-align: end;
+
+        .tx-amount {
+            @include utils.typography('table/text-sm');
+
+            color: colors.$gray-100;
+            text-align: right;
+        }
+
+        .tx-image {
+            display: flex;
+            justify-content: flex-end;
+
+            img {
+                width: 50px;
+                height: 50px;
+                border-radius: 6px;
+                object-fit: cover;
+            }
+        }
     }
 
     .card-content {
@@ -86,16 +106,6 @@
 
         font-family: 'Space Mono', ui-monospace, monospace;
         color: colors.$gray-65;
-    }
-
-    .tx-image img {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        width: 50px;
-        height: 50px;
-        border-radius: 6px;
-        object-fit: cover;
     }
 }
 
