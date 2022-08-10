@@ -11,6 +11,6 @@ export interface Feature {
 export interface NodeLocation {
     count: number;
     city: string;
-    country: string;
+    countryCode: string;
     location: [lat: number, long: number];
 }

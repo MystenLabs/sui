@@ -23,15 +23,19 @@
 }
 
 .mapcontainer {
-    @apply absolute top-0 bottom-0 right-0 left-0 md:left-32 z-0;
+    @apply absolute inset-0 z-0 overflow-hidden;
 }
 
 .map {
-    @apply absolute inset-0 overflow-hidden;
+    @apply absolute top-0 bottom-0 right-0 md:left-32 pointer-events-none md:pointer-events-auto;
+}
+
+.map svg {
+    @apply overflow-visible;
 }
 
 .tooltip {
-    @apply bg-sui-grey-100 text-white p-2 absolute z-20 text-xs font-sans rounded-md min-w-[100px];
+    @apply bg-sui-grey-100 text-white p-2 absolute z-20 text-xs font-sans rounded-md min-w-[100px] hidden md:block z-40;
 }
 
 .tipitem {

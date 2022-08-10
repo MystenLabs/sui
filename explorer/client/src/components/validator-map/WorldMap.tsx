@@ -26,7 +26,7 @@ interface Props {
     width: number;
     height: number;
     nodes?: NodeLocation[];
-    onMouseOver(event: React.MouseEvent, alpha2?: string): void;
+    onMouseOver(event: React.MouseEvent, countryCode?: string): void;
     onMouseOut(): void;
 }
 

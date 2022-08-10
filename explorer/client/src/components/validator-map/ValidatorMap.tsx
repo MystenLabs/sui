@@ -14,21 +14,21 @@ import styles from './ValidatorMap.module.css';
 
 const HOST = 'https://imgmod.sui.io';
 
-// TODO: Ensure this is the shape of the API that actually lands
 type NodeList = [
     ip: string,
     city: string,
     region: string,
-    country: string,
-    loc: string,
-    alpha2: string
+    countryCode: string,
+    loc: string
 ][];
 
-type CountryNodes = Record<string, { count: number; name: string }>;
+type CountryNodes = Record<string, { count: number; countryCode: string }>;
+
+const regionNamesInEnglish = new Intl.DisplayNames(['en'], { type: 'region' });
 
 export default function ValidatorMap() {
     const { data } = useQuery(['validator-map'], async () => {
-        const res = await fetch(`${HOST}/locations`, {
+        const res = await fetch(`${HOST}/location`, {
             method: 'GET',
         });
 
@@ -47,19 +47,19 @@ export default function ValidatorMap() {
         const nodeLocations: Record<string, NodeLocation> = {};
         const countryNodes: CountryNodes = {};
 
-        data.forEach(([, city, region, country, loc, alpha2]) => {
-            const key = `${city}-${region}-${country}`;
+        data.forEach(([, city, region, countryCode, loc]) => {
+            const key = `${city}-${region}-${countryCode}`;
 
-            countryNodes[alpha2] ??= {
+            countryNodes[countryCode] ??= {
                 count: 0,
-                name: country,
+                countryCode,
             };
-            countryNodes[alpha2].count += 1;
+            countryNodes[countryCode].count += 1;
 
             nodeLocations[key] ??= {
                 count: 0,
                 city,
-                country,
+                countryCode,
                 location: loc
                     .split(',')
                     .reverse()
@@ -85,17 +85,17 @@ export default function ValidatorMap() {
     } = useTooltip<string>();
 
     const handleMouseOver = useCallback(
-        (event: React.MouseEvent<SVGElement>, alpha2?: string) => {
+        (event: React.MouseEvent<SVGElement>, countryCode?: string) => {
             const owner = event.currentTarget.ownerSVGElement;
             if (!owner) return;
 
             const rect = owner.getBoundingClientRect();
 
-            if (alpha2 && countryNodes[alpha2]) {
+            if (countryCode && countryNodes[countryCode]) {
                 showTooltip({
                     tooltipLeft: event.clientX - rect.x,
                     tooltipTop: event.clientY - rect.y,
-                    tooltipData: alpha2,
+                    tooltipData: countryCode,
                 });
             } else {
                 hideTooltip();
@@ -141,24 +141,28 @@ export default function ValidatorMap() {
                         )}
                     </ParentSizeModern>
                 </div>
-
-                {tooltipOpen && tooltipData && (
-                    <TooltipWithBounds
-                        top={tooltipTop}
-                        left={tooltipLeft}
-                        className={styles.tooltip}
-                        // NOTE: Tooltip will un-style itself if we provide a style object:
-                        style={{}}
-                    >
-                        <div className={styles.tipitem}>
-                            <div>Nodes</div>
-                            <div>{countryNodes[tooltipData].count}</div>
-                        </div>
-                        <div className={styles.tipdivider} />
-                        <div>{countryNodes[tooltipData].name}</div>
-                    </TooltipWithBounds>
-                )}
             </div>
+
+            {tooltipOpen && tooltipData && (
+                <TooltipWithBounds
+                    top={tooltipTop}
+                    left={tooltipLeft}
+                    className={styles.tooltip}
+                    // NOTE: Tooltip will un-style itself if we provide a style object:
+                    style={{}}
+                >
+                    <div className={styles.tipitem}>
+                        <div>Nodes</div>
+                        <div>{countryNodes[tooltipData].count}</div>
+                    </div>
+                    <div className={styles.tipdivider} />
+                    <div>
+                        {regionNamesInEnglish.of(
+                            countryNodes[tooltipData].countryCode
+                        ) || countryNodes[tooltipData].countryCode}
+                    </div>
+                </TooltipWithBounds>
+            )}
         </div>
     );
 }

@@ -8,7 +8,7 @@ import { type Feature } from './types';
 interface Props {
     path: string | null;
     feature: Feature;
-    onMouseOver(event: React.MouseEvent, alpha2?: string): void;
+    onMouseOver(event: React.MouseEvent, countryCode?: string): void;
     onMouseOut(): void;
 }
 
