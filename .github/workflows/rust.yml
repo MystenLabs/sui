@@ -110,19 +110,17 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           components: clippy
+
+      # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
-      # TODO(bradh): re-enable this
       # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
       #   with:
       #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
+
       # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
-        run: |
-          echo $PATH
-          which protoc
-          /opt/hostedtoolcache/protoc/3.20.1/x64/bin/protoc --help
-          cargo xclippy -D warnings
+        run: cargo xclippy -D warnings
 
   rustfmt:
     needs: diff
