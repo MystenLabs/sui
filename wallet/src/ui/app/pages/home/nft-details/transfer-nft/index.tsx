@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Formik } from 'formik';
-import { useCallback, useMemo, useState, memo, useEffect } from 'react';
+import { useCallback, useMemo, useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import TransferNFTForm from './TransferNFTForm';
@@ -14,7 +14,6 @@ import {
     accountNftsSelector,
     accountAggregateBalancesSelector,
 } from '_redux/slices/account';
-import { setSelectedNFT, clearActiveNFT } from '_redux/slices/selected-nft';
 import { transferSuiNFT } from '_redux/slices/sui-objects';
 import {
     GAS_TYPE_ARG,
@@ -37,7 +36,6 @@ interface TransferProps {
     objectId: ObjectId;
 }
 
-// Cache NFT object data before transfer of the NFT to use it in the TxResponse card
 function TransferNFTCard({ objectId }: TransferProps) {
     const address = useAppSelector(({ account: { address } }) => address);
     const dispatch = useAppDispatch();
@@ -51,15 +49,7 @@ function TransferNFTCard({ objectId }: TransferProps) {
         [nftCollections, objectId]
     );
 
-    useEffect(() => {
-        dispatch(clearActiveNFT());
-        if (selectedNFTObj) {
-            dispatch(setSelectedNFT({ data: selectedNFTObj, loaded: true }));
-        }
-    }, [dispatch, objectId, selectedNFTObj]);
-
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
-    const nftObj = useAppSelector(({ selectedNft }) => selectedNft);
 
     const gasAggregateBalance = useMemo(
         () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
@@ -101,7 +91,7 @@ function TransferNFTCard({ objectId }: TransferProps) {
                 navigate(
                     `/receipt?${new URLSearchParams({
                         txdigest: resp.txId,
-                        tranfer: 'nft',
+                        transfer: 'nft',
                     }).toString()}`
                 );
             }
@@ -121,8 +111,8 @@ function TransferNFTCard({ objectId }: TransferProps) {
                 className={st.pageTitle}
             />
             <div className={st.content}>
-                {nftObj.data && (
-                    <NFTDisplayCard nftobj={nftObj.data} wideview={true} />
+                {selectedNFTObj && (
+                    <NFTDisplayCard nftobj={selectedNFTObj} wideview={true} />
                 )}
                 <Formik
                     initialValues={initialValues}

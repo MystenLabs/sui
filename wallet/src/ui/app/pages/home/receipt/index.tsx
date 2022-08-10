@@ -49,6 +49,8 @@ function ReceiptPage() {
         return <Navigate to="/transactions" replace={true} />;
     }
 
+    const linkTo = tranferType ? '/nfts' : '/transactions';
+
     return (
         <div className={st.container}>
             <BottomMenuLayout>
@@ -62,7 +64,7 @@ function ReceiptPage() {
                 </Content>
                 <Menu stuckClass={st.shadow} className={st.shadow}>
                     <Link
-                        to={tranferType ? `/nft` : `/transactions`}
+                        to={linkTo}
                         className={cl('btn', st.action, st.done, 'neutral')}
                     >
                         <Icon
