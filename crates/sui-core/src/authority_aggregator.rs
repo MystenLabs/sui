@@ -767,6 +767,8 @@ where
         timeout_each_authority: Duration,
         // When to give up on the attempt entirely.
         timeout_total: Option<Duration>,
+        // The behavior that authorities expect to perform, used for logging and error
+        description: &str,
     ) -> Result<S, SuiError>
     where
         FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
@@ -792,6 +794,7 @@ where
                             .iter()
                             .map(|(a, b)| (*a, b.clone()))
                             .collect(),
+                        action: description.to_string(),
                     }
                 }
             })?
@@ -871,6 +874,7 @@ where
                                             response.err().map(|err| (name, err))
                                         })
                                         .collect(),
+                                    action: "get_object_by_id".to_string(),
                                 });
                             }
                         }
@@ -1027,6 +1031,7 @@ where
                                 if state.bad_weight > validity {
                                     return Err(SuiError::TooManyIncorrectAuthorities {
                                         errors: state.errors,
+                                        action: "get_all_owned_objects".to_string(),
                                     });
                                 }
                             }
@@ -1704,6 +1709,7 @@ where
             |_, client| Box::pin(async move { client.handle_checkpoint(request.clone()).await }),
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "handle_checkpoint_request",
         )
         .await
     }
@@ -1743,6 +1749,7 @@ where
             },
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "get_certified_checkpoint",
         )
         .await
     }
@@ -1777,6 +1784,7 @@ where
             },
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "handle_cert_info_request",
         )
         .await
     }
@@ -1821,6 +1829,7 @@ where
             },
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "handle_transaction_and_effects_info_request",
         )
         .await
     }
@@ -1930,6 +1939,7 @@ where
             .true_effects
             .ok_or(SuiError::TooManyIncorrectAuthorities {
                 errors: final_state.errors,
+                action: "execute_cert_to_true_effects".to_string(),
             })
             .tap_err(|e| info!(?digest, "execute_cert_to_true_effects failed: {}", e))
     }

@@ -374,6 +374,7 @@ where
                         if state.bad_weight > validity {
                             return Err(SuiError::TooManyIncorrectAuthorities {
                                 errors: state.errors,
+                                action: "get_latest_checkpoint_from_all".to_string(),
                             });
                         }
                     }

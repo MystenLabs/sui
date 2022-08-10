@@ -381,9 +381,12 @@ async fn test_map_reducer() {
             0usize,
             |_name, _client| Box::pin(async move { Ok(()) }),
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(
-                    async move { Err(SuiError::TooManyIncorrectAuthorities { errors: vec![] }) },
-                )
+                Box::pin(async move {
+                    Err(SuiError::TooManyIncorrectAuthorities {
+                        errors: vec![],
+                        action: String::new(),
+                    })
+                })
             },
             Duration::from_millis(1000),
         )
@@ -399,8 +402,10 @@ async fn test_map_reducer() {
             0usize,
             |_name, _client| {
                 Box::pin(async move {
-                    let res: Result<usize, SuiError> =
-                        Err(SuiError::TooManyIncorrectAuthorities { errors: vec![] });
+                    let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities {
+                        errors: vec![],
+                        action: String::new(),
+                    });
                     res
                 })
             },
@@ -451,9 +456,12 @@ async fn test_map_reducer() {
                 })
             },
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(
-                    async move { Err(SuiError::TooManyIncorrectAuthorities { errors: vec![] }) },
-                )
+                Box::pin(async move {
+                    Err(SuiError::TooManyIncorrectAuthorities {
+                        errors: vec![],
+                        action: String::new(),
+                    })
+                })
             },
             Duration::from_millis(10),
         )
@@ -1002,6 +1010,7 @@ async fn test_quorum_once_with_timeout() {
             },
             Duration::from_millis(authority_request_timeout),
             Some(Duration::from_millis(30 * 50)),
+            "test",
         )
         .await
         .unwrap();
