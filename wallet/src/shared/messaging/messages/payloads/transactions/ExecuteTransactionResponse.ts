@@ -3,12 +3,12 @@
 
 import { isBasePayload } from '_payloads';
 
-import type { TransactionResponse } from '@mysten/sui.js';
+import type { SuiTransactionEffectsResponse } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
 
 export interface ExecuteTransactionResponse extends BasePayload {
     type: 'execute-transaction-response';
-    result: TransactionResponse;
+    result: SuiTransactionEffectsResponse;
 }
 
 export function isExecuteTransactionResponse(
