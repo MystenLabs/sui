@@ -7,7 +7,7 @@ import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
-  isSuiTransactionEffectsResponse,
+  isSuiTransactionResponse,
 } from '../index.guard';
 import {
   GatewayTxSeqNumber,
@@ -15,7 +15,7 @@ import {
   GetObjectDataResponse,
   SuiObjectInfo,
   TransactionDigest,
-  SuiTransactionEffectsResponse,
+  SuiTransactionResponse,
   SuiObjectRef,
   getObjectReference,
   Coin,
@@ -162,12 +162,12 @@ export class JsonRpcProvider extends Provider {
 
   async getTransactionWithEffects(
     digest: TransactionDigest
-  ): Promise<SuiTransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     try {
       const resp = await this.client.requestWithType(
         'sui_getTransaction',
         [digest],
-        isSuiTransactionEffectsResponse
+        isSuiTransactionResponse
       );
       return resp;
     } catch (err) {
@@ -179,7 +179,7 @@ export class JsonRpcProvider extends Provider {
 
   async getTransactionWithEffectsBatch(
     digests: TransactionDigest[]
-  ): Promise<SuiTransactionEffectsResponse[]> {
+  ): Promise<SuiTransactionResponse[]> {
     const requests = digests.map(d => ({
       method: 'sui_getTransaction',
       args: [d],
@@ -187,7 +187,7 @@ export class JsonRpcProvider extends Provider {
     try {
       return await this.client.batchRequestWithType(
         requests,
-        isSuiTransactionEffectsResponse
+        isSuiTransactionResponse
       );
     } catch (err) {
       const list = digests.join(', ').substring(0, -2);
@@ -202,12 +202,12 @@ export class JsonRpcProvider extends Provider {
     signatureScheme: SignatureScheme,
     signature: string,
     pubkey: string
-  ): Promise<SuiTransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     try {
       const resp = await this.client.requestWithType(
         'sui_executeTransaction',
         [txnBytes, signatureScheme, signature, pubkey],
-        isSuiTransactionEffectsResponse
+        isSuiTransactionResponse
       );
       return resp;
     } catch (err) {

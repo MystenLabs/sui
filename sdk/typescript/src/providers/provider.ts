@@ -7,7 +7,7 @@ import {
   SuiObjectInfo,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
-  SuiTransactionEffectsResponse,
+  SuiTransactionResponse,
   SuiObjectRef,
 } from '../types';
 
@@ -69,7 +69,7 @@ export abstract class Provider {
     signatureScheme: SignatureScheme,
     signature: string,
     pubkey: string
-  ): Promise<SuiTransactionEffectsResponse>;
+  ): Promise<SuiTransactionResponse>;
 
   abstract syncAccountState(address: string): Promise<any>;
   // TODO: add more interface methods

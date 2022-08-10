@@ -9,7 +9,7 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
     RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffectsResponse,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionResponse,
     SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc_macros::open_rpc;
@@ -32,7 +32,7 @@ pub trait RpcGatewayApi {
         signature: Base64,
         /// signer's public key, as base-64 encoded string
         pub_key: Base64,
-    ) -> RpcResult<SuiTransactionEffectsResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Wallet Sync API")]
@@ -94,7 +94,7 @@ pub trait RpcReadApi {
         &self,
         /// the digest of the queried transaction
         digest: TransactionDigest,
-    ) -> RpcResult<SuiTransactionEffectsResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 
     /// Return the object information for a specified object
     #[method(name = "getObject")]

@@ -12,7 +12,7 @@ use crate::metrics::FaucetMetrics;
 use prometheus::Registry;
 use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionEffectsResponse, SuiTransactionKind, SuiTransferSui,
+    SuiExecutionStatus, SuiTransactionKind, SuiTransactionResponse, SuiTransferSui,
 };
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -185,7 +185,7 @@ impl SimpleFaucet {
         budget: u64,
         amount: u64,
         uuid: Uuid,
-    ) -> Result<SuiTransactionEffectsResponse, anyhow::Error> {
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let context = &self.wallet;
 
         let data = context

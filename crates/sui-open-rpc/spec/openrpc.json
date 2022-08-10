@@ -185,10 +185,10 @@
         }
       ],
       "result": {
-        "name": "SuiTransactionEffectsResponse",
+        "name": "SuiTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiTransactionEffectsResponse"
+          "$ref": "#/components/schemas/SuiTransactionResponse"
         }
       },
       "examples": [
@@ -908,10 +908,10 @@
         }
       ],
       "result": {
-        "name": "SuiTransactionEffectsResponse",
+        "name": "SuiTransactionResponse",
         "required": true,
         "schema": {
-          "$ref": "#/components/schemas/SuiTransactionEffectsResponse"
+          "$ref": "#/components/schemas/SuiTransactionResponse"
         }
       },
       "examples": [
@@ -3504,7 +3504,7 @@
           }
         ]
       },
-      "SuiTransactionEffectsResponse": {
+      "SuiTransactionResponse": {
         "type": "object",
         "required": [
           "certificate",

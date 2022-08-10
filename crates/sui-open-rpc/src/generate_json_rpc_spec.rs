@@ -31,7 +31,7 @@ use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
     GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiObjectInfo,
-    SuiTransactionEffectsResponse, TransactionBytes,
+    SuiTransactionResponse, TransactionBytes,
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::SuiSignature;
@@ -206,7 +206,7 @@ fn create_move_function_arg_type_response() -> Result<Vec<MoveFunctionArgType>, 
 
 async fn create_package_object_response(
     context: &mut WalletContext,
-) -> Result<(GetObjectDataResponse, SuiTransactionEffectsResponse), anyhow::Error> {
+) -> Result<(GetObjectDataResponse, SuiTransactionResponse), anyhow::Error> {
     let package_path = ["sui_programmability", "examples", "move_tutorial"]
         .into_iter()
         .collect();
@@ -244,7 +244,7 @@ async fn create_transfer_response(
     context: &mut WalletContext,
     address: SuiAddress,
     coins: &[SuiObjectInfo],
-) -> Result<SuiTransactionEffectsResponse, anyhow::Error> {
+) -> Result<SuiTransactionResponse, anyhow::Error> {
     let response = SuiClientCommands::Transfer {
         to: address,
         coin_object_id: coins.first().unwrap().object_id,
@@ -254,7 +254,7 @@ async fn create_transfer_response(
     .execute(context)
     .await?;
     if let SuiClientCommandResult::Transfer(_, certificate, effects) = response {
-        Ok(SuiTransactionEffectsResponse {
+        Ok(SuiTransactionResponse {
             certificate,
             effects,
             timestamp_ms: None,
@@ -269,7 +269,7 @@ async fn create_transfer_sui_response(
     context: &mut WalletContext,
     address: SuiAddress,
     coins: &[SuiObjectInfo],
-) -> Result<SuiTransactionEffectsResponse, anyhow::Error> {
+) -> Result<SuiTransactionResponse, anyhow::Error> {
     let response = SuiClientCommands::TransferSui {
         to: address,
         sui_coin_object_id: coins.first().unwrap().object_id,
@@ -279,7 +279,7 @@ async fn create_transfer_sui_response(
     .execute(context)
     .await?;
     if let SuiClientCommandResult::TransferSui(certificate, effects) = response {
-        Ok(SuiTransactionEffectsResponse {
+        Ok(SuiTransactionResponse {
             certificate,
             effects,
             timestamp_ms: None,
@@ -396,7 +396,7 @@ async fn create_error_response(
 async fn create_coin_split_response(
     context: &mut WalletContext,
     coins: &[SuiObjectInfo],
-) -> Result<SuiTransactionEffectsResponse, anyhow::Error> {
+) -> Result<SuiTransactionResponse, anyhow::Error> {
     // create coin_split response
     let result = SuiClientCommands::SplitCoin {
         coin_id: coins.first().unwrap().object_id,
@@ -416,7 +416,7 @@ async fn create_coin_split_response(
 
 async fn get_nft_response(
     context: &mut WalletContext,
-) -> Result<(SuiTransactionEffectsResponse, GetObjectDataResponse), anyhow::Error> {
+) -> Result<(SuiTransactionResponse, GetObjectDataResponse), anyhow::Error> {
     // Create example-nft response
     let args_json = json!([EXAMPLE_NFT_NAME, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_URL]);
     let args = args_json
@@ -444,7 +444,7 @@ async fn get_nft_response(
             .gateway
             .get_object(effects.created.first().unwrap().reference.object_id)
             .await?;
-        let tx = SuiTransactionEffectsResponse {
+        let tx = SuiTransactionResponse {
             certificate,
             effects,
             timestamp_ms: None,
@@ -471,10 +471,10 @@ struct ObjectResponseSample {
 
 #[derive(Serialize)]
 struct TransactionResponseSample {
-    pub move_call: SuiTransactionEffectsResponse,
-    pub transfer: SuiTransactionEffectsResponse,
-    pub transfer_sui: SuiTransactionEffectsResponse,
-    pub coin_split: SuiTransactionEffectsResponse,
-    pub publish: SuiTransactionEffectsResponse,
+    pub move_call: SuiTransactionResponse,
+    pub transfer: SuiTransactionResponse,
+    pub transfer_sui: SuiTransactionResponse,
+    pub coin_split: SuiTransactionResponse,
+    pub publish: SuiTransactionResponse,
     pub error: Value,
 }

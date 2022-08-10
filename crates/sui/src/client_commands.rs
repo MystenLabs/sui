@@ -21,7 +21,7 @@ use tracing::info;
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionEffectsResponse,
+    GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::SuiKeystore;
@@ -833,7 +833,7 @@ impl SuiClientCommandResult {
 #[derive(Serialize)]
 #[serde(untagged)]
 pub enum SuiClientCommandResult {
-    Publish(SuiTransactionEffectsResponse),
+    Publish(SuiTransactionResponse),
     Object(GetObjectDataResponse),
     Call(SuiCertifiedTransaction, SuiTransactionEffects),
     Transfer(
@@ -848,8 +848,8 @@ pub enum SuiClientCommandResult {
     SyncClientState,
     NewAddress((SuiAddress, String)),
     Gas(Vec<GasCoin>),
-    SplitCoin(SuiTransactionEffectsResponse),
-    MergeCoin(SuiTransactionEffectsResponse),
+    SplitCoin(SuiTransactionResponse),
+    MergeCoin(SuiTransactionResponse),
     Switch(SwitchResponse),
     ActiveAddress(Option<SuiAddress>),
     CreateExampleNFT(GetObjectDataResponse),

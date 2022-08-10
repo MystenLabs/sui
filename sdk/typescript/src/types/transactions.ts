@@ -106,7 +106,7 @@ export type TransactionEffects = {
   dependencies?: TransactionDigest[];
 };
 
-export type SuiTransactionEffectsResponse = {
+export type SuiTransactionResponse = {
   certificate: CertifiedTransaction;
   effects: TransactionEffects;
   timestamp_ms: number | null;
@@ -261,30 +261,30 @@ export function getTransactionKindName(
 /* ----------------------------- ExecutionStatus ---------------------------- */
 
 export function getExecutionStatusType(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): ExecutionStatusType {
   return getExecutionStatus(data).status;
 }
 
 export function getExecutionStatus(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): ExecutionStatus {
   return data.effects.status;
 }
 
 export function getExecutionStatusError(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): string | undefined {
   return getExecutionStatus(data).error;
 }
 
 export function getExecutionStatusGasSummary(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): GasCostSummary {
   return data.effects.gasUsed;
 }
 
-export function getTotalGasUsed(data: SuiTransactionEffectsResponse): number {
+export function getTotalGasUsed(data: SuiTransactionResponse): number {
   const gasSummary = getExecutionStatusGasSummary(data);
   return (
     gasSummary.computationCost +
@@ -296,21 +296,21 @@ export function getTotalGasUsed(data: SuiTransactionEffectsResponse): number {
 /* --------------------------- TransactionResponse -------------------------- */
 
 export function getParsedSplitCoinResponse(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): SuiParsedSplitCoinResponse | undefined {
   const parsed = data.parsed_data;
   return parsed && 'SplitCoin' in parsed ? parsed.SplitCoin : undefined;
 }
 
 export function getParsedMergeCoinResponse(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): SuiParsedMergeCoinResponse | undefined {
   const parsed = data.parsed_data;
   return parsed && 'MergeCoin' in parsed ? parsed.MergeCoin : undefined;
 }
 
 export function getParsedPublishResponse(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): SuiParsedPublishResponse | undefined {
   const parsed = data.parsed_data;
   return parsed && 'Publish' in parsed ? parsed.Publish : undefined;
@@ -322,7 +322,7 @@ export function getParsedPublishResponse(
  * @returns the updated state of the primary coin after the merge
  */
 export function getCoinAfterMerge(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): SuiObject | undefined {
   return getParsedMergeCoinResponse(data)?.updatedCoin;
 }
@@ -333,7 +333,7 @@ export function getCoinAfterMerge(
  * @returns the updated state of the original coin object used for the split
  */
 export function getCoinAfterSplit(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): SuiObject | undefined {
   return getParsedSplitCoinResponse(data)?.updatedCoin;
 }
@@ -344,7 +344,7 @@ export function getCoinAfterSplit(
  * @returns the updated state of the original coin object used for the split
  */
 export function getNewlyCreatedCoinsAfterSplit(
-  data: SuiTransactionEffectsResponse
+  data: SuiTransactionResponse
 ): SuiObject[] | undefined {
   return getParsedSplitCoinResponse(data)?.newCoins;
 }

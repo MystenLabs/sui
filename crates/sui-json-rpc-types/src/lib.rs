@@ -303,7 +303,7 @@ pub enum MoveFunctionArgType {
 }
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub struct SuiTransactionEffectsResponse {
+pub struct SuiTransactionResponse {
     pub certificate: SuiCertifiedTransaction,
     pub effects: SuiTransactionEffects,
     pub timestamp_ms: Option<u64>,

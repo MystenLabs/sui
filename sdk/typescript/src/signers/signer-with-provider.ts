@@ -5,7 +5,7 @@ import { JsonRpcProvider } from '../providers/json-rpc-provider';
 import { Provider } from '../providers/provider';
 import { VoidProvider } from '../providers/void-provider';
 import { Base64DataBuffer } from '../serialization/base64';
-import { SuiAddress, SuiTransactionEffectsResponse } from '../types';
+import { SuiAddress, SuiTransactionResponse } from '../types';
 import { SignaturePubkeyPair, Signer } from './signer';
 import { RpcTxnDataSerializer } from './txn-data-serializers/rpc-txn-data-serializer';
 import {
@@ -58,7 +58,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async signAndExecuteTransaction(
     txBytes: Base64DataBuffer
-  ): Promise<SuiTransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     const sig = await this.signData(txBytes);
     return await this.provider.executeTransaction(
       txBytes.toString(),
@@ -82,7 +82,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async transferObject(
     transaction: TransferObjectTransaction
-  ): Promise<SuiTransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newTransferObject(
       signerAddress,
@@ -96,7 +96,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async transferSui(
     transaction: TransferSuiTransaction
-  ): Promise<SuiTransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newTransferSui(
       signerAddress,
@@ -110,7 +110,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async mergeCoin(
     transaction: MergeCoinTransaction
-  ): Promise<SuiTransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newMergeCoin(
       signerAddress,
@@ -124,7 +124,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async splitCoin(
     transaction: SplitCoinTransaction
-  ): Promise<SuiTransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newSplitCoin(
       signerAddress,
@@ -138,7 +138,7 @@ export abstract class SignerWithProvider implements Signer {
    */
   async executeMoveCall(
     transaction: MoveCallTransaction
-  ): Promise<SuiTransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newMoveCall(
       signerAddress,
@@ -149,7 +149,7 @@ export abstract class SignerWithProvider implements Signer {
 
   async publish(
     transaction: PublishTransaction
-  ): Promise<SuiTransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     const signerAddress = await this.getAddress();
     const txBytes = await this.serializer.newPublish(
       signerAddress,

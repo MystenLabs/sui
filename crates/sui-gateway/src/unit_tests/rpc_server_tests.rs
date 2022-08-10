@@ -10,7 +10,7 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc::api::{
     RpcGatewayApiClient, RpcReadApiClient, RpcTransactionBuilderClient, WalletSyncApiClient,
 };
-use sui_json_rpc_types::{GetObjectDataResponse, SuiTransactionEffectsResponse, TransactionBytes};
+use sui_json_rpc_types::{GetObjectDataResponse, SuiTransactionResponse, TransactionBytes};
 use sui_sdk::crypto::KeystoreType;
 use sui_types::crypto::SuiSignature;
 use sui_types::sui_serde::Base64;
@@ -236,8 +236,7 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
 
     // test get_transaction
     for (_, tx_digest) in tx {
-        let response: SuiTransactionEffectsResponse =
-            http_client.get_transaction(tx_digest).await?;
+        let response: SuiTransactionResponse = http_client.get_transaction(tx_digest).await?;
         assert!(tx_responses.iter().any(
             |effects| effects.effects.transaction_digest == response.effects.transaction_digest
         ))

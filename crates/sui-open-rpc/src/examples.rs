@@ -18,7 +18,7 @@ use sui_json_rpc_types::{
     GatewayTxSeqNumber, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
     SuiCertifiedTransaction, SuiData, SuiExecutionStatus, SuiGasCostSummary, SuiMoveObject,
     SuiObject, SuiObjectRead, SuiObjectRef, SuiParsedMoveObject, SuiRawMoveObject,
-    SuiTransactionData, SuiTransactionEffects, SuiTransactionEffectsResponse, TransactionBytes,
+    SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
     TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
@@ -424,7 +424,7 @@ impl RpcExampleProvider {
 
     fn get_transfer_data_response(
         &mut self,
-    ) -> (TransactionData, Signature, SuiTransactionEffectsResponse) {
+    ) -> (TransactionData, Signature, SuiTransactionResponse) {
         let (signer, kp): (_, AccountKeyPair) = get_key_pair_from_rng(&mut self.rng);
         let recipient = SuiAddress::from(ObjectID::new(self.rng.gen()));
         let gas_ref = (
@@ -441,7 +441,7 @@ impl RpcExampleProvider {
         let data = TransactionData::new_transfer(recipient, object_ref, signer, gas_ref, 1000);
         let signature = Signature::new(&data, &kp);
 
-        let result = SuiTransactionEffectsResponse {
+        let result = SuiTransactionResponse {
             certificate: SuiCertifiedTransaction {
                 transaction_digest: TransactionDigest::new(self.rng.gen()),
                 data: SuiTransactionData::try_from(data.clone()).unwrap(),

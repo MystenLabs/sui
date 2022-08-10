@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui_config::ValidatorInfo;
 use sui_core::authority_client::AuthorityAPI;
-use sui_json_rpc_types::{SuiParsedTransactionResponse, SuiTransactionEffectsResponse};
+use sui_json_rpc_types::{SuiParsedTransactionResponse, SuiTransactionResponse};
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
@@ -92,7 +92,7 @@ pub async fn submit_move_transaction(
     arguments: Vec<SuiJsonValue>,
     sender: SuiAddress,
     gas_object: Option<ObjectID>,
-) -> SuiTransactionEffectsResponse {
+) -> SuiTransactionResponse {
     debug!(?package_ref, ?arguments, "move_transaction");
 
     let data = context
@@ -150,7 +150,7 @@ pub async fn increment_counter(
     gas_object: Option<ObjectID>,
     package_ref: ObjectRef,
     counter_id: ObjectID,
-) -> SuiTransactionEffectsResponse {
+) -> SuiTransactionResponse {
     let resp = submit_move_transaction(
         context,
         "counter",

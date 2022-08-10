@@ -47,7 +47,7 @@ async fn public_transfer_object(
     coin_object_id: ObjectID,
     gas_object_id: ObjectID,
     recipient: SuiAddress,
-) -> Result<SuiTransactionEffectsResponse, anyhow::Error> {
+) -> Result<SuiTransactionResponse, anyhow::Error> {
     let data = gateway
         .public_transfer_object(
             signer,

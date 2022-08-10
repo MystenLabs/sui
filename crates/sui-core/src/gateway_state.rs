@@ -52,7 +52,7 @@ use sui_json_rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, MoveCallParams, RPCTransactionRequestParams,
     SuiMoveObject, SuiObject, SuiObjectInfo, SuiParsedMergeCoinResponse, SuiParsedPublishResponse,
     SuiParsedSplitCoinResponse, SuiParsedTransactionResponse, SuiTransactionEffects,
-    SuiTransactionEffectsResponse, SuiTypeTag, TransferObjectParams,
+    SuiTransactionResponse, SuiTypeTag, TransferObjectParams,
 };
 use sui_types::error::SuiError::ConflictingTransaction;
 
@@ -275,7 +275,7 @@ pub trait GatewayAPI {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<SuiTransactionEffectsResponse, anyhow::Error>;
+    ) -> Result<SuiTransactionResponse, anyhow::Error>;
 
     /// Send an object to a Sui address. The object's type must allow public transfers
     async fn public_transfer_object(
@@ -409,7 +409,7 @@ pub trait GatewayAPI {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<SuiTransactionEffectsResponse, anyhow::Error>;
+    ) -> Result<SuiTransactionResponse, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -1203,7 +1203,7 @@ where
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<SuiTransactionEffectsResponse, anyhow::Error> {
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let tx_kind = tx.data.kind.clone();
         let tx_digest = tx.digest();
 
@@ -1269,7 +1269,7 @@ where
             .create_parsed_transaction_response(tx_kind, certificate.clone(), effects.clone())
             .await?;
 
-        return Ok(SuiTransactionEffectsResponse {
+        return Ok(SuiTransactionResponse {
             certificate: certificate.try_into()?,
             effects: SuiTransactionEffects::try_from(effects, &self.module_cache)?,
             timestamp_ms: None,
@@ -1563,10 +1563,10 @@ where
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<SuiTransactionEffectsResponse, anyhow::Error> {
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let (cert, effect) = QueryHelpers::get_transaction(&self.store, &digest)?;
 
-        Ok(SuiTransactionEffectsResponse {
+        Ok(SuiTransactionResponse {
             certificate: cert.try_into()?,
             effects: SuiTransactionEffects::try_from(effect, &self.module_cache)?,
             timestamp_ms: None,

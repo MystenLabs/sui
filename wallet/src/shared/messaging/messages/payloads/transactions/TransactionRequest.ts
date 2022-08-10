@@ -3,7 +3,7 @@
 
 import type {
     MoveCallTransaction,
-    SuiTransactionEffectsResponse,
+    SuiTransactionResponse,
 } from '@mysten/sui.js';
 
 export type TransactionRequest = {
@@ -11,7 +11,7 @@ export type TransactionRequest = {
     approved: boolean | null;
     origin: string;
     originFavIcon?: string;
-    txResult?: SuiTransactionEffectsResponse;
+    txResult?: SuiTransactionResponse;
     txResultError?: string;
     createdDate: string;
 } & (
