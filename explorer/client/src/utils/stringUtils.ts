@@ -54,41 +54,40 @@ export async function extractFileType(
     displayString: string,
     signal: AbortSignal
 ) {
-    let result: string;
+    // First check Content-Type in header:
+    const result = await fetch(transformURL(displayString), {
+        signal: signal,
+    })
+        .then(
+            (resp) =>
+                resp?.headers?.get('Content-Type')?.split('/').reverse()?.[0]
+        )
+        .catch((err) => console.error(err));
 
-    try {
-        // First check Content-Type in header:
-        result = await fetch(transformURL(displayString), {
-            signal: signal,
-        })
-            .then(
-                (resp) =>
-                    resp?.headers
-                        ?.get('Content-Type')
-                        ?.split('/')
-                        .reverse()?.[0]
-                        ?.toUpperCase() || 'Image'
-            )
-            .catch((err) => {
-                console.error(err);
-                return 'Image';
-            });
-
-        // When Content-Type cannot be accessed (e.g. because of CORS), rely on file extension
-
-        if (result === 'Image') {
-            const extension =
-                displayString?.split('.').reverse()?.[0]?.toUpperCase() || '';
-            if (['JPG', 'JPEG', 'PNG'].includes(extension)) {
-                result = extension;
-            }
-        }
-    } catch (err) {
-        console.error(err);
-        result = 'Image';
+    // Return the Content-Type if found:
+    if (result) {
+        return result;
     }
+    // When Content-Type cannot be accessed (e.g. because of CORS), rely on file extension
+    const extension = displayString?.split('.').reverse()?.[0] || '';
+    if (['jpg', 'jpeg', 'png'].includes(extension)) {
+        return extension;
+    } else {
+        return 'Image';
+    }
+}
 
-    return `1 ${result} File`;
+export async function genFileTypeMsg(
+    displayString: string,
+    signal: AbortSignal
+) {
+    return extractFileType(displayString, signal)
+        .then((result) => (result === 'Image' ? result : result.toUpperCase()))
+        .then((result) => `1 ${result} File`)
+        .catch((err) => {
+            console.error(err);
+            return `1 Image File`;
+        });
 }
 
 /* Currently unused but potentially useful:

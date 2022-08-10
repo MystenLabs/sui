@@ -8,7 +8,7 @@ import {
     FALLBACK_IMAGE,
     ImageModClient,
 } from '../../utils/imageModeratorClient';
-import { transformURL, extractFileType } from '../../utils/stringUtils';
+import { transformURL, genFileTypeMsg } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
@@ -36,7 +36,7 @@ function DisplayBox({
     useEffect(() => {
         if (!fileInfo) {
             const controller = new AbortController();
-            extractFileType(display, controller.signal)
+            genFileTypeMsg(display, controller.signal)
                 .then((result) => setFileType(result))
                 .catch((err) => console.log(err));
 

@@ -15,7 +15,7 @@ import {
     checkIsPropertyType,
     extractName,
 } from '../../../utils/objectUtils';
-import { trimStdLibPrefix, extractFileType } from '../../../utils/stringUtils';
+import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
@@ -49,7 +49,7 @@ function TokenView({ data }: { data: DataType }) {
 
     useEffect(() => {
         const controller = new AbortController();
-        extractFileType(viewedData.url, controller.signal)
+        genFileTypeMsg(viewedData.url, controller.signal)
             .then((result) => setFileType(result))
             .catch((err) => console.log(err));
 
