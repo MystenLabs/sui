@@ -66,7 +66,7 @@ jobs:
       matrix:
         os:
           - [self-hosted, self-hosted-arc]
-          - [cloud-runner-01, windows]
+          - [cloud-runner-01]
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
@@ -98,7 +98,7 @@ jobs:
       matrix:
         os:
           - [self-hosted, self-hosted-arc]
-          - [self-hosted, windows]
+          - [cloud-runner-01]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
