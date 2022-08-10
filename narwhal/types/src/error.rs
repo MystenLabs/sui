@@ -57,8 +57,11 @@ pub enum DagError {
     #[error("Parents of header {0} are not a quorum")]
     HeaderRequiresQuorum(HeaderDigest),
 
-    #[error("Message {0} (round {1}) too old")]
-    TooOld(Digest, Round),
+    #[error("Message {0} (round {1}) too old for GC round {2}")]
+    TooOld(Digest, Round, Round),
+
+    #[error("Vote {0} (round {1}) too old for round {2}")]
+    VoteTooOld(Digest, Round, Round),
 
     #[error("Invalid epoch (expected {expected}, received {received})")]
     InvalidEpoch { expected: Epoch, received: Epoch },

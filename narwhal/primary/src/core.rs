@@ -452,7 +452,7 @@ impl Core {
         );
         ensure!(
             self.gc_round < header.round,
-            DagError::TooOld(header.id.into(), header.round)
+            DagError::TooOld(header.id.into(), header.round, self.gc_round)
         );
 
         // Verify the header's signature.
@@ -476,7 +476,7 @@ impl Core {
         );
         ensure!(
             self.current_header.round <= vote.round,
-            DagError::TooOld(vote.digest().into(), vote.round)
+            DagError::VoteTooOld(vote.digest().into(), vote.round, self.current_header.round)
         );
 
         // Ensure we receive a vote on the expected header.
@@ -504,7 +504,11 @@ impl Core {
         );
         ensure!(
             self.gc_round < certificate.round(),
-            DagError::TooOld(certificate.digest().into(), certificate.round())
+            DagError::TooOld(
+                certificate.digest().into(),
+                certificate.round(),
+                self.gc_round
+            )
         );
 
         // Verify the certificate (and the embedded header).
