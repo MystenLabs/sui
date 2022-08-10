@@ -7,6 +7,10 @@
     color: #404040;
 }
 
+.tx-card {
+    text-decoration: none;
+}
+
 .card {
     display: grid;
     gap: 5px;
@@ -29,7 +33,10 @@
 
         .angled-arrow {
             @include utils.angled-arrow;
+        }
 
+        .buy-icon,
+        .angled-arrow {
             width: 20px;
             height: 20px;
             display: flex;

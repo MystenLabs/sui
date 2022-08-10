@@ -1,17 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState, memo, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import TransferNFTForm from './TransferNFTForm';
 import { createValidationSchema } from './validation';
 import PageTitle from '_app/shared/page-title';
-import Icon, { SuiIcons } from '_components/icon';
 import NFTDisplayCard from '_components/nft-display';
-import TxResponseCard from '_components/transaction-response-card';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import {
     accountNftsSelector,
@@ -25,7 +22,6 @@ import {
 } from '_redux/slices/sui-objects/Coin';
 
 import type { ObjectId } from '@mysten/sui.js';
-import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
 import st from './TransferNFTForm.module.scss';
@@ -36,16 +32,6 @@ const initialValues = {
 };
 
 export type FormValues = typeof initialValues;
-
-type TxResponse = {
-    address?: string;
-    gasFee?: number;
-    date?: number;
-    txId?: string;
-    status: 'success' | 'failure';
-} | null;
-
-const initTxResponse: TxResponse = null;
 
 interface TransferProps {
     objectId: ObjectId;
@@ -80,7 +66,6 @@ function TransferNFTCard({ objectId }: TransferProps) {
         [aggregateBalances]
     );
 
-    const [txResponse, setTxResponse] = useState<TxResponse>(initTxResponse);
     const [sendError, setSendError] = useState<string | null>(null);
 
     const validationSchema = useMemo(
@@ -92,7 +77,7 @@ function TransferNFTCard({ objectId }: TransferProps) {
             ),
         [gasAggregateBalance, address, objectId]
     );
-
+    const navigate = useNavigate();
     const onHandleSubmit = useCallback(
         async (
             { to }: FormValues,
@@ -102,34 +87,26 @@ function TransferNFTCard({ objectId }: TransferProps) {
                 return;
             }
             setSendError(null);
-            try {
-                const resp = await dispatch(
-                    transferSuiNFT({
-                        recipientAddress: to,
-                        nftId: objectId,
-                        transferCost: DEFAULT_NFT_TRANSFER_GAS_FEE,
-                    })
-                ).unwrap();
 
-                setTxResponse((state) => ({
-                    ...state,
-                    address: to,
-                    gasFee: resp.gasFee,
-                    date: resp?.timestamp_ms,
-                    txId: resp?.txId,
-                    status: resp.status === 'success' ? 'success' : 'failure',
-                }));
-                resetForm();
-            } catch (e) {
-                setSendError((e as SerializedError).message || null);
-                setTxResponse((state) => ({
-                    ...state,
-                    address: to,
-                    status: 'failure',
-                }));
+            const resp = await dispatch(
+                transferSuiNFT({
+                    recipientAddress: to,
+                    nftId: objectId,
+                    transferCost: DEFAULT_NFT_TRANSFER_GAS_FEE,
+                })
+            ).unwrap();
+
+            resetForm();
+            if (resp.txId) {
+                navigate(
+                    `/receipt?${new URLSearchParams({
+                        txdigest: resp.txId,
+                        tranfer: 'nft',
+                    }).toString()}`
+                );
             }
         },
-        [dispatch, objectId]
+        [dispatch, navigate, objectId]
     );
 
     const handleOnClearSubmitError = useCallback(() => {
@@ -163,53 +140,7 @@ function TransferNFTCard({ objectId }: TransferProps) {
         </>
     );
 
-    const TransferResponse = (
-        <>
-            {txResponse?.address ? (
-                <div className={st.nftResponse}>
-                    <TxResponseCard
-                        status={txResponse.status}
-                        address={txResponse.address}
-                        date={
-                            txResponse.date
-                                ? new Date(txResponse.date).toDateString()
-                                : null
-                        }
-                        errorMessage={sendError}
-                        txId={txResponse.txId}
-                        gasFee={txResponse.gasFee}
-                    >
-                        {nftObj.data && (
-                            <NFTDisplayCard
-                                nftobj={nftObj.data}
-                                wideview={true}
-                            />
-                        )}
-                    </TxResponseCard>
-                    <div className={st.formcta}>
-                        <Link
-                            to="/nfts"
-                            className={cl('btn', st.action, st.done, 'neutral')}
-                        >
-                            <Icon
-                                icon={SuiIcons.Checkmark}
-                                className={st.checkmark}
-                            />
-                            Done
-                        </Link>
-                    </div>
-                </div>
-            ) : (
-                <></>
-            )}
-        </>
-    );
-
-    return (
-        <div className={st.container}>
-            {txResponse?.address ? TransferResponse : TransferNFT}
-        </div>
-    );
+    return <div className={st.container}>{TransferNFT}</div>;
 }
 
 export default memo(TransferNFTCard);

@@ -9,6 +9,7 @@ import {
     getExecutionStatusType,
     getTotalGasUsed,
     getTransferSuiTransaction,
+    getExecutionStatusError,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
@@ -38,6 +39,7 @@ export type TxResultState = {
     description?: string;
     name?: string;
     isSender?: boolean;
+    error?: string;
 };
 
 interface TransactionManualState {
@@ -134,6 +136,7 @@ export const getTransactionsByAddress = createAsyncThunk<
                                                   .objectId,
                                       }
                                     : {}),
+                                error: getExecutionStatusError(txEff),
                                 timestamp_ms: txEff.timestamp_ms,
                                 isSender: res.data.sender === address,
                                 ...(tranferSui?.amount
