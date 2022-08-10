@@ -1609,7 +1609,7 @@ impl ExecutionState for AuthorityState {
         _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<narwhal_config::Committee>), Self::Error> {
+    ) -> Result<Self::Outcome, Self::Error> {
         self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
@@ -1632,7 +1632,7 @@ impl ExecutionState for AuthorityState {
 
                 // TODO: This return time is not ideal.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok((Vec::default(), None))
+                Ok(Vec::default())
             }
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
@@ -1661,7 +1661,7 @@ impl ExecutionState for AuthorityState {
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
                 // is not expecting any reply.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok((Vec::default(), None))
+                Ok(Vec::default())
             }
         }
     }

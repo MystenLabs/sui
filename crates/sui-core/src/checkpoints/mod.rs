@@ -79,10 +79,16 @@ pub trait ConsensusSender: Send + Sync + 'static {
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum FragmentInternalError {
     Error(SuiError),
     Retry(Box<CheckpointFragment>),
+}
+
+impl std::fmt::Display for FragmentInternalError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "FragmentInternalError: {:?}", self)
+    }
 }
 
 /// DBMap tables for checkpoints
