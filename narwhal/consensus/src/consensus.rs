@@ -153,11 +153,6 @@ impl ConsensusState {
                 !authorities.is_empty()
             });
         }
-
-        self.metrics
-            .consensus_dag_size
-            .with_label_values(&[])
-            .set(self.dag.len() as i64);
     }
 }
 
@@ -327,6 +322,11 @@ where
                             tracing::warn!("Failed to output certificate: {e}");
                         }
                     }
+
+                    self.metrics
+                        .consensus_dag_rounds
+                        .with_label_values(&[])
+                        .set(state.dag.len() as i64);
                 },
 
                 // Check whether the committee changed.
