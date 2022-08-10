@@ -222,6 +222,9 @@ Docker image, they are set automatically):
 * `MALLOC_CONF=prof:true`
 * `_RJEM_MALLOC_CONF=prof:true`
 
+Note that running some allocator-based heap profilers such as [Bytehound](https://github.com/koute/bytehound) will essentially disable
+automatic jemalloc profiling, because they interfere with or don't implement `jemalloc_ctl` stats APIs.
+
 To view the profile files:
 1. `brew install jemalloc libunwind gprof2dot`
 2. Build with debug symbols: `cargo build --profile bench-profiling`

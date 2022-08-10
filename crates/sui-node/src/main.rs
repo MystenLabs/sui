@@ -73,6 +73,8 @@ async fn main() -> Result<()> {
                 // many statistics are cached and only updated when the epoch is advanced.
                 epoch::advance().unwrap();
 
+                // NOTE: The below code does not return values when a malloc-based profiler like Bytehound
+                // is used.  Bytehound does not implement the stat APIs needed.
                 let allocated = stats::allocated::read().unwrap() / (1024 * 1024);
                 let resident = stats::resident::read().unwrap() / (1024 * 1024);
                 info!(
