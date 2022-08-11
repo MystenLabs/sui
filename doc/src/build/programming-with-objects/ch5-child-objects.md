@@ -119,7 +119,7 @@ Both functions will compile successfully, because object ownership relationships
 
 Let's try to interact with these two entry functions on-chain and see what happens. First we publish the sample code:
 ```
-$ sui client publish --path $ROOT/sui/sui-core/src/unit_tests/data/object_owner --gas-budget 5000
+$ sui client publish --path $ROOT/sui-core/src/unit_tests/data/object_owner --gas-budget 5000
 ```
 ```
 ----- Publish Results ----
@@ -243,4 +243,4 @@ After we unpacked the `Parent` object we are able to extract the parent's `id` (
 
 ### Delete Parent Objects
 
-TODO
+(This section is still in development)
