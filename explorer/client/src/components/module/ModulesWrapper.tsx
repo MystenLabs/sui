@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 
 import Pagination from '../../components/pagination/Pagination';
 import ModuleView from './ModuleView';
@@ -13,12 +13,16 @@ type Modules = {
     content: any[];
 };
 
+interface Props {
+    id?: string;
+    data: Modules;
+}
+
 const MODULES_PER_PAGE = 3;
 // TODO: Include Pagination for now use viewMore and viewLess
-function ModuleViewWrapper({ data }: { data: Modules }) {
-    const moduleData = useMemo(() => data, [data]);
+function ModuleViewWrapper({ id, data }: Props) {
     const [modulesPageNumber, setModulesPageNumber] = useState(1);
-    const totalModulesCount = moduleData.content.length;
+    const totalModulesCount = data.content.length;
     const numOfMudulesToShow = MODULES_PER_PAGE;
 
     useEffect(() => {
@@ -34,15 +38,15 @@ function ModuleViewWrapper({ data }: { data: Modules }) {
         <div className={styles.modulewraper}>
             <h3 className={styles.title}>{data.title}</h3>
             <div className={styles.module}>
-                {moduleData.content
+                {data.content
                     .filter(
                         (_, index) =>
                             index >=
                                 (modulesPageNumber - 1) * numOfMudulesToShow &&
                             index < modulesPageNumber * numOfMudulesToShow
                     )
-                    .map((item, idx) => (
-                        <ModuleView itm={item} key={idx} />
+                    .map(([name, code], idx) => (
+                        <ModuleView key={idx} id={id} name={name} code={code} />
                     ))}
             </div>
             {totalModulesCount > numOfMudulesToShow && (

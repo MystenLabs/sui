@@ -398,7 +398,10 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                     styles.txgridcolspan3,
                                 ])}
                             >
-                                <ModulesWrapper data={modules} />
+                                <ModulesWrapper
+                                    id={txKindData.objectId?.value}
+                                    data={modules}
+                                />
                             </section>
                         )}
                     </div>

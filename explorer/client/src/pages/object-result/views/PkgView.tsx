@@ -75,6 +75,7 @@ function PkgView({ data }: { data: DataType }) {
                     </table>
                 </Tabs>
                 <ModulesWrapper
+                    id={data.id}
                     data={{
                         title: 'Modules',
                         content: properties,
