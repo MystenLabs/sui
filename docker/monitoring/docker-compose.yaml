@@ -1,0 +1,96 @@
+---
+version: "3.9"
+
+services:
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v2.37.0
+    user: "0"
+    ports:
+    - "9090:9090"
+    # expose:
+    # - "9090"
+    volumes:
+    - ./data/prometheus:/prometheus:rw
+    - ./config/prometheus.yaml:/etc/prometheus/prometheus.yml
+    restart: "always"
+    networks:
+    - sui-net
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:9.0.7
+    user: "0"
+    volumes:
+    - ./data/grafana:/var/lib/grafana:rw
+    - ./config/grafana_provisioning/:/etc/grafana/provisioning/
+    ports:
+    - "3000:3000"
+    restart: "always"
+    networks:
+    - sui-net
+
+  # Promtail
+  promtail:
+    image: grafana/promtail:2.6.0
+    user: "0"
+    volumes:
+    - logs:/logs/
+    - ./config:/mnt/config
+    - ./data/promtail:/mnt/var
+    # - /var/log:/var/log
+    - /var/lib/docker/containers:/var/lib/docker/containers
+    command: -config.file=/mnt/config/promtail.yaml
+    ports:
+    # why 9081 ?
+    - "9081:9080"
+    restart: "always"
+    networks:
+    - sui-net
+
+  # Loki
+  loki:
+    image: grafana/loki:2.6.0
+    user: "0"
+    volumes:
+    - ./config:/mnt/config
+    - ./data/loki-data:/tmp/loki:rw
+    - ./data/loki-wal:/tmp/wal:rw
+    command: -config.file=/mnt/config/loki.yaml
+    ports:
+    - "3100:3100"
+    restart: "always"
+    networks:
+    - sui-net
+
+  # node-exporter
+  node-exporter:
+    image: prom/node-exporter:v1.3.1
+    ports:
+    - '9100:9100'
+    networks:
+    - sui-net
+
+  # cadvisor
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.45.0
+    volumes:
+    - /:/rootfs:ro
+    - /var/run:/var/run:rw
+    - /sys:/sys:ro
+    - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+    # 8080 is used by sui-node
+    - 8090:8080
+    restart: always
+    networks:
+    - sui-net
+    deploy:
+      mode: global
+
+volumes:
+  logs:
+
+networks:
+  sui-net:
+    name: sui_network

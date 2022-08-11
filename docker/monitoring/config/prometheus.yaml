@@ -1,0 +1,24 @@
+global:
+  scrape_interval: 15s
+  scrape_timeout: 10s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "fullnode"
+    static_configs:
+    - targets: ["fullnode:9184"]
+
+  - job_name: "validator"
+    static_configs:
+    - targets: ["validator:9184"]
+
+  - job_name: "node-exporter"
+    static_configs:
+    - targets: ["node-exporter:9100"]
+
+  - job_name: "cadvisor"
+    static_configs:
+      - targets: ["cadvisor:8080"]

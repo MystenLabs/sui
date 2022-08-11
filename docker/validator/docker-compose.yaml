@@ -1,0 +1,29 @@
+---
+version: "3.9"
+
+services:
+  validator:
+    container_name: validator
+    image: mysten/sui-node:018dcec001003ee0af5e760d62b30f24d0ff7953
+    ports:
+    - "8080:8080"
+    - "8081:8081"
+    - "8084:8084"
+    - "9000:9000"
+    - "9184:9184"
+    expose:
+    - "9184"
+    volumes:
+    - ./validator.yaml:/sui/validator.yaml:ro
+    - ./genesis.blob:/sui/genesis.blob:ro
+    - suidb:/sui/suidb:rw
+    command: ["/usr/local/bin/sui-node", "--config-path", "validator.yaml"]
+    networks:
+      - sui-net
+
+volumes:
+  suidb:
+
+networks:
+  sui-net:
+    name: sui_network

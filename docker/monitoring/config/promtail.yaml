@@ -1,0 +1,22 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: ./mnt/var/positions-docker.yaml
+
+# Where to send logs.
+clients:
+- url: http://loki:3100/loki/api/v1/push
+  external_labels:
+    host: docker
+
+# What to read.
+scrape_configs:
+- job_name: containers
+  static_configs:
+  - targets:
+      - localhost
+    labels:
+      job: containerlogs
+      __path__: /var/lib/docker/containers/*/*log
