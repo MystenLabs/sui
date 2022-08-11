@@ -4,12 +4,13 @@
 
 use crate::authority::AuthorityState;
 use async_trait::async_trait;
-use futures::{stream::BoxStream, TryStreamExt};
+use futures::{stream::BoxStream, FutureExt, TryStreamExt};
 use multiaddr::Multiaddr;
 use mysten_network::config::Config;
 use narwhal_crypto::traits::ToFromBytes;
 use prometheus::{register_histogram_with_registry, Histogram};
 use std::collections::BTreeMap;
+use std::mem;
 use std::sync::Arc;
 use sui_config::genesis::Genesis;
 use sui_network::{api::ValidatorClient, tonic};
@@ -118,11 +119,22 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.client()
+        self.metrics
+            .handle_transaction_request_bytes
+            .observe(mem::size_of_val(&transaction) as f64);
+
+        let response = self
+            .client()
             .transaction(transaction)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        self.metrics
+            .handle_transaction_response_bytes
+            .observe(mem::size_of_val(&response) as f64);
+
+        response
     }
 
     /// Execute a certificate.
@@ -130,33 +142,66 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.client()
+        self.metrics
+            .handle_certificate_request_bytes
+            .observe(mem::size_of_val(&certificate) as f64);
+
+        let response = self
+            .client()
             .handle_certificate(certificate)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        self.metrics
+            .handle_certificate_response_bytes
+            .observe(mem::size_of_val(&response) as f64);
+
+        response
     }
 
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
-        self.client()
+        self.metrics
+            .handle_account_info_request_bytes
+            .observe(mem::size_of_val(&request) as f64);
+
+        let response = self
+            .client()
             .account_info(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        self.metrics
+            .handle_account_info_response_bytes
+            .observe(mem::size_of_val(&response) as f64);
+
+        response
     }
 
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
-        self.client()
+        self.metrics
+            .handle_object_info_request_bytes
+            .observe(mem::size_of_val(&request) as f64);
+
+        let response = self
+            .client()
             .object_info(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        self.metrics
+            .handle_object_info_response_bytes
+            .observe(mem::size_of_val(&response) as f64);
+
+        response
     }
 
     /// Handle Object information requests for this account.
@@ -164,11 +209,22 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.client()
+        self.metrics
+            .handle_transaction_info_request_bytes
+            .observe(mem::size_of_val(&request) as f64);
+
+        let response = self
+            .client()
             .transaction_info(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        self.metrics
+            .handle_transaction_info_response_bytes
+            .observe(mem::size_of_val(&response) as f64);
+
+        response
     }
 
     /// Handle Batch information requests for this authority.
@@ -176,9 +232,22 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
+        self.metrics
+            .batch_info_request_start_seq
+            .observe(request.start.unwrap_or(0) as f64);
+
+        self.metrics
+            .handle_batch_stream_request_bytes
+            .observe(mem::size_of_val(&request) as f64);
+
         let stream = self
             .client()
             .batch_info(request)
+            .inspect(|item| {
+                self.metrics
+                    .handle_batch_stream_response_bytes
+                    .observe(mem::size_of_val(&item) as f64);
+            })
             .await
             .map(tonic::Response::into_inner)?
             .map_err(Into::into);
@@ -191,11 +260,22 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        self.client()
+        self.metrics
+            .handle_checkpoint_request_bytes
+            .observe(mem::size_of_val(&request) as f64);
+
+        let response = self
+            .client()
             .checkpoint(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        self.metrics
+            .handle_checkpoint_response_bytes
+            .observe(mem::size_of_val(&response) as f64);
+
+        response
     }
 
     async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
@@ -463,7 +543,7 @@ impl NetworkAuthorityClientMetrics {
             )
             .unwrap(),
             handle_transaction_info_request_bytes: register_histogram_with_registry!(
-                "handle_certificate_request_bytes",
+                "handle_transaction_info_request_bytes",
                 "Number of bytes sent by handle transaction info request",
                 registry
             )
