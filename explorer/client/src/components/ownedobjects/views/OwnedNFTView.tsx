@@ -8,7 +8,7 @@ import { type DataType } from '../OwnedObjectConstants';
 
 import type BN from 'bn.js';
 
-import styles from './OwnedObjects.module.css';
+import styles from '../styles/OwnedObjects.module.css';
 
 export default function OwnedNFTView({ results }: { results: DataType }) {
     const alttextgen = (value: number | string | boolean | BN): string =>
@@ -27,88 +27,19 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
                         </div>
                     )}
                     <div className={styles.textitem}>
-                        {Object.entries(entryObj).map(
-                            ([key, value], index2) => (
-                                <div key={`object-${index1}-${index2}`}>
-                                    {(() => {
-                                        switch (key) {
-                                            case 'Type':
-                                                if (entryObj._isCoin) {
-                                                    break;
-                                                } else {
-                                                    return (
-                                                        <span
-                                                            className={
-                                                                styles.typevalue
-                                                            }
-                                                        >
-                                                            {trimStdLibPrefix(
-                                                                value as string
-                                                            )}
-                                                        </span>
-                                                    );
-                                                }
-                                            case 'balance':
-                                                if (!entryObj._isCoin) {
-                                                    break;
-                                                } else {
-                                                    return (
-                                                        <div
-                                                            className={
-                                                                styles.coinfield
-                                                            }
-                                                        >
-                                                            <div>Balance</div>
-                                                            <div>
-                                                                {String(value)}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                }
-                                            case 'id':
-                                                if (entryObj._isCoin) {
-                                                    return (
-                                                        <div
-                                                            className={
-                                                                styles.coinfield
-                                                            }
-                                                        >
-                                                            <div>Object ID</div>
-                                                            <div>
-                                                                <Longtext
-                                                                    text={String(
-                                                                        value
-                                                                    )}
-                                                                    category="objects"
-                                                                    isCopyButton={
-                                                                        false
-                                                                    }
-                                                                    alttext={alttextgen(
-                                                                        value
-                                                                    )}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                } else {
-                                                    return (
-                                                        <Longtext
-                                                            text={String(value)}
-                                                            category="objects"
-                                                            isCopyButton={false}
-                                                            alttext={alttextgen(
-                                                                value
-                                                            )}
-                                                        />
-                                                    );
-                                                }
-                                            default:
-                                                break;
-                                        }
-                                    })()}
-                                </div>
-                            )
-                        )}
+                        <div>
+                            <Longtext
+                                text={entryObj.id}
+                                category="objects"
+                                isCopyButton={false}
+                                alttext={alttextgen(entryObj.id)}
+                            />
+                        </div>
+                        <div>
+                            <span className={styles.typevalue}>
+                                {trimStdLibPrefix(entryObj.Type)}
+                            </span>
+                        </div>
                     </div>
                 </div>
             ))}

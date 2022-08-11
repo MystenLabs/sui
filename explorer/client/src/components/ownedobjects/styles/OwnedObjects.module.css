@@ -15,36 +15,12 @@
     @apply sm:pr-[4vw] sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-sui-grey-45;
 }
 
-.ownedcoins,
 .ownedobjects {
     @apply w-[100%] lg:min-h-[240px] lg:flex lg:flex-wrap lg:justify-between;
 }
 
 .objectbox {
     @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] max-h-[72px] flex items-center;
-}
-
-.coinheading + .ownedobjects > .objectbox,
-.ownedcoins > div.objectbox {
-    @apply p-1 lg:w-[47%] rounded-md;
-}
-
-.coinheading + .ownedobjects > .objectbox {
-    @apply bg-sui-grey-40;
-}
-
-.coinfield {
-    @apply grid grid-cols-12;
-}
-
-.coinfield > div:first-child {
-    @apply col-span-4 text-sui-grey-80 font-medium;
-
-    word-break: keep-all;
-}
-
-.coinfield > div:nth-child(2) {
-    @apply col-span-8;
 }
 
 .fillerbox {

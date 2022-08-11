@@ -29,7 +29,7 @@ import { transformURL } from '../../utils/stringUtils';
 import { type DataType } from './OwnedObjectConstants';
 import OwnedObjectView from './views/OwnedObjectView';
 
-import styles from './views/OwnedObjects.module.css';
+import styles from './styles/OwnedObjects.module.css';
 
 const DATATYPE_DEFAULT: DataType = [
     {

@@ -6,7 +6,7 @@ import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
 import OwnedCoinView from './OwnedCoinView';
 import OwnedNFTView from './OwnedNFTView';
 
-import styles from './OwnedObjects.module.css';
+import styles from '../styles/OwnedObjects.module.css';
 
 const viewFn = (results: any) => <OwnedNFTView results={results} />;
 

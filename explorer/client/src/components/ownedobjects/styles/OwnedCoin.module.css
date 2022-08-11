@@ -63,7 +63,7 @@
 
 .openicon,
 .closedicon {
-    @apply pr-[6px] pl-[12px];
+    @apply pr-[6px] pl-[12px] invisible sm:visible;
 }
 
 .openicon svg path {
