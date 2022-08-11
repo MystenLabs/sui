@@ -197,8 +197,6 @@ export function bigintDisplay(
 }
 
 export function eventToDisplay(event: SuiEvent) {
-    console.log('event to display', event);
-
     if ('moveEvent' in event && isMoveEvent(event.moveEvent))
         return moveEventDisplay(event.moveEvent);
 
