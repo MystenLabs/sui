@@ -23,7 +23,7 @@ use futures::StreamExt;
 use typed_store::Map;
 
 use tokio::sync::broadcast::{error::RecvError, Receiver};
-use tracing::error;
+use tracing::{debug, error};
 
 #[cfg(test)]
 #[path = "unit_tests/batch_tests.rs"]
@@ -132,6 +132,7 @@ impl crate::authority::AuthorityState {
         min_batch_size: u64,
         max_delay: Duration,
     ) -> SuiResult<()> {
+        debug!("Batch service started");
         // This assumes we have initialized the database with a batch.
         let (next_sequence_number, prev_signed_batch) = self
             .db()
@@ -209,6 +210,7 @@ impl crate::authority::AuthorityState {
                     .tables
                     .batches
                     .insert(&new_batch.data().next_sequence_number, &new_batch)?;
+                debug!(next_sequence_number=?new_batch.data().next_sequence_number, "New batch created");
 
                 // If a checkpointing service is present, register the batch with it
                 // to insert the transactions into future checkpoint candidates

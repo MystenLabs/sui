@@ -362,7 +362,7 @@ impl AuthorityState {
             SuiError::InvalidSystemTransaction
         );
 
-        if self.halted.load(Ordering::SeqCst) {
+        if self.is_halted() {
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
@@ -392,13 +392,14 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        let transaction_digest = *transaction.digest();
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.data.kind);
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
             self.metrics.signature_errors.inc();
             e
         })?;
-        let transaction_digest = *transaction.digest();
 
         let response = self.handle_transaction_impl(transaction).await;
         match response {
@@ -570,7 +571,7 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.data.kind.is_system_tx() {
             tx_guard.release();
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -1268,7 +1269,6 @@ impl AuthorityState {
         )?)
     }
 
-    #[cfg(test)]
     pub(crate) fn is_halted(&self) -> bool {
         self.halted.load(Ordering::Relaxed)
     }
@@ -1281,7 +1281,7 @@ impl AuthorityState {
         self.halted.store(false, Ordering::Relaxed);
     }
 
-    pub(crate) fn db(&self) -> Arc<AuthorityStore> {
+    pub fn db(&self) -> Arc<AuthorityStore> {
         self.database.clone()
     }
 
@@ -1502,7 +1502,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
