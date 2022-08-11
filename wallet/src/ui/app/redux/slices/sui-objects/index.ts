@@ -46,6 +46,22 @@ export const fetchAllOwnedObjects = createAsyncThunk<
     return allSuiObjects;
 });
 
+export const batchFetchObject = createAsyncThunk<
+    SuiObject[],
+    ObjectId[],
+    AppThunkConfig
+>('sui-objects/batch', async (objectIDs, { extra: { api } }) => {
+    const allSuiObjects: SuiObject[] = [];
+    const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
+    for (const objRes of allObjRes) {
+        const suiObj = getObjectExistsResponse(objRes);
+        if (suiObj) {
+            allSuiObjects.push(suiObj);
+        }
+    }
+    return allSuiObjects;
+});
+
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
     async (_, { extra: { api, keypairVault }, dispatch }) => {

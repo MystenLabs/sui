@@ -8,8 +8,12 @@ import {
     getTransferObjectTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
+    getTransferSuiTransaction,
+    getExecutionStatusError,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+
+import { batchFetchObject } from '_redux/slices/sui-objects';
 
 import type {
     GetTxnDigestsResponse,
@@ -20,13 +24,21 @@ import type {
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 export type TxResultState = {
-    To?: string;
+    to?: string;
     seq: number;
     txId: string;
     status: ExecutionStatusType;
     txGas: number;
     kind: TransactionKindName | undefined;
-    From: string;
+    from: string;
+    amount?: number;
+    timestampMs?: number;
+    url?: string;
+    objectId: string;
+    description?: string;
+    name?: string;
+    isSender?: boolean;
+    error?: string;
 };
 
 interface TransactionManualState {
@@ -58,7 +70,10 @@ export const getTransactionsByAddress = createAsyncThunk<
     AppThunkConfig
 >(
     'sui-transactions/get-transactions-by-address',
-    async (_, { getState, extra: { api } }): Promise<TxResultByAddress> => {
+    async (
+        _,
+        { getState, dispatch, extra: { api } }
+    ): Promise<TxResultByAddress> => {
         const address = getState().account.address;
 
         if (!address) {
@@ -72,10 +87,10 @@ export const getTransactionsByAddress = createAsyncThunk<
         if (!transactions || !transactions.length) {
             return [];
         }
-        //getTransactionWithEffectsBatch
+
         const resp = await api.instance.fullNode
             .getTransactionWithEffectsBatch(deduplicate(transactions))
-            .then((txEffs) => {
+            .then(async (txEffs) => {
                 return (
                     txEffs
                         .map((txEff, i) => {
@@ -85,15 +100,22 @@ export const getTransactionsByAddress = createAsyncThunk<
                                     getTransactionDigest(txEff.certificate)
                             )[0];
                             const res: CertifiedTransaction = txEff.certificate;
-                            // TODO: handle multiple transactions
+
                             const txns = getTransactions(res);
                             if (txns.length > 1) {
                                 return null;
                             }
+                            // TODO handle batch transactions
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
+
+                            const tranferSui = getTransferSuiTransaction(txn);
+                            const txTransferObject =
+                                getTransferObjectTransaction(txn);
+
                             const recipient =
-                                getTransferObjectTransaction(txn)?.recipient;
+                                tranferSui?.recipient ??
+                                txTransferObject?.recipient;
 
                             return {
                                 seq,
@@ -101,10 +123,23 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 status: getExecutionStatusType(txEff),
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
-                                From: res.data.sender,
+                                from: res.data.sender,
+                                ...(txTransferObject
+                                    ? {
+                                          objectId:
+                                              txTransferObject?.objectRef
+                                                  .objectId,
+                                      }
+                                    : {}),
+                                error: getExecutionStatusError(txEff),
+                                timestampMs: txEff.timestamp_ms,
+                                isSender: res.data.sender === address,
+                                ...(tranferSui?.amount
+                                    ? { amount: tranferSui.amount }
+                                    : {}),
                                 ...(recipient
                                     ? {
-                                          To: recipient,
+                                          to: recipient,
                                       }
                                     : {}),
                             };
@@ -115,7 +150,39 @@ export const getTransactionsByAddress = createAsyncThunk<
                         .sort((a, b) => b!.seq - a!.seq)
                 );
             });
-        return resp as TxResultByAddress;
+
+        // Get all objectId and batch fetch objects for transactions with objectIds
+        // remove duplicates
+        const objectIDs = [
+            ...new Set(
+                resp.filter((itm) => itm).map((itm) => itm?.objectId || '')
+            ),
+        ];
+
+        const getObjectBatch = await dispatch(batchFetchObject(objectIDs));
+        const txObjects = getObjectBatch.payload;
+
+        const txnResp = resp.map((itm) => {
+            const objectTxObj =
+                txObjects && itm?.objectId && Array.isArray(txObjects)
+                    ? txObjects.find(
+                          (obj) => obj.reference.objectId === itm.objectId
+                      )
+                    : null;
+
+            return {
+                ...itm,
+                ...(objectTxObj
+                    ? {
+                          description: objectTxObj.data.fields.description,
+                          name: objectTxObj.data.fields.name,
+                          url: objectTxObj.data.fields.url,
+                      }
+                    : {}),
+            };
+        });
+
+        return txnResp as TxResultByAddress;
     }
 );
 
@@ -131,8 +198,8 @@ const txSlice = createSlice({
                 state.latestTx = action.payload;
                 // Add recent addresses to the list
                 const recentAddresses = action.payload.map((tx) => [
-                    tx?.To as string,
-                    tx.From as string,
+                    tx?.to as string,
+                    tx.from as string,
                 ]);
                 // Remove duplicates
                 state.recentAddresses = [

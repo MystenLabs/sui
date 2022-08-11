@@ -63,7 +63,7 @@ function NFTDisplayCard({
                 <img
                     className={cl(st.img, st[size])}
                     src={filePath}
-                    alt="NFT"
+                    alt={fileExtentionType?.name || 'NFT'}
                 />
             )}
             {wideview ? wideviewSection : defaultSection}

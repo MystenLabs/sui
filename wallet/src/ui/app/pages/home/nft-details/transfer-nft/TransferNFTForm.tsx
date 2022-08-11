@@ -106,6 +106,10 @@ function TransferNFTForm({
                         </div>
                     )}
 
+                    {submitError ? (
+                        <div className={st.error}>{submitError}</div>
+                    ) : null}
+
                     <div className={st.formcta}>
                         <Button
                             size="large"
