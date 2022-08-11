@@ -33,7 +33,7 @@ describe('End-to-end Tests', () => {
         });
 
         it('has a go home button', () => {
-            cy.visit('/apples');
+            cy.visit('/objects/CollectionObject');
             cy.get('#homeBtn').click();
             expectHome();
         });
@@ -89,54 +89,26 @@ describe('End-to-end Tests', () => {
         });
     });
 
-    /*
     describe('Transaction Results', () => {
-        // disabled because we are not do not display the Word Transaction ID
         const successID = 'Da4vHc9IwbvOYblE8LnrVsqXwryt2Kmms+xnJ7Zx5E4=';
-        it('can be searched', async () => {
-            await page.goto(BASE_URL);
-            await searchText(page, successID);
-            const value = await cssInteract(page)
-                .with('#transactionID')
-                .get.textContent();
-            expect(value.trim()).toBe(successID);
+        it('can be searched', () => {
+            cy.visit('/');
+            searchText(successID);
+            cy.get('[data-testid=transaction-id]').contains(successID);
         });
 
-        it('can be reached through URL', async () => {
-            await page.goto(`${BASE_URL}/transactions/${successID}`);
-            const value = await cssInteract(page)
-                .with('#transactionID')
-                .get.textContent();
-            expect(value.trim()).toBe(successID);
+        it('can be reached through URL', () => {
+            cy.visit(`/transactions/${successID}`);
+            cy.get('[data-testid=transaction-id]').contains(successID);
         });
-        it('correctly renders days and hours', async () => {
-            await page.goto(`${BASE_URL}/transactions/${successID}`);
-            const value = await cssInteract(page)
-                .with('#timestamp')
-                .get.textContent();
-            expect(value.trim()).toBe(
-                '17 days 1 hour ago (15 Dec 2024 00:00:00 UTC)'
+
+        it('includes the sender time information', () => {
+            cy.visit(`/transactions/${successID}`);
+            cy.get('[data-testid=transaction-sender]').contains(
+                'Sun, 15 Dec 2024 00:00:00 GMT'
             );
         });
-        it('correctly renders a time on the cusp of a year', async () => {
-            const otherID = 'GHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=';
-            await page.goto(`${BASE_URL}/transactions/${otherID}`);
-            const value = await cssInteract(page)
-                .with('#timestamp')
-                .get.textContent();
-            expect(value.trim()).toBe(
-                '1 min 3 secs ago (01 Jan 2025 01:12:07 UTC)'
-            );
-        });
-        it('correctly renders a time diff of less than 1 sec', async () => {
-            const otherID = 'XHTP9gcFmF5KTspnz3KxXjvSH8Bx0jv68KFhdqfpdK8=';
-            await page.goto(`${BASE_URL}/transactions/${otherID}`);
-            const value = await cssInteract(page)
-                .with('#timestamp')
-                .get.textContent();
-            expect(value.trim()).toBe('< 1 sec ago (01 Jan 2025 01:13:09 UTC)');
-        });
-    });*/
+    });
 
     describe('Owned Objects have links that enable', () => {
         it('going from address to object and back', () => {
@@ -166,10 +138,12 @@ describe('End-to-end Tests', () => {
     });
 
     describe('PaginationWrapper has buttons', () => {
+        const paginationContext = '[data-testid=address-objects]';
+
         it('to go to the next page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
-            cy.get('[data-testid="nextBtn"]').filter(':visible').click();
+            cy.get(paginationContext).get('[data-testid=nextBtn]:visible').click();
             cy.get(nftObject(1)).click();
             cy.get('#objectID').contains('Image2');
         });
@@ -177,7 +151,7 @@ describe('End-to-end Tests', () => {
         it('to go to the last page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
-            cy.get('[data-testid="lastBtn"]').filter(':visible').click();
+            cy.get(paginationContext).get('[data-testid=lastBtn]:visible').click();
             cy.get(nftObject(1)).click();
             cy.get('#objectID').contains('CollectionObject');
         });
@@ -185,31 +159,24 @@ describe('End-to-end Tests', () => {
         it('where last and next disappear in final page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
-            cy.get('[data-testid="lastBtn"]').filter(':visible').click();
+            const pagination = cy.get(paginationContext);
+            pagination.get('[data-testid=lastBtn]:visible').click();
 
             //Back and First buttons are not disabled:
-            cy.get('[data-testid="backBtn"]')
-                .filter(':visible')
-                .should('be.enabled');
-            cy.get('[data-testid="firstBtn"]')
-                .filter(':visible')
-                .should('be.enabled');
+            pagination.get('[data-testid=backBtn]:visible').should('be.enabled');
+            pagination.get('[data-testid=firstBtn]:visible').should('be.enabled');
 
             //Next and Last buttons are disabled:
-            cy.get('[data-testid="nextBtn"]')
-                .filter(':visible')
-                .should('be.disabled');
-            cy.get('[data-testid="lastBtn"]')
-                .filter(':visible')
-                .should('be.disabled');
+            pagination.get('[data-testid=nextBtn]:visible').should('be.disabled');
+            pagination.get('[data-testid=lastBtn]:visible').should('be.disabled');
         });
 
         it('to go back a page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
 
-            cy.get('[data-testid="lastBtn"]').filter(':visible').click();
-            cy.get('[data-testid="backBtn"]').filter(':visible').click();
+            cy.get(paginationContext).get('[data-testid=lastBtn]:visible').click();
+            cy.get(paginationContext).get('[data-testid=backBtn]:visible').click();
             cy.get(nftObject(1)).click();
             cy.get('#objectID').contains('player5');
         });
@@ -217,9 +184,9 @@ describe('End-to-end Tests', () => {
         it('to go to first page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
-            cy.get('[data-testid="lastBtn"]').filter(':visible').click();
-            cy.get('[data-testid="backBtn"]').filter(':visible').click();
-            cy.get('[data-testid="firstBtn"]').filter(':visible').click();
+            cy.get(paginationContext).get('[data-testid=lastBtn]:visible').click();
+            cy.get(paginationContext).get('[data-testid=backBtn]:visible').click();
+            cy.get(paginationContext).get('[data-testid=firstBtn]:visible').click();
             cy.get(nftObject(1)).click();
             cy.get('#objectID').contains('ChildObjectWBrokenImage');
         });
@@ -227,22 +194,15 @@ describe('End-to-end Tests', () => {
         it('where first and back disappear in first page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
+            const pagination = cy.get(paginationContext);
 
             //Back and First buttons are disabled:
-            cy.get('[data-testid="backBtn"]')
-                .filter(':visible')
-                .should('be.disabled');
-            cy.get('[data-testid="firstBtn"]')
-                .filter(':visible')
-                .should('be.disabled');
+            pagination.get('[data-testid=backBtn]:visible').should('be.disabled');
+            pagination.get('[data-testid=firstBtn]:visible').should('be.disabled');
 
             //Next and Last buttons are not disabled:
-            cy.get('[data-testid="nextBtn"]')
-                .filter(':visible')
-                .should('be.enabled');
-            cy.get('[data-testid="lastBtn"]')
-                .filter(':visible')
-                .should('be.enabled');
+            pagination.get('[data-testid=nextBtn]:visible').should('be.enabled');
+            pagination.get('[data-testid=lastBtn]:visible').should('be.enabled');
         });
     });
 
@@ -251,10 +211,17 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
 
-            cy.get('#groupCollection').contains('0x2::USD::USD');
-            cy.get('#groupCollection').contains('9007199254740993');
-            cy.get('#groupCollection').contains('SUI');
-            cy.get('#groupCollection').contains('200');
+            cy.get('#groupCollection tr:first-child td')
+                .first()
+                .contains('0x2::USD::USD')
+                .next()
+                .contains('9007199254740993');
+
+            cy.get('#groupCollection tr:last-child td')
+                .first()
+                .contains('SUI')
+                .next()
+                .contains('200');
         });
     });
 
@@ -265,7 +232,7 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
 
-            cy.get('[data-testid="tx"] td').should(
+            cy.get('[data-testid=tx] td').should(
                 'have.length.greaterThan',
                 0
             );
@@ -275,7 +242,7 @@ describe('End-to-end Tests', () => {
             const address = 'CollectionObject';
             cy.visit(`/addresses/${address}`);
 
-            cy.get('[data-testid="tx"] td').should(
+            cy.get('[data-testid=tx] td').should(
                 'have.length.greaterThan',
                 0
             );

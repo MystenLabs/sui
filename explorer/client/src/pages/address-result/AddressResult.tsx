@@ -44,7 +44,7 @@ function AddressResult() {
                 </div>
                 <div>
                     <h1>Owned Objects</h1>
-                    <div>
+                    <div data-testid="address-objects">
                         {<OwnedObjects id={addressID} byAddress={true} />}
                     </div>
                 </div>
