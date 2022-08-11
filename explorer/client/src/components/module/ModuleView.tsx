@@ -5,17 +5,17 @@ import cl from 'classnames';
 import Highlight, { defaultProps, Prism } from 'prism-react-renderer';
 import 'prism-themes/themes/prism-one-light.css';
 import { useContext } from 'react';
+import { Link } from 'react-router-dom';
 
 import { NetworkContext } from '../../context';
 import codestyle from '../../styles/bytecode.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
+import { normalizeSuiAddress } from './util';
 
 import type { SuiMoveNormalizedType } from '@mysten/sui.js';
 import type { Language } from 'prism-react-renderer';
 
 import styles from './ModuleView.module.css';
-import { Link } from 'react-router-dom';
-import { normalizeSuiAddress } from './util';
 
 // inclue Rust language.
 // @ts-ignore

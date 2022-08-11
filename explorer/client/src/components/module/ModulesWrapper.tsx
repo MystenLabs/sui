@@ -33,7 +33,9 @@ function ModuleViewWrapper({ id, data }: Props) {
                 return moduleName === searchParams.get('module');
             });
 
-            setModulesPageNumber(Math.floor(moduleIndex / MODULES_PER_PAGE) + 1);
+            setModulesPageNumber(
+                Math.floor(moduleIndex / MODULES_PER_PAGE) + 1
+            );
         }
     }, [searchParams, data.content]);
 
