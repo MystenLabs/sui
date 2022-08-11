@@ -67,6 +67,7 @@ const REFRESH_FOLLOWER_PERIOD_SECS: u64 = 60;
 
 use super::ActiveAuthority;
 
+/// See the `new` function for description for each metrics.
 #[derive(Clone, Debug)]
 pub struct GossipMetrics {
     pub concurrent_followed_validators: IntGauge,
@@ -74,8 +75,8 @@ pub struct GossipMetrics {
     pub total_tx_received: IntCounter,
     pub total_batch_received: IntCounter,
     pub wait_for_finality_latency_ms: Histogram,
-    pub total_cert_download_attempts: IntCounter,
-    pub total_cert_downloads: IntCounter,
+    pub total_attempts_cert_downloads: IntCounter,
+    pub total_successful_attempts_cert_downloads: IntCounter,
 }
 
 impl GossipMetrics {
@@ -111,14 +112,14 @@ impl GossipMetrics {
                 registry,
             )
             .unwrap(),
-            total_cert_download_attempts: register_int_counter_with_registry!(
-                "gossip_total_cert_download_attempts",
+            total_attempts_cert_downloads: register_int_counter_with_registry!(
+                "gossip_total_attempts_cert_downloads",
                 "Total number of certs/effects download attemps through gossip/node sync process",
                 registry,
             )
             .unwrap(),
-            total_cert_downloads: register_int_counter_with_registry!(
-                "gossip_total_cert_downloads",
+            total_successful_attempts_cert_downloads: register_int_counter_with_registry!(
+                "gossip_total_successful_attempts_cert_downloads",
                 "Total number of success certs/effects downloads through gossip/node sync process",
                 registry,
             )

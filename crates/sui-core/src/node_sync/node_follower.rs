@@ -623,16 +623,16 @@ where
     ) -> SuiResult {
         let (cert, effects) = match req {
             DownloadRequest::Node(digests) => {
-                metrics.total_cert_download_attempts.inc();
-                let res = aggregator
+                metrics.total_attempts_cert_downloads.inc();
+                let resp = aggregator
                     .handle_transaction_and_effects_info_request(
                         digests,
                         authorities.as_ref(),
                         None,
                     )
                     .await?;
-                metrics.total_cert_downloads.inc();
-                res
+                metrics.total_successful_attempts_cert_downloads.inc();
+                resp
             }
             DownloadRequest::Validator(digest) => {
                 let resp = aggregator.handle_cert_info_request(digest, None).await?;
