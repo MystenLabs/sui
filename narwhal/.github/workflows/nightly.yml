@@ -27,8 +27,8 @@ env:
   RUST_BACKTRACE: short
 
 jobs:
-  ignored:
-    name: Run long-running tests
+  end-to-end-tests:
+    name: Run long-running end-to-end tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -39,9 +39,11 @@ jobs:
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
         with:
           path: ~/.cargo/registry/src/**/librocksdb-sys-*
-      - name: cargo test
+      # We run only the integration tests that are ignored under the primary package.
+      # These are considered the end-to-end "slow" tests for us
+      - name: cargo nextest
         run: |
-          cargo nextest run --profile ci --run-ignored ignored-only
+          cargo nextest run -E 'kind(test) + package(primary)' --run-ignored ignored-only
 
   beta:
     name: Run test on the beta channel
