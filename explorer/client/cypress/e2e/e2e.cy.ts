@@ -143,7 +143,9 @@ describe('End-to-end Tests', () => {
         it('to go to the next page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
-            cy.get(paginationContext).get('[data-testid=nextBtn]:visible').click();
+            cy.get(paginationContext)
+                .get('[data-testid=nextBtn]:visible')
+                .click();
             cy.get(nftObject(1)).click();
             cy.get('#objectID').contains('Image2');
         });
@@ -151,7 +153,9 @@ describe('End-to-end Tests', () => {
         it('to go to the last page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
-            cy.get(paginationContext).get('[data-testid=lastBtn]:visible').click();
+            cy.get(paginationContext)
+                .get('[data-testid=lastBtn]:visible')
+                .click();
             cy.get(nftObject(1)).click();
             cy.get('#objectID').contains('CollectionObject');
         });
@@ -163,20 +167,32 @@ describe('End-to-end Tests', () => {
             pagination.get('[data-testid=lastBtn]:visible').click();
 
             //Back and First buttons are not disabled:
-            pagination.get('[data-testid=backBtn]:visible').should('be.enabled');
-            pagination.get('[data-testid=firstBtn]:visible').should('be.enabled');
+            pagination
+                .get('[data-testid=backBtn]:visible')
+                .should('be.enabled');
+            pagination
+                .get('[data-testid=firstBtn]:visible')
+                .should('be.enabled');
 
             //Next and Last buttons are disabled:
-            pagination.get('[data-testid=nextBtn]:visible').should('be.disabled');
-            pagination.get('[data-testid=lastBtn]:visible').should('be.disabled');
+            pagination
+                .get('[data-testid=nextBtn]:visible')
+                .should('be.disabled');
+            pagination
+                .get('[data-testid=lastBtn]:visible')
+                .should('be.disabled');
         });
 
         it('to go back a page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
 
-            cy.get(paginationContext).get('[data-testid=lastBtn]:visible').click();
-            cy.get(paginationContext).get('[data-testid=backBtn]:visible').click();
+            cy.get(paginationContext)
+                .get('[data-testid=lastBtn]:visible')
+                .click();
+            cy.get(paginationContext)
+                .get('[data-testid=backBtn]:visible')
+                .click();
             cy.get(nftObject(1)).click();
             cy.get('#objectID').contains('player5');
         });
@@ -184,9 +200,15 @@ describe('End-to-end Tests', () => {
         it('to go to first page', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
-            cy.get(paginationContext).get('[data-testid=lastBtn]:visible').click();
-            cy.get(paginationContext).get('[data-testid=backBtn]:visible').click();
-            cy.get(paginationContext).get('[data-testid=firstBtn]:visible').click();
+            cy.get(paginationContext)
+                .get('[data-testid=lastBtn]:visible')
+                .click();
+            cy.get(paginationContext)
+                .get('[data-testid=backBtn]:visible')
+                .click();
+            cy.get(paginationContext)
+                .get('[data-testid=firstBtn]:visible')
+                .click();
             cy.get(nftObject(1)).click();
             cy.get('#objectID').contains('ChildObjectWBrokenImage');
         });
@@ -197,12 +219,20 @@ describe('End-to-end Tests', () => {
             const pagination = cy.get(paginationContext);
 
             //Back and First buttons are disabled:
-            pagination.get('[data-testid=backBtn]:visible').should('be.disabled');
-            pagination.get('[data-testid=firstBtn]:visible').should('be.disabled');
+            pagination
+                .get('[data-testid=backBtn]:visible')
+                .should('be.disabled');
+            pagination
+                .get('[data-testid=firstBtn]:visible')
+                .should('be.disabled');
 
             //Next and Last buttons are not disabled:
-            pagination.get('[data-testid=nextBtn]:visible').should('be.enabled');
-            pagination.get('[data-testid=lastBtn]:visible').should('be.enabled');
+            pagination
+                .get('[data-testid=nextBtn]:visible')
+                .should('be.enabled');
+            pagination
+                .get('[data-testid=lastBtn]:visible')
+                .should('be.enabled');
         });
     });
 
@@ -232,20 +262,14 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
 
-            cy.get('[data-testid=tx] td').should(
-                'have.length.greaterThan',
-                0
-            );
+            cy.get('[data-testid=tx] td').should('have.length.greaterThan', 0);
         });
 
         it('are displayed for input and mutated object', () => {
             const address = 'CollectionObject';
             cy.visit(`/addresses/${address}`);
 
-            cy.get('[data-testid=tx] td').should(
-                'have.length.greaterThan',
-                0
-            );
+            cy.get('[data-testid=tx] td').should('have.length.greaterThan', 0);
         });
     });
 });
