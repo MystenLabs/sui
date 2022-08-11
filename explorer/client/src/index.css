@@ -16,14 +16,14 @@ body {
 }
 
 html {
-    scrollbar-color: #4e555d #fefefe;
+    scrollbar-color: #182435 #fefefe;
     scrollbar-width: 6px;
 }
 
 /* Improves scrollbar look on Chromium browsers */
 
 ::-webkit-scrollbar {
-    width: 6px;
+    @apply w-[6px];
 }
 
 ::-webkit-scrollbar-track {
@@ -31,13 +31,11 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-    @apply bg-sui-grey-50;
-
-    border-radius: 5px;
+    @apply bg-sui-grey-50 rounded-[10px];
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: #4e555d;
+    @apply bg-sui-grey-100;
 }
 
 input:focus,
