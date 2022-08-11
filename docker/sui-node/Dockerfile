@@ -37,14 +37,16 @@ RUN cargo build --profile $PROFILE
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 RUN cargo build --profile $PROFILE --bin sui-node
+# Strip the binary to make it MUCH smaller even with debug symbols
+# Do it in this step so final runtime image is much smaller
+RUN apt-get update && apt-get install -y binutils
+RUN strip --strip-debug "/sui/target/$PROFILE/sui-node"
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
 ARG PROFILE=release
 WORKDIR sui
 COPY --from=builder "/sui/target/$PROFILE/sui-node" /usr/local/bin
-RUN apt-get update && apt-get install -y binutils
-RUN strip --strip-debug /usr/local/bin/sui-node
 
 ARG BUILD_DATE
 ARG GIT_REVISION
