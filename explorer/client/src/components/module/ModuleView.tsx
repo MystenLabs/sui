@@ -14,6 +14,8 @@ import type { SuiMoveNormalizedType } from '@mysten/sui.js';
 import type { Language } from 'prism-react-renderer';
 
 import styles from './ModuleView.module.css';
+import { Link } from 'react-router-dom';
+import { normalizeSuiAddress } from './util';
 
 // inclue Rust language.
 // @ts-ignore
@@ -26,12 +28,17 @@ interface Props {
     code: string;
 }
 
-/** Takes a normalized move type and returns the address information contained within it */
-function unwrapTypeReference(type: SuiMoveNormalizedType): null | {
+interface TypeReference {
     address: string;
     module: string;
     name: string;
-} {
+    type_arguments: SuiMoveNormalizedType[];
+}
+
+/** Takes a normalized move type and returns the address information contained within it */
+function unwrapTypeReference(
+    type: SuiMoveNormalizedType
+): null | TypeReference {
     if (typeof type === 'object') {
         if ('Struct' in type) {
             return type.Struct;
@@ -59,14 +66,22 @@ function ModuleView({ id, name, code }: Props) {
                 name
             );
 
-            const typeReferences: Record<string, any> = {};
+            const typeReferences: Record<string, TypeReference> = {};
+
             Object.values(normalizedModule.exposed_functions).forEach(
                 (exposedFunction) => {
                     exposedFunction.parameters.forEach((param) => {
                         const unwrappedType = unwrapTypeReference(param);
                         if (!unwrappedType) return;
-                        typeReferences[unwrappedType.name] =
-                            unwrappedType.address;
+                        typeReferences[unwrappedType.name] = unwrappedType;
+
+                        unwrappedType.type_arguments.forEach((typeArg) => {
+                            const unwrappedTypeArg =
+                                unwrapTypeReference(typeArg);
+                            if (!unwrappedTypeArg) return;
+                            typeReferences[unwrappedTypeArg.name] =
+                                unwrappedTypeArg;
+                        });
                     });
                 }
             );
@@ -105,29 +120,40 @@ function ModuleView({ id, name, code }: Props) {
                                     <div className={styles.codelinenumbers}>
                                         {i + 1}
                                     </div>
+
                                     {line.map((token, key) => {
-                                        if (
-                                            token.types.includes(
-                                                'class-name'
-                                            ) &&
+                                        const reference =
                                             normalizedModuleReferences?.[
                                                 token.content
-                                            ]
+                                            ];
+
+                                        if (
+                                            (token.types.includes(
+                                                'class-name'
+                                            ) ||
+                                                token.types.includes(
+                                                    'constant'
+                                                )) &&
+                                            reference
                                         ) {
+                                            const href = `/objects/${reference.address}?module=${reference.module}`;
+
                                             return (
-                                                // eslint-disable-next-line jsx-a11y/anchor-has-content, react/jsx-no-target-blank
-                                                <a
+                                                <Link
                                                     key={key}
                                                     {...getTokenProps({
                                                         token,
                                                         key,
                                                     })}
-                                                    target="_blank"
-                                                    href={`/objects/${
-                                                        normalizedModuleReferences?.[
-                                                            token.content
-                                                        ]
-                                                    }`}
+                                                    to={href}
+                                                    target={
+                                                        normalizeSuiAddress(
+                                                            reference.address
+                                                        ) ===
+                                                        normalizeSuiAddress(id!)
+                                                            ? undefined
+                                                            : '_blank'
+                                                    }
                                                 />
                                             );
                                         }
