@@ -17,11 +17,19 @@
 .summary {
     @apply grid py-[10px] cursor-pointer;
 
-    grid-template-columns: 5% 30% 30% 35%;
+    grid-template-columns: 5% 30% 30% 30% 5%;
 }
 
 .openedgroup .summary {
     @apply text-sui-grey-100;
+}
+
+.openedgroup .summary div {
+    @apply pb-[12px];
+}
+
+.openedgroup .summary div:not(:first-child):not(:last-child) {
+    @apply border-solid border-0 border-b border-sui-grey-45;
 }
 
 .closedgroup {
@@ -29,55 +37,26 @@
 }
 
 .openedgroup {
-    @apply bg-sui-grey-40;
+    @apply bg-sui-grey-40 rounded-md;
 }
 
-.openedgroup tr:not(:first-child) td {
-    @apply text-sui-grey-80;
+.objectid,
+.balance {
+    @apply text-sui-grey-80 grid;
+
+    grid-template-columns: 5% 30% 30% 5%;
 }
 
-.openedgroup tr:nth-child(2) td {
-    @apply pt-[14px];
+.objectid {
+    @apply pb-[10px] pt-0;
 }
 
-.openedgroup tr:nth-child(even) td {
-    @apply pb-[10px];
+.balance {
+    @apply pb-[16px];
 }
 
-.groupview tr td:not(:first-child):not(:last-child) {
-    @apply w-[30%];
-}
-
-.openedgroup tr:nth-child(odd):not(:first-child) td {
-    @apply pt-0;
-}
-
-.closedgroup tr:hover td:first-child {
-    @apply rounded-l-md;
-}
-
-.closedgroup tr:hover td:last-child {
-    @apply rounded-r-md;
-}
-
-.openedgroup tr:first-child td:first-child {
-    @apply rounded-tl-md;
-}
-
-.openedgroup tr:first-child td:last-child {
-    @apply rounded-tr-md;
-}
-
-.openedgroup tr:last-child td:first-child {
-    @apply rounded-bl-md;
-}
-
-.openedgroup tr:last-child td:last-child {
-    @apply rounded-br-md;
-}
-
-.openedgroup tr:first-child td:not(:first-child):not(:last-child) {
-    @apply border-solid border-0 border-b border-sui-grey-45;
+.closedgroup .summary:hover {
+    @apply rounded-md bg-[#6fbcf014];
 }
 
 .icon {

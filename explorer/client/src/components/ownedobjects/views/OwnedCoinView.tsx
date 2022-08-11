@@ -91,32 +91,35 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                                                   )}`
                                                 : ''}
                                         </div>
+                                        <div />
                                     </div>
                                     {openedType === typeV &&
                                         subObjList.map((subObj, index) => (
                                             <React.Fragment
                                                 key={`${typeV}${index}`}
                                             >
-                                                <tr>
-                                                    <td />
-                                                    <td>Object ID</td>
-                                                    <td colSpan={2}>
+                                                <div
+                                                    className={styles.objectid}
+                                                >
+                                                    <div />
+                                                    <div>Object ID</div>
+                                                    <div>
                                                         <Longtext
                                                             text={subObj.id}
                                                             category="objects"
                                                             isCopyButton={false}
                                                         />
-                                                    </td>
-                                                    <td />
-                                                </tr>
-                                                <tr>
-                                                    <td />
-                                                    <td>Balance</td>
-                                                    <td colSpan={2}>
+                                                    </div>
+                                                    <div />
+                                                </div>
+                                                <div className={styles.balance}>
+                                                    <div />
+                                                    <div>Balance</div>
+                                                    <div>
                                                         {subObj.balance?.toString()}
-                                                    </td>
-                                                    <td />
-                                                </tr>
+                                                    </div>
+                                                    <div />
+                                                </div>
                                             </React.Fragment>
                                         ))}
                                 </div>
