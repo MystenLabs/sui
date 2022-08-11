@@ -26,8 +26,8 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
         ? txDigest?.url.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/')
         : false;
 
-    const date = txDigest?.timestamp_ms
-        ? new Date(txDigest.timestamp_ms).toLocaleDateString('en-us', {
+    const date = txDigest?.timestampMs
+        ? new Date(txDigest.timestampMs).toLocaleDateString('en-us', {
               month: 'short',
               day: 'numeric',
               year: 'numeric',
@@ -83,9 +83,9 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                 {txDigest.status === 'success' ? SuccessCard : failedCard}
                 <div className={cl(st.responseCard)}>
                     {AssetCard}
-                    {txDigest.Amount && (
+                    {txDigest.amount && (
                         <div className={st.amount}>
-                            {txDigest.Amount} <span>SUI</span>
+                            {txDigest.amount} <span>SUI</span>
                         </div>
                     )}
                     <div className={st.txInfo}>
@@ -99,8 +99,8 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                             )}
                         >
                             {txDigest.kind !== 'Call' && txDigest.isSender
-                                ? txDigest.To
-                                : txDigest.From}
+                                ? txDigest.to
+                                : txDigest.from}
                         </div>
                     </div>
 

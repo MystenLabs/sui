@@ -17,12 +17,12 @@ const TRUNCATE_PREFIX_LENGTH = 4;
 
 function TransactionCard({ txn }: { txn: TxResultState }) {
     const toAddrStr = useMiddleEllipsis(
-        txn.To || '',
+        txn.to || '',
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
     const fromAddrStr = useMiddleEllipsis(
-        txn.From || '',
+        txn.from || '',
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
@@ -33,8 +33,8 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         ? cl(st.arrowActionIcon, st.angledArrow)
         : cl(st.arrowActionIcon, st.buyIcon);
 
-    const date = txn?.timestamp_ms
-        ? new Date(txn.timestamp_ms).toLocaleDateString('en-us', {
+    const date = txn?.timestampMs
+        ? new Date(txn.timestampMs).toLocaleDateString('en-us', {
               weekday: 'short',
               month: 'short',
               day: 'numeric',
@@ -82,9 +82,9 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                     </div>
                 </div>
                 <div className={st.txTransferred}>
-                    {txn.Amount && (
+                    {txn.amount && (
                         <>
-                            <div className={st.txAmount}>{txn.Amount} SUI</div>
+                            <div className={st.txAmount}>{txn.amount} SUI</div>
                             <div className={st.txFiatValue}></div>
                         </>
                     )}

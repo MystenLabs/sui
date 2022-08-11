@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 import cl from 'classnames';
-import { useMemo, useEffect } from 'react';
+import { useMemo } from 'react';
 import { Navigate, useSearchParams, Link } from 'react-router-dom';
 
 import BottomMenuLayout, {
@@ -10,8 +10,7 @@ import BottomMenuLayout, {
 } from '_app/shared/bottom-menu-layout';
 import Icon, { SuiIcons } from '_components/icon';
 import ReceiptCard from '_components/receipt-card';
-import { useAppSelector, useAppDispatch } from '_hooks';
-import { getTransactionsByAddress } from '_redux/slices/txresults';
+import { useAppSelector } from '_hooks';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
@@ -23,33 +22,23 @@ function ReceiptPage() {
     const [searchParams] = useSearchParams();
 
     // get tx results from url params
-    const txDigest = useMemo(
-        () => searchParams.get('txdigest'),
-        [searchParams]
-    );
+    const txDigest = searchParams.get('txdigest');
 
-    const tranferType = useMemo(
-        () => searchParams.get('transfer'),
-        [searchParams]
-    );
-    const dispatch = useAppDispatch();
+    const tranferType = searchParams.get('transfer');
+
     const txResults: TxResultState[] = useAppSelector(
         ({ txresults }) => txresults.latestTx
     );
-
-    useEffect(() => {
-        dispatch(getTransactionsByAddress()).unwrap();
-    }, [dispatch]);
 
     const txnItem = useMemo(() => {
         return txResults.filter((txn) => txn.txId === txDigest)[0];
     }, [txResults, txDigest]);
 
-    if (!txDigest && !txnItem.seq) {
-        return <Navigate to="/transactions" replace={true} />;
-    }
-
     const linkTo = tranferType ? '/nfts' : '/transactions';
+
+    if (!txDigest || (txResults && !txnItem)) {
+        return <Navigate to={linkTo} replace={true} />;
+    }
 
     return (
         <div className={st.container}>

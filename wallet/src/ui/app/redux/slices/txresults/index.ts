@@ -13,7 +13,7 @@ import {
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
-import { batchBetchObjects } from '_redux/slices/sui-objects';
+import { batchFetchObject } from '_redux/slices/sui-objects';
 
 import type {
     GetTxnDigestsResponse,
@@ -24,15 +24,15 @@ import type {
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 export type TxResultState = {
-    To?: string;
+    to?: string;
     seq: number;
     txId: string;
     status: ExecutionStatusType;
     txGas: number;
     kind: TransactionKindName | undefined;
-    From: string;
-    Amount?: number;
-    timestamp_ms?: number;
+    from: string;
+    amount?: number;
+    timestampMs?: number;
     url?: string;
     objectId: string;
     description?: string;
@@ -108,18 +108,13 @@ export const getTransactionsByAddress = createAsyncThunk<
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
 
-                            const tranferSui =
-                                txKind === 'TransferSui'
-                                    ? getTransferSuiTransaction(txn)
-                                    : null;
-                            const recipient =
-                                txKind === 'TransferSui'
-                                    ? tranferSui?.recipient
-                                    : getTransferObjectTransaction(txn)
-                                          ?.recipient;
-
+                            const tranferSui = getTransferSuiTransaction(txn);
                             const txTransferObject =
                                 getTransferObjectTransaction(txn);
+
+                            const recipient =
+                                tranferSui?.recipient ??
+                                txTransferObject?.recipient;
 
                             return {
                                 seq,
@@ -127,8 +122,8 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 status: getExecutionStatusType(txEff),
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
-                                From: res.data.sender,
-                                ...(txTransferObject?.objectRef.objectId
+                                from: res.data.sender,
+                                ...(txTransferObject
                                     ? {
                                           objectId:
                                               txTransferObject?.objectRef
@@ -136,14 +131,14 @@ export const getTransactionsByAddress = createAsyncThunk<
                                       }
                                     : {}),
                                 error: getExecutionStatusError(txEff),
-                                timestamp_ms: txEff.timestamp_ms,
+                                timestampMs: txEff.timestamp_ms,
                                 isSender: res.data.sender === address,
                                 ...(tranferSui?.amount
-                                    ? { Amount: tranferSui.amount }
+                                    ? { amount: tranferSui.amount }
                                     : {}),
                                 ...(recipient
                                     ? {
-                                          To: recipient,
+                                          to: recipient,
                                       }
                                     : {}),
                             };
@@ -163,7 +158,7 @@ export const getTransactionsByAddress = createAsyncThunk<
             ),
         ];
 
-        const getObjectBatch = await dispatch(batchBetchObjects(objectIDs));
+        const getObjectBatch = await dispatch(batchFetchObject(objectIDs));
         const txObjects = getObjectBatch.payload;
 
         const txnResp = resp.map((itm) => {
@@ -202,8 +197,8 @@ const txSlice = createSlice({
                 state.latestTx = action.payload;
                 // Add recent addresses to the list
                 const recentAddresses = action.payload.map((tx) => [
-                    tx?.To as string,
-                    tx.From as string,
+                    tx?.to as string,
+                    tx.from as string,
                 ]);
                 // Remove duplicates
                 state.recentAddresses = [

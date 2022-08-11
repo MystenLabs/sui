@@ -109,7 +109,6 @@ function TransferNFTCard({ objectId }: TransferProps) {
 
     return (
         <div className={st.container}>
-            {' '}
             <PageTitle
                 title="Send NFT"
                 backLink="/nfts"

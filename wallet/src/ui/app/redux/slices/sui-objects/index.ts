@@ -46,7 +46,7 @@ export const fetchAllOwnedObjects = createAsyncThunk<
     return allSuiObjects;
 });
 
-export const batchBetchObjects = createAsyncThunk<
+export const batchFetchObject = createAsyncThunk<
     SuiObject[],
     ObjectId[],
     AppThunkConfig
