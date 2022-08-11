@@ -361,7 +361,7 @@ where
                             if state.bad_weight > validity {
                                 return Err(SuiError::TooManyIncorrectAuthorities {
                                     errors: state.errors,
-                                    action: "wait_for_epoch_cert".to_string(),
+                                    action: "wait_for_epoch_cert",
                                 });
                             }
                         }
@@ -378,7 +378,7 @@ where
         } else {
             Err(SuiError::TooManyIncorrectAuthorities {
                 errors: final_state.errors,
-                action: "wait_for_epoch_cert".to_string(),
+                action: "wait_for_epoch_cert",
             })
         }
     }

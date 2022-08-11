@@ -384,7 +384,7 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     Err(SuiError::TooManyIncorrectAuthorities {
                         errors: vec![],
-                        action: String::new(),
+                        action: "",
                     })
                 })
             },
@@ -404,7 +404,7 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities {
                         errors: vec![],
-                        action: String::new(),
+                        action: "",
                     });
                     res
                 })
@@ -459,7 +459,7 @@ async fn test_map_reducer() {
                 Box::pin(async move {
                     Err(SuiError::TooManyIncorrectAuthorities {
                         errors: vec![],
-                        action: String::new(),
+                        action: "",
                     })
                 })
             },

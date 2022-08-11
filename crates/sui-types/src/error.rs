@@ -336,7 +336,7 @@ pub enum SuiError {
     #[error("Too many authority errors were detected for {}: {:?}", action, errors)]
     TooManyIncorrectAuthorities {
         errors: Vec<(AuthorityName, SuiError)>,
-        action: String,
+        action: &'static str,
     },
     #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
     InconsistentGatewayResult { error: String },
