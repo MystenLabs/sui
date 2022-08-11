@@ -21,6 +21,7 @@ import {
 } from '_redux/slices/sui-objects/Coin';
 
 import type { ObjectId } from '@mysten/sui.js';
+import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
 import st from './TransferNFTForm.module.scss';
@@ -77,23 +78,26 @@ function TransferNFTCard({ objectId }: TransferProps) {
                 return;
             }
             setSendError(null);
+            try {
+                const resp = await dispatch(
+                    transferSuiNFT({
+                        recipientAddress: to,
+                        nftId: objectId,
+                        transferCost: DEFAULT_NFT_TRANSFER_GAS_FEE,
+                    })
+                ).unwrap();
 
-            const resp = await dispatch(
-                transferSuiNFT({
-                    recipientAddress: to,
-                    nftId: objectId,
-                    transferCost: DEFAULT_NFT_TRANSFER_GAS_FEE,
-                })
-            ).unwrap();
-
-            resetForm();
-            if (resp.txId) {
-                navigate(
-                    `/receipt?${new URLSearchParams({
-                        txdigest: resp.txId,
-                        transfer: 'nft',
-                    }).toString()}`
-                );
+                resetForm();
+                if (resp.txId) {
+                    navigate(
+                        `/receipt?${new URLSearchParams({
+                            txdigest: resp.txId,
+                            transfer: 'nft',
+                        }).toString()}`
+                    );
+                }
+            } catch (e) {
+                setSendError((e as SerializedError).message || null);
             }
         },
         [dispatch, navigate, objectId]
@@ -103,8 +107,9 @@ function TransferNFTCard({ objectId }: TransferProps) {
         setSendError(null);
     }, []);
 
-    const TransferNFT = (
-        <>
+    return (
+        <div className={st.container}>
+            {' '}
             <PageTitle
                 title="Send NFT"
                 backLink="/nfts"
@@ -127,10 +132,8 @@ function TransferNFTCard({ objectId }: TransferProps) {
                     />
                 </Formik>
             </div>
-        </>
+        </div>
     );
-
-    return <div className={st.container}>{TransferNFT}</div>;
 }
 
 export default memo(TransferNFTCard);

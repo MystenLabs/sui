@@ -20,7 +20,6 @@ import type {
     CertifiedTransaction,
     TransactionKindName,
     ExecutionStatusType,
-    TransactionEffectsResponse,
 } from '@mysten/sui.js';
 import type { AppThunkConfig } from '_store/thunk-extras';
 
@@ -91,7 +90,7 @@ export const getTransactionsByAddress = createAsyncThunk<
 
         const resp = await api.instance.fullNode
             .getTransactionWithEffectsBatch(deduplicate(transactions))
-            .then(async (txEffs: TransactionEffectsResponse[]) => {
+            .then(async (txEffs) => {
                 return (
                     txEffs
                         .map((txEff, i) => {
