@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
 import Icon, { SuiIcons } from '_components/icon';
+import { formatDate } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
 
 import type { TxResultState } from '_redux/slices/txresults';
@@ -28,17 +29,21 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
     );
 
     const transferStatus = txn.status === 'success' ? 'Checkmark' : 'Close';
+
+    //TODO update the logic to account for other transfer type
     const TxIcon = txn.isSender ? SuiIcons.ArrowLeft : SuiIcons.Buy;
     const iconClassName = txn.isSender
         ? cl(st.arrowActionIcon, st.angledArrow)
         : cl(st.arrowActionIcon, st.buyIcon);
 
     const date = txn?.timestampMs
-        ? new Date(txn.timestampMs).toLocaleDateString('en-us', {
-              weekday: 'short',
-              month: 'short',
-              day: 'numeric',
-          })
+        ? formatDate(txn.timestampMs, [
+              'weekday',
+              'month',
+              'day',
+              // 'hour',
+              // 'minute',
+          ])
         : false;
 
     return (
@@ -64,7 +69,6 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                             {txn.kind !== 'Call' && txn.isSender
                                 ? 'To'
                                 : 'From'}
-                            :{' '}
                         </div>
                         <div className={cl(st.txValue, st.txAddress)}>
                             {txn.kind !== 'Call' && txn.isSender

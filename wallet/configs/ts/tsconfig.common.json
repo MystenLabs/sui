@@ -26,6 +26,7 @@
             "_store": ["./src/ui/app/redux/store/"],
             "_store/*": ["./src/ui/app/redux/store/*"],
             "_hooks": ["./src/ui/app/hooks/"],
+            "_helpers": ["./src/ui/app/helpers/"],
             "_pages/*": ["./src/ui/app/pages/*"],
             "_components/*": ["./src/ui/app/components/*"],
             "_messaging/*": ["./src/shared/messaging/*"],

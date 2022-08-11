@@ -4,6 +4,7 @@
 import cl from 'classnames';
 
 import Icon, { SuiIcons } from '_components/icon';
+import { formatDate } from '_helpers';
 import { useFileExtentionType } from '_hooks';
 import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
 
@@ -27,11 +28,7 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
         : false;
 
     const date = txDigest?.timestampMs
-        ? new Date(txDigest.timestampMs).toLocaleDateString('en-us', {
-              month: 'short',
-              day: 'numeric',
-              year: 'numeric',
-          })
+        ? formatDate(txDigest.timestampMs, ['month', 'day', 'year'])
         : false;
 
     // TODO add copy for other trafer type like transfer sui, swap, etc.
