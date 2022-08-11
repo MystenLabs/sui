@@ -16,7 +16,6 @@ crypto = { path = "../crypto" }
 futures = "0.3.21"
 multiaddr = "0.14.0"
 primary = { path = "../primary" }
-rocksdb = { version = "0.18.0", features = ["snappy", "lz4", "zstd", "zlib"], default-features = false }
 serde = { version = "1.0.142", features = ["derive"] }
 thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["sync"] }
@@ -27,9 +26,9 @@ prometheus = "0.13.1"
 
 types = { path = "../types" }
 worker = { path = "../worker" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e" }
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 match_opt = "0.1.2"
 
