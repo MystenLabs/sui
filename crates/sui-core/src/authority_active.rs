@@ -118,7 +118,8 @@ pub struct ActiveAuthority<A> {
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
-    // Metrics
+    // Gossip Metrics including gossip between validators and
+    // node sync process between fullnode and validators
     pub gossip_metrics: GossipMetrics,
 }
 

@@ -346,7 +346,6 @@ pub(crate) trait DigestHandler<A> {
     fn get_metrics(&self) -> &GossipMetrics;
 }
 
-// #[derive(Clone, Copy)]
 #[derive(Clone)]
 struct GossipDigestHandler {
     metrics: GossipMetrics,

@@ -598,10 +598,13 @@ async fn main() -> Result<()> {
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
         let committee = GatewayState::make_committee(&config)?;
         let authority_clients = GatewayState::make_authority_clients(&config);
-        let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
-        let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
-        let aggregator =
-            AuthorityAggregator::new(committee, authority_clients, metrics, safe_client_metrics);
+        let registry = prometheus::Registry::new();
+        let aggregator = AuthorityAggregator::new(
+            committee,
+            authority_clients,
+            AuthAggMetrics::new(&registry),
+            SafeClientMetrics::new(&registry),
+        );
         let primary_gas_id = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
         let primary_gas = get_latest(primary_gas_id, &aggregator)
             .await
@@ -655,13 +658,11 @@ async fn main() -> Result<()> {
                     .parse()
                     .unwrap(),
             );
-            let metrics = AuthAggMetrics::new(&registry);
-            let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
             let aggregator = AuthorityAggregator::new(
                 committee,
                 authority_clients,
-                metrics,
-                safe_client_metrics,
+                AuthAggMetrics::new(&registry),
+                SafeClientMetrics::new(&registry),
             );
             let mut workload = make_workload(primary_gas_id, owner, keypair, &opts);
             workload.init(&aggregator).await;

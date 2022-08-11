@@ -23,21 +23,21 @@ use tracing::info;
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone, Debug)]
 pub struct SafeClientMetrics {
-    pub safe_client_total_requests_by_address_method: IntCounterVec,
-    pub safe_client_total_responses_by_address_method: IntCounterVec,
+    pub total_requests_by_address_method: IntCounterVec,
+    pub total_responses_by_address_method: IntCounterVec,
 }
 
 impl SafeClientMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
         Self {
-            safe_client_total_requests_by_address_method: register_int_counter_vec_with_registry!(
+            total_requests_by_address_method: register_int_counter_vec_with_registry!(
                 "safe_client_total_requests_by_address_method",
                 "Total requests to validators group by address and method",
                 &["address", "method"],
                 registry,
             )
             .unwrap(),
-            safe_client_total_responses_by_address_method: register_int_counter_vec_with_registry!(
+            total_responses_by_address_method: register_int_counter_vec_with_registry!(
                 "safe_client_total_responses_by_address_method",
                 "Total good (OK) responses from validators group by address and method",
                 &["address", "method"],
@@ -81,9 +81,8 @@ impl<C> SafeClient<C> {
     ) -> Self {
         // Cache counters for efficiency
         let validator_address = address.to_string();
-        let requests_metrics_vec = safe_client_metrics.safe_client_total_requests_by_address_method;
-        let responses_metrics_vec =
-            safe_client_metrics.safe_client_total_responses_by_address_method;
+        let requests_metrics_vec = safe_client_metrics.total_requests_by_address_method;
+        let responses_metrics_vec = safe_client_metrics.total_responses_by_address_method;
 
         let metrics_total_requests_handle_transaction_and_effects_info_request =
             requests_metrics_vec.with_label_values(&[
@@ -357,43 +356,6 @@ impl<C> SafeClient<C>
 where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    // /// Uses the follower API and augments each digest received with a full transactions info structure.
-    // pub async fn handle_batch_stream_request_to_transaction_info(
-    //     &self,
-    //     request: BatchInfoRequest,
-    // ) -> Result<
-    //     impl futures::Stream<Item = Result<(u64, TransactionInfoResponse), SuiError>> + '_,
-    //     SuiError,
-    // > {
-    //     let new_stream = self
-    //         .handle_batch_stream(request)
-    //         .await
-    //         .map_err(|err| SuiError::GenericAuthorityError {
-    //             error: format!("Stream error: {:?}", err),
-    //         })?
-    //         .filter_map(|item| {
-    //             let _client = self.clone();
-    //             async move {
-    //                 match &item {
-    //                     Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => None,
-    //                     Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
-    //                         // Download the full transaction info
-    //                         let transaction_info_request =
-    //                             TransactionInfoRequest::from(digest.transaction);
-    //                         let res = _client
-    //                             .handle_transaction_info_request(transaction_info_request)
-    //                             .await
-    //                             .map(|v| (*seq, v));
-    //                         Some(res)
-    //                     }
-    //                     Err(err) => Some(Err(err.clone())),
-    //                 }
-    //             }
-    //         });
-
-    //     Ok(new_stream)
-    // }
-
     /// Initiate a new transfer to a Sui or Primary account.
     pub async fn handle_transaction(
         &self,

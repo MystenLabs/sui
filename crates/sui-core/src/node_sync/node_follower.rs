@@ -265,7 +265,7 @@ pub struct NodeSyncState<A> {
     sender: mpsc::Sender<DigestsMessage>,
     receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<DigestsMessage>>>,
 
-    // Metrics
+    // Gossip Metrics
     metrics: GossipMetrics,
 }
 
