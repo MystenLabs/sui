@@ -242,7 +242,7 @@ what is required above.  It is possible to configure custom profiling options, s
 For example, set `JE_MALLOC_CONF` or `JEMALLOC_SYS_WITH_MALLOC_CONF` to:
 `prof:true,lg_prof_interval:24,lg_prof_sample:19`
 
-The above setting means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
+The preceding setting means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
 and dump out the profile every 2^24 or 16MB of memory allocated. 
 However, the automatic profiling is designed to produce files that are better named and at less intervals,
 so overriding the default configuration is not usually recommended.
