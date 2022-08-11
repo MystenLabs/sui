@@ -23,6 +23,7 @@ use sui_config::PersistedConfig;
 use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::gateway_state::GatewayState;
+use sui_core::safe_client::SafeClientMetrics;
 use sui_node::metrics;
 use sui_node::SuiNode;
 use sui_types::base_types::ObjectID;
@@ -598,7 +599,9 @@ async fn main() -> Result<()> {
         let committee = GatewayState::make_committee(&config)?;
         let authority_clients = GatewayState::make_authority_clients(&config);
         let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
-        let aggregator = AuthorityAggregator::new(committee, authority_clients, metrics);
+        let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
+        let aggregator =
+            AuthorityAggregator::new(committee, authority_clients, metrics, safe_client_metrics);
         let primary_gas_id = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
         let primary_gas = get_latest(primary_gas_id, &aggregator)
             .await
@@ -653,7 +656,13 @@ async fn main() -> Result<()> {
                     .unwrap(),
             );
             let metrics = AuthAggMetrics::new(&registry);
-            let aggregator = AuthorityAggregator::new(committee, authority_clients, metrics);
+            let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
+            let aggregator = AuthorityAggregator::new(
+                committee,
+                authority_clients,
+                metrics,
+                safe_client_metrics,
+            );
             let mut workload = make_workload(primary_gas_id, owner, keypair, &opts);
             workload.init(&aggregator).await;
             let barrier = Arc::new(Barrier::new(opts.num_workers as usize));

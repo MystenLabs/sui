@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
-use crate::safe_client::SafeClient;
+use crate::safe_client::{SafeClient, SafeClientMetrics};
 use async_trait::async_trait;
 
 use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -150,6 +150,8 @@ pub struct AuthorityAggregator<A> {
     // Metrics
     pub metrics: AuthAggMetrics,
     pub timeouts: TimeoutConfig,
+    // Store here for clone during re-config
+    pub safe_client_metrics: SafeClientMetrics,
 }
 
 impl<A> AuthorityAggregator<A> {
@@ -157,24 +159,38 @@ impl<A> AuthorityAggregator<A> {
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
+        safe_client_metrics: SafeClientMetrics,
     ) -> Self {
-        Self::new_with_timeouts(committee, authority_clients, metrics, Default::default())
+        Self::new_with_timeouts(
+            committee,
+            authority_clients,
+            metrics,
+            safe_client_metrics,
+            Default::default(),
+        )
     }
 
     pub fn new_with_timeouts(
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
+        safe_client_metrics: SafeClientMetrics,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
             committee: committee.clone(),
             authority_clients: authority_clients
                 .into_iter()
-                .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
+                .map(|(name, api)| {
+                    (
+                        name,
+                        SafeClient::new(api, committee.clone(), name, safe_client_metrics.clone()),
+                    )
+                })
                 .collect(),
             metrics,
             timeouts,
+            safe_client_metrics,
         }
     }
 

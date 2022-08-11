@@ -48,13 +48,10 @@ use crate::{
     node_sync::{NodeSyncHandle, NodeSyncState},
 };
 use once_cell::sync::OnceCell;
+
 use tokio::time::Instant;
-use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
-    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
-};
 pub mod gossip;
-use gossip::{gossip_process, node_sync_process};
+use gossip::{gossip_process, node_sync_process, GossipMetrics};
 
 pub mod checkpoint_driver;
 use crate::authority_active::checkpoint_driver::CheckpointMetrics;
@@ -110,84 +107,6 @@ impl AuthorityHealth {
     }
 }
 
-/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
-#[derive(Clone)]
-pub struct AuthorityActiveMetrics {
-    pub concurrent_followed_validators: IntGauge,
-    pub gossip_reconnect_interval_ms: IntGauge,
-    pub total_tx_received_through_gossip: IntCounter,
-    pub total_batch_received_through_gossip: IntCounter,
-    pub node_sync_wait_for_finality_latency_ms: Histogram,
-    pub total_cert_download_attempts_through_node_sync: IntCounter,
-    pub total_cert_downloads_through_node_sync: IntCounter,
-
-    // pub num_signatures: Histogram,
-    // pub num_good_stake: Histogram,
-    // pub num_bad_stake: Histogram,
-}
-
-impl AuthorityActiveMetrics {
-    pub fn new(registry: &Registry) -> Self {
-        Self {
-            concurrent_followed_validators: register_int_gauge_with_registry!(
-                "concurrent_followed_validators",
-                "Number of validators being followed concurrently at the moment.",
-                registry,
-            )
-            .unwrap(),
-            // FIXME scopeguard?
-            gossip_reconnect_interval_ms: register_int_gauge_with_registry!(
-                "gossip_reconnect_interval",
-                "Interval to start the next gossip task, in milisec",
-                registry,
-            )
-            .unwrap(),
-            total_tx_received_through_gossip: register_int_counter_with_registry!(
-                "total_tx_received_through_gossip",
-                "Total number of transactions received through gossip",
-                registry,
-            )
-            .unwrap(),
-            total_batch_received_through_gossip: register_int_counter_with_registry!(
-                "total_batch_received_through_gossip",
-                "Total number of signed batches received through gossip",
-                registry,
-            )
-            .unwrap(),
-            node_sync_wait_for_finality_latency_ms: register_histogram_with_registry!(
-                "node_sync_wait_for_finality_latency_ms",
-                "Latency histogram for node sync process to wait for txs to become final, in milisec",
-                registry,
-            )
-            .unwrap(),
-            total_cert_download_attempts_through_node_sync: register_int_counter_with_registry!(
-                "total_cert_download_attempts_through_node_sync",
-                "Total number of certs/effects download attemps through node sync process",
-                registry,
-            )
-            .unwrap(),
-            total_cert_downloads_through_node_sync: register_int_counter_with_registry!(
-                "total_cert_downloads_through_node_sync",
-                "Total number of success certs/effects downloads through node sync process",
-                registry,
-            )
-            .unwrap(),                            
-            // checkpoint_frequency: register_histogram_with_registry!(
-            //     "checkpoint_frequency",
-            //     "Number of seconds elapsed between two consecutive checkpoint certificates",
-            //     registry,
-            // )
-            // .unwrap(),
-        }
-    }
-
-    pub fn new_for_tests() -> Self {
-        let registry = Registry::new();
-        Self::new(&registry)
-    }
-}
-
-
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
@@ -200,7 +119,7 @@ pub struct ActiveAuthority<A> {
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
     // Metrics
-    pub metrics: AuthorityActiveMetrics,
+    pub gossip_metrics: GossipMetrics,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -209,7 +128,7 @@ impl<A> ActiveAuthority<A> {
         node_sync_store: Arc<NodeSyncStore>,
         follower_store: Arc<FollowerStore>,
         net: AuthorityAggregator<A>,
-        metrics: AuthorityActiveMetrics,
+        gossip_metrics: GossipMetrics,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
@@ -219,7 +138,7 @@ impl<A> ActiveAuthority<A> {
             authority.clone(),
             net.clone(),
             node_sync_store,
-            metrics.clone(),
+            gossip_metrics.clone(),
         ));
 
         Ok(ActiveAuthority {
@@ -234,7 +153,7 @@ impl<A> ActiveAuthority<A> {
             node_sync_handle: OnceCell::new(),
             follower_store,
             net: ArcSwap::from(net),
-            metrics: metrics,
+            gossip_metrics,
         })
     }
 
@@ -255,7 +174,13 @@ impl<A> ActiveAuthority<A> {
             None,
         ));
         let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(sync_db_path, None));
-        Self::new(authority, node_sync_store, follower_store, net, AuthorityActiveMetrics::new_for_tests())
+        Self::new(
+            authority,
+            node_sync_store,
+            follower_store,
+            net,
+            GossipMetrics::new_for_tests(),
+        )
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -326,7 +251,7 @@ impl<A> Clone for ActiveAuthority<A> {
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
-            metrics: self.metrics.clone(),
+            gossip_metrics: self.gossip_metrics.clone(),
         }
     }
 }
@@ -338,7 +263,7 @@ where
     fn node_sync_handle(&self) -> NodeSyncHandle {
         let node_sync_state = self.node_sync_state.clone();
         self.node_sync_handle
-            .get_or_init(|| NodeSyncHandle::new(node_sync_state, self.metrics.clone()))
+            .get_or_init(|| NodeSyncHandle::new(node_sync_state, self.gossip_metrics.clone()))
             .clone()
     }
 

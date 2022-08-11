@@ -42,6 +42,7 @@ use sui_types::{
 use crate::authority::ResolverWrapper;
 use crate::authority_aggregator::AuthAggMetrics;
 use crate::authority_client::NetworkAuthorityClient;
+use crate::safe_client::SafeClientMetrics;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -182,9 +183,15 @@ impl<A> GatewayState<A> {
     ) -> SuiResult<Self> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
+        let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
         Self::new_with_authorities(
             path,
-            AuthorityAggregator::new(committee, authority_clients, auth_agg_metrics),
+            AuthorityAggregator::new(
+                committee,
+                authority_clients,
+                auth_agg_metrics,
+                safe_client_metrics,
+            ),
             gateway_metrics,
         )
     }

@@ -122,6 +122,7 @@ pub struct AuthorityMetrics {
     pub follower_connections: IntCounter,
     pub follower_connections_concurrent: IntGauge,
 
+    // TODO: consolidate these into GossipMetrics
     pub gossip_queued_count: IntCounter,
     pub gossip_sync_count: IntCounter,
     pub gossip_task_success_count: IntCounter,

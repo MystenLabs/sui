@@ -201,6 +201,8 @@ pub async fn init_configurable_authorities(
     use narwhal_crypto::traits::KeyPair;
     use sui_types::crypto::AccountKeyPair;
 
+    use crate::safe_client::SafeClientMetrics;
+
     let authority_count = 4;
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let mut gas_objects = Vec::new();
@@ -236,7 +238,12 @@ pub async fn init_configurable_authorities(
         }
         states.push(client.state.clone());
         names.push(authority_name);
-        clients.push(SafeClient::new(client, committee.clone(), authority_name));
+        clients.push(SafeClient::new(
+            client,
+            committee.clone(),
+            authority_name,
+            SafeClientMetrics::new_for_tests(),
+        ));
     }
 
     // Execute transactions for every EmitUpdateItem Action, use the digest of the transaction to
@@ -316,6 +323,7 @@ pub async fn init_configurable_authorities(
         committee,
         authority_clients,
         AuthAggMetrics::new_for_tests(),
+        SafeClientMetrics::new_for_tests(),
     );
     (net, states, executed_digests)
 }

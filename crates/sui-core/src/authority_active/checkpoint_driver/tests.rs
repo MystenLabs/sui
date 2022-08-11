@@ -32,8 +32,11 @@ async fn checkpoint_active_flow_happy_path() {
     for inner_state in authorities.clone() {
         let inner_agg = aggregator.clone();
         let active_state = Arc::new(
-            ActiveAuthority::new_with_ephemeral_storage_for_test(inner_state.authority.clone(), inner_agg)
-                .unwrap(),
+            ActiveAuthority::new_with_ephemeral_storage_for_test(
+                inner_state.authority.clone(),
+                inner_agg,
+            )
+            .unwrap(),
         );
         let _active_handle = active_state
             .spawn_checkpoint_process(CheckpointMetrics::new_for_tests(), false)

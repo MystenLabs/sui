@@ -4,6 +4,8 @@
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use futures::StreamExt;
+use prometheus::core::GenericCounter;
+use prometheus::{register_int_counter_vec_with_registry, IntCounterVec};
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
@@ -17,22 +19,28 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tracing::info;
-use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, register_int_counter_vec_with_registry
-};
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
-#[derive(Clone)]
-pub struct ValidatorClientMetrics {
-    pub total_handle_transaction_and_effects_info_request: IntCounterVec,
+#[derive(Clone, Debug)]
+pub struct SafeClientMetrics {
+    pub safe_client_total_requests_by_address_method: IntCounterVec,
+    pub safe_client_total_responses_by_address_method: IntCounterVec,
 }
 
-impl ValidatorClientMetrics {
+impl SafeClientMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
         Self {
-            total_handle_transaction_and_effects_info_request: register_int_counter_vec_with_registry!(
-                "total_handle_transaction_and_effects_info_request",
-                "FIXME",
+            safe_client_total_requests_by_address_method: register_int_counter_vec_with_registry!(
+                "safe_client_total_requests_by_address_method",
+                "Total requests to validators group by address and method",
+                &["address", "method"],
+                registry,
+            )
+            .unwrap(),
+            safe_client_total_responses_by_address_method: register_int_counter_vec_with_registry!(
+                "safe_client_total_responses_by_address_method",
+                "Total good (OK) responses from validators group by address and method",
+                &["address", "method"],
                 registry,
             )
             .unwrap(),
@@ -45,12 +53,23 @@ impl ValidatorClientMetrics {
     }
 }
 
-
 #[derive(Clone)]
 pub struct SafeClient<C> {
     authority_client: C,
     committee: Committee,
     address: AuthorityPublicKeyBytes,
+
+    metrics_total_requests_handle_transaction_and_effects_info_request:
+        GenericCounter<prometheus::core::AtomicU64>,
+    metrics_total_ok_responses_handle_transaction_and_effects_info_request:
+        GenericCounter<prometheus::core::AtomicU64>,
+    metrics_total_requests_handle_transaction_info_request:
+        GenericCounter<prometheus::core::AtomicU64>,
+    metrics_total_ok_responses_handle_transaction_info_request:
+        GenericCounter<prometheus::core::AtomicU64>,
+    metrics_total_requests_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
+    metrics_total_ok_responses_handle_object_info_request:
+        GenericCounter<prometheus::core::AtomicU64>,
 }
 
 impl<C> SafeClient<C> {
@@ -58,11 +77,46 @@ impl<C> SafeClient<C> {
         authority_client: C,
         committee: Committee,
         address: AuthorityPublicKeyBytes,
+        safe_client_metrics: SafeClientMetrics,
     ) -> Self {
+        // Cache counters for efficiency
+        let validator_address = address.to_string();
+        let requests_metrics_vec = safe_client_metrics.safe_client_total_requests_by_address_method;
+        let responses_metrics_vec =
+            safe_client_metrics.safe_client_total_responses_by_address_method;
+
+        let metrics_total_requests_handle_transaction_and_effects_info_request =
+            requests_metrics_vec.with_label_values(&[
+                &validator_address,
+                "handle_transaction_and_effects_info_request",
+            ]);
+        let metrics_total_ok_responses_handle_transaction_and_effects_info_request =
+            responses_metrics_vec.with_label_values(&[
+                &validator_address,
+                "handle_transaction_and_effects_info_request",
+            ]);
+
+        let metrics_total_requests_handle_transaction_info_request = requests_metrics_vec
+            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+        let metrics_total_ok_responses_handle_transaction_info_request = responses_metrics_vec
+            .with_label_values(&[&validator_address, "handle_transaction_info_request"]);
+
+        let metrics_total_requests_handle_object_info_request = requests_metrics_vec
+            .with_label_values(&[&validator_address, "handle_object_info_request"]);
+        let metrics_total_ok_responses_handle_object_info_request = responses_metrics_vec
+            .with_label_values(&[&validator_address, "handle_object_info_request"]);
+
         Self {
             authority_client,
             committee,
             address,
+
+            metrics_total_requests_handle_transaction_and_effects_info_request,
+            metrics_total_ok_responses_handle_transaction_and_effects_info_request,
+            metrics_total_requests_handle_transaction_info_request,
+            metrics_total_ok_responses_handle_transaction_info_request,
+            metrics_total_requests_handle_object_info_request,
+            metrics_total_ok_responses_handle_object_info_request,
         }
     }
 
@@ -303,42 +357,42 @@ impl<C> SafeClient<C>
 where
     C: AuthorityAPI + Send + Sync + Clone + 'static,
 {
-    /// Uses the follower API and augments each digest received with a full transactions info structure.
-    pub async fn handle_batch_stream_request_to_transaction_info(
-        &self,
-        request: BatchInfoRequest,
-    ) -> Result<
-        impl futures::Stream<Item = Result<(u64, TransactionInfoResponse), SuiError>> + '_,
-        SuiError,
-    > {
-        let new_stream = self
-            .handle_batch_stream(request)
-            .await
-            .map_err(|err| SuiError::GenericAuthorityError {
-                error: format!("Stream error: {:?}", err),
-            })?
-            .filter_map(|item| {
-                let _client = self.clone();
-                async move {
-                    match &item {
-                        Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => None,
-                        Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
-                            // Download the full transaction info
-                            let transaction_info_request =
-                                TransactionInfoRequest::from(digest.transaction);
-                            let res = _client
-                                .handle_transaction_info_request(transaction_info_request)
-                                .await
-                                .map(|v| (*seq, v));
-                            Some(res)
-                        }
-                        Err(err) => Some(Err(err.clone())),
-                    }
-                }
-            });
+    // /// Uses the follower API and augments each digest received with a full transactions info structure.
+    // pub async fn handle_batch_stream_request_to_transaction_info(
+    //     &self,
+    //     request: BatchInfoRequest,
+    // ) -> Result<
+    //     impl futures::Stream<Item = Result<(u64, TransactionInfoResponse), SuiError>> + '_,
+    //     SuiError,
+    // > {
+    //     let new_stream = self
+    //         .handle_batch_stream(request)
+    //         .await
+    //         .map_err(|err| SuiError::GenericAuthorityError {
+    //             error: format!("Stream error: {:?}", err),
+    //         })?
+    //         .filter_map(|item| {
+    //             let _client = self.clone();
+    //             async move {
+    //                 match &item {
+    //                     Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => None,
+    //                     Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digest)))) => {
+    //                         // Download the full transaction info
+    //                         let transaction_info_request =
+    //                             TransactionInfoRequest::from(digest.transaction);
+    //                         let res = _client
+    //                             .handle_transaction_info_request(transaction_info_request)
+    //                             .await
+    //                             .map(|v| (*seq, v));
+    //                         Some(res)
+    //                     }
+    //                     Err(err) => Some(Err(err.clone())),
+    //                 }
+    //             }
+    //         });
 
-        Ok(new_stream)
-    }
+    //     Ok(new_stream)
+    // }
 
     /// Initiate a new transfer to a Sui or Primary account.
     pub async fn handle_transaction(
@@ -404,6 +458,7 @@ where
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
+        self.metrics_total_requests_handle_object_info_request.inc();
         let response = self
             .authority_client
             .handle_object_info_request(request.clone())
@@ -412,6 +467,8 @@ where
             self.report_client_error(&err);
             return Err(err);
         }
+        self.metrics_total_ok_responses_handle_object_info_request
+            .inc();
         Ok(response)
     }
 
@@ -420,6 +477,8 @@ where
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        self.metrics_total_requests_handle_transaction_info_request
+            .inc();
         let digest = request.transaction_digest;
         let transaction_info = self
             .authority_client
@@ -430,6 +489,8 @@ where
             self.report_client_error(&err);
             return Err(err);
         }
+        self.metrics_total_ok_responses_handle_transaction_info_request
+            .inc();
         Ok(transaction_info)
     }
 
@@ -438,6 +499,8 @@ where
         &self,
         digests: &ExecutionDigests,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        self.metrics_total_requests_handle_transaction_and_effects_info_request
+            .inc();
         let transaction_info = self
             .authority_client
             .handle_transaction_info_request(digests.transaction.into())
@@ -451,6 +514,8 @@ where
             self.report_client_error(&err);
             return Err(err);
         }
+        self.metrics_total_ok_responses_handle_transaction_and_effects_info_request
+            .inc();
         Ok(transaction_info)
     }
 

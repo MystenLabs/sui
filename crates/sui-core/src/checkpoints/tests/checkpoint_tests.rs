@@ -10,6 +10,7 @@ use crate::{
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::LocalAuthorityClient,
+    safe_client::SafeClientMetrics,
 };
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -1677,6 +1678,7 @@ pub async fn checkpoint_tests_setup(
             })
             .collect(),
         AuthAggMetrics::new_for_tests(),
+        SafeClientMetrics::new_for_tests(),
     );
 
     TestSetup {
