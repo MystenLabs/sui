@@ -46,7 +46,7 @@ impl TransactionBuilder {
                 .filter(|obj| obj.type_ == GasCoin::type_().to_string());
 
             for obj in gas_objs {
-                let response = self.read_api.get_raw_object(obj.object_id).await?;
+                let response = self.read_api.get_object(obj.object_id).await?;
                 let obj = response.object()?;
                 let gas: GasCoin = bcs::from_bytes(&obj.data.try_as_move().unwrap().bcs_bytes)?;
                 if !input_objects.contains(&obj.id()) && gas.value() >= budget {
@@ -181,11 +181,7 @@ impl TransactionBuilder {
         type_args: &[TypeTag],
         json_args: Vec<SuiJsonValue>,
     ) -> Result<Vec<CallArg>, anyhow::Error> {
-        let package = self
-            .read_api
-            .get_raw_object(package_id)
-            .await?
-            .into_object()?;
+        let package = self.read_api.get_object(package_id).await?.into_object()?;
         let package = package
             .data
             .try_as_package()
@@ -200,7 +196,7 @@ impl TransactionBuilder {
         for arg in json_args {
             args.push(match arg {
                 SuiJsonCallArg::Object(o) => {
-                    let response = self.read_api.get_raw_object(o).await?;
+                    let response = self.read_api.get_object(o).await?;
                     let obj: Object = response.into_object()?.try_into()?;
                     let obj_ref = obj.compute_object_reference();
                     let owner = obj.owner;
@@ -254,7 +250,7 @@ impl TransactionBuilder {
     ) -> anyhow::Result<TransactionData> {
         let coin = self
             .read_api
-            .get_raw_object(coin_object_id)
+            .get_object(coin_object_id)
             .await?
             .into_object()?;
         let coin_object_ref = coin.reference.to_object_ref();
@@ -289,7 +285,7 @@ impl TransactionBuilder {
     ) -> anyhow::Result<TransactionData> {
         let coin = self
             .read_api
-            .get_raw_object(primary_coin)
+            .get_object(primary_coin)
             .await?
             .into_object()?;
         let primary_coin_ref = coin.reference.to_object_ref();
@@ -376,7 +372,7 @@ impl TransactionBuilder {
     async fn get_object_ref(&self, object_id: ObjectID) -> anyhow::Result<ObjectRef> {
         Ok(self
             .read_api
-            .get_raw_object(object_id)
+            .get_object(object_id)
             .await?
             .object()?
             .reference

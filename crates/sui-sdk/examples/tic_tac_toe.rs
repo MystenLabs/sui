@@ -227,7 +227,7 @@ impl TicTacToe {
     // Retrieve the latest game state from the server.
     async fn fetch_game_state(&self, game_id: ObjectID) -> Result<TicTacToeState, anyhow::Error> {
         // Get the raw BCS serialised move object data
-        let current_game = self.client.read_api().get_raw_object(game_id).await?;
+        let current_game = self.client.read_api().get_object(game_id).await?;
         current_game
             .object()?
             .data

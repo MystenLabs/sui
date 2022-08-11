@@ -18,8 +18,7 @@ use sui_json_rpc_types::{
     GatewayTxSeqNumber, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
     SuiCertifiedTransaction, SuiData, SuiExecutionStatus, SuiGasCostSummary, SuiObject,
     SuiObjectRead, SuiObjectRef, SuiParsedData, SuiRawData, SuiRawMoveObject, SuiTransactionData,
-    SuiTransactionEffects, TransactionBytes, TransactionEffectsResponse, TransactionResponse,
-    TransferObjectParams,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionBytes, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{

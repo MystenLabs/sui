@@ -50,10 +50,10 @@ use crate::{
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
-    PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiData, SuiObject,
-    SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
-    TransactionResponse, TransferObjectParams,
+    GetObjectDataResponse, GetRawObjectDataResponse, MoveCallParams, RPCTransactionRequestParams,
+    SuiData, SuiObject, SuiObjectInfo, SuiParsedMergeCoinResponse, SuiParsedPublishResponse,
+    SuiParsedSplitCoinResponse, SuiParsedTransactionResponse, SuiTransactionEffects,
+    SuiTransactionResponse, SuiTypeTag, TransferObjectParams,
 };
 use sui_types::error::SuiError::ConflictingTransaction;
 

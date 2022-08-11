@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 use anyhow::anyhow;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::resolver::ModuleResolver;
+use tokio::runtime::Handle;
+use tokio::sync::RwLock;
 
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
 use sui_types::base_types::{ObjectID, ObjectRef};
@@ -18,7 +21,7 @@ pub(crate) struct ClientState {
 }
 
 impl ClientState {
-    pub fn get_raw_object(&self, object_id: ObjectID) -> Option<&GetRawObjectDataResponse> {
+    pub fn get_object(&self, object_id: ObjectID) -> Option<&GetRawObjectDataResponse> {
         self.object_refs
             .get(&object_id)
             .and_then(|oref| self.objects.get(oref))
@@ -53,7 +56,7 @@ impl ModuleResolver for ClientState {
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
         let response = self
-            .get_raw_object(ObjectID::from(*id.address()))
+            .get_object(ObjectID::from(*id.address()))
             .ok_or_else(|| anyhow!("Cannot found package [{}]", id.address()))?;
         let package = response
             .object()?
@@ -65,5 +68,16 @@ impl ModuleResolver for ClientState {
             .serialized_module_map()
             .get(id.name().as_str())
             .cloned())
+    }
+}
+
+pub(crate) struct ResolverWrapper<T: ModuleResolver>(pub Arc<RwLock<T>>);
+
+impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
+    type Error = T::Error;
+    fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
+        let handle = Handle::current();
+        let _ = handle.enter();
+        futures::executor::block_on(self.0.read()).get_module(module_id)
     }
 }

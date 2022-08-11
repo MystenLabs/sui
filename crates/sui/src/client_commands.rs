@@ -301,7 +301,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::Object { id } => {
                 // Fetch the object ref
-                let object_read = context.gateway.read_api().get_object(id).await?;
+                let object_read = context.gateway.read_api().get_parsed_object(id).await?;
                 SuiClientCommandResult::Object(object_read)
             }
             SuiClientCommands::Call {
@@ -519,7 +519,7 @@ impl SuiClientCommands {
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
                     .reference
                     .object_id;
-                let object_read = context.gateway.read_api().get_object(nft_id).await?;
+                let object_read = context.gateway.read_api().get_parsed_object(nft_id).await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
         });
@@ -583,7 +583,12 @@ impl WalletContext {
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();
         for oref in object_refs {
-            match self.gateway.read_api().get_object(oref.object_id).await? {
+            let response = self
+                .gateway
+                .read_api()
+                .get_parsed_object(oref.object_id)
+                .await?;
+            match response {
                 GetObjectDataResponse::Exists(o) => {
                     if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
                         // Okay to unwrap() since we already checked type

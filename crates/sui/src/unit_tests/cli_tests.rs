@@ -171,8 +171,8 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
-async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
-    let (_network, mut context, address) = setup_network_and_wallet().await?;
+async fn test_create_example_nft_command() {
+    let (_network, mut context, address) = setup_network_and_wallet().await.unwrap();
 
     let result = SuiClientCommands::CreateExampleNFT {
         name: None,
@@ -182,7 +182,8 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
         gas_budget: None,
     }
     .execute(&mut context)
-    .await?;
+    .await
+    .unwrap();
 
     match result {
         SuiClientCommandResult::CreateExampleNFT(GetObjectDataResponse::Exists(obj)) => {
@@ -196,9 +197,8 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
         _ => Err(anyhow!(
             "WalletCommands::CreateExampleNFT returns wrong type"
         )),
-    }?;
-
-    Ok(())
+    }
+    .unwrap();
 }
 
 #[tokio::test]
@@ -818,9 +818,13 @@ fn get_gas_value(o: &SuiParsedObject) -> u64 {
 }
 
 async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiParsedObject> {
-    if let GetObjectDataResponse::Exists(o) =
-        context.gateway.read_api().get_object(id).await.unwrap()
-    {
+    let response = context
+        .gateway
+        .read_api()
+        .get_parsed_object(id)
+        .await
+        .unwrap();
+    if let GetObjectDataResponse::Exists(o) = response {
         Some(o)
     } else {
         None
