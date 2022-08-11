@@ -216,8 +216,7 @@ use.  The profiling code spits out profiles at most every 5 minutes, and only wh
 by a default 20%.  Profiling files are named `jeprof.<TIMESTAMP>.<memorysize>MB.prof` so that it is easy to 
 correlate to metrics and incidents, for ease of debugging.
 
-For the memory profiling to work, the following environment variables need to be set (and if you use the 
-Docker image, they are set automatically):
+For the memory profiling to work, you need to set the following environment variables. If you use the [Docker image](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme), they are set automatically):
 
 * `MALLOC_CONF=prof:true`
 * `_RJEM_MALLOC_CONF=prof:true`
