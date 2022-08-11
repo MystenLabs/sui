@@ -4,8 +4,11 @@
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use futures::StreamExt;
-use prometheus::core::GenericCounter;
-use prometheus::{register_int_counter_vec_with_registry, IntCounterVec};
+use prometheus::core::{GenericCounter, GenericGauge};
+use prometheus::{
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
+    IntGaugeVec,
+};
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
@@ -23,8 +26,10 @@ use tracing::info;
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 #[derive(Clone, Debug)]
 pub struct SafeClientMetrics {
-    pub total_requests_by_address_method: IntCounterVec,
-    pub total_responses_by_address_method: IntCounterVec,
+    pub(crate) total_requests_by_address_method: IntCounterVec,
+    pub(crate) total_responses_by_address_method: IntCounterVec,
+    pub(crate) follower_streaming_from_seq_number_by_address: IntGaugeVec,
+    pub(crate) follower_streaming_reconnect_times_by_address: IntCounterVec,
 }
 
 impl SafeClientMetrics {
@@ -41,6 +46,20 @@ impl SafeClientMetrics {
                 "safe_client_total_responses_by_address_method",
                 "Total good (OK) responses from validators group by address and method",
                 &["address", "method"],
+                registry,
+            )
+            .unwrap(),
+            follower_streaming_from_seq_number_by_address: register_int_gauge_vec_with_registry!(
+                "safe_client_follower_streaming_from_seq_number_by_address",
+                "The seq nubmer with which to request follower streaming, group by address",
+                &["address"],
+                registry,
+            )
+            .unwrap(),
+            follower_streaming_reconnect_times_by_address: register_int_counter_vec_with_registry!(
+                "safe_client_follower_streaming_reconnect_times_by_address",
+                "Total times that a follower stream is closed and reconnected, group by address",
+                &["address"],
                 registry,
             )
             .unwrap(),
@@ -69,6 +88,11 @@ pub struct SafeClient<C> {
         GenericCounter<prometheus::core::AtomicU64>,
     metrics_total_requests_handle_object_info_request: GenericCounter<prometheus::core::AtomicU64>,
     metrics_total_ok_responses_handle_object_info_request:
+        GenericCounter<prometheus::core::AtomicU64>,
+    metrics_total_requests_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
+    metrics_total_ok_responses_handle_batch_stream: GenericCounter<prometheus::core::AtomicU64>,
+    pub(crate) metrics_seq_number_to_handle_batch_stream: GenericGauge<prometheus::core::AtomicI64>,
+    pub(crate) metrics_total_times_reconnect_follower_stream:
         GenericCounter<prometheus::core::AtomicU64>,
 }
 
@@ -105,6 +129,18 @@ impl<C> SafeClient<C> {
         let metrics_total_ok_responses_handle_object_info_request = responses_metrics_vec
             .with_label_values(&[&validator_address, "handle_object_info_request"]);
 
+        let metrics_total_requests_handle_batch_stream =
+            requests_metrics_vec.with_label_values(&[&validator_address, "handle_batch_stream"]);
+        let metrics_total_ok_responses_handle_batch_stream =
+            responses_metrics_vec.with_label_values(&[&validator_address, "handle_batch_stream"]);
+
+        let metrics_seq_number_to_handle_batch_stream = safe_client_metrics
+            .follower_streaming_from_seq_number_by_address
+            .with_label_values(&[&validator_address]);
+        let metrics_total_times_reconnect_follower_stream = safe_client_metrics
+            .follower_streaming_reconnect_times_by_address
+            .with_label_values(&[&validator_address]);
+
         Self {
             authority_client,
             committee,
@@ -116,6 +152,10 @@ impl<C> SafeClient<C> {
             metrics_total_ok_responses_handle_transaction_info_request,
             metrics_total_requests_handle_object_info_request,
             metrics_total_ok_responses_handle_object_info_request,
+            metrics_total_requests_handle_batch_stream,
+            metrics_total_ok_responses_handle_batch_stream,
+            metrics_seq_number_to_handle_batch_stream,
+            metrics_total_times_reconnect_follower_stream,
         }
     }
 
@@ -574,11 +614,12 @@ where
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
+        self.metrics_total_requests_handle_batch_stream.inc();
         let batch_info_items = self
             .authority_client
             .handle_batch_stream(request.clone())
             .await?;
-
+        self.metrics_total_ok_responses_handle_batch_stream.inc();
         let client = self.clone();
         let address = self.address;
         let count: u64 = 0;

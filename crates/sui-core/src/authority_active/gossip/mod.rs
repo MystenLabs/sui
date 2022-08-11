@@ -489,11 +489,14 @@ where
 
         let mut latest_seq = self.max_seq;
 
+        self.client
+            .metrics_seq_number_to_handle_batch_stream
+            .set(latest_seq.unwrap_or_default() as i64);
+
         let req = BatchInfoRequest {
             start: latest_seq,
             length: REQUEST_FOLLOW_NUM_DIGESTS,
         };
-
         let mut last_seq_in_cur_batch: TxSequenceNumber = 0;
         let mut streamx = Box::pin(self.client.handle_batch_stream(req).await?);
         let metrics = handler.get_metrics();
@@ -544,6 +547,9 @@ where
 
                         // The stream has closed, re-request:
                         None => {
+                            info!(peer = ?self.peer_name, ?latest_seq, "Gossip stream was closed. Restarting");
+                            self.client.metrics_seq_number_to_handle_batch_stream.set(latest_seq.unwrap_or_default() as i64);
+                            self.client.metrics_total_times_reconnect_follower_stream.inc();
                             tokio::time::sleep(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS / 12)).await;
                             let req = BatchInfoRequest {
                                 start: latest_seq,
