@@ -210,7 +210,7 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
 
 ### Memory profiling
 
-Sui uses the jemalloc memory allocator by default on most platforms, and there is code that enables automatic
+Sui uses the [jemalloc memory allocator](https://jemalloc.net/) by default on most platforms, and there is code that enables automatic
 memory profiling using jemalloc's sampling profiler, which is very lightweight and designed for production
 use.  The profiling code spits out profiles at most every 5 minutes, and only when total memory has increased
 by a default 20%.  Profiling files are named `jeprof.<TIMESTAMP>.<memorysize>MB.prof` so that it is easy to 
