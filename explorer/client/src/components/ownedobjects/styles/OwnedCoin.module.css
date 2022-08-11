@@ -35,7 +35,11 @@
 }
 
 .openedgroup {
-    @apply bg-sui-grey-40 rounded-md max-h-[245px] overflow-auto;
+    @apply bg-sui-grey-40 rounded-md;
+}
+
+.openbody {
+    @apply max-h-[200px] overflow-auto;
 }
 
 .objectid,

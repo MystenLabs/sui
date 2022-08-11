@@ -93,35 +93,45 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                                         </div>
                                         <div />
                                     </div>
-                                    {openedType === typeV &&
-                                        subObjList.map((subObj, index) => (
-                                            <React.Fragment
-                                                key={`${typeV}${index}`}
-                                            >
-                                                <div
-                                                    className={styles.objectid}
+                                    <div className={styles.openbody}>
+                                        {openedType === typeV &&
+                                            subObjList.map((subObj, index) => (
+                                                <React.Fragment
+                                                    key={`${typeV}${index}`}
                                                 >
-                                                    <div />
-                                                    <div>Object ID</div>
-                                                    <div>
-                                                        <Longtext
-                                                            text={subObj.id}
-                                                            category="objects"
-                                                            isCopyButton={false}
-                                                        />
+                                                    <div
+                                                        className={
+                                                            styles.objectid
+                                                        }
+                                                    >
+                                                        <div />
+                                                        <div>Object ID</div>
+                                                        <div>
+                                                            <Longtext
+                                                                text={subObj.id}
+                                                                category="objects"
+                                                                isCopyButton={
+                                                                    false
+                                                                }
+                                                            />
+                                                        </div>
+                                                        <div />
                                                     </div>
-                                                    <div />
-                                                </div>
-                                                <div className={styles.balance}>
-                                                    <div />
-                                                    <div>Balance</div>
-                                                    <div>
-                                                        {subObj.balance?.toString()}
+                                                    <div
+                                                        className={
+                                                            styles.balance
+                                                        }
+                                                    >
+                                                        <div />
+                                                        <div>Balance</div>
+                                                        <div>
+                                                            {subObj.balance?.toString()}
+                                                        </div>
+                                                        <div />
                                                     </div>
-                                                    <div />
-                                                </div>
-                                            </React.Fragment>
-                                        ))}
+                                                </React.Fragment>
+                                            ))}
+                                    </div>
                                 </div>
                             );
                         })}
