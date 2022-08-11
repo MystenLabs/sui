@@ -142,7 +142,7 @@ where
         // Replace the clients in the authority aggregator with new clients.
         let new_net = Arc::new(AuthorityAggregator::new(
             new_committee,
-            self.state.clone_epoch_store(),
+            self.state.epoch_store().clone(),
             new_clients,
             self.net.load().metrics.clone(),
             self.net.load().safe_client_metrics.clone(),

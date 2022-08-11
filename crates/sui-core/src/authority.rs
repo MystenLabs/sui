@@ -346,8 +346,8 @@ impl AuthorityState {
         self.committee.load().epoch
     }
 
-    pub fn clone_epoch_store(&self) -> Arc<EpochStore> {
-        self.epoch_store.clone()
+    pub fn epoch_store(&self) -> &Arc<EpochStore> {
+        &self.epoch_store
     }
 
     async fn handle_transaction_impl(
@@ -1169,7 +1169,11 @@ impl AuthorityState {
                 .expect("No issues");
         }
 
-        let epochs = Arc::new(EpochStore::new(path.join("epochs"), &genesis_committee));
+        let epochs = Arc::new(EpochStore::new(
+            path.join("epochs"),
+            &genesis_committee,
+            None,
+        ));
 
         AuthorityState::new(
             secret.public().into(),

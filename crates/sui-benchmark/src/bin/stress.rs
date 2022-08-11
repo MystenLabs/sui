@@ -600,9 +600,10 @@ async fn main() -> Result<()> {
         let committee = GatewayState::make_committee(&config)?;
         let authority_clients = GatewayState::make_authority_clients(&config);
         let registry = prometheus::Registry::new();
+        let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
         let aggregator = AuthorityAggregator::new(
             committee,
-            Arc::new(EpochStore::new_for_testing(&committee))
+            epoch_store,
             authority_clients,
             AuthAggMetrics::new(&registry),
             SafeClientMetrics::new(&registry),
@@ -660,9 +661,10 @@ async fn main() -> Result<()> {
                     .parse()
                     .unwrap(),
             );
+            let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
             let aggregator = AuthorityAggregator::new(
                 committee,
-                Arc::new(EpochStore::new_for_testing(&committee))
+                epoch_store,
                 authority_clients,
                 AuthAggMetrics::new(&registry),
                 SafeClientMetrics::new(&registry),

@@ -185,8 +185,10 @@ impl<A> GatewayState<A> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
+        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None));
+        let epoch_store = Arc::new(EpochStore::new(base_path.join("epochs"), &committee, None));
         Self::new_with_authorities(
-            path,
+            gateway_store,
             AuthorityAggregator::new(
                 committee,
                 epoch_store,

@@ -368,7 +368,7 @@ async fn shared_object_on_gateway() {
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let clients = test_authority_aggregator(&configs, handles[0].state().clone_epoch_store());
+    let clients = test_authority_aggregator(&configs, handles[0].state().epoch_store().clone());
     let path = tempfile::tempdir().unwrap().into_path();
     let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None));
     let gateway = Arc::new(

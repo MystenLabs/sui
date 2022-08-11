@@ -189,7 +189,12 @@ impl<A> AuthorityAggregator<A> {
                 .map(|(name, api)| {
                     (
                         name,
-                        SafeClient::new(api, epoch_store.clone(), name, safe_client_metrics.clone()),
+                        SafeClient::new(
+                            api,
+                            epoch_store.clone(),
+                            name,
+                            safe_client_metrics.clone(),
+                        ),
                     )
                 })
                 .collect(),

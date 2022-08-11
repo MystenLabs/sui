@@ -239,7 +239,7 @@ pub async fn init_configurable_authorities(
         }
         states.push(client.state.clone());
         names.push(authority_name);
-        let epoch_store = client.state.clone_epoch_store();
+        let epoch_store = client.state.epoch_store().clone();
         clients.push(SafeClient::new(
             client,
             epoch_store,

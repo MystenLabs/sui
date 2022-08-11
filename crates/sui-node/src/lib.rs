@@ -81,7 +81,11 @@ impl SuiNode {
         let secret = Arc::pin(config.key_pair().copy());
         let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
-        let epoch_store = Arc::new(EpochStore::new(config.db_path().join("epochs"), &committee));
+        let epoch_store = Arc::new(EpochStore::new(
+            config.db_path().join("epochs"),
+            &committee,
+            None,
+        ));
 
         let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
             &config.db_path().join("checkpoints"),
