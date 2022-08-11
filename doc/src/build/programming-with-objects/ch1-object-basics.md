@@ -12,12 +12,12 @@ struct Color {
 }
 ```
 The above `struct` defines a data structure that can represent RGB color. `struct`s like this can be used to organize data with complicated semantics. However, instances of `struct`s like `Color` are not Sui objects yet.
-To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `Info` from the [object library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move):
+To define a struct that represents a Sui object type, we must add a `key` capability to the definition, and the first field of the struct must be the `id` of the object with type `UID` from the [object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move):
 ```rust
-use sui::object::Info;
+use sui::object::UID;
 
 struct ColorObject has key {
-    info: Info,
+    id: UID,
     red: u8,
     green: u8,
     blue: u8,
@@ -26,22 +26,22 @@ struct ColorObject has key {
 Now `ColorObject` represents a Sui object type and can be used to create Sui objects that can be eventually stored on the Sui chain.
 > :books: In both core Move and Sui Move, the [key ability](https://github.com/move-language/move/blob/main/language/documentation/book/src/abilities.md#key) denotes a type that can appear as a key in global storage. However, the structure of global storage is a bit different: core Move uses a (type, `address`)-indexed map, whereas Sui Move uses a map keyed by object IDs.
 
-> :bulb: The `Info` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the unique `ID` of the object and the version of the object. Each time a mutable object is used in a transaction, its version will increase by 1.
+> :bulb: The `UID` type is internal to Sui, and you most likely won't need to deal with it directly. For curious readers, it contains the "unique ID" that defines an object. It is unique in the sense that no two values of type `UID` will ever have the same underlying set of bytes.
 
 ### Create Sui object
-Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `info`. The only way to create a new unique `Info` for a Sui object is to call `object::new`. The `new` function takes the current transaction context as an argument to generate unique IDs. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move/index.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
+Now that we have learned how to define a Sui object type, how do we create/instantiate a Sui object? In order to create a new Sui object from its type, we must assign an initial value to each of the fields, including `id`. The only way to create a new `UID` for a Sui object is to call `object::new`. The `new` function takes the current transaction context as an argument to generate unique `ID`s. The transaction context is of type `&mut TxContext` and should be passed down from an [entry function](../move/index.md#entry-functions) (a function that can be called directly from a transaction). Let's look at how we may define a constructor for `ColorObject`:
 ```rust
-// object represents the object module, which allows us call
+// object creates an alias to the object module, which allows us call
 // functions in the module, such as the `new` function, without fully
 // qualifying, e.g. `sui::object::new`.
 use sui::object;
-// tx_context::TxContext represents the TxContext struct in tx_context module.
+// tx_context::TxContext creates an alias to the the TxContext struct in tx_context module.
 use sui::tx_context::TxContext;
 
 
 fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
     ColorObject {
-        info: object::new(ctx),
+        id: object::new(ctx),
         red,
         green,
         blue,
@@ -53,7 +53,7 @@ fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
 ### Store Sui object
 We have defined a constructor for the `ColorObject`. Calling this constructor will put the value in a local variable where it can be returned from the current function, passed to other functions, or stored inside another struct. And of course, the object can be placed in persistent global storage so it can be read by the outside world and accessed in subsequent transactions.
 
-All of the APIs for adding objects to persistent storage live in the [`Transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) module. One key API is:
+All of the APIs for adding objects to persistent storage live in the [`transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) module. One key API is:
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
@@ -111,19 +111,19 @@ let scenario = &mut test_scenario::begin(&owner);
     color_object::create(255, 0, 255, ctx);
 };
 ```
->:books: Note there is a "`;`" after "`}`". This is required except for the last statement in the function. Refer to the [Move book](https://move-book.com/syntax-basics/expression-and-scope.html) for a detailed explanation.
+>:books: Note there is a "`;`" after "`}`". `;` is required to sequence a series of expressions, and even the block `{ ... }` is an expression! Refer to the [Move book](https://move-book.com/syntax-basics/expression-and-scope.html) for a detailed explanation.
 
 Now account `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
 ```rust
 let not_owner = @0x2;
-// Check that @not_owner does not own the just-created ColorObject.
+// Check that not_owner does not own the just-created ColorObject.
 test_scenario::next_tx(scenario, &not_owner);
 {
     assert!(!test_scenario::can_take_owned<ColorObject>(scenario), 0);
 };
 ```
 
-`test_scenario::next_tx` switches the transaction sender to `@0x2`, which is a new address than the previous one.
+`test_scenario::next_tx` switches the transaction sender to `@0x2`, which is a new address different from the previous one.
 `test_scenario::can_take_owned` checks whether an object with the given type actually exists in the global storage owned by the current sender of the transaction. In this code, we assert that we should not be able to remove such an object, because `@0x2` does not own any object.
 > :bulb: The second parameter of `assert!` is the error code. In non-test code, we usually define a list of dedicated error code constants for each type of error that could happen in production. For unit tests though, it's usually unnecessary because there will be way too many assetions and the stacktrace upon error is sufficient to tell where the error happened. Hence we recommend just putting `0` there in unit tests for assertions.
 
