@@ -13,7 +13,7 @@
 }
 
 .summary {
-    @apply grid py-[10px] cursor-pointer;
+    @apply grid py-[10px] cursor-pointer break-words;
 
     grid-template-columns: 5% 30% 30% 30% 5%;
 }
@@ -44,7 +44,7 @@
 
 .objectid,
 .balance {
-    @apply text-sui-grey-80 grid;
+    @apply text-sui-grey-80 grid break-words;
 
     grid-template-columns: 5% 30% 60% 5%;
 }
