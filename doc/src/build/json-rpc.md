@@ -66,8 +66,6 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}'
 ```
 
-You can see an example of the discovery service in the [Sui API Reference](https://docs.sui.io/sui-jsonrpc).
-
 ### sui_syncAccountState
 
 Synchronize client state with validators with the following command,
