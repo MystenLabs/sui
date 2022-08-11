@@ -10,14 +10,21 @@ use bincode::Options;
 use collectable::TryExtend;
 use rocksdb::{ColumnFamilyDescriptor, DBWithThreadMode, MultiThreaded, WriteBatch};
 use serde::{de::DeserializeOwned, Serialize};
-use std::{borrow::Borrow, marker::PhantomData, path::Path, sync::Arc};
-use tracing::instrument;
+use std::{borrow::Borrow, env, marker::PhantomData, path::Path, sync::Arc};
+use tracing::{info, instrument};
 
 use self::{iter::Iter, keys::Keys, values::Values};
 pub use errors::TypedStoreError;
 
-// The default bytes limit on total memtable size per RocksDB.
-const DB_WRITE_BUFFER_SIZE: usize = 512 * 1024 * 1024;
+// Write buffer size per RocksDB instance can be set via the env var below.
+// If the env var is not set, use the default value in MiB.
+const ENV_VAR_DB_WRITE_BUFFER_SIZE: &str = "MYSTEN_DB_WRITE_BUFFER_SIZE_MB";
+const DEFAULT_DB_WRITE_BUFFER_SIZE: usize = 512;
+
+// Write ahead log size per RocksDB instance can be set via the env var below.
+// If the env var is not set, use the default value in MiB.
+const ENV_VAR_DB_WAL_SIZE: &str = "MYSTEN_DB_WAL_SIZE_MB";
+const DEFAULT_DB_WAL_SIZE: usize = 1024;
 
 #[cfg(test)]
 mod tests;
@@ -430,11 +437,46 @@ where
     }
 }
 
-/// Creates a default Rocksdb option.
+fn read_size_from_env(var_name: &str) -> Option<usize> {
+    match env::var(var_name) {
+        Ok(val) => match val.parse::<usize>() {
+            Ok(i) => Some(i),
+            Err(e) => {
+                info!(
+                    "Env var {} does not contain valid usize integer: {}",
+                    var_name, e
+                );
+                Option::None
+            }
+        },
+        Err(e) => {
+            info!("Env var {} is not set: {}", var_name, e);
+            Option::None
+        }
+    }
+}
+
+/// Creates a default RocksDB option, to be used when RocksDB option is not specified..
 pub fn default_rocksdb_options() -> rocksdb::Options {
     let mut opt = rocksdb::Options::default();
-    // Limit the total memtable usage per db.
-    opt.set_db_write_buffer_size(DB_WRITE_BUFFER_SIZE);
+    // Sui uses multiple RocksDB in a node, so total sizes of write buffers and WAL can be higher
+    // than the limits below.
+    //
+    // RocksDB also exposes the option to configure total write buffer size across multiple instances
+    // via `write_buffer_manager`. But the write buffer flush policy (flushing the buffer receiving
+    // the next write) may not work well. So sticking to per-db write buffer size limit for now.
+    //
+    // The environment variables are only meant to be emergency overrides. They may go away in future.
+    // If you need to modify an option, either update the default value, or override the option in
+    // Sui / Narwhal.
+    opt.set_db_write_buffer_size(
+        read_size_from_env(ENV_VAR_DB_WRITE_BUFFER_SIZE).unwrap_or(DEFAULT_DB_WRITE_BUFFER_SIZE)
+            * 1024
+            * 1024,
+    );
+    opt.set_max_total_wal_size(
+        read_size_from_env(ENV_VAR_DB_WAL_SIZE).unwrap_or(DEFAULT_DB_WAL_SIZE) as u64 * 1024 * 1024,
+    );
     opt
 }
 
