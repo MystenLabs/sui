@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, TransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DeleteObjectEvent, MoveEvent, NewObjectEvent, PublishEvent, SuiEvent, TransferObjectEvent } from "./index";
 import { BN } from "bn.js";
 import { Base64DataBuffer } from "./serialization/base64";
 import { PublicKey } from "./cryptography/publickey";
@@ -559,6 +559,105 @@ export function isObjectId(obj: any, _argumentName?: string): obj is ObjectId {
 export function isSequenceNumber(obj: any, _argumentName?: string): obj is SequenceNumber {
     return (
         typeof obj === "number"
+    )
+}
+
+export function isMoveEvent(obj: any, _argumentName?: string): obj is MoveEvent {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.packageId) as boolean &&
+        isTransactionDigest(obj.transactionModule) as boolean &&
+        isTransactionDigest(obj.sender) as boolean &&
+        isTransactionDigest(obj.type) as boolean &&
+        (obj.fields !== null &&
+            typeof obj.fields === "object" ||
+            typeof obj.fields === "function") &&
+        isTransactionDigest(obj.bcs) as boolean
+    )
+}
+
+export function isPublishEvent(obj: any, _argumentName?: string): obj is PublishEvent {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.sender) as boolean &&
+        isTransactionDigest(obj.packageId) as boolean
+    )
+}
+
+export function isTransferObjectEvent(obj: any, _argumentName?: string): obj is TransferObjectEvent {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.packageId) as boolean &&
+        isTransactionDigest(obj.transactionModule) as boolean &&
+        isTransactionDigest(obj.sender) as boolean &&
+        isObjectOwner(obj.recipient) as boolean &&
+        isTransactionDigest(obj.objectId) as boolean &&
+        isSequenceNumber(obj.version) as boolean &&
+        isTransactionDigest(obj.type) as boolean
+    )
+}
+
+export function isDeleteObjectEvent(obj: any, _argumentName?: string): obj is DeleteObjectEvent {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.packageId) as boolean &&
+        isTransactionDigest(obj.transactionModule) as boolean &&
+        isTransactionDigest(obj.sender) as boolean &&
+        isTransactionDigest(obj.objectId) as boolean
+    )
+}
+
+export function isNewObjectEvent(obj: any, _argumentName?: string): obj is NewObjectEvent {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.packageId) as boolean &&
+        isTransactionDigest(obj.transactionModule) as boolean &&
+        isTransactionDigest(obj.sender) as boolean &&
+        isObjectOwner(obj.recipient) as boolean &&
+        isTransactionDigest(obj.objectId) as boolean
+    )
+}
+
+export function isSuiEvent(obj: any, _argumentName?: string): obj is SuiEvent {
+    return (
+        ((obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+            isMoveEvent(obj.moveEvent) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isPublishEvent(obj.publish) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransferObjectEvent(obj.transferObject) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isDeleteObjectEvent(obj.deleteObject) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isNewObjectEvent(obj.newObject) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            typeof obj.epochChange === "bigint" ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            typeof obj.checkpoint === "bigint")
     )
 }
 

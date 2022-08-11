@@ -14,8 +14,13 @@ import {
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
+import {
+    eventToDisplay,
+    getAddressesLinks,
+} from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
+import { type Link, TxAddresses } from '../../components/table/TableCard';
 import Tabs from '../../components/tabs/Tabs';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
@@ -28,6 +33,7 @@ import type {
     ExecutionStatusType,
     SuiTransactionKind,
     SuiObjectRef,
+    SuiEvent,
 } from '@mysten/sui.js';
 
 import styles from './TransactionResult.module.css';
@@ -39,6 +45,7 @@ type TxDataProps = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
+    events?: SuiEvent[];
 };
 
 function generateMutatedCreated(tx: TxDataProps) {
@@ -138,6 +145,7 @@ function formatByTransactionKind(
 
 type TxItemView = {
     title: string;
+    titleStyle?: string;
     content: {
         label?: string | number | any;
         value: string | number;
@@ -150,20 +158,36 @@ type TxItemView = {
 function ItemView({ data }: { data: TxItemView }) {
     return (
         <div className={styles.itemView}>
-            <div className={styles.itemviewtitle}>{data.title}</div>
+            <div
+                className={
+                    data.titleStyle
+                        ? styles[data.titleStyle]
+                        : styles.itemviewtitle
+                }
+            >
+                {data.title}
+            </div>
             <div className={styles.itemviewcontent}>
                 {data.content.map((item, index) => {
+                    // handle sender -> recipient display in one line
+                    let links: Link[] = [];
+                    let label = item.label;
+                    if (Array.isArray(item)) {
+                        links = getAddressesLinks(item);
+                        label = 'Sender, Recipient';
+                    }
+
                     return (
                         <div
                             key={index}
                             className={cl(
                                 styles.itemviewcontentitem,
-                                !item.label && styles.singleitem
+                                label && styles.singleitem
                             )}
                         >
-                            {item.label && (
+                            {label && (
                                 <div className={styles.itemviewcontentlabel}>
-                                    {item.label}
+                                    {label}
                                 </div>
                             )}
                             <div
@@ -172,6 +196,9 @@ function ItemView({ data }: { data: TxItemView }) {
                                     item.monotypeClass && styles.mono
                                 )}
                             >
+                                {links.length > 1 && (
+                                    <TxAddresses content={links}></TxAddresses>
+                                )}
                                 {item.link ? (
                                     <Longtext
                                         text={item.value as string}
@@ -206,6 +233,32 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         txKindName: txKindName,
         ...(txdata.txError ? { error: txdata.txError } : {}),
     };
+
+    const txEventData = txdata.events?.map(eventToDisplay);
+
+    let eventTitles: string[] = [];
+    const txEventDisplay = txEventData?.map((ed) => {
+        if (!ed) return <div></div>;
+
+        eventTitles.push(ed.top.title);
+        return (
+            <div className={styles.txgridcomponent} key={ed.top.title}>
+                <ItemView data={ed.top as TxItemView} />
+                {ed.fields && <ItemView data={ed.fields as TxItemView} />}
+            </div>
+        );
+    });
+
+    let eventTitlesDisplay = eventTitles.map((et) => (
+        <div key={et} className={styles.eventtitle}>
+            <Longtext
+                text={et}
+                category={'unknown'}
+                isCopyButton={false}
+                isLink={false}
+            />
+        </div>
+    ));
 
     const transactionSignatureData = {
         title: 'Transaction Signatures',
@@ -351,6 +404,16 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                     </div>
                     <div className={styles.txgridcomponent}>
                         <ItemView data={GasStorageFees} />
+                    </div>
+                </section>
+                <section title="Events">
+                    <div className={styles.txevents}>
+                        <div className={styles.txeventsleft}>
+                            {eventTitlesDisplay}
+                        </div>
+                        <div className={styles.txeventsright}>
+                            {txEventDisplay}
+                        </div>
                     </div>
                 </section>
                 <section title="Signatures">
