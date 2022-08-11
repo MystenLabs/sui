@@ -10,7 +10,7 @@ import Longtext from '../../longtext/Longtext';
 import Pagination from '../../pagination/Pagination';
 import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
 
-import styles from './OwnedObjects.module.css';
+import styles from '../styles/OwnedCoin.module.css';
 
 export default function OwnedCoinView({ results }: { results: DataType }) {
     const CLOSED_TYPE_STRING = '';
