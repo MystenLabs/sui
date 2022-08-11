@@ -2,6 +2,7 @@
 *.move linguist-language=Rust
 *.mvir linguist-language=Rust
 
-# This file is used in "porcelain" file comparison,
+# These files are used in "porcelain" file comparison,
 # we don't want an equality to fail because of line endings.
-sui_core/tests/staged/sui.yaml text eol=lf
+crates/sui-core/tests/staged/sui.yaml text eol=lf
+crates/sui-open-rpc/spec/openrpc.json text eol=lf

@@ -49,10 +49,10 @@ use crate::{
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
-    PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
-    SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
-    TransactionResponse, TransferObjectParams,
+    GetObjectDataResponse, GetRawObjectDataResponse, MoveCallParams, RPCTransactionRequestParams,
+    SuiMoveObject, SuiObject, SuiObjectInfo, SuiParsedMergeCoinResponse, SuiParsedPublishResponse,
+    SuiParsedSplitCoinResponse, SuiParsedTransactionResponse, SuiTransactionEffects,
+    SuiTransactionResponse, SuiTypeTag, TransferObjectParams,
 };
 use sui_types::error::SuiError::ConflictingTransaction;
 
@@ -275,7 +275,7 @@ pub trait GatewayAPI {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<TransactionResponse, anyhow::Error>;
+    ) -> Result<SuiTransactionResponse, anyhow::Error>;
 
     /// Send an object to a Sui address. The object's type must allow public transfers
     async fn public_transfer_object(
@@ -409,7 +409,7 @@ pub trait GatewayAPI {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEffectsResponse, anyhow::Error>;
+    ) -> Result<SuiTransactionResponse, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -810,11 +810,52 @@ where
         Ok(objects)
     }
 
+    async fn create_parsed_transaction_response(
+        &self,
+        tx_kind: TransactionKind,
+        certificate: CertifiedTransaction,
+        effects: TransactionEffects,
+    ) -> Result<Option<SuiParsedTransactionResponse>, anyhow::Error> {
+        if let TransactionKind::Single(tx_kind) = tx_kind {
+            match tx_kind {
+                SingleTransactionKind::Publish(_) => {
+                    self.metrics.num_tx_publish.inc();
+                    return Ok(Some(
+                        self.create_publish_response(certificate, effects).await?,
+                    ));
+                }
+                // Work out if the transaction is split coin or merge coin transaction
+                SingleTransactionKind::Call(move_call) => {
+                    self.metrics.num_tx_movecall.inc();
+                    if move_call.package == self.get_framework_object_ref().await?
+                        && move_call.module.as_ref() == coin::COIN_MODULE_NAME
+                    {
+                        if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
+                            self.metrics.num_tx_splitcoin.inc();
+                            return Ok(Some(
+                                self.create_split_coin_response(certificate, effects)
+                                    .await?,
+                            ));
+                        } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
+                            self.metrics.num_tx_mergecoin.inc();
+                            return Ok(Some(
+                                self.create_merge_coin_response(certificate, effects)
+                                    .await?,
+                            ));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(None)
+    }
+
     async fn create_publish_response(
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
-    ) -> Result<TransactionResponse, anyhow::Error> {
+    ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
         if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
@@ -886,19 +927,20 @@ where
             "Created Publish response"
         );
 
-        Ok(TransactionResponse::PublishResponse(PublishResponse {
-            certificate: certificate.try_into()?,
-            package,
-            created_objects,
-            updated_gas,
-        }))
+        Ok(SuiParsedTransactionResponse::Publish(
+            SuiParsedPublishResponse {
+                package,
+                created_objects,
+                updated_gas,
+            },
+        ))
     }
 
     async fn create_split_coin_response(
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
-    ) -> Result<TransactionResponse, anyhow::Error> {
+    ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
         let signer = certificate.data.signer();
         let (gas_payment, _, _) = certificate.data.gas();
@@ -943,19 +985,20 @@ where
             "Created Split Coin response"
         );
 
-        Ok(TransactionResponse::SplitCoinResponse(SplitCoinResponse {
-            certificate: certificate.try_into()?,
-            updated_coin,
-            new_coins,
-            updated_gas,
-        }))
+        Ok(SuiParsedTransactionResponse::SplitCoin(
+            SuiParsedSplitCoinResponse {
+                updated_coin,
+                new_coins,
+                updated_gas,
+            },
+        ))
     }
 
     async fn create_merge_coin_response(
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
-    ) -> Result<TransactionResponse, anyhow::Error> {
+    ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
         let primary_coin = match call.arguments.first() {
             Some(CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))) => id,
@@ -988,11 +1031,12 @@ where
             "Created Merge Coin response"
         );
 
-        Ok(TransactionResponse::MergeCoinResponse(MergeCoinResponse {
-            certificate: certificate.try_into()?,
-            updated_coin,
-            updated_gas,
-        }))
+        Ok(SuiParsedTransactionResponse::MergeCoin(
+            SuiParsedMergeCoinResponse {
+                updated_coin,
+                updated_gas,
+            },
+        ))
     }
 
     fn try_get_move_call(certificate: &CertifiedTransaction) -> Result<&MoveCall, anyhow::Error> {
@@ -1159,7 +1203,7 @@ where
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<TransactionResponse, anyhow::Error> {
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let tx_kind = tx.data.kind.clone();
         let tx_digest = tx.digest();
 
@@ -1221,37 +1265,16 @@ where
         };
 
         // Create custom response base on the request type
-        if let TransactionKind::Single(tx_kind) = tx_kind {
-            match tx_kind {
-                SingleTransactionKind::Publish(_) => {
-                    self.metrics.num_tx_publish.inc();
-                    return self.create_publish_response(certificate, effects).await;
-                }
-                // Work out if the transaction is split coin or merge coin transaction
-                SingleTransactionKind::Call(move_call) => {
-                    self.metrics.num_tx_movecall.inc();
-                    if move_call.package == self.get_framework_object_ref().await?
-                        && move_call.module.as_ref() == coin::COIN_MODULE_NAME
-                    {
-                        if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
-                            self.metrics.num_tx_splitcoin.inc();
-                            return self.create_split_coin_response(certificate, effects).await;
-                        } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
-                            self.metrics.num_tx_mergecoin.inc();
-                            return self.create_merge_coin_response(certificate, effects).await;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        return Ok(TransactionResponse::EffectResponse(
-            TransactionEffectsResponse {
-                certificate: certificate.try_into()?,
-                effects: SuiTransactionEffects::try_from(effects, &self.module_cache)?,
-                timestamp_ms: None,
-            },
-        ));
+        let parsed_data = self
+            .create_parsed_transaction_response(tx_kind, certificate.clone(), effects.clone())
+            .await?;
+
+        return Ok(SuiTransactionResponse {
+            certificate: certificate.try_into()?,
+            effects: SuiTransactionEffects::try_from(effects, &self.module_cache)?,
+            timestamp_ms: None,
+            parsed_data,
+        });
     }
 
     async fn public_transfer_object(
@@ -1540,13 +1563,14 @@ where
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEffectsResponse, anyhow::Error> {
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let (cert, effect) = QueryHelpers::get_transaction(&self.store, &digest)?;
 
-        Ok(TransactionEffectsResponse {
+        Ok(SuiTransactionResponse {
             certificate: cert.try_into()?,
             effects: SuiTransactionEffects::try_from(effect, &self.module_cache)?,
             timestamp_ms: None,
+            parsed_data: None,
         })
     }
 }

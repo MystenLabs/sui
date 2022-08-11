@@ -4,7 +4,7 @@
 import RpcClient from 'jayson/lib/client/browser';
 import fetch from 'cross-fetch';
 import { isErrorResponse, isValidResponse } from './client.guard';
-const LosslessJSON = require('lossless-json');
+import * as LosslessJSON from 'lossless-json';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -47,11 +47,16 @@ export class JsonRpcClient {
           let res: Response = await fetch(url, options);
           const text = await res.text();
           const result = JSON.stringify(
-            LosslessJSON.parse(text, (key: string, value: any) => {
+            LosslessJSON.parse(text, (key, value) => {
               if (value == null) {
                 return value;
               }
-              if (key === 'balance') return value.toString();
+
+              // TODO: This is a bad hack, we really shouldn't be doing this here:
+              if (key === 'balance' && typeof value === 'number') {
+                return value.toString();
+              }
+
               try {
                 if (value.isLosslessNumber) return value.valueOf();
               } catch {
@@ -85,7 +90,6 @@ export class JsonRpcClient {
       throw new Error(`RPC Error: ${response.error.message}`);
     } else if (isValidResponse(response)) {
       if (isT(response.result)) return response.result;
-      else
         throw new Error(
           `RPC Error: result not of expected type. Result received was: ${JSON.stringify(
             response.result

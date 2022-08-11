@@ -20,7 +20,7 @@ use sui_types::messages::{
     SignedTransaction,
 };
 use sui_types::sui_system_state::SuiSystemState;
-use tracing::{debug, error, info};
+use tracing::{debug, error, info, warn};
 use typed_store::Map;
 
 #[async_trait]
@@ -44,24 +44,15 @@ where
     pub async fn start_epoch_change(&self) -> SuiResult {
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Starting epoch change");
-        if let Some(checkpoints) = &self.state.checkpoints {
-            assert!(
-                checkpoints.lock().is_ready_to_start_epoch_change(),
-                "start_epoch_change called at the wrong checkpoint",
-            );
-        } else {
-            unreachable!();
-        }
+        let checkpoints = self.state.checkpoints.as_ref().unwrap();
+        assert!(
+            checkpoints.lock().is_ready_to_start_epoch_change(),
+            "start_epoch_change called at the wrong checkpoint",
+        );
 
         self.state.halt_validator();
         info!(?epoch, "Validator halted for epoch change");
-        // TODO: The following doesn't work: we also need to make sure that the transactions
-        // all have been included in a batch (and hence will be included in the next checkpoint
-        // proposal).
-        // TODO: Use a conditional variable pattern instead of while + sleep.
-        while !self.state.batch_notifier.ticket_drained() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        self.wait_for_validator_batch().await;
         info!(?epoch, "Epoch change started");
         Ok(())
     }
@@ -72,7 +63,8 @@ where
     pub async fn finish_epoch_change(&self) -> SuiResult {
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Finishing epoch change");
-        let next_checkpoint = if let Some(checkpoints) = &self.state.checkpoints {
+        let checkpoints = self.state.checkpoints.as_ref().unwrap();
+        {
             let mut checkpoints = checkpoints.lock();
             assert!(
                 checkpoints.is_ready_to_finish_epoch_change(),
@@ -80,7 +72,7 @@ where
             );
 
             for (tx_digest, _) in checkpoints.tables.extra_transactions.iter() {
-                debug!(?epoch, tx_digest=?tx_digest.transaction, "Reverting local transaction effects");
+                warn!(?epoch, tx_digest=?tx_digest.transaction, "Reverting local transaction effects");
                 self.state
                     .database
                     .revert_state_update(&tx_digest.transaction)?;
@@ -90,13 +82,8 @@ where
             checkpoints.tables.extra_transactions.clear()?;
 
             self.state.database.remove_all_pending_certificates()?;
-
-            checkpoints.next_checkpoint()
-
-            // drop checkpoints lock
-        } else {
-            unreachable!();
-        };
+        }
+        let next_checkpoint = checkpoints.lock().next_checkpoint();
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;
         let next_epoch = epoch + 1;
@@ -114,7 +101,7 @@ where
         let new_committee = Committee::new(next_epoch, votes)?;
         debug!(
             ?epoch,
-            "New committee for the next epoch: {:?}", new_committee
+            "New committee for the next epoch: {}", new_committee
         );
         let old_committee = self.state.clone_committee();
         self.state
@@ -391,6 +378,24 @@ where
             Err(SuiError::TooManyIncorrectAuthorities {
                 errors: final_state.errors,
             })
+        }
+    }
+
+    /// Check that all transactions that have been sequenced and are about to be committed get
+    /// committed. Also make sure that all the transactions that have been committed have made
+    /// into a batch. This ensures that they will all made to the next checkpoint proposal.
+    /// TODO: We need to ensure that this does not halt forever and is more efficient.
+    /// https://github.com/MystenLabs/sui/issues/3915
+    async fn wait_for_validator_batch(&self) {
+        while !self.state.batch_notifier.ticket_drained_til(
+            self.state
+                .checkpoints
+                .as_ref()
+                .unwrap()
+                .lock()
+                .next_transaction_sequence_expected(),
+        ) {
+            tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
 }

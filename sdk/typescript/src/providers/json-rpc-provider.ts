@@ -7,17 +7,25 @@ import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
   isGetTxnDigestsResponse,
-  isTransactionEffectsResponse,
-  isTransactionResponse,
+  isSuiTransactionResponse,
+  isSuiMoveFunctionArgTypes,
+  isSuiMoveNormalizedModules,
+  isSuiMoveNormalizedModule,
+  isSuiMoveNormalizedFunction,
+  isSuiMoveNormalizedStruct,
 } from '../index.guard';
 import {
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
   GetObjectDataResponse,
   SuiObjectInfo,
+  SuiMoveFunctionArgTypes,
+  SuiMoveNormalizedModules,
+  SuiMoveNormalizedModule,
+  SuiMoveNormalizedFunction,
+  SuiMoveNormalizedStruct,
   TransactionDigest,
-  TransactionEffectsResponse,
-  TransactionResponse,
+  SuiTransactionResponse,
   SuiObjectRef,
   getObjectReference,
   Coin,
@@ -38,6 +46,84 @@ export class JsonRpcProvider extends Provider {
   constructor(public endpoint: string) {
     super();
     this.client = new JsonRpcClient(endpoint);
+  }
+
+  // Move info
+  async getMoveFunctionArgTypes(
+    objectId: string,
+    moduleName: string,
+    functionName: string
+  ): Promise<SuiMoveFunctionArgTypes> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getMoveFunctionArgTypes',
+        [objectId, moduleName, functionName],
+        isSuiMoveFunctionArgTypes
+      );
+    } catch (err) {
+      throw new Error(
+        `Error fetching Move function arg types with package object ID: ${objectId}, module name: ${moduleName}, function name: ${functionName}`
+      );
+    }
+  }
+
+  async getNormalizedMoveModulesByPackage(objectId: string,): Promise<SuiMoveNormalizedModules> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getNormalizedMoveModulesByPackage',
+        [objectId],
+        isSuiMoveNormalizedModules,
+      );
+    } catch (err) {
+      throw new Error(`Error fetching package: ${err} for package ${objectId}`);
+    }
+  }
+
+  async getNormalizedMoveModule(
+    objectId: string,
+    moduleName: string,
+  ): Promise<SuiMoveNormalizedModule> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getNormalizedMoveModule',
+        [objectId, moduleName],
+        isSuiMoveNormalizedModule,
+      );
+    } catch (err) {
+      throw new Error(`Error fetching module: ${err} for package ${objectId}, module ${moduleName}}`);
+    }
+  }
+
+  async getNormalizedMoveFunction(
+    objectId: string,
+    moduleName: string,
+    functionName: string
+  ): Promise<SuiMoveNormalizedFunction> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getNormalizedMoveFunction',
+        [objectId, moduleName, functionName],
+        isSuiMoveNormalizedFunction,
+      );
+    } catch (err) {
+      throw new Error(`Error fetching function: ${err} for package ${objectId}, module ${moduleName} and function ${functionName}}`);
+    }
+  }
+
+  async getNormalizedMoveStruct(
+    objectId: string,
+    moduleName: string,
+    structName: string
+  ): Promise<SuiMoveNormalizedStruct> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getNormalizedMoveStruct',
+        [objectId, moduleName, structName],
+        isSuiMoveNormalizedStruct,
+      );
+    } catch (err) {
+      throw new Error(`Error fetching struct: ${err} for package ${objectId}, module ${moduleName} and struct ${structName}}`);
+    }
   }
 
   // Objects
@@ -164,12 +250,12 @@ export class JsonRpcProvider extends Provider {
 
   async getTransactionWithEffects(
     digest: TransactionDigest
-  ): Promise<TransactionEffectsResponse> {
+  ): Promise<SuiTransactionResponse> {
     try {
       const resp = await this.client.requestWithType(
         'sui_getTransaction',
         [digest],
-        isTransactionEffectsResponse
+        isSuiTransactionResponse
       );
       return resp;
     } catch (err) {
@@ -181,7 +267,7 @@ export class JsonRpcProvider extends Provider {
 
   async getTransactionWithEffectsBatch(
     digests: TransactionDigest[]
-  ): Promise<TransactionEffectsResponse[]> {
+  ): Promise<SuiTransactionResponse[]> {
     const requests = digests.map(d => ({
       method: 'sui_getTransaction',
       args: [d],
@@ -189,7 +275,7 @@ export class JsonRpcProvider extends Provider {
     try {
       return await this.client.batchRequestWithType(
         requests,
-        isTransactionEffectsResponse
+        isSuiTransactionResponse
       );
     } catch (err) {
       const list = digests.join(', ').substring(0, -2);
@@ -204,12 +290,12 @@ export class JsonRpcProvider extends Provider {
     signatureScheme: SignatureScheme,
     signature: string,
     pubkey: string
-  ): Promise<TransactionResponse> {
+  ): Promise<SuiTransactionResponse> {
     try {
       const resp = await this.client.requestWithType(
         'sui_executeTransaction',
         [txnBytes, signatureScheme, signature, pubkey],
-        isTransactionResponse
+        isSuiTransactionResponse
       );
       return resp;
     } catch (err) {

@@ -48,10 +48,8 @@ async fn test_start_epoch_change() {
 
     // Set the checkpoint number to be near the end of epoch.
 
-    state
-        .checkpoints
-        .as_ref()
-        .unwrap()
+    let checkpoints = state.checkpoints.as_ref().unwrap();
+    checkpoints
         .lock()
         .set_locals_for_testing(CheckpointLocals {
             next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
@@ -73,15 +71,21 @@ async fn test_start_epoch_change() {
         active.start_epoch_change().await.unwrap();
         epoch_change_started_copy.store(true, Ordering::SeqCst);
     });
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
     // Validator should now be halted, but epoch change hasn't finished.
     assert!(state.is_halted());
     assert!(!epoch_change_started.load(Ordering::SeqCst));
 
     // Drain ticket.
     drop(ticket);
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    // After we drained ticket, epoch change started.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    // After we drained ticket, epoch change still hasn't started as the latest ticket
+    // hasn't made into batch yet.
+    assert!(!epoch_change_started.load(Ordering::SeqCst));
+
+    checkpoints.lock().handle_internal_batch(1, &[]).unwrap();
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    // Now epoch change should have started.
     assert!(epoch_change_started.load(Ordering::SeqCst));
     handle.await.unwrap();
 

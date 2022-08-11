@@ -34,6 +34,7 @@ module.exports = {
                     35: '#FEFEFE',
                 },
             },
+            cardDark: '#F3F4F5',
             success: '#2DD7A7',
             error: '#2DD7A7',
             header: '#2A4362',

@@ -95,7 +95,7 @@ use sui_types::sui_system_state::SuiSystemState;
 
 pub mod authority_notifier;
 
-pub const MAX_ITEMS_LIMIT: u64 = 100_000;
+pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 const MAX_TX_RECOVERY_RETRY: u32 = 3;
@@ -362,7 +362,7 @@ impl AuthorityState {
             SuiError::InvalidSystemTransaction
         );
 
-        if self.halted.load(Ordering::SeqCst) {
+        if self.is_halted() {
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
@@ -392,13 +392,14 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        let transaction_digest = *transaction.digest();
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.data.kind);
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
             self.metrics.signature_errors.inc();
             e
         })?;
-        let transaction_digest = *transaction.digest();
 
         let response = self.handle_transaction_impl(transaction).await;
         match response {
@@ -570,7 +571,7 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.data.kind.is_system_tx() {
             tx_guard.release();
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -927,9 +928,7 @@ impl AuthorityState {
         };
 
         // Ensure we are not doing too much work per request
-        if request.length > MAX_ITEMS_LIMIT {
-            return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
-        }
+        let length = std::cmp::min(request.length, MAX_ITEMS_LIMIT);
 
         // If we do not have a start, pick next sequence number that has
         // not yet been put into a batch.
@@ -942,7 +941,7 @@ impl AuthorityState {
                     .next_sequence_number
             }
         };
-        let end = start + request.length;
+        let end = start + length;
 
         let (batches, transactions) = self.database.batches_and_transactions(start, end)?;
 
@@ -1270,7 +1269,6 @@ impl AuthorityState {
         )?)
     }
 
-    #[cfg(test)]
     pub(crate) fn is_halted(&self) -> bool {
         self.halted.load(Ordering::Relaxed)
     }
@@ -1283,7 +1281,7 @@ impl AuthorityState {
         self.halted.store(false, Ordering::Relaxed);
     }
 
-    pub(crate) fn db(&self) -> Arc<AuthorityStore> {
+    pub fn db(&self) -> Arc<AuthorityStore> {
         self.database.clone()
     }
 
@@ -1504,7 +1502,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);

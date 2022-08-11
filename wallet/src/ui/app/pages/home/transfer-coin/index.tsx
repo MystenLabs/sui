@@ -91,8 +91,7 @@ function TransferCoinPage() {
                         tokenTypeArg: coinType,
                     })
                 ).unwrap();
-                const txDigest =
-                    response.EffectResponse.certificate.transactionDigest;
+                const txDigest = response.certificate.transactionDigest;
                 resetForm();
                 navigate(`/tx/${encodeURIComponent(txDigest)}`);
             } catch (e) {

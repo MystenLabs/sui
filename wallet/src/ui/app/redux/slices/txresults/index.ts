@@ -12,7 +12,6 @@ import {
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
 import type {
-    TransactionEffectsResponse,
     GetTxnDigestsResponse,
     CertifiedTransaction,
     TransactionKindName,
@@ -76,7 +75,7 @@ export const getTransactionsByAddress = createAsyncThunk<
         //getTransactionWithEffectsBatch
         const resp = await api.instance.fullNode
             .getTransactionWithEffectsBatch(deduplicate(transactions))
-            .then((txEffs: TransactionEffectsResponse[]) => {
+            .then((txEffs) => {
                 return (
                     txEffs
                         .map((txEff, i) => {

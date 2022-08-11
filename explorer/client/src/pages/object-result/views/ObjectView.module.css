@@ -51,20 +51,46 @@ div.displaycontainer {
 }
 
 div.metadata {
-    @apply ml-5;
+    @apply ml-2.5 sm:ml-5 my-auto sm:my-0;
 }
 
 div.metadata > h2 {
     @apply my-0;
 }
 
-div.display div,
-div.display img {
-    @apply max-h-[120px] max-w-[120px] ml-auto;
+div.metadata > p {
+    @apply text-sui-grey-80 text-[13px] leading-[12px];
+}
+
+.desktoppreviewmedia,
+.mobilepreviewmedia {
+    @apply bg-inherit border-0 p-0 cursor-pointer text-[14px] leading-[13px] 
+  text-sui-grey-80 font-semibold tracking-[-0.02em];
+}
+
+.desktoppreviewmedia {
+    @apply mt-5 hidden sm:block;
+}
+
+.mobilepreviewmedia {
+    @apply block sm:hidden w-full mt-1;
+}
+
+div.display {
+    @apply w-[50%] sm:w-auto;
+}
+
+div.display > div > img {
+    @apply max-h-[120px] w-full sm:max-w-[120px] ml-auto;
 }
 
 table.description {
     @apply w-full sm:w-[866px] mb-[3.75rem] 2xl:mb-0;
+}
+
+table.properties,
+div.ownedobjects {
+    @apply mb-[3.75rem];
 }
 
 /* Description CSS */
@@ -89,7 +115,7 @@ td.objectid {
 /* Clickable Header CSS */
 
 h2.header {
-    @apply text-sui-grey-100 font-semibold text-[1.125rem] leading-[1.125rem] mb-5;
+    @apply text-sui-grey-100 font-semibold text-[1.125rem] leading-[1.125rem] mb-5 mt-0;
 }
 
 div.accommodate > h2.header {

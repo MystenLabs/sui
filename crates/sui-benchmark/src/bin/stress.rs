@@ -267,7 +267,7 @@ async fn run(
                 tokio::select! {
                     _ = stat_interval.tick() => {
                         if tx_cloned
-                            .send(Stats {
+                            .try_send(Stats {
                                 id: i as usize,
                                 num_success,
                                 num_error,
@@ -278,7 +278,6 @@ async fn run(
                                 num_submitted,
                                 duration: Duration::from_micros(stat_delay_micros),
                             })
-                            .await
                             .is_err()
                         {
                             debug!("Failed to update stat!");

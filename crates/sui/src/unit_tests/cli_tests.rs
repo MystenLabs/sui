@@ -478,9 +478,10 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     resp.print(true);
 
     let (package, created_obj) = if let SuiClientCommandResult::Publish(response) = resp {
+        let publish_resp = response.parsed_data.unwrap().to_publish_response().unwrap();
         (
-            response.package,
-            response.created_objects[0].reference.clone(),
+            publish_resp.package,
+            publish_resp.created_objects[0].reference.clone(),
         )
     } else {
         unreachable!("Invalid response");
@@ -842,7 +843,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
-        r
+        r.parsed_data.unwrap().to_merge_coin_response().unwrap()
     } else {
         panic!("Command failed")
     };
@@ -881,7 +882,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let g = if let SuiClientCommandResult::MergeCoin(r) = resp {
-        r
+        r.parsed_data.unwrap().to_merge_coin_response().unwrap()
     } else {
         panic!("Command failed")
     };
@@ -921,7 +922,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let g = if let SuiClientCommandResult::SplitCoin(r) = resp {
-        r
+        r.parsed_data.unwrap().to_split_coin_response().unwrap()
     } else {
         panic!("Command failed")
     };
@@ -962,7 +963,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .await?;
 
     let g = if let SuiClientCommandResult::SplitCoin(r) = resp {
-        r
+        r.parsed_data.unwrap().to_split_coin_response().unwrap()
     } else {
         panic!("Command failed")
     };

@@ -17,7 +17,7 @@ import { Coin } from '_redux/slices/sui-objects/Coin';
 import type {
     SuiAddress,
     SuiMoveObject,
-    TransactionEffectsResponse,
+    SuiTransactionResponse,
 } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 import type { AppThunkConfig } from '_store/thunk-extras';
@@ -27,7 +27,7 @@ type SendTokensTXArgs = {
     amount: bigint;
     recipientAddress: SuiAddress;
 };
-type TransactionResult = { EffectResponse: TransactionEffectsResponse };
+type TransactionResult = SuiTransactionResponse;
 
 export const sendTokens = createAsyncThunk<
     TransactionResult,
@@ -116,7 +116,7 @@ export const StakeTokens = createAsyncThunk<
 );
 
 const txAdapter = createEntityAdapter<TransactionResult>({
-    selectId: (tx) => tx.EffectResponse.certificate.transactionDigest,
+    selectId: (tx) => tx.certificate.transactionDigest,
 });
 
 export const txSelectors = txAdapter.getSelectors(

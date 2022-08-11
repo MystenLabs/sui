@@ -7,8 +7,8 @@ use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
+use sui_json_rpc_types::SuiTransactionResponse;
 
-use sui_json_rpc_types::TransactionResponse;
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
@@ -44,7 +44,7 @@ pub struct TestContext {
 impl TestContext {
     async fn get_sui_from_faucet(&self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
         self.faucet
-            .request_sui_coins(self.get_context(), minimum_coins)
+            .request_sui_coins(self.get_context(), minimum_coins, None)
             .await
             .unwrap_or_else(|e| panic!("Failed to get test SUI coins from faucet, {e}"))
     }
@@ -73,7 +73,11 @@ impl TestContext {
         self.client.get_wallet_address()
     }
 
-    async fn sign_and_execute(&self, txn_data: TransactionData, desc: &str) -> TransactionResponse {
+    async fn sign_and_execute(
+        &self,
+        txn_data: TransactionData,
+        desc: &str,
+    ) -> SuiTransactionResponse {
         let signature = self.get_context().sign(&txn_data, desc);
         self.get_gateway()
             .execute_transaction(Transaction::new(txn_data, signature))

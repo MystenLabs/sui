@@ -17,7 +17,11 @@ import tablestyle from '../../components/table/TableCard.module.css';
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { parseImageURL, parseObjectType } from '../../utils/objectUtils';
+import {
+    parseImageURL,
+    parseObjectType,
+    extractName,
+} from '../../utils/objectUtils';
 import { navigateWithUnknown } from '../../utils/searchUtil';
 import {
     findDataFromID,
@@ -42,6 +46,7 @@ type resultType = {
     Version?: string;
     display?: string;
     balance?: BN;
+    name?: string;
 }[];
 
 const DATATYPE_DEFAULT: resultType = [
@@ -95,6 +100,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
                 display: entry?.data?.contents?.display,
                 balance: convertToBN(entry?.data?.contents?.balance),
                 _isCoin: entry?.data?.contents?.balance !== undefined,
+                name: extractName(entry?.data?.contents),
             };
         });
 
@@ -138,6 +144,8 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
                                 (resp) => {
                                     const contents = getObjectFields(resp);
                                     const url = parseImageURL(contents);
+
+                                    const name = extractName(contents);
                                     const objType = parseObjectType(resp);
                                     const balanceValue = Coin.getBalance(resp);
                                     return {
@@ -148,6 +156,7 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
                                             ? transformURL(url)
                                             : undefined,
                                         balance: balanceValue,
+                                        name: name,
                                     };
                                 }
                                 // TODO - add back version
@@ -302,7 +311,13 @@ function OwnedObjectView({ results }: { results: resultType }) {
                 <div className={styles.objectbox} key={`object-${index1}`}>
                     {entryObj.display !== undefined && (
                         <div className={styles.previewimage}>
-                            <DisplayBox display={entryObj.display} />
+                            <DisplayBox
+                                display={entryObj.display}
+                                caption={
+                                    entryObj.name ||
+                                    trimStdLibPrefix(entryObj.Type)
+                                }
+                            />
                         </div>
                     )}
                     <div className={styles.textitem}>

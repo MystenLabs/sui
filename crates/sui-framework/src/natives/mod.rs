@@ -7,6 +7,7 @@ mod object;
 mod test_scenario;
 mod transfer;
 mod tx_context;
+mod types;
 
 use move_binary_format::errors::PartialVMError;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
@@ -64,6 +65,7 @@ pub fn all_natives(
             "new_signer_from_address",
             tx_context::new_signer_from_address,
         ),
+        ("types", "is_one_time_witness", types::is_one_time_witness),
     ];
     SUI_NATIVES
         .iter()

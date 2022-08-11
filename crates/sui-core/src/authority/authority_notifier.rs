@@ -51,8 +51,16 @@ impl TransactionNotifier {
         self.low_watermark.load(Ordering::SeqCst)
     }
 
-    pub fn ticket_drained(&self) -> bool {
-        self.inner.lock().high_watermark == self.low_watermark.load(Ordering::SeqCst)
+    /// Check that we have drained all tickets (i.e. low watermark reached high watermark),
+    /// and that the issued tickets ends before `end`.
+    pub fn ticket_drained_til(&self, end: TxSequenceNumber) -> bool {
+        let high_watermark = self.inner.lock().high_watermark;
+        let low_watermark = self.low_watermark.load(Ordering::SeqCst);
+        let result = high_watermark == low_watermark && high_watermark == end;
+        if !result {
+            debug!(?high_watermark, ?low_watermark, checkpoint_end_tx=?end, "Ticket not drained yet.");
+        }
+        result
     }
 
     /// Get a ticket with a sequence number

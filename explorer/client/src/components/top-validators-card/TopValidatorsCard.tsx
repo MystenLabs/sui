@@ -5,11 +5,9 @@ import { useContext, useEffect, useState } from 'react';
 
 import Longtext from '../../components/longtext/Longtext';
 import TableCard from '../../components/table/TableCard';
-import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
 import { NetworkContext } from '../../context';
 import {
-    getTabFooter,
     getValidatorState,
     processValidators,
     ValidatorLoadFail,
@@ -100,6 +98,16 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                     alttext={truncate(validator.address, 14)}
                     category={'addresses'}
                     isLink={true}
+                    isCopyButton={false}
+                />
+            ),
+            pubkeyBytes: (
+                <Longtext
+                    text={validator.pubkeyBytes}
+                    alttext={truncate(validator.pubkeyBytes, 14)}
+                    category={'addresses'}
+                    isLink={false}
+                    isCopyButton={false}
                 />
             ),
         })),
@@ -116,26 +124,27 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                 headerLabel: 'Address',
                 accessorKey: 'address',
             },
+            {
+                headerLabel: 'Pubkey Bytes',
+                accessorKey: 'pubkeyBytes',
+            },
         ],
     };
-
-    const tabsFooter = getTabFooter(validatorsData.length);
 
     return (
         <div className={styles.validators}>
             <Tabs selected={0}>
                 <div title="Top Validators">
                     <TableCard tabledata={tableData} />
-                    <TabFooter stats={tabsFooter.stats}>
+                    {/* <TabFooter stats={tabsFooter.stats}>
                         <Longtext
                             text=""
                             category="validators"
                             isLink={true}
                             isCopyButton={false}
-                            /*showIconButton={true}*/
                             alttext="More Validators"
                         />
-                    </TabFooter>
+                    </TabFooter> */}
                 </div>
             </Tabs>
         </div>
