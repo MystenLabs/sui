@@ -76,7 +76,7 @@ pub async fn spawn_checkpoint_processes(
         let state = authority.state().clone();
         let inner_agg = aggregator.clone();
         let active_state =
-            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
+            Arc::new(ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_agg).unwrap());
         let checkpoint_process_control = CheckpointProcessControl {
             long_pause_between_checkpoints: Duration::from_millis(10),
             ..CheckpointProcessControl::default()

@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::AuthorityState,
+    authority::{AuthorityState, AuthorityMetrics},
     authority_aggregator::{AuthorityAggregator, CertificateHandler},
     authority_client::AuthorityAPI,
-    safe_client::SafeClient,
+    safe_client::SafeClient, authority_active,
 };
 use async_trait::async_trait;
 use futures::{
@@ -61,7 +61,7 @@ pub(crate) struct Follower<A> {
 const REQUEST_FOLLOW_NUM_DIGESTS: u64 = 100_000;
 const REFRESH_FOLLOWER_PERIOD_SECS: u64 = 60;
 
-use super::ActiveAuthority;
+use super::{ActiveAuthority, AuthorityActiveMetrics};
 
 pub async fn gossip_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
 where
@@ -70,7 +70,7 @@ where
     follower_process(
         active_authority,
         degree,
-        GossipDigestHandler::new(),
+        GossipDigestHandler::new(active_authority.metrics.clone()),
         GossipType::BestEffort,
     )
     .await;
@@ -130,15 +130,18 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
         }
         let mut k = 0;
         while gossip_tasks.len() < target_num_tasks {
+            active_authority.metrics.concurrent_followed_validators.set(gossip_tasks.len() as i64);
+            // handler.get_metrics().me
+
             // Find out what is the earliest time that we are allowed to reconnect
             // to at least 2f+1 nodes.
             let next_connect = local_active
                 .minimum_wait_for_majority_honest_available()
                 .await;
-            debug!(
-                "Waiting for {:?}",
-                next_connect - tokio::time::Instant::now()
-            );
+            let wait_duration = next_connect - tokio::time::Instant::now();
+            debug!("Waiting for {:?}", wait_duration);
+            active_authority.metrics.gossip_reconnect_interval_ms.set(wait_duration.as_millis() as i64);
+
             tokio::time::sleep_until(next_connect).await;
 
             let name_result =
@@ -268,14 +271,19 @@ pub(crate) trait DigestHandler<A> {
         follower: &Follower<A>,
         digest: ExecutionDigests,
     ) -> SuiResult<Self::DigestResult>;
+
+    fn get_metrics(&self) -> &AuthorityActiveMetrics;
 }
 
-#[derive(Clone, Copy)]
-struct GossipDigestHandler {}
+// #[derive(Clone, Copy)]
+#[derive(Clone)]
+struct GossipDigestHandler {
+    metrics: AuthorityActiveMetrics,
+}
 
 impl GossipDigestHandler {
-    fn new() -> Self {
-        Self {}
+    fn new(metrics: AuthorityActiveMetrics) -> Self {
+        Self {metrics}
     }
 
     async fn process_response<A>(
@@ -339,6 +347,10 @@ where
             }
             Ok(())
         }))
+    }
+
+    fn get_metrics(&self) -> &AuthorityActiveMetrics {
+        &self.metrics
     }
 }
 
@@ -414,7 +426,7 @@ where
 
         let mut last_seq_in_cur_batch: TxSequenceNumber = 0;
         let mut streamx = Box::pin(self.client.handle_batch_stream(req).await?);
-
+        let metrics = handler.get_metrics();
         loop {
             tokio::select! {
                 _ = &mut timeout => {
@@ -425,6 +437,8 @@ where
                 items = &mut streamx.next() => {
                     match items {
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) )) => {
+                            metrics.total_batch_received_through_gossip.inc();
+
                             let next_seq = signed_batch.data().next_sequence_number;
                             debug!(?peer, batch_next_seq = ?next_seq, "Received signed batch");
                             batch_seq_to_record.push_back((next_seq, last_seq_in_cur_batch));
@@ -438,6 +452,7 @@ where
                         // Upon receiving a transaction digest, store it if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests))))) => {
                             trace!(?peer, ?digests, ?seq, "received tx from peer");
+                            metrics.total_tx_received_through_gossip.inc();
 
                             // track the last observed sequence in a batch, so we can tell when the
                             // batch has been fully processed.

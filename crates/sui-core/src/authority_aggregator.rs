@@ -86,6 +86,7 @@ pub struct AuthAggMetrics {
     pub num_signatures: Histogram,
     pub num_good_stake: Histogram,
     pub num_bad_stake: Histogram,
+    pub total_quorum_once_timeout: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -122,6 +123,12 @@ impl AuthAggMetrics {
                 "num_bad_stake_per_tx",
                 "Amount of bad stake collected per transaction",
                 POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            total_quorum_once_timeout: register_int_counter_with_registry!(
+                "total_quorum_once_timeout",
+                "Total number of timeout when calling quorum_once_with_timeout",
                 registry,
             )
             .unwrap(),
@@ -785,6 +792,7 @@ where
         if let Some(t) = timeout_total {
             timeout(t, fut).await.map_err(|_timeout_error| {
                 if authority_errors.is_empty() {
+                    self.metrics.total_quorum_once_timeout.inc();
                     SuiError::TimeoutError
                 } else {
                     SuiError::TooManyIncorrectAuthorities {

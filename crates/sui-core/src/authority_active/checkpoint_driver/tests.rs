@@ -32,7 +32,7 @@ async fn checkpoint_active_flow_happy_path() {
     for inner_state in authorities.clone() {
         let inner_agg = aggregator.clone();
         let active_state = Arc::new(
-            ActiveAuthority::new_with_ephemeral_storage(inner_state.authority.clone(), inner_agg)
+            ActiveAuthority::new_with_ephemeral_storage_for_test(inner_state.authority.clone(), inner_agg)
                 .unwrap(),
         );
         let _active_handle = active_state
@@ -107,7 +107,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
         let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_storage(
+                ActiveAuthority::new_with_ephemeral_storage_for_test(
                     inner_state.authority.clone(),
                     inner_agg,
                 )
@@ -204,7 +204,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
         let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_storage(
+                ActiveAuthority::new_with_ephemeral_storage_for_test(
                     inner_state.authority.clone(),
                     inner_agg,
                 )
@@ -301,7 +301,7 @@ async fn test_empty_checkpoint() {
         let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_storage(
+                ActiveAuthority::new_with_ephemeral_storage_for_test(
                     inner_state.authority.clone(),
                     inner_agg,
                 )

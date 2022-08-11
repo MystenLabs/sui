@@ -17,6 +17,34 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tracing::info;
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter, IntCounterVec, register_int_counter_vec_with_registry
+};
+
+/// Prometheus metrics which can be displayed in Grafana, queried and alerted on
+#[derive(Clone)]
+pub struct ValidatorClientMetrics {
+    pub total_handle_transaction_and_effects_info_request: IntCounterVec,
+}
+
+impl ValidatorClientMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            total_handle_transaction_and_effects_info_request: register_int_counter_vec_with_registry!(
+                "total_handle_transaction_and_effects_info_request",
+                "FIXME",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = prometheus::Registry::new();
+        Self::new(&registry)
+    }
+}
+
 
 #[derive(Clone)]
 pub struct SafeClient<C> {

@@ -13,7 +13,7 @@ use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::ActiveAuthority,
+    authority_active::{ActiveAuthority, AuthorityActiveMetrics},
     authority_client::{
         make_network_authority_client_sets_from_genesis,
         make_network_authority_client_sets_from_system_state, NetworkAuthorityClient,
@@ -172,6 +172,7 @@ impl SuiNode {
                     pending_store,
                     follower_store,
                     net,
+                    AuthorityActiveMetrics::new(&prometheus_registry),
                 )?);
                 active = Some(Arc::clone(&active_authority));
 
