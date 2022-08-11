@@ -236,8 +236,8 @@ To view the profile files:
 Note: with automatic memory profiling, it is no longer necessary to configure environment variables beyond
 what is required above.  It is possible to configure custom profiling options, see the links below:
 
-* https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling
-* https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174
+* [Heap Profiling](https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling)
+* [heap profiling with jemallocator](https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174)
 
 For example, set `JE_MALLOC_CONF` or `JEMALLOC_SYS_WITH_MALLOC_CONF` to:
 `prof:true,lg_prof_interval:24,lg_prof_sample:19`
