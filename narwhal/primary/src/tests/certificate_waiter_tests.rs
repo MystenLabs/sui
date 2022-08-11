@@ -8,15 +8,10 @@ use crate::{
     metrics::PrimaryMetrics,
     synchronizer::Synchronizer,
 };
-use core::sync::atomic::AtomicU64;
 use crypto::{traits::KeyPair, Hash, SignatureService};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
-use std::{
-    collections::BTreeSet,
-    sync::{atomic::Ordering, Arc},
-    time::Duration,
-};
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use test_utils::{certificate, committee, fixture_headers_round, keys};
 use tokio::sync::watch;
 use types::{Certificate, PrimaryMessage, ReconfigureNotification, Round};
@@ -163,7 +158,6 @@ async fn process_certificate_missing_parents_in_reverse() {
     }
 }
 
-#[ignore]
 #[tokio::test]
 async fn process_certificate_check_gc_fires() {
     let kp = keys(None).pop().unwrap();
@@ -191,7 +185,7 @@ async fn process_certificate_check_gc_fires() {
     let (tx_parents, _rx_parents) = test_utils::test_channel!(100);
 
     // Signal consensus round
-    let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
+    let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
     // Create test stores.
     let (header_store, certificates_store, payload_store) = create_db_stores();
@@ -208,7 +202,6 @@ async fn process_certificate_check_gc_fires() {
     );
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
-    let consensus_round = Arc::new(AtomicU64::new(0));
     let gc_depth: Round = 50;
 
     // Make a headerWaiter
@@ -300,7 +293,7 @@ async fn process_certificate_check_gc_fires() {
     assert!(certificates_store.read(id).await.unwrap().is_none());
 
     // Move the round so that this pending certificate moves well past the GC bound
-    assert_eq!(consensus_round.fetch_add(60, Ordering::SeqCst), 0);
+    tx_consensus_round_updates.send(60u64).unwrap();
 
     // we re-evaluate pending after a little while
     tokio::time::sleep(Duration::from_millis(GC_RESOLUTION)).await;
