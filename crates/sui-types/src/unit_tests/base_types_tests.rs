@@ -77,7 +77,7 @@ fn test_increment_version() {
     assert_eq!(coin.id(), &id);
     assert_eq!(coin.value(), value);
 
-    let mut coin_obj = coin.to_object(version, None);
+    let mut coin_obj = coin.to_object(version);
     assert_eq!(&coin_obj.id(), coin.id());
 
     // update contents, which should increase sequence number, but leave

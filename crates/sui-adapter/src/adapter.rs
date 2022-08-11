@@ -466,7 +466,7 @@ fn process_successful_execution<
     state_view.set_create_object_ids(newly_generated_ids.clone());
     let mut unwrap_and_deleted = BTreeSet::new();
     let mut frozen_object_ids = BTreeSet::new();
-    let mut child_count_deltas = BTreeMap::new();
+    let mut child_count_deltas: BTreeMap<ObjectID, i64> = BTreeMap::new();
     let mut newly_generated_deleted = BTreeSet::new();
     let mut newly_generated_unused = newly_generated_ids.clone();
     // process events to identify transfers, freezes
@@ -513,9 +513,11 @@ fn process_successful_execution<
                 let uid: UID = bcs::from_bytes(&event_bytes).unwrap();
                 let obj_id = uid.object_id();
                 newly_generated_unused.remove(obj_id);
-                // We don't care about IDs that are generated in this same transaction
-                // but only to be deleted.
-                if !newly_generated_ids.contains(obj_id) {
+                if newly_generated_ids.contains(obj_id) {
+                    // we will need to make sure that this deleted object did not receive any
+                    // children
+                    newly_generated_deleted.insert(*obj_id);
+                } else {
                     match by_value_objects.remove(obj_id) {
                         Some((owner, version, child_count)) => {
                             state_view.log_event(Event::delete_object(
@@ -570,10 +572,6 @@ fn process_successful_execution<
                             )
                         }
                     }
-                } else {
-                    // we will need to make sure that this deleted object did not receive any
-                    // children
-                    newly_generated_deleted.insert(*obj_id);
                 }
                 Ok(())
             }
@@ -595,10 +593,10 @@ fn process_successful_execution<
         }?;
     }
 
-    // any object left in `by_value_objects` is an input passed by value that was not transferred or
-    // frozen.
-    // this means that either the object was (1) deleted from the Sui system altogether, or
-    // (2) wrapped inside another object that is in the Sui object pool
+    // any object left in `by_value_objects` is an input passed by value that was not transferred,
+    // frozen, shared, or deleted.
+    // This means that either the object was wrapped inside another object that is in the Sui object
+    // pool
     for (id, (owner, version, child_count)) in by_value_objects {
         if let Owner::ObjectOwner(parent) = owner {
             let delta = child_count_deltas.entry(parent.into()).or_insert(0);

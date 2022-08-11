@@ -94,12 +94,17 @@ impl<S> TemporaryStore<S> {
             .into_iter()
             .map(|(id, obj)| (id, (obj.compute_object_reference(), obj)))
             .collect();
+        let deleted = self
+            .deleted
+            .into_iter()
+            .map(|(id, (seq, _child_count, kind))| (id, (seq, kind)))
+            .collect();
         (
             InnerTemporaryStore {
                 objects: self.input_objects,
                 mutable_inputs: self.mutable_input_refs,
                 written,
-                deleted: self.deleted,
+                deleted,
             },
             self.events,
         )
@@ -383,42 +388,47 @@ impl<S> Storage for TemporaryStore<S> {
         self.events.push(event)
     }
 
+    // This updates the child count of objects, given the change +/- to the child count
+    // If the object has not been written/deleted, we need to mark it as being written.
+    // From there we have two cases
+    // - If the object was written, we need to update the child count in that object in that map
+    // - If the object was deleted, we carry around the child count at the moment of deletion.
+    //   We then update the count based on this change. This is to support
+    //   'deleted_objects_child_count'.
     fn change_child_counts(&mut self, deltas: BTreeMap<ObjectID, i64>) -> Result<(), ObjectID> {
         let deltas = deltas
             .into_iter()
             .filter(|(_, delta)| *delta != 0)
             .collect::<BTreeMap<_, _>>();
         for id in deltas.keys() {
-            if !(self.written.contains_key(id) || self.deleted.contains_key(id)) {
-                let mut object = self.objects[id].clone();
+            if !(self._written.contains_key(id) || self.deleted.contains_key(id)) {
+                let mut object = self.input_objects[id].clone();
                 // Active input object must be Move object.
                 object.data.try_as_move_mut().unwrap().increment_version();
-                self.written.insert(*id, object);
+                self.write_object(object);
             }
         }
         for (id, delta) in deltas {
-            match (self.written.get_mut(&id), self.deleted.get_mut(&id)) {
-                (None, None) => debug_assert!(false, "Invalid state, manually written above"),
-                (Some(_), Some(_)) => {
-                    debug_assert!(
-                        false,
-                        "Invalid state, parent is in both written/deleted set"
-                    )
-                }
-                (Some(written), None) => written
+            // If it was deleted, update the count we saw at the moment of deletion
+            // If it is written, update the child count
+            // The object is guaranteed to be in exactly one of the two maps
+            if let Some((_version, child_count, _kind)) = self.deleted.get_mut(&id) {
+                MoveObject::apply_child_count_delta(child_count, delta).map_err(|_| id)?
+            } else {
+                self._written
+                    .get_mut(&id)
+                    .expect("guaranteed to be written or deleted")
                     .data
                     .try_as_move_mut()
                     .unwrap()
                     .change_child_count(delta)
-                    .map_err(|_| id)?,
-                (None, Some((_version, child_count, _kind))) => {
-                    MoveObject::apply_child_count_delta(child_count, delta).map_err(|_| id)?
-                }
+                    .map_err(|_| id)?
             }
         }
         Ok(())
     }
 
+    // Get the child count of the deleted objects
     fn deleted_objects_child_count(&mut self) -> Vec<(ObjectID, Option<u32>, DeleteKind)> {
         self.deleted
             .iter()

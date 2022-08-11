@@ -192,7 +192,7 @@ impl RpcExampleProvider {
         let result = SuiObjectRead::Exists(SuiObject {
             data: SuiData::MoveObject(
                 SuiParsedMoveObject::try_from_layout(
-                    coin.to_object(SequenceNumber::from_u64(1), None),
+                    coin.to_object(SequenceNumber::from_u64(1)),
                     GasCoin::layout(),
                 )
                 .unwrap(),
@@ -265,7 +265,7 @@ impl RpcExampleProvider {
         let object_id = ObjectID::new(self.rng.gen());
 
         let coin = GasCoin::new(object_id, 10000);
-        let object = coin.to_object(SequenceNumber::from_u64(1), None);
+        let object = coin.to_object(SequenceNumber::from_u64(1));
         let result = SuiObjectRead::Exists(SuiObject {
             data: SuiData::MoveObject(SuiRawMoveObject {
                 type_: GasCoin::type_().to_string(),

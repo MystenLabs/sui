@@ -38,6 +38,8 @@ pub struct MoveObject {
     /// Derived from the type_
     has_public_transfer: bool,
     version: SequenceNumber,
+    /// The number of immediate children for this object.
+    /// It is an option to reduce object size, as most objects will not have children.
     child_count: Option<u32>,
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
@@ -90,12 +92,8 @@ impl MoveObject {
         }
     }
 
-    pub fn new_gas_coin(
-        version: SequenceNumber,
-        child_count: Option<u32>,
-        contents: Vec<u8>,
-    ) -> Self {
-        unsafe { Self::new_from_execution(GasCoin::type_(), true, version, child_count, contents) }
+    pub fn new_gas_coin(version: SequenceNumber, contents: Vec<u8>) -> Self {
+        unsafe { Self::new_from_execution(GasCoin::type_(), true, version, None, contents) }
     }
 
     pub fn has_public_transfer(&self) -> bool {
