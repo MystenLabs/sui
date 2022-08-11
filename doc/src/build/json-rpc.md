@@ -40,17 +40,20 @@ export SUI_RPC_HOST=http://127.0.0.1:5001
 
 ## Sui software development kits
 
-You may sign transactions and interact with the Sui network using:
+You can sign transactions and interact with the Sui network using any of the following:
 
-* the [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
-* the [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
+* [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
+* [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
+* [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for all available methods.
 
 ## Sui JSON-RPC API
 
 In the following sections we will show how to use Sui's JSON-RPC API with
 the `curl` command.
 
-## Sui JSON-RPC methods
+## Sui JSON-RPC examples
+
+This section includes example calls to the SUI JSON-RPC interface using `curl`. See the [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for the latest list of all available methods. 
 
 ### rpc.discover
 
@@ -62,8 +65,6 @@ curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
 --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}'
 ```
-
-You can see an example of the discovery service in the [OpenRPC Playground](https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json).
 
 ### sui_syncAccountState
 
