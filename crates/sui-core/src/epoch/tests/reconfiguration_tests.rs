@@ -146,7 +146,8 @@ async fn test_start_epoch_change() {
         tx_digest,
     );
     let (inner_temporary_store, effects, _) = execution_engine::execute_transaction_to_effects(
-        vec![],
+        vec![], // no shared objects
+        vec![], // no shared object errors
         temporary_store,
         transaction.signed_data.data.clone(),
         tx_digest,

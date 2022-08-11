@@ -501,6 +501,7 @@ impl<'a> SuiTestAdapter<'a> {
             execution_error,
         ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
+            vec![], // no shared object errors
             temporary_store,
             transaction.signed_data.data,
             transaction_digest,

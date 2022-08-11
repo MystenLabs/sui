@@ -678,7 +678,11 @@ where
             .await?;
 
         let (_gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.store, transaction).await?;
+            transaction_input_checker::check_transaction_input_for_certificate_generation(
+                &self.store,
+                transaction,
+            )
+            .await?;
 
         let owned_objects = input_objects.filter_owned_objects();
         if let Err(err) = self

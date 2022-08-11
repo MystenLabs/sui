@@ -12,10 +12,10 @@ use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
 use sui_types::committee::EpochId;
-use sui_types::error::ExecutionError;
+use sui_types::error::{ExecutionError, ExecutionErrorKind, SuiError};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::ObjectArg;
+use sui_types::messages::{InvalidSharedObjectUsage, ObjectArg};
 use sui_types::object::{MoveObject, Owner, OBJECT_START_VERSION};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest, TxContext},
@@ -35,6 +35,7 @@ use tracing::{debug, instrument, trace};
 #[instrument(name = "tx_execute_to_effects", level = "debug", skip_all)]
 pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync>(
     shared_object_refs: Vec<ObjectRef>,
+    shared_object_errors: Vec<(ObjectID, SuiError)>,
     mut temporary_store: TemporaryStore<S>,
     transaction_data: TransactionData,
     transaction_digest: TransactionDigest,
@@ -52,6 +53,7 @@ pub fn execute_transaction_to_effects<S: BackingPackageStore + ParentSync>(
 
     let gas_object_ref = *transaction_data.gas_payment_object_ref();
     let (gas_cost_summary, execution_result) = execute_transaction(
+        shared_object_errors,
         &mut temporary_store,
         transaction_data,
         gas_object_ref.0,
@@ -107,6 +109,7 @@ fn charge_gas_for_object_read<S>(
 
 #[instrument(name = "tx_execute", level = "debug", skip_all)]
 fn execute_transaction<S: BackingPackageStore + ParentSync>(
+    shared_object_errors: Vec<(ObjectID, SuiError)>,
     temporary_store: &mut TemporaryStore<S>,
     transaction_data: TransactionData,
     gas_object_id: ObjectID,
@@ -118,7 +121,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
     // We must charge object read gas inside here during transaction execution, because if this fails
     // we must still ensure an effect is committed and all objects versions incremented.
     let mut result = charge_gas_for_object_read(temporary_store, &mut gas_status);
-    if result.is_ok() {
+    if result.is_ok() && shared_object_errors.is_empty() {
         // TODO: Since we require all mutable objects to not show up more than
         // once across single tx, we should be able to run them in parallel.
         for single_tx in transaction_data.kind.into_single_transactions() {
@@ -197,11 +200,27 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
             if result.is_err() {
                 break;
             }
+            if result.is_err() {
+                // Roll back the temporary store if execution failed.
+                temporary_store.reset();
+            }
         }
-        if result.is_err() {
-            // Roll back the temporary store if execution failed.
-            temporary_store.reset();
-        }
+    } else if result.is_ok() {
+        assert!(!shared_object_errors.is_empty());
+        let (first_id, first_err) = &shared_object_errors[0];
+        let e = match first_err {
+            SuiError::ObjectNotFound { .. } => {
+                InvalidSharedObjectUsage::ObjectNotFound { object: *first_id }
+            }
+            SuiError::NotQuasiSharedObject { .. } => {
+                InvalidSharedObjectUsage::NotQuasiSharedObject { object: *first_id }
+            }
+            SuiError::InvalidSequenceNumber { .. } => {
+                InvalidSharedObjectUsage::InvalidSequenceNumber { object: *first_id }
+            }
+            _ => InvalidSharedObjectUsage::UnknownError { object: *first_id },
+        };
+        result = Err(ExecutionErrorKind::InvalidSharedObjectUsage(e).into());
     }
 
     // Make sure every mutable object's version number is incremented.

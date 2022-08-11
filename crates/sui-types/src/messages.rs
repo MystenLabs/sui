@@ -969,63 +969,53 @@ pub enum ExecutionStatus {
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
+#[rustfmt::skip]
 pub enum ExecutionFailureStatus {
-    //
-    // General transaction errors
-    //
-    InsufficientGas,
-    InvalidGasObject,
-    InvalidTransactionUpdate,
-    ModuleNotFound,
-    FunctionNotFound,
-    InvariantViolation,
-
-    //
-    // Transfer errors
-    //
-    InvalidTransferObject,
-    InvalidTransferSui,
-    InvalidTransferSuiInsufficientBalance,
-
-    //
-    // MoveCall errors
-    //
-    NonEntryFunctionInvoked,
-    EntryTypeArityMismatch,
-    EntryArgumentError(EntryArgumentError),
-    CircularObjectOwnership(CircularObjectOwnership),
-    MissingObjectOwner(MissingObjectOwner),
-    InvalidSharedChildUse(InvalidSharedChildUse),
-    InvalidSharedByValue(InvalidSharedByValue),
-    TooManyChildObjects {
+    InsufficientGas,                                    // General transaction error
+    InvalidGasObject,                                   // General transaction error
+    InvalidTransactionUpdate,                           // General transaction error
+    ModuleNotFound,                                     // General transaction error
+    FunctionNotFound,                                   // General transaction error
+    InvariantViolation,                                 // General transaction error
+    InvalidSharedObjectUsage(InvalidSharedObjectUsage), // General transaction error
+    InvalidTransferObject,                              // Transfer error
+    InvalidTransferSui,                                 // Transfer error
+    InvalidTransferSuiInsufficientBalance,              // Transfer error
+    NonEntryFunctionInvoked,                            // MoveCall error
+    EntryTypeArityMismatch,                             // MoveCall error
+    EntryArgumentError(EntryArgumentError),             // MoveCall error
+    CircularObjectOwnership(CircularObjectOwnership),   // MoveCall error
+    MissingObjectOwner(MissingObjectOwner),             // MoveCall error
+    InvalidSharedChildUse(InvalidSharedChildUse),       // MoveCall error
+    InvalidSharedByValue(InvalidSharedByValue),         // MoveCall error
+    TooManyChildObjects {                               // MoveCall error
         object: ObjectID,
     },
-    InvalidParentDeletion {
+    InvalidParentDeletion {                             // MoveCall error
         parent: ObjectID,
         kind: Option<DeleteKind>,
     },
-    InvalidParentFreezing {
+    InvalidParentFreezing {                             // MoveCall error
         parent: ObjectID,
     },
-
-    //
-    // MovePublish errors
-    //
-    PublishErrorEmptyPackage,
-    PublishErrorNonZeroAddress,
-    PublishErrorDuplicateModule,
-    SuiMoveVerificationError,
-
-    //
-    // Errors from the Move VM
-    //
+    PublishErrorEmptyPackage,                           // MovePublish error
+    PublishErrorNonZeroAddress,                         // MovePublish error
+    PublishErrorDuplicateModule,                        // MovePublish error
+    SuiMoveVerificationError,                           // MovePublish error
     // TODO module id + func def + offset?
-    MovePrimitiveRuntimeError,
-    /// Indicates and `abort` from inside Move code. Contains the location of the abort and the
-    /// abort code
-    MoveAbort(ModuleId, u64), // TODO func def + offset?
-    VMVerificationOrDeserializationError,
-    VMInvariantViolation,
+    MovePrimitiveRuntimeError,                          // Error from the Move VM
+    // TODO func def + offset?
+    MoveAbort(ModuleId, u64),                           // Error from the Move VM
+    VMVerificationOrDeserializationError,               // Error from the Move VM
+    VMInvariantViolation,                               // Error from the Move VM
+}
+
+#[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
+pub enum InvalidSharedObjectUsage {
+    ObjectNotFound { object: ObjectID },
+    NotQuasiSharedObject { object: ObjectID },
+    InvalidSequenceNumber { object: ObjectID },
+    UnknownError { object: ObjectID },
 }
 
 #[derive(Eq, PartialEq, Clone, Copy, Debug, Serialize, Deserialize, Hash)]
@@ -1104,6 +1094,10 @@ impl std::fmt::Display for ExecutionFailureStatus {
             ExecutionFailureStatus::ModuleNotFound => write!(f, "Module Not Found."),
             ExecutionFailureStatus::FunctionNotFound => write!(f, "Function Not Found."),
             ExecutionFailureStatus::InvariantViolation => write!(f, "INVARIANT VIOLATION."),
+            ExecutionFailureStatus::InvalidSharedObjectUsage(data) => {
+                write!(f, "Invalid Shared Object Usage. The usage of the shared object is no longer  valid {data}")
+            }
+
             ExecutionFailureStatus::InvalidTransferObject => write!(
                 f,
                 "Invalid Transfer Object Transaction. \
@@ -1200,6 +1194,27 @@ impl std::fmt::Display for ExecutionFailureStatus {
             ),
             ExecutionFailureStatus::VMInvariantViolation => {
                 write!(f, "MOVE VM INVARIANT VIOLATION.")
+            }
+        }
+    }
+}
+
+impl Display for InvalidSharedObjectUsage {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            InvalidSharedObjectUsage::ObjectNotFound { object } => {
+                write!(f, "Object {object} not found, It might have been deleted.")
+            }
+            InvalidSharedObjectUsage::NotQuasiSharedObject { object } => write!(
+                f,
+                "Object {object} no longer quasi-shared, it might have been transferred away."
+            ),
+            InvalidSharedObjectUsage::InvalidSequenceNumber { object } => write!(
+                f,
+                "Sequence number too large for (quasi-) shared object {object}."
+            ),
+            InvalidSharedObjectUsage::UnknownError { object } => {
+                write!(f, "Unknown error with (quasi-) shared object {object}.")
             }
         }
     }

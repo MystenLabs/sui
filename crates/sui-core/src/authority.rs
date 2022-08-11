@@ -374,8 +374,11 @@ impl AuthorityState {
         }
 
         let (_gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.database, &transaction)
-                .await?;
+            transaction_input_checker::check_transaction_input_for_certificate_generation(
+                &self.database,
+                &transaction,
+            )
+            .await?;
 
         let owned_objects = input_objects.filter_owned_objects();
 
@@ -658,8 +661,12 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         transaction_digest: TransactionDigest,
     ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
-        let (gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.database, certificate).await?;
+        let (gas_status, input_objects, shared_object_errors) =
+            transaction_input_checker::check_transaction_input_for_certificate_execution(
+                &self.database,
+                certificate,
+            )
+            .await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
@@ -685,6 +692,7 @@ impl AuthorityState {
         let (inner_temp_store, effects, _execution_error) =
             execution_engine::execute_transaction_to_effects(
                 shared_object_refs,
+                shared_object_errors,
                 temporary_store,
                 certificate.signed_data.data.clone(),
                 transaction_digest,

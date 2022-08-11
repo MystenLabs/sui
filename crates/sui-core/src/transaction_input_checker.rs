@@ -7,6 +7,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::fmt::Debug;
 use sui_adapter::object_root_ancestor_map::ObjectRootAncestorMap;
 use sui_types::messages::TransactionKind;
+use sui_types::object::Data;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
@@ -20,7 +21,7 @@ use sui_types::{
 use tracing::instrument;
 
 #[instrument(level = "trace", skip_all)]
-pub async fn check_transaction_input<S, T>(
+pub async fn check_transaction_input_for_certificate_generation<S, T>(
     store: &SuiDataStore<S>,
     transaction: &TransactionEnvelope<T>,
 ) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
@@ -36,8 +37,22 @@ where
     )
     .await?;
 
-    let input_objects = check_objects(store, &transaction.signed_data.data).await?;
-
+    let input_object_kinds = transaction.signed_data.data.input_objects()?;
+    // These IDs act as authenticators that can own other objects.
+    let fetched_input_objects = fetch_objects(store, &input_object_kinds).await?;
+    let (input_objects, errors) = check_objects(
+        &transaction.signed_data.data,
+        input_object_kinds,
+        fetched_input_objects,
+    );
+    if !errors.is_empty() {
+        let errors = errors.into_iter().map(|(_, _, e)| e).collect();
+        return Err(SuiError::ObjectErrors { errors });
+    }
+    fp_ensure!(
+        !input_objects.is_empty(),
+        SuiError::ObjectInputArityViolation
+    );
     if transaction.contains_shared_object() {
         // It's important that we do this here to make sure there is enough
         // gas to cover shared objects, before we lock all objects.
@@ -45,6 +60,89 @@ where
     }
 
     Ok((gas_status, input_objects))
+}
+
+pub async fn check_transaction_input_for_certificate_execution<S, T>(
+    store: &SuiDataStore<S>,
+    transaction: &TransactionEnvelope<T>,
+) -> Result<
+    (
+        SuiGasStatus<'static>,
+        InputObjects,
+        Vec<(ObjectID, SuiError)>,
+    ),
+    SuiError,
+>
+where
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
+{
+    macro_rules! unexpected_error {
+        () => {
+            "Should have been verified during certificate generation"
+        };
+    }
+    let gas_status_res = check_gas(
+        store,
+        transaction.gas_payment_object_ref().0,
+        transaction.signed_data.data.gas_budget,
+        transaction.signed_data.data.gas_price,
+        &transaction.signed_data.data.kind,
+    )
+    .await;
+    debug_assert!(gas_status_res.is_ok(), unexpected_error!());
+    let mut gas_status = gas_status_res?;
+
+    let input_object_kinds_res = transaction.signed_data.data.input_objects();
+    debug_assert!(input_object_kinds_res.is_ok(), unexpected_error!());
+    let input_object_kinds = input_object_kinds_res?;
+
+    // These IDs act as authenticators that can own other objects.
+    let fetched_input_objects_res = fetch_objects(store, &input_object_kinds).await;
+    debug_assert!(fetched_input_objects_res.is_ok(), unexpected_error!());
+    let fetched_input_objects = fetched_input_objects_res?;
+    let (input_objects, errors) = check_objects(
+        &transaction.signed_data.data,
+        input_object_kinds,
+        fetched_input_objects,
+    ); // errors is empty implies all_objects is not empty
+    if errors.is_empty() && input_objects.is_empty() {
+        debug_assert!(false, unexpected_error!());
+        return Err(SuiError::ObjectInputArityViolation);
+    }
+    let mut shared_or_quasi_shared_errors = vec![];
+    let mut non_shared_errors = vec![];
+    for (err_obj_id, is_shared_or_quasi_shared, e) in errors {
+        if is_shared_or_quasi_shared {
+            debug_assert!(
+                matches!(
+                    e,
+                    SuiError::ObjectNotFound { .. }
+                        | SuiError::NotQuasiSharedObject { .. }
+                        | SuiError::InvalidSequenceNumber { .. }
+                ),
+                unexpected_error!()
+            );
+            shared_or_quasi_shared_errors.push((err_obj_id, e))
+        } else {
+            debug_assert!(false, unexpected_error!());
+            non_shared_errors.push(e)
+        }
+    }
+    if !non_shared_errors.is_empty() {
+        return Err(SuiError::ObjectErrors {
+            errors: non_shared_errors,
+        });
+    }
+
+    if transaction.contains_shared_object() {
+        // It's important that we do this here to make sure there is enough
+        // gas to cover shared objects, before we lock all objects.
+        let charge_res = gas_status.charge_consensus();
+        debug_assert!(charge_res.is_ok(), unexpected_error!());
+        charge_res?
+    }
+
+    Ok((gas_status, input_objects, shared_or_quasi_shared_errors))
 }
 
 /// Checking gas budget by fetching the gas object only from the store,
@@ -94,21 +192,40 @@ where
     }
 }
 
-/// Check all the objects used in the transaction against the database, and ensure
-/// that they are all the correct version and number.
-#[instrument(level = "trace", skip_all)]
-async fn check_objects<S>(
+#[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
+async fn fetch_objects<S>(
     store: &SuiDataStore<S>,
-    transaction: &TransactionData,
-) -> Result<InputObjects, SuiError>
+    input_objects: &[InputObjectKind],
+) -> Result<Vec<Option<Object>>, SuiError>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    let input_objects = transaction.input_objects()?;
+    let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
+    store.get_objects(&ids[..])
+}
 
-    // These IDs act as authenticators that can own other objects.
-    let objects = store.get_input_objects(&input_objects)?;
-
+/// Check all the objects used in the transaction against the database, and ensure
+/// that they are all the correct version and number.
+/// When processing the certificate we want to know if the error was associated with a shared or
+/// quasi shared objects. The only errors that should be possible for those cases are:
+/// - The (quasi-)shared object was deleted
+/// - The quasi-shared object is no longer quasi-shared
+///   (transferred to an owned object, made owned, frozen, etc)
+#[instrument(level = "trace", skip_all)]
+fn check_objects(
+    transaction: &TransactionData,
+    input_object_kinds: Vec<InputObjectKind>,
+    fetched_input_objects: Vec<Option<Object>>,
+) -> (
+    InputObjects,
+    Vec<(
+        ObjectID,
+        /* for shared or quasi-shared */ bool,
+        SuiError,
+    )>,
+) {
+    assert!(input_object_kinds.len() == fetched_input_objects.len());
+    let mut errors: Vec<(ObjectID, bool, SuiError)> = vec![];
     // Constructing the list of objects that could be used to authenticate other
     // objects. Any mutable object (either shared or owned) can be used to
     // authenticate other objects. Hence essentially we are building the list
@@ -122,14 +239,23 @@ where
     // in more than one SingleTransactionKind. We need to ensure that their
     // version number only increases once at the end of the Batch execution.
     let mut object_owner_map = BTreeMap::new();
-    for object in objects.iter().flatten() {
+    for object in fetched_input_objects.iter().flatten() {
         if !object.is_immutable() {
-            fp_ensure!(
-                object_owner_map.insert(object.id(), object.owner).is_none(),
-                SuiError::InvalidBatchTransaction {
-                    error: format!("Mutable object {} cannot appear in more than one single transactions in a batch", object.id()),
-                }
-            );
+            let object_id = object.id();
+            if object_owner_map.insert(object.id(), object.owner).is_some() {
+                // we do not care about this error for shared objects as it should not be possible
+                // when processing a certificate
+                let error = format!(
+                    "Mutable object {} cannot appear in more than one single \
+                    transactions in a batch",
+                    object.id()
+                );
+                errors.push((
+                    object_id,
+                    false,
+                    SuiError::InvalidBatchTransaction { error },
+                ));
+            }
         }
     }
 
@@ -138,8 +264,7 @@ where
     let root_ancestor_map =
         ObjectRootAncestorMap::new(&object_owner_map).expect("ownership should be well formed");
     // Gather all objects and errors.
-    let mut all_objects = Vec::with_capacity(input_objects.len());
-    let mut errors = Vec::new();
+    let mut all_objects = Vec::with_capacity(input_object_kinds.len());
     let transfer_object_ids: HashSet<_> = transaction
         .kind
         .single_transactions()
@@ -152,40 +277,50 @@ where
         })
         .collect();
 
-    for (object_kind, object) in input_objects.into_iter().zip(objects) {
+    for (object_kind, object) in input_object_kinds.into_iter().zip(fetched_input_objects) {
+        let is_shared_or_quasi_shared = matches!(
+            object_kind,
+            InputObjectKind::SharedMoveObject(_) | InputObjectKind::QuasiSharedMoveObject(_)
+        );
         // All objects must exist in the DB.
         let object = match object {
             Some(object) => object,
             None => {
-                errors.push(object_kind.object_not_found_error());
+                errors.push((
+                    object_kind.object_id(),
+                    is_shared_or_quasi_shared,
+                    object_kind.object_not_found_error(),
+                ));
                 continue;
             }
         };
-        if transfer_object_ids.contains(&object.id()) {
-            object.ensure_public_transfer_eligible()?;
-        }
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_object(
+        let object_id = object.id();
+        let correct_object_kind = match check_one_object(
             &transaction.signer(),
             object_kind,
             &object,
             &root_ancestor_map,
         ) {
-            Ok(()) => all_objects.push((object_kind, object)),
             Err(e) => {
-                errors.push(e);
+                // if there was an error in checking the object, there could be something off with
+                // the object kind.
+                // For correctly bumping the versions of shared objects, we need to make sure we
+                // have the correct object kind
+                errors.push((object_id, is_shared_or_quasi_shared, e));
+                compute_object_kind(&object, &root_ancestor_map)
+            }
+            Ok(()) => object_kind,
+        };
+        if transfer_object_ids.contains(&object_id) {
+            if let Err(e) = object.ensure_public_transfer_eligible() {
+                errors.push((object_id, is_shared_or_quasi_shared, e.into()));
             }
         }
+        all_objects.push((correct_object_kind, object));
     }
-    // If any errors with the locks were detected, we return all errors to give the client
-    // a chance to update the authority if possible.
-    if !errors.is_empty() {
-        return Err(SuiError::ObjectErrors { errors });
-    }
-    fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
-
-    Ok(InputObjects::new(all_objects))
+    (InputObjects::new(all_objects), errors)
 }
 
 /// The logic to check one object against a reference, and return the object if all is well
@@ -218,10 +353,6 @@ fn check_one_object(
             );
 
             // Check that the seq number is the same
-            // Note that this generally can't fail, because we fetch objects at the version
-            // specified by the input objects. This makes check_transaction_input idempotent.
-            // A tx that tries to operate on older versions will fail later when checking the
-            // object locks.
             fp_ensure!(
                 object.version() == sequence_number,
                 SuiError::UnexpectedSequenceNumber {
@@ -286,6 +417,12 @@ fn check_one_object(
             fp_ensure!(object.is_shared(), SuiError::NotSharedObjectError);
         }
         InputObjectKind::QuasiSharedMoveObject(object_id) => {
+            // wrapped objects that are then deleted will be set to MAX,
+            // so we need to cap the sequence number at MAX - 1
+            fp_ensure!(
+                object.version() < SequenceNumber::MAX.decrement().unwrap(),
+                SuiError::InvalidSequenceNumber
+            );
             fp_ensure!(
                 matches!(object.owner, Owner::ObjectOwner(_)),
                 SuiError::NotQuasiSharedObject {
@@ -306,4 +443,28 @@ fn check_one_object(
         }
     };
     Ok(())
+}
+
+fn compute_object_kind(
+    object: &Object,
+    root_ancestor_map: &ObjectRootAncestorMap,
+) -> InputObjectKind {
+    match (&object.data, &object.owner) {
+        (Data::Package(_), _) => InputObjectKind::MovePackage(object.id()),
+        (Data::Move(_), Owner::Shared) => InputObjectKind::SharedMoveObject(object.id()),
+        (Data::Move(_), Owner::AddressOwner(_)) | (Data::Move(_), Owner::Immutable) => {
+            InputObjectKind::ImmOrOwnedMoveObject(object.compute_object_reference())
+        }
+        (Data::Move(_), Owner::ObjectOwner(_)) => {
+            let object_id = object.id();
+            let (_, ancestor_owner) = root_ancestor_map
+                .get_root_ancestor(&object_id)
+                .expect("ownership should be well formed");
+            if ancestor_owner.is_shared() {
+                InputObjectKind::QuasiSharedMoveObject(object_id)
+            } else {
+                InputObjectKind::ImmOrOwnedMoveObject(object.compute_object_reference())
+            }
+        }
+    }
 }
