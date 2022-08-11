@@ -61,6 +61,14 @@
     @apply rounded-md bg-[#6fbcf014];
 }
 
-.icon {
+.openicon,
+.closedicon {
     @apply pr-[6px] pl-[12px];
+}
+
+.openicon svg path {
+    @apply fill-sui-grey-80;
+
+    transform: rotate(90deg);
+    transform-origin: 50% 50%;
 }

@@ -70,10 +70,14 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                                         }
                                         className={styles.summary}
                                     >
-                                        <div>
-                                            <span className={styles.icon}>
-                                                <ContentIcon />
-                                            </span>
+                                        <div
+                                            className={
+                                                openedType === typeV
+                                                    ? styles.openicon
+                                                    : styles.closedicon
+                                            }
+                                        >
+                                            <ContentIcon />
                                         </div>
                                         <div>{handleCoinType(typeV)}</div>
                                         <div>{subObjList.length}</div>
