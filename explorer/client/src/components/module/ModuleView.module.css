@@ -51,6 +51,7 @@ section .codeview pre {
 .modulewrapper {
     @apply p-0 pb-2;
 }
+
 @media (min-width: 40em) {
     section .modulewrapper {
         border-right: 1px solid #f0f1f2;
