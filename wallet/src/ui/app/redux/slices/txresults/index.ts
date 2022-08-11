@@ -10,12 +10,8 @@ import {
     getTotalGasUsed,
     getTransferSuiTransaction,
     getExecutionStatusError,
-    getTransferSuiTransaction,
-    getExecutionStatusError,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
-
-import { batchBetchObjects } from '_redux/slices/sui-objects';
 
 import { batchBetchObjects } from '_redux/slices/sui-objects';
 
@@ -35,14 +31,6 @@ export type TxResultState = {
     txGas: number;
     kind: TransactionKindName | undefined;
     From: string;
-    Amount?: number;
-    timestamp_ms?: number;
-    url?: string;
-    objectId: string;
-    description?: string;
-    name?: string;
-    isSender?: boolean;
-    error?: string;
     Amount?: number;
     timestamp_ms?: number;
     url?: string;
@@ -124,22 +112,11 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 txKind === 'TransferSui'
                                     ? getTransferSuiTransaction(txn)
                                     : null;
-
-                            const tranferSui =
-                                txKind === 'TransferSui'
-                                    ? getTransferSuiTransaction(txn)
-                                    : null;
                             const recipient =
                                 txKind === 'TransferSui'
                                     ? tranferSui?.recipient
-                                    : txKind === 'TransferSui'
-                                    ? tranferSui?.recipient
                                     : getTransferObjectTransaction(txn)
-                                          
                                           ?.recipient;
-
-                            const txTransferObject =
-                                getTransferObjectTransaction(txn);
 
                             const txTransferObject =
                                 getTransferObjectTransaction(txn);
@@ -151,19 +128,6 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
                                 From: res.data.sender,
-                                ...(txTransferObject?.objectRef.objectId
-                                    ? {
-                                          objectId:
-                                              txTransferObject?.objectRef
-                                                  .objectId,
-                                      }
-                                    : {}),
-                                error: getExecutionStatusError(txEff),
-                                timestamp_ms: txEff.timestamp_ms,
-                                isSender: res.data.sender === address,
-                                ...(tranferSui?.amount
-                                    ? { Amount: tranferSui.amount }
-                                    : {}),
                                 ...(txTransferObject?.objectRef.objectId
                                     ? {
                                           objectId:

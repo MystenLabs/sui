@@ -21,6 +21,7 @@ import {
 } from '_redux/slices/sui-objects/Coin';
 
 import type { ObjectId } from '@mysten/sui.js';
+import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
 import st from './TransferNFTForm.module.scss';
@@ -99,7 +100,7 @@ function TransferNFTCard({ objectId }: TransferProps) {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, navigate, objectId]
+        [dispatch, navigate, objectId]
     );
 
     const handleOnClearSubmitError = useCallback(() => {
