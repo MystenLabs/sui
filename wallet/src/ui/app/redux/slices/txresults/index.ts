@@ -100,11 +100,12 @@ export const getTransactionsByAddress = createAsyncThunk<
                                     getTransactionDigest(txEff.certificate)
                             )[0];
                             const res: CertifiedTransaction = txEff.certificate;
-                            // TODO: handle multiple transactions
+
                             const txns = getTransactions(res);
                             if (txns.length > 1) {
                                 return null;
                             }
+                            // TODO handle batch transactions
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
 
