@@ -4,7 +4,7 @@ version: "3.9"
 services:
   validator:
     container_name: validator
-    image: mysten/sui-node:d7c5f234391ce1e4556c55800cec2b801d2a8ce4
+    image: mysten/sui-node:c5cb2e6c7af6bd99318f03e799c6dc8fd2b026cc
     labels:
       org.label-schema.name: "validator"
     ports:
