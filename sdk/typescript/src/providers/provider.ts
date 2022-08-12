@@ -120,30 +120,15 @@ export abstract class Provider {
   ): Promise<SuiMoveNormalizedStruct>;
 
   abstract syncAccountState(address: string): Promise<any>;
-  // TODO: add more interface methods
 
   /**
    * Subscribe to an event
    */
    abstract subscribeEvent(
     params: object[],
-    onEvent: (event: SuiEvent) => {}
-  ): Promise<any[]>;
+    // will actually return an event envelope probably
+    onMessage: (event: SuiEvent) => {}
+  ): Promise<any>;
 
-  /*
-    request = {
-      "jsonrpc":"2.0",
-      "id": 1,
-      "method": "sui_subscribeEvent",
-      "params": [
-        {
-          "All": [
-            {"EventType":"MoveEvent"},
-            {"Package":"0x2"},
-            {"Module":"devnet_nft"}
-          ]
-        }
-      ]
-    }
-  */
+  // TODO: add more interface methods
 }

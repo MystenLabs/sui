@@ -3,6 +3,7 @@
 
 import { SuiAddress, ObjectOwner } from "./common";
 import { ObjectId, SequenceNumber } from "./objects";
+import { SuiJsonValue } from "./transactions";
 
 
 // event types mirror those in "sui-json-rpc-types/lib.rs"
@@ -53,3 +54,32 @@ export type SuiEvent =
     | { newObject: NewObjectEvent }
     | { epochChange: bigint }
     | { checkpoint: bigint };
+
+
+export type MoveEventField = {
+    path: string,
+    value: SuiJsonValue
+}
+
+// mirrors sui_framework::EventType
+export type EventType =
+    | "TransferToAddress"
+    | "TransferToObject"
+    | "FreezeObject"
+    | "ShareObject"
+    | "DeleteObjectID"
+    | "User";
+
+// mirrors sui_json_rpc_types::SuiEventFilter
+export type SuiEventFilter =
+    | { "package" : ObjectId }
+    | { "module" : string }
+    | { "moveEventType" : string }
+    | { "moveEventField" : MoveEventField }
+    | { "senderAddress" : SuiAddress }
+    | { "eventType" : EventType }
+    | { "objectId" : ObjectId }
+    | { "All" : SuiEventFilter[] }
+    | { "Any" : SuiEventFilter[] }
+    | { "And" : [SuiEventFilter, SuiEventFilter] }
+    | { "Or" : [SuiEventFilter, SuiEventFilter] };

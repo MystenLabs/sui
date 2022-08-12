@@ -360,4 +360,34 @@ export class JsonRpcProvider extends Provider {
       );
     }
   }
+
+  async subscribeEvent(params: object[]): Promise<any> {
+    try {
+      return await this.client.requestWithType(
+        'sui_subscribeEvent',
+        params,
+        isAny
+      );
+    } catch (err) {
+      throw new Error(
+        `Error subscribing to event filter: ${err}, params: ${JSON.stringify(params)}`
+      );
+    }
+  }
+  /*
+    request = {
+      "jsonrpc":"2.0",
+      "id": 1,
+      "method": "sui_subscribeEvent",
+      "params": [
+        {
+          "All": [
+            {"EventType":"MoveEvent"},
+            {"Package":"0x2"},
+            {"Module":"devnet_nft"}
+          ]
+        }
+      ]
+    }
+  */
 }
