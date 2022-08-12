@@ -223,18 +223,18 @@ impl SuiClient {
     ) -> anyhow::Result<SuiTransactionResponse> {
         Ok(match &self {
             Self::Http(c) => {
-                let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
-                let flag = tx.tx_signature.scheme();
-                let signature = Base64::from_bytes(tx.tx_signature.signature_bytes());
-                let pub_key = Base64::from_bytes(tx.tx_signature.public_key_bytes());
+                let tx_bytes = Base64::from_bytes(&tx.signed_data.data.to_bytes());
+                let flag = tx.signed_data.tx_signature.scheme();
+                let signature = Base64::from_bytes(tx.signed_data.tx_signature.signature_bytes());
+                let pub_key = Base64::from_bytes(tx.signed_data.tx_signature.public_key_bytes());
                 c.execute_transaction(tx_bytes, flag, signature, pub_key)
                     .await?
             }
             Self::Ws(c) => {
-                let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());
-                let flag = tx.tx_signature.scheme();
-                let signature = Base64::from_bytes(tx.tx_signature.signature_bytes());
-                let pub_key = Base64::from_bytes(tx.tx_signature.public_key_bytes());
+                let tx_bytes = Base64::from_bytes(&tx.signed_data.data.to_bytes());
+                let flag = tx.signed_data.tx_signature.scheme();
+                let signature = Base64::from_bytes(tx.signed_data.tx_signature.signature_bytes());
+                let pub_key = Base64::from_bytes(tx.signed_data.tx_signature.public_key_bytes());
                 c.execute_transaction(tx_bytes, flag, signature, pub_key)
                     .await?
             }

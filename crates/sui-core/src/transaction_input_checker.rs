@@ -29,13 +29,13 @@ where
     let mut gas_status = check_gas(
         store,
         transaction.gas_payment_object_ref().0,
-        transaction.data.gas_budget,
-        transaction.data.gas_price,
-        &transaction.data.kind,
+        transaction.signed_data.data.gas_budget,
+        transaction.signed_data.data.gas_price,
+        &transaction.signed_data.data.kind,
     )
     .await?;
 
-    let input_objects = check_objects(store, &transaction.data).await?;
+    let input_objects = check_objects(store, &transaction.signed_data.data).await?;
 
     if transaction.contains_shared_object() {
         // It's important that we do this here to make sure there is enough

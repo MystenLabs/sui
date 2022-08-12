@@ -364,7 +364,7 @@ impl AuthorityState {
 
         // Validators should never sign an external system transaction.
         fp_ensure!(
-            !transaction.data.kind.is_system_tx(),
+            !transaction.signed_data.data.kind.is_system_tx(),
             SuiError::InvalidSystemTransaction
         );
 
@@ -399,7 +399,7 @@ impl AuthorityState {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.data.kind);
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.signed_data.data.kind);
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
@@ -468,7 +468,7 @@ impl AuthorityState {
                 ?observed_effects_digest,
                 ?signed_effects,
                 ?resp.signed_effects,
-                input_objects = ?certificate.data.input_objects(),
+                input_objects = ?certificate.signed_data.data.input_objects(),
                 "Locally executed effects do not match canonical effects!");
         }
         Ok(())
@@ -577,7 +577,7 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.is_halted() && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
             tx_guard.release();
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -634,7 +634,7 @@ impl AuthorityState {
             .observe(shared_object_count as f64);
         self.metrics
             .batch_size
-            .observe(certificate.data.kind.batch_size() as f64);
+            .observe(certificate.signed_data.data.kind.batch_size() as f64);
 
         Ok(TransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&digest)?,
@@ -664,7 +664,7 @@ impl AuthorityState {
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let shared_object_refs = input_objects.filter_shared_objects();
-        if !shared_object_refs.is_empty() && !certificate.data.kind.is_system_tx() {
+        if !shared_object_refs.is_empty() && !certificate.signed_data.data.kind.is_system_tx() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             // There is no need to go through consensus for system transactions that can
@@ -686,7 +686,7 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects(
                 shared_object_refs,
                 temporary_store,
-                certificate.data.clone(),
+                certificate.signed_data.data.clone(),
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,
@@ -724,9 +724,14 @@ impl AuthorityState {
     ) -> SuiResult {
         indexes.index_tx(
             cert.sender_address(),
-            cert.data.input_objects()?.iter().map(|o| o.object_id()),
+            cert.signed_data
+                .data
+                .input_objects()?
+                .iter()
+                .map(|o| o.object_id()),
             effects.effects.all_mutated(),
-            cert.data
+            cert.signed_data
+                .data
                 .move_calls()?
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
@@ -1504,7 +1509,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        if self.is_halted() && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);

@@ -1236,7 +1236,7 @@ where
             validity_threshold = validity,
             "Broadcasting transaction request to authorities"
         );
-        trace!("Transaction data: {:?}", transaction.data);
+        trace!("Transaction data: {:?}", transaction.signed_data.data);
 
         struct ProcessTransactionState {
             // The list of signatures gathered at any point
