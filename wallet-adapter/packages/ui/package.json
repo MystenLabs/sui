@@ -22,6 +22,6 @@
   "dependencies": {
     "@mui/icons-material": "^5.8.4",
     "@mui/material": "^5.8.4",
-    "sui-wallet-adapter-react": "file:../react-providers"
+    "sui-wallet-adapter-react": "workspace:*"
   }
 }

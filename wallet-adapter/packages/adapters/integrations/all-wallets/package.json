@@ -11,8 +11,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@sui-wallet-adapter/mock-wallet": "file:../mock-wallet",
-    "@sui-wallet-adapter/sui-wallet": "file:../sui-wallet"
+    "@sui-wallet-adapter/mock-wallet": "workspace:*",
+    "@sui-wallet-adapter/sui-wallet": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^4.7.4"
