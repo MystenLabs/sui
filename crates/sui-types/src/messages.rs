@@ -12,6 +12,7 @@ use crate::crypto::{
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
+use crate::storage::DeleteKind;
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
 use itertools::Either;
@@ -972,6 +973,16 @@ pub enum ExecutionFailureStatus {
     MissingObjectOwner(MissingObjectOwner),
     InvalidSharedChildUse(InvalidSharedChildUse),
     InvalidSharedByValue(InvalidSharedByValue),
+    TooManyChildObjects {
+        object: ObjectID,
+    },
+    InvalidParentDeletion {
+        parent: ObjectID,
+        kind: Option<DeleteKind>,
+    },
+    InvalidParentFreezing {
+        parent: ObjectID,
+    },
 
     //
     // MovePublish errors
@@ -1104,6 +1115,33 @@ impl std::fmt::Display for ExecutionFailureStatus {
             }
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
                 write!(f, "Invalid Shared Object By-Value Usage. {data}.")
+            }
+            ExecutionFailureStatus::TooManyChildObjects { object } => {
+                write!(
+                    f,
+                    "Object {object} has too many child objects. \
+                    The number of child objects cannot exceed 2^32 - 1."
+                )
+            }
+            ExecutionFailureStatus::InvalidParentDeletion { parent, kind } => {
+                let method = match kind {
+                    Some(DeleteKind::Normal) => "deleted",
+                    Some(DeleteKind::UnwrapThenDelete) => "unwrapped then deleted",
+                    Some(DeleteKind::Wrap) => "wrapped in another object",
+                    None => "created and destroyed",
+                };
+                write!(
+                    f,
+                    "Invalid Deletion of Parent Object with Children. Parent object {parent} was \
+                    {method} before its children were deleted or transferred."
+                )
+            }
+            ExecutionFailureStatus::InvalidParentFreezing { parent } => {
+                write!(
+                    f,
+                    "Invalid Freezing of Parent Object with Children. Parent object {parent} was \
+                    made immutable before its children were deleted or transferred."
+                )
             }
             ExecutionFailureStatus::PublishErrorEmptyPackage => write!(
                 f,

@@ -4,7 +4,7 @@
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -12,7 +12,7 @@ use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::fp_bail;
 use sui_types::messages::{ExecutionStatus, InputObjects, TransactionEffects};
 use sui_types::object::{Data, Object};
-use sui_types::storage::{BackingPackageStore, DeleteKind, ParentSync, Storage};
+use sui_types::storage::{BackingPackageStore, DeleteKind, ObjectChange, ParentSync, Storage};
 use sui_types::{
     event::Event,
     gas::{GasCostSummary, SuiGasStatus},
@@ -41,13 +41,12 @@ pub struct TemporaryStore<S> {
     // into _written directly.
     _written: BTreeMap<ObjectID, Object>, // Objects written
     /// Objects actively deleted.
-    /// Child count is Some for Normal/UnwrapThenDelete events, and is None for wraps
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     // New object IDs created during the transaction, needed for
     // telling apart unwrapped objects.
-    created_object_ids: HashSet<ObjectID>,
+    created_object_ids: BTreeSet<ObjectID>,
 }
 
 impl<S> TemporaryStore<S> {
@@ -64,7 +63,7 @@ impl<S> TemporaryStore<S> {
             _written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
-            created_object_ids: HashSet::new(),
+            created_object_ids: BTreeSet::new(),
         }
     }
 
@@ -88,12 +87,17 @@ impl<S> TemporaryStore<S> {
             .into_iter()
             .map(|(id, obj)| (id, (obj.compute_object_reference(), obj)))
             .collect();
+        let deleted = self
+            .deleted
+            .into_iter()
+            .map(|(id, (seq, kind))| (id, (seq, kind)))
+            .collect();
         (
             InnerTemporaryStore {
                 objects: self.input_objects,
                 mutable_inputs: self.mutable_input_refs,
                 written,
-                deleted: self.deleted,
+                deleted,
             },
             self.events,
         )
@@ -304,32 +308,12 @@ impl<S> TemporaryStore<S> {
             "Object previous transaction not properly set",
         );
     }
-}
-
-impl<S> Storage for TemporaryStore<S> {
-    /// Resets any mutations and deletions recorded in the store.
-    fn reset(&mut self) {
-        self._written.clear();
-        self.deleted.clear();
-        self.events.clear();
-        self.created_object_ids.clear();
-    }
-
-    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
-        // there should be no read after delete
-        debug_assert!(self.deleted.get(id) == None);
-        self._written.get(id).or_else(|| self.input_objects.get(id))
-    }
-
-    fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
-        self.created_object_ids = ids;
-    }
 
     // Invariant: A key assumption of the write-delete logic
     // is that an entry is not both added and deleted by the
     // caller.
 
-    fn write_object(&mut self, mut object: Object) {
+    pub fn write_object(&mut self, mut object: Object) {
         // there should be no write after delete
         debug_assert!(self.deleted.get(&object.id()) == None);
         // Check it is not read-only
@@ -348,7 +332,7 @@ impl<S> Storage for TemporaryStore<S> {
         self._written.insert(object.id(), object);
     }
 
-    fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
+    pub fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
         // there should be no deletion after write
         debug_assert!(self._written.get(id) == None);
         // Check it is not read-only
@@ -365,9 +349,37 @@ impl<S> Storage for TemporaryStore<S> {
         // eventually show up in the parent_sync table with an updated version.
         self.deleted.insert(*id, (version.increment(), kind));
     }
+}
+
+impl<S> Storage for TemporaryStore<S> {
+    /// Resets any mutations and deletions recorded in the store.
+    fn reset(&mut self) {
+        self._written.clear();
+        self.deleted.clear();
+        self.events.clear();
+        self.created_object_ids.clear();
+    }
+
+    fn read_object(&self, id: &ObjectID) -> Option<&Object> {
+        // there should be no read after delete
+        debug_assert!(self.deleted.get(id) == None);
+        self._written.get(id).or_else(|| self.input_objects.get(id))
+    }
+
+    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>) {
+        self.created_object_ids = ids;
+    }
 
     fn log_event(&mut self, event: Event) {
         self.events.push(event)
+    }
+    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
+        for (id, change) in changes {
+            match change {
+                ObjectChange::Write(new_value) => self.write_object(new_value),
+                ObjectChange::Delete(version, kind) => self.delete_object(&id, version, kind),
+            }
+        }
     }
 }
 
