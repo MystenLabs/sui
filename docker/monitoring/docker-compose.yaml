@@ -100,14 +100,12 @@ services:
     - /var/run:/var/run:rw
     - /sys:/sys:ro
     - /var/lib/docker/:/var/lib/docker:ro
-    ports:
+    # ports:
     # 8080 is used by sui-node
-    - 8090:8080
+    # - 8090:8080
     restart: always
     networks:
     - sui-net
-    deploy:
-      mode: global
 
 volumes:
   logs:
