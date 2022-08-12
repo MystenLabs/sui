@@ -3,6 +3,8 @@
 
 import cl from 'classnames';
 
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import { formatDate } from '_helpers';
 import { useFileExtentionType } from '_hooks';
@@ -74,27 +76,30 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
         </div>
     );
 
+    const statusClassName =
+        txDigest.status === 'success' ? st.success : st.failed;
+
     return (
         <>
             <div className={st.txnResponse}>
                 {txDigest.status === 'success' ? SuccessCard : failedCard}
-                <div className={cl(st.responseCard)}>
+                <div className={st.responseCard}>
                     {AssetCard}
                     {txDigest.amount && (
                         <div className={st.amount}>
-                            {txDigest.amount} <span>SUI</span>
+                            {txDigest.amount} <span>{GAS_SYMBOL}</span>
                         </div>
                     )}
-                    <div className={st.txInfo}>
-                        <div className={st.txInfoLabel}>Your Wallet</div>
-                        <div
-                            className={cl(
-                                st.txInfoValue,
-                                txDigest.status === 'success'
-                                    ? st.success
-                                    : st.failed
-                            )}
-                        >
+                    <div
+                        className={cl(
+                            st.txInfo,
+                            !txDigest.isSender && st.reciever
+                        )}
+                    >
+                        <div className={cl(st.txInfoLabel, statusClassName)}>
+                            Your Wallet
+                        </div>
+                        <div className={cl(st.txInfoValue, statusClassName)}>
                             {txDigest.kind !== 'Call' && txDigest.isSender
                                 ? txDigest.to
                                 : txDigest.from}
@@ -113,6 +118,28 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                         <div className={st.txDate}>
                             <div className={st.txInfoLabel}>Date</div>
                             <div className={st.walletInfoValue}>{date}</div>
+                        </div>
+                    )}
+
+                    {txDigest.txId && (
+                        <div className={st.explorerLink}>
+                            <ExplorerLink
+                                type={ExplorerLinkType.transaction}
+                                transactionID={txDigest.txId}
+                                title="View on Sui Explorer"
+                                className={st['explorer-link']}
+                                showIcon={false}
+                            >
+                                View in Explorer
+                                <Icon
+                                    icon={SuiIcons.ArrowLeft}
+                                    className={cl(
+                                        st.arrowActionIcon,
+                                        st.angledArrow,
+                                        st.iconExplorer
+                                    )}
+                                />
+                            </ExplorerLink>
                         </div>
                     )}
                 </div>
