@@ -55,7 +55,6 @@ export type SuiEvent =
     | { epochChange: bigint }
     | { checkpoint: bigint };
 
-
 export type MoveEventField = {
     path: string,
     value: SuiJsonValue
