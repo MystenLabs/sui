@@ -59,20 +59,22 @@ function EventSubscription() {
                 aria-label="event subscription form"
             >
                 <label>
-                Filter Type
-                <select>
-                    <option value="package">Package</option>
-                    <option value="module">Module</option>
-                    <option selected value="objectId">ObjectId</option>
-                    <option value="senderAddress">Sender Address</option>
-                    <option value="eventType">Event Type</option>
-                    <option value="moveEventType">Move Event Type</option>
-                    <option value="moveEventField">Move Event Field</option>
-                    <option value="All">All</option>
-                    <option value="Any">Any</option>
-                    <option value="And">And</option>
-                    <option value="Or">Or</option>
-                </select>
+                    Filter Type
+                    <select id="eventFilterSelect">
+                        <option value="package">Package</option>
+                        <option value="module">Module</option>
+                        <option selected value="objectId">
+                            ObjectId
+                        </option>
+                        <option value="senderAddress">Sender Address</option>
+                        <option value="eventType">Event Type</option>
+                        <option value="moveEventType">Move Event Type</option>
+                        <option value="moveEventField">Move Event Field</option>
+                        <option value="All">All</option>
+                        <option value="Any">Any</option>
+                        <option value="And">And</option>
+                        <option value="Or">Or</option>
+                    </select>
                 </label>
             </form>
             <form
