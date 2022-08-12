@@ -28,7 +28,7 @@ import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
 import { setNavVisibility } from '_redux/slices/app';
 
-const HIDDEN_MENU_PATHS = ['/stake-new', '/nft-details', '/receipt'];
+const HIDDEN_MENU_PATHS = ['/stake-new', '/nft-details', '/receipt', '/send'];
 
 const App = () => {
     const dispatch = useAppDispatch();

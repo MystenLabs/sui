@@ -84,6 +84,23 @@
     }
 }
 
+.tx-date,
+.tx-fees {
+    display: flex;
+    gap: 10px;
+    margin: 10px;
+    justify-content: space-between;
+    @include utils.typography('table/text-lg');
+
+    .tx-info-label {
+        color: colors.$gray-80;
+    }
+
+    .tx-info-value {
+        color: colors.$gray-85;
+    }
+}
+
 .response-card {
     background-color: colors.$gray-40;
     border-radius: 10px;
@@ -160,22 +177,30 @@
                 background-image: url('_assets/images/Done.svg');
             }
         }
-    }
 
-    .tx-date,
-    .tx-fees {
-        display: flex;
-        gap: 10px;
-        margin: 10px;
-        justify-content: space-between;
-        @include utils.typography('table/text-lg');
+        &.reciever {
+            flex-direction: column-reverse;
 
-        .tx-info-label {
-            color: colors.$gray-80;
-        }
+            .tx-info-label {
+                &::after {
+                    height: 30px;
+                    margin-top: -30px;
+                }
 
-        .tx-info-value {
-            color: colors.$gray-85;
+                &.failed::before {
+                    background-image: url('_assets/images/Fail.svg');
+                }
+
+                &.success::before {
+                    background-image: url('_assets/images/Done.svg');
+                }
+            }
+
+            .tx-info-value {
+                &::before {
+                    background-image: url('_assets/images/Start.svg');
+                }
+            }
         }
     }
 
@@ -250,7 +275,7 @@
         white-space: nowrap;
         text-overflow: ellipsis;
 
-        @include utils.typography('nft-title');
+        @include utils.typography('page-title');
     }
 
     .nft-type {
