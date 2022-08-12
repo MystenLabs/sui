@@ -36,15 +36,13 @@ members = [
     "crates/x",
 ]
 
-# Debug symbols are really important for profiling
-# [profile.release]
-# debug = true
-# strip = "debuginfo"
-
-[profile.bench-profiling]
-inherits = "release"
-# Important for performance/memory profiling
+[profile.release]
+# The following two lines add minimal symbol information, which helps certain profilers like Bytehound
+# without significantly increasing binary size
 debug = true
+strip = 'debuginfo'
 
 [profile.bench]
+# Do not strip any debug info.  This helps the widest set of profiling tools
 debug = true
+strip = 'none'

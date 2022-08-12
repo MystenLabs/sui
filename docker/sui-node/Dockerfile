@@ -37,8 +37,8 @@ RUN cargo build --profile $PROFILE
 COPY Cargo.toml Cargo.lock ./
 COPY crates crates
 RUN cargo build --profile $PROFILE --bin sui-node
-RUN apt-get update && apt-get install -y binutils
-RUN strip -s -w -K sui* -K narwhal* -K hyper* -K typed_store* "/sui/target/$PROFILE/sui-node"
+# RUN apt-get update && apt-get install -y binutils
+# RUN strip --debug-only -w -K sui* -K narwhal* -K hyper* -K typed_store* "/sui/target/$PROFILE/sui-node"
 
 # Production Image
 FROM debian:bullseye-slim AS runtime
