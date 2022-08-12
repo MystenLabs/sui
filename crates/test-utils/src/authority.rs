@@ -13,6 +13,7 @@ use sui_core::{
     },
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
     authority_client::NetworkAuthorityClient,
+    safe_client::SafeClientMetrics,
 };
 use sui_node::SuiNode;
 use sui_types::{committee::Committee, object::Object};
@@ -75,8 +76,9 @@ pub async fn spawn_checkpoint_processes(
     for authority in handles {
         let state = authority.state().clone();
         let inner_agg = aggregator.clone();
-        let active_state =
-            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
+        let active_state = Arc::new(
+            ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_agg).unwrap(),
+        );
         let checkpoint_process_control = CheckpointProcessControl {
             long_pause_between_checkpoints: Duration::from_millis(10),
             ..CheckpointProcessControl::default()
@@ -106,8 +108,13 @@ pub fn test_authority_aggregator(
             )
         })
         .collect();
-    let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
-    AuthorityAggregator::new(committee, clients, metrics)
+    let registry = prometheus::Registry::new();
+    AuthorityAggregator::new(
+        committee,
+        clients,
+        AuthAggMetrics::new(&registry),
+        SafeClientMetrics::new(&registry),
+    )
 }
 
 /// Get a network client to communicate with the consensus.

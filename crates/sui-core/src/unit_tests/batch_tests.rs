@@ -19,6 +19,7 @@ use crate::safe_client::SafeClient;
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::epoch::epoch_store::EpochStore;
+use crate::safe_client::SafeClientMetrics;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use futures::stream;
@@ -769,7 +770,12 @@ async fn test_safe_batch_stream() {
 
     // Happy path:
     let auth_client = TrustworthyAuthorityClient::new(state);
-    let safe_client = SafeClient::new(auth_client, committee.clone(), public_key_bytes);
+    let safe_client = SafeClient::new(
+        auth_client,
+        committee.clone(),
+        public_key_bytes,
+        SafeClientMetrics::new_for_tests(),
+    );
 
     let request = BatchInfoRequest {
         start: Some(0),
@@ -808,6 +814,7 @@ async fn test_safe_batch_stream() {
         auth_client_from_byzantine,
         committee.clone(),
         public_key_bytes_b,
+        SafeClientMetrics::new_for_tests(),
     );
 
     let mut batch_stream = safe_client_from_byzantine

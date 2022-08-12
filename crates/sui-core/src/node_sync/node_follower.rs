@@ -3,7 +3,7 @@
 
 use crate::{
     authority::AuthorityState,
-    authority_active::gossip::{DigestHandler, Follower},
+    authority_active::gossip::{DigestHandler, Follower, GossipMetrics},
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
 };
@@ -264,6 +264,9 @@ pub struct NodeSyncState<A> {
     // Channels for enqueuing DigestMessage requests.
     sender: mpsc::Sender<DigestsMessage>,
     receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<DigestsMessage>>>,
+
+    // Gossip Metrics
+    metrics: GossipMetrics,
 }
 
 impl<A> NodeSyncState<A> {
@@ -271,6 +274,7 @@ impl<A> NodeSyncState<A> {
         state: Arc<AuthorityState>,
         aggregator: Arc<AuthorityAggregator<A>>,
         node_sync_store: Arc<NodeSyncStore>,
+        metrics: GossipMetrics,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(NODE_SYNC_QUEUE_LEN);
         let committee = state.committee.load().deref().clone();
@@ -284,6 +288,7 @@ impl<A> NodeSyncState<A> {
             pending_txes: Waiter::new(),
             sender,
             receiver: Arc::new(tokio::sync::Mutex::new(receiver)),
+            metrics,
         }
     }
 }
@@ -399,7 +404,8 @@ where
 
                 debug!(?parents, "attempting to execute parents");
 
-                let handle = NodeSyncHandle::new_from_sender(self.sender.clone());
+                let handle =
+                    NodeSyncHandle::new_from_sender(self.sender.clone(), self.metrics.clone());
                 let results = handle
                     .handle_execution_request(parents.iter().cloned())
                     .await?;
@@ -467,13 +473,15 @@ where
 
                     // wait until the tx becomes final before returning, so that the follower doesn't mark
                     // this tx as finished prematurely.
+                    let _timer = self.metrics.wait_for_finality_latency_sec.start_timer();
                     let (_, mut rx) = self.pending_txes.wait(&digests.transaction).await;
-                    return rx
+                    let result = rx
                         .recv()
                         .await
                         .map_err(|e| SuiError::GenericAuthorityError {
                             error: format!("{:?}", e),
                         });
+                    return result;
                 }
 
                 debug!(?digests, ?peer, "digests are now final");
@@ -564,7 +572,6 @@ where
         if let Some(c) = self.node_sync_store.get_cert_and_effects(&tx_digest)? {
             return Ok(c);
         }
-
         let pending_downloads = self.pending_downloads.clone();
         let (first, mut rx) = pending_downloads.wait(&tx_digest).await;
         // Only start the download if there are no other concurrent downloads.
@@ -572,6 +579,7 @@ where
             let aggregator = self.aggregator.clone();
             let node_sync_store = self.node_sync_store.clone();
             let req = req.clone();
+            let metrics = self.metrics.clone();
             tokio::task::spawn(async move {
                 let _ = pending_downloads
                     .notify(
@@ -581,6 +589,7 @@ where
                             aggregator,
                             &req,
                             node_sync_store,
+                            metrics,
                         )
                         .await,
                     )
@@ -609,16 +618,20 @@ where
         aggregator: Arc<AuthorityAggregator<A>>,
         req: &DownloadRequest,
         node_sync_store: Arc<NodeSyncStore>,
+        metrics: GossipMetrics,
     ) -> SuiResult {
         let (cert, effects) = match req {
             DownloadRequest::Node(digests) => {
-                aggregator
+                metrics.total_attempts_cert_downloads.inc();
+                let resp = aggregator
                     .handle_transaction_and_effects_info_request(
                         digests,
                         authorities.as_ref(),
                         None,
                     )
-                    .await?
+                    .await?;
+                metrics.total_successful_attempts_cert_downloads.inc();
+                resp
             }
             DownloadRequest::Validator(digest) => {
                 let resp = aggregator.handle_cert_info_request(digest, None).await?;
@@ -642,20 +655,21 @@ where
 #[derive(Clone)]
 pub struct NodeSyncHandle {
     sender: mpsc::Sender<DigestsMessage>,
+    metrics: GossipMetrics,
 }
 
 impl NodeSyncHandle {
-    pub fn new<A>(sync_state: Arc<NodeSyncState<A>>) -> Self
+    pub fn new<A>(sync_state: Arc<NodeSyncState<A>>, metrics: GossipMetrics) -> Self
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let (_handle, sender) = sync_state.start();
 
-        Self { sender }
+        Self { sender, metrics }
     }
 
-    fn new_from_sender(sender: mpsc::Sender<DigestsMessage>) -> Self {
-        Self { sender }
+    fn new_from_sender(sender: mpsc::Sender<DigestsMessage>, metrics: GossipMetrics) -> Self {
+        Self { sender, metrics }
     }
 
     fn map_rx(rx: oneshot::Receiver<SuiResult>) -> BoxFuture<'static, SuiResult> {
@@ -733,6 +747,10 @@ where
         )
         .await?;
         Ok(Self::map_rx(rx))
+    }
+
+    fn get_metrics(&self) -> &GossipMetrics {
+        &self.metrics
     }
 }
 

@@ -11,9 +11,10 @@ use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
+use sui_core::safe_client::SafeClientMetrics;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::ActiveAuthority,
+    authority_active::{gossip::GossipMetrics, ActiveAuthority},
     authority_client::{
         make_network_authority_client_sets_from_genesis,
         make_network_authority_client_sets_from_system_state, NetworkAuthorityClient,
@@ -145,6 +146,7 @@ impl SuiNode {
             state.clone_committee(),
             authority_clients,
             AuthAggMetrics::new(&prometheus_registry),
+            SafeClientMetrics::new(&prometheus_registry),
         );
 
         // TODO: maybe have a config enum that takes care of this for us.
@@ -172,6 +174,7 @@ impl SuiNode {
                     pending_store,
                     follower_store,
                     net,
+                    GossipMetrics::new(&prometheus_registry),
                 )?);
                 active = Some(Arc::clone(&active_authority));
 

@@ -90,6 +90,7 @@ pub async fn init_local_authorities_with_genesis(
             committee,
             clients,
             AuthAggMetrics::new_for_tests(),
+            SafeClientMetrics::new_for_tests(),
             timeouts,
         ),
         states,
@@ -987,6 +988,7 @@ async fn test_quorum_once_with_timeout() {
         committee,
         clients,
         AuthAggMetrics::new_for_tests(),
+        SafeClientMetrics::new_for_tests(),
         TimeoutConfig {
             serial_authority_request_interval: Duration::from_millis(50),
             ..Default::default()
