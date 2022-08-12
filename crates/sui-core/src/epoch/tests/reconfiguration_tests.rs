@@ -42,7 +42,7 @@ async fn test_start_epoch_change() {
     let state = states[0].clone();
 
     // Check that we initialized the genesis epoch.
-    let init_epoch = state.epoch_store.get_latest_authenticated_epoch();
+    let init_epoch = state.epoch_store().get_latest_authenticated_epoch();
     assert!(matches!(init_epoch, AuthenticatedEpoch::Genesis(..)));
     assert_eq!(init_epoch.epoch(), 0);
 
@@ -220,7 +220,7 @@ async fn test_finish_epoch_change() {
     for active in actives {
         assert_eq!(active.state.epoch(), 1);
         assert_eq!(active.net.load().committee.epoch, 1);
-        let latest_epoch = active.state.epoch_store.get_latest_authenticated_epoch();
+        let latest_epoch = active.state.epoch_store().get_latest_authenticated_epoch();
         assert_eq!(latest_epoch.epoch(), 1);
         assert!(matches!(latest_epoch, AuthenticatedEpoch::Certified(..)));
         assert_eq!(latest_epoch.epoch_info().epoch(), 1);

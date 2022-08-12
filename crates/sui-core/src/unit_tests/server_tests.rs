@@ -307,7 +307,7 @@ async fn test_subscription_safe_client() {
             state: state.clone(),
             fault_config: LocalAuthorityClientFaultConfig::default(),
         },
-        state.clone_committee(),
+        state.epoch_store().clone(),
         state.name,
         SafeClientMetrics::new_for_tests(),
     );

@@ -27,6 +27,7 @@ use sui_types::{
 };
 
 use crate::authority_aggregator::AuthAggMetrics;
+use crate::epoch::epoch_store::EpochStore;
 use parking_lot::Mutex;
 
 pub struct TestCausalOrderPendCertNoop;
@@ -1668,6 +1669,7 @@ pub async fn checkpoint_tests_setup(
     // Now make an authority aggregator
     let aggregator = AuthorityAggregator::new(
         committee.clone(),
+        Arc::new(EpochStore::new_for_testing(&committee)),
         authorities
             .iter()
             .map(|a| {

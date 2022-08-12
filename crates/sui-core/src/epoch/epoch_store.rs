@@ -1,7 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use rocksdb::Options;
 use std::path::PathBuf;
+use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::error::SuiResult;
 use sui_types::messages::{AuthenticatedEpoch, GenesisEpoch};
@@ -19,12 +21,21 @@ pub struct EpochStore {
 }
 
 impl EpochStore {
-    pub fn new(path: PathBuf) -> Self {
-        Self::open_tables_read_write(path, None)
+    pub fn new(path: PathBuf, genesis_committee: &Committee, db_options: Option<Options>) -> Self {
+        let epoch_store = Self::open_tables_read_write(path, db_options);
+        if epoch_store.database_is_empty() {
+            epoch_store
+                .init_genesis_epoch(genesis_committee.clone())
+                .expect("Init genesis epoch data must not fail");
+        }
+        epoch_store
     }
 
-    pub fn database_is_empty(&self) -> bool {
-        self.epochs.iter().next().is_none()
+    pub fn new_for_testing(genesis_committee: &Committee) -> Self {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        std::fs::create_dir(&path).unwrap();
+        Self::new(path, genesis_committee, None)
     }
 
     pub fn init_genesis_epoch(&self, genesis_committee: Committee) -> SuiResult {
@@ -50,5 +61,9 @@ impl EpochStore {
             // when initializing the store.
             .unwrap()
             .1
+    }
+
+    fn database_is_empty(&self) -> bool {
+        self.epochs.iter().next().is_none()
     }
 }

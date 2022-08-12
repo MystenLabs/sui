@@ -306,7 +306,7 @@ pub struct AuthorityState {
     /// The checkpoint store
     pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
-    pub(crate) epoch_store: Arc<EpochStore>,
+    epoch_store: Arc<EpochStore>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -344,6 +344,10 @@ impl AuthorityState {
 
     pub fn epoch(&self) -> EpochId {
         self.committee.load().epoch
+    }
+
+    pub fn epoch_store(&self) -> &Arc<EpochStore> {
+        &self.epoch_store
     }
 
     async fn handle_transaction_impl(
@@ -1017,7 +1021,6 @@ impl AuthorityState {
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
-        genesis_committee: Committee,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
@@ -1046,18 +1049,11 @@ impl AuthorityState {
                 .expect("Cannot bulk insert genesis objects");
         }
 
-        let committee = if epoch_store.database_is_empty() {
-            epoch_store
-                .init_genesis_epoch(genesis_committee.clone())
-                .expect("Init genesis epoch data must not fail");
-            genesis_committee
-        } else {
-            epoch_store
-                .get_latest_authenticated_epoch()
-                .epoch_info()
-                .committee()
-                .clone()
-        };
+        let committee = epoch_store
+            .get_latest_authenticated_epoch()
+            .epoch_info()
+            .committee()
+            .clone();
 
         let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
 
@@ -1134,6 +1130,7 @@ impl AuthorityState {
         state
     }
 
+    // TODO: Technically genesis_committee can be derived from genesis.
     pub async fn new_for_testing(
         genesis_committee: Committee,
         key: &AuthorityKeyPair,
@@ -1172,10 +1169,13 @@ impl AuthorityState {
                 .expect("No issues");
         }
 
-        let epochs = Arc::new(EpochStore::new(path.join("epochs")));
+        let epochs = Arc::new(EpochStore::new(
+            path.join("epochs"),
+            &genesis_committee,
+            None,
+        ));
 
         AuthorityState::new(
-            genesis_committee.clone(),
             secret.public().into(),
             secret.clone(),
             store,

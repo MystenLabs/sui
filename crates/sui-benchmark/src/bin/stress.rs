@@ -43,6 +43,7 @@ use sui_benchmark::workloads::workload::CombinationWorkload;
 use sui_benchmark::workloads::workload::Payload;
 use sui_benchmark::workloads::workload::Workload;
 use sui_core::authority_client::NetworkAuthorityClient;
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_quorum_driver::QuorumDriverHandler;
 use sui_sdk::crypto::FileBasedKeystore;
 use sui_types::crypto::EncodeDecodeBase64;
@@ -118,7 +119,7 @@ struct Opts {
     pub client_metric_port: u16,
     /// Number of followers to run. This also  stresses the follower logic in validators
     #[clap(long, default_value = "0", global = true)]
-    pub num_folowers: u64,
+    pub num_followers: u64,
     /// Whether or no to download TXes during follow
     #[clap(long, global = true)]
     pub download_txes: bool,
@@ -131,7 +132,7 @@ pub enum OptWorkloadSpec {
     // Allow the ability to mix shared object and
     // single owner transactions in the benchmarking
     // framework. Currently, only shared counter
-    // and transfer obejct transaction types are
+    // and transfer object transaction types are
     // supported but there will be more in future. Also
     // there is no dependency between individual
     // transactions such that they can all be executed
@@ -559,7 +560,7 @@ async fn main() -> Result<()> {
                 let mut follower_handles = vec![];
 
                 // Start the followers if any
-                for idx in 0..opts.num_folowers {
+                for idx in 0..opts.num_followers {
                     // Kick off a task which follows all authorities and discards the data
                     for (name, auth_client) in auth_clients.clone() {
                         follower_handles.push(tokio::task::spawn(async move {
@@ -599,8 +600,10 @@ async fn main() -> Result<()> {
         let committee = GatewayState::make_committee(&config)?;
         let authority_clients = GatewayState::make_authority_clients(&config);
         let registry = prometheus::Registry::new();
+        let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
         let aggregator = AuthorityAggregator::new(
             committee,
+            epoch_store,
             authority_clients,
             AuthAggMetrics::new(&registry),
             SafeClientMetrics::new(&registry),
@@ -658,8 +661,10 @@ async fn main() -> Result<()> {
                     .parse()
                     .unwrap(),
             );
+            let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
             let aggregator = AuthorityAggregator::new(
                 committee,
+                epoch_store,
                 authority_clients,
                 AuthAggMetrics::new(&registry),
                 SafeClientMetrics::new(&registry),

@@ -59,9 +59,8 @@ pub(crate) async fn init_state(
     let dir = env::temp_dir();
     let epoch_path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&epoch_path).unwrap();
-    let epoch_store = Arc::new(EpochStore::new(epoch_path));
+    let epoch_store = Arc::new(EpochStore::new(epoch_path, &committee, None));
     AuthorityState::new(
-        committee,
         authority_key.public().into(),
         Arc::pin(authority_key),
         store,
@@ -767,12 +766,13 @@ async fn test_safe_batch_stream() {
     // Create an authority
     let store = Arc::new(AuthorityStore::open(&path.join("store"), None));
     let state = init_state(committee.clone(), authority_key, store).await;
+    let epoch_store = state.epoch_store().clone();
 
     // Happy path:
     let auth_client = TrustworthyAuthorityClient::new(state);
     let safe_client = SafeClient::new(
         auth_client,
-        committee.clone(),
+        epoch_store,
         public_key_bytes,
         SafeClientMetrics::new_for_tests(),
     );
@@ -808,11 +808,12 @@ async fn test_safe_batch_stream() {
     let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
     let state_b =
         AuthorityState::new_for_testing(committee.clone(), &authority_key, None, None, None).await;
+    let epoch_store = state_b.epoch_store().clone();
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);
     let public_key_bytes_b = authority_key.public().into();
     let safe_client_from_byzantine = SafeClient::new(
         auth_client_from_byzantine,
-        committee.clone(),
+        epoch_store,
         public_key_bytes_b,
         SafeClientMetrics::new_for_tests(),
     );

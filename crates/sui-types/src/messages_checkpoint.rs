@@ -123,38 +123,6 @@ pub struct CheckpointResponse {
     pub detail: Option<CheckpointContents>,
 }
 
-impl CheckpointResponse {
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        match &self.info {
-            AuthorityCheckpointInfo::AuthenticatedCheckpoint(ckpt) => {
-                if let Some(ckpt) = ckpt {
-                    ckpt.verify(committee, self.detail.as_ref())?;
-                }
-                Ok(())
-            }
-            AuthorityCheckpointInfo::CheckpointProposal {
-                proposal,
-                prev_cert,
-            } => {
-                if let Some(p) = proposal {
-                    p.verify(committee, self.detail.as_ref())?;
-                    if p.summary.sequence_number > 0 {
-                        let cert = prev_cert.as_ref().ok_or_else(|| {
-                            SuiError::from("No checkpoint cert provided along with proposal")
-                        })?;
-                        cert.verify(committee, None)?;
-                        fp_ensure!(
-                            p.summary.sequence_number - 1 == cert.summary.sequence_number,
-                            SuiError::from("Checkpoint proposal sequence number inconsistent with previous cert")
-                        );
-                    }
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
     AuthenticatedCheckpoint(Option<AuthenticatedCheckpoint>),

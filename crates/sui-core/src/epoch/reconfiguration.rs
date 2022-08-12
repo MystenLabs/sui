@@ -134,18 +134,20 @@ where
         }
 
         // Reconnect the network if we have an type of AuthorityClient that has a network.
-        if A::needs_network_recreation() {
-            self.recreate_network(sui_system_state, new_committee)?;
+        let new_clients = if A::needs_network_recreation() {
+            self.recreate_network(sui_system_state)?
         } else {
-            // update the authorities with the new committee
-            let new_net = Arc::new(AuthorityAggregator::new(
-                new_committee,
-                self.net.load().clone_inner_clients(),
-                self.net.load().metrics.clone(),
-                self.net.load().safe_client_metrics.clone(),
-            ));
-            self.net.store(new_net);
-        }
+            self.net.load().clone_inner_clients()
+        };
+        // Replace the clients in the authority aggregator with new clients.
+        let new_net = Arc::new(AuthorityAggregator::new(
+            new_committee,
+            self.state.epoch_store().clone(),
+            new_clients,
+            self.net.load().metrics.clone(),
+            self.net.load().safe_client_metrics.clone(),
+        ));
+        self.net.store(new_net);
 
         // TODO: Update all committee in all components safely,
         // potentially restart narwhal committee/consensus adapter,
@@ -207,8 +209,7 @@ where
     pub fn recreate_network(
         &self,
         sui_system_state: SuiSystemState,
-        new_committee: Committee,
-    ) -> SuiResult {
+    ) -> SuiResult<BTreeMap<AuthorityName, A>> {
         let mut new_clients = BTreeMap::new();
         let next_epoch_validators = sui_system_state.validators.next_epoch_validators;
 
@@ -266,16 +267,7 @@ where
             );
             new_clients.insert(public_key_bytes, client);
         }
-
-        // Replace the clients in the authority aggregator with new clients.
-        let new_net = Arc::new(AuthorityAggregator::new(
-            new_committee,
-            new_clients,
-            self.net.load().metrics.clone(),
-            self.net.load().safe_client_metrics.clone(),
-        ));
-        self.net.store(new_net);
-        Ok(())
+        Ok(new_clients)
     }
 
     async fn wait_for_epoch_cert(
