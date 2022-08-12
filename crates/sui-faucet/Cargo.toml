@@ -11,7 +11,7 @@ anyhow = { version = "1.0.58", features = ["backtrace"] }
 async-trait = "0.1.57"
 axum = "0.5.13"
 clap = { version = "3.1.17", features = ["derive"] }
-thiserror = "1.0.31"
+thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.36"
 serde = { version = "1.0.141", features = ["derive"] }
@@ -28,7 +28,7 @@ sui-node = { path = "../sui-node" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
