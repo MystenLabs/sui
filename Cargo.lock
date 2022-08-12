@@ -6982,6 +6982,7 @@ dependencies = [
  "tempfile",
  "test-fuzz",
  "test-utils",
+ "thiserror",
  "tokio",
  "tokio-retry",
  "tokio-stream",

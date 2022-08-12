@@ -57,6 +57,7 @@ narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "24353
 narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "types" }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
+thiserror = "1.0.32"
 
 [dev-dependencies]
 clap = { version = "3.1.17", features = ["derive"] }
