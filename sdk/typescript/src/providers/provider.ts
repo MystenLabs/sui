@@ -127,7 +127,7 @@ export abstract class Provider {
    */
    abstract subscribeEvent(
     filter: SuiEventFilter,
-    onMessage: (event: SuiEventEnvelope) => {}
+    onMessage: (event: SuiEventEnvelope) => void
   ): Promise<any>;
 
   // TODO: add more interface methods

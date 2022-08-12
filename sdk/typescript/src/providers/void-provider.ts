@@ -114,7 +114,7 @@ export class VoidProvider extends Provider {
 
   async subscribeEvent(
     _filter: SuiEventFilter,
-    _onMessage: (event: SuiEventEnvelope) => {}
+    _onMessage: (event: SuiEventEnvelope) => void
   ): Promise<any> {
       throw this.newError('subscribeEvent');
   }

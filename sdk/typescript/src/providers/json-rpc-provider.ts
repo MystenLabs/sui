@@ -60,8 +60,12 @@ export class JsonRpcProvider extends Provider {
    */
   constructor(public endpoint: string) {
     super();
+
     this.client = new JsonRpcClient(endpoint);
+    console.log('this.client ?', this.client);
+
     this.wsClient = new JsonRpcClient(getWebsocketUrl(endpoint));
+    console.log('this.wsClient ?', this.wsClient);
   }
 
   // Move info
@@ -379,7 +383,7 @@ export class JsonRpcProvider extends Provider {
 
   async subscribeEvent(
     filter: SuiEventFilter,
-    _onMessage: (event: SuiEventEnvelope) => {}
+    _onMessage: (event: SuiEventEnvelope) => void
   ): Promise<any> {
     try {
       return await this.wsClient.requestWithType(
