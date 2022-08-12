@@ -369,24 +369,27 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 <ItemView data={typearguments} />
                             </section>
                         )}
-                        {sender && (
+                        {(sender || txKindName === 'TransferSui') && (
                             <section
                                 className={cl([
                                     styles.txcomponent,
                                     styles.txsender,
                                 ])}
                             >
-                                <div className={styles.txaddress}>
-                                    <SendReceiveView data={sendreceive} />
-                                </div>
+                                {txKindName === 'TransferSui' && (
+                                    <div>
+                                        <div>Amount</div>
+                                        <div>{amount ? amount : 0}</div>
+                                    </div>
+                                )}
+                                {sender && (
+                                    <div className={styles.txaddress}>
+                                        <SendReceiveView data={sendreceive} />
+                                    </div>
+                                )}
                             </section>
                         )}
-                        {txKindName === 'TransferSui' && (
-                            <section>
-                                <div>Amount</div>
-                                <div>{amount ? amount : 0}</div>
-                            </section>
-                        )}
+
                         <section
                             className={cl([
                                 styles.txcomponent,
