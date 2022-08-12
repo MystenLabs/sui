@@ -74,7 +74,7 @@ pub struct GossipMetrics {
     pub reconnect_interval_ms: IntGauge,
     pub total_tx_received: IntCounter,
     pub total_batch_received: IntCounter,
-    pub wait_for_finality_latency_ms: Histogram,
+    pub wait_for_finality_latency_sec: Histogram,
     pub total_attempts_cert_downloads: IntCounter,
     pub total_successful_attempts_cert_downloads: IntCounter,
 }
@@ -106,9 +106,9 @@ impl GossipMetrics {
                 registry,
             )
             .unwrap(),
-            wait_for_finality_latency_ms: register_histogram_with_registry!(
-                "gossip_wait_for_finality_latency_ms",
-                "Latency histogram for gossip/node sync process to wait for txs to become final, in millisec",
+            wait_for_finality_latency_sec: register_histogram_with_registry!(
+                "gossip_wait_for_finality_latency_sec",
+                "Latency histogram for gossip/node sync process to wait for txs to become final, in sec",
                 registry,
             )
             .unwrap(),

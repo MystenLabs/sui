@@ -473,7 +473,7 @@ where
 
                     // wait until the tx becomes final before returning, so that the follower doesn't mark
                     // this tx as finished prematurely.
-                    let timer = self.metrics.wait_for_finality_latency_ms.start_timer();
+                    let _timer = self.metrics.wait_for_finality_latency_sec.start_timer();
                     let (_, mut rx) = self.pending_txes.wait(&digests.transaction).await;
                     let result = rx
                         .recv()
@@ -481,7 +481,6 @@ where
                         .map_err(|e| SuiError::GenericAuthorityError {
                             error: format!("{:?}", e),
                         });
-                    timer.stop_and_record();
                     return result;
                 }
 
