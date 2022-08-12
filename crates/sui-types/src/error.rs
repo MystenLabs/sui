@@ -467,10 +467,6 @@ impl ExecutionStateError for SuiError {
                 | Self::GenericAuthorityError { .. }
         )
     }
-
-    fn to_string(&self) -> String {
-        ToString::to_string(&self)
-    }
 }
 
 type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;

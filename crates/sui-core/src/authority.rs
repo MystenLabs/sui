@@ -1609,7 +1609,7 @@ impl ExecutionState for AuthorityState {
         _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<narwhal_config::Committee>), Self::Error> {
+    ) -> Result<Self::Outcome, Self::Error> {
         self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
@@ -1632,7 +1632,7 @@ impl ExecutionState for AuthorityState {
 
                 // TODO: This return time is not ideal.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok((Vec::default(), None))
+                Ok(Vec::default())
             }
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
@@ -1661,7 +1661,7 @@ impl ExecutionState for AuthorityState {
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
                 // is not expecting any reply.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok((Vec::default(), None))
+                Ok(Vec::default())
             }
         }
     }
@@ -1688,13 +1688,6 @@ impl ExecutionStateError for FragmentInternalError {
             // Those are errors caused by the authority (eg. storage failure). It is not guaranteed
             // that other validators will also trigger it and they may not be deterministic.
             Self::Retry(..) => true,
-        }
-    }
-
-    fn to_string(&self) -> String {
-        match self {
-            Self::Error(sui_error) => format!("Failed to process checkpoint fragment {sui_error}"),
-            Self::Retry(fragment) => format!("Failed to sequence checkpoint fragment {fragment:?}"),
         }
     }
 }
