@@ -29,13 +29,13 @@ where
     let mut gas_status = check_gas(
         store,
         transaction.gas_payment_object_ref().0,
-        transaction.data.gas_budget,
-        transaction.data.gas_price,
+        transaction.signed_data.data.gas_budget,
+        transaction.signed_data.data.gas_price,
         transaction,
     )
     .await?;
 
-    let input_objects = check_objects(store, &transaction.data).await?;
+    let input_objects = check_objects(store, &transaction.signed_data.data).await?;
 
     if transaction.contains_shared_object() {
         // It's important that we do this here to make sure there is enough
@@ -62,7 +62,7 @@ where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let tx_size = transaction.size_for_gas_metering();
-    let tx_kind = &transaction.data.kind;
+    let tx_kind = &transaction.signed_data.data.kind;
     if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered())
     } else {

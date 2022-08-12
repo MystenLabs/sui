@@ -12,6 +12,7 @@ use crate::crypto::{
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
+use crate::storage::DeleteKind;
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
 use itertools::Either;
@@ -513,22 +514,30 @@ pub struct TransactionEnvelope<S> {
     #[serde(skip)]
     pub is_verified: bool,
 
-    pub data: TransactionData,
-    /// tx_signature is signed by the transaction sender, applied on `data`.
-    pub tx_signature: Signature,
-    /// authority signature information, if available, is signed by an authority, applied on `data`.
+    // The packet of data that authorities will sign on. Stores the tx data and the sender signature.
+    pub signed_data: SenderSignedData,
+
+    /// authority signature information, if available, is signed by an authority, applied on `tx_signature` || `data`.
     pub auth_sign_info: S,
     // Note: If any new field is added here, make sure the Hash and PartialEq
     // implementation are adjusted to include that new field (unless the new field
     // does not participate in the hash and comparison).
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct SenderSignedData {
+    pub data: TransactionData,
+    /// tx_signature is signed by the transaction sender, applied on `data`.
+    pub tx_signature: Signature,
+}
+
 impl<S> TransactionEnvelope<S> {
     pub fn size_for_gas_metering(&self) -> u64 {
-        // u64 is fine for TX size. 
+        // u64 is fine for TX size.
         size_of::<Self>() as u64
     }
 
+    #[allow(dead_code)]
     fn add_sender_sig_to_verification_obligation(
         &self,
         obligation: &mut VerificationObligation,
@@ -538,30 +547,30 @@ impl<S> TransactionEnvelope<S> {
         // and therefore we can skip the check. Note that the flag has
         // to be set to true manually, and is not set by calling this
         // "check" function.
-        if self.is_verified || self.data.kind.is_system_tx() {
+        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
 
-        self.tx_signature.add_to_verification_obligation_or_verify(
-            self.data.sender,
-            obligation,
-            idx,
-        )
+        self.signed_data
+            .tx_signature
+            .add_to_verification_obligation_or_verify(self.signed_data.data.sender, obligation, idx)
     }
 
     pub fn verify_sender_signature(&self) -> SuiResult<()> {
-        if self.is_verified || self.data.kind.is_system_tx() {
+        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
-        self.tx_signature.verify(&self.data, self.data.sender)
+        self.signed_data
+            .tx_signature
+            .verify(&self.signed_data.data, self.signed_data.data.sender)
     }
 
     pub fn sender_address(&self) -> SuiAddress {
-        self.data.sender
+        self.signed_data.data.sender
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        self.data.gas_payment_object_ref()
+        self.signed_data.data.gas_payment_object_ref()
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -569,7 +578,7 @@ impl<S> TransactionEnvelope<S> {
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
-        match &self.data.kind {
+        match &self.signed_data.data.kind {
             TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
             TransactionKind::Batch(b) => {
                 Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
@@ -580,7 +589,7 @@ impl<S> TransactionEnvelope<S> {
     /// Get the transaction digest and write it to the cache
     pub fn digest(&self) -> &TransactionDigest {
         self.transaction_digest
-            .get_or_init(|| TransactionDigest::new(sha3_hash(&self.data)))
+            .get_or_init(|| TransactionDigest::new(sha3_hash(&self.signed_data)))
     }
 
     pub fn input_objects_in_compiled_modules(
@@ -657,8 +666,10 @@ impl Transaction {
         Self {
             transaction_digest: OnceCell::new(),
             is_verified: false,
-            data,
-            tx_signature: signature,
+            signed_data: SenderSignedData {
+                data,
+                tx_signature: signature,
+            },
             auth_sign_info: EmptySignInfo {},
         }
     }
@@ -670,13 +681,13 @@ impl Transaction {
 
 impl Hash for Transaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.data.hash(state);
+        self.signed_data.hash(state);
     }
 }
 
 impl PartialEq for Transaction {
     fn eq(&self, other: &Self) -> bool {
-        self.data == other.data
+        self.signed_data == other.signed_data
     }
 }
 impl Eq for Transaction {}
@@ -692,12 +703,11 @@ impl SignedTransaction {
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        let signature = AuthoritySignature::new(&transaction.data, secret);
+        let signature = AuthoritySignature::new(&transaction.signed_data, secret);
         Self {
             transaction_digest: OnceCell::new(),
             is_verified: transaction.is_verified,
-            data: transaction.data,
-            tx_signature: transaction.tx_signature,
+            signed_data: transaction.signed_data,
             auth_sign_info: AuthoritySignInfo {
                 epoch,
                 authority,
@@ -725,15 +735,18 @@ impl SignedTransaction {
             (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
             0,
         );
-        let signature = AuthoritySignature::new(&data, secret);
-        Self {
-            transaction_digest: OnceCell::new(),
-            is_verified: false,
+        let signed_data = SenderSignedData {
             data,
             // Arbitrary keypair
             tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
                 .unwrap()
                 .into(),
+        };
+        let signature = AuthoritySignature::new(&signed_data, secret);
+        Self {
+            transaction_digest: OnceCell::new(),
+            is_verified: false,
+            signed_data,
             auth_sign_info: AuthoritySignInfo {
                 epoch: next_epoch,
                 authority,
@@ -744,17 +757,10 @@ impl SignedTransaction {
 
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.verify_sender_signature()?;
+
         let mut obligation = VerificationObligation::default();
-
-        let idx = obligation.add_message(&self.data);
-
-        if self
-            .add_sender_sig_to_verification_obligation(&mut obligation, idx)
-            .is_err()
-        {
-            self.verify_sender_signature()?;
-        }
-
+        let idx = obligation.add_message(&self.signed_data);
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
@@ -766,13 +772,13 @@ impl SignedTransaction {
     // forming a CertifiedTransaction, where each transaction's authority signature
     // is taking out to form an aggregated signature.
     pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.data, self.tx_signature)
+        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
     }
 }
 
 impl Hash for SignedTransaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.data.hash(state);
+        self.signed_data.hash(state);
         self.auth_sign_info.hash(state);
     }
 }
@@ -781,7 +787,7 @@ impl PartialEq for SignedTransaction {
     fn eq(&self, other: &Self) -> bool {
         // We do not compare the tx_signature, because there can be multiple
         // valid signatures for the same data and signer.
-        self.data == other.data && self.auth_sign_info == other.auth_sign_info
+        self.signed_data == other.signed_data && self.auth_sign_info == other.auth_sign_info
     }
 }
 
@@ -978,6 +984,16 @@ pub enum ExecutionFailureStatus {
     MissingObjectOwner(MissingObjectOwner),
     InvalidSharedChildUse(InvalidSharedChildUse),
     InvalidSharedByValue(InvalidSharedByValue),
+    TooManyChildObjects {
+        object: ObjectID,
+    },
+    InvalidParentDeletion {
+        parent: ObjectID,
+        kind: Option<DeleteKind>,
+    },
+    InvalidParentFreezing {
+        parent: ObjectID,
+    },
 
     //
     // MovePublish errors
@@ -1110,6 +1126,33 @@ impl std::fmt::Display for ExecutionFailureStatus {
             }
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
                 write!(f, "Invalid Shared Object By-Value Usage. {data}.")
+            }
+            ExecutionFailureStatus::TooManyChildObjects { object } => {
+                write!(
+                    f,
+                    "Object {object} has too many child objects. \
+                    The number of child objects cannot exceed 2^32 - 1."
+                )
+            }
+            ExecutionFailureStatus::InvalidParentDeletion { parent, kind } => {
+                let method = match kind {
+                    Some(DeleteKind::Normal) => "deleted",
+                    Some(DeleteKind::UnwrapThenDelete) => "unwrapped then deleted",
+                    Some(DeleteKind::Wrap) => "wrapped in another object",
+                    None => "created and destroyed",
+                };
+                write!(
+                    f,
+                    "Invalid Deletion of Parent Object with Children. Parent object {parent} was \
+                    {method} before its children were deleted or transferred."
+                )
+            }
+            ExecutionFailureStatus::InvalidParentFreezing { parent } => {
+                write!(
+                    f,
+                    "Invalid Freezing of Parent Object with Children. Parent object {parent} was \
+                    made immutable before its children were deleted or transferred."
+                )
             }
             ExecutionFailureStatus::PublishErrorEmptyPackage => write!(
                 f,
@@ -1648,7 +1691,8 @@ impl<'a> SignatureAggregator<'a> {
         authority: AuthorityName,
         signature: AuthoritySignature,
     ) -> Result<Option<CertifiedTransaction>, SuiError> {
-        signature.verify(&self.partial.data, authority)?;
+        signature.verify(&self.partial.signed_data, authority)?;
+
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
@@ -1680,8 +1724,7 @@ impl CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
-            data: transaction.data,
-            tx_signature: transaction.tx_signature,
+            signed_data: transaction.signed_data,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new(epoch),
         }
     }
@@ -1694,8 +1737,7 @@ impl CertifiedTransaction {
         Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
-            data: transaction.data,
-            tx_signature: transaction.tx_signature,
+            signed_data: transaction.signed_data,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
                 signatures, committee,
             )?,
@@ -1703,7 +1745,7 @@ impl CertifiedTransaction {
     }
 
     pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.data, self.tx_signature)
+        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
     }
 
     /// Verify the certificate.
@@ -1716,18 +1758,12 @@ impl CertifiedTransaction {
             return Ok(());
         }
 
+        // Add the obligation of the sender signature verification.
+        self.verify_sender_signature()?;
+
         let mut obligation = VerificationObligation::default();
         // Add the obligation of the authority signature verifications.
-        let idx = obligation.add_message(&self.data);
-
-        // Add the obligation of the sender signature verification.
-        if self
-            .add_sender_sig_to_verification_obligation(&mut obligation, idx)
-            .is_err()
-        {
-            self.verify_sender_signature()?;
-        }
-
+        let idx = obligation.add_message(&self.signed_data);
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
@@ -1744,7 +1780,7 @@ impl Display for CertifiedTransaction {
             "Signed Authorities Bitmap : {:?}",
             self.auth_sign_info.signers_map
         )?;
-        write!(writer, "{}", &self.data.kind)?;
+        write!(writer, "{}", &self.signed_data.data.kind)?;
         write!(f, "{}", writer)
     }
 }

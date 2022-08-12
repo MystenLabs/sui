@@ -122,22 +122,8 @@ div.accommodate > h2.header {
     @apply lg:w-[50vw];
 }
 
-/* Bytecode Styling */
+/* Transaction Section Spacing */
 
-div.bytecodebox > div {
-    @apply ml-[5vw];
-}
-
-div.bytecodebox > div > div:first-child {
-    @apply font-sans tracking-tight font-semibold block;
-}
-
-div.bytecodebox > div > div:nth-child(2) {
-    @apply w-[65vw] h-[30vh] mt-[2vh] mb-[5vh];
-}
-
-div.jsondata {
-    @apply border-solid border-stone-300 mb-[5vh] p-5 bg-white whitespace-pre text-lg font-mono;
-
-    overflow-x: scroll;
+.txsection {
+    @apply mt-[68px];
 }

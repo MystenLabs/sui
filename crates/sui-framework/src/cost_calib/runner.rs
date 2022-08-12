@@ -133,3 +133,70 @@ pub fn extract_calib(s: String) -> Vec<CalibTestResult> {
 
     ret
 }
+
+/// This is a table of equations used to convert the measured value to the actual value
+/// lpr is the load-pop ratio
+fn _resolve_measured_time(
+    instr: &str,
+    measured: f32,
+    lpr: f32,
+    ldu64_cost: f32,
+    nop_cost: f32,
+) -> f32 {
+    let pop_cost = ldu64_cost / lpr;
+    const TWO_FLOAT: f32 = 2.0f32;
+    const THREE_FLOAT: f32 = 3.0f32;
+
+    match instr {
+        // All dual operand arithmetic and logic opers have similar cost fns
+        "Add" | "Sub" | "Mul" | "Div" | "Mod" | "BitOr" | "BitAnd" | "Or" | "And" | "Shl"
+        | "Shr" | "Xor" | "Le" | "Lr" | "Gt" | "Ge" | "Neq" | "Eq" => measured - ldu64_cost,
+
+        // Exact
+        "not" => measured,
+
+        // Loads
+        "LdU64" | "LdU8" | "LdU128" | "LdConst" => measured - pop_cost,
+
+        // Cast
+        "CastU8" | "CastU64" | "CastU128" => measured + pop_cost,
+
+        // Vectors
+        "VecLen" => measured,
+        "VecSwap" => measured + THREE_FLOAT * pop_cost,
+        "VecPack" => measured,
+        "VecPopBack" => measured,
+        "VecPushBack" => measured + TWO_FLOAT * pop_cost,
+        "VecImmBorrow" | "VecMutBorrow" => measured + pop_cost,
+
+        // Pack/Unpack
+        "Pack" | "Unpack" | "PackGeneric" | "UnpackGeneric" => measured,
+
+        // Borrowing
+        "ImmBorrowLoc" | "MutBorrowLoc" => measured - pop_cost,
+        "ImmBorrowField" | "MutBorrowField" => measured,
+
+        // Refs
+        "ReadRef" => measured,
+        "WriteRef" => measured + TWO_FLOAT * pop_cost,
+        "FreezeRef" => nop_cost,
+
+        // Locals
+        "CopyLoc" => measured - pop_cost,
+
+        // Need to re calibrate
+        // Natives
+        "IdBytesToAddress" => measured,
+        "IdBorrowUid" => measured,
+        "TransferTransferInternal" => measured + THREE_FLOAT * pop_cost,
+        "TransferFreezeObject" => measured + pop_cost,
+
+        "TxContextDeriveId" => measured + pop_cost,
+        "EventEmit" => measured + pop_cost,
+
+        _ => {
+            println!("Invalid instr {instr}");
+            0.0f32
+        }
+    }
+}

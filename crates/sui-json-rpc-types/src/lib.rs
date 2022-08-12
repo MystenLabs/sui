@@ -1288,8 +1288,8 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
     fn try_from(cert: CertifiedTransaction) -> Result<Self, Self::Error> {
         Ok(Self {
             transaction_digest: *cert.digest(),
-            data: cert.data.try_into()?,
-            tx_signature: cert.tx_signature,
+            data: cert.signed_data.data.try_into()?,
+            tx_signature: cert.signed_data.tx_signature,
             auth_sign_info: cert.auth_sign_info,
         })
     }

@@ -2,7 +2,9 @@
 title: How Sui Move differs from Core Move
 ---
 
-This document describes the Sui programming model and highlights the differences between the core (previously Diem) Move language and the Move we use in Sui. First remember, Move is a language and Sui a platform.
+This document describes the Sui programming model and highlights the differences between the core (previously Diem) Move language and the Move we use in Sui. First remember, Move is a language and Sui a platform. 
+
+To learn more about the motivations behind creating Sui Move, see [Why We Created Sui Move](https://medium.com/mysten-labs/why-we-created-sui-move-6a234656c36b).
 
 In general, Move code written for other systems will work in Sui with these exceptions:
 
