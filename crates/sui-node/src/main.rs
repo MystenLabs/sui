@@ -10,6 +10,7 @@ use sui_config::{Config, NodeConfig};
 use sui_telemetry::send_telemetry_event;
 use tokio::task;
 use tokio::time::sleep;
+use tracing::warn;
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case")]
@@ -104,8 +105,9 @@ async fn main() -> Result<()> {
                     // Trigger profiling dump
                     let dump_name_cstr = CString::new(dump_name).expect("Cannot create dump name");
                     unsafe {
-                        jemalloc_ctl::raw::write(PROF_DUMP, dump_name_cstr.as_ptr())
-                            .expect("Cannot dump memory profile, is MALLOC_CONF set to prof:true?");
+                        if jemalloc_ctl::raw::write(PROF_DUMP, dump_name_cstr.as_ptr()).is_err() {
+                            warn!("Cannot dump memory profile, is _RJEM_MALLOC_CONF set to prof:true?");
+                        }
                     }
                 }
                 std::thread::sleep(Duration::from_secs(MEMORY_PROFILING_INTERVAL_SECS));
