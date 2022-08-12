@@ -189,6 +189,7 @@ async fn restart() {
                 parameters,
                 rx_node_reconfigure,
                 tx_output,
+                &Registry::new(),
             )
             .await;
         });
