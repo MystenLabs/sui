@@ -49,12 +49,7 @@
 }
 
 .empty {
-    font-style: italic;
-    font-weight: 400;
-    font-size: 12px;
-    text-align: center;
-    color: colors.$gray-70;
-    padding: 0 16px;
+    @include utils.typography('empty');
 }
 
 .others-loader,
