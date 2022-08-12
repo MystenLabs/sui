@@ -50,8 +50,7 @@ COPY --from=builder "/sui/target/$PROFILE/sui-node" /usr/local/bin
 
 ARG BUILD_DATE
 ARG GIT_REVISION
-# Enable automatic memory profiling.  Note: disabling this might lead to a panic
-ENV MALLOC_CONF prof:true
+# Enable automatic memory profiling.
 ENV _RJEM_MALLOC_CONF prof:true
 LABEL build-date=$BUILD_DATE
 LABEL git-revision=$GIT_REVISION

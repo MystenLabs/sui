@@ -216,20 +216,17 @@ use.  The profiling code spits out profiles at most every 5 minutes, and only wh
 by a default 20%.  Profiling files are named `jeprof.<TIMESTAMP>.<memorysize>MB.prof` so that it is easy to 
 correlate to metrics and incidents, for ease of debugging.
 
-For the memory profiling to work, you need to set the following environment variables. If you use the [Docker image](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#readme), they are set automatically):
-
-* `MALLOC_CONF=prof:true`
-* `_RJEM_MALLOC_CONF=prof:true`
+For the memory profiling to work, you need to set the environment variable `_RJEM_MALLOC_CONF=prof:true`. 
+(If you use the [Docker image](https://hub.docker.com/r/mysten/sui-node), they are set automatically)
 
 Note that running some allocator-based heap profilers such as [Bytehound](https://github.com/koute/bytehound) will essentially disable
 automatic jemalloc profiling, because they interfere with or don't implement `jemalloc_ctl` stats APIs.
 
-To view the profile files:
-1. `brew install jemalloc libunwind gprof2dot`
+To view the profile files, one needs to do the following, on the same platform as where the profiles were gathered:
+1. Install `libunwind`, the `dot` utility from graphviz, and jeprof.  On Debian: `apt-get install libjemalloc-dev libunwind-dev graphviz`.
 2. Build with debug symbols: `cargo build --profile bench-profiling`
 2. cd to `$SUI_REPO/target/bench-profiling`
-1. Start `./sui node --config-path ...`
-1. In the same directory, run `jeprof --svg sui-node jeprof.xxyyzz.heap` - select the heap profile based on 
+1. Run `jeprof --svg sui-node jeprof.xxyyzz.heap` - select the heap profile based on 
    timestamp and memory size in the filename.
 
 Note: with automatic memory profiling, it is no longer necessary to configure environment variables beyond
@@ -238,7 +235,7 @@ what is required above.  It is possible to configure custom profiling options, s
 * [Heap Profiling](https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling)
 * [heap profiling with jemallocator](https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174)
 
-For example, set `JE_MALLOC_CONF` or `JEMALLOC_SYS_WITH_MALLOC_CONF` to:
+For example, set `_RJEM_MALLOC_CONF` to:
 `prof:true,lg_prof_interval:24,lg_prof_sample:19`
 
 The preceding setting means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
