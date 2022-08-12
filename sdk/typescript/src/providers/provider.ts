@@ -14,6 +14,7 @@ import {
   SuiMoveNormalizedStruct,
   SuiMoveNormalizedModule,
   SuiMoveNormalizedModules,
+  SuiEvent,
 } from '../types';
 
 ///////////////////////////////
@@ -125,7 +126,8 @@ export abstract class Provider {
    * Subscribe to an event
    */
    abstract subscribeEvent(
-    params: object[]
+    params: object[],
+    onEvent: (event: SuiEvent) => {}
   ): Promise<any[]>;
 
   /*
