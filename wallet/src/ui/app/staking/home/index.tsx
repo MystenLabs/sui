@@ -12,6 +12,7 @@ import Button from '_app/shared/button';
 import CoinBalance from '_app/shared/coin-balance';
 import PageTitle from '_app/shared/page-title';
 import StatsCard, { StatsRow, StatsItem } from '_app/shared/stats-card';
+import { STAKING_ENABLED } from '_app/staking';
 import {
     activeDelegationIDsSelector,
     totalActiveStakedSelector,
@@ -134,6 +135,8 @@ function StakeHome() {
                         mode="primary"
                         className={st.action}
                         href="new"
+                        title="Currently disabled"
+                        disabled={!STAKING_ENABLED}
                     >
                         Stake Coins
                         <Icon
