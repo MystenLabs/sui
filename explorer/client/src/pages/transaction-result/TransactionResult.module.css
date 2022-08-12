@@ -107,7 +107,7 @@
 }
 
 .singleitem {
-    @apply block !important;
+    @apply block sm:grid !important;
 }
 
 .mono {
