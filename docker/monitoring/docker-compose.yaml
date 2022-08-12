@@ -50,9 +50,6 @@ services:
     - ./data/promtail:/mnt/var
     - /var/lib/docker/containers:/var/lib/docker/containers
     command: -config.file=/mnt/config/promtail.yaml
-    ports:
-    # why 9081 ?
-    - "9081:9080"
     restart: "always"
     networks:
     - sui-net
@@ -100,9 +97,6 @@ services:
     - /var/run:/var/run:rw
     - /sys:/sys:ro
     - /var/lib/docker/:/var/lib/docker:ro
-    # ports:
-    # 8080 is used by sui-node
-    # - 8090:8080
     restart: always
     networks:
     - sui-net
