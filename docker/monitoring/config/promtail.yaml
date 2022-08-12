@@ -20,20 +20,3 @@ scrape_configs:
     labels:
       job: containerlogs
       __path__: /var/lib/docker/containers/*/*log
-
-- job_name: containers_new
-  docker_sd_configs:
-    - host: unix:///var/run/docker.sock
-      refresh_interval: 15s
-      filters:
-        - name: label
-          values: ["org.label-schema.name=validator"]
-
-  pipeline_stages:
-    - docker: {}
-    - static_labels:
-        job: "promtail"
-  relabel_configs:
-    - source_labels: ['__meta_docker_container_name']
-      regex: '/(.*)'
-      target_label: 'container'
