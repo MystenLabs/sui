@@ -225,7 +225,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         getTransferObjectTransaction(txdetails) ||
         getTransferSuiTransaction(txdetails);
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
-    const TabName = `${txKindName} Details`;
+    const TabName = `Details`;
 
     const txHeaderData = {
         txId: txdata.txId,
