@@ -12,10 +12,7 @@ import styles from './EventSubscription.module.css';
 
 function EventSubscription() {
     const [input, setInput] = useState('');
-    const [filterObjId, setFilterObjId] = useState('0x');
-    const [selectedFilterType, setSelectedFilterType] = useState('objectId');
     const [network] = useContext(NetworkContext);
-
     const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
 
     const handleSubmit = useCallback(
@@ -52,74 +49,10 @@ function EventSubscription() {
         [setInput]
     );
 
-    const handleObjectIdTextChange = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) =>
-            setFilterObjId(e.currentTarget.value),
-        [setFilterObjId]
-    );
-
-    const handleFilterSelectChange = useCallback(
-        (e: React.ChangeEvent<HTMLSelectElement>) => {
-            console.log('select filter change', e.currentTarget.value);
-            setSelectedFilterType(e.currentTarget.value);
-        },
-        [setSelectedFilterType]
-    );
-
     return (
         <div>
             <h3>Event Subscription Tester</h3>
-            <form
-                className={styles.selectform}
-                onSubmit={handleSubmit}
-                aria-label="event filter type form"
-            >
-                <label>
-                    Filter Type
-                    <select
-                        id="eventFilterSelect"
-                        onChange={handleFilterSelectChange}
-                    >
-                        <option value="package">Package</option>
-                        <option value="module">Module</option>
-                        <option selected value="objectId">
-                            ObjectId
-                        </option>
-                        <option value="senderAddress">Sender Address</option>
-                        <option value="eventType">Event Type</option>
-                        <option value="moveEventType">Move Event Type</option>
-                        <option value="moveEventField">Move Event Field</option>
-                        <option value="All">All</option>
-                        <option value="Any">Any</option>
-                        <option value="And">And</option>
-                        <option value="Or">Or</option>
-                    </select>
-                </label>
-            </form>
-            <form
-                className={styles.selectform}
-                onSubmit={handleSubmit}
-                aria-label="event filter details form"
-            >
-                <div>
-                    {selectedFilterType === 'objectId' && (
-                        <label>
-                            Object ID
-                            <div className={styles.form}>
-                                <input
-                                    className={styles.searchtext}
-                                    id="searchText"
-                                    placeholder="Object ID"
-                                    value={filterObjId}
-                                    autoFocus
-                                    onChange={handleObjectIdTextChange}
-                                    type="text"
-                                />
-                            </div>
-                        </label>
-                    )}
-                </div>
-            </form>
+            this
             <form
                 className={styles.form}
                 onSubmit={handleSubmit}
@@ -147,7 +80,7 @@ function EventSubscription() {
                     id="searchBtn"
                     type="submit"
                     disabled={pleaseWaitMode}
-                    className={`${styles.searchbtn} ${
+                    className={`${styles.button} ${
                         pleaseWaitMode && styles.disabled
                     }`}
                 >

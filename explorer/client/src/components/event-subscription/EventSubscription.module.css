@@ -2,18 +2,6 @@
     @apply flex bg-search-fill border-[1px] border-solid border-sui rounded-[6px] h-[2rem] px-[0.2vw] max-w-[500px];
 }
 
-.selectform {
-    @apply flex bg-sui-light border-[1px] border-solid border-sui rounded-[6px] px-[0.2vw] max-w-[400px];
-}
-
-.selectformtext {
-    @apply bg-transparent border-none font-mono leading-8
-    flex-1 w-[85%]
-    text-sm text-offblack;
-
-    align-self: flex-start;
-}
-
 .searchbtn {
     @apply flex-initial font-sans text-xs border-none bg-transparent cursor-pointer;
 }
