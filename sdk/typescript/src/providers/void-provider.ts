@@ -16,7 +16,6 @@ import {
   SuiMoveNormalizedStruct,
   SuiMoveNormalizedModule,
   SuiMoveNormalizedModules,
-  SuiEvent,
   SuiEventFilter,
   SuiEventEnvelope,
 } from '../types';

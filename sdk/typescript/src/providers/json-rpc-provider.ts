@@ -30,7 +30,7 @@ import {
   getObjectReference,
   Coin,
   SuiEventFilter,
-  SuiEvent,
+  SuiEventEnvelope,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 
@@ -379,7 +379,7 @@ export class JsonRpcProvider extends Provider {
 
   async subscribeEvent(
     filter: SuiEventFilter,
-    _onMessage: (event: SuiEvent) => {}
+    _onMessage: (event: SuiEventEnvelope) => {}
   ): Promise<any> {
     try {
       return await this.wsClient.requestWithType(
