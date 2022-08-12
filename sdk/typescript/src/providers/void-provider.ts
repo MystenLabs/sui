@@ -16,6 +16,7 @@ import {
   SuiMoveNormalizedStruct,
   SuiMoveNormalizedModule,
   SuiMoveNormalizedModules,
+  SuiEvent,
 } from '../types';
 import { Provider } from './provider';
 
@@ -108,6 +109,13 @@ export class VoidProvider extends Provider {
 
   async syncAccountState(_address: string): Promise<any> {
     throw this.newError('syncAccountState');
+  }
+
+  async subscribeEvent(
+    _params: object[],
+    _onMessage: (event: SuiEvent) => {}
+  ): Promise<any> {
+      throw this.newError('subscribeEvent');
   }
 
   private newError(operation: string): Error {
