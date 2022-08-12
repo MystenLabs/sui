@@ -26,7 +26,7 @@ use sui_types::{coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID};
 use crate::ReadApi;
 
 pub struct TransactionBuilder {
-    pub(crate) read_api: Arc<ReadApi>,
+    pub(crate) read_api: Arc<dyn ReadApi + Sync + Send>,
 }
 
 impl TransactionBuilder {

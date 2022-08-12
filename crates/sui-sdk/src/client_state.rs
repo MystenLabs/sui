@@ -7,7 +7,6 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::resolver::ModuleResolver;
-use tokio::runtime::Handle;
 use tokio::sync::RwLock;
 
 use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData};
@@ -15,12 +14,12 @@ use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::move_package::MovePackage;
 
 #[derive(Default)]
-pub(crate) struct ClientState {
+pub(crate) struct ClientCache {
     objects: BTreeMap<ObjectRef, GetRawObjectDataResponse>,
     object_refs: BTreeMap<ObjectID, ObjectRef>,
 }
 
-impl ClientState {
+impl ClientCache {
     pub fn get_object(&self, object_id: ObjectID) -> Option<&GetRawObjectDataResponse> {
         self.object_refs
             .get(&object_id)
@@ -31,14 +30,12 @@ impl ClientState {
         match &response {
             GetRawObjectDataResponse::Exists(o) => {
                 let oref = &o.reference;
-                self.object_refs
-                    .insert(oref.object_id, oref.to_object_ref());
+                self.update_refs(vec![oref.to_object_ref()]);
                 self.objects.insert(oref.to_object_ref(), response);
             }
             GetRawObjectDataResponse::NotExists(_) => {}
             GetRawObjectDataResponse::Deleted(oref) => {
-                self.object_refs
-                    .insert(oref.object_id, oref.to_object_ref());
+                self.update_refs(vec![oref.to_object_ref()]);
                 self.objects.insert(oref.to_object_ref(), response);
             }
         };
@@ -46,12 +43,17 @@ impl ClientState {
 
     pub fn update_refs(&mut self, orefs: Vec<ObjectRef>) {
         for oref in orefs {
+            if let Some((_, version, _)) = self.object_refs.get(&oref.0) {
+                if oref.1 <= *version {
+                    continue;
+                }
+            }
             self.object_refs.insert(oref.0, oref);
         }
     }
 }
 
-impl ModuleResolver for ClientState {
+impl ModuleResolver for ClientCache {
     type Error = anyhow::Error;
 
     fn get_module(&self, id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -76,8 +78,6 @@ pub(crate) struct ResolverWrapper<T: ModuleResolver>(pub Arc<RwLock<T>>);
 impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
     type Error = T::Error;
     fn get_module(&self, module_id: &ModuleId) -> Result<Option<Vec<u8>>, Self::Error> {
-        let handle = Handle::current();
-        let _ = handle.enter();
         futures::executor::block_on(self.0.read()).get_module(module_id)
     }
 }

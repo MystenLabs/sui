@@ -78,6 +78,9 @@ impl ObjectChecker {
             .get_object(object_id)
             .await
             .or_else(|err| bail!("Failed to get object info (id: {}), err: {err}", object_id))?;
+
+        println!("getting object {object_id}, info :: {object_info:?}");
+
         match object_info {
             GetRawObjectDataResponse::NotExists(_) => {
                 panic!("Node can't find gas object {}", object_id)

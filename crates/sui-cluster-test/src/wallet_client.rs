@@ -28,7 +28,7 @@ impl WalletClient {
 
         let fullnode_url = String::from(cluster.fullnode_url());
         info!("Use fullnode: {}", &fullnode_url);
-        let fullnode_client = SuiClient::new_rpc_client(&fullnode_url, None)
+        let fullnode_client = SuiClient::new_rpc_client(&fullnode_url, None, false)
             .await
             .unwrap();
 
