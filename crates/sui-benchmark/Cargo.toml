@@ -18,11 +18,11 @@ tokio = { version = "1.20.1", features = ["full"] }
 strum = "0.24.1"
 strum_macros = "0.24.2"
 num_cpus = "1.13.1"
-rocksdb = "0.18.0"
+rocksdb = "0.19.0"
 serde_with = { version = "1.14.0", features = ["hex"] }
 tracing = "0.1.36"
 tracing-subscriber = { version = "0.3.15", features = ["time", "registry", "env-filter"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e" }
 clap = { version = "3.1.17", features = ["derive"] }
 prometheus = "0.13.1"
 multiaddr = "0.14.0"
@@ -41,7 +41,7 @@ sui-node = { path = "../sui-node" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "node" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "ef4536f3db403fda6d6c1c12ccb0ca827974e4fc", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 test-utils = { path = "../test-utils" }
 
