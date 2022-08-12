@@ -28,7 +28,6 @@ use sui_quorum_driver::QuorumDriverMetrics;
 use sui_quorum_driver::{QuorumDriver, QuorumDriverHandler};
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
-    follower_store::FollowerStore,
     node_sync_store::NodeSyncStore,
     IndexStore,
 };
@@ -113,12 +112,6 @@ impl SuiNode {
             )))
         };
 
-        let follower_store = Arc::new(FollowerStore::open_tables_read_write(
-            config.db_path().join("follower_db"),
-            None,
-            None,
-        ));
-
         let event_store = if config.enable_event_processing {
             let path = config.db_path().join("events.db");
             let db = SqlEventStore::new_from_file(&path).await?;
@@ -196,7 +189,6 @@ impl SuiNode {
                 let active_authority = Arc::new(ActiveAuthority::new(
                     state.clone(),
                     pending_store,
-                    follower_store,
                     net,
                     GossipMetrics::new(&prometheus_registry),
                     network_metrics.clone(),

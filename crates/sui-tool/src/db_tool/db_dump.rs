@@ -11,10 +11,7 @@ use strum_macros::EnumString;
 use sui_core::authority::authority_store_tables::AuthorityStoreTables;
 use sui_core::checkpoints::CheckpointStoreTables;
 use sui_storage::default_db_options;
-use sui_storage::{
-    follower_store::FollowerStore, lock_service::LockServiceImpl, node_sync_store::NodeSyncStore,
-    IndexStore,
-};
+use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use typed_store::traits::DBMapTableUtil;
 
@@ -22,7 +19,6 @@ use typed_store::traits::DBMapTableUtil;
 pub enum StoreName {
     Validator,
     Gateway,
-    Follower,
     Index,
     LocksService,
     NodeSync,
@@ -69,11 +65,6 @@ pub fn dump_table(
             db_path, None, None,
         )
         .dump(table_name, page_size, page_number),
-        StoreName::Follower => FollowerStore::open_tables_read_only(db_path, None, None).dump(
-            table_name,
-            page_size,
-            page_number,
-        ),
         StoreName::Index => IndexStore::open_tables_read_only(db_path, None, None).dump(
             table_name,
             page_size,
