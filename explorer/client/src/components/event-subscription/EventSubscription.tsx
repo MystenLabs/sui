@@ -62,7 +62,8 @@ function EventSubscription() {
         (e: React.ChangeEvent<HTMLSelectElement>) => {
             console.log('select filter change', e.currentTarget.value);
             setSelectedFilterType(e.currentTarget.value);
-        }, [setSelectedFilterType]
+        },
+        [setSelectedFilterType]
     );
 
     return (
@@ -75,7 +76,10 @@ function EventSubscription() {
             >
                 <label>
                     Filter Type
-                    <select id="eventFilterSelect" onChange={handleFilterSelectChange}>
+                    <select
+                        id="eventFilterSelect"
+                        onChange={handleFilterSelectChange}
+                    >
                         <option value="package">Package</option>
                         <option value="module">Module</option>
                         <option selected value="objectId">
@@ -98,22 +102,22 @@ function EventSubscription() {
                 aria-label="event filter details form"
             >
                 <div>
-                {selectedFilterType === 'objectId' && (
-                    <label>
-                        Object ID
-                        <div className={styles.form}>
-                        <input
-                            className={styles.searchtext}
-                            id="searchText"
-                            placeholder="Object ID"
-                            value={filterObjId}
-                            autoFocus
-                            onChange={handleObjectIdTextChange}
-                            type="text"
-                        />
-                        </div>
-                    </label>
-                )}
+                    {selectedFilterType === 'objectId' && (
+                        <label>
+                            Object ID
+                            <div className={styles.form}>
+                                <input
+                                    className={styles.searchtext}
+                                    id="searchText"
+                                    placeholder="Object ID"
+                                    value={filterObjId}
+                                    autoFocus
+                                    onChange={handleObjectIdTextChange}
+                                    type="text"
+                                />
+                            </div>
+                        </label>
+                    )}
                 </div>
             </form>
             <form
