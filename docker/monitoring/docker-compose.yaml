@@ -4,12 +4,14 @@ version: "3.9"
 services:
   # Prometheus
   prometheus:
+    container_name: prometheus
     image: prom/prometheus:v2.37.0
+    labels:
+      org.label-schema.group: "monitoring"
+      org.label-schema.name: "prometheus"
     user: "0"
     ports:
     - "9090:9090"
-    # expose:
-    # - "9090"
     volumes:
     - ./data/prometheus:/prometheus:rw
     - ./config/prometheus.yaml:/etc/prometheus/prometheus.yml
@@ -19,7 +21,11 @@ services:
 
   # Grafana
   grafana:
+    container_name: grafana
     image: grafana/grafana:9.0.7
+    labels:
+      org.label-schema.group: "monitoring"
+      org.label-schema.name: "grafana"
     user: "0"
     volumes:
     - ./data/grafana:/var/lib/grafana:rw
@@ -32,13 +38,16 @@ services:
 
   # Promtail
   promtail:
+    container_name: promtail
     image: grafana/promtail:2.6.0
+    labels:
+      org.label-schema.group: "monitoring"
+      org.label-schema.name: "promtail"
     user: "0"
     volumes:
     - logs:/logs/
     - ./config:/mnt/config
     - ./data/promtail:/mnt/var
-    # - /var/log:/var/log
     - /var/lib/docker/containers:/var/lib/docker/containers
     command: -config.file=/mnt/config/promtail.yaml
     ports:
@@ -50,7 +59,11 @@ services:
 
   # Loki
   loki:
+    container_name: loki
     image: grafana/loki:2.6.0
+    labels:
+      org.label-schema.group: "monitoring"
+      org.label-schema.name: "loki"
     user: "0"
     volumes:
     - ./config:/mnt/config
@@ -65,7 +78,11 @@ services:
 
   # node-exporter
   node-exporter:
+    container_name: node-exporter
     image: prom/node-exporter:v1.3.1
+    labels:
+      org.label-schema.group: "monitoring"
+      org.label-schema.name: "node-exporter"
     ports:
     - '9100:9100'
     networks:
@@ -73,7 +90,11 @@ services:
 
   # cadvisor
   cadvisor:
+    container_name: cadvisor
     image: gcr.io/cadvisor/cadvisor:v0.45.0
+    labels:
+      org.label-schema.group: "monitoring"
+      org.label-schema.name: "cadvisor"
     volumes:
     - /:/rootfs:ro
     - /var/run:/var/run:rw
