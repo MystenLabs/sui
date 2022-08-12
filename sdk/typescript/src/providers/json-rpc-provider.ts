@@ -29,14 +29,24 @@ import {
   SuiObjectRef,
   getObjectReference,
   Coin,
+  SuiEventFilter,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
+const httpRegex = new RegExp('^https?');
+const portRegex = new RegExp(':[0-9]{1,5}$');
+const getWebsocketUrl = (httpUrl: string): string => {
+  let wsUrl = httpUrl.replace(httpRegex, 'wss');
+  wsUrl = wsUrl.replace(portRegex, '');
+  return `${wsUrl}:9001`;
+};
+
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
+  private wsClient: JsonRpcClient;
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -46,6 +56,7 @@ export class JsonRpcProvider extends Provider {
   constructor(public endpoint: string) {
     super();
     this.client = new JsonRpcClient(endpoint);
+    this.wsClient = new JsonRpcClient(getWebsocketUrl(endpoint));
   }
 
   // Move info
@@ -361,16 +372,16 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async subscribeEvent(params: object[]): Promise<any> {
+  async subscribeEvent(filter: SuiEventFilter): Promise<any> {
     try {
-      return await this.client.requestWithType(
+      return await this.wsClient.requestWithType(
         'sui_subscribeEvent',
-        params,
+        [filter],
         isAny
       );
     } catch (err) {
       throw new Error(
-        `Error subscribing to event filter: ${err}, params: ${JSON.stringify(params)}`
+        `Error subscribing to event: ${err}, filter: ${JSON.stringify(filter)}`
       );
     }
   }

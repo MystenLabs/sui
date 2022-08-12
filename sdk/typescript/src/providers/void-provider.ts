@@ -17,6 +17,7 @@ import {
   SuiMoveNormalizedModule,
   SuiMoveNormalizedModules,
   SuiEvent,
+  SuiEventFilter,
 } from '../types';
 import { Provider } from './provider';
 
@@ -112,7 +113,7 @@ export class VoidProvider extends Provider {
   }
 
   async subscribeEvent(
-    _params: object[],
+    _filter: SuiEventFilter,
     _onMessage: (event: SuiEvent) => {}
   ): Promise<any> {
       throw this.newError('subscribeEvent');
