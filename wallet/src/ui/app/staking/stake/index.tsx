@@ -4,7 +4,7 @@
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
 
 import StakeForm from './StakeForm';
 import { createValidationSchema } from './validation';
@@ -28,8 +28,7 @@ const initialValues = {
 export type FormValues = typeof initialValues;
 
 function StakePage() {
-    const [searchParams] = useSearchParams();
-    const coinType = useMemo(() => searchParams.get('type'), [searchParams]);
+    const coinType = GAS_TYPE_ARG;
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(

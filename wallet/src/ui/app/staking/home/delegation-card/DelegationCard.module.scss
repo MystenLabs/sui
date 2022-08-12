@@ -10,6 +10,7 @@
     background: colors.$gray-40;
     border-radius: 10px;
     cursor: pointer;
+    overflow: hidden;
 
     &:hover {
         background-color: colors.$gray-50;
@@ -26,6 +27,7 @@
     margin-bottom: 4px;
 
     @include utils.typography('table/title-sm');
+    @include utils.overflow-ellipsis;
 }
 
 .apy {

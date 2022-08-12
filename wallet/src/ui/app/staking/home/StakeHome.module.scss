@@ -9,6 +9,10 @@
     height: 100%;
 }
 
+.alert {
+    margin-bottom: 8px;
+}
+
 .page-title {
     margin-bottom: 8px;
 }
@@ -53,6 +57,18 @@
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 10px;
+}
+
+.staked-info-container {
+    display: flex;
+    margin-top: 30px;
+    grid-column-start: span 2;
+    align-items: center;
+    justify-content: center;
+}
+
+.empty {
+    @include utils.typography('empty');
 }
 
 .action {
