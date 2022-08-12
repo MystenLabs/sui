@@ -81,8 +81,10 @@ function PkgView({ data }: { data: DataType }) {
                         content: properties,
                     }}
                 />
-                <h2 className={styles.header}>Transactions </h2>
-                <TxForID id={viewedData.id} category="object" />
+                <div className={styles.txsection}>
+                    <h2 className={styles.header}>Transactions </h2>
+                    <TxForID id={viewedData.id} category="object" />
+                </div>
             </div>
         </div>
     );
