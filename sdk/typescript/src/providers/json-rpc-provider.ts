@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Provider } from './provider';
-import { JsonRpcClient } from '../rpc/client';
+import { getWebsocketUrl, JsonRpcClient } from '../rpc/client';
 import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
@@ -33,25 +33,14 @@ import {
   SuiEventEnvelope,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
+import { Client as WsRpcClient} from 'rpc-websockets';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
-const httpRegex = new RegExp('^http');
-const portRegex = new RegExp(':[0-9]{1,5}$');
-const getWebsocketUrl = (httpUrl: string): string => {
-  console.log('trying to convert http url to ws', httpUrl);
-  let wsUrl = httpUrl.replace(httpRegex, 'ws');
-  wsUrl = wsUrl.replace(portRegex, '');
-  wsUrl = `${wsUrl}:9001`;
-
-  console.log('wsUrl', wsUrl);
-  return wsUrl;
-};
-
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
-  private wsClient: JsonRpcClient;
+  private wsClient: WsRpcClient;
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -62,10 +51,8 @@ export class JsonRpcProvider extends Provider {
     super();
 
     this.client = new JsonRpcClient(endpoint);
-    console.log('this.client ?', this.client);
-
-    this.wsClient = new JsonRpcClient(getWebsocketUrl(endpoint));
-    console.log('this.wsClient ?', this.wsClient);
+    this.wsClient = new WsRpcClient(getWebsocketUrl(endpoint))
+    console.log('client & wsClient', this.client, this.wsClient);
   }
 
   // Move info
@@ -386,7 +373,7 @@ export class JsonRpcProvider extends Provider {
     _onMessage: (event: SuiEventEnvelope) => void
   ): Promise<any> {
     try {
-      return await this.wsClient.requestWithType(
+      return await this.client.wsRequestWithType(
         'sui_subscribeEvent',
         [filter],
         isAny
