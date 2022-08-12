@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, TransferObjectTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
 import { BN } from "bn.js";
 import { Base64DataBuffer } from "./serialization/base64";
 import { PublicKey } from "./cryptography/publickey";
@@ -1040,6 +1040,74 @@ export function isSuiParsedTransactionResponse(obj: any, _argumentName?: string)
                 typeof obj === "object" ||
                 typeof obj === "function") &&
             isSuiParsedPublishResponse(obj.Publish) as boolean)
+    )
+}
+
+export function isDelegationData(obj: any, _argumentName?: string): obj is DelegationData {
+    return (
+        isSuiMoveObject(obj) as boolean &&
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isObjectType(obj.dataType) as boolean &&
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        obj.type === "0x2::delegation::Delegation" &&
+        (obj.fields !== null &&
+            typeof obj.fields === "object" ||
+            typeof obj.fields === "function") &&
+        (isSuiMoveTypeParameterIndex(obj.fields.active_delegation) as boolean ||
+            (obj.fields.active_delegation !== null &&
+                typeof obj.fields.active_delegation === "object" ||
+                typeof obj.fields.active_delegation === "function") &&
+            (obj.fields.active_delegation.fields !== null &&
+                typeof obj.fields.active_delegation.fields === "object" ||
+                typeof obj.fields.active_delegation.fields === "function") &&
+            obj.fields.active_delegation.fields.vec === "" &&
+            isTransactionDigest(obj.fields.active_delegation.type) as boolean) &&
+        isSuiMoveTypeParameterIndex(obj.fields.delegate_amount) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.fields.next_reward_unclaimed_epoch) as boolean &&
+        isTransactionDigest(obj.fields.validator_address) as boolean &&
+        (obj.fields.info !== null &&
+            typeof obj.fields.info === "object" ||
+            typeof obj.fields.info === "function") &&
+        isTransactionDigest(obj.fields.info.id) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.fields.info.version) as boolean &&
+        (isSuiMoveObject(obj.fields.coin_locked_until_epoch) as boolean ||
+            (obj.fields.coin_locked_until_epoch !== null &&
+                typeof obj.fields.coin_locked_until_epoch === "object" ||
+                typeof obj.fields.coin_locked_until_epoch === "function") &&
+            (obj.fields.coin_locked_until_epoch.fields !== null &&
+                typeof obj.fields.coin_locked_until_epoch.fields === "object" ||
+                typeof obj.fields.coin_locked_until_epoch.fields === "function") &&
+            obj.fields.coin_locked_until_epoch.fields.vec === "" &&
+            isTransactionDigest(obj.fields.coin_locked_until_epoch.type) as boolean) &&
+        (isSuiMoveTypeParameterIndex(obj.fields.ending_epoch) as boolean ||
+            (obj.fields.ending_epoch !== null &&
+                typeof obj.fields.ending_epoch === "object" ||
+                typeof obj.fields.ending_epoch === "function") &&
+            (obj.fields.ending_epoch.fields !== null &&
+                typeof obj.fields.ending_epoch.fields === "object" ||
+                typeof obj.fields.ending_epoch.fields === "function") &&
+            obj.fields.ending_epoch.fields.vec === "" &&
+            isTransactionDigest(obj.fields.ending_epoch.type) as boolean)
+    )
+}
+
+export function isDelegationSuiObject(obj: any, _argumentName?: string): obj is DelegationSuiObject {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isObjectOwner(obj.owner) as boolean &&
+        isTransactionDigest(obj.previousTransaction) as boolean &&
+        isSuiMoveTypeParameterIndex(obj.storageRebate) as boolean &&
+        isSuiObjectRef(obj.reference) as boolean &&
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isDelegationData(obj.data) as boolean
     )
 }
 
