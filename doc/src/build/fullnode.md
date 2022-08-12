@@ -282,3 +282,20 @@ If you receive an error with code 98 or 99, you should restart your server using
 Then, restart your Sui fullnode:
 `$ cargo run --release --bin sui-node -- --config-path fullnode.yaml`
 
+#### Errors after redeploying Devnet without genesis update (node is killed). Look at the screenshot
+
+![error after devnet updt](https://user-images.githubusercontent.com/86624298/184237312-4af31e15-c939-47e9-8055-535bee579dba.png)
+
+Solution:
+1. Delete suidb folder 
+    ```shell
+    $ rm -rf ~/sui/suidb
+    ```
+1. `cd` into your `sui` repository:
+    ```shell
+    $ cd sui
+    ```
+1. Restart your Sui fullnode:
+    ```shell
+    $ cargo run --release --bin sui-node -- --config-path fullnode.yaml
+    ```
