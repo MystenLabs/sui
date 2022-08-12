@@ -3,7 +3,7 @@
 
 use crate::{
     authority::AuthorityState,
-    authority_active::gossip::{DigestHandler, Follower},
+    authority_active::gossip::{DigestHandler, Follower, GossipMetrics},
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
 };
@@ -112,6 +112,7 @@ impl EffectsStakeMap {
 
     pub fn forget_effects(&mut self, digests: &TransactionEffectsDigest) {
         self.effects_stake_map.remove(digests);
+        self.effects_vote_map.remove(digests);
     }
 }
 
@@ -131,24 +132,18 @@ where
         }
     }
 
-    /// Returns (Some(tx), rx) if there are no other waiters yet, or else (None, rx).
-    /// All rxes can be woken by sending to the supplied tx, or by calling notify(key, result)
-    async fn wait(
-        &self,
-        key: &Key,
-    ) -> (
-        Option<broadcast::Sender<ResultT>>,
-        broadcast::Receiver<ResultT>,
-    ) {
+    /// Returns (true, rx) if there are no other waiters yet, or else (false, rx).
+    /// All rxes can be woken by calling notify(key, result)
+    async fn wait(&self, key: &Key) -> (bool, broadcast::Receiver<ResultT>) {
         let waiters = &mut self.waiters.lock().unwrap();
         let entry = waiters.entry(key.clone());
 
         match entry {
-            hash_map::Entry::Occupied(e) => (None, e.get().subscribe()),
+            hash_map::Entry::Occupied(e) => (false, e.get().subscribe()),
             hash_map::Entry::Vacant(e) => {
                 let (tx, rx) = broadcast::channel(1);
-                e.insert(tx.clone());
-                (Some(tx), rx)
+                e.insert(tx);
+                (true, rx)
             }
         }
     }
@@ -261,7 +256,7 @@ pub struct NodeSyncState<A> {
     aggregator: Arc<AuthorityAggregator<A>>,
 
     // Used to single-shot multiple concurrent downloads.
-    pending_downloads: Waiter<TransactionDigest, SuiResult>,
+    pending_downloads: Arc<Waiter<TransactionDigest, SuiResult>>,
 
     // Used to wait for parent transactions to be applied locally
     pending_txes: Waiter<TransactionDigest, ()>,
@@ -269,6 +264,9 @@ pub struct NodeSyncState<A> {
     // Channels for enqueuing DigestMessage requests.
     sender: mpsc::Sender<DigestsMessage>,
     receiver: Arc<tokio::sync::Mutex<mpsc::Receiver<DigestsMessage>>>,
+
+    // Gossip Metrics
+    metrics: GossipMetrics,
 }
 
 impl<A> NodeSyncState<A> {
@@ -276,6 +274,7 @@ impl<A> NodeSyncState<A> {
         state: Arc<AuthorityState>,
         aggregator: Arc<AuthorityAggregator<A>>,
         node_sync_store: Arc<NodeSyncStore>,
+        metrics: GossipMetrics,
     ) -> Self {
         let (sender, receiver) = mpsc::channel(NODE_SYNC_QUEUE_LEN);
         let committee = state.committee.load().deref().clone();
@@ -285,10 +284,11 @@ impl<A> NodeSyncState<A> {
             state,
             aggregator,
             node_sync_store,
-            pending_downloads: Waiter::new(),
+            pending_downloads: Arc::new(Waiter::new()),
             pending_txes: Waiter::new(),
             sender,
             receiver: Arc::new(tokio::sync::Mutex::new(receiver)),
+            metrics,
         }
     }
 }
@@ -336,24 +336,26 @@ where
         while let Some(DigestsMessage { sync_arg, tx }) = receiver.recv().await {
             let state = self.clone();
             let limit = limit.clone();
-            tokio::spawn(async move {
-                // hold semaphore permit until task completes. unwrap ok because we never close
-                // the semaphore in this context.
-                let permit = limit.acquire_owned().await.unwrap();
 
+            // hold semaphore permit until task completes. unwrap ok because we never close
+            // the semaphore in this context.
+            let permit = limit.acquire_owned().await.unwrap();
+
+            tokio::spawn(async move {
                 let res = state.process_digest(sync_arg, permit).await;
                 if let Err(error) = &res {
                     error!(?sync_arg, "process_digest failed: {}", error);
-                } else {
-                    let digest = sync_arg.transaction_digest();
-                    trace!(?digest, "notifying waiters");
-                    state
-                        .pending_txes
-                        .notify(digest, ())
-                        .await
-                        .tap_err(|e| debug!(?digest, "{}", e))
-                        .ok();
                 }
+
+                // Notify waiters even if tx failed, to avoid leaking resources.
+                let digest = sync_arg.transaction_digest();
+                trace!(?digest, "notifying waiters");
+                state
+                    .pending_txes
+                    .notify(digest, ())
+                    .await
+                    .tap_err(|e| debug!(?digest, "{}", e))
+                    .ok();
 
                 if let Some(tx) = tx {
                     // Send status back to follower so that it knows whether to advance
@@ -402,7 +404,8 @@ where
 
                 debug!(?parents, "attempting to execute parents");
 
-                let handle = NodeSyncHandle::new_from_sender(self.sender.clone());
+                let handle =
+                    NodeSyncHandle::new_from_sender(self.sender.clone(), self.metrics.clone());
                 let results = handle
                     .handle_execution_request(parents.iter().cloned())
                     .await?;
@@ -470,13 +473,15 @@ where
 
                     // wait until the tx becomes final before returning, so that the follower doesn't mark
                     // this tx as finished prematurely.
+                    let _timer = self.metrics.wait_for_finality_latency_sec.start_timer();
                     let (_, mut rx) = self.pending_txes.wait(&digests.transaction).await;
-                    return rx
+                    let result = rx
                         .recv()
                         .await
                         .map_err(|e| SuiError::GenericAuthorityError {
                             error: format!("{:?}", e),
                         });
+                    return result;
                 }
 
                 debug!(?digests, ?peer, "digests are now final");
@@ -563,24 +568,32 @@ where
         authorities_with_cert: Option<BTreeSet<AuthorityName>>,
         req: &DownloadRequest,
     ) -> SuiResult<(CertifiedTransaction, SignedTransactionEffects)> {
-        let tx_digest = req.transaction_digest();
-        if let Some(c) = self.node_sync_store.get_cert_and_effects(tx_digest)? {
+        let tx_digest = *req.transaction_digest();
+        if let Some(c) = self.node_sync_store.get_cert_and_effects(&tx_digest)? {
             return Ok(c);
         }
-
-        let (tx, mut rx) = self.pending_downloads.wait(tx_digest).await;
+        let pending_downloads = self.pending_downloads.clone();
+        let (first, mut rx) = pending_downloads.wait(&tx_digest).await;
         // Only start the download if there are no other concurrent downloads.
-        if let Some(tx) = tx {
+        if first {
             let aggregator = self.aggregator.clone();
             let node_sync_store = self.node_sync_store.clone();
             let req = req.clone();
+            let metrics = self.metrics.clone();
             tokio::task::spawn(async move {
-                if let Err(error) = tx.send(
-                    Self::download_impl(authorities_with_cert, aggregator, &req, node_sync_store)
+                let _ = pending_downloads
+                    .notify(
+                        &tx_digest,
+                        Self::download_impl(
+                            authorities_with_cert,
+                            aggregator,
+                            &req,
+                            node_sync_store,
+                            metrics,
+                        )
                         .await,
-                ) {
-                    error!(?req, ?error, "Could not broadcast cert response");
-                }
+                    )
+                    .await;
             });
         }
 
@@ -591,7 +604,7 @@ where
             })??;
 
         self.node_sync_store
-            .get_cert_and_effects(tx_digest)?
+            .get_cert_and_effects(&tx_digest)?
             .ok_or_else(|| SuiError::GenericAuthorityError {
                 error: format!(
                     "cert/effects for {:?} should have been in the node_sync_store",
@@ -605,16 +618,20 @@ where
         aggregator: Arc<AuthorityAggregator<A>>,
         req: &DownloadRequest,
         node_sync_store: Arc<NodeSyncStore>,
+        metrics: GossipMetrics,
     ) -> SuiResult {
         let (cert, effects) = match req {
             DownloadRequest::Node(digests) => {
-                aggregator
+                metrics.total_attempts_cert_downloads.inc();
+                let resp = aggregator
                     .handle_transaction_and_effects_info_request(
                         digests,
                         authorities.as_ref(),
                         None,
                     )
-                    .await?
+                    .await?;
+                metrics.total_successful_attempts_cert_downloads.inc();
+                resp
             }
             DownloadRequest::Validator(digest) => {
                 let resp = aggregator.handle_cert_info_request(digest, None).await?;
@@ -638,20 +655,21 @@ where
 #[derive(Clone)]
 pub struct NodeSyncHandle {
     sender: mpsc::Sender<DigestsMessage>,
+    metrics: GossipMetrics,
 }
 
 impl NodeSyncHandle {
-    pub fn new<A>(sync_state: Arc<NodeSyncState<A>>) -> Self
+    pub fn new<A>(sync_state: Arc<NodeSyncState<A>>, metrics: GossipMetrics) -> Self
     where
         A: AuthorityAPI + Send + Sync + 'static + Clone,
     {
         let (_handle, sender) = sync_state.start();
 
-        Self { sender }
+        Self { sender, metrics }
     }
 
-    fn new_from_sender(sender: mpsc::Sender<DigestsMessage>) -> Self {
-        Self { sender }
+    fn new_from_sender(sender: mpsc::Sender<DigestsMessage>, metrics: GossipMetrics) -> Self {
+        Self { sender, metrics }
     }
 
     fn map_rx(rx: oneshot::Receiver<SuiResult>) -> BoxFuture<'static, SuiResult> {
@@ -729,6 +747,10 @@ where
         )
         .await?;
         Ok(Self::map_rx(rx))
+    }
+
+    fn get_metrics(&self) -> &GossipMetrics {
+        &self.metrics
     }
 }
 

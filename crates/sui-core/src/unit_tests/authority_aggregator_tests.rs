@@ -70,7 +70,6 @@ pub async fn init_local_authorities_with_genesis(
     for (authority_name, secret) in key_pairs {
         let client = LocalAuthorityClient::new_with_objects(
             committee.clone(),
-            authority_name,
             secret,
             genesis.objects().to_owned(),
             genesis,
@@ -91,6 +90,7 @@ pub async fn init_local_authorities_with_genesis(
             committee,
             clients,
             AuthAggMetrics::new_for_tests(),
+            SafeClientMetrics::new_for_tests(),
             timeouts,
         ),
         states,
@@ -382,9 +382,12 @@ async fn test_map_reducer() {
             0usize,
             |_name, _client| Box::pin(async move { Ok(()) }),
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(
-                    async move { Err(SuiError::TooManyIncorrectAuthorities { errors: vec![] }) },
-                )
+                Box::pin(async move {
+                    Err(SuiError::TooManyIncorrectAuthorities {
+                        errors: vec![],
+                        action: "",
+                    })
+                })
             },
             Duration::from_millis(1000),
         )
@@ -400,8 +403,10 @@ async fn test_map_reducer() {
             0usize,
             |_name, _client| {
                 Box::pin(async move {
-                    let res: Result<usize, SuiError> =
-                        Err(SuiError::TooManyIncorrectAuthorities { errors: vec![] });
+                    let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities {
+                        errors: vec![],
+                        action: "",
+                    });
                     res
                 })
             },
@@ -452,9 +457,12 @@ async fn test_map_reducer() {
                 })
             },
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(
-                    async move { Err(SuiError::TooManyIncorrectAuthorities { errors: vec![] }) },
-                )
+                Box::pin(async move {
+                    Err(SuiError::TooManyIncorrectAuthorities {
+                        errors: vec![],
+                        action: "",
+                    })
+                })
             },
             Duration::from_millis(10),
         )
@@ -980,6 +988,7 @@ async fn test_quorum_once_with_timeout() {
         committee,
         clients,
         AuthAggMetrics::new_for_tests(),
+        SafeClientMetrics::new_for_tests(),
         TimeoutConfig {
             serial_authority_request_interval: Duration::from_millis(50),
             ..Default::default()
@@ -1003,6 +1012,7 @@ async fn test_quorum_once_with_timeout() {
             },
             Duration::from_millis(authority_request_timeout),
             Some(Duration::from_millis(30 * 50)),
+            "test",
         )
         .await
         .unwrap();

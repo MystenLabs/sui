@@ -1,11 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod crypto;
 mod event;
 mod object;
 mod test_scenario;
 mod transfer;
 mod tx_context;
+mod types;
 
 use move_binary_format::errors::PartialVMError;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
@@ -17,6 +19,8 @@ pub fn all_natives(
     sui_framework_addr: AccountAddress,
 ) -> NativeFunctionTable {
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
+        ("crypto", "ecrecover", crypto::ecrecover),
+        ("crypto", "keccak256", crypto::keccak256),
         ("event", "emit", event::emit),
         ("object", "bytes_to_address", object::bytes_to_address),
         ("object", "delete_impl", object::delete_impl),
@@ -61,6 +65,7 @@ pub fn all_natives(
             "new_signer_from_address",
             tx_context::new_signer_from_address,
         ),
+        ("types", "is_one_time_witness", types::is_one_time_witness),
     ];
     SUI_NATIVES
         .iter()

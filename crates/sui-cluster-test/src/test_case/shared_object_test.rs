@@ -4,7 +4,7 @@
 use crate::{helper::ObjectChecker, TestCaseImpl, TestContext};
 use async_trait::async_trait;
 use sui::client_commands::WalletContext;
-use sui_json_rpc_types::{SuiExecutionStatus, TransactionEffectsResponse};
+use sui_json_rpc_types::{SuiExecutionStatus, SuiTransactionResponse};
 use sui_types::base_types::SequenceNumber;
 use sui_types::object::Owner;
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
@@ -30,7 +30,7 @@ impl TestCaseImpl for SharedCounterTest {
         let (package_ref, counter_id) =
             publish_basics_package_and_make_counter(wallet_context, address).await;
 
-        let effects: TransactionEffectsResponse =
+        let effects: SuiTransactionResponse =
             increment_counter(wallet_context, address, None, package_ref, counter_id).await;
         let effects = effects.effects;
         assert_eq!(

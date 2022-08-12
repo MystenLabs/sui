@@ -194,12 +194,13 @@ This will put the following binaries in your `PATH` (ex. under `~/.cargo/bin`) t
 * [`sui`](cli-client.md) - The Sui CLI tool contains subcommands for enabling `genesis` of validators and accounts, starting the Sui network, and [building and testing Move packages](move/index.md), as well as a [client](cli-client.md) for interacting with the Sui network.
 * [`rpc-server`](json-rpc.md) - run a local Sui gateway service accessible via an RPC interface.
 
-Confirm the installation with:
-#### macOS and Linux
+### macOS and Linux
+Confirm the binaries are installed with:
 ```
 $ echo $PATH
 ```
-#### Windows
+### Windows
+Confirm the binaries are installed with:
 ```
 $ echo %PATH%
 ```

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
-use crate::safe_client::SafeClient;
+use crate::safe_client::{SafeClient, SafeClientMetrics};
 use async_trait::async_trait;
 
 use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -86,6 +86,7 @@ pub struct AuthAggMetrics {
     pub num_signatures: Histogram,
     pub num_good_stake: Histogram,
     pub num_bad_stake: Histogram,
+    pub total_quorum_once_timeout: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -125,6 +126,12 @@ impl AuthAggMetrics {
                 registry,
             )
             .unwrap(),
+            total_quorum_once_timeout: register_int_counter_with_registry!(
+                "total_quorum_once_timeout",
+                "Total number of timeout when calling quorum_once_with_timeout",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -143,6 +150,8 @@ pub struct AuthorityAggregator<A> {
     // Metrics
     pub metrics: AuthAggMetrics,
     pub timeouts: TimeoutConfig,
+    // Store here for clone during re-config
+    pub safe_client_metrics: SafeClientMetrics,
 }
 
 impl<A> AuthorityAggregator<A> {
@@ -150,24 +159,38 @@ impl<A> AuthorityAggregator<A> {
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
+        safe_client_metrics: SafeClientMetrics,
     ) -> Self {
-        Self::new_with_timeouts(committee, authority_clients, metrics, Default::default())
+        Self::new_with_timeouts(
+            committee,
+            authority_clients,
+            metrics,
+            safe_client_metrics,
+            Default::default(),
+        )
     }
 
     pub fn new_with_timeouts(
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
+        safe_client_metrics: SafeClientMetrics,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
             committee: committee.clone(),
             authority_clients: authority_clients
                 .into_iter()
-                .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
+                .map(|(name, api)| {
+                    (
+                        name,
+                        SafeClient::new(api, committee.clone(), name, safe_client_metrics.clone()),
+                    )
+                })
                 .collect(),
             metrics,
             timeouts,
+            safe_client_metrics,
         }
     }
 
@@ -767,6 +790,8 @@ where
         timeout_each_authority: Duration,
         // When to give up on the attempt entirely.
         timeout_total: Option<Duration>,
+        // The behavior that authorities expect to perform, used for logging and error
+        description: &'static str,
     ) -> Result<S, SuiError>
     where
         FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
@@ -785,6 +810,7 @@ where
         if let Some(t) = timeout_total {
             timeout(t, fut).await.map_err(|_timeout_error| {
                 if authority_errors.is_empty() {
+                    self.metrics.total_quorum_once_timeout.inc();
                     SuiError::TimeoutError
                 } else {
                     SuiError::TooManyIncorrectAuthorities {
@@ -792,6 +818,7 @@ where
                             .iter()
                             .map(|(a, b)| (*a, b.clone()))
                             .collect(),
+                        action: description,
                     }
                 }
             })?
@@ -871,6 +898,7 @@ where
                                             response.err().map(|err| (name, err))
                                         })
                                         .collect(),
+                                    action: "get_object_by_id",
                                 });
                             }
                         }
@@ -1027,6 +1055,7 @@ where
                                 if state.bad_weight > validity {
                                     return Err(SuiError::TooManyIncorrectAuthorities {
                                         errors: state.errors,
+                                        action: "get_all_owned_objects",
                                     });
                                 }
                             }
@@ -1704,6 +1733,7 @@ where
             |_, client| Box::pin(async move { client.handle_checkpoint(request.clone()).await }),
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "handle_checkpoint_request",
         )
         .await
     }
@@ -1743,6 +1773,7 @@ where
             },
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "get_certified_checkpoint",
         )
         .await
     }
@@ -1777,6 +1808,7 @@ where
             },
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "handle_cert_info_request",
         )
         .await
     }
@@ -1821,6 +1853,7 @@ where
             },
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "handle_transaction_and_effects_info_request",
         )
         .await
     }
@@ -1930,6 +1963,7 @@ where
             .true_effects
             .ok_or(SuiError::TooManyIncorrectAuthorities {
                 errors: final_state.errors,
+                action: "execute_cert_to_true_effects",
             })
             .tap_err(|e| info!(?digest, "execute_cert_to_true_effects failed: {}", e))
     }

@@ -185,6 +185,11 @@ impl Swarm {
         &self.network_config
     }
 
+    /// Return a mutable reference to this Swarm's `NetworkConfig`.
+    pub fn config_mut(&mut self) -> &mut NetworkConfig {
+        &mut self.network_config
+    }
+
     /// Attempt to lookup and return a shared reference to the Validator with the provided `name`.
     pub fn validator(&self, name: SuiAddress) -> Option<&Node> {
         self.validators.get(&name)

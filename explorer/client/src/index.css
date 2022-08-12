@@ -15,23 +15,27 @@ body {
     @apply m-0 text-offblack;
 }
 
+html {
+    scrollbar-color: #182435 #fefefe;
+    scrollbar-width: 6px;
+}
+
 /* Improves scrollbar look on Chromium browsers */
 
-body::-webkit-scrollbar {
-    width: 10px;
+::-webkit-scrollbar {
+    @apply w-[6px];
 }
 
-body::-webkit-scrollbar-track {
-    background: transparent;
+::-webkit-scrollbar-track {
+    @apply bg-inherit;
 }
 
-body::-webkit-scrollbar-thumb {
-    background: #898d93;
-    border-radius: 5px;
+::-webkit-scrollbar-thumb {
+    @apply bg-sui-grey-50 rounded-[10px];
 }
 
-body::-webkit-scrollbar-thumb:hover {
-    background: #4e555d;
+::-webkit-scrollbar-thumb:hover {
+    @apply bg-sui-grey-100;
 }
 
 input:focus,

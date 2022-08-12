@@ -92,7 +92,7 @@ pub trait WriteAheadLog<'a, C> {
 
 pub struct DBTxGuard<'a, C: Serialize + DeserializeOwned + Debug> {
     tx: TransactionDigest,
-    _mutex_guard: LockGuard<'a>,
+    _mutex_guard: LockGuard,
     wal: &'a DBWriteAheadLog<C>,
     dead: bool,
 }
@@ -101,11 +101,7 @@ impl<'a, C> DBTxGuard<'a, C>
 where
     C: Serialize + DeserializeOwned + Debug,
 {
-    fn new(
-        tx: &TransactionDigest,
-        _mutex_guard: LockGuard<'a>,
-        wal: &'a DBWriteAheadLog<C>,
-    ) -> Self {
+    fn new(tx: &TransactionDigest, _mutex_guard: LockGuard, wal: &'a DBWriteAheadLog<C>) -> Self {
         Self {
             tx: *tx,
             _mutex_guard,
@@ -173,6 +169,7 @@ pub struct DBWriteAheadLog<C> {
 }
 
 const MUTEX_TABLE_SIZE: usize = 1024;
+const MUTEX_TABLE_SHARD_SIZE: usize = 128;
 
 impl<C> DBWriteAheadLog<C>
 where
@@ -193,7 +190,7 @@ where
         Self {
             tables,
             recoverable_txes: Mutex::new(recoverable_txes),
-            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
+            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE, MUTEX_TABLE_SHARD_SIZE),
         }
     }
 
@@ -251,7 +248,7 @@ where
     C: Serialize + DeserializeOwned + std::marker::Send + std::marker::Sync + Debug,
 {
     type Guard = DBTxGuard<'a, C>;
-    type LockGuard = LockGuard<'a>;
+    type LockGuard = LockGuard;
 
     #[must_use]
     #[instrument(level = "debug", name = "begin_tx", skip_all)]
@@ -260,7 +257,7 @@ where
         tx: &'b TransactionDigest,
         cert: &'b C,
     ) -> SuiResult<Option<DBTxGuard<'a, C>>> {
-        let mutex_guard = self.mutex_table.acquire_lock(tx).await;
+        let mutex_guard = self.mutex_table.acquire_lock(*tx).await;
         trace!(digest = ?tx, "acquired tx lock");
 
         if self.tables.log.contains_key(tx)? {
@@ -281,7 +278,7 @@ where
 
     #[must_use]
     async fn acquire_lock(&'a self, tx: &TransactionDigest) -> Self::LockGuard {
-        let res = self.mutex_table.acquire_lock(tx).await;
+        let res = self.mutex_table.acquire_lock(*tx).await;
         trace!(digest = ?tx, "acquired tx lock");
         res
     }
@@ -293,7 +290,7 @@ where
         match candidate {
             None => None,
             Some(digest) => {
-                let guard = self.mutex_table.acquire_lock(&digest).await;
+                let guard = self.mutex_table.acquire_lock(digest).await;
                 Some(DBTxGuard::new(&digest, guard, self))
             }
         }

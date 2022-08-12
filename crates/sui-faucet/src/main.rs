@@ -17,7 +17,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui::client_commands::{SuiClientCommands, WalletContext};
+use sui::client_commands::WalletContext;
 use sui_config::{sui_config_dir, SUI_CLIENT_CONFIG};
 use sui_faucet::{Faucet, FaucetRequest, FaucetResponse, SimpleFaucet};
 use tower::ServiceBuilder;
@@ -166,26 +166,9 @@ async fn request_gas(
 }
 
 async fn create_wallet_context() -> Result<WalletContext, anyhow::Error> {
-    // Create Wallet context.
     let wallet_conf = sui_config_dir()?.join(SUI_CLIENT_CONFIG);
     info!("Initialize wallet from config path: {:?}", wallet_conf);
-    let mut context = WalletContext::new(&wallet_conf).await?;
-    let address = context
-        .keystore
-        .addresses()
-        .first()
-        .cloned()
-        .ok_or_else(|| anyhow::anyhow!("Empty wallet context!"))?;
-
-    info!(?address, "Sync client states");
-    // Sync client to retrieve objects from the network.
-    SuiClientCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await
-    .map_err(|err| anyhow::anyhow!("Fail to sync client state: {}", err))?;
-    Ok(context)
+    WalletContext::new(&wallet_conf).await
 }
 
 async fn handle_error(error: BoxError) -> impl IntoResponse {

@@ -32,7 +32,7 @@ validator_configs:
           remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
-          socket_addr: "0.0.0.0:1"
+          socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
@@ -67,7 +67,7 @@ validator_configs:
           remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
-          socket_addr: "0.0.0.0:1"
+          socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
@@ -102,7 +102,7 @@ validator_configs:
           remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
-          socket_addr: "0.0.0.0:1"
+          socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
@@ -137,7 +137,7 @@ validator_configs:
           remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
-          socket_addr: "0.0.0.0:1"
+          socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
@@ -172,7 +172,7 @@ validator_configs:
           remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
-          socket_addr: "0.0.0.0:1"
+          socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
@@ -207,7 +207,7 @@ validator_configs:
           remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
-          socket_addr: "0.0.0.0:1"
+          socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false
@@ -242,7 +242,7 @@ validator_configs:
           remove_collections_timeout: 5000ms
         max_concurrent_requests: 500000
         prometheus_metrics:
-          socket_addr: "0.0.0.0:1"
+          socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
     enable-reconfig: false

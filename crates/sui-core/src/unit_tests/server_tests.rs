@@ -7,6 +7,7 @@ use crate::{
     authority_client::{
         AuthorityAPI, LocalAuthorityClient, LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
     },
+    safe_client::SafeClientMetrics,
 };
 use futures::StreamExt;
 use std::sync::Arc;
@@ -308,6 +309,7 @@ async fn test_subscription_safe_client() {
         },
         state.clone_committee(),
         state.name,
+        SafeClientMetrics::new_for_tests(),
     );
 
     let _join = server

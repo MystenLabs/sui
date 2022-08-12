@@ -65,16 +65,13 @@ jobs:
     strategy:
       matrix:
         os:
-          - [self-hosted, self-hosted-arc]
-          - [self-hosted, windows]
+          - [ubuntu-ghcloud]
+          - [windows-ghcloud]
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
-      # The install script for nextest doesn't work on windows (very linux/bash
-      # specific) so the windows builders already have the binaries installed.
       - uses: taiki-e/install-action@nextest
-        if: "startsWith(runner.os, 'linux')"
       - name: cargo test
         run: |
           cargo nextest run --all-features --profile ci
@@ -97,8 +94,8 @@ jobs:
     strategy:
       matrix:
         os:
-          - [self-hosted, self-hosted-arc]
-          - [self-hosted, windows]
+          - [ubuntu-ghcloud]
+          - [windows-ghcloud]
       fail-fast: false
     steps:
       - run: 'echo "No build required" '
@@ -106,17 +103,21 @@ jobs:
   clippy:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
-    runs-on: [self-hosted, self-hosted-arc]
+    runs-on: [ubuntu-ghcloud]
     steps:
+      - uses: arduino/setup-protoc@v1
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           components: clippy
+
+      # TODO(bradh): debug and re-enable this; the caching is breaking the clippy build
       # Enable caching of the 'librocksdb-sys' crate by additionally caching the
       # 'librocksdb-sys' src directory which is managed by cargo
-      - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-        with:
-          path: ~/.cargo/registry/src/**/librocksdb-sys-*
+      # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+      #   with:
+      #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
+
       # See '.cargo/config' for list of enabled/disappled clippy lints
       - name: cargo clippy
         run: cargo xclippy -D warnings

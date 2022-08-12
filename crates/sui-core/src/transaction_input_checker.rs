@@ -5,6 +5,7 @@ use crate::authority::SuiDataStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Debug;
+use sui_types::messages::TransactionKind;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
@@ -30,7 +31,7 @@ where
         transaction.gas_payment_object_ref().0,
         transaction.data.gas_budget,
         transaction.data.gas_price,
-        transaction.data.kind.is_system_tx(),
+        &transaction.data.kind,
     )
     .await?;
 
@@ -55,12 +56,12 @@ async fn check_gas<S>(
     gas_payment_id: ObjectID,
     gas_budget: u64,
     computation_gas_price: u64,
-    is_system_tx: bool,
+    tx_kind: &TransactionKind,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    if is_system_tx {
+    if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered())
     } else {
         let gas_object = store.get_object(&gas_payment_id)?;
@@ -74,8 +75,18 @@ where
             .parameters
             .storage_gas_price;
 
+        // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
+        // both gas budget and the transfer amount.
+        let extra_amount =
+            if let TransactionKind::Single(SingleTransactionKind::TransferSui(t)) = tx_kind {
+                t.amount.unwrap_or_default()
+            } else {
+                0
+            };
+        // TODO: We should revisit how we compute gas price and compare to gas budget.
         let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
-        gas::check_gas_balance(&gas_object, gas_budget, gas_price)?;
+
+        gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount)?;
         let gas_status =
             gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)?;
         Ok(gas_status)

@@ -10,7 +10,7 @@ import { isGetTransactionRequestsResponse } from '_payloads/transactions/ui/GetT
 import { setPermissions } from '_redux/slices/permissions';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
-import type { SuiAddress, TransactionResponse } from '@mysten/sui.js';
+import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type {
     GetPermissionRequests,
@@ -68,7 +68,7 @@ export class BackgroundClient {
     public async sendTransactionRequestResponse(
         txID: string,
         approved: boolean,
-        txResult: TransactionResponse | undefined,
+        txResult: SuiTransactionResponse | undefined,
         tsResultError: string | undefined
     ) {
         this.sendMessage(

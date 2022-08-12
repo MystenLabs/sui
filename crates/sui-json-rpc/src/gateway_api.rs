@@ -15,8 +15,8 @@ use crate::SuiRpcModule;
 use sui_core::gateway_state::{GatewayClient, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo, SuiTypeTag,
-    TransactionBytes, TransactionEffectsResponse, TransactionResponse,
+    GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo, SuiTransactionResponse,
+    SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
 use sui_types::crypto::SignatureScheme;
@@ -75,7 +75,7 @@ impl RpcGatewayApiServer for RpcGatewayImpl {
         sig_scheme: SignatureScheme,
         signature: Base64,
         pub_key: Base64,
-    ) -> RpcResult<TransactionResponse> {
+    ) -> RpcResult<SuiTransactionResponse> {
         let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
         let flag = vec![sig_scheme.flag()];
         let signature = crypto::Signature::from_bytes(
@@ -151,7 +151,7 @@ impl RpcReadApiServer for GatewayReadApiImpl {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> RpcResult<TransactionEffectsResponse> {
+    ) -> RpcResult<SuiTransactionResponse> {
         Ok(self.client.get_transaction(digest).await?)
     }
 

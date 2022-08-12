@@ -6,6 +6,35 @@
     @apply block md:grid grid-cols-1 md:grid-cols-1 gap-0 md:gap-3;
 }
 
+.txevents {
+    @apply grid grid-cols-5;
+}
+
+.eventtitle {
+    @apply pl-2 text-gray-600;
+}
+
+.eventtitle:hover {
+    @apply bg-blue-100 cursor-pointer;
+
+    border-radius: 6px;
+}
+
+.txeventsleft {
+    @apply col-span-1 hidden md:block;
+
+    margin-top: 12.5%;
+    line-height: 200%;
+    margin-right: 5%;
+    border-right: 1px solid #f0f1f2;
+}
+
+.txeventsright {
+    @apply col-span-5 md:col-span-4 overflow-y-scroll;
+
+    height: 100vh; /* enables scrolling list independtly of page */
+}
+
 .txcomponent {
     @apply pt-4 pb-4;
 }
@@ -36,6 +65,10 @@
 .itemviewtitle {
     border-bottom: 1px solid #f0f1f2;
     @apply border-b-[1px] border-[#f0f1f2] pb-1 pt-1;
+}
+
+.itemfieldstitle {
+    @apply border-b-[1px] border-[#f0f1f2] text-sm pb-1 pt-1;
 }
 
 .itemviewcontent {

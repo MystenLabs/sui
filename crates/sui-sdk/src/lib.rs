@@ -23,8 +23,8 @@ use sui_json_rpc::api::RpcTransactionBuilderClient;
 use sui_json_rpc::api::WalletSyncApiClient;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse,
-    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo, SuiTypeTag,
-    TransactionEffectsResponse, TransactionResponse,
+    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo,
+    SuiTransactionResponse, SuiTypeTag,
 };
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::{SignableBytes, SuiSignature};
@@ -119,7 +119,7 @@ impl SuiClient {
     pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> anyhow::Result<TransactionEffectsResponse> {
+    ) -> anyhow::Result<SuiTransactionResponse> {
         Ok(match &self {
             Self::Http(c) => c.get_transaction(digest).await?,
             Self::Ws(c) => c.get_transaction(digest).await?,
@@ -220,7 +220,7 @@ impl SuiClient {
     pub async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> anyhow::Result<TransactionResponse> {
+    ) -> anyhow::Result<SuiTransactionResponse> {
         Ok(match &self {
             Self::Http(c) => {
                 let tx_bytes = Base64::from_bytes(&tx.data.to_bytes());

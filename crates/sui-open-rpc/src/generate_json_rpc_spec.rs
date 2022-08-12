@@ -30,8 +30,8 @@ use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiObjectInfo, TransactionBytes,
-    TransactionEffectsResponse, TransactionResponse,
+    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiObjectInfo,
+    SuiTransactionResponse, TransactionBytes,
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::SuiSignature;
@@ -206,7 +206,7 @@ fn create_move_function_arg_type_response() -> Result<Vec<MoveFunctionArgType>, 
 
 async fn create_package_object_response(
     context: &mut WalletContext,
-) -> Result<(GetObjectDataResponse, TransactionResponse), anyhow::Error> {
+) -> Result<(GetObjectDataResponse, SuiTransactionResponse), anyhow::Error> {
     let package_path = ["sui_programmability", "examples", "move_tutorial"]
         .into_iter()
         .collect();
@@ -223,9 +223,17 @@ async fn create_package_object_response(
         Ok((
             context
                 .gateway
-                .get_object(response.package.object_id)
+                .get_object(
+                    response
+                        .parsed_data
+                        .clone()
+                        .unwrap()
+                        .to_publish_response()?
+                        .package
+                        .object_id,
+                )
                 .await?,
-            TransactionResponse::PublishResponse(response),
+            response,
         ))
     } else {
         panic!()
@@ -236,7 +244,7 @@ async fn create_transfer_response(
     context: &mut WalletContext,
     address: SuiAddress,
     coins: &[SuiObjectInfo],
-) -> Result<TransactionResponse, anyhow::Error> {
+) -> Result<SuiTransactionResponse, anyhow::Error> {
     let response = SuiClientCommands::Transfer {
         to: address,
         coin_object_id: coins.first().unwrap().object_id,
@@ -246,13 +254,12 @@ async fn create_transfer_response(
     .execute(context)
     .await?;
     if let SuiClientCommandResult::Transfer(_, certificate, effects) = response {
-        Ok(TransactionResponse::EffectResponse(
-            TransactionEffectsResponse {
-                certificate,
-                effects,
-                timestamp_ms: None,
-            },
-        ))
+        Ok(SuiTransactionResponse {
+            certificate,
+            effects,
+            timestamp_ms: None,
+            parsed_data: None,
+        })
     } else {
         panic!()
     }
@@ -262,7 +269,7 @@ async fn create_transfer_sui_response(
     context: &mut WalletContext,
     address: SuiAddress,
     coins: &[SuiObjectInfo],
-) -> Result<TransactionResponse, anyhow::Error> {
+) -> Result<SuiTransactionResponse, anyhow::Error> {
     let response = SuiClientCommands::TransferSui {
         to: address,
         sui_coin_object_id: coins.first().unwrap().object_id,
@@ -272,13 +279,12 @@ async fn create_transfer_sui_response(
     .execute(context)
     .await?;
     if let SuiClientCommandResult::TransferSui(certificate, effects) = response {
-        Ok(TransactionResponse::EffectResponse(
-            TransactionEffectsResponse {
-                certificate,
-                effects,
-                timestamp_ms: None,
-            },
-        ))
+        Ok(SuiTransactionResponse {
+            certificate,
+            effects,
+            timestamp_ms: None,
+            parsed_data: None,
+        })
     } else {
         panic!()
     }
@@ -302,8 +308,9 @@ async fn create_hero_response(
     .execute(context)
     .await?;
     if let SuiClientCommandResult::Publish(response) = result {
-        let package_id = response.package.object_id;
-        let game_info = response
+        let publish_resp = response.parsed_data.unwrap().to_publish_response().unwrap();
+        let package_id = publish_resp.package.object_id;
+        let game_info = publish_resp
             .created_objects
             .iter()
             .find(|o| o.data.type_().unwrap().ends_with("GameInfo"))
@@ -389,7 +396,7 @@ async fn create_error_response(
 async fn create_coin_split_response(
     context: &mut WalletContext,
     coins: &[SuiObjectInfo],
-) -> Result<TransactionResponse, anyhow::Error> {
+) -> Result<SuiTransactionResponse, anyhow::Error> {
     // create coin_split response
     let result = SuiClientCommands::SplitCoin {
         coin_id: coins.first().unwrap().object_id,
@@ -401,7 +408,7 @@ async fn create_coin_split_response(
     .await?;
 
     if let SuiClientCommandResult::SplitCoin(resp) = result {
-        Ok(TransactionResponse::SplitCoinResponse(resp))
+        Ok(resp)
     } else {
         panic!()
     }
@@ -409,7 +416,7 @@ async fn create_coin_split_response(
 
 async fn get_nft_response(
     context: &mut WalletContext,
-) -> Result<(TransactionResponse, GetObjectDataResponse), anyhow::Error> {
+) -> Result<(SuiTransactionResponse, GetObjectDataResponse), anyhow::Error> {
     // Create example-nft response
     let args_json = json!([EXAMPLE_NFT_NAME, EXAMPLE_NFT_DESCRIPTION, EXAMPLE_NFT_URL]);
     let args = args_json
@@ -437,11 +444,12 @@ async fn get_nft_response(
             .gateway
             .get_object(effects.created.first().unwrap().reference.object_id)
             .await?;
-        let tx = TransactionResponse::EffectResponse(TransactionEffectsResponse {
+        let tx = SuiTransactionResponse {
             certificate,
             effects,
             timestamp_ms: None,
-        });
+            parsed_data: None,
+        };
         Ok((tx, object))
     } else {
         panic!()
@@ -463,10 +471,10 @@ struct ObjectResponseSample {
 
 #[derive(Serialize)]
 struct TransactionResponseSample {
-    pub move_call: TransactionResponse,
-    pub transfer: TransactionResponse,
-    pub transfer_sui: TransactionResponse,
-    pub coin_split: TransactionResponse,
-    pub publish: TransactionResponse,
+    pub move_call: SuiTransactionResponse,
+    pub transfer: SuiTransactionResponse,
+    pub transfer_sui: SuiTransactionResponse,
+    pub coin_split: SuiTransactionResponse,
+    pub publish: SuiTransactionResponse,
     pub error: Value,
 }

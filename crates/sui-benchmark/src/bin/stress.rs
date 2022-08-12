@@ -23,6 +23,7 @@ use sui_config::PersistedConfig;
 use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::gateway_state::GatewayState;
+use sui_core::safe_client::SafeClientMetrics;
 use sui_node::metrics;
 use sui_node::SuiNode;
 use sui_types::base_types::ObjectID;
@@ -267,7 +268,7 @@ async fn run(
                 tokio::select! {
                     _ = stat_interval.tick() => {
                         if tx_cloned
-                            .send(Stats {
+                            .try_send(Stats {
                                 id: i as usize,
                                 num_success,
                                 num_error,
@@ -278,7 +279,6 @@ async fn run(
                                 num_submitted,
                                 duration: Duration::from_micros(stat_delay_micros),
                             })
-                            .await
                             .is_err()
                         {
                             debug!("Failed to update stat!");
@@ -598,8 +598,13 @@ async fn main() -> Result<()> {
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
         let committee = GatewayState::make_committee(&config)?;
         let authority_clients = GatewayState::make_authority_clients(&config);
-        let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
-        let aggregator = AuthorityAggregator::new(committee, authority_clients, metrics);
+        let registry = prometheus::Registry::new();
+        let aggregator = AuthorityAggregator::new(
+            committee,
+            authority_clients,
+            AuthAggMetrics::new(&registry),
+            SafeClientMetrics::new(&registry),
+        );
         let primary_gas_id = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
         let primary_gas = get_latest(primary_gas_id, &aggregator)
             .await
@@ -653,8 +658,12 @@ async fn main() -> Result<()> {
                     .parse()
                     .unwrap(),
             );
-            let metrics = AuthAggMetrics::new(&registry);
-            let aggregator = AuthorityAggregator::new(committee, authority_clients, metrics);
+            let aggregator = AuthorityAggregator::new(
+                committee,
+                authority_clients,
+                AuthAggMetrics::new(&registry),
+                SafeClientMetrics::new(&registry),
+            );
             let mut workload = make_workload(primary_gas_id, owner, keypair, &opts);
             workload.init(&aggregator).await;
             let barrier = Arc::new(Barrier::new(opts.num_workers as usize));

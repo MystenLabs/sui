@@ -10,9 +10,9 @@ use std::collections::HashSet;
 
 use crate::metrics::FaucetMetrics;
 use prometheus::Registry;
-use sui::client_commands::WalletContext;
+use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
-    SuiExecutionStatus, SuiTransactionKind, SuiTransferSui, TransactionEffectsResponse,
+    SuiExecutionStatus, SuiTransactionKind, SuiTransactionResponse, SuiTransferSui,
 };
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -47,6 +47,14 @@ impl SimpleFaucet {
             .active_address()
             .map_err(|err| FaucetError::Wallet(err.to_string()))?;
         info!("SimpleFaucet::new with active address: {active_address}");
+
+        // Sync to have the latest status
+        SuiClientCommands::SyncClientState {
+            address: Some(active_address),
+        }
+        .execute(&mut wallet)
+        .await
+        .map_err(|err| FaucetError::Wallet(format!("Fail to sync client state: {}", err)))?;
 
         let coins = wallet
             .gas_objects(active_address)
@@ -95,7 +103,6 @@ impl SimpleFaucet {
                 break;
             }
         }
-        debug!("Planning to use coins: {:?}", coins);
         coins
     }
 
@@ -107,6 +114,8 @@ impl SimpleFaucet {
     ) -> Result<Vec<(TransactionDigest, ObjectID, u64, ObjectID)>, FaucetError> {
         let number_of_coins = amounts.len();
         let coins = self.select_coins(number_of_coins).await;
+        debug!(recipient=?to, ?uuid, "Planning to use coins: {:?}", coins);
+
         let futures: Vec<_> = coins
             .iter()
             .zip(amounts)
@@ -177,7 +186,7 @@ impl SimpleFaucet {
         budget: u64,
         amount: u64,
         uuid: Uuid,
-    ) -> Result<TransactionEffectsResponse, anyhow::Error> {
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let context = &self.wallet;
 
         let data = context
@@ -188,11 +197,7 @@ impl SimpleFaucet {
 
         let tx = Transaction::new(data, signature);
         info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");
-        let response = context
-            .gateway
-            .execute_transaction(tx)
-            .await?
-            .to_effect_response()?;
+        let response = context.gateway.execute_transaction(tx).await?;
         let effects = &response.effects;
         if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
             return Err(anyhow!("Error transferring object: {:#?}", effects.status));
@@ -242,6 +247,14 @@ impl Faucet for SimpleFaucet {
         let timer = self.metrics.process_latency.start_timer();
 
         let results = self.transfer_gases(amounts, recipient, id).await?;
+
+        if results.len() != amounts.len() {
+            return Err(FaucetError::Transfer(format!(
+                "Requested {} coins but only got {}",
+                amounts.len(),
+                results.len()
+            )));
+        }
 
         let elapsed = timer.stop_and_record();
 

@@ -11,7 +11,7 @@ import type {
     ObjectId,
     SuiObject,
     SuiMoveObject,
-    TransactionResponse,
+    SuiTransactionResponse,
     RawSigner,
     SuiAddress,
     JsonRpcProvider,
@@ -75,7 +75,7 @@ export class Coin {
         coins: SuiMoveObject[],
         amount: bigint,
         recipient: SuiAddress
-    ): Promise<TransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
         await signer.syncAccountState();
         const coin = await Coin.selectCoin(signer, coins, amount);
         return await signer.transferObject({
@@ -98,7 +98,7 @@ export class Coin {
         coins: SuiMoveObject[],
         amount: bigint,
         recipient: SuiAddress
-    ): Promise<TransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
         await signer.syncAccountState();
         const coin = await Coin.prepareCoinWithEnoughBalance(
             signer,
@@ -127,7 +127,7 @@ export class Coin {
         coins: SuiMoveObject[],
         amount: bigint,
         validator: SuiAddress
-    ): Promise<TransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
         const coin = await Coin.selectCoin(signer, coins, amount);
         await signer.syncAccountState();
         return await signer.executeMoveCall({

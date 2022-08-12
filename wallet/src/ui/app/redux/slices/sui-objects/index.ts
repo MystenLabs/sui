@@ -4,7 +4,6 @@
 import {
     getObjectExistsResponse,
     getTotalGasUsed,
-    getTransactionEffectsResponse,
     getTransactionDigest,
 } from '@mysten/sui.js';
 import {
@@ -47,6 +46,22 @@ export const fetchAllOwnedObjects = createAsyncThunk<
     return allSuiObjects;
 });
 
+export const batchFetchObject = createAsyncThunk<
+    SuiObject[],
+    ObjectId[],
+    AppThunkConfig
+>('sui-objects/batch', async (objectIDs, { extra: { api } }) => {
+    const allSuiObjects: SuiObject[] = [];
+    const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
+    for (const objRes of allObjRes) {
+        const suiObj = getObjectExistsResponse(objRes);
+        if (suiObj) {
+            allSuiObjects.push(suiObj);
+        }
+    }
+    return allSuiObjects;
+});
+
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
     async (_, { extra: { api, keypairVault }, dispatch }) => {
@@ -71,7 +86,7 @@ export const transferSuiNFT = createAsyncThunk<
 >(
     'transferSuiNFT',
     async (data, { extra: { api, keypairVault }, dispatch }) => {
-        const txRes = await ExampleNFT.TransferNFT(
+        const txn = await ExampleNFT.TransferNFT(
             api.getSignerInstance(keypairVault.getKeyPair()),
             data.nftId,
             data.recipientAddress,
@@ -79,8 +94,7 @@ export const transferSuiNFT = createAsyncThunk<
         );
 
         await dispatch(fetchAllOwnedObjects());
-        const txn = getTransactionEffectsResponse(txRes);
-        const txnDigest = txn ? getTransactionDigest(txn.certificate) : null;
+        const txnDigest = getTransactionDigest(txn.certificate);
         const txnResp = {
             timestamp_ms: txn?.timestamp_ms,
             status: txn?.effects?.status?.status,

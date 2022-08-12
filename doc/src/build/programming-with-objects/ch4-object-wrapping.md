@@ -6,9 +6,10 @@ In many programming languages, we organize data structures in layers by nesting 
 
 ```rust
 struct Foo has key {
-    info: Info,
+    id: UID,
     bar: Bar,
 }
+
 struct Bar has store {
     value: u64,
 }
@@ -21,7 +22,7 @@ In some cases, however, we want to put a Sui object struct type as a field in an
 
 ```rust
 struct Bar has key, store {
-    info: Info,
+    id: UID,
     value: u64,
 }
 ```
@@ -48,7 +49,7 @@ First of all, let's define such an object type:
 
 ```rust
 struct Object has key, store {
-    info: Info,
+    id: UID,
     scarcity: u8,
     style: u8,
 }
@@ -59,7 +60,7 @@ In a real application, we probably would make sure that there is a limited suppl
 ```rust
 public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
     let object = Object {
-        info: object::new(ctx),
+        id: object::new(ctx),
         scarcity,
         style,
     };
@@ -70,9 +71,9 @@ public entry fun create_object(scarcity: u8, style: u8, ctx: &mut TxContext) {
 Anyone can call `create_object` to create a new object with specified `scarcity` and `style`. The created object will be sent to the signer of the transaction. We will likely also want to be able to transfer the object to others:
 
 ```rust
-    public entry fun transfer_object(object: Object, recipient: address) {
-        transfer::transfer(object, recipient)
-    }
+public entry fun transfer_object(object: Object, recipient: address) {
+    transfer::transfer(object, recipient)
+}
 ```
 
 Now let's look at how we could enable a swap/trade between your object and others' objects. A straightforward idea is this: define a function that takes two objects from two accounts and swaps their ownership. But this doesn't work in Sui! Recall from [chapter 2](ch2-using-objects.md) that only object owners can send a transaction to mutate the object. So one person cannot send a transaction that would swap their own object with someone else's object.
@@ -85,7 +86,7 @@ To be able to perform a swap of objects, both objects must be owned by the same 
 
 ```rust
 struct ObjectWrapper has key {
-    info: Info,
+    id: UID,
     original_owner: address,
     to_swap: Object,
     fee: Balance<SUI>,
@@ -98,7 +99,7 @@ struct ObjectWrapper has key {
 public entry fun request_swap(object: Object, fee: Coin<SUI>, service_address: address, ctx: &mut TxContext) {
     assert!(coin::value(&fee) >= MIN_FEE, 0);
     let wrapper = ObjectWrapper {
-        info: object::new(ctx),
+        id: object::new(ctx),
         original_owner: tx_context::sender(ctx),
         to_swap: object,
         fee: coin::into_balance(fee),
@@ -182,7 +183,7 @@ Let's demonstrate this use case by designing a simple game character: A warrior 
 
 ```rust
 struct SimpleWarrior has key {
-    info: Info,
+    id: UID,
     sword: Option<Sword>,
     shield: Option<Shield>,
 }
@@ -192,12 +193,12 @@ Each `SimpleWarrior` type has an optional `sword` and `shield` wrapped in it, de
 
 ```rust
 struct Sword has key, store {
-    info: Info,
+    id: UID,
     strength: u8,
 }
 
 struct Shield has key, store {
-    info: Info,
+    id: UID,
     armor: u8,
 }
 ```
@@ -207,7 +208,7 @@ When we are creating a new warrior, we can set the `sword` and `shield` to `none
 ```rust
 public entry fun create_warrior(ctx: &mut TxContext) {
     let warrior = SimpleWarrior {
-        info: object::new(ctx),
+        id: object::new(ctx),
         sword: option::none(),
         shield: option::none(),
     };
@@ -229,7 +230,7 @@ public entry fun equip_sword(warrior: &mut SimpleWarrior, sword: Sword, ctx: &mu
 
 In the above function, we are passing a `warrior` as mutable reference of `SimpleWarrior`, and a `sword` passed by value because we need to wrap it into the `warrior`.
 
-It is important to note that because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, that sword cannot just be dropped. If we make a call to `Option::fill` without first checking and taking out the existing sword, a runtime error may occur. Hence in `equip_sword`, we first check if there is already a sword equipped, and if so, we take it out and send it back to the sender. This matches what you would expect when you equip a new sword--you get the old sword back, if there is one.
+It is important to note that because `Sword` is a Sui object type without `drop` ability, if the warrior already has a sword equipped, that sword cannot just be dropped. If we make a call to `option::fill` without first checking and taking out the existing sword, a runtime error may occur. Hence in `equip_sword`, we first check if there is already a sword equipped, and if so, we take it out and send it back to the sender. This matches what you would expect when you equip a new sword--you get the old sword back, if there is one.
 
 Full code can be found in [simple_warrior.move](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/simple_warrior.move).
 
@@ -243,12 +244,12 @@ We won't use a full example to demonstrate this use case, but wrapping through v
 
 ```rust
 struct Pet has key, store {
-    info: Info,
+    id: UID,
     cuteness: u64,
 }
 
 struct Farm has key {
-    info: Info,
+    id: UID,
     pets: vector<Pet>,
 }
 ```

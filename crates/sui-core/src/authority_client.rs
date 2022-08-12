@@ -18,9 +18,7 @@ use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::SuiError, messages::*};
 
 #[cfg(test)]
-use sui_types::{
-    base_types::ObjectID, committee::Committee, crypto::AuthorityKeyPair, object::Object,
-};
+use sui_types::{committee::Committee, crypto::AuthorityKeyPair, object::Object};
 
 use crate::epoch::reconfiguration::Reconfigurable;
 use sui_network::tonic::transport::Channel;
@@ -357,50 +355,9 @@ impl AuthorityAPI for LocalAuthorityClient {
 
 impl LocalAuthorityClient {
     #[cfg(test)]
-    pub async fn new(
-        committee: Committee,
-        address: AuthorityPublicKeyBytes,
-        secret: AuthorityKeyPair,
-        genesis: &Genesis,
-    ) -> Self {
-        use crate::authority::AuthorityStore;
-        use crate::checkpoints::CheckpointStore;
-        use parking_lot::Mutex;
-        use std::{env, fs};
-
-        // Random directory
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        let secret = Arc::pin(secret);
-
-        let mut store_path = path.clone();
-        store_path.push("store");
-        let store = Arc::new(AuthorityStore::open(&store_path, None));
-        let mut checkpoints_path = path.clone();
-        checkpoints_path.push("checkpoints");
-        let checkpoints = CheckpointStore::open(
-            &checkpoints_path,
-            None,
-            committee.epoch,
-            address,
-            secret.clone(),
-        )
-        .expect("Should not fail to open local checkpoint DB");
-
-        let state = AuthorityState::new(
-            committee.clone(),
-            address,
-            secret.clone(),
-            store,
-            None,
-            None,
-            Some(Arc::new(Mutex::new(checkpoints))),
-            genesis,
-            &prometheus::Registry::new(),
-        )
-        .await;
+    pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
+        let state =
+            AuthorityState::new_for_testing(committee, &secret, None, Some(genesis), None).await;
         Self {
             state: Arc::new(state),
             fault_config: LocalAuthorityClientFaultConfig::default(),
@@ -410,12 +367,11 @@ impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new_with_objects(
         committee: Committee,
-        address: AuthorityPublicKeyBytes,
         secret: AuthorityKeyPair,
         objects: Vec<Object>,
         genesis: &Genesis,
     ) -> Self {
-        let client = Self::new(committee, address, secret, genesis).await;
+        let client = Self::new(committee, secret, genesis).await;
 
         for object in objects {
             client.state.insert_genesis_object(object).await;

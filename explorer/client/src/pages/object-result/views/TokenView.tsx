@@ -1,5 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+import { useState, useEffect, useCallback } from 'react';
+
+import { ReactComponent as PreviewMediaIcon } from '../../../assets/SVGIcons/preview-media.svg';
 import DisplayBox from '../../../components/displaybox/DisplayBox';
 import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
@@ -9,20 +13,22 @@ import {
     getOwnerStr,
     parseImageURL,
     checkIsPropertyType,
+    extractName,
 } from '../../../utils/objectUtils';
-import { trimStdLibPrefix } from '../../../utils/stringUtils';
+import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
-function TokenView({ data, name }: { data: DataType; name?: string }) {
+function TokenView({ data }: { data: DataType }) {
     const viewedData = {
         ...data,
         objType: trimStdLibPrefix(data.objType),
-        name: data.name,
         tx_digest: data.data.tx_digest,
         owner: getOwnerStr(data.owner),
         url: parseImageURL(data.data.contents),
     };
+
+    const name = extractName(data?.data?.contents);
 
     const properties = Object.entries(viewedData.data?.contents).filter(
         ([key, value]) => key !== 'name' && checkIsPropertyType(value)
@@ -38,6 +44,25 @@ function TokenView({ data, name }: { data: DataType; name?: string }) {
             ([x, y]) => [x, JSON.stringify(y, null, 2)]
         );
     }
+
+    const [fileType, setFileType] = useState<undefined | string>(undefined);
+
+    useEffect(() => {
+        const controller = new AbortController();
+        genFileTypeMsg(viewedData.url, controller.signal)
+            .then((result) => setFileType(result))
+            .catch((err) => console.log(err));
+
+        return () => {
+            controller.abort();
+        };
+    }, [viewedData.url]);
+
+    const [isImageFullScreen, setImageFullScreen] = useState<boolean>(false);
+
+    const handlePreviewClick = useCallback(() => {
+        setImageFullScreen(true);
+    }, []);
 
     return (
         <div>
@@ -118,10 +143,35 @@ function TokenView({ data, name }: { data: DataType; name?: string }) {
                 {viewedData.url !== '' && (
                     <div className={styles.displaycontainer}>
                         <div className={styles.display}>
-                            <DisplayBox display={viewedData.url} />
+                            <DisplayBox
+                                display={viewedData.url}
+                                caption={
+                                    name || trimStdLibPrefix(viewedData.objType)
+                                }
+                                fileInfo={fileType}
+                                modalImage={[
+                                    isImageFullScreen,
+                                    setImageFullScreen,
+                                ]}
+                            />
+                            <button
+                                onClick={handlePreviewClick}
+                                className={styles.mobilepreviewmedia}
+                            >
+                                Preview Media <PreviewMediaIcon />
+                            </button>
                         </div>
                         <div className={styles.metadata}>
                             {name && <h2 className={styles.header}>{name}</h2>}
+                            {fileType && (
+                                <p className={styles.header}>{fileType}</p>
+                            )}
+                            <button
+                                onClick={handlePreviewClick}
+                                className={styles.desktoppreviewmedia}
+                            >
+                                Preview Media <PreviewMediaIcon />
+                            </button>
                         </div>
                     </div>
                 )}
@@ -150,7 +200,9 @@ function TokenView({ data, name }: { data: DataType; name?: string }) {
                 />
             )}
             <h2 className={styles.header}>Child Objects</h2>
-            <OwnedObjects id={viewedData.id} byAddress={false} />
+            <div className={styles.ownedobjects}>
+                <OwnedObjects id={viewedData.id} byAddress={false} />
+            </div>
             <h2 className={styles.header}>Transactions </h2>
             <TxForID id={viewedData.id} category="object" />
         </div>

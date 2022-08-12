@@ -48,10 +48,10 @@ use crate::{
     node_sync::{NodeSyncHandle, NodeSyncState},
 };
 use once_cell::sync::OnceCell;
-use tokio::time::Instant;
 
+use tokio::time::Instant;
 pub mod gossip;
-use gossip::{gossip_process, node_sync_process};
+use gossip::{gossip_process, node_sync_process, GossipMetrics};
 
 pub mod checkpoint_driver;
 use crate::authority_active::checkpoint_driver::CheckpointMetrics;
@@ -118,6 +118,9 @@ pub struct ActiveAuthority<A> {
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
     pub health: Arc<Mutex<HashMap<AuthorityName, AuthorityHealth>>>,
+    // Gossip Metrics including gossip between validators and
+    // node sync process between fullnode and validators
+    pub gossip_metrics: GossipMetrics,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -126,6 +129,7 @@ impl<A> ActiveAuthority<A> {
         node_sync_store: Arc<NodeSyncStore>,
         follower_store: Arc<FollowerStore>,
         net: AuthorityAggregator<A>,
+        gossip_metrics: GossipMetrics,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
@@ -135,6 +139,7 @@ impl<A> ActiveAuthority<A> {
             authority.clone(),
             net.clone(),
             node_sync_store,
+            gossip_metrics.clone(),
         ));
 
         Ok(ActiveAuthority {
@@ -149,6 +154,7 @@ impl<A> ActiveAuthority<A> {
             node_sync_handle: OnceCell::new(),
             follower_store,
             net: ArcSwap::from(net),
+            gossip_metrics,
         })
     }
 
@@ -156,7 +162,7 @@ impl<A> ActiveAuthority<A> {
         self.net.load().clone()
     }
 
-    pub fn new_with_ephemeral_storage(
+    pub fn new_with_ephemeral_storage_for_test(
         authority: Arc<AuthorityState>,
         net: AuthorityAggregator<A>,
     ) -> SuiResult<Self> {
@@ -169,7 +175,13 @@ impl<A> ActiveAuthority<A> {
             None,
         ));
         let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(sync_db_path, None));
-        Self::new(authority, node_sync_store, follower_store, net)
+        Self::new(
+            authority,
+            node_sync_store,
+            follower_store,
+            net,
+            GossipMetrics::new_for_tests(),
+        )
     }
 
     /// Returns the amount of time we should wait to be able to contact at least
@@ -240,6 +252,7 @@ impl<A> Clone for ActiveAuthority<A> {
             follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
+            gossip_metrics: self.gossip_metrics.clone(),
         }
     }
 }
@@ -251,7 +264,7 @@ where
     fn node_sync_handle(&self) -> NodeSyncHandle {
         let node_sync_state = self.node_sync_state.clone();
         self.node_sync_handle
-            .get_or_init(|| NodeSyncHandle::new(node_sync_state))
+            .get_or_init(|| NodeSyncHandle::new(node_sync_state, self.gossip_metrics.clone()))
             .clone()
     }
 

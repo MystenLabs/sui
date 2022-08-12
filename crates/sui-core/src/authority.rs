@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoints::FragmentInternalError;
+use crate::checkpoints::{ConsensusSender, FragmentInternalError};
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
@@ -17,6 +17,7 @@ use chrono::prelude::*;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use narwhal_crypto::traits::KeyPair;
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
@@ -25,6 +26,7 @@ use prometheus::{
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::{
     collections::{HashMap, VecDeque},
     pin::Pin,
@@ -79,10 +81,12 @@ pub use sui_adapter::temporary_store::TemporaryStore;
 pub mod authority_store_tables;
 
 mod authority_store;
+use crate::epoch::epoch_store::EpochStore;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
 use sui_types::committee::EpochId;
+use sui_types::crypto::AuthorityKeyPair;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -91,7 +95,7 @@ use sui_types::sui_system_state::SuiSystemState;
 
 pub mod authority_notifier;
 
-pub const MAX_ITEMS_LIMIT: u64 = 100_000;
+pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 const MAX_TX_RECOVERY_RETRY: u32 = 3;
@@ -118,6 +122,8 @@ pub struct AuthorityMetrics {
     pub follower_connections: IntCounter,
     pub follower_connections_concurrent: IntGauge,
 
+    // TODO: consolidate these into GossipMetrics
+    // (issue: https://github.com/MystenLabs/sui/issues/3926)
     pub gossip_queued_count: IntCounter,
     pub gossip_sync_count: IntCounter,
     pub gossip_task_success_count: IntCounter,
@@ -300,6 +306,8 @@ pub struct AuthorityState {
     /// The checkpoint store
     pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
+    pub(crate) epoch_store: Arc<EpochStore>,
+
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
     /// and create batches for this authority.
@@ -356,7 +364,7 @@ impl AuthorityState {
             SuiError::InvalidSystemTransaction
         );
 
-        if self.halted.load(Ordering::SeqCst) {
+        if self.is_halted() {
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
@@ -386,13 +394,14 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        let transaction_digest = *transaction.digest();
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.data.kind);
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
             self.metrics.signature_errors.inc();
             e
         })?;
-        let transaction_digest = *transaction.digest();
 
         let response = self.handle_transaction_impl(transaction).await;
         match response {
@@ -564,7 +573,7 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.data.kind.is_system_tx() {
             tx_guard.release();
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -921,9 +930,7 @@ impl AuthorityState {
         };
 
         // Ensure we are not doing too much work per request
-        if request.length > MAX_ITEMS_LIMIT {
-            return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
-        }
+        let length = std::cmp::min(request.length, MAX_ITEMS_LIMIT);
 
         // If we do not have a start, pick next sequence number that has
         // not yet been put into a batch.
@@ -936,7 +943,7 @@ impl AuthorityState {
                     .next_sequence_number
             }
         };
-        let end = start + request.length;
+        let end = start + length;
 
         let (batches, transactions) = self.database.batches_and_transactions(start, end)?;
 
@@ -1001,8 +1008,8 @@ impl AuthorityState {
 
     pub fn handle_epoch_request(&self, request: &EpochRequest) -> SuiResult<EpochResponse> {
         let epoch_info = match &request.epoch_id {
-            Some(id) => self.database.get_authenticated_epoch(id)?,
-            None => Some(self.database.get_latest_authenticated_epoch()),
+            Some(id) => self.epoch_store.get_authenticated_epoch(id)?,
+            None => Some(self.epoch_store.get_latest_authenticated_epoch()),
         };
         Ok(EpochResponse { epoch_info })
     }
@@ -1014,6 +1021,7 @@ impl AuthorityState {
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
+        epoch_store: Arc<EpochStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -1027,9 +1035,8 @@ impl AuthorityState {
             adapter::new_move_vm(native_functions.clone())
                 .expect("We defined natives to not fail here"),
         );
-        // TODO: update this function to not take genesis, committee if store already exists
         // Only initialize an empty database.
-        let committee = if store
+        if store
             .database_is_empty()
             .expect("Database read should not fail.")
         {
@@ -1037,12 +1044,15 @@ impl AuthorityState {
                 .bulk_object_insert(&genesis.objects().iter().collect::<Vec<_>>())
                 .await
                 .expect("Cannot bulk insert genesis objects");
-            store
+        }
+
+        let committee = if epoch_store.database_is_empty() {
+            epoch_store
                 .init_genesis_epoch(genesis_committee.clone())
                 .expect("Init genesis epoch data must not fail");
             genesis_committee
         } else {
-            store
+            epoch_store
                 .get_latest_authenticated_epoch()
                 .epoch_info()
                 .committee()
@@ -1065,6 +1075,7 @@ impl AuthorityState {
             module_cache: SyncModuleCache::new(ResolverWrapper(store.clone())),
             event_handler,
             checkpoints,
+            epoch_store,
             batch_channels: tx,
             batch_notifier: Arc::new(
                 authority_notifier::TransactionNotifier::new(store.clone())
@@ -1123,6 +1134,61 @@ impl AuthorityState {
         state
     }
 
+    pub async fn new_for_testing(
+        genesis_committee: Committee,
+        key: &AuthorityKeyPair,
+        store_base_path: Option<PathBuf>,
+        genesis: Option<&Genesis>,
+        consensus_sender: Option<Box<dyn ConsensusSender>>,
+    ) -> Self {
+        let secret = Arc::pin(key.copy());
+        let path = match store_base_path {
+            Some(path) => path,
+            None => {
+                let dir = std::env::temp_dir();
+                let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+                std::fs::create_dir(&path).unwrap();
+                path
+            }
+        };
+        let default_genesis = Genesis::get_default_genesis();
+        let genesis = match genesis {
+            Some(genesis) => genesis,
+            None => &default_genesis,
+        };
+
+        let store = Arc::new(AuthorityStore::open(&path.join("store"), None));
+        let mut checkpoints = CheckpointStore::open(
+            &path.join("checkpoints"),
+            None,
+            genesis_committee.epoch,
+            secret.public().into(),
+            secret.clone(),
+        )
+        .expect("Should not fail to open local checkpoint DB");
+        if let Some(consensus_sender) = consensus_sender {
+            checkpoints
+                .set_consensus(consensus_sender)
+                .expect("No issues");
+        }
+
+        let epochs = Arc::new(EpochStore::new(path.join("epochs")));
+
+        AuthorityState::new(
+            genesis_committee.clone(),
+            secret.public().into(),
+            secret.clone(),
+            store,
+            epochs,
+            None,
+            None,
+            Some(Arc::new(Mutex::new(checkpoints))),
+            genesis,
+            &prometheus::Registry::new(),
+        )
+        .await
+    }
+
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
     pub async fn process_tx_recovery_log(&self, limit: Option<usize>) -> SuiResult {
         let mut limit = limit.unwrap_or(usize::max_value());
@@ -1176,22 +1242,35 @@ impl AuthorityState {
             self.epoch() + 1 == new_committee.epoch,
             SuiError::from("Invalid new epoch to sign and update")
         );
-        self.database.sign_new_epoch(
+        let cur_epoch = new_committee.epoch;
+        let latest_epoch = self.epoch_store.get_latest_authenticated_epoch();
+        fp_ensure!(
+            latest_epoch.epoch() + 1 == cur_epoch,
+            SuiError::from("Unexpected new epoch number")
+        );
+
+        let signed_epoch = SignedEpoch::new(
             new_committee.clone(),
             self.name,
             &*self.secret,
             next_checkpoint,
-        )?;
+            latest_epoch.epoch_info(),
+        );
+        self.epoch_store
+            .epochs
+            .insert(&cur_epoch, &AuthenticatedEpoch::Signed(signed_epoch))?;
         // TODO: Do we want to make it possible to subscribe to committee changes?
         self.committee.swap(Arc::new(new_committee));
         Ok(())
     }
 
     pub(crate) fn promote_signed_epoch_to_cert(&self, cert: CertifiedEpoch) -> SuiResult {
-        self.database.store_epoch_cert(cert)
+        Ok(self.epoch_store.epochs.insert(
+            &cert.epoch_info.epoch(),
+            &AuthenticatedEpoch::Certified(cert),
+        )?)
     }
 
-    #[cfg(test)]
     pub(crate) fn is_halted(&self) -> bool {
         self.halted.load(Ordering::Relaxed)
     }
@@ -1204,7 +1283,7 @@ impl AuthorityState {
         self.halted.store(false, Ordering::Relaxed);
     }
 
-    pub(crate) fn db(&self) -> Arc<AuthorityStore> {
+    pub fn db(&self) -> Arc<AuthorityStore> {
         self.database.clone()
     }
 
@@ -1425,7 +1504,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);

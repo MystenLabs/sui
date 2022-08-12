@@ -75,7 +75,7 @@ impl Genesis {
                 };
                 let workers = [(
                     0, // worker_id
-                    narwhal_config::WorkerAddresses {
+                    narwhal_config::WorkerInfo {
                         primary_to_worker: validator.narwhal_primary_to_worker.clone(),
                         transactions: validator.narwhal_consensus_address.clone(),
                         worker_to_worker: validator.narwhal_worker_to_worker.clone(),
@@ -136,6 +136,16 @@ impl Genesis {
 
     pub fn to_bytes(&self) -> Vec<u8> {
         bcs::to_bytes(self).expect("failed to serialize genesis")
+    }
+
+    pub fn sha3(&self) -> [u8; 32] {
+        use digest::Digest;
+        use std::io::Write;
+
+        let mut digest = sha3::Sha3_256::default();
+        digest.write_all(&self.to_bytes()).unwrap();
+        let hash = digest.finalize();
+        hash.into()
     }
 }
 
@@ -451,9 +461,12 @@ fn process_package(
         &mut gas_status,
     )?;
 
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = temporary_store.into_inner();
+    let (
+        InnerTemporaryStore {
+            written, deleted, ..
+        },
+        _events,
+    ) = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -501,9 +514,12 @@ pub fn generate_genesis_system_object(
         genesis_ctx,
     )?;
 
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = temporary_store.into_inner();
+    let (
+        InnerTemporaryStore {
+            written, deleted, ..
+        },
+        _events,
+    ) = temporary_store.into_inner();
 
     store.finish(written, deleted);
 

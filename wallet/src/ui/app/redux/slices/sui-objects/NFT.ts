@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import type { TransactionResponse, RawSigner } from '@mysten/sui.js';
+import type { SuiTransactionResponse, RawSigner } from '@mysten/sui.js';
 
 // TODO: Remove this after internal dogfooding
 export class ExampleNFT {
@@ -15,7 +15,7 @@ export class ExampleNFT {
         name?: string,
         description?: string,
         imageUrl?: string
-    ): Promise<TransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
         await signer.syncAccountState();
         return await signer.executeMoveCall({
             packageObjectId: '0x2',
@@ -39,7 +39,7 @@ export class ExampleNFT {
         nftId: string,
         recipientID: string,
         transferCost: number
-    ): Promise<TransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
         await signer.syncAccountState();
         return await signer.transferObject({
             objectId: nftId,

@@ -11,9 +11,10 @@ use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
+use sui_core::safe_client::SafeClientMetrics;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::ActiveAuthority,
+    authority_active::{gossip::GossipMetrics, ActiveAuthority},
     authority_client::{
         make_network_authority_client_sets_from_genesis,
         make_network_authority_client_sets_from_system_state, NetworkAuthorityClient,
@@ -32,6 +33,7 @@ use sui_storage::{
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tracing::info;
 
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::http_server::HttpServerHandle;
@@ -79,6 +81,7 @@ impl SuiNode {
         let secret = Arc::pin(config.key_pair().copy());
         let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
+        let epoch_store = Arc::new(EpochStore::new(config.db_path().join("epochs")));
 
         let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
             &config.db_path().join("checkpoints"),
@@ -117,6 +120,7 @@ impl SuiNode {
                 config.public_key(),
                 secret,
                 store,
+                epoch_store,
                 index_store.clone(),
                 event_store,
                 Some(checkpoint_store),
@@ -142,6 +146,7 @@ impl SuiNode {
             state.clone_committee(),
             authority_clients,
             AuthAggMetrics::new(&prometheus_registry),
+            SafeClientMetrics::new(&prometheus_registry),
         );
 
         // TODO: maybe have a config enum that takes care of this for us.
@@ -169,6 +174,7 @@ impl SuiNode {
                     pending_store,
                     follower_store,
                     net,
+                    GossipMetrics::new(&prometheus_registry),
                 )?);
                 active = Some(Arc::clone(&active_authority));
 

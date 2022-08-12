@@ -28,7 +28,7 @@ use crate::{format_signature_token, resolve_struct, verification_failure, INIT_F
 /// - The function must have `Visibility::Private`
 /// - The function can have at most two parameters:
 ///   - mandatory &mut TxContext (see `is_tx_context`) in the last position
-///   - optional characteristic type (see char_type verifier pass) passed by value in the first
+///   - optional one-time witness type (see one_time_witness verifier pass) passed by value in the first
 ///   position
 ///
 /// For transaction entry points
@@ -132,9 +132,9 @@ fn verify_init_function(module: &CompiledModule, fdef: &FunctionDefinition) -> R
     }
 
     // Checking only the last (and possibly the only) parameter here. If there are two parameters,
-    // then the first parameter must be of a characteristic type and must be passed by value. This
-    // is checked by the verifier pass handling characteristic types (char_type) - please see the
-    // description of this pass for additional details.
+    // then the first parameter must be of a one-time witness type and must be passed by value. This
+    // is checked by the verifier for pass one-time witness value (one_time_witness_verifier) -
+    // please see the description of this pass for additional details.
     if is_tx_context(view, &parameters[parameters.len() - 1]) {
         Ok(())
     } else {

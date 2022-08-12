@@ -92,17 +92,23 @@ Debian distributions and tests against
 [Ubuntu version 18.04 (Bionic Beaver)](https://releases.ubuntu.com/18.04/).
 
 That said, you are welcome to run a Sui fullnode on the operating system of your
-choosing and submit changes to accommodate that environment.
+choosing and submit changes to accommodate that environment. See [Install Sui](../build/install.md)
+for setup instructions for each operating system.
 
-Before building, ensure the required tools are installed in your environment as
-outlined in the [Prerequisites](../build/install.md#prerequisites) section. Note,
-you will fork the Sui repository here rather than clone it as described in
+Specifically, ensure the required tools are installed and updated in your environment as
+outlined in the [Prerequisites](../build/install.md#prerequisites) section. In particular,
+ensure [Rust](../build/install.md#rust) is up-to-date.
+
+Similarly, if you are using Windows Subsystem for Linux (WSL), install a fresh copy of
+[CLang/LLVM](https://releases.llvm.org/download.html), as described in [Prerequisites](../build/install.md#prerequisites).
+
+Note, you will fork the Sui repository here rather than clone it as described in
 *Prerequisites*. So you can skip that step.
 
 If you are using Linux, install these extra dependencies. For example, in Ubuntu, run:
 ```shell
     $ apt-get update \
-    && DEBIAN_FRONTEND=noninteractive TZ=Etc/UTC apt-get install -y --no-install-recommends \
+    && apt-get install -y --no-install-recommends \
     tzdata \
     git \
     ca-certificates \
@@ -113,6 +119,8 @@ If you are using Linux, install these extra dependencies. For example, in Ubuntu
     libclang-dev \
     cmake
 ```
+
+If you are using macOS or Windows Subsystem for Linux (WSL), the command will be similar. Remember to install [CLang](https://clang.llvm.org/) in WSL.
 
 ## Configuring your fullnode
 
@@ -127,10 +135,10 @@ to run a Sui fullnode using Docker, including [resetting the environment](https:
 
 ### Building from source
 
-Remember to install the required tools in your environment as
+1. Install the required tools in your environment as
 outlined in the [Prerequisites](../build/install.md#prerequisites) section if you
-haven't already. Then:
-
+haven't already. Make sure your entire toolchain stays up-to-date. If you encounter
+issues building and installing the Sui binaries, update all packages above and re-install.
 1. Set up your fork of the Sui repository:
     1. Go to the [Sui repository](https://github.com/MystenLabs/sui) on GitHub
        and click the *Fork* button in the top right-hand corner of the screen.

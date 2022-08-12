@@ -11,7 +11,7 @@ use multiaddr::Multiaddr;
 use rocksdb::Options;
 use std::{
     env, fs, panic,
-    path::{Path, PathBuf},
+    path::PathBuf,
     process::{Child, Command},
     sync::Arc,
     thread,
@@ -19,6 +19,7 @@ use std::{
     time::Duration,
 };
 use sui_core::authority::*;
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_types::{
     base_types::{SuiAddress, *},
     committee::*,
@@ -98,10 +99,7 @@ impl ValidatorPreparer {
                 let validator_config = &network_config.validator_configs()[0];
                 let committee = network_config.committee();
 
-                // Create a random directory to store the DB
-                let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
                 let auth_state = make_authority_state(
-                    &path,
                     db_cpus as i32,
                     &committee,
                     &validator_config.public_key(),
@@ -257,14 +255,15 @@ pub fn get_multithread_runtime() -> Runtime {
 }
 
 fn make_authority_state(
-    store_path: &Path,
     db_cpus: i32,
     committee: &Committee,
     pubx: &AuthorityPublicKeyBytes,
     secx: AuthorityKeyPair,
 ) -> (AuthorityState, Arc<AuthorityStore>) {
-    fs::create_dir(&store_path).unwrap();
-    info!("Open database on path: {:?}", store_path.as_os_str());
+    // Create a random directory to store the DB
+    let path = env::temp_dir().join(format!("DB_{:?}", ObjectID::random()));
+    fs::create_dir(&path).unwrap();
+    info!("Open database on path: {:?}", path.as_os_str());
 
     let mut opts = Options::default();
     opts.increase_parallelism(db_cpus);
@@ -279,7 +278,8 @@ fn make_authority_state(
     // manually.
     // opts.set_manual_wal_flush(true);
 
-    let store = Arc::new(AuthorityStore::open(store_path, Some(opts)));
+    let store = Arc::new(AuthorityStore::open(&path.join("store"), Some(opts)));
+    let epoch_store = Arc::new(EpochStore::new(path.join("epochs")));
     (
         Runtime::new().unwrap().block_on(async {
             AuthorityState::new(
@@ -287,6 +287,7 @@ fn make_authority_state(
                 *pubx,
                 Arc::pin(secx),
                 store.clone(),
+                epoch_store,
                 None,
                 None,
                 None,

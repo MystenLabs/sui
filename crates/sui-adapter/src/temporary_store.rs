@@ -34,9 +34,12 @@ pub struct TemporaryStore<S> {
     // objects
     store: S,
     tx_digest: TransactionDigest,
-    objects: BTreeMap<ObjectID, Object>,
-    mutable_inputs: Vec<ObjectRef>,      // Inputs that are mutable
-    written: BTreeMap<ObjectID, Object>, // Objects written
+    input_objects: BTreeMap<ObjectID, Object>,
+    mutable_input_refs: Vec<ObjectRef>, // Inputs that are mutable
+    // When an object is being written, we need to ensure that a few invariants hold.
+    // It's critical that we always call write_object to update `_written`, instead of writing
+    // into _written directly.
+    _written: BTreeMap<ObjectID, Object>, // Objects written
     /// Objects actively deleted.
     /// Child count is Some for Normal/UnwrapThenDelete events, and is None for wraps
     deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
@@ -45,22 +48,6 @@ pub struct TemporaryStore<S> {
     // New object IDs created during the transaction, needed for
     // telling apart unwrapped objects.
     created_object_ids: HashSet<ObjectID>,
-}
-
-macro_rules! into_inner {
-    ($store:ident) => {{
-        let written = $store
-            .written
-            .into_iter()
-            .map(|(id, obj)| (id, (obj.compute_object_reference(), obj)))
-            .collect();
-        InnerTemporaryStore {
-            objects: $store.objects,
-            mutable_inputs: $store.mutable_inputs,
-            written,
-            deleted: $store.deleted,
-        }
-    }};
 }
 
 impl<S> TemporaryStore<S> {
@@ -72,9 +59,9 @@ impl<S> TemporaryStore<S> {
         Self {
             store,
             tx_digest,
-            objects,
-            mutable_inputs,
-            written: BTreeMap::new(),
+            input_objects: objects,
+            mutable_input_refs: mutable_inputs,
+            _written: BTreeMap::new(),
             deleted: BTreeMap::new(),
             events: Vec::new(),
             created_object_ids: HashSet::new(),
@@ -83,11 +70,7 @@ impl<S> TemporaryStore<S> {
 
     // Helpers to access private fields
     pub fn objects(&self) -> &BTreeMap<ObjectID, Object> {
-        &self.objects
-    }
-
-    pub fn written(&self) -> &BTreeMap<ObjectID, Object> {
-        &self.written
+        &self.input_objects
     }
 
     pub fn deleted(&self) -> &BTreeMap<ObjectID, (SequenceNumber, DeleteKind)> {
@@ -95,12 +78,25 @@ impl<S> TemporaryStore<S> {
     }
 
     /// Break up the structure and return its internal stores (objects, active_inputs, written, deleted)
-    pub fn into_inner(self) -> InnerTemporaryStore {
+    pub fn into_inner(self) -> (InnerTemporaryStore, Vec<Event>) {
         #[cfg(debug_assertions)]
         {
             self.check_invariants();
         }
-        into_inner!(self)
+        let written = self
+            ._written
+            .into_iter()
+            .map(|(id, obj)| (id, (obj.compute_object_reference(), obj)))
+            .collect();
+        (
+            InnerTemporaryStore {
+                objects: self.input_objects,
+                mutable_inputs: self.mutable_input_refs,
+                written,
+                deleted: self.deleted,
+            },
+            self.events,
+        )
     }
 
     /// For every object from active_inputs (i.e. all mutable objects), if they are not
@@ -108,16 +104,23 @@ impl<S> TemporaryStore<S> {
     /// sequence number. This is required to achieve safety.
     /// We skip the gas object, because gas object will be updated separately.
     pub fn ensure_active_inputs_mutated(&mut self, gas_object_id: &ObjectID) {
-        for (id, _seq, _) in &self.mutable_inputs {
+        let mut to_be_updated = vec![];
+        for (id, _seq, _) in &self.mutable_input_refs {
             if id == gas_object_id {
                 continue;
             }
-            if !self.written.contains_key(id) && !self.deleted.contains_key(id) {
-                let mut object = self.objects[id].clone();
+            if !self._written.contains_key(id) && !self.deleted.contains_key(id) {
+                let mut object = self.input_objects[id].clone();
                 // Active input object must be Move object.
                 object.data.try_as_move_mut().unwrap().increment_version();
-                self.written.insert(*id, object);
+                // We cannot update here but have to push to `to_be_updated` and update latter
+                // because the for loop is holding a reference to `self`, and calling
+                // `self.write_object` requires a mutable reference to `self`.
+                to_be_updated.push(object);
             }
+        }
+        for object in to_be_updated {
+            self.write_object(object);
         }
     }
 
@@ -139,9 +142,9 @@ impl<S> TemporaryStore<S> {
         )?;
         objects_to_update.push(gas_object.clone());
 
-        for (object_id, object) in &mut self.written {
+        for (object_id, object) in &mut self._written {
             let (old_object_size, storage_rebate) =
-                if let Some(old_object) = self.objects.get(object_id) {
+                if let Some(old_object) = self.input_objects.get(object_id) {
                     (
                         old_object.object_size_for_gas_metering(),
                         old_object.storage_rebate,
@@ -167,7 +170,7 @@ impl<S> TemporaryStore<S> {
             // Otherwise if an object is in `self.deleted` but not in `self.objects`, it means this
             // object was unwrapped and then deleted. The rebate would have been provided already when
             // mutating the object that wrapped this object.
-            if let Some(old_object) = self.objects.get(object_id) {
+            if let Some(old_object) = self.input_objects.get(object_id) {
                 gas_status.charge_storage_mutation(
                     old_object.object_size_for_gas_metering(),
                     0,
@@ -195,7 +198,7 @@ impl<S> TemporaryStore<S> {
         gas_object_ref: ObjectRef,
     ) -> (InnerTemporaryStore, TransactionEffects) {
         let written = self
-            .written
+            ._written
             .iter()
             .map(|(id, obj)| (*id, (obj.compute_object_reference(), obj.owner)))
             .collect::<BTreeMap<_, _>>();
@@ -213,7 +216,7 @@ impl<S> TemporaryStore<S> {
         for (id, object_ref_and_owner) in written {
             match (
                 self.created_object_ids.contains(&id),
-                self.objects.contains_key(&id),
+                self.input_objects.contains_key(&id),
             ) {
                 (true, _) => created.push(object_ref_and_owner),
                 (false, true) => mutated.push(object_ref_and_owner),
@@ -238,7 +241,7 @@ impl<S> TemporaryStore<S> {
                 }
             }
         }
-        let inner = into_inner!(self);
+        let (inner, events) = self.into_inner();
 
         let effects = TransactionEffects {
             status,
@@ -251,7 +254,7 @@ impl<S> TemporaryStore<S> {
             deleted,
             wrapped,
             gas_object: updated_gas_object_info,
-            events: self.events,
+            events,
             dependencies: transaction_dependencies,
         };
         (inner, effects)
@@ -264,7 +267,7 @@ impl<S> TemporaryStore<S> {
         debug_assert!(
             {
                 let mut used = HashSet::new();
-                self.written.iter().all(|(elt, _)| used.insert(elt));
+                self._written.iter().all(|(elt, _)| used.insert(elt));
                 self.deleted.iter().all(move |elt| used.insert(elt.0))
             },
             "Object both written and deleted."
@@ -274,20 +277,31 @@ impl<S> TemporaryStore<S> {
         debug_assert!(
             {
                 let mut used = HashSet::new();
-                self.written.iter().all(|(elt, _)| used.insert(elt));
+                self._written.iter().all(|(elt, _)| used.insert(elt));
                 self.deleted.iter().all(|elt| used.insert(elt.0));
 
-                self.mutable_inputs.iter().all(|elt| !used.insert(&elt.0))
+                self.mutable_input_refs
+                    .iter()
+                    .all(|elt| !used.insert(&elt.0))
             },
             "Mutable input neither written nor deleted."
         );
 
         debug_assert!(
             {
-                let input_ids = self.objects.clone().into_keys().collect();
+                let input_ids = self.input_objects.clone().into_keys().collect();
                 self.created_object_ids.is_disjoint(&input_ids)
             },
             "Newly created object IDs showed up in the input",
+        );
+
+        debug_assert!(
+            {
+                self._written
+                    .iter()
+                    .all(|(_, obj)| obj.previous_transaction == self.tx_digest)
+            },
+            "Object previous transaction not properly set",
         );
     }
 }
@@ -295,7 +309,7 @@ impl<S> TemporaryStore<S> {
 impl<S> Storage for TemporaryStore<S> {
     /// Resets any mutations and deletions recorded in the store.
     fn reset(&mut self) {
-        self.written.clear();
+        self._written.clear();
         self.deleted.clear();
         self.events.clear();
         self.created_object_ids.clear();
@@ -304,7 +318,7 @@ impl<S> Storage for TemporaryStore<S> {
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
         debug_assert!(self.deleted.get(id) == None);
-        self.written.get(id).or_else(|| self.objects.get(id))
+        self._written.get(id).or_else(|| self.input_objects.get(id))
     }
 
     fn set_create_object_ids(&mut self, ids: HashSet<ObjectID>) {
@@ -331,12 +345,12 @@ impl<S> Storage for TemporaryStore<S> {
         // The adapter is not very disciplined at filling in the correct
         // previous transaction digest, so we ensure it is correct here.
         object.previous_transaction = self.tx_digest;
-        self.written.insert(object.id(), object);
+        self._written.insert(object.id(), object);
     }
 
     fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
         // there should be no deletion after write
-        debug_assert!(self.written.get(id) == None);
+        debug_assert!(self._written.get(id) == None);
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(object) = self.read_object(id) {
