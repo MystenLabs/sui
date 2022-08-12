@@ -11,7 +11,6 @@ use sui_types::{
 };
 
 use futures::{stream::FuturesUnordered, StreamExt};
-use std::ops::Deref;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::time::{sleep, Duration};
