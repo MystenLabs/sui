@@ -21,6 +21,11 @@ pub enum DeleteKind {
     Wrap,
 }
 
+pub enum ObjectChange {
+    Write(Object),
+    Delete(SequenceNumber, DeleteKind),
+}
+
 /// An abstraction of the (possibly distributed) store for objects, and (soon) events and transactions
 pub trait Storage {
     fn reset(&mut self);
@@ -31,22 +36,10 @@ pub trait Storage {
     // This is needed to determine unwrapped objects at the end.
     fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>);
 
-    fn write_object(&mut self, object: Object);
-
     /// Record an event that happened during execution
     fn log_event(&mut self, event: Event);
 
-    fn delete_object(
-        &mut self,
-        id: &ObjectID,
-        version: SequenceNumber,
-        child_count: Option<u32>,
-        kind: DeleteKind,
-    );
-
-    fn change_child_counts(&mut self, deltas: BTreeMap<ObjectID, i64>) -> Result<(), ObjectID>;
-
-    fn deleted_objects_child_count(&mut self) -> Vec<(ObjectID, Option<u32>, DeleteKind)>;
+    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>);
 }
 
 pub trait BackingPackageStore {

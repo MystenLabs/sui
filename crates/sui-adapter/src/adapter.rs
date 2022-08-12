@@ -33,7 +33,7 @@ use sui_types::{
     id::UID,
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
-    storage::{DeleteKind, ParentSync, Storage},
+    storage::{DeleteKind, ObjectChange, ParentSync, Storage},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_verifier::{
@@ -287,8 +287,10 @@ pub fn store_package_and_init_modules<
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
     let package_object = Object::new_package(modules, ctx.digest());
-    state_view.set_create_object_ids(BTreeSet::from([package_object.id()]));
-    state_view.write_object(package_object);
+    let id = package_object.id();
+    state_view.set_create_object_ids(BTreeSet::from([id]));
+    let changes = BTreeMap::from([(id, ObjectChange::Write(package_object))]);
+    state_view.apply_object_changes(changes);
 
     init_modules(state_view, vm, modules_to_init, ctx, gas_status)
 }
@@ -444,6 +446,7 @@ fn process_successful_execution<
     ctx: &TxContext,
     mut object_owner_map: BTreeMap<SuiAddress, SuiAddress>,
 ) -> Result<(), ExecutionError> {
+    let mut changes = BTreeMap::new();
     for (obj_id, new_contents) in mutable_refs {
         // update contents and increment sequence number
         let mut obj = state_view
@@ -454,7 +457,7 @@ fn process_successful_execution<
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
             .update_contents_and_increment_version(new_contents);
-        state_view.write_object(obj);
+        changes.insert(obj_id, ObjectChange::Write(obj));
     }
     let tx_digest = ctx.digest();
     // newly_generated_ids contains all object IDs generated in this transaction.
@@ -490,7 +493,7 @@ fn process_successful_execution<
                     EventType::ShareObject => Owner::Shared,
                     _ => unreachable!(),
                 };
-                handle_transfer(
+                let obj = handle_transfer(
                     ctx.sender(),
                     new_owner,
                     type_,
@@ -505,7 +508,8 @@ fn process_successful_execution<
                     &mut newly_generated_unused,
                     &mut frozen_object_ids,
                     &mut child_count_deltas,
-                )
+                )?;
+                changes.insert(obj.id(), ObjectChange::Write(obj));
             }
             EventType::DeleteObjectID => {
                 // unwrap safe because this event can only be emitted from processing
@@ -519,7 +523,7 @@ fn process_successful_execution<
                     newly_generated_deleted.insert(*obj_id);
                 } else {
                     match by_value_objects.remove(obj_id) {
-                        Some((owner, version, child_count)) => {
+                        Some((owner, version, child_count_opt)) => {
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
                                 module_id.name(),
@@ -530,12 +534,14 @@ fn process_successful_execution<
                                 let delta = child_count_deltas.entry(parent_id.into()).or_insert(0);
                                 *delta -= 1
                             }
-                            state_view.delete_object(
-                                obj_id,
-                                version,
-                                child_count,
-                                DeleteKind::Normal,
-                            )
+                            // update the child_count for the object being deleted
+                            // this must be zero at the end
+                            if let Some(child_count) = child_count_opt {
+                                let delta = child_count_deltas.entry(*obj_id).or_insert(0);
+                                *delta += child_count as i64;
+                            }
+                            changes
+                                .insert(*obj_id, ObjectChange::Delete(version, DeleteKind::Normal));
                         }
                         None => {
                             // This object wasn't in the input, and is being deleted. It must
@@ -564,16 +570,16 @@ fn process_successful_execution<
                                     }
                                 };
                             unwrap_and_deleted.insert(*obj_id);
-                            state_view.delete_object(
-                                obj_id,
-                                previous_version,
-                                None,
-                                DeleteKind::UnwrapThenDelete,
-                            )
+                            changes.insert(
+                                *obj_id,
+                                ObjectChange::Delete(
+                                    previous_version,
+                                    DeleteKind::UnwrapThenDelete,
+                                ),
+                            );
                         }
                     }
                 }
-                Ok(())
             }
             EventType::User => {
                 match type_ {
@@ -588,21 +594,24 @@ fn process_successful_execution<
                         "Native function emit_event<T> ensures that T is always bound to structs"
                     ),
                 };
-                Ok(())
             }
-        }?;
+        };
     }
 
     // any object left in `by_value_objects` is an input passed by value that was not transferred,
     // frozen, shared, or deleted.
     // This means that either the object was wrapped inside another object that is in the Sui object
     // pool
-    for (id, (owner, version, child_count)) in by_value_objects {
+    for (id, (owner, version, child_count_opt)) in by_value_objects {
         if let Owner::ObjectOwner(parent) = owner {
             let delta = child_count_deltas.entry(parent.into()).or_insert(0);
             *delta -= 1
         }
-        state_view.delete_object(&id, version, child_count, DeleteKind::Wrap);
+        if let Some(child_count) = child_count_opt {
+            let delta = child_count_deltas.entry(id).or_insert(0);
+            *delta += child_count as i64;
+        }
+        changes.insert(id, ObjectChange::Delete(version, DeleteKind::Wrap));
     }
 
     // Check validity of child object counts
@@ -611,7 +620,7 @@ fn process_successful_execution<
     // - Any frozen object (made immutable) cannot have child objects
     for id in newly_generated_deleted {
         // check that the newly generated (but not used) object does not have children
-        // we remove it here as it is not needed for `change_child_counts`
+        // we remove it here as it is not needed for updating the written object child counts
         let delta = child_count_deltas.remove(&id).unwrap_or(0);
         if delta != 0 {
             return Err(ExecutionErrorKind::InvalidParentDeletion {
@@ -624,31 +633,52 @@ fn process_successful_execution<
 
     for id in newly_generated_unused {
         // check that any remaining non-zero delta was created this transaction and wrapped
-        // we remove it here as it is not needed for `change_child_counts`
+        // we remove it here as it is not needed for updating the written object child counts
         let delta = child_count_deltas.remove(&id).unwrap_or(0);
         if delta != 0 {
             debug_assert!(delta > 0);
             return Err(ExecutionErrorKind::InvalidParentDeletion {
                 parent: id,
-                kind: Some(DeleteKind::UnwrapThenDelete),
+                kind: Some(DeleteKind::Wrap),
             }
             .into());
         }
     }
 
     // check that all deleted objects have a child count of zero
-    state_view
-        .change_child_counts(child_count_deltas)
-        .map_err(|object| ExecutionErrorKind::TooManyChildObjects { object })?;
-    for (deleted_parent_id, child_count, kind) in state_view.deleted_objects_child_count() {
-        if child_count.unwrap_or(0) != 0 {
-            return Err(ExecutionErrorKind::InvalidParentDeletion {
-                parent: deleted_parent_id,
-                kind: Some(kind),
+    for (id, delta) in child_count_deltas {
+        if delta == 0 {
+            continue;
+        }
+        let change = changes.entry(id).or_insert_with(|| {
+            let mut object = state_view.read_object(&id).unwrap().clone();
+            // Active input object must be Move object.
+            object.data.try_as_move_mut().unwrap().increment_version();
+            ObjectChange::Write(object)
+        });
+        match change {
+            ObjectChange::Write(object) => {
+                object
+                    .data
+                    .try_as_move_mut()
+                    .expect("must be move object")
+                    .change_child_count(delta)
+                    .map_err(|()| ExecutionErrorKind::TooManyChildObjects { object: id })?;
             }
-            .into());
+            ObjectChange::Delete(_, kind) => {
+                if delta != 0 {
+                    return Err(ExecutionErrorKind::InvalidParentDeletion {
+                        parent: id,
+                        kind: Some(*kind),
+                    }
+                    .into());
+                }
+            }
         }
     }
+
+    // apply object writes and object deletions
+    state_view.apply_object_changes(changes);
 
     // check all frozen objects have a child count of zero
     for frozen_object_id in frozen_object_ids {
@@ -688,7 +718,7 @@ fn handle_transfer<
     newly_generated_unused: &mut BTreeSet<ObjectID>,
     frozen_object_ids: &mut BTreeSet<ObjectID>,
     child_count_deltas: &mut BTreeMap<ObjectID, i64>,
-) -> Result<(), ExecutionError> {
+) -> Result<Object, ExecutionError> {
     let s_type = match type_ {
         TypeTag::Struct(s_type) => s_type,
         _ => unreachable!("Only structs can be transferred"),
@@ -812,8 +842,7 @@ fn handle_transfer<
         }
     }
 
-    state_view.write_object(obj);
-    Ok(())
+    Ok(obj)
 }
 
 #[cfg(debug_assertions)]

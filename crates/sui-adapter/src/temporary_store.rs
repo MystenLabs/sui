@@ -11,8 +11,8 @@ use sui_types::base_types::{
 use sui_types::error::{ExecutionError, SuiError, SuiResult};
 use sui_types::fp_bail;
 use sui_types::messages::{ExecutionStatus, InputObjects, TransactionEffects};
-use sui_types::object::{Data, MoveObject, Object};
-use sui_types::storage::{BackingPackageStore, DeleteKind, ParentSync, Storage};
+use sui_types::object::{Data, Object};
+use sui_types::storage::{BackingPackageStore, DeleteKind, ObjectChange, ParentSync, Storage};
 use sui_types::{
     event::Event,
     gas::{GasCostSummary, SuiGasStatus},
@@ -41,14 +41,7 @@ pub struct TemporaryStore<S> {
     // into _written directly.
     _written: BTreeMap<ObjectID, Object>, // Objects written
     /// Objects actively deleted.
-    deleted: BTreeMap<
-        ObjectID,
-        (
-            SequenceNumber,
-            /* child count */ Option<u32>,
-            DeleteKind,
-        ),
-    >,
+    deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     /// Ordered sequence of events emitted by execution
     events: Vec<Event>,
     // New object IDs created during the transaction, needed for
@@ -79,7 +72,7 @@ impl<S> TemporaryStore<S> {
         &self.input_objects
     }
 
-    pub fn deleted(&self) -> &BTreeMap<ObjectID, (SequenceNumber, Option<u32>, DeleteKind)> {
+    pub fn deleted(&self) -> &BTreeMap<ObjectID, (SequenceNumber, DeleteKind)> {
         &self.deleted
     }
 
@@ -97,7 +90,7 @@ impl<S> TemporaryStore<S> {
         let deleted = self
             .deleted
             .into_iter()
-            .map(|(id, (seq, _child_count, kind))| (id, (seq, kind)))
+            .map(|(id, (seq, kind))| (id, (seq, kind)))
             .collect();
         (
             InnerTemporaryStore {
@@ -242,7 +235,7 @@ impl<S> TemporaryStore<S> {
 
         let mut deleted = vec![];
         let mut wrapped = vec![];
-        for (id, (version, _child_count, kind)) in &self.deleted {
+        for (id, (version, kind)) in &self.deleted {
             match kind {
                 DeleteKind::Normal | DeleteKind::UnwrapThenDelete => {
                     deleted.push((*id, *version, ObjectDigest::OBJECT_DIGEST_DELETED))
@@ -315,6 +308,47 @@ impl<S> TemporaryStore<S> {
             "Object previous transaction not properly set",
         );
     }
+
+    // Invariant: A key assumption of the write-delete logic
+    // is that an entry is not both added and deleted by the
+    // caller.
+
+    pub fn write_object(&mut self, mut object: Object) {
+        // there should be no write after delete
+        debug_assert!(self.deleted.get(&object.id()) == None);
+        // Check it is not read-only
+        #[cfg(test)] // Movevm should ensure this
+        if let Some(existing_object) = self.read_object(&object.id()) {
+            if existing_object.is_immutable() {
+                // This is an internal invariant violation. Move only allows us to
+                // mutate objects if they are &mut so they cannot be read-only.
+                panic!("Internal invariant violation: Mutating a read-only object.")
+            }
+        }
+
+        // The adapter is not very disciplined at filling in the correct
+        // previous transaction digest, so we ensure it is correct here.
+        object.previous_transaction = self.tx_digest;
+        self._written.insert(object.id(), object);
+    }
+
+    pub fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
+        // there should be no deletion after write
+        debug_assert!(self._written.get(id) == None);
+        // Check it is not read-only
+        #[cfg(test)] // Movevm should ensure this
+        if let Some(object) = self.read_object(id) {
+            if object.is_immutable() {
+                // This is an internal invariant violation. Move only allows us to
+                // mutate objects if they are &mut so they cannot be read-only.
+                panic!("Internal invariant violation: Deleting a read-only object.")
+            }
+        }
+
+        // For object deletion, we increment their version so that they will
+        // eventually show up in the parent_sync table with an updated version.
+        self.deleted.insert(*id, (version.increment(), kind));
+    }
 }
 
 impl<S> Storage for TemporaryStore<S> {
@@ -336,104 +370,16 @@ impl<S> Storage for TemporaryStore<S> {
         self.created_object_ids = ids;
     }
 
-    // Invariant: A key assumption of the write-delete logic
-    // is that an entry is not both added and deleted by the
-    // caller.
-
-    fn write_object(&mut self, mut object: Object) {
-        // there should be no write after delete
-        debug_assert!(self.deleted.get(&object.id()) == None);
-        // Check it is not read-only
-        #[cfg(test)] // Movevm should ensure this
-        if let Some(existing_object) = self.read_object(&object.id()) {
-            if existing_object.is_immutable() {
-                // This is an internal invariant violation. Move only allows us to
-                // mutate objects if they are &mut so they cannot be read-only.
-                panic!("Internal invariant violation: Mutating a read-only object.")
-            }
-        }
-
-        // The adapter is not very disciplined at filling in the correct
-        // previous transaction digest, so we ensure it is correct here.
-        object.previous_transaction = self.tx_digest;
-        self._written.insert(object.id(), object);
-    }
-
-    fn delete_object(
-        &mut self,
-        id: &ObjectID,
-        version: SequenceNumber,
-        child_count: Option<u32>,
-        kind: DeleteKind,
-    ) {
-        // there should be no deletion after write
-        debug_assert!(self._written.get(id) == None);
-        // Check it is not read-only
-        #[cfg(test)] // Movevm should ensure this
-        if let Some(object) = self.read_object(id) {
-            if object.is_immutable() {
-                // This is an internal invariant violation. Move only allows us to
-                // mutate objects if they are &mut so they cannot be read-only.
-                panic!("Internal invariant violation: Deleting a read-only object.")
-            }
-        }
-
-        // For object deletion, we increment their version so that they will
-        // eventually show up in the parent_sync table with an updated version.
-        self.deleted
-            .insert(*id, (version.increment(), child_count, kind));
-    }
-
     fn log_event(&mut self, event: Event) {
         self.events.push(event)
     }
-
-    // This updates the child count of objects, given the change +/- to the child count
-    // If the object has not been written/deleted, we need to mark it as being written.
-    // From there we have two cases
-    // - If the object was written, we need to update the child count in that object in that map
-    // - If the object was deleted, we carry around the child count at the moment of deletion.
-    //   We then update the count based on this change. This is to support
-    //   'deleted_objects_child_count'.
-    fn change_child_counts(&mut self, deltas: BTreeMap<ObjectID, i64>) -> Result<(), ObjectID> {
-        let deltas = deltas
-            .into_iter()
-            .filter(|(_, delta)| *delta != 0)
-            .collect::<BTreeMap<_, _>>();
-        for id in deltas.keys() {
-            if !(self._written.contains_key(id) || self.deleted.contains_key(id)) {
-                let mut object = self.input_objects[id].clone();
-                // Active input object must be Move object.
-                object.data.try_as_move_mut().unwrap().increment_version();
-                self.write_object(object);
+    fn apply_object_changes(&mut self, changes: BTreeMap<ObjectID, ObjectChange>) {
+        for (id, change) in changes {
+            match change {
+                ObjectChange::Write(new_value) => self.write_object(new_value),
+                ObjectChange::Delete(version, kind) => self.delete_object(&id, version, kind),
             }
         }
-        for (id, delta) in deltas {
-            // If it was deleted, update the count we saw at the moment of deletion
-            // If it is written, update the child count
-            // The object is guaranteed to be in exactly one of the two maps
-            if let Some((_version, child_count, _kind)) = self.deleted.get_mut(&id) {
-                MoveObject::apply_child_count_delta(child_count, delta).map_err(|_| id)?
-            } else {
-                self._written
-                    .get_mut(&id)
-                    .expect("guaranteed to be written or deleted")
-                    .data
-                    .try_as_move_mut()
-                    .unwrap()
-                    .change_child_count(delta)
-                    .map_err(|_| id)?
-            }
-        }
-        Ok(())
-    }
-
-    // Get the child count of the deleted objects
-    fn deleted_objects_child_count(&mut self) -> Vec<(ObjectID, Option<u32>, DeleteKind)> {
-        self.deleted
-            .iter()
-            .map(|(id, (_, child_count, kind))| (*id, *child_count, *kind))
-            .collect()
     }
 }
 

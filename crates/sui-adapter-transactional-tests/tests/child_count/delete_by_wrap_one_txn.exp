@@ -8,5 +8,5 @@ created: object(105)
 written: object(104)
 
 task 2 'run'. lines 32-32:
-Error: Transaction Effects Status: Invalid Deletion of Parent Object with Children. Parent object _ was unwrapped then deleted before its children were deleted or transferred.
-Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidParentDeletion { parent: _, kind: Some(UnwrapThenDelete) }, source: None } }
+Error: Transaction Effects Status: Invalid Deletion of Parent Object with Children. Parent object _ was wrapped in another object before its children were deleted or transferred.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidParentDeletion { parent: _, kind: Some(Wrap) }, source: None } }
