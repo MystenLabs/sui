@@ -31,7 +31,7 @@
 
 use arc_swap::ArcSwap;
 use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
-use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
+use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::AuthorityName,
     error::{SuiError, SuiResult},
@@ -122,7 +122,6 @@ pub struct ActiveAuthority<A> {
     node_sync_handle: OnceCell<NodeSyncHandle>,
     node_sync_process: Arc<Mutex<Option<NodeSyncProcessHandle>>>,
 
-    pub follower_store: Arc<FollowerStore>,
     // The network interfaces to other authorities
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
@@ -136,7 +135,6 @@ impl<A> ActiveAuthority<A> {
     pub fn new(
         authority: Arc<AuthorityState>,
         node_sync_store: Arc<NodeSyncStore>,
-        follower_store: Arc<FollowerStore>,
         net: AuthorityAggregator<A>,
         gossip_metrics: GossipMetrics,
     ) -> SuiResult<Self> {
@@ -162,7 +160,6 @@ impl<A> ActiveAuthority<A> {
             node_sync_state,
             node_sync_handle: OnceCell::new(),
             node_sync_process: Default::default(),
-            follower_store,
             net: ArcSwap::from(net),
             gossip_metrics,
         })
@@ -177,18 +174,12 @@ impl<A> ActiveAuthority<A> {
         net: AuthorityAggregator<A>,
     ) -> SuiResult<Self> {
         let working_dir = tempfile::tempdir().unwrap();
-        let follower_db_path = working_dir.path().join("follower_db");
         let sync_db_path = working_dir.path().join("node_sync_db");
 
-        let follower_store = Arc::new(FollowerStore::open_tables_read_write(
-            follower_db_path,
-            None,
-        ));
         let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(sync_db_path, None));
         Self::new(
             authority,
             node_sync_store,
-            follower_store,
             net,
             GossipMetrics::new_for_tests(),
         )
@@ -260,7 +251,6 @@ impl<A> Clone for ActiveAuthority<A> {
             node_sync_state: self.node_sync_state.clone(),
             node_sync_handle: self.node_sync_handle.clone(),
             node_sync_process: self.node_sync_process.clone(),
-            follower_store: self.follower_store.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
             gossip_metrics: self.gossip_metrics.clone(),
