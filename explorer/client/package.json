@@ -14,7 +14,6 @@
         "@types/topojson-client": "^3.1.1",
         "autoprefixer": "^10.4.2",
         "cypress": "^10.4.0",
-        "cypress-plugin-snapshots": "^1.4.4",
         "eslint-config-prettier": "^8.3.0",
         "eslint-plugin-header": "^3.1.1",
         "onchange": "^7.1.0",
