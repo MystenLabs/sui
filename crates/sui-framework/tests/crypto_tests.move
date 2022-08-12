@@ -40,4 +40,21 @@ module sui::crypto_tests {
         let hashed_msg = crypto::keccak256(msg);
         assert!(hashed_msg == hashed_msg_bytes, 0);
     }
+
+    // #[test]
+    // fun test_bulletproof_standard_0_2pow64_proof() {
+    //     // These are generated elsewhere;
+    //     let bulletproof = [];
+    //     let commitment = [];
+    //     verify_full_range_proof(bulletproof, commitment);
+    // }
+
+    // #[test]
+    // #[expected_failure(abort_code = 1)]
+    // fun invalid_2pow64_range_proof() {
+    //     // These are generated elsewhere;
+    //     let bulletproof = [];
+    //     let commitment = [];
+    //     verify_full_range_proof(bulletproof, commitment);
+    // }
 }

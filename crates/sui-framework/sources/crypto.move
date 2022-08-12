@@ -3,6 +3,8 @@
 
 /// Library for cryptography onchain.
 module sui::crypto {
+    use std::vector;
+
     /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using 
     /// Secp256k1. Reference implementation on signature generation using RFC6979: 
     /// https://github.com/MystenLabs/narwhal/blob/5d6f6df8ccee94446ff88786c0dbbc98be7cfc09/crypto/src/secp256k1.rs
@@ -19,13 +21,70 @@ module sui::crypto {
     /// Hash the input bytes using keccak256 and returns 32 bytes.
     public native fun keccak256(data: vector<u8>): vector<u8>;
 
-    /// @param value: the value to prove
-    /// @param blinding_factor: a random value to ensure that the underlying pedersen commitments are hiding
-    /// @param lower_bound: The lower bound that we are proving
-    public native fun verify_lower_bound(proof: vector<u8>, commitment: vector<u8>);
+    /// @param proof: The bulletproof
+    /// @param commitment: The commitment which we are trying to verify the range proof for
+    native fun native_verify_full_range_proof(proof: vector<u8>, commitment: vector<u8>);
 
-    /// @param value: the value to prove
-    /// @param blinding_factor: a random value to ensure that the underlying pedersen commitments are hiding
-    /// @param lower_bound: The lower bound that we are proving
-    public native fun verify_full_range_proof(proof: vector<u8>, commitment: vector<u8>);
+    /// Ristretto Point is currently stored as bytes and deserialized for every command used
+    struct RistrettoPoint has copy, drop, store {
+        value: vector<u8>
+    }
+
+    /// Private
+
+    /// Public
+    /// @param value: The value to commit to
+    /// @param blinding_factor: A random number used to ensure that the commitment is hiding.
+    native fun native_create_pedersen_commitment(value: vector<u8>, blinding_factor: vector<u8>): vector<u8>;
+
+    /// @param self: bytes representation of an EC point on the Ristretto curve
+    /// @param other: bytes representation of an EC point on the Ristretto curve
+    /// A native move wrapper around the addition of Ristretto points. Returns self + other.
+    native fun native_add_ristretto_point(point1: &vector<u8>, point2: &vector<u8>): vector<u8>;
+
+    /// @param self: bytes representation of an EC point on the Ristretto curve
+    /// @param other: bytes representation of an EC point on the Ristretto curve
+    /// A native move wrapper around the subtraction of Ristretto points. Returns self - other.
+    native fun native_subtract_ristretto_point(point1: &vector<u8>, point2: &vector<u8>): vector<u8>;
+
+    struct BigScalar has copy, drop, store {
+        value: vector<u8>
+    }
+
+    // This is pretty lazy, we should ideally have a Move-native unified BigInt library - but this can be added in a future refactor.
+    public native fun big_scalar_from_u64(value: u64): BigScalar;
+
+    public fun create_pedersen_commitment(value: vector<u8>, blinding_factor: vector<u8>): RistrettoPoint {
+        return RistrettoPoint {
+            value: native_create_pedersen_commitment(value, blinding_factor)
+        }
+    }
+
+    public fun big_scalar_from_bytes(value: vector<u8>): BigScalar {
+        assert!(vector::length(&value) == 32, 1);
+
+        BigScalar {
+            value
+        }
+    }
+
+    public fun big_scalar_to_vec(self: BigScalar): vector<u8> {
+        self.value
+    }
+
+    public fun add_ristretto_point(self: &RistrettoPoint, other: &RistrettoPoint): RistrettoPoint {
+        RistrettoPoint {
+            value: native_add_ristretto_point(&self.value, &other.value)
+        }
+    }
+
+    public fun subtract_ristretto_point(self: &RistrettoPoint, other: &RistrettoPoint): RistrettoPoint {
+        RistrettoPoint {
+            value: native_subtract_ristretto_point(&self.value, &other.value)
+        }
+    }
+
+    public fun verify_full_range_proof(proof: vector<u8>, commitment: RistrettoPoint) {
+        native_verify_full_range_proof(proof, commitment.value)
+    }
 }

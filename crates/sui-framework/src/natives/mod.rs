@@ -19,9 +19,12 @@ pub fn all_natives(
 ) -> NativeFunctionTable {
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
         ("crypto", "ecrecover", crypto::ecrecover),
-        ("crypto", "verify_full_range_proof", crypto::verify_full_range_proof),
+        ("crypto", "native_verify_full_range_proof", crypto::verify_full_range_proof),
+        ("crypto", "native_add_ristretto_point", crypto::add_ristretto_point),
+        ("crypto", "native_subtract_ristretto_point", crypto::subtract_ristretto_point),
+        ("crypto", "native_create_pedersen_commitment", crypto::pedersen_commit),
+        ("crypto", "big_scalar_from_u64", crypto::big_scalar_from_u64),
         ("crypto", "keccak256", crypto::keccak256),
-        ("crypto", "verify_full_range_proof", crypto::verify_full_range_proof),
         ("event", "emit", event::emit),
         ("object", "bytes_to_address", object::bytes_to_address),
         ("object", "delete_impl", object::delete_impl),
