@@ -59,17 +59,6 @@ function EventSubscription() {
                 onSubmit={handleSubmit}
                 aria-label="event subscription form"
             >
-                <fieldset>
-                    <input type="checkbox" name="favorite_pet" value="Cats">
-                        Cats
-                    </input>
-                    <input type="checkbox" name="favorite_pet" value="Dogs">
-                        Dogs
-                    </input>
-                    <input type="checkbox" name="favorite_pet" value="Birds">
-                        Birds
-                    </input>
-                </fieldset>
                 <input
                     className={styles.searchtextdesktop}
                     id="searchText"
