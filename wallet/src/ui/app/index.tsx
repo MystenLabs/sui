@@ -48,10 +48,6 @@ const App = () => {
     return (
         <Routes>
             <Route path="/*" element={<HomePage />}>
-                <Route
-                    index
-                    element={<Navigate to="/tokens" replace={true} />}
-                />
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
                 <Route path="nft-details" element={<NFTDetailsPage />} />
@@ -63,6 +59,10 @@ const App = () => {
                     element={<TransactionDetailsPage />}
                 />
                 <Route path="receipt" element={<ReceiptPage />} />
+                <Route
+                    path="*"
+                    element={<Navigate to="/tokens" replace={true} />}
+                />
             </Route>
             <Route path="welcome" element={<WelcomePage />} />
             <Route path="/initialize" element={<InitializePage />}>
@@ -73,10 +73,6 @@ const App = () => {
             </Route>
             <Route path="/connect/:requestID" element={<SiteConnectPage />} />
             <Route path="/tx-approval/:txID" element={<DappTxApprovalPage />} />
-            <Route
-                path="*"
-                element={<Navigate to="/tokens" replace={true} />}
-            />
         </Routes>
     );
 };
