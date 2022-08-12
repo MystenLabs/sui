@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress, ObjectOwner } from "./common";
+import { SuiAddress, ObjectOwner, TransactionDigest } from "./common";
 import { ObjectId, SequenceNumber } from "./objects";
 import { SuiJsonValue } from "./transactions";
 
@@ -83,3 +83,9 @@ export type SuiEventFilter =
     | { "Any" : SuiEventFilter[] }
     | { "And" : [SuiEventFilter, SuiEventFilter] }
     | { "Or" : [SuiEventFilter, SuiEventFilter] };
+
+export type SuiEventEnvelope = {
+    timestamp: bigint,
+    txDigest: TransactionDigest,
+    event: SuiEvent
+}

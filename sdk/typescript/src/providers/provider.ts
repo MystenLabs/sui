@@ -16,6 +16,7 @@ import {
   SuiMoveNormalizedModules,
   SuiEvent,
   SuiEventFilter,
+  SuiEventEnvelope,
 } from '../types';
 
 ///////////////////////////////
@@ -127,8 +128,7 @@ export abstract class Provider {
    */
    abstract subscribeEvent(
     filter: SuiEventFilter,
-    // will actually return an event envelope probably
-    onMessage: (event: SuiEvent) => {}
+    onMessage: (event: SuiEventEnvelope) => {}
   ): Promise<any>;
 
   // TODO: add more interface methods
