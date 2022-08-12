@@ -126,7 +126,7 @@ export abstract class Provider {
    * Subscribe to an event
    */
    abstract subscribeEvent(
-    params: SuiEventFilter,
+    filter: SuiEventFilter,
     // will actually return an event envelope probably
     onMessage: (event: SuiEvent) => {}
   ): Promise<any>;
