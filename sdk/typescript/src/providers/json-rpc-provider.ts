@@ -30,6 +30,7 @@ import {
   getObjectReference,
   Coin,
   SuiEventFilter,
+  SuiEvent,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 
@@ -39,9 +40,13 @@ const isAny = (_val: any): _val is any => true;
 const httpRegex = new RegExp('^http');
 const portRegex = new RegExp(':[0-9]{1,5}$');
 const getWebsocketUrl = (httpUrl: string): string => {
+  console.log('trying to convert http url to ws', httpUrl);
   let wsUrl = httpUrl.replace(httpRegex, 'ws');
   wsUrl = wsUrl.replace(portRegex, '');
-  return `${wsUrl}:9001`;
+  wsUrl = `${wsUrl}:9001`;
+
+  console.log('wsUrl', wsUrl);
+  return wsUrl;
 };
 
 export class JsonRpcProvider extends Provider {
@@ -372,7 +377,10 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async subscribeEvent(filter: SuiEventFilter): Promise<any> {
+  async subscribeEvent(
+    filter: SuiEventFilter,
+    _onMessage: (event: SuiEvent) => {}
+  ): Promise<any> {
     try {
       return await this.wsClient.requestWithType(
         'sui_subscribeEvent',
