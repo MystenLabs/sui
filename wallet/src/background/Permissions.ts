@@ -23,6 +23,8 @@ function openPermissionWindow(permissionID: string) {
 
 const PERMISSIONS_STORAGE_KEY = 'permissions';
 
+// Browser.storage.local.clear();
+
 class Permissions {
     private _permissionResponses: Subject<PermissionResponse> = new Subject();
 

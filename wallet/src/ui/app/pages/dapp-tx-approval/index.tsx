@@ -102,7 +102,6 @@ export function DappTxApprovalPage() {
         <Loading loading={loading}>
             {txRequest ? (
                 <UserApproveContainer
-                    title="Transaction Request"
                     origin={txRequest.origin}
                     originFavIcon={txRequest.originFavIcon}
                     approveTitle="Approve"
