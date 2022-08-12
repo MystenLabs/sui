@@ -11,15 +11,15 @@ anyhow = { version = "1.0.58", features = ["backtrace"] }
 tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.36"
 clap = { version = "3.1.17", features = ["derive"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f3f5a90f853f43f800e7dc0b10571d9c9b1162a2" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f3f5a90f853f43f800e7dc0b10571d9c9b1162a2" }
 textwrap = "0.15"
 futures = "0.3.21"
-rocksdb = "0.18.0"
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa"}
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa"} 
+rocksdb = "0.19.0"
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f3f5a90f853f43f800e7dc0b10571d9c9b1162a2"}
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f3f5a90f853f43f800e7dc0b10571d9c9b1162a2"}
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "49890f08588dc16389b1686642f43f54b0581135", package = "executor" }
 serde_with = { version = "1.14.0", features = ["hex"] }
 sui-storage = { path = "../sui-storage" }
 strum_macros = "^0.24"

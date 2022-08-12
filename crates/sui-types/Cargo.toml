@@ -17,7 +17,7 @@ curve25519-dalek = { version = "3", default-features = false, features = ["serde
 serde-name = "0.2.1"
 sha2 = "0.9.9"
 sha3 = "0.10.2"
-thiserror = "1.0.31"
+thiserror = "1.0.32"
 tracing = "0.1"
 hex = "0.4.3"
 serde_bytes = "0.11.6"
@@ -40,8 +40,8 @@ enum_dispatch = "^0.3"
 # This version is incompatible with ed25519-dalek
 rand_latest = { version = "0.8.5", package = "rand" }
 
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
+name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f3f5a90f853f43f800e7dc0b10571d9c9b1162a2" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f3f5a90f853f43f800e7dc0b10571d9c9b1162a2" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
@@ -50,8 +50,8 @@ move-disassembler = { git = "https://github.com/move-language/move", rev = "7907
 move-ir-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "executor" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "crypto" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "49890f08588dc16389b1686642f43f54b0581135", package = "executor" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "49890f08588dc16389b1686642f43f54b0581135", package = "crypto" }
 
 workspace-hack = { path = "../workspace-hack"}
 
