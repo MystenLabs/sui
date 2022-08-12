@@ -138,7 +138,7 @@ describe('End-to-end Tests', () => {
     });
 
     describe('PaginationWrapper has buttons', () => {
-        const paginationContext = '[data-testid=address-objects]';
+        const paginationContext = '#NFTSection';
 
         it('to go to the next page', () => {
             const address = 'ownsAllAddress';
