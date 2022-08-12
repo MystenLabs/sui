@@ -107,7 +107,7 @@ export abstract class Provider {
     objectId: string,
     moduleName: string,
     functionName: string
-  ): Promise<SuiMoveNormalizedFunction> 
+  ): Promise<SuiMoveNormalizedFunction>
 
   /**
    * Get a structured representation of Move struct
@@ -120,4 +120,28 @@ export abstract class Provider {
 
   abstract syncAccountState(address: string): Promise<any>;
   // TODO: add more interface methods
+
+  /**
+   * Subscribe to an event
+   */
+   abstract subscribeEvent(
+    params: object[]
+  ): Promise<any[]>;
+
+  /*
+    request = {
+      "jsonrpc":"2.0",
+      "id": 1,
+      "method": "sui_subscribeEvent",
+      "params": [
+        {
+          "All": [
+            {"EventType":"MoveEvent"},
+            {"Package":"0x2"},
+            {"Module":"devnet_nft"}
+          ]
+        }
+      ]
+    }
+  */
 }
