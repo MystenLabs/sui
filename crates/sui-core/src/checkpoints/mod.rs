@@ -847,6 +847,12 @@ impl CheckpointStore {
 
         let transactions = CheckpointContents::new(self.tables.extra_transactions.keys());
         let size = transactions.transactions.len();
+        info!(cp_seq=?checkpoint_sequence, ?size, "A new checkpoint proposal is created");
+        debug!(
+            "Transactions included in the checkpoint: {:?}",
+            transactions.transactions
+        );
+
         let checkpoint_proposal = CheckpointProposal::new(
             epoch,
             checkpoint_sequence,
@@ -861,7 +867,6 @@ impl CheckpointStore {
         new_locals.proposal_next_transaction = Some(next_local_tx_sequence);
         self.set_locals(locals, new_locals)?;
 
-        info!(cp_seq=?checkpoint_sequence, ?size, "A new checkpoint proposal is created");
         Ok(checkpoint_proposal)
     }
 
@@ -1035,19 +1040,19 @@ impl CheckpointStore {
 
         // If the transactions processed did not belong to a checkpoint yet, we add them to the list
         // of `extra` transactions, that we should be actively propagating to others.
-        let batch = batch.insert_batch(
-            &self.tables.extra_transactions,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_none() {
-                        Some((tx, seq))
-                    } else {
-                        None
-                    }
-                }),
-        )?;
+        let new_extra: Vec<_> = transactions
+            .iter()
+            .zip(&in_checkpoint)
+            .filter_map(|((seq, tx), in_chk)| {
+                if in_chk.is_none() {
+                    Some((tx, seq))
+                } else {
+                    None
+                }
+            })
+            .collect();
+        debug!("Transactions added to extra_transactions: {:?}", new_extra);
+        let batch = batch.insert_batch(&self.tables.extra_transactions, new_extra)?;
 
         // Write to the database.
         batch.write()?;

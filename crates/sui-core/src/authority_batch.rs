@@ -210,7 +210,7 @@ impl crate::authority::AuthorityState {
                     .tables
                     .batches
                     .insert(&new_batch.data().next_sequence_number, &new_batch)?;
-                debug!(next_sequence_number=?new_batch.data().next_sequence_number, "New batch created");
+                debug!(next_sequence_number=?new_batch.data().next_sequence_number, "New batch created. Transactions: {:?}", current_batch);
 
                 // If a checkpointing service is present, register the batch with it
                 // to insert the transactions into future checkpoint candidates
