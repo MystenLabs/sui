@@ -38,9 +38,20 @@ import { Client as WsRpcClient} from 'rpc-websockets';
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
+export type SubscriptionId = number;
+
+enum ConnectionState {
+  NotConnected,
+  Connecting,
+  Connected
+}
+
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
   private wsClient: WsRpcClient;
+  private wsConnectionState: ConnectionState = ConnectionState.NotConnected;
+
+  private activeSubscriptions: Map<number, (event: SuiEventEnvelope) => any> = new Map();
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -53,6 +64,19 @@ export class JsonRpcProvider extends Provider {
     this.client = new JsonRpcClient(endpoint);
     this.wsClient = new WsRpcClient(getWebsocketUrl(endpoint))
     console.log('client & wsClient', this.client, this.wsClient);
+  }
+
+  private getWsConnection(): WsRpcClient {
+    if(this.wsConnectionState === ConnectionState.NotConnected) {
+      this.wsClient.connect();
+      this.wsConnectionState = ConnectionState.Connecting;
+      this.wsClient.on('open', () => {
+        this.wsConnectionState = ConnectionState.Connected;
+        console.log('ws connection opened');
+      });
+      this.wsClient.on('message', console.log);
+    }
+    return this.wsClient
   }
 
   // Move info
@@ -370,14 +394,19 @@ export class JsonRpcProvider extends Provider {
 
   async subscribeEvent(
     filter: SuiEventFilter,
-    _onMessage: (event: SuiEventEnvelope) => void
-  ): Promise<any> {
+    onMessage: (event: SuiEventEnvelope) => void
+  ): Promise<SubscriptionId> {
     try {
-      return await this.client.wsRequestWithType(
+      let ws = this.getWsConnection();
+      let subId = await ws.call(
         'sui_subscribeEvent',
         [filter],
-        isAny
-      );
+        30000
+      ) as SubscriptionId;
+
+      this.activeSubscriptions.set(subId, onMessage);
+      console.log('subscription id, onMessage', subId, onMessage);
+      return subId;
     } catch (err) {
       throw new Error(
         `Error subscribing to event: ${err}, filter: ${JSON.stringify(filter)}`

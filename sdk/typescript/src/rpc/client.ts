@@ -21,14 +21,10 @@ export type RpcParams = {
 
 const httpRegex = new RegExp('^http');
 const portRegex = new RegExp(':[0-9]{1,5}$');
-export const getWebsocketUrl = (httpUrl: string): string => {
-  console.log('trying to convert http url to ws', httpUrl);
+export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
   let wsUrl = httpUrl.replace(httpRegex, 'ws');
   wsUrl = wsUrl.replace(portRegex, '');
-  wsUrl = `${wsUrl}:9001`;
-
-  console.log('wsUrl', wsUrl);
-  return wsUrl;
+  return `${wsUrl}:${port ?? 9001}`;
 };
 
 export class JsonRpcClient {
@@ -92,25 +88,6 @@ export class JsonRpcClient {
     return client;
   }
 
-  async wsRequestWithType<T>(
-    method: string,
-    args: Array<any>,
-    isT: (val: any) => val is T
-  ): Promise<T> {
-    const response = await this.wsRequest(method, args);
-    if (isErrorResponse(response)) {
-      throw new Error(`RPC Error: ${response.error.message}`);
-    } else if (isValidResponse(response)) {
-      if (isT(response.result)) return response.result;
-        throw new Error(
-          `RPC Error: result not of expected type. Result received was: ${JSON.stringify(
-            response.result
-          )}`
-        );
-    }
-    throw new Error(`Unexpected Websocket RPC Response: ${response}`);
-  }
-
   async requestWithType<T>(
     method: string,
     args: Array<any>,
@@ -154,18 +131,6 @@ export class JsonRpcClient {
   async request(method: string, args: Array<any>): Promise<any> {
     return new Promise((resolve, reject) => {
       this.rpcClient.request(method, args, (err: any, response: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(response);
-      });
-    });
-  }
-
-  async wsRequest(method: string, args: Array<any>): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.wsClient.request(method, args, (err: any, response: any) => {
         if (err) {
           reject(err);
           return;

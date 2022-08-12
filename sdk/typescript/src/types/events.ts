@@ -77,7 +77,6 @@ export type SuiEventFilter =
     | { "moveEventField" : MoveEventField }
     | { "senderAddress" : SuiAddress }
     | { "eventType" : EventType }
-    | { "objectId" : ObjectId }
     | { "All" : SuiEventFilter[] }
     | { "Any" : SuiEventFilter[] }
     | { "And" : [SuiEventFilter, SuiEventFilter] }
