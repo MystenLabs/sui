@@ -31,7 +31,7 @@ where
         transaction.gas_payment_object_ref().0,
         transaction.data.gas_budget,
         transaction.data.gas_price,
-        &transaction.data.kind,
+        transaction,
     )
     .await?;
 
@@ -51,16 +51,18 @@ where
 /// Returns the gas object (to be able to reuse it latter) and a gas status
 /// that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
-async fn check_gas<S>(
+async fn check_gas<S, T>(
     store: &SuiDataStore<S>,
     gas_payment_id: ObjectID,
     gas_budget: u64,
     computation_gas_price: u64,
-    tx_kind: &TransactionKind,
+    transaction: &TransactionEnvelope<T>,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
+    let tx_size = transaction.size_for_gas_metering();
+    let tx_kind = &transaction.data.kind;
     if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered())
     } else {
@@ -86,7 +88,7 @@ where
         // TODO: We should revisit how we compute gas price and compare to gas budget.
         let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
 
-        gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount)?;
+        gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount, tx_size)?;
         let gas_status =
             gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)?;
         Ok(gas_status)

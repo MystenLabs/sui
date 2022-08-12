@@ -31,6 +31,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
+use std::mem::size_of;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -523,6 +524,11 @@ pub struct TransactionEnvelope<S> {
 }
 
 impl<S> TransactionEnvelope<S> {
+    pub fn size_for_gas_metering(&self) -> u64 {
+        // u64 is fine for TX size. 
+        size_of::<Self>() as u64
+    }
+
     fn add_sender_sig_to_verification_obligation(
         &self,
         obligation: &mut VerificationObligation,

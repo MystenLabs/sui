@@ -9,7 +9,8 @@ use crate::authority::authority_tests::init_state;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use sui_adapter::genesis;
-use sui_types::crypto::AccountKeyPair;
+use sui_types::crypto::{AccountKeyPair, EmptySignInfo};
+use sui_types::gas::GAS_BUDGET_PER_TX_BYTE;
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::{
@@ -25,14 +26,21 @@ async fn test_tx_less_than_minimum_gas_budget() {
     // transaction requirement. It's expected to fail early during transaction
     // handling phase.
     let budget = *MIN_GAS_BUDGET - 1;
-    let result = execute_transfer(*MAX_GAS_BUDGET, budget, false).await;
+
+    let (tx, authority_state) = make_transfer_tx(*MAX_GAS_BUDGET, budget, 1).await;
+    let tx_size = tx.size_for_gas_metering();
+
+    let result = execute_transfer_transaction_inner(tx, authority_state, false).await;
+
     let err = result.response.unwrap_err();
+    let min_gas_budget = *MIN_GAS_BUDGET + (*GAS_BUDGET_PER_TX_BYTE) * (tx_size as u64);
+
     assert_eq!(
         err,
         SuiError::InsufficientGas {
             error: format!(
-                "Gas budget is {}, smaller than minimum requirement {}",
-                budget, *MIN_GAS_BUDGET
+                "Gas budget is {}, smaller than minimum requirement {} for this transaction",
+                budget, min_gas_budget
             )
         }
     );
@@ -81,10 +89,13 @@ async fn test_tx_gas_balance_less_than_budget() {
 async fn test_native_transfer_sufficient_gas() -> SuiResult {
     // This test does a native transfer with sufficient gas budget and balance.
     // It's expected to succeed. We check that gas was charged properly.
-    let result = execute_transfer(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, true).await;
+    let (tx, authority_state) = make_transfer_tx(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, 1).await;
+    let tx_size = tx.size_for_gas_metering();
+    let result = execute_transfer_transaction_inner(tx, authority_state, true).await;
+    let min_gas_budget = *MIN_GAS_BUDGET + (*GAS_BUDGET_PER_TX_BYTE) * (tx_size as u64);
     let effects = result.response.unwrap().signed_effects.unwrap().effects;
     let gas_cost = effects.gas_used;
-    assert!(gas_cost.computation_cost > *MIN_GAS_BUDGET);
+    assert!(gas_cost.computation_cost > min_gas_budget);
     assert!(gas_cost.storage_cost > 0);
     // Removing genesis object does not have rebate.
     assert_eq!(gas_cost.storage_rebate, 0);
@@ -520,12 +531,11 @@ async fn execute_transfer(gas_balance: u64, gas_budget: u64, run_confirm: bool) 
     execute_transfer_with_price(gas_balance, gas_budget, 1, run_confirm).await
 }
 
-async fn execute_transfer_with_price(
+async fn make_transfer_tx(
     gas_balance: u64,
     gas_budget: u64,
     gas_price: u64,
-    run_confirm: bool,
-) -> TransferResult {
+) -> (TransactionEnvelope<EmptySignInfo>, AuthorityState) {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
@@ -547,7 +557,24 @@ async fn execute_transfer_with_price(
     let data =
         TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, gas_price);
     let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    (Transaction::new(data, signature), authority_state)
+}
+
+async fn execute_transfer_transaction_inner(
+    tx: TransactionEnvelope<EmptySignInfo>,
+    authority_state: AuthorityState,
+    run_confirm: bool,
+) -> TransferResult {
+    let gas_object_id = tx.data.gas().0;
+    let object_id = tx
+        .data
+        .input_objects()
+        .unwrap()
+        .iter()
+        .filter(|o| o.object_id() != gas_object_id)
+        .next()
+        .unwrap()
+        .object_id();
 
     let response = if run_confirm {
         send_and_confirm_transaction(&authority_state, tx).await
@@ -560,4 +587,15 @@ async fn execute_transfer_with_price(
         gas_object_id,
         response,
     }
+}
+
+async fn execute_transfer_with_price(
+    gas_balance: u64,
+    gas_budget: u64,
+    gas_price: u64,
+    run_confirm: bool,
+) -> TransferResult {
+    let (tx, authority_state) = make_transfer_tx(gas_balance, gas_budget, gas_price).await;
+
+    execute_transfer_transaction_inner(tx, authority_state, run_confirm).await
 }

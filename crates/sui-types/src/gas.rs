@@ -75,9 +75,12 @@ impl StorageCost {
 
 /// A list of constant costs of various operations in Sui.
 struct SuiCostTable {
-    /// A flat fee charged for every transaction. This is also the mimmum amount of
-    /// gas charged for a transaction.
+    /// A flat fee charged for every transaction. Independent of size.
     pub min_transaction_cost: ComputationCost,
+
+    /// This gets charged for each byte of the transaction
+    pub transaction_cost_per_byte: ComputationCost,
+
     /// Computation cost per byte charged for package publish. This cost is primarily
     /// determined by the cost to verify and link a package. Note that this does not
     /// include the cost of writing the package to the store.
@@ -103,6 +106,8 @@ struct SuiCostTable {
 // TODO: The following numbers are arbitrary at this point.
 static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
     min_transaction_cost: ComputationCost(InternalGasUnits::new(10000)),
+    // Keep at zero for now for backend compat
+    transaction_cost_per_byte: ComputationCost(InternalGasUnits::new(0)),
     package_publish_per_byte_cost: ComputationCost(InternalGasUnits::new(80)),
     object_read_per_byte_cost: ComputationCost(InternalGasUnits::new(15)),
     object_mutation_per_byte_cost: ComputationCost(InternalGasUnits::new(40)),
@@ -116,6 +121,9 @@ pub static MAX_GAS_BUDGET: Lazy<u64> =
 
 pub static MIN_GAS_BUDGET: Lazy<u64> =
     Lazy::new(|| to_external(INIT_SUI_COST_TABLE.min_transaction_cost.0).get());
+
+pub static GAS_BUDGET_PER_TX_BYTE: Lazy<u64> =
+    Lazy::new(|| to_external(INIT_SUI_COST_TABLE.transaction_cost_per_byte.0).get());
 
 fn to_external(internal_units: InternalGasUnits<GasCarrier>) -> GasUnits<GasCarrier> {
     let consts = &INITIAL_COST_SCHEDULE.gas_constants;
@@ -310,6 +318,7 @@ pub fn check_gas_balance(
     gas_budget: u64,
     gas_price: u64,
     extra_amount: u64,
+    tx_size: u64,
 ) -> SuiResult {
     ok_or_gas_error!(
         matches!(gas_object.owner, Owner::AddressOwner(_)),
@@ -319,11 +328,14 @@ pub fn check_gas_balance(
         gas_budget <= *MAX_GAS_BUDGET,
         format!("Gas budget set too high; maximum is {}", *MAX_GAS_BUDGET)
     )?;
+
+    let min_gas_budget = *MIN_GAS_BUDGET + (*GAS_BUDGET_PER_TX_BYTE) * (tx_size as u64);
+
     ok_or_gas_error!(
-        gas_budget >= *MIN_GAS_BUDGET,
+        gas_budget >= min_gas_budget,
         format!(
-            "Gas budget is {}, smaller than minimum requirement {}",
-            gas_budget, *MIN_GAS_BUDGET
+            "Gas budget is {}, smaller than minimum requirement {} for this transaction",
+            gas_budget, min_gas_budget
         )
     )?;
 
