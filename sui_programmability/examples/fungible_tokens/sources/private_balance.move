@@ -91,12 +91,3 @@ module fungible_tokens::private_balance {
         Supply { value }
     }
 }
-
-#[test_only]
-module fungible_tokens::private_balance_tests {
-    use fungible_tokens::basket::{Self, Reserve};
-    use fungible_tokens::managed::MANAGED;
-    use sui::coin;
-    use sui::sui::SUI;
-    use sui::test_scenario;
-}

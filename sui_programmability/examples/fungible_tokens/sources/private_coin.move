@@ -246,9 +246,11 @@ module fungible_tokens::test_private_coin {
         private_balance::join(&mut balance, another);
 
         let point = crypto::create_pedersen_commitment(
-            crypto::big_scalar_from_u64(1),
-            crypto::big_scalar_from_u64(2)
+            crypto::big_scalar_to_vec(crypto::big_scalar_from_u64(1)),
+            crypto::big_scalar_to_vec(crypto::big_scalar_from_u64(10)),
         );
+
+        
         let balance1 = private_balance::split(&mut balance, 3, vector[0]);
 
         balance::destroy_zero(balance);
