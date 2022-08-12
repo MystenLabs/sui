@@ -103,7 +103,6 @@ impl SimpleFaucet {
                 break;
             }
         }
-        debug!("Planning to use coins: {:?}", coins);
         coins
     }
 
@@ -115,6 +114,8 @@ impl SimpleFaucet {
     ) -> Result<Vec<(TransactionDigest, ObjectID, u64, ObjectID)>, FaucetError> {
         let number_of_coins = amounts.len();
         let coins = self.select_coins(number_of_coins).await;
+        debug!(recipient=?to, ?uuid, "Planning to use coins: {:?}", coins);
+
         let futures: Vec<_> = coins
             .iter()
             .zip(amounts)
@@ -246,6 +247,14 @@ impl Faucet for SimpleFaucet {
         let timer = self.metrics.process_latency.start_timer();
 
         let results = self.transfer_gases(amounts, recipient, id).await?;
+
+        if results.len() != amounts.len() {
+            return Err(FaucetError::Transfer(format!(
+                "Requested {} coins but only got {}",
+                amounts.len(),
+                results.len()
+            )));
+        }
 
         let elapsed = timer.stop_and_record();
 
