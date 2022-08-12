@@ -19,6 +19,11 @@ use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
+use sui_cost::cost::{
+    BASE_TX_COST_FIXED, BASE_TX_COST_PER_BYTE, CONSENSUS_COST, OBJ_ACCESS_COST_MUTATE,
+    OBJ_ACCESS_COST_READ, OBJ_DATA_COST_REFUNDABLE, OBJ_METADATA_COST_REFUNDABLE,
+    PACKAGE_PUBLISH_COST,
+};
 
 macro_rules! ok_or_gas_error {
     ($cond:expr, $e:expr) => {
@@ -84,7 +89,7 @@ struct SuiCostTable {
     /// Computation cost per byte charged for package publish. This cost is primarily
     /// determined by the cost to verify and link a package. Note that this does not
     /// include the cost of writing the package to the store.
-    pub package_publish_per_byte_cost: ComputationCost,
+    pub package_publish_cost: ComputationCost,
     /// Per byte cost to read objects from the store. This is computation cost instead of
     /// storage cost because it does not change the amount of data stored on the db.
     pub object_read_per_byte_cost: ComputationCost,
@@ -100,20 +105,26 @@ struct SuiCostTable {
     /// TODO: We should introduce a flat fee on storage that does not get refunded even
     /// when objects are deleted. This cost covers the cost of storing transaction metadata
     /// which will always be there even after the objects are deleted.
-    pub storage_per_byte_cost: StorageCost,
+    pub storage_per_byte_non_refundable_cost: StorageCost,
+    /// This is the refundable piece of the storage cost
+    pub _storage_per_byte_refundable_cost: StorageCost,
 }
 
 // TODO: The following numbers are arbitrary at this point.
 static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
-    min_transaction_cost: ComputationCost(InternalGasUnits::new(10000)),
+    min_transaction_cost: ComputationCost(InternalGasUnits::new(BASE_TX_COST_FIXED)),
     // Keep at zero for now for backend compat
-    transaction_cost_per_byte: ComputationCost(InternalGasUnits::new(0)),
-    package_publish_per_byte_cost: ComputationCost(InternalGasUnits::new(80)),
-    object_read_per_byte_cost: ComputationCost(InternalGasUnits::new(15)),
-    object_mutation_per_byte_cost: ComputationCost(InternalGasUnits::new(40)),
-    consensus_cost: ComputationCost(InternalGasUnits::new(100000)),
-
-    storage_per_byte_cost: StorageCost(InternalGasUnits::new(100)),
+    transaction_cost_per_byte: ComputationCost(InternalGasUnits::new(BASE_TX_COST_PER_BYTE)),
+    package_publish_cost: ComputationCost(InternalGasUnits::new(PACKAGE_PUBLISH_COST)),
+    object_read_per_byte_cost: ComputationCost(InternalGasUnits::new(OBJ_ACCESS_COST_READ)),
+    object_mutation_per_byte_cost: ComputationCost(InternalGasUnits::new(OBJ_ACCESS_COST_MUTATE)),
+    consensus_cost: ComputationCost(InternalGasUnits::new(CONSENSUS_COST)),
+    storage_per_byte_non_refundable_cost: StorageCost(InternalGasUnits::new(
+        OBJ_DATA_COST_REFUNDABLE,
+    )),
+    _storage_per_byte_refundable_cost: StorageCost(InternalGasUnits::new(
+        OBJ_METADATA_COST_REFUNDABLE,
+    )),
 });
 
 pub static MAX_GAS_BUDGET: Lazy<u64> =
@@ -186,11 +197,8 @@ impl<'a> SuiGasStatus<'a> {
         self.deduct_computation_cost(&INIT_SUI_COST_TABLE.consensus_cost)
     }
 
-    pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
-        let computation_cost = INIT_SUI_COST_TABLE
-            .package_publish_per_byte_cost
-            .with_size(size);
-        self.deduct_computation_cost(&computation_cost)
+    pub fn charge_publish_package(&mut self) -> Result<(), ExecutionError> {
+        self.deduct_computation_cost(&INIT_SUI_COST_TABLE.package_publish_cost)
     }
 
     pub fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError> {
@@ -221,7 +229,7 @@ impl<'a> SuiGasStatus<'a> {
         self.storage_rebate += storage_rebate;
 
         let storage_cost = INIT_SUI_COST_TABLE
-            .storage_per_byte_cost
+            .storage_per_byte_non_refundable_cost
             .with_size(new_size);
         self.deduct_storage_cost(&storage_cost)
     }

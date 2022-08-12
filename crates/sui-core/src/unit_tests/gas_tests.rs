@@ -286,21 +286,6 @@ async fn test_publish_gas() -> anyhow::Result<()> {
     );
     // genesis objects are read during transaction since they are direct dependencies.
     let genesis_objects = genesis::clone_genesis_packages();
-    // We need the original package bytes in order to reproduce the publish computation cost.
-    let publish_bytes = match response
-        .certified_transaction
-        .as_ref()
-        .unwrap()
-        .signed_data
-        .data
-        .kind
-        .single_transactions()
-        .next()
-        .unwrap()
-    {
-        SingleTransactionKind::Publish(p) => &p.modules,
-        _ => unreachable!(),
-    };
 
     // Mimic the gas charge behavior and cross check the result with above.
     let mut gas_status = SuiGasStatus::new_with_budget(*MAX_GAS_BUDGET, 1, 1);
@@ -312,7 +297,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
             .sum(),
     )?;
     gas_status.charge_storage_read(gas_object.object_size_for_gas_metering())?;
-    gas_status.charge_publish_package(publish_bytes.iter().map(|v| v.len()).sum())?;
+    gas_status.charge_publish_package()?;
     gas_status.charge_storage_mutation(0, package.object_size_for_gas_metering(), 0)?;
     // Remember the gas used so far. We will use this to create another failure case latter.
     let gas_used_after_package_creation = gas_status.summary(true).gas_used();
@@ -566,14 +551,14 @@ async fn execute_transfer_transaction_inner(
     authority_state: AuthorityState,
     run_confirm: bool,
 ) -> TransferResult {
-    let gas_object_id = tx.data.gas().0;
+    let gas_object_id = tx.signed_data.data.gas().0;
     let object_id = tx
+        .signed_data
         .data
         .input_objects()
         .unwrap()
         .iter()
-        .filter(|o| o.object_id() != gas_object_id)
-        .next()
+        .find(|o| o.object_id() != gas_object_id)
         .unwrap()
         .object_id();
 

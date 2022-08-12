@@ -27,17 +27,18 @@ pub const MAX_TX_GAS: u64 = 1_000_000_000;
 // Fixed costs: these are charged regardless of execution
 //
 // This is a flat fee
-pub const BASE_TX_COST_FIXED: u64 = 1_000;
+pub const BASE_TX_COST_FIXED: u64 = 10_000;
 // This is charged per byte of the TX
-pub const BASE_TX_COST_PER_BYTE: u64 = 10;
+// Keep as 0 for now for backwards compatibility
+pub const BASE_TX_COST_PER_BYTE: u64 = 0;
 
 //
 // Object access costs: These are for reading, writing, and verifying objects
 //
 // Cost to read an object per byte
-pub const OBJ_ACCESS_COST_READ: u64 = 100;
+pub const OBJ_ACCESS_COST_READ: u64 = 15;
 // Cost to mutate an object per byte
-pub const OBJ_ACCESS_COST_MUTATE: u64 = 100;
+pub const OBJ_ACCESS_COST_MUTATE: u64 = 40;
 // Cost to delete an object per byte
 pub const OBJ_ACCESS_COST_DELETE: u64 = 20;
 // For checking locks. Charged per object
@@ -56,7 +57,7 @@ pub const OBJ_METADATA_COST_REFUNDABLE: u64 = 100;
 // Consensus costs: costs for TXes that use shared object
 //
 // Flat cost for consensus transactions
-pub const CONSENSUS_COST: u64 = 1_000;
+pub const CONSENSUS_COST: u64 = 100_000;
 
 //
 // Package verification & publish cost: when publishing a package

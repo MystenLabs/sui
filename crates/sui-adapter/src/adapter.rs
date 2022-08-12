@@ -234,7 +234,7 @@ pub fn publish<
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
 ) -> Result<(), ExecutionError> {
-    gas_status.charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
+    gas_status.charge_publish_package()?;
     let mut modules = module_bytes
         .iter()
         .map(|b| {
