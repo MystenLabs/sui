@@ -53,7 +53,7 @@ impl SafeClientMetrics {
             .unwrap(),
             follower_streaming_from_seq_number_by_address: register_int_gauge_vec_with_registry!(
                 "safe_client_follower_streaming_from_seq_number_by_address",
-                "The seq nubmer with which to request follower streaming, group by address",
+                "The seq number with which to request follower streaming, group by address",
                 &["address"],
                 registry,
             )
@@ -615,13 +615,24 @@ where
                 {
                     // Verify signature.
                     if let Some(signed_proposal) = proposal {
-                        let committee =
+                        let mut committee =
                             self.get_committee(&signed_proposal.auth_signature.epoch)?;
                         signed_proposal.verify(&committee, response.detail.as_ref())?;
                         if signed_proposal.summary.sequence_number > 0 {
                             let cert = prev_cert.as_ref().ok_or_else(|| {
                                 SuiError::from("No checkpoint cert provided along with proposal")
                             })?;
+                            if cert.auth_signature.epoch != signed_proposal.auth_signature.epoch {
+                                // It's possible that the previous checkpoint cert is from the
+                                // previous epoch, and in that case we verify them using different
+                                // committee.
+                                fp_ensure!(
+                                    cert.auth_signature.epoch + 1
+                                        == signed_proposal.auth_signature.epoch,
+                                    SuiError::from("Unexpected epoch for checkpoint cert")
+                                );
+                                committee = self.get_committee(&cert.auth_signature.epoch)?;
+                            }
                             cert.verify(&committee, None)?;
                             fp_ensure!(
                                 signed_proposal.summary.sequence_number - 1 == cert.summary.sequence_number,

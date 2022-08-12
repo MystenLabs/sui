@@ -281,7 +281,7 @@ impl SignedCheckpointSummary {
         contents: Option<&CheckpointContents>,
     ) -> Result<(), SuiError> {
         fp_ensure!(
-            self.summary.epoch == self.auth_signature.epoch,
+            self.summary.epoch == committee.epoch,
             SuiError::from("Epoch in the summary doesn't match with the signature")
         );
 
