@@ -50,13 +50,14 @@ typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa"} 
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "config" }
-narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "consensus" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "crypto", features=["copy_key"]}
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "executor" }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "types" }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "32b5298b60d410620f2c0e80eec4b6c12e4f9bdd", package = "node" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "config" }
+narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "consensus" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "crypto", features=["copy_key"]}
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "executor" }
+narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "types" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
+thiserror = "1.0.32"
 
 [dev-dependencies]
 clap = { version = "3.1.17", features = ["derive"] }

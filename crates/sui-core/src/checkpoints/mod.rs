@@ -26,6 +26,7 @@ use sui_types::{
         CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
+use thiserror::Error;
 use tracing::{debug, error, info};
 use typed_store::traits::DBMapTableUtil;
 use typed_store::{
@@ -79,9 +80,11 @@ pub trait ConsensusSender: Send + Sync + 'static {
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum FragmentInternalError {
+    #[error("Sui error: {0}")]
     Error(SuiError),
+    #[error("Error processing fragment, retrying")]
     Retry(Box<CheckpointFragment>),
 }
 
