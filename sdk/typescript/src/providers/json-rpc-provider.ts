@@ -36,10 +36,10 @@ import { SignatureScheme } from '../cryptography/publickey';
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
-const httpRegex = new RegExp('^https?');
+const httpRegex = new RegExp('^http');
 const portRegex = new RegExp(':[0-9]{1,5}$');
 const getWebsocketUrl = (httpUrl: string): string => {
-  let wsUrl = httpUrl.replace(httpRegex, 'wss');
+  let wsUrl = httpUrl.replace(httpRegex, 'ws');
   wsUrl = wsUrl.replace(portRegex, '');
   return `${wsUrl}:9001`;
 };
