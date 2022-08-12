@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use move_binary_format::errors::PartialVMResult;
+use move_binary_format::errors::{PartialVMResult, PartialVMError};
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     gas_schedule::NativeCostIndex,
@@ -9,7 +9,7 @@ use move_vm_types::{
     pop_arg,
     values::Value,
 };
-use narwhal_crypto::traits::ToFromBytes;
+use narwhal_crypto::{traits::ToFromBytes, bulletproofs::{BulletproofsRangeProof, PedersenCommitment}};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -61,4 +61,47 @@ pub fn keccak256(
                 .to_vec()
         )],
     ))
+}
+
+/// Native implemention of bulletproofs proof in public Move API, see crypto.move for specifications.
+pub fn verify_full_range_proof(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 2);
+
+    let commitment_bytes = pop_arg!(args, Vec<u8>);
+    let proof_bytes = pop_arg!(args, Vec<u8>);
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
+
+    let proof = if let Ok(val) = BulletproofsRangeProof::from_bytes(&proof_bytes[..]) {
+        val
+    } else {
+        return Ok(NativeResult::err(
+            cost,
+            FAIL_TO_RECOVER_PUBKEY,
+        ));
+    };
+
+    let commitment = if let Ok(val) = PedersenCommitment::from_bytes(&commitment_bytes[..]) {
+        val
+    } else {
+        return Ok(NativeResult::err(
+            cost,
+            FAIL_TO_RECOVER_PUBKEY,
+        ));
+    };
+
+    match proof.verify_bound(&commitment) {
+        Ok(_) => Ok(NativeResult::ok(
+            cost,
+            smallvec![]
+        )),
+        _ => Ok(NativeResult::err(
+            cost,
+            FAIL_TO_RECOVER_PUBKEY,
+        ))
+    }
 }

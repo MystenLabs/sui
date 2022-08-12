@@ -50,17 +50,17 @@ typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa"} 
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }
 
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", package = "config" }
-narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", package = "consensus" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", package = "crypto", features=["copy_key"]}
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", package = "executor" }
-narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", package = "types" }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "259a37b487570763575e6b28f8b8057b16b3e916", package = "node" }
+narwhal-config = { git = "https://github.com/punwai/narwhal-1", rev = "fb34b17da15e39a657494a9598fb9aa1894d2077", package = "config" }
+narwhal-consensus = { git = "https://github.com/punwai/narwhal-1", rev = "fb34b17da15e39a657494a9598fb9aa1894d2077", package = "consensus" }
+narwhal-crypto = { git = "https://github.com/punwai/narwhal-1", rev = "fb34b17da15e39a657494a9598fb9aa1894d2077", package = "crypto", features=["copy_key"]}
+narwhal-executor = { git = "https://github.com/punwai/narwhal-1", rev = "fb34b17da15e39a657494a9598fb9aa1894d2077", package = "executor" }
+narwhal-types = { git = "https://github.com/punwai/narwhal-1", rev = "fb34b17da15e39a657494a9598fb9aa1894d2077", package = "types" }
+narwhal-node = { git = "https://github.com/punwai/narwhal-1", rev = "fb34b17da15e39a657494a9598fb9aa1894d2077", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 clap = { version = "3.1.17", features = ["derive"] }
-rand = "0.7.3"
+rand = "0.8.5"
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 
 serde-reflection = "0.3.6"

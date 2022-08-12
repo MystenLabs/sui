@@ -18,4 +18,14 @@ module sui::crypto {
     /// @param data: arbitrary bytes data to hash
     /// Hash the input bytes using keccak256 and returns 32 bytes.
     public native fun keccak256(data: vector<u8>): vector<u8>;
+
+    /// @param value: the value to prove
+    /// @param blinding_factor: a random value to ensure that the underlying pedersen commitments are hiding
+    /// @param lower_bound: The lower bound that we are proving
+    public native fun verify_lower_bound(proof: vector<u8>, commitment: vector<u8>);
+
+    /// @param value: the value to prove
+    /// @param blinding_factor: a random value to ensure that the underlying pedersen commitments are hiding
+    /// @param lower_bound: The lower bound that we are proving
+    public native fun verify_full_range_proof(proof: vector<u8>, commitment: vector<u8>);
 }

@@ -631,7 +631,7 @@ async fn main() -> Result<()> {
         (
             primary_gas_id,
             primary_gas_account,
-            Arc::new(keypair.parse()?),
+            Arc::new(keypair.parse().map_err(|_| anyhow!("Invalid Keypair"))?),
             config,
         )
     };
