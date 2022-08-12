@@ -320,6 +320,29 @@ fn verify_batch_aggregate_signature_length_mismatch() {
     )
     .is_err());
 
+    // add an extra signature to both aggregated_signature that batch_verify takes in
+    let mut signatures1_with_extra = aggregated_signature1.clone();
+    let kp = &keys()[0];
+    let sig = kp.sign(&digest1.0);
+    let res = signatures1_with_extra.add_signature(sig);
+    assert!(res.is_ok());
+
+    let mut signatures2_with_extra = aggregated_signature2.clone();
+    let kp = &keys()[0];
+    let sig2 = kp.sign(&digest1.0);
+    let res = signatures2_with_extra.add_signature(sig2);
+    assert!(res.is_ok());
+
+    assert!(Ed25519AggregateSignature::batch_verify(
+        &[
+            signatures1_with_extra.clone(),
+            signatures2_with_extra.clone()
+        ],
+        &[&pubkeys1[..]],
+        &[&digest1.0[..], &digest2.0[..]]
+    )
+    .is_err());
+
     assert!(Ed25519AggregateSignature::batch_verify(
         &[aggregated_signature1.clone(), aggregated_signature2.clone()],
         &[&pubkeys1[..], &pubkeys2[1..]],

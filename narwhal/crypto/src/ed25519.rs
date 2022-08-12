@@ -341,6 +341,9 @@ impl AggregateAuthenticator for Ed25519AggregateSignature {
         let mut batch = batch::Verifier::new();
 
         for i in 0..pks.len() {
+            if pks[i].len() != sigs[i].0.len() {
+                return Err(signature::Error::new());
+            }
             for j in 0..pks[i].len() {
                 let vk_bytes = VerificationKeyBytes::from(pks[i][j].0);
                 batch.queue((vk_bytes, sigs[i].0[j], messages[i]));
