@@ -11,6 +11,7 @@ import {
     getMovePackageContent,
     getObjectId,
     getTransferSuiTransaction,
+    getTransferSuiAmount,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
@@ -219,6 +220,7 @@ function ItemView({ data }: { data: TxItemView }) {
 
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
+    const amount = getTransferSuiAmount(txdetails);
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
     const recipient =
@@ -377,6 +379,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 <div className={styles.txaddress}>
                                     <SendReceiveView data={sendreceive} />
                                 </div>
+                            </section>
+                        )}
+                        {txKindName === 'TransferSui' && (
+                            <section>
+                                <div>Amount</div>
+                                <div>{amount ? amount : 0}</div>
                             </section>
                         )}
                         <section

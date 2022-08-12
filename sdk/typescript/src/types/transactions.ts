@@ -254,6 +254,12 @@ export function getTransactions(
   return data.data.transactions;
 }
 
+export function getTransferSuiAmount(
+  data: SuiTransactionKind
+): number | null {
+  return ("TransferSui" in data) ? data.TransferSui.amount : null; 
+}
+
 export function getTransactionKindName(
   data: SuiTransactionKind
 ): TransactionKindName {
