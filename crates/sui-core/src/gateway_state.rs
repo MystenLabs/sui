@@ -21,7 +21,7 @@ use prometheus::{
     Registry,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
-use tracing::{debug, error, Instrument};
+use tracing::{debug, error, trace, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_config::gateway::GatewayConfig;
@@ -1378,7 +1378,8 @@ where
             .sync_all_owned_objects(account_addr, Duration::from_secs(60))
             .await?;
 
-        debug!(
+        // This is quite spammy when there are a number of huge objects
+        trace!(
             ?active_object_certs,
             deletec = ?_deleted_refs_certs,
             ?account_addr,
