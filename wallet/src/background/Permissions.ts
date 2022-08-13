@@ -17,7 +17,7 @@ import type {
 function openPermissionWindow(permissionID: string) {
     return new Window(
         Browser.runtime.getURL('ui.html') +
-            `#/connect/${encodeURIComponent(permissionID)}`
+            `#/dapp/connect/${encodeURIComponent(permissionID)}`
     );
 }
 

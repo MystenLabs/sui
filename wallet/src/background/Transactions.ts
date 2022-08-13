@@ -17,7 +17,7 @@ const TX_STORE_KEY = 'transactions';
 function openTxWindow(txRequestID: string) {
     return new Window(
         Browser.runtime.getURL('ui.html') +
-            `#/tx-approval/${encodeURIComponent(txRequestID)}`
+            `#/dapp/tx-approval/${encodeURIComponent(txRequestID)}`
     );
 }
 

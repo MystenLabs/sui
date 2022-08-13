@@ -17,11 +17,11 @@ const NetworkSelector = () => {
     const netWorks = useMemo(
         () =>
             Object.keys(API_ENV)
-                .filter(
-                    (env) =>
-                        process.env.SHOW_STAGING !== 'false' ||
-                        env !== API_ENV.staging
-                )
+                // .filter(
+                //     (env) =>
+                //         process.env.SHOW_STAGING !== 'false' ||
+                //         env !== API_ENV.staging
+                // )
                 .map((itm) => ({
                     style: {
                         color: API_ENV_TO_INFO[itm as keyof typeof API_ENV]
