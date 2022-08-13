@@ -189,8 +189,9 @@ impl SimpleFaucet {
         amount: u64,
         uuid: Uuid,
     ) -> Result<TransactionData, anyhow::Error> {
-        // try 3 times in total
+        // if needed, retry 2 times with the following interval
         let retry_intervals_ms = [Duration::from_millis(500), Duration::from_millis(1000)];
+
         let mut data = self
             .construct_transfer_sui_txn(coin_id, signer, recipient, budget, amount)
             .await;
@@ -202,7 +203,9 @@ impl SimpleFaucet {
             } else {
                 warn!(
                     ?uuid,
-                    "Failed to construct TransferSui txn after attempts: {:?}", &retry_intervals_ms
+                    "Failed to construct TransferSui txn after {} attempts with interval {:?}",
+                    retry_intervals_ms.len(),
+                    &retry_intervals_ms
                 );
                 break;
             }
