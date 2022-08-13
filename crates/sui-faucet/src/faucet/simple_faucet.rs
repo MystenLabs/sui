@@ -4,12 +4,13 @@
 use anyhow::anyhow;
 use async_trait::async_trait;
 
+use crate::metrics::FaucetMetrics;
+use prometheus::Registry;
+
 // HashSet is in fact used but linter does not think so
 #[allow(unused_imports)]
 use std::collections::HashSet;
 
-use crate::metrics::FaucetMetrics;
-use prometheus::Registry;
 use sui::client_commands::{SuiClientCommands, WalletContext};
 use sui_json_rpc_types::{
     SuiExecutionStatus, SuiTransactionKind, SuiTransactionResponse, SuiTransferSui,
@@ -17,13 +18,14 @@ use sui_json_rpc_types::{
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
     gas_coin::GasCoin,
-    messages::Transaction,
+    messages::{Transaction, TransactionData},
 };
 use tokio::sync::{
     mpsc::{self, Receiver, Sender},
     Mutex,
 };
-use tracing::{debug, error, info};
+use tokio::time::Duration;
+use tracing::{debug, error, info, warn};
 use uuid::Uuid;
 
 use crate::{CoinInfo, Faucet, FaucetError, FaucetReceipt};
@@ -178,6 +180,71 @@ impl SimpleFaucet {
         Ok(responses)
     }
 
+    async fn construct_transfer_sui_txn_with_retry(
+        &self,
+        coin_id: ObjectID,
+        signer: SuiAddress,
+        recipient: SuiAddress,
+        budget: u64,
+        amount: u64,
+        uuid: Uuid,
+    ) -> Result<TransactionData, anyhow::Error> {
+        // if needed, retry 2 times with the following interval
+        let retry_intervals_ms = [Duration::from_millis(500), Duration::from_millis(1000)];
+
+        let mut data = self
+            .construct_transfer_sui_txn(coin_id, signer, recipient, budget, amount)
+            .await;
+        let mut iter = retry_intervals_ms.iter();
+        while data.is_err() {
+            if let Some(duration) = iter.next() {
+                tokio::time::sleep(*duration).await;
+                debug!(
+                    ?recipient,
+                    ?coin_id,
+                    ?uuid,
+                    "Retrying constructing TransferSui txn. Previous error: {:?}",
+                    &data,
+                );
+            } else {
+                warn!(
+                    ?recipient,
+                    ?coin_id,
+                    ?uuid,
+                    "Failed to construct TransferSui txn after {} retries with interval {:?}",
+                    retry_intervals_ms.len(),
+                    &retry_intervals_ms
+                );
+                break;
+            }
+            data = self
+                .construct_transfer_sui_txn(coin_id, signer, recipient, budget, amount)
+                .await;
+        }
+        data
+    }
+
+    async fn construct_transfer_sui_txn(
+        &self,
+        coin_id: ObjectID,
+        signer: SuiAddress,
+        recipient: SuiAddress,
+        budget: u64,
+        amount: u64,
+    ) -> Result<TransactionData, anyhow::Error> {
+        self.wallet
+            .gateway
+            .transfer_sui(signer, coin_id, budget, recipient, Some(amount))
+            .await
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to construct TransferSui transaction for coin {:?}, {:?}",
+                    coin_id,
+                    e
+                )
+            })
+    }
+
     async fn transfer_sui(
         &self,
         coin_id: ObjectID,
@@ -188,11 +255,10 @@ impl SimpleFaucet {
         uuid: Uuid,
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let context = &self.wallet;
-
-        let data = context
-            .gateway
-            .transfer_sui(signer, coin_id, budget, recipient, Some(amount))
+        let data = self
+            .construct_transfer_sui_txn_with_retry(coin_id, signer, recipient, budget, amount, uuid)
             .await?;
+
         let signature = context.keystore.sign(&signer, &data.to_bytes())?;
 
         let tx = Transaction::new(data, signature);
