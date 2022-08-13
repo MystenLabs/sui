@@ -1,0 +1,76 @@
+@use '_utils';
+@use '_variables' as v;
+@use '_values/colors';
+
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    flex: 1;
+    align-self: stretch;
+    height: calc(100% - 75px);
+    margin-top: 10px;
+}
+
+.amount {
+    input {
+        width: 100%;
+        border: 1px solid colors.$gray-50;
+        height: 44px;
+        border-radius: 10px;
+        padding: 14px 10px;
+
+        &::placeholder {
+            color: colors.$gray-70;
+        }
+    }
+}
+
+.group {
+    display: flex;
+    flex-flow: column nowrap;
+
+    & + & {
+        margin-top: 8px;
+    }
+}
+
+.label {
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.error {
+    color: #8b1111;
+    line-height: 1em;
+    min-height: 1em;
+    margin-top: 2px;
+}
+
+.muted {
+    font-size: 10px;
+    font-weight: 400;
+    color: #666;
+    margin-top: 1px;
+}
+
+.input {
+    padding: 12px;
+}
+
+.btn {
+    background-color: colors.$cta-blue;
+    color: colors.$white;
+    width: 100%;
+    font-weight: 600;
+
+    .arrow-left {
+        margin-left: 10px;
+        transform: rotate(180deg);
+        margin-right: 0;
+        color: colors.$cta-light-blue;
+    }
+
+    &:hover {
+        background-color: colors.$sui-steel-blue;
+    }
+}
