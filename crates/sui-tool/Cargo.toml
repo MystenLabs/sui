@@ -18,7 +18,7 @@ futures = "0.3.21"
 rocksdb = "0.18.0"
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa"}
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "fd070584b57304a8c7b94ee7af656a9375fc2095", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "606c3a9e81f18bc65c1ffa99152452e387d081f8", package = "executor" }
 serde_with = { version = "1.14.0", features = ["hex"] }
 sui-storage = { path = "../sui-storage" }
 serde = { version = "1.0.141", features = ["derive"] }

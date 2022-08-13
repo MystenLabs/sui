@@ -37,7 +37,7 @@ sui-types = { path = "../sui-types" }
 sui-sdk = { path = "../sui-sdk" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "fd070584b57304a8c7b94ee7af656a9375fc2095", package = "node" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "606c3a9e81f18bc65c1ffa99152452e387d081f8", package = "node" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-node = { path = "../sui-node" }
 workspace-hack = { path = "../workspace-hack"}
