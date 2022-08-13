@@ -299,7 +299,7 @@ async fn epoch_change() {
             }
         });
 
-        let _primary_handles = Node::spawn_primary(
+        let _primary = Node::spawn_primary(
             keypair,
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             &store,

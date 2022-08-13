@@ -75,7 +75,7 @@ impl Primary {
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_committed_certificates: Sender<Certificate>,
         registry: &Registry,
-    ) -> Vec<JoinHandle<()>> {
+    ) -> Vec<(&str, JoinHandle<()>)> {
         // Write the parameters to the logs.
         parameters.tracing();
 
@@ -440,22 +440,22 @@ impl Primary {
         );
 
         let mut handles = vec![
-            primary_receiver_handle,
-            worker_receiver_handle,
-            core_handle,
-            payload_receiver_handle,
-            block_synchronizer_handle,
-            block_waiter_handle,
-            block_remover_handle,
-            header_waiter_handle,
-            certificate_waiter_handle,
-            proposer_handle,
-            helper_handle,
-            state_handler_handle,
+            ("primary_receiver", primary_receiver_handle),
+            ("worker_receiver", worker_receiver_handle),
+            ("core", core_handle),
+            ("payload_receiver", payload_receiver_handle),
+            ("block_synchronizer", block_synchronizer_handle),
+            ("block_waiter", block_waiter_handle),
+            ("block_remover", block_remover_handle),
+            ("header_waiter", header_waiter_handle),
+            ("certificate_waiter", certificate_waiter_handle),
+            ("proposer", proposer_handle),
+            ("helper", helper_handle),
+            ("state_handler", state_handler_handle),
         ];
 
         if let Some(h) = consensus_api_handle {
-            handles.push(h);
+            handles.push(("consensus_api", h));
         }
 
         handles

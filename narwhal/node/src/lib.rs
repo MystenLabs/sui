@@ -20,9 +20,10 @@ use store::{
     rocks::{open_cf, DBMap},
     Store,
 };
+use task_group::{TaskGroup, TaskManager};
 use tokio::{
     sync::{mpsc::Sender, watch},
-    task::JoinHandle,
+    task::{JoinError, JoinHandle},
 };
 use tracing::debug;
 use types::{
@@ -123,7 +124,7 @@ impl Node {
         tx_confirmation: Sender<ExecutorOutput<State>>,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
-    ) -> SubscriberResult<Vec<JoinHandle<()>>>
+    ) -> SubscriberResult<TaskManager<JoinError>>
     where
         State: ExecutionState + Send + Sync + 'static,
         State::Outcome: Send + 'static,
@@ -159,7 +160,7 @@ impl Node {
             let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
             let (handle, dag) = Dag::new(&committee.load(), rx_new_certificates, consensus_metrics);
 
-            handles.push(handle);
+            handles.push(("dag", handle));
 
             (Some(Arc::new(dag)), NetworkModel::Asynchronous)
         } else {
@@ -231,7 +232,13 @@ impl Node {
             });
         }
 
-        Ok(handles)
+        let (task_group, task_manager) = TaskGroup::new();
+        for (name, handle) in handles {
+            // The tasks will be awaited with the `task_manager`, so the task handles / futures can be dropped.
+            let _ = task_group.spawn(name, handle);
+        }
+
+        Ok(task_manager)
     }
 
     /// Spawn the consensus core and the client executing transactions.
@@ -249,7 +256,7 @@ impl Node {
             SerializedTransaction,
         )>,
         registry: &Registry,
-    ) -> SubscriberResult<Vec<JoinHandle<()>>>
+    ) -> SubscriberResult<Vec<(&'static str, JoinHandle<()>)>>
     where
         PublicKey: VerifyingKey,
         State: ExecutionState + Send + Sync + 'static,
@@ -262,13 +269,15 @@ impl Node {
         let (tx_sequence, rx_sequence) =
             metered_channel::channel(Self::CHANNEL_CAPACITY, &channel_metrics.tx_sequence);
 
+        let mut handles = Vec::new();
+
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
             (**committee.load()).clone(),
             store.consensus_store.clone(),
             parameters.gc_depth,
         );
-        let consensus_handles = Consensus::spawn(
+        let consensus_handle = Consensus::spawn(
             (**committee.load()).clone(),
             store.consensus_store.clone(),
             store.certificate_store.clone(),
@@ -280,6 +289,7 @@ impl Node {
             consensus_metrics.clone(),
             parameters.gc_depth,
         );
+        handles.push(("consensus", consensus_handle));
 
         // Spawn the client executing the transactions. It can also synchronize with the
         // subscriber handler if it missed some transactions.
@@ -294,11 +304,9 @@ impl Node {
             registry,
         )
         .await?;
+        handles.extend(executor_handles);
 
-        Ok(executor_handles
-            .into_iter()
-            .chain(std::iter::once(consensus_handles))
-            .collect())
+        Ok(handles)
     }
 
     /// Spawn a specified number of workers.
@@ -315,11 +323,10 @@ impl Node {
         parameters: Parameters,
         // The prometheus metrics Registry
         registry: &Registry,
-    ) -> Vec<JoinHandle<()>> {
-        let mut handles = Vec::new();
-
+    ) -> TaskManager<JoinError> {
         let metrics = initialise_metrics(registry);
 
+        let (task_group, task_manager) = TaskGroup::new();
         for id in ids {
             let worker_handles = Worker::spawn(
                 name.clone(),
@@ -329,8 +336,12 @@ impl Node {
                 store.batch_store.clone(),
                 metrics.clone(),
             );
-            handles.extend(worker_handles);
+            // TODO(narwhal/727): propagate worker task names.
+            for (i, h) in worker_handles.into_iter().enumerate() {
+                let _ = task_group.spawn(format!("worker_{}_{}", id, i), h);
+            }
         }
-        handles
+
+        task_manager
     }
 }

@@ -35,7 +35,7 @@ impl NodeRestarter {
         let mut name = keypair.public().clone();
         let mut committee = committee.clone();
 
-        let mut handles = Vec::new();
+        let mut task_managers = Vec::new();
         let mut primary_network = WorkerToPrimaryNetwork::default();
         let mut worker_network = PrimaryToWorkerNetwork::default();
 
@@ -49,7 +49,7 @@ impl NodeRestarter {
             let store = NodeStorage::reopen(store_path);
 
             // Restart the relevant components.
-            let primary_handles = Node::spawn_primary(
+            let primary = Node::spawn_primary(
                 keypair,
                 Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
                 &store,
@@ -62,7 +62,7 @@ impl NodeRestarter {
             .await
             .unwrap();
 
-            let worker_handles = Node::spawn_workers(
+            let workers = Node::spawn_workers(
                 name.clone(),
                 /* worker_ids */ vec![0],
                 Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
@@ -71,8 +71,8 @@ impl NodeRestarter {
                 registry,
             );
 
-            handles.extend(primary_handles);
-            handles.extend(worker_handles);
+            task_managers.push(primary);
+            task_managers.push(workers);
 
             // Wait for a committee change.
             let (new_keypair, new_committee) = match rx_reconfigure.recv().await {
@@ -111,7 +111,7 @@ impl NodeRestarter {
             worker_network.cleanup(committee.network_diff(&new_committee));
 
             // Wait for the components to shut down.
-            join_all(handles.drain(..)).await;
+            join_all(task_managers.drain(..)).await;
             tracing::debug!("All tasks successfully exited");
 
             // Give it an extra second in case the last task to exit is a network server. The OS
