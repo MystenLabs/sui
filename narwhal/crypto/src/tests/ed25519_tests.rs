@@ -247,8 +247,14 @@ fn verify_invalid_aggregate_signature_public_key_switch() {
     assert!(res.is_err(), "{:?}", res);
 }
 
-#[test]
-fn verify_batch_aggregate_signature() {
+fn verify_batch_aggregate_signature_inputs() -> (
+    Vec<u8>,
+    Vec<u8>,
+    Vec<Ed25519PublicKey>,
+    Vec<Ed25519PublicKey>,
+    Ed25519AggregateSignature,
+    Ed25519AggregateSignature,
+) {
     // Make signatures.
     let message1: &[u8] = b"Hello, world!";
     let digest1 = message1.digest();
@@ -263,7 +269,7 @@ fn verify_batch_aggregate_signature() {
     let aggregated_signature1 = Ed25519AggregateSignature::aggregate(signatures1).unwrap();
 
     // Make signatures.
-    let message2: &[u8] = b"Hello, world!";
+    let message2: &[u8] = b"Hello, worl!";
     let digest2 = message2.digest();
     let (pubkeys2, signatures2): (Vec<Ed25519PublicKey>, Vec<Ed25519Signature>) = keys()
         .into_iter()
@@ -275,61 +281,94 @@ fn verify_batch_aggregate_signature() {
         .unzip();
 
     let aggregated_signature2 = Ed25519AggregateSignature::aggregate(signatures2).unwrap();
+    (
+        digest1.to_vec(),
+        digest2.to_vec(),
+        pubkeys1,
+        pubkeys2,
+        aggregated_signature1,
+        aggregated_signature2,
+    )
+}
+
+#[test]
+fn verify_batch_aggregate_signature() {
+    let (digest1, digest2, pubkeys1, pubkeys2, aggregated_signature1, aggregated_signature2) =
+        verify_batch_aggregate_signature_inputs();
 
     assert!(Ed25519AggregateSignature::batch_verify(
         &[aggregated_signature1, aggregated_signature2],
         &[&pubkeys1[..], &pubkeys2[..]],
-        &[&digest1.0[..], &digest2.0[..]]
+        &[&digest1[..], &digest2[..]]
     )
     .is_ok());
 }
 
 #[test]
-fn verify_batch_aggregate_signature_length_mismatch() {
-    // Make signatures.
-    let message1: &[u8] = b"Hello, world!";
-    let digest1 = message1.digest();
-    let (pubkeys1, signatures1): (Vec<Ed25519PublicKey>, Vec<Ed25519Signature>) = keys()
-        .into_iter()
-        .take(3)
-        .map(|kp| {
-            let sig = kp.sign(&digest1.0);
-            (kp.public().clone(), sig)
-        })
-        .unzip();
-    let aggregated_signature1 = Ed25519AggregateSignature::aggregate(signatures1).unwrap();
+fn verify_batch_missing_parameters_length_mismatch() {
+    let (digest1, digest2, pubkeys1, pubkeys2, aggregated_signature1, aggregated_signature2) =
+        verify_batch_aggregate_signature_inputs();
 
-    // Make signatures.
-    let message2: &[u8] = b"Hello, world!";
-    let digest2 = message2.digest();
-    let (pubkeys2, signatures2): (Vec<Ed25519PublicKey>, Vec<Ed25519Signature>) = keys()
-        .into_iter()
-        .take(2)
-        .map(|kp| {
-            let sig = kp.sign(&digest2.0);
-            (kp.public().clone(), sig)
-        })
-        .unzip();
-
-    let aggregated_signature2 = Ed25519AggregateSignature::aggregate(signatures2).unwrap();
-
+    // Fewer pubkeys than signatures
     assert!(Ed25519AggregateSignature::batch_verify(
         &[aggregated_signature1.clone(), aggregated_signature2.clone()],
         &[&pubkeys1[..]],
-        &[&digest1.0[..], &digest2.0[..]]
+        &[&digest1[..], &digest2[..]]
+    )
+    .is_err());
+    assert!(Ed25519AggregateSignature::batch_verify(
+        &[aggregated_signature1.clone(), aggregated_signature2.clone()],
+        &[&pubkeys1[..]],
+        &[&digest1[..]]
+    )
+    .is_err());
+
+    // Fewer messages than signatures
+    assert!(Ed25519AggregateSignature::batch_verify(
+        &[aggregated_signature1.clone(), aggregated_signature2.clone()],
+        &[&pubkeys1[..], &pubkeys2[..]],
+        &[&digest1[..]]
+    )
+    .is_err());
+    assert!(Ed25519AggregateSignature::batch_verify(
+        &[aggregated_signature1, aggregated_signature2],
+        &[&pubkeys1[..]],
+        &[&digest1[..]]
+    )
+    .is_err());
+}
+
+#[test]
+fn verify_batch_missing_keys_in_batch() {
+    let (digest1, digest2, pubkeys1, pubkeys2, aggregated_signature1, aggregated_signature2) =
+        verify_batch_aggregate_signature_inputs();
+
+    // Pubkeys missing at the end
+    assert!(Ed25519AggregateSignature::batch_verify(
+        &[aggregated_signature1.clone(), aggregated_signature2.clone()],
+        &[&pubkeys1[..], &pubkeys2[1..]],
+        &[&digest1[..], &digest2[..]]
+    )
+    .is_err());
+
+    // Pubkeys missing at the start
+    assert!(Ed25519AggregateSignature::batch_verify(
+        &[aggregated_signature1.clone(), aggregated_signature2.clone()],
+        &[&pubkeys1[..], &pubkeys2[..pubkeys2.len() - 1]],
+        &[&digest1[..], &digest2[..]]
     )
     .is_err());
 
     // add an extra signature to both aggregated_signature that batch_verify takes in
-    let mut signatures1_with_extra = aggregated_signature1.clone();
+    let mut signatures1_with_extra = aggregated_signature1;
     let kp = &keys()[0];
-    let sig = kp.sign(&digest1.0);
+    let sig = kp.sign(&digest1);
     let res = signatures1_with_extra.add_signature(sig);
     assert!(res.is_ok());
 
-    let mut signatures2_with_extra = aggregated_signature2.clone();
+    let mut signatures2_with_extra = aggregated_signature2;
     let kp = &keys()[0];
-    let sig2 = kp.sign(&digest1.0);
+    let sig2 = kp.sign(&digest1);
     let res = signatures2_with_extra.add_signature(sig2);
     assert!(res.is_ok());
 
@@ -339,21 +378,7 @@ fn verify_batch_aggregate_signature_length_mismatch() {
             signatures2_with_extra.clone()
         ],
         &[&pubkeys1[..]],
-        &[&digest1.0[..], &digest2.0[..]]
-    )
-    .is_err());
-
-    assert!(Ed25519AggregateSignature::batch_verify(
-        &[aggregated_signature1.clone(), aggregated_signature2.clone()],
-        &[&pubkeys1[..], &pubkeys2[1..]],
-        &[&digest1.0[..], &digest2.0[..]]
-    )
-    .is_err());
-
-    assert!(Ed25519AggregateSignature::batch_verify(
-        &[aggregated_signature1, aggregated_signature2],
-        &[&pubkeys1[..], &pubkeys2[..]],
-        &[&digest2.0[..]]
+        &[&digest1[..], &digest2[..]]
     )
     .is_err());
 }
