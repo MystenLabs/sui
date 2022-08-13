@@ -203,7 +203,7 @@ impl SimpleFaucet {
             } else {
                 warn!(
                     ?uuid,
-                    "Failed to construct TransferSui txn after {} attempts with interval {:?}",
+                    "Failed to construct TransferSui txn after {} retries with interval {:?}",
                     retry_intervals_ms.len(),
                     &retry_intervals_ms
                 );
