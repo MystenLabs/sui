@@ -90,11 +90,11 @@ export async function genFileTypeMsg(
         });
 }
 
-/* Currently unused but potentially useful:
- *
- * export const isValidHttpUrl = (url: string) => {
- *     try { new URL(url) }
- *         catch (e) { return false }
- *             return /^https?/.test(url);
- *             };
- */
+export function isValidHttpUrl(url: string) {
+    try {
+        new URL(url);
+    } catch (e) {
+        return false;
+    }
+    return /^https?/.test(url);
+}

@@ -39,6 +39,10 @@ div.active {
     @apply bg-offblack text-offwhite border-green-500 border-solid font-mono;
 }
 
+.opennetworkdetails > div > input.invalid {
+    @apply border-red-500;
+}
+
 .remove {
     @apply hidden;
 }

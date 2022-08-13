@@ -4,8 +4,8 @@
 import { useCallback, useContext, useState } from 'react';
 
 import { ReactComponent as DownSVG } from '../../assets/Down.svg';
-import { NetworkContext } from '../../context';
-import { Network, getEndpoint } from '../../utils/api/DefaultRpcClient';
+import { NetworkContext, useCustomRPC } from '../../context';
+import { Network } from '../../utils/api/DefaultRpcClient';
 import {
     IS_STATIC_ENV,
     IS_LOCAL_ENV,
@@ -19,6 +19,8 @@ export default function NetworkSelect() {
     const [isModuleOpen, setModuleOpen] = useState(false);
     const [isOpenInput, setIsOpenInput] = useState(false);
 
+    const { customRPC, setCustomRPC, customRPCIsValid } = useCustomRPC();
+
     const openModal = useCallback(
         () => (isModuleOpen ? setModuleOpen(false) : setModuleOpen(true)),
         [isModuleOpen, setModuleOpen]
@@ -27,8 +29,8 @@ export default function NetworkSelect() {
 
     const openInput = useCallback(() => {
         setIsOpenInput(true);
-        setNetwork(getEndpoint(Network.Local));
-    }, [setIsOpenInput, setNetwork]);
+        setNetwork(customRPC);
+    }, [setIsOpenInput, setNetwork, customRPC]);
 
     const chooseNetwork = useCallback(
         (specified: Network | string) => () => {
@@ -41,9 +43,13 @@ export default function NetworkSelect() {
     );
 
     const handleTextChange = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) =>
-            setNetwork(e.currentTarget.value),
-        [setNetwork]
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            setCustomRPC(e.currentTarget.value);
+            if (customRPCIsValid) {
+                setNetwork(e.currentTarget.value);
+            }
+        },
+        [customRPCIsValid, setNetwork, setCustomRPC]
     );
     const networkStyle = (iconNetwork: Network | 'other') =>
         // Button text matches network or
@@ -116,8 +122,11 @@ export default function NetworkSelect() {
                         {isOpenInput && (
                             <input
                                 type="text"
-                                value={network}
+                                value={customRPC}
                                 onChange={handleTextChange}
+                                className={
+                                    !customRPCIsValid ? styles.invalid : ''
+                                }
                             />
                         )}
                     </div>

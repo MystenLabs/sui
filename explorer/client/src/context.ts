@@ -9,10 +9,12 @@ import {
     type SetStateAction,
 } from 'react';
 
-import { Network } from './utils/api/DefaultRpcClient';
+import { getEndpoint, Network } from './utils/api/DefaultRpcClient';
 import { IS_LOCAL_ENV, IS_STAGING_ENV, CURRENT_ENV } from './utils/envUtil';
+import { isValidHttpUrl } from './utils/stringUtils';
 
 const LOCALSTORE_RPC_KEY = CURRENT_ENV + 'sui-explorer-rpc';
+const LOCALSTORE_CUSTOM_RPC_KEY = CURRENT_ENV + 'sui-explorer-custom-rpc';
 const LOCALSTORE_RPC_TIME_KEY = CURRENT_ENV + 'sui-explorer-rpc-lastset';
 // Below is 3 hours in milliseconds:
 const LOCALSTORE_RPC_VALID_MS = 60000 * 60 * 3;
@@ -66,4 +68,41 @@ export function useNetwork(): [
     }, [network]);
 
     return [network, setNetwork];
+}
+
+type CustomRPC = {
+    customRPC: string;
+    customRPCIsValid: boolean;
+    setCustomRPC: Dispatch<SetStateAction<string>>;
+};
+
+export function useCustomRPC(): CustomRPC {
+    let defaultCustomRPC = window.localStorage.getItem(
+        LOCALSTORE_CUSTOM_RPC_KEY
+    );
+
+    if (!defaultCustomRPC || wasNetworkSetLongTimeAgo()) {
+        defaultCustomRPC = getEndpoint(Network.Local);
+        window.localStorage.setItem(
+            LOCALSTORE_CUSTOM_RPC_KEY,
+            defaultCustomRPC
+        );
+    }
+
+    const [customRPC, setCustomRPC] = useState<string>(defaultCustomRPC);
+    const [customRPCIsValid, setCustomRPCIsValid] = useState<boolean>(true);
+
+    useEffect(() => {
+        const isValid = isValidHttpUrl(customRPC);
+        setCustomRPCIsValid(isValid);
+        if (isValid) {
+            window.localStorage.setItem(LOCALSTORE_CUSTOM_RPC_KEY, customRPC);
+        }
+    }, [customRPC, setCustomRPCIsValid]);
+
+    return {
+        customRPC,
+        customRPCIsValid,
+        setCustomRPC,
+    };
 }
