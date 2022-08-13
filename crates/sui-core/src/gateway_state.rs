@@ -41,7 +41,7 @@ use sui_types::{
 
 use crate::authority::ResolverWrapper;
 use crate::authority_aggregator::AuthAggMetrics;
-use crate::authority_client::NetworkAuthorityClient;
+use crate::authority_client::{NetworkAuthorityClient, NetworkAuthorityClientMetrics};
 use crate::safe_client::SafeClientMetrics;
 use crate::transaction_input_checker;
 use crate::{
@@ -243,9 +243,11 @@ impl GatewayState<NetworkAuthorityClient> {
         prometheus_registry: Option<&Registry>,
     ) -> Result<GatewayClient, anyhow::Error> {
         let committee = Self::make_committee(config)?;
-        let authority_clients = Self::make_authority_clients(config);
         let default_registry = Registry::new();
         let prometheus_registry = prometheus_registry.unwrap_or(&default_registry);
+        let network_metrics = NetworkAuthorityClientMetrics::new(&prometheus_registry);
+        let authority_clients = Self::make_authority_clients(config, network_metrics);
+
         Ok(Arc::new(GatewayState::new(
             &config.db_folder_path,
             committee,
@@ -263,16 +265,18 @@ impl GatewayState<NetworkAuthorityClient> {
 
     pub fn make_authority_clients(
         config: &GatewayConfig,
+        network_metrics: NetworkAuthorityClientMetrics,
     ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
         let mut authority_clients = BTreeMap::new();
         let mut network_config = mysten_network::config::Config::new();
         network_config.connect_timeout = Some(config.send_timeout);
         network_config.request_timeout = Some(config.recv_timeout);
+        let net_metrics = Arc::new(network_metrics);
         for authority in &config.validator_set {
             let channel = network_config
                 .connect_lazy(authority.network_address())
                 .unwrap();
-            let client = NetworkAuthorityClient::new(channel);
+            let client = NetworkAuthorityClient::new(channel, net_metrics.clone());
             authority_clients.insert(authority.public_key(), client);
         }
         authority_clients

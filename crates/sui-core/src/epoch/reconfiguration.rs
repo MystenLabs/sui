@@ -3,7 +3,7 @@
 
 use crate::authority_active::ActiveAuthority;
 use crate::authority_aggregator::{AuthorityAggregator, ReduceOutput};
-use crate::authority_client::AuthorityAPI;
+use crate::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
 use async_trait::async_trait;
 use multiaddr::Multiaddr;
 use narwhal_crypto::traits::ToFromBytes;
@@ -27,7 +27,10 @@ use typed_store::Map;
 pub trait Reconfigurable {
     fn needs_network_recreation() -> bool;
 
-    fn recreate(channel: tonic::transport::Channel) -> Self;
+    fn recreate(
+        channel: tonic::transport::Channel,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> Self;
 }
 
 // TODO: Move these constants to a control config.
@@ -260,7 +263,7 @@ where
                 }
                 Ok(result) => result,
             };
-            let client: A = A::recreate(channel);
+            let client: A = A::recreate(channel, self.network_metrics.clone());
             debug!(
                 "New network client created for {} at {:?}",
                 public_key_bytes, address

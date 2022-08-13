@@ -33,6 +33,7 @@ use sui_storage::{
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tracing::info;
 
+use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
@@ -140,10 +141,20 @@ impl SuiNode {
 
         let sui_system_state = state.get_sui_system_state_object().await?;
 
+        let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&prometheus_registry));
+
         let authority_clients = if config.enable_reconfig && sui_system_state.epoch > 0 {
-            make_network_authority_client_sets_from_system_state(&sui_system_state, &net_config)
+            make_network_authority_client_sets_from_system_state(
+                &sui_system_state,
+                &net_config,
+                network_metrics.clone(),
+            )
         } else {
-            make_network_authority_client_sets_from_genesis(genesis, &net_config)
+            make_network_authority_client_sets_from_genesis(
+                genesis,
+                &net_config,
+                network_metrics.clone(),
+            )
         }?;
         let net = AuthorityAggregator::new(
             state.clone_committee(),
@@ -179,6 +190,7 @@ impl SuiNode {
                     follower_store,
                     net,
                     GossipMetrics::new(&prometheus_registry),
+                    network_metrics.clone(),
                 )?);
                 active = Some(Arc::clone(&active_authority));
 
