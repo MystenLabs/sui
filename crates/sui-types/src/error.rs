@@ -381,8 +381,8 @@ pub enum SuiError {
 
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
-    #[error("{0}")]
-    RpcError(String),
+    #[error("{1} - {0}")]
+    RpcError(String, &'static str),
 
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
@@ -439,7 +439,7 @@ impl std::convert::From<SubscriberError> for SuiError {
 
 impl From<tonic::Status> for SuiError {
     fn from(status: tonic::Status) -> Self {
-        Self::RpcError(status.message().to_owned())
+        Self::RpcError(status.message().to_owned(), status.code().description())
     }
 }
 
