@@ -55,6 +55,7 @@ use gossip::{gossip_process, node_sync_process, GossipMetrics};
 
 pub mod checkpoint_driver;
 use crate::authority_active::checkpoint_driver::CheckpointMetrics;
+use crate::authority_client::NetworkAuthorityClientMetrics;
 use crate::epoch::reconfiguration::Reconfigurable;
 use checkpoint_driver::{checkpoint_process, get_latest_checkpoint_from_all, sync_to_checkpoint};
 
@@ -121,6 +122,10 @@ pub struct ActiveAuthority<A> {
     // Gossip Metrics including gossip between validators and
     // node sync process between fullnode and validators
     pub gossip_metrics: GossipMetrics,
+
+    // This is only meaningful if A is of type NetworkAuthorityClient,
+    // and stored here for reconfiguration purposes.
+    pub network_metrics: Arc<NetworkAuthorityClientMetrics>,
 }
 
 impl<A> ActiveAuthority<A> {
@@ -130,6 +135,7 @@ impl<A> ActiveAuthority<A> {
         follower_store: Arc<FollowerStore>,
         net: AuthorityAggregator<A>,
         gossip_metrics: GossipMetrics,
+        network_metrics: Arc<NetworkAuthorityClientMetrics>,
     ) -> SuiResult<Self> {
         let committee = authority.clone_committee();
 
@@ -155,6 +161,7 @@ impl<A> ActiveAuthority<A> {
             follower_store,
             net: ArcSwap::from(net),
             gossip_metrics,
+            network_metrics,
         })
     }
 
@@ -186,6 +193,7 @@ impl<A> ActiveAuthority<A> {
             follower_store,
             net,
             GossipMetrics::new_for_tests(),
+            Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
         )
     }
 
@@ -258,6 +266,7 @@ impl<A> Clone for ActiveAuthority<A> {
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
             gossip_metrics: self.gossip_metrics.clone(),
+            network_metrics: self.network_metrics.clone(),
         }
     }
 }

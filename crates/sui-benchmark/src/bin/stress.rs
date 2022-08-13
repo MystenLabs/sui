@@ -37,6 +37,7 @@ use sui_core::epoch::epoch_store::EpochStore;
 use sui_sdk::crypto::FileBasedKeystore;
 use sui_types::crypto::EncodeDecodeBase64;
 
+use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::objects::generate_gas_objects_with_owner;
@@ -212,7 +213,10 @@ async fn main() -> Result<()> {
         // Make the client runtime wait until we are done creating genesis objects
         let cloned_config = configs;
         let cloned_gas = primary_gas;
-        let auth_clients = GatewayState::make_authority_clients(&gateway_config);
+        let auth_clients = GatewayState::make_authority_clients(
+            &gateway_config,
+            NetworkAuthorityClientMetrics::new_for_tests(),
+        );
         // spawn a thread to spin up sui nodes on the multi-threaded server runtime
         let _ = std::thread::spawn(move || {
             // create server runtime
@@ -268,7 +272,10 @@ async fn main() -> Result<()> {
             })?;
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
         let committee = GatewayState::make_committee(&config)?;
-        let authority_clients = GatewayState::make_authority_clients(&config);
+        let authority_clients = GatewayState::make_authority_clients(
+            &config,
+            NetworkAuthorityClientMetrics::new_for_tests(),
+        );
         let registry = prometheus::Registry::new();
         let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
         let aggregator = AuthorityAggregator::new(
@@ -325,7 +332,10 @@ async fn main() -> Result<()> {
     let handle = std::thread::spawn(move || {
         client_runtime.block_on(async move {
             let committee = GatewayState::make_committee(&gateway_config).unwrap();
-            let authority_clients = GatewayState::make_authority_clients(&gateway_config);
+            let authority_clients = GatewayState::make_authority_clients(
+                &gateway_config,
+                NetworkAuthorityClientMetrics::new_for_tests(),
+            );
             let registry: Registry = metrics::start_prometheus_server(
                 format!("127.0.0.1:{}", opts.client_metric_port)
                     .parse()

@@ -76,27 +76,36 @@ pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoRespon
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
     client: ValidatorClient<tonic::transport::Channel>,
-    metrics: NetworkAuthorityClientMetrics,
+    metrics: Arc<NetworkAuthorityClientMetrics>,
 }
 
 impl NetworkAuthorityClient {
-    pub async fn connect(address: &Multiaddr) -> anyhow::Result<Self> {
+    pub async fn connect(
+        address: &Multiaddr,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> anyhow::Result<Self> {
         let channel = mysten_network::client::connect(address)
             .await
             .map_err(|err| anyhow!(err.to_string()))?;
-        Ok(Self::new(channel))
+        Ok(Self::new(channel, metrics))
     }
 
-    pub fn connect_lazy(address: &Multiaddr) -> anyhow::Result<Self> {
+    pub fn connect_lazy(
+        address: &Multiaddr,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> anyhow::Result<Self> {
         let channel = mysten_network::client::connect_lazy(address)
             .map_err(|err| anyhow!(err.to_string()))?;
-        Ok(Self::new(channel))
+        Ok(Self::new(channel, metrics))
     }
 
-    pub fn new(channel: tonic::transport::Channel) -> Self {
+    pub fn new(
+        channel: tonic::transport::Channel,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> Self {
         Self {
             client: ValidatorClient::new(channel),
-            metrics: NetworkAuthorityClientMetrics::new(&prometheus::Registry::new()),
+            metrics,
         }
     }
 
@@ -111,8 +120,11 @@ impl Reconfigurable for NetworkAuthorityClient {
         true
     }
 
-    fn recreate(channel: tonic::transport::Channel) -> Self {
-        NetworkAuthorityClient::new(channel)
+    fn recreate(
+        channel: tonic::transport::Channel,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> Self {
+        NetworkAuthorityClient::new(channel, metrics)
     }
 }
 
@@ -294,6 +306,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
 pub fn make_network_authority_client_sets_from_system_state(
     sui_system_state: &SuiSystemState,
     network_config: &Config,
+    network_metrics: Arc<NetworkAuthorityClientMetrics>,
 ) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for validator in &sui_system_state.validators.active_validators {
@@ -301,7 +314,7 @@ pub fn make_network_authority_client_sets_from_system_state(
         let channel = network_config
             .connect_lazy(&address)
             .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel);
+        let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
         let name: &[u8] = &validator.metadata.name;
         let public_key_bytes = AuthorityPublicKeyBytes::from_bytes(name)?;
         authority_clients.insert(public_key_bytes, client);
@@ -312,13 +325,14 @@ pub fn make_network_authority_client_sets_from_system_state(
 pub fn make_network_authority_client_sets_from_genesis(
     genesis: &Genesis,
     network_config: &Config,
+    network_metrics: Arc<NetworkAuthorityClientMetrics>,
 ) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for validator in genesis.validator_set() {
         let channel = network_config
             .connect_lazy(validator.network_address())
             .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel);
+        let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
         authority_clients.insert(validator.public_key(), client);
     }
     Ok(authority_clients)
@@ -349,7 +363,7 @@ impl Reconfigurable for LocalAuthorityClient {
         false
     }
 
-    fn recreate(_channel: Channel) -> Self {
+    fn recreate(_channel: Channel, _metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
         unreachable!(); // this function should not get called because the above function returns false
     }
 }
@@ -593,5 +607,10 @@ impl NetworkAuthorityClientMetrics {
             )
             .unwrap(),
         }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = prometheus::Registry::new();
+        Self::new(&registry)
     }
 }

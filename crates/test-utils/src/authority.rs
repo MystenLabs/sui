@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::{
     authority_active::{
@@ -106,7 +107,11 @@ pub fn test_authority_aggregator(
         .map(|config| {
             (
                 config.public_key(),
-                NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap(),
+                NetworkAuthorityClient::connect_lazy(
+                    config.network_address(),
+                    Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+                )
+                .unwrap(),
             )
         })
         .collect();
@@ -122,5 +127,9 @@ pub fn test_authority_aggregator(
 
 /// Get a network client to communicate with the consensus.
 pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
-    NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()
+    NetworkAuthorityClient::connect_lazy(
+        config.network_address(),
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+    )
+    .unwrap()
 }
