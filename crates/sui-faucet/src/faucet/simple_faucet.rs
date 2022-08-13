@@ -199,9 +199,17 @@ impl SimpleFaucet {
         while data.is_err() {
             if let Some(duration) = iter.next() {
                 tokio::time::sleep(*duration).await;
-                debug!(?uuid, "Retrying constructing TransferSui txn");
+                debug!(
+                    ?recipient,
+                    ?coin_id,
+                    ?uuid,
+                    "Retrying constructing TransferSui txn. Previous error: {:?}",
+                    &data,
+                );
             } else {
                 warn!(
+                    ?recipient,
+                    ?coin_id,
                     ?uuid,
                     "Failed to construct TransferSui txn after {} retries with interval {:?}",
                     retry_intervals_ms.len(),
