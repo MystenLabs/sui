@@ -3,6 +3,7 @@
 
 import { useMemo } from 'react';
 import { useIntl } from 'react-intl';
+import { Link } from 'react-router-dom';
 
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
@@ -18,10 +19,10 @@ import st from './CoinSelection.module.scss';
 // Get all the coins that are available in the account.
 // default coin type is GAS_TYPE_ARG unless specified in props
 // create a list of coins that are available in the account
-function CoinSelection({
+function ActiveCoinCard({
     activeCoinType = GAS_TYPE_ARG,
 }: {
-    activeCoinType?: string;
+    activeCoinType: string;
 }) {
     const intl = useIntl();
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
@@ -48,7 +49,12 @@ function CoinSelection({
     return (
         <div className={st.content}>
             <div className={st.selectCoin}>
-                <div className={st.coin}>
+                <Link
+                    to={`/send/select?${new URLSearchParams({
+                        type: activeCoinType,
+                    }).toString()}`}
+                    className={st.coin}
+                >
                     <div className={st.suiIcon}>
                         <Icon icon={SuiIcons[IconName]} />
                     </div>
@@ -61,7 +67,7 @@ function CoinSelection({
                     <div className={st.chevron}>
                         <Icon icon={SuiIcons.SuiChevronRight} />
                     </div>
-                </div>
+                </Link>
                 <div className={st.coinBalance}>
                     <div className={st.coinBalanceLabel}>Total Available</div>
                     <div className={st.coinBalanceValue}>
@@ -73,5 +79,4 @@ function CoinSelection({
     );
 }
 
-export default CoinSelection;
-export { default as CoinsCard } from './CoinCard';
+export default ActiveCoinCard;

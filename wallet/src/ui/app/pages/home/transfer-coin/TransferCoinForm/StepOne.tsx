@@ -1,12 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 import { useIntl } from 'react-intl';
 
-import AddressInput from '_components/address-input';
+import Button from '_app/shared/button';
 import Alert from '_components/alert';
+import ActiveCoinCard from '_components/coin-selection';
+import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import NumberInput from '_components/number-input';
 import {
@@ -15,7 +18,7 @@ import {
 } from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
-import type { FormValues } from '.';
+import type { FormValuesStepOne } from '../';
 
 import st from './TransferCoinForm.module.scss';
 
@@ -23,38 +26,34 @@ export type TransferCoinFormProps = {
     submitError: string | null;
     coinBalance: string;
     coinSymbol: string;
+    coinType: string;
     onClearSubmitError: () => void;
 };
 
-function TransferCoinForm({
+function StepOne({
     submitError,
     coinBalance,
     coinSymbol,
+    coinType,
     onClearSubmitError,
 }: TransferCoinFormProps) {
     const {
         isSubmitting,
         isValid,
-        values: { amount, to },
-    } = useFormikContext<FormValues>();
+        values: { amount },
+    } = useFormikContext<FormValuesStepOne>();
     const intl = useIntl();
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
     useEffect(() => {
         onClearRef.current();
-    }, [amount, to]);
+    }, [amount]);
     return (
-        <Form className={st.container} autoComplete="off" noValidate={true}>
-            <div className={st.group}>
-                <label className={st.label}>To:</label>
-                <Field
-                    component={AddressInput}
-                    name="to"
-                    className={st.input}
-                />
-                <div className={st.muted}>The recipient&apos;s address</div>
-                <ErrorMessage className={st.error} name="to" component="div" />
-            </div>
+        <Form
+            className={cl(st.container, st.amount)}
+            autoComplete="off"
+            noValidate={true}
+        >
             <div className={st.group}>
                 <label className={st.label}>Amount:</label>
                 <Field
@@ -78,6 +77,7 @@ function TransferCoinForm({
                     component="div"
                 />
             </div>
+            <ActiveCoinCard activeCoinType={coinType} />
             <div className={st.group}>
                 * Total transaction fee estimate (gas cost):{' '}
                 {DEFAULT_GAS_BUDGET_FOR_TRANSFER} {GAS_SYMBOL}
@@ -91,16 +91,21 @@ function TransferCoinForm({
                 </div>
             ) : null}
             <div className={st.group}>
-                <button
+                <Button
                     type="submit"
                     disabled={!isValid || isSubmitting}
-                    className="btn"
+                    mode="primary"
+                    className={st.btn}
                 >
-                    {isSubmitting ? <LoadingIndicator /> : 'Send'}
-                </button>
+                    Continue
+                    <Icon
+                        icon={SuiIcons.ArrowLeft}
+                        className={cl(st.arrowLeft)}
+                    />
+                </Button>
             </div>
         </Form>
     );
 }
 
-export default memo(TransferCoinForm);
+export default memo(StepOne);

@@ -1,21 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import TransferCoinForm from './TransferCoinForm';
-import { createValidationSchema } from './validation';
-import BottomMenuLayout, {
-    Content,
-    Menu,
-} from '_app/shared/bottom-menu-layout';
+import StepOne from './TransferCoinForm/StepOne';
+import {
+    createValidationSchema,
+    createValidationSchemaStepOne,
+} from './validation';
+import { Content } from '_app/shared/bottom-menu-layout';
 import PageTitle from '_app/shared/page-title';
-import CoinSelection, { CoinsCard } from '_components/coin-selection';
-import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import ProgressBar from '_components/progress-bar';
 import { useAppSelector, useAppDispatch } from '_hooks';
@@ -37,13 +34,19 @@ const initialValues = {
     amount: '',
 };
 
+const initialValuesStepOne = {
+    amount: '',
+};
+
+export type FormValuesStepOne = typeof initialValuesStepOne;
 export type FormValues = typeof initialValues;
 
 // TODO: show out of sync when sui objects locally might be outdated
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
-    const [changeSelectedCoin, setChangeSelectedCoin] = useState(true);
+
     const coinType = useMemo(() => searchParams.get('type'), [searchParams]);
+
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
@@ -68,7 +71,7 @@ function TransferCoinPage() {
     const intl = useIntl();
     const validationSchema = useMemo(
         () =>
-            createValidationSchema(
+            createValidationSchemaStepOne(
                 coinType || '',
                 coinBalance,
                 coinSymbol,
@@ -114,6 +117,10 @@ function TransferCoinPage() {
         },
         [dispatch, navigate, coinType]
     );
+
+    const handleNextStep = useCallback(() => {
+        console.log('handleNextStep');
+    }, []);
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
     }, []);
@@ -131,44 +138,33 @@ function TransferCoinPage() {
                 backLink="/"
                 className={st.pageTitle}
             />
-            <BottomMenuLayout>
-                <Content>
-                    <Loading loading={loadingBalance}>
-                        <ProgressBar
-                            currentStep={1}
-                            stepsName={['Amount', 'Address']}
-                        />
-                        <Formik
-                            initialValues={initialValues}
-                            validateOnMount={true}
-                            validationSchema={validationSchema}
-                            onSubmit={onHandleSubmit}
-                        >
-                            <TransferCoinForm
-                                submitError={sendError}
-                                coinBalance={coinBalance.toString()}
-                                coinSymbol={coinSymbol}
-                                onClearSubmitError={handleOnClearSubmitError}
-                            />
-                        </Formik>
 
-                        <CoinSelection />
-                    </Loading>
-                </Content>
-                <Menu stuckClass={st.shadow} className={st.shadow}>
-                    <button className={cl('btn', st.btn, 'primary')}>
-                        Continue
-                        <Icon
-                            icon={SuiIcons.ArrowLeft}
-                            className={cl(st.arrowLeft)}
+            <Content>
+                <Loading loading={loadingBalance}>
+                    <ProgressBar
+                        currentStep={1}
+                        stepsName={['Amount', 'Address']}
+                    />
+                    <Formik
+                        initialValues={initialValuesStepOne}
+                        validateOnMount={true}
+                        validationSchema={validationSchema}
+                        onSubmit={handleNextStep}
+                    >
+                        <StepOne
+                            submitError={sendError}
+                            coinBalance={coinBalance.toString()}
+                            coinSymbol={coinSymbol}
+                            coinType={coinType}
+                            onClearSubmitError={handleOnClearSubmitError}
                         />
-                    </button>
-                </Menu>
-            </BottomMenuLayout>
+                    </Formik>
+                </Loading>
+            </Content>
         </div>
     );
 
-    return <>{changeSelectedCoin ? <CoinsCard /> : SendCoin}</>;
+    return <>{SendCoin}</>;
 }
 
 export default TransferCoinPage;
