@@ -13,6 +13,7 @@ import {
     getTransferSuiTransaction,
 } from '@mysten/sui.js';
 import cl from 'classnames';
+import { Link } from 'react-router-dom';
 
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
@@ -111,6 +112,7 @@ function formatByTransactionKind(
                 arguments: {
                     value: moveCall.arguments,
                     list: true,
+                    formatArguments: true,
                 },
             };
         case 'Publish':
@@ -142,10 +144,31 @@ type TxItemView = {
         label?: string | number | any;
         value: string | number;
         link?: boolean;
+        formatArguments?: boolean;
         category?: string;
         monotypeClass?: boolean;
     }[];
 };
+
+function FormatArguments({ value }: { value: string }): JSX.Element {
+    const matchAddress = /(0x[a-f0-9]*)/;
+    const split = value.split(matchAddress);
+    return (
+        <>
+            {split.map((value, index) =>
+                value.match(matchAddress) ? (
+                    <Link to={`/addresses/${value}`} key={index}>
+                        {value}
+                    </Link>
+                ) : (
+                    <span key={index} className={styles.formattedArguments}>
+                        {value}
+                    </span>
+                )
+            )}
+        </>
+    );
+}
 
 function ItemView({ data }: { data: TxItemView }) {
     return (
@@ -177,6 +200,10 @@ function ItemView({ data }: { data: TxItemView }) {
                                         text={item.value as string}
                                         category={item.category as Category}
                                         isLink={true}
+                                    />
+                                ) : item.formatArguments ? (
+                                    <FormatArguments
+                                        value={item.value as string}
                                     />
                                 ) : (
                                     item.value
@@ -281,6 +308,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                       {
                           label: 'Argument',
                           monotypeClass: true,
+                          formatArguments: true,
                           value: JSON.stringify(txKindData.arguments.value),
                       },
                   ],

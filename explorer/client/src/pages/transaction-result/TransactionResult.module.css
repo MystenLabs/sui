@@ -62,6 +62,10 @@
     @apply break-all font-mono text-sm text-sui-dark;
 }
 
+.itemviewcontent .itemviewcontentitem span.formattedArguments {
+    @apply text-sui-grey-100;
+}
+
 @media (min-width: 40em) {
     .itemviewcontent .itemviewcontentitem {
         grid-template-columns: 1fr 5fr;
