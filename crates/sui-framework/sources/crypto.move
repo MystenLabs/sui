@@ -30,6 +30,13 @@ module sui::crypto {
         value: vector<u8>
     }
 
+    public fun ristretto_from_bytes(bytes: vector<u8>): RistrettoPoint {
+        assert!(vector::length(&bytes) == 32, 1);
+        RistrettoPoint {
+            value: bytes
+        }
+    }
+
     /// Private
 
     /// Public
@@ -40,24 +47,34 @@ module sui::crypto {
     /// @param self: bytes representation of an EC point on the Ristretto curve
     /// @param other: bytes representation of an EC point on the Ristretto curve
     /// A native move wrapper around the addition of Ristretto points. Returns self + other.
-    native fun native_add_ristretto_point(point1: &vector<u8>, point2: &vector<u8>): vector<u8>;
+    native fun native_add_ristretto_point(point1: vector<u8>, point2: vector<u8>): vector<u8>;
 
     /// @param self: bytes representation of an EC point on the Ristretto curve
     /// @param other: bytes representation of an EC point on the Ristretto curve
     /// A native move wrapper around the subtraction of Ristretto points. Returns self - other.
-    native fun native_subtract_ristretto_point(point1: &vector<u8>, point2: &vector<u8>): vector<u8>;
+    native fun native_subtract_ristretto_point(point1: vector<u8>, point2: vector<u8>): vector<u8>;
 
     struct BigScalar has copy, drop, store {
         value: vector<u8>
     }
 
     // This is pretty lazy, we should ideally have a Move-native unified BigInt library - but this can be added in a future refactor.
-    public native fun big_scalar_from_u64(value: u64): BigScalar;
+    native fun native_big_scalar_from_u64(value: u64): vector<u8>;
+
+    public fun big_scalar_from_u64(value: u64): BigScalar {
+        BigScalar {
+            value: native_big_scalar_from_u64(value)
+        }
+    }
 
     public fun create_pedersen_commitment(value: vector<u8>, blinding_factor: vector<u8>): RistrettoPoint {
         return RistrettoPoint {
             value: native_create_pedersen_commitment(value, blinding_factor)
         }
+    }
+
+    public fun value(self: &RistrettoPoint): vector<u8> {
+        self.value
     }
 
     public fun big_scalar_from_bytes(value: vector<u8>): BigScalar {
@@ -74,13 +91,13 @@ module sui::crypto {
 
     public fun add_ristretto_point(self: &RistrettoPoint, other: &RistrettoPoint): RistrettoPoint {
         RistrettoPoint {
-            value: native_add_ristretto_point(&self.value, &other.value)
+            value: native_add_ristretto_point(self.value, other.value)
         }
     }
 
     public fun subtract_ristretto_point(self: &RistrettoPoint, other: &RistrettoPoint): RistrettoPoint {
         RistrettoPoint {
-            value: native_subtract_ristretto_point(&self.value, &other.value)
+            value: native_subtract_ristretto_point(self.value, other.value)
         }
     }
 

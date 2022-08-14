@@ -158,8 +158,8 @@ pub fn subtract_ristretto_point(
     debug_assert!(ty_args.is_empty());
     debug_assert!(args.len() == 2);
 
-    let point_a = pop_arg!(args, Vec<u8>);
     let point_b = pop_arg!(args, Vec<u8>);
+    let point_a = pop_arg!(args, Vec<u8>);
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
 
     let rist_point_a = if let Ok(val) = PedersenCommitment::from_bytes(&point_a[..]) {
@@ -253,4 +253,18 @@ pub fn big_scalar_from_u64(
         cost,
         smallvec![Value::vector_u8(scalar.as_bytes().to_vec())],
     ))
+}
+
+#[test]
+fn test_range_proof() {
+    let secret = 990u64;
+    let blinding = 980u64;
+
+    let blinding_vec = Scalar::from(blinding).to_bytes();
+    let secret_vec = Scalar::from(secret).to_bytes();
+
+    let (commitment, range_proof) = BulletproofsRangeProof::prove_bound(secret, blinding_vec).unwrap();
+
+    eprintln!("{:?}", commitment.as_ref());
+    eprintln!("{:?}", range_proof.as_ref());
 }

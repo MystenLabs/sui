@@ -13,7 +13,7 @@ module fungible_tokens::private_balance {
     /// For when trying to withdraw more than there is.
     const ENotEnough: u64 = 2;
 
-    use sui::crypto::{RistrettoPoint, create_pedersen_commitment, big_scalar_from_u64, big_scalar_to_vec, add_ristretto_point, subtract_ristretto_point};
+    use sui::crypto::{RistrettoPoint, create_pedersen_commitment, big_scalar_from_u64, big_scalar_to_vec, add_ristretto_point, subtract_ristretto_point, verify_full_range_proof};
 
     /// A Supply of T. Used for minting and burning.
     /// Wrapped into a `TreasuryCap` in the `Coin` module.
@@ -27,6 +27,10 @@ module fungible_tokens::private_balance {
     /// Helpful in representing a Coin without having to create a stand-alone object.
     struct PrivateBalance<phantom T> has store {
         value: RistrettoPoint // Stores a Pedersen commitment
+    }
+
+    public fun value<T>(balance: &PrivateBalance<T>): RistrettoPoint{
+        balance.value
     }
 
     /// Get the `Supply` value.
@@ -68,6 +72,7 @@ module fungible_tokens::private_balance {
     /// Split a `Balance` and take a sub balance from it.
     public fun split<T>(self: &mut PrivateBalance<T>, new_commitment: RistrettoPoint, proof: vector<u8>): PrivateBalance<T> {
         self.value = subtract_ristretto_point(&self.value, &new_commitment);
+        verify_full_range_proof(proof, self.value);
         PrivateBalance { value: new_commitment }
     }
 

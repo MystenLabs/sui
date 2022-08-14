@@ -23,7 +23,7 @@ pub fn all_natives(
         ("crypto", "native_add_ristretto_point", crypto::add_ristretto_point),
         ("crypto", "native_subtract_ristretto_point", crypto::subtract_ristretto_point),
         ("crypto", "native_create_pedersen_commitment", crypto::pedersen_commit),
-        ("crypto", "big_scalar_from_u64", crypto::big_scalar_from_u64),
+        ("crypto", "native_big_scalar_from_u64", crypto::big_scalar_from_u64),
         ("crypto", "keccak256", crypto::keccak256),
         ("event", "emit", event::emit),
         ("object", "bytes_to_address", object::bytes_to_address),
