@@ -29,8 +29,10 @@ export default function NetworkSelect() {
 
     const openInput = useCallback(() => {
         setIsOpenInput(true);
-        setNetwork(customRPC);
-    }, [setIsOpenInput, setNetwork, customRPC]);
+        if (customRPCIsValid) {
+            setNetwork(customRPC);
+        }
+    }, [setIsOpenInput, setNetwork, customRPC, customRPCIsValid]);
 
     const chooseNetwork = useCallback(
         (specified: Network | string) => () => {
