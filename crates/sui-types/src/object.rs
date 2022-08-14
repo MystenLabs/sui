@@ -5,6 +5,7 @@ use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
 
+use deepsize::DeepSizeOf;
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::layout::TypeLayoutBuilder;
 use move_bytecode_utils::module_cache::GetModule;
@@ -305,7 +306,18 @@ impl Data {
 }
 
 #[derive(
-    Eq, PartialEq, Debug, Clone, Copy, Deserialize, Serialize, Hash, JsonSchema, Ord, PartialOrd,
+    Eq,
+    PartialEq,
+    Debug,
+    Clone,
+    Copy,
+    Deserialize,
+    Serialize,
+    Hash,
+    JsonSchema,
+    Ord,
+    PartialOrd,
+    DeepSizeOf,
 )]
 pub enum Owner {
     /// Object is exclusively owned by a single address, and is mutable.

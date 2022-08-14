@@ -12,6 +12,7 @@ use prometheus::{register_histogram_with_registry, Histogram};
 use std::collections::BTreeMap;
 use std::mem;
 use std::sync::Arc;
+use deepsize::DeepSizeOf;
 use sui_config::genesis::Genesis;
 use sui_network::{api::ValidatorClient, tonic};
 use sui_types::crypto::AuthorityPublicKeyBytes;
@@ -133,7 +134,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
     ) -> Result<TransactionInfoResponse, SuiError> {
         self.metrics
             .handle_transaction_request_bytes
-            .observe(mem::size_of_val(&transaction) as f64);
+            .observe(transaction.deep_size_of() as f64);
 
         let response = self
             .client()

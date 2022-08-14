@@ -6,7 +6,9 @@ use std::str::FromStr;
 
 use anyhow::Error;
 use base64ct::Encoding;
+use deepsize::{Context, DeepSizeOf};
 use digest::Digest;
+use memuse::DynamicUsage;
 use narwhal_crypto::ed25519::{
     Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
     Ed25519Signature,
@@ -25,14 +27,12 @@ use serde::ser::Serializer;
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
-use signature::Signer;
 
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
 use crate::sui_serde::{Base64, Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
-
 // Comment the one you want to use
 
 // Authority Objects
@@ -239,7 +239,7 @@ where
 
 // Enums for Signatures
 #[enum_dispatch]
-#[derive(Clone, JsonSchema, PartialEq, Eq, Hash)]
+#[derive(Clone, JsonSchema, PartialEq, Eq, Hash, DeepSizeOf)]
 pub enum Signature {
     Ed25519SuiSignature,
 }
@@ -333,6 +333,16 @@ pub struct Ed25519SuiSignature(
     #[serde_as(as = "Readable<Base64, Bytes>")]
     [u8; Ed25519PublicKey::LENGTH + Ed25519Signature::LENGTH + 1],
 );
+
+impl DeepSizeOf for Ed25519SuiSignature {
+    fn deep_size_of(&self) -> usize {
+        self.0.dynamic_usage()
+    }
+
+    fn deep_size_of_children(&self, context: &mut Context) -> usize {
+        0
+    }
+}
 
 impl SuiSignatureInner for Ed25519SuiSignature {
     type Sig = Ed25519Signature;

@@ -1554,6 +1554,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7e51694c5f8b91baf933e6429a3df4ff3e9f1160386d150790b97bef73337d1b"
 
 [[package]]
+name = "deepsize"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1cdb987ec36f6bf7bfbea3f928b75590b736fc42af8e54d97592481351b2b96c"
+dependencies = [
+ "deepsize_derive",
+]
+
+[[package]]
+name = "deepsize_derive"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "990101d41f3bc8c1a45641024377ee284ecc338e5ecf3ea0f0e236d897c72796"
+dependencies = [
+ "proc-macro2 1.0.42",
+ "quote 1.0.21",
+ "syn 1.0.99",
+]
+
+[[package]]
 name = "der"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3336,6 +3356,12 @@ checksum = "5aa361d4faea93603064a027415f07bd8e1d5c88c9fbf68bf56a285428fd79ce"
 dependencies = [
  "autocfg 1.1.0",
 ]
+
+[[package]]
+name = "memuse"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f69d25cd7528769ad3d897e99eb942774bff8b23165012af490351a44c5b583b"
 
 [[package]]
 name = "merlin"
@@ -6946,6 +6972,7 @@ dependencies = [
  "config 0.1.0",
  "consensus",
  "crypto",
+ "deepsize",
  "executor",
  "futures",
  "move-binary-format",
@@ -7436,12 +7463,14 @@ dependencies = [
  "bincode",
  "crypto",
  "curve25519-dalek",
+ "deepsize",
  "digest 0.10.3",
  "enum_dispatch",
  "executor",
  "hex",
  "hkdf",
  "itertools",
+ "memuse",
  "move-binary-format",
  "move-bytecode-utils",
  "move-core-types",

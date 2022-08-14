@@ -11,8 +11,10 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use base64ct::Encoding;
 use curve25519_dalek::ristretto::RistrettoPoint;
+use deepsize::DeepSizeOf;
 use digest::Digest;
 use hex::FromHex;
+use memuse::DynamicUsage;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::identifier::IdentStr;
@@ -53,6 +55,7 @@ mod base_types_tests;
     Serialize,
     Deserialize,
     JsonSchema,
+    DeepSizeOf,
 )]
 pub struct SequenceNumber(u64);
 
@@ -77,9 +80,19 @@ pub struct ObjectID(
     AccountAddress,
 );
 
+impl DeepSizeOf for ObjectID {
+    fn deep_size_of(&self) -> usize {
+        self.0.dynamic_usage()
+    }
+
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        0
+    }
+}
+
 pub type ObjectRef = (ObjectID, SequenceNumber, ObjectDigest);
 
-#[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug)]
+#[derive(Clone, Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug, DeepSizeOf)]
 pub struct ObjectInfo {
     pub object_id: ObjectID,
     pub version: SequenceNumber,
@@ -125,6 +138,16 @@ pub struct SuiAddress(
     #[serde_as(as = "Readable<Hex, _>")]
     [u8; SUI_ADDRESS_LENGTH],
 );
+
+impl DeepSizeOf for SuiAddress {
+    fn deep_size_of(&self) -> usize {
+        self.0.dynamic_usage()
+    }
+
+    fn deep_size_of_children(&self, _context: &mut deepsize::Context) -> usize {
+        0
+    }
+}
 
 impl SuiAddress {
     pub fn to_vec(&self) -> Vec<u8> {
@@ -243,6 +266,16 @@ impl IntoPoint for TransactionDigest {
     }
 }
 
+impl DeepSizeOf for TransactionDigest {
+    fn deep_size_of(&self) -> usize {
+        self.0.dynamic_usage()
+    }
+
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        0
+    }
+}
+
 // Each object has a unique digest
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]
@@ -251,6 +284,16 @@ pub struct ObjectDigest(
     #[serde_as(as = "Readable<Base64, Bytes>")]
     pub [u8; 32],
 ); // We use SHA3-256 hence 32 bytes here
+
+impl DeepSizeOf for ObjectDigest {
+    fn deep_size_of(&self) -> usize {
+        self.0.dynamic_usage()
+    }
+
+    fn deep_size_of_children(&self, context: &mut deepsize::Context) -> usize {
+        0
+    }
+}
 
 #[serde_as]
 #[derive(Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Hash, Serialize, Deserialize, JsonSchema)]

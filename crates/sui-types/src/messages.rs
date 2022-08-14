@@ -15,7 +15,9 @@ use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::DeleteKind;
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
+use deepsize::{Context, DeepSizeOf};
 use itertools::Either;
+use memuse::DynamicUsage;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::LocalIndex;
 use move_binary_format::CompiledModule;
@@ -35,6 +37,7 @@ use std::fmt::{Display, Formatter};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
+    mem,
 };
 use tracing::debug;
 
@@ -42,7 +45,7 @@ use tracing::debug;
 #[path = "unit_tests/messages_tests.rs"]
 mod messages_tests;
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, DeepSizeOf)]
 pub enum CallArg {
     // contains no structs or objects
     Pure(Vec<u8>),
@@ -51,7 +54,7 @@ pub enum CallArg {
     // TODO support more than one object (object vector of some sort)
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, DeepSizeOf)]
 pub enum ObjectArg {
     // A Move object, either immutable, or owned mutable.
     ImmOrOwnedObject(ObjectRef),
@@ -59,7 +62,7 @@ pub enum ObjectArg {
     SharedObject(ObjectID),
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, DeepSizeOf)]
 pub struct TransferObject {
     pub recipient: SuiAddress,
     pub object_ref: ObjectRef,
@@ -79,20 +82,42 @@ pub struct MoveCall {
     pub arguments: Vec<CallArg>,
 }
 
+impl DeepSizeOf for MoveCall {
+    fn deep_size_of(&self) -> usize {
+        // todo: this can be made more precise by measuring more inner fields
+        let mut total = 0;
+        total += self.package.deep_size_of();
+        total += mem::size_of_val(&self.module);
+        total += mem::size_of_val(&self.function);
+        for t in self.type_arguments.iter() {
+            total += mem::size_of_val(t);
+        }
+        for a in self.arguments.iter() {
+            total += a.deep_size_of();
+        }
+
+        total
+    }
+
+    fn deep_size_of_children(&self, context: &mut Context) -> usize {
+        0
+    }
+}
+
 #[serde_as]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, DeepSizeOf)]
 pub struct MoveModulePublish {
     #[serde_as(as = "Vec<Bytes>")]
     pub modules: Vec<Vec<u8>>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, DeepSizeOf)]
 pub struct TransferSui {
     pub recipient: SuiAddress,
     pub amount: Option<u64>,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, DeepSizeOf)]
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
     pub epoch: EpochId,
@@ -102,7 +127,7 @@ pub struct ChangeEpoch {
     pub computation_charge: u64,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, DeepSizeOf)]
 pub enum SingleTransactionKind {
     /// Initiate an object transfer between addresses
     TransferObject(TransferObject),
@@ -259,7 +284,7 @@ impl Display for SingleTransactionKind {
 
 // TODO: Make SingleTransactionKind a Box
 #[allow(clippy::large_enum_variant)]
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, NamedVariant, DeepSizeOf)]
 pub enum TransactionKind {
     /// A single transaction.
     Single(SingleTransactionKind),
@@ -317,7 +342,7 @@ impl Display for TransactionKind {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize, DeepSizeOf)]
 pub struct TransactionData {
     pub kind: TransactionKind,
     sender: SuiAddress,
@@ -523,7 +548,23 @@ pub struct TransactionEnvelope<S> {
     // does not participate in the hash and comparison).
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+impl<S: DynamicUsage> DeepSizeOf for TransactionEnvelope<S> {
+    fn deep_size_of(&self) -> usize {
+        let mut total = 0;
+        total += self.is_verified.deep_size_of();
+        total += self.signed_data.deep_size_of();
+        total += self.auth_sign_info.dynamic_usage();
+        total += self.transaction_digest.get().deep_size_of();
+
+        total
+    }
+
+    fn deep_size_of_children(&self, context: &mut Context) -> usize {
+        0
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash, DeepSizeOf)]
 pub struct SenderSignedData {
     pub data: TransactionData,
     /// tx_signature is signed by the transaction sender, applied on `data`.
