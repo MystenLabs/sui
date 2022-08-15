@@ -49,7 +49,11 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
                         <Link to="/tokens" className={st.logoLink}>
                             <Logo className={st.logo} txt={true} />
                         </Link>
-                        <MenuButton className={st.menuButton} />
+                        {disableNavigation ? (
+                            <span />
+                        ) : (
+                            <MenuButton className={st.menuButton} />
+                        )}
                     </div>
                     <div className={st.content}>
                         <main
