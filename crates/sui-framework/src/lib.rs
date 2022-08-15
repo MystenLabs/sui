@@ -165,7 +165,8 @@ fn verify_framework_version(pkg: &CompiledPackage) -> SuiResult<()> {
     if dep_framework != framework {
         return Err(SuiError::ModuleVerificationFailure {
             error: "Sui framework version mismatch detected.\
-                    Make sure that the sui command line tool and the Sui framework code used as a dependency correspond to the same git commit"
+                    Make sure that the sui command line tool and the Sui framework code\
+                    used as a dependency correspond to the same git commit"
                 .to_string(),
         });
     }
@@ -183,7 +184,8 @@ fn verify_framework_version(pkg: &CompiledPackage) -> SuiResult<()> {
     if dep_stdlib != stdlib {
         return Err(SuiError::ModuleVerificationFailure {
             error: "Move stdlib version mismatch detected.\
-                    Make sure that the sui command line tool and the Move standard library code used as a dependency correspond to the same git commit"
+                    Make sure that the sui command line tool and the Move standard library code\
+                    used as a dependency correspond to the same git commit"
                 .to_string(),
         });
     }
