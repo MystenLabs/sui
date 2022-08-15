@@ -7042,7 +7042,10 @@ dependencies = [
  "crypto",
  "linked-hash-map",
  "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier",
  "move-cli",
+ "move-compiler",
  "move-core-types",
  "move-package",
  "move-stdlib",
@@ -7055,6 +7058,7 @@ dependencies = [
  "smallvec",
  "sui-framework-build",
  "sui-types",
+ "sui-verifier",
  "workspace-hack 0.1.0",
 ]
 
@@ -7063,10 +7067,12 @@ name = "sui-framework-build"
 version = "0.0.0"
 dependencies = [
  "move-binary-format",
+ "move-bytecode-utils",
  "move-bytecode-verifier",
  "move-compiler",
  "move-core-types",
  "move-package",
+ "once_cell",
  "sui-types",
  "sui-verifier",
  "workspace-hack 0.1.0",
