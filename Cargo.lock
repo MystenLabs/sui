@@ -627,7 +627,7 @@ dependencies = [
  "ark-std",
  "blake2s_simd",
  "byteorder",
- "clap 3.1.18",
+ "clap 3.2.17",
  "csv",
  "env_logger",
  "hex",
@@ -893,16 +893,16 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "3.1.18"
+version = "3.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2dbdf4bdacb33466e854ce889eee8dfd5729abf7ccd7664d0a2d60cd384440b"
+checksum = "29e724a68d9319343bb3328c9cc2dfde263f4b3142ee1059a9980580171c954b"
 dependencies = [
  "atty",
  "bitflags",
  "clap_derive",
  "clap_lex",
  "indexmap",
- "lazy_static 1.4.0",
+ "once_cell",
  "strsim 0.10.0",
  "termcolor",
  "textwrap 0.15.0",
@@ -910,9 +910,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "3.1.18"
+version = "3.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25320346e922cffe59c0bbc5410c8d8784509efb321488971081313cb1e1a33c"
+checksum = "13547f7012c01ab4a0e8f8967730ada8f9fdf419e8b6c792788f39cf4e46eefa"
 dependencies = [
  "heck 0.4.0",
  "proc-macro-error",
@@ -3291,7 +3291,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cc195aab5b803465bf614a5a4765741abce6c8d64e7d8ca57acd2923661fba9f"
 dependencies = [
- "clap 3.1.18",
+ "clap 3.2.17",
  "crossbeam-channel",
  "rayon",
  "termcolor",
@@ -3585,7 +3585,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84c1094d8e976aa17a#79071528524f08b12e9abb84c1094d8e976aa17a"
 dependencies = [
  "anyhow",
- "clap 3.1.18",
+ "clap 3.2.17",
  "crossterm 0.21.0",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -3603,7 +3603,7 @@ source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.18",
+ "clap 3.2.17",
  "codespan-reporting",
  "colored",
  "difference",
@@ -3659,7 +3659,7 @@ source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.18",
+ "clap 3.2.17",
  "codespan-reporting",
  "difference",
  "hex",
@@ -3703,7 +3703,7 @@ source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.18",
+ "clap 3.2.17",
  "codespan",
  "colored",
  "move-binary-format",
@@ -3722,7 +3722,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84c1094d8e976aa17a#79071528524f08b12e9abb84c1094d8e976aa17a"
 dependencies = [
  "anyhow",
- "clap 3.1.18",
+ "clap 3.2.17",
  "colored",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -3773,7 +3773,7 @@ source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.18",
+ "clap 3.2.17",
  "move-binary-format",
  "move-bytecode-source-map",
  "move-bytecode-verifier",
@@ -3864,7 +3864,7 @@ source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84
 dependencies = [
  "anyhow",
  "bcs",
- "clap 3.1.18",
+ "clap 3.2.17",
  "colored",
  "dirs-next",
  "move-abigen",
@@ -3898,7 +3898,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "atty",
- "clap 3.1.18",
+ "clap 3.2.17",
  "codespan",
  "codespan-reporting",
  "futures",
@@ -4015,7 +4015,7 @@ source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84
 dependencies = [
  "anyhow",
  "bytecode-interpreter-crypto",
- "clap 3.1.18",
+ "clap 3.2.17",
  "codespan-reporting",
  "itertools",
  "move-binary-format",
@@ -4080,7 +4080,7 @@ version = "0.1.0"
 source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84c1094d8e976aa17a#79071528524f08b12e9abb84c1094d8e976aa17a"
 dependencies = [
  "anyhow",
- "clap 3.1.18",
+ "clap 3.2.17",
  "colored",
  "move-binary-format",
  "move-bytecode-source-map",
@@ -4112,7 +4112,7 @@ source = "git+https://github.com/move-language/move?rev=79071528524f08b12e9abb84
 dependencies = [
  "anyhow",
  "better_any",
- "clap 3.1.18",
+ "clap 3.2.17",
  "codespan-reporting",
  "colored",
  "itertools",
@@ -6826,7 +6826,7 @@ dependencies = [
  "base64ct",
  "bcs",
  "camino",
- "clap 3.1.18",
+ "clap 3.2.17",
  "colored",
  "executor",
  "futures",
@@ -6905,7 +6905,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bcs",
- "clap 3.1.18",
+ "clap 3.2.17",
  "crossterm 0.23.2",
  "futures",
  "jemalloc-ctl",
@@ -6947,7 +6947,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bcs",
- "clap 3.1.18",
+ "clap 3.2.17",
  "futures",
  "prometheus",
  "reqwest",
@@ -7014,7 +7014,7 @@ dependencies = [
  "bincode",
  "bytes",
  "chrono",
- "clap 3.1.18",
+ "clap 3.2.17",
  "config 0.1.0",
  "consensus",
  "executor",
@@ -7098,7 +7098,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "axum",
- "clap 3.1.18",
+ "clap 3.2.17",
  "futures",
  "http",
  "prometheus",
@@ -7171,7 +7171,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "clap 3.1.18",
+ "clap 3.2.17",
  "futures",
  "move-package",
  "mysten-network",
@@ -7283,7 +7283,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
- "clap 3.1.18",
+ "clap 3.2.17",
  "futures",
  "jemalloc-ctl",
  "jemallocator",
@@ -7311,7 +7311,7 @@ name = "sui-open-rpc"
 version = "0.6.1"
 dependencies = [
  "anyhow",
- "clap 3.1.18",
+ "clap 3.2.17",
  "hyper",
  "move-core-types",
  "move-package",
@@ -7367,7 +7367,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bip39",
- "clap 3.1.18",
+ "clap 3.2.17",
  "dirs",
  "futures",
  "futures-core",
@@ -7458,7 +7458,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "axum",
- "clap 3.1.18",
+ "clap 3.2.17",
  "http",
  "move-package",
  "serde 1.0.143",
@@ -7478,7 +7478,7 @@ name = "sui-tool"
 version = "0.6.2"
 dependencies = [
  "anyhow",
- "clap 3.1.18",
+ "clap 3.2.17",
  "colored",
  "executor",
  "eyre",
@@ -7509,7 +7509,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bimap",
- "clap 3.1.18",
+ "clap 3.2.17",
  "move-binary-format",
  "move-bytecode-utils",
  "move-command-line-common",
@@ -9155,7 +9155,7 @@ dependencies = [
  "chrono-tz-build",
  "clang-sys",
  "clap 2.34.0",
- "clap 3.1.18",
+ "clap 3.2.17",
  "clap_derive",
  "clap_lex",
  "clear_on_drop",
@@ -9817,7 +9817,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "clang-sys",
  "clap 2.34.0",
- "clap 3.1.18",
+ "clap 3.2.17",
  "clap_lex",
  "clear_on_drop",
  "cmake",
@@ -10157,7 +10157,7 @@ name = "x"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "clap 3.1.18",
+ "clap 3.2.17",
  "nexlint",
  "nexlint-lints",
 ]
