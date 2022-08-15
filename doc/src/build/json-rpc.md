@@ -2,7 +2,11 @@
 title: RPC Server & JSON-RPC API Quick Start
 ---
 
-Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through connecting to Sui and using the Sui JSON-RPC API to interact with the Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
+Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through connecting to Sui and using the Sui JSON-RPC API to interact with the Sui network. Use the RPC layer to test your dApps, sending their transactions onto the [Sui validators](../learn/architecture/validators.md) for verification.
+
+This guide is useful for developers interested in Sui network interactions via API and should be used in conjunction with the [SuiJSON format](sui-json.md) for aligning JSON inputs with Move Call arguments.
+
+For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
 
 ## Set up RPC server
 Follow the instructions to [install Sui binaries](install.md).
