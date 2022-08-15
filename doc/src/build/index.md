@@ -14,7 +14,12 @@ Here is our recommended workflow to interact with Sui:
    1. [Write](../build/move/write-package.md) a package.
    1. [Build and test](../build/move/build-test.md) a package.
    1. [Debug and publish](../build/move/debug-publish.md) a package.
-1. [Program objects](../build/programming-with-objects/index.md) in Sui.
+1. [Program objects](../build/programming-with-objects/index.md) in Sui:
+   1. [Learn](../build/programming-with-objects/ch1-object-basics.md) object basics.
+   1. [Pass](../build/programming-with-objects/ch2-using-objects.md) Move objects as arguments, mutating objects, deleting objects.
+   1. [Freeze](../build//programming-with-objects/ch3-immutable-objects.md) an object, using immutable objects.
+   1. [Wrap](../build/programming-with-objects/ch4-object-wrapping.md) objects in another object.
+   1. [Enable](../build/programming-with-objects/ch5-child-objects.md) objects to own other objects.
 1. [Start](../build/json-rpc.md) a *JSON-RPC Gateway server* to communicate with Sui.
 1. [Talk](../build/comms.md) with Sui using our API and SDKs:
    * [Use](../build/json-rpc.md) the *Sui RPC Server and JSON-RPC API* to interact with a local Sui network.
