@@ -1,5 +1,5 @@
 .groupview {
-    @apply text-left mx-[-0.625rem];
+    @apply text-left sm:mx-0 mx-[-0.625rem] border-0 border-t border-solid border-sui-grey-45;
 }
 
 .firstrow {
@@ -63,7 +63,7 @@
 
 .openicon,
 .closedicon {
-    @apply p-0 sm:pr-[6px] sm:pl-[12px];
+    @apply p-0 mx-auto sm:pr-[6px] sm:pl-[12px];
 }
 
 .openicon svg path {
