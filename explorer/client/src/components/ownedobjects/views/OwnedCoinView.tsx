@@ -13,9 +13,9 @@ import { type DataType, ITEMS_PER_PAGE } from '../OwnedObjectConstants';
 import styles from '../styles/OwnedCoin.module.css';
 
 export default function OwnedCoinView({ results }: { results: DataType }) {
-    const CLOSED_TYPE_STRING = '';
+    const ALL_CLOSED = null;
 
-    const [openedType, setOpenedType] = useState(CLOSED_TYPE_STRING);
+    const [openedType, setOpenedType] = useState<string | null>(ALL_CLOSED);
 
     const [currentPage, setCurrentPage] = useState(1);
 
@@ -26,13 +26,13 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
         []
     );
 
-    const goBack = useCallback(() => setOpenedType(CLOSED_TYPE_STRING), []);
+    const goBack = useCallback(() => setOpenedType(ALL_CLOSED), []);
 
     const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
 
     // Switching the page closes any open group:
     useEffect(() => {
-        setOpenedType(CLOSED_TYPE_STRING);
+        setOpenedType(ALL_CLOSED);
     }, [currentPage]);
 
     return (
