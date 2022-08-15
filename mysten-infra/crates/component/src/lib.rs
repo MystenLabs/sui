@@ -1,14 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
 use async_trait::async_trait;
+use eyre::eyre;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tokio::sync::oneshot::{
     channel as oneshotChannel, Receiver as oneshotReceiver, Sender as oneshotSender,
 };
 
-pub type IrrecoverableError = anyhow::Error;
+pub type IrrecoverableError = eyre::Report;
 type JoinHandle = tokio::task::JoinHandle<()>;
 
 static CHANNEL_SIZE: usize = 10;
@@ -49,7 +49,7 @@ pub trait Manageable {
     // The function that spawns a tokio task
     async fn start(
         &self,
-        tx_irrecoverable: Sender<anyhow::Error>,
+        tx_irrecoverable: Sender<eyre::Report>,
         rx_cancellation: oneshotReceiver<()>,
     ) -> tokio::task::JoinHandle<()>; // Note the task is "silent" (returns nothing)
 
@@ -57,7 +57,7 @@ pub trait Manageable {
     fn handle_irrecoverable(
         &mut self,
         irrecoverable: IrrecoverableError,
-    ) -> Result<(), anyhow::Error>;
+    ) -> Result<(), eyre::Report>;
 }
 
 impl<M: Manageable + Send> Supervisor<M> {
@@ -73,7 +73,7 @@ impl<M: Manageable + Send> Supervisor<M> {
     }
 
     /// Spawn calls the start function of the Manageable component and runs supervision.
-    pub async fn spawn(mut self) -> Result<(), anyhow::Error> {
+    pub async fn spawn(mut self) -> Result<(), eyre::Report> {
         let (tx_irrecoverable, tr_irrecoverable) = channel(CHANNEL_SIZE);
         let (tx_cancellation, tr_cancellation) = oneshotChannel();
 
@@ -91,7 +91,7 @@ impl<M: Manageable + Send> Supervisor<M> {
     }
 
     /// Run watches continuously for irrecoverable errors or JoinHandle completion.
-    async fn run(mut self) -> Result<(), anyhow::Error> {
+    async fn run(mut self) -> Result<(), eyre::Report> {
         // select statement that listens for the following cases:
         //
         // Irrecoverable signal incoming => log, terminate and restart
@@ -102,7 +102,7 @@ impl<M: Manageable + Send> Supervisor<M> {
         // was sent to us. This makes resource cleanup possible.
 
         loop {
-            let mut message = anyhow!("An unexpected shutdown was observed in a component.");
+            let mut message = eyre!("An unexpected shutdown was observed in a component.");
             tokio::select! {
                 Some(m) = self.irrecoverable_signal.recv() => {
                     message = m;

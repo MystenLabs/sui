@@ -12,16 +12,13 @@ publish = false
 proc-macro = true
 
 [dependencies]
-syn = { version = "1.0.64", features = ["derive"] }
-quote = "1.0.9"
-proc-macro2 = "1.0.24"
-anyhow = { version = "1.0.58"}
-typed-store = {path = "../typed-store"}
-tokio = { version = "1.20.0", features = ["sync", "macros", "rt"] }
-tempfile = "3.3.0"
-rocksdb = { version = "0.19.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
+eyre = "0.6.8"
 fdlimit = "0.2.1"
 pre = "0.2.0"
-
-[dev-dependencies]
-anyhow = "1.0.52"
+proc-macro2 = "1.0.24"
+quote = "1.0.9"
+rocksdb = { version = "0.19.0", features = ["snappy", "lz4", "zstd", "zlib", "multi-threaded-cf"], default-features = false }
+syn = { version = "1.0.64", features = ["derive"] }
+tempfile = "3.3.0"
+tokio = { version = "1.20.0", features = ["sync", "macros", "rt"] }
+typed-store = { path = "../typed-store" }

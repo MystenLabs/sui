@@ -37,7 +37,7 @@ fn keypair_bytes_to_pkcs8_n_algo(
 fn gen_certificate(
     subject_names: impl Into<Vec<String>>,
     key_pair: (&[u8], &'static SignatureAlgorithm),
-) -> Result<rustls::Certificate, anyhow::Error> {
+) -> Result<rustls::Certificate, eyre::Report> {
     let kp = KeyPair::from_der_and_sign_algo(key_pair.0, key_pair.1)?;
 
     let mut cert_params = CertificateParams::new(subject_names);
@@ -79,10 +79,10 @@ impl Certifiable for Ed25519 {
     fn keypair_to_certificate(
         subject_names: impl Into<Vec<String>>,
         kp: Self::KeyPair,
-    ) -> Result<rustls::Certificate, anyhow::Error> {
+    ) -> Result<rustls::Certificate, eyre::Report> {
         let keypair_bytes = dalek_to_keypair_bytes(kp);
         let (pkcs_bytes, alg) =
-            keypair_bytes_to_pkcs8_n_algo(keypair_bytes).map_err(anyhow::Error::new)?;
+            keypair_bytes_to_pkcs8_n_algo(keypair_bytes).map_err(eyre::Report::new)?;
 
         let certificate = gen_certificate(subject_names, (pkcs_bytes.as_bytes(), alg))?;
         Ok(certificate)

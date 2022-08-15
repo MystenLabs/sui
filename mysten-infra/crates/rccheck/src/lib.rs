@@ -56,7 +56,7 @@ pub trait Certifiable {
     fn keypair_to_certificate(
         subject_names: impl Into<Vec<String>>,
         kp: Self::KeyPair,
-    ) -> Result<rustls::Certificate, anyhow::Error>;
+    ) -> Result<rustls::Certificate, eyre::Report>;
 
     /// This generates X.509 `SubjectPublicKeyInfo` (SPKI) bytes (in DER format) from the provided public key
     fn public_key_to_spki(public_key: &Self::PublicKey) -> Vec<u8>;
@@ -83,14 +83,14 @@ pub struct PskSet {
 
 impl PskSet {
     /// This creates a new `PskSet` from a set of X.509 `SubjectPublicKeyInfo` (SPKI) bytes (in DER format)
-    pub fn from_der(bytes_array: &[&[u8]]) -> Result<PskSet, anyhow::Error> {
+    pub fn from_der(bytes_array: &[&[u8]]) -> Result<PskSet, eyre::Report> {
         let set = bytes_array
             .iter()
             .map(|&bytes| {
                 let psk = Psk::from_der(bytes)?;
                 Ok(psk)
             })
-            .collect::<Result<BTreeSet<Psk>, anyhow::Error>>()?;
+            .collect::<Result<BTreeSet<Psk>, eyre::Report>>()?;
         Ok(PskSet { spki_set: set })
     }
 }
@@ -210,7 +210,7 @@ pub struct Psk {
 impl Eq for Psk {}
 
 impl Psk {
-    pub fn from_der(bytes: &[u8]) -> Result<Psk, anyhow::Error> {
+    pub fn from_der(bytes: &[u8]) -> Result<Psk, eyre::Report> {
         PskTryBuilder {
             key_bytes: bytes.to_vec(),
             spki_builder: |key_bytes: &Vec<u8>| {

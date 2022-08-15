@@ -8,7 +8,7 @@ use crate::{
     config::Config,
     multiaddr::{parse_dns, parse_ip4, parse_ip6},
 };
-use anyhow::{anyhow, Result};
+use eyre::{eyre, Result};
 use futures::FutureExt;
 use multiaddr::{Multiaddr, Protocol};
 use std::{convert::Infallible, net::SocketAddr};
@@ -156,7 +156,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
         let (tx_cancellation, rx_cancellation) = tokio::sync::oneshot::channel();
         let rx_cancellation = rx_cancellation.map(|_| ());
         let (local_addr, server): (Multiaddr, BoxFuture<(), tonic::transport::Error>) =
-            match iter.next().ok_or_else(|| anyhow!("malformed addr"))? {
+            match iter.next().ok_or_else(|| eyre!("malformed addr"))? {
                 Protocol::Dns(_) => {
                     let (dns_name, tcp_port, _http_or_https) = parse_dns(addr)?;
                     let (local_addr, incoming) =
@@ -201,7 +201,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
                     );
                     (local_addr, server)
                 }
-                unsupported => return Err(anyhow!("unsupported protocol {unsupported}")),
+                unsupported => return Err(eyre!("unsupported protocol {unsupported}")),
             };
 
         Ok(Server {
