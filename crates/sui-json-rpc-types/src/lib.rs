@@ -37,8 +37,8 @@ use sui_types::base_types::{
 use sui_types::committee::EpochId;
 use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature};
 use sui_types::error::SuiError;
-use sui_types::event::EventType;
 use sui_types::event::{Event, TransferType};
+use sui_types::event::{EventEnvelope, EventType};
 use sui_types::event_filter::EventFilter;
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
@@ -1861,6 +1861,145 @@ impl SuiEvent {
             Event::EpochChange(id) => SuiEvent::EpochChange(id),
             Event::Checkpoint(seq) => SuiEvent::Checkpoint(seq),
         })
+    }
+}
+
+impl PartialEq<SuiEventEnvelope> for EventEnvelope {
+    fn eq(&self, other: &SuiEventEnvelope) -> bool {
+        self.timestamp == other.timestamp
+            && self.tx_digest == other.tx_digest
+            && self.event == other.event
+    }
+}
+
+impl PartialEq<SuiEvent> for Event {
+    fn eq(&self, other: &SuiEvent) -> bool {
+        match self {
+            Event::MoveEvent {
+                package_id: self_package_id,
+                transaction_module: self_transaction_module,
+                sender: self_sender,
+                type_: self_type,
+                contents: self_contents,
+            } => {
+                if let SuiEvent::MoveEvent {
+                    package_id,
+                    transaction_module,
+                    sender,
+                    type_,
+                    fields: _fields,
+                    bcs,
+                } = other
+                {
+                    package_id == self_package_id
+                        && &self_transaction_module.to_string() == transaction_module
+                        && self_sender == sender
+                        && &self_type.to_string() == type_
+                        && self_contents == bcs
+                } else {
+                    false
+                }
+            }
+            Event::Publish {
+                sender: self_sender,
+                package_id: self_package_id,
+            } => {
+                if let SuiEvent::Publish { package_id, sender } = other {
+                    package_id == self_package_id && self_sender == sender
+                } else {
+                    false
+                }
+            }
+            Event::TransferObject {
+                package_id: self_package_id,
+                transaction_module: self_transaction_module,
+                sender: self_sender,
+                recipient: self_recipient,
+                type_: self_type,
+                object_id: self_object_id,
+                version: self_version,
+            } => {
+                if let SuiEvent::TransferObject {
+                    package_id,
+                    transaction_module,
+                    sender,
+                    recipient,
+                    object_id,
+                    version,
+                    type_,
+                } = other
+                {
+                    package_id == self_package_id
+                        && &self_transaction_module.to_string() == transaction_module
+                        && self_sender == sender
+                        && self_recipient == recipient
+                        && self_object_id == object_id
+                        && self_version == version
+                        && self_type == type_
+                } else {
+                    false
+                }
+            }
+            Event::DeleteObject {
+                package_id: self_package_id,
+                transaction_module: self_transaction_module,
+                sender: self_sender,
+                object_id: self_object_id,
+            } => {
+                if let SuiEvent::DeleteObject {
+                    package_id,
+                    transaction_module,
+                    sender,
+                    object_id,
+                } = other
+                {
+                    package_id == self_package_id
+                        && &self_transaction_module.to_string() == transaction_module
+                        && self_sender == sender
+                        && self_object_id == object_id
+                } else {
+                    false
+                }
+            }
+            Event::NewObject {
+                package_id: self_package_id,
+                transaction_module: self_transaction_module,
+                sender: self_sender,
+                recipient: self_recipient,
+                object_id: self_object_id,
+            } => {
+                if let SuiEvent::NewObject {
+                    package_id,
+                    transaction_module,
+                    sender,
+                    recipient,
+                    object_id,
+                } = other
+                {
+                    package_id == self_package_id
+                        && &self_transaction_module.to_string() == transaction_module
+                        && self_sender == sender
+                        && self_recipient == recipient
+                        && self_object_id == object_id
+                } else {
+                    false
+                }
+            }
+            Event::EpochChange(self_id) => {
+                if let SuiEvent::EpochChange(id) = other {
+                    self_id == id
+                } else {
+                    false
+                }
+            }
+            Event::Checkpoint(self_id) => {
+                if let SuiEvent::Checkpoint(id) = other {
+                    self_id == id
+                } else {
+                    false
+                }
+            }
+        }
     }
 }
 

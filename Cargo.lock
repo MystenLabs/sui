@@ -7455,6 +7455,7 @@ dependencies = [
  "sqlx",
  "strum",
  "strum_macros",
+ "sui-json-rpc-types",
  "sui-types",
  "tap",
  "telemetry-subscribers",

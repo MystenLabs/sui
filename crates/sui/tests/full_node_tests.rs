@@ -9,6 +9,9 @@ use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
+use sui_types::base_types::SequenceNumber;
+use sui_types::event::TransferType;
+use sui_types::object::Owner;
 use sui_types::sui_framework_address_concat_string;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::transaction::{increment_counter, publish_basics_package_and_make_counter};
@@ -248,15 +251,32 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     sleep(Duration::from_millis(1000)).await;
 
     // one event is stored, and can be looked up by digest
-    // Also query by timestamp verifies that a timestamp is inserted, within an hour
-    let all_events = node
+    // query by timestamp verifies that a timestamp is inserted, within an hour
+    let expected_event = SuiEvent::TransferObject {
+        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
+        transaction_module: "native".into(),
+        sender,
+        recipient: Owner::AddressOwner(receiver),
+        object_id: transfered_object,
+        version: SequenceNumber::from_u64(1),
+        type_: TransferType::Coin,
+    };
+
+    let mut all_events = node
         .state()
         .get_events_for_timerange(ts.unwrap() - HOUR_MS, ts.unwrap() + HOUR_MS, None)
         .await?;
     assert_eq!(all_events.len(), 1);
-    let events = node.state().get_events_for_transaction(digest).await?;
-    assert_eq!(events.len(), 1);
+    let event_envelope = all_events.swap_remove(0);
+    assert_eq!(event_envelope.event, expected_event);
+    assert_eq!(event_envelope.tx_digest.unwrap(), digest);
 
+    // query by tx digest
+    let mut events = node.state().get_events_for_transaction(digest).await?;
+    assert_eq!(events.len(), 1);
+    let event_envelope = events.swap_remove(0);
+    assert_eq!(event_envelope.event, expected_event);
+    assert_eq!(event_envelope.tx_digest.unwrap(), digest);
     Ok(())
 }
 

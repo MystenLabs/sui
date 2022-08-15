@@ -308,6 +308,12 @@ pub enum SuiError {
     StorageError(#[from] TypedStoreError),
     #[error("Non-RocksDB Storage error: {0}")]
     GenericStorageError(String),
+
+    #[error("Missing fields/data in storage error: {0}")]
+    StorageMissingFieldError(String),
+    #[error("Corrupted fields/data in storage error: {0}")]
+    StorageCorruptedFieldError(String),
+
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]
@@ -315,6 +321,9 @@ pub enum SuiError {
 
     #[error("Failed to dispatch event: {error:?}")]
     EventFailedToDispatch { error: String },
+
+    #[error("Failed to serialize Owner: {error:?}")]
+    OwnerFailedToSerialize { error: String },
 
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
