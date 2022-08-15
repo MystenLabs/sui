@@ -208,12 +208,12 @@ async fn run(matches: &ArgMatches<'_>) -> Result<(), eyre::Report> {
     analyze(rx_transaction_confirmation).await;
 
     // Await on the completion handles of all the nodes we have launched
-    return task_manager.await.map_err(|err| match err {
+    task_manager.await.map_err(|err| match err {
         task_group::RuntimeError::Panic { name: n, panic: p } => eyre!("{} paniced: {:?}", n, p),
         task_group::RuntimeError::Application { name: n, error: e } => {
             eyre!("{} error: {:?}", n, e)
         }
-    });
+    })
 }
 
 /// Receives an ordered list of certificates and apply any application-specific logic.

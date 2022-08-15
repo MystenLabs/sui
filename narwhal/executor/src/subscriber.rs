@@ -146,7 +146,7 @@ impl Subscriber {
                     .await
                     .map_err(|err| Error::permanent(PayloadRetrieveError(id, err.to_string())))?;
 
-                return match receiver
+                match receiver
                     .await
                     .map_err(|err| Error::permanent(PayloadRetrieveError(id, err.to_string())))?
                 {
@@ -165,7 +165,7 @@ impl Subscriber {
                         error!("Error while retrieving block via block waiter: {}", err);
                         Err(Error::transient(PayloadRetrieveError(id, err.to_string())))
                     }
-                };
+                }
             }
         };
 

@@ -84,11 +84,7 @@ impl<T> Sender<T> {
     /// Sends a value, waiting until there is capacity.
     /// Increments the gauge in case of a successful `send`.
     pub async fn send(&self, value: T) -> Result<(), SendError<T>> {
-        (*self)
-            .inner
-            .send(value)
-            .inspect(|_| self.gauge.inc())
-            .await
+        self.inner.send(value).inspect(|_| self.gauge.inc()).await
     }
 
     /// Completes when the receiver has dropped.
@@ -99,8 +95,7 @@ impl<T> Sender<T> {
     /// Attempts to immediately send a message on this `Sender`
     /// Increments the gauge in case of a successful `try_send`.
     pub fn try_send(&self, message: T) -> Result<(), TrySendError<T>> {
-        (*self)
-            .inner
+        self.inner
             .try_send(message)
             // remove this unsightly hack once https://github.com/rust-lang/rust/issues/91345 is resolved
             .map(|val| {
