@@ -198,7 +198,7 @@ where
         self.state.unhalt_validator();
         info!(?epoch, "Validator unhalted.");
         info!(
-            "Epoch change finished. We are now at epoch {:?}",
+            "===== Epoch change finished. We are now at epoch {:?} =====",
             next_epoch
         );
         Ok(())
