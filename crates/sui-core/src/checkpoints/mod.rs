@@ -986,8 +986,7 @@ impl CheckpointStore {
     }
 
     /// Updates the store on the basis of transactions that have been processed. This is idempotent
-    /// and nothing unsafe happens if it is called twice. Returns the lowest checkpoint number with
-    /// unprocessed transactions (this is the low watermark).
+    /// and nothing unsafe happens if it is called twice.
     fn update_processed_transactions(
         &mut self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
@@ -996,66 +995,33 @@ impl CheckpointStore {
             .tables
             .transactions_to_checkpoint
             .multi_get(transactions.iter().map(|(_, tx)| tx))?;
-
-        let batch = self.tables.transactions_to_checkpoint.batch();
-
-        // Check we are not re-proposing the same transactions that are already in a
-        // final checkpoint. This should not be possible since we only accept (sign /
-        // record) a checkpoint if we have already processed all transactions within.
-        let already_in_checkpoint_tx = transactions
+        let already_in_checkpoint_tx: Vec<_> = transactions
             .iter()
             .zip(&in_checkpoint)
-            .filter_map(
-                |((_seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some(tx)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .count();
-
-        if already_in_checkpoint_tx != 0 {
-            return Err(SuiError::CheckpointingError {
-                error: "Processing transactions already in a checkpoint.".to_string(),
-            });
+            .filter_map(|((_seq, tx), in_chk)| in_chk.map(|_| tx))
+            .collect();
+        if !already_in_checkpoint_tx.is_empty() {
+            // This should never happen, but if it happens, we should not let it block checkpoint
+            // progress either. Log the error so that we can keep track.
+            error!(
+                "Transactions are processed and updated from batch more than once: {:?}",
+                already_in_checkpoint_tx
+            );
         }
 
-        // Update the entry to the transactions_to_checkpoint
-
+        let batch = self.tables.extra_transactions.batch();
         let batch = batch.insert_batch(
-            &self.tables.transactions_to_checkpoint,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some((tx, (in_chk.unwrap().0, *seq)))
-                    } else {
-                        None
-                    }
-                }),
+            &self.tables.extra_transactions,
+            transactions.iter().map(|(seq, digest)| (digest, seq)),
         )?;
-
-        // If the transactions processed did not belong to a checkpoint yet, we add them to the list
-        // of `extra` transactions, that we should be actively propagating to others.
-        let new_extra: Vec<_> = transactions
-            .iter()
-            .zip(&in_checkpoint)
-            .filter_map(|((seq, tx), in_chk)| {
-                if in_chk.is_none() {
-                    Some((tx, seq))
-                } else {
-                    None
-                }
-            })
-            .collect();
-        debug!("Transactions added to extra_transactions: {:?}", new_extra);
-        let batch = batch.insert_batch(&self.tables.extra_transactions, new_extra)?;
 
         // Write to the database.
         batch.write()?;
+
+        debug!(
+            "Transactions added to extra_transactions: {:?}",
+            transactions
+        );
 
         Ok(())
     }
