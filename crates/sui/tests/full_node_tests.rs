@@ -568,18 +568,126 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
     Ok(())
 }
 
-// Test fullnode has event read jsonrpc endpoints
+// Test fullnode has event read jsonrpc endpoints working
 #[tokio::test]
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
-    let (swarm, _context, address) = setup_network_and_wallet().await?;
-    let (_node, jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
+    let (swarm, mut context, _address) = setup_network_and_wallet().await?;
+    let (node, jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
+    let (transfered_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
 
-    let params = rpc_params![address, 10, 0, 666];
-    let response: Vec<SuiEventEnvelope> = jsonrpc_client
+    wait_for_tx(digest, node.state().clone()).await;
+
+    let txes = node
+        .state()
+        .get_transactions_by_input_object(transfered_object)
+        .await?;
+
+    assert_eq!(txes.len(), 1);
+    assert_eq!(txes[0].1, digest);
+
+    // timestamp is recorded
+    let ts = node.state().get_timestamp_ms(&digest).await?;
+    assert!(ts.is_some());
+
+    // This is a poor substitute for the post processing taking some time
+    sleep(Duration::from_millis(1000)).await;
+
+    let expected_event = SuiEvent::TransferObject {
+        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
+        transaction_module: "native".into(),
+        sender,
+        recipient: Owner::AddressOwner(receiver),
+        object_id: transfered_object,
+        version: SequenceNumber::from_u64(1),
+        type_: TransferType::Coin,
+    };
+
+    // query by sender
+    let params = rpc_params![sender, 10, ts.unwrap() - HOUR_MS, ts.unwrap() + HOUR_MS];
+    let events_by_sender: Vec<SuiEventEnvelope> = jsonrpc_client
         .request("sui_getEventsBySender", params)
         .await
         .unwrap();
-    assert!(response.is_empty());
+    assert_eq!(events_by_sender.len(), 1);
+    assert_eq!(events_by_sender[0].event, expected_event);
+    assert_eq!(events_by_sender[0].tx_digest.unwrap(), digest);
+
+    // query by tx digest
+    let params = rpc_params![digest, 10];
+    let events_by_tx: Vec<SuiEventEnvelope> = jsonrpc_client
+        .request("sui_getEventsByTransaction", params)
+        .await
+        .unwrap();
+    assert_eq!(events_by_tx.len(), 1);
+    assert_eq!(events_by_tx[0].event, expected_event);
+    assert_eq!(events_by_tx[0].tx_digest.unwrap(), digest);
+
+    // query by recipient
+    let params = rpc_params![
+        Owner::AddressOwner(receiver),
+        10,
+        ts.unwrap() - HOUR_MS,
+        ts.unwrap() + HOUR_MS
+    ];
+    let events_by_recipient: Vec<SuiEventEnvelope> = jsonrpc_client
+        .request("sui_getEventsByRecipient", params)
+        .await
+        .unwrap();
+    assert_eq!(events_by_recipient.len(), 1);
+    assert_eq!(events_by_recipient[0].event, expected_event);
+    assert_eq!(events_by_recipient[0].tx_digest.unwrap(), digest);
+
+    // query by object
+    let params = rpc_params![
+        transfered_object,
+        10,
+        ts.unwrap() - HOUR_MS,
+        ts.unwrap() + HOUR_MS
+    ];
+    let events_by_object: Vec<SuiEventEnvelope> = jsonrpc_client
+        .request("sui_getEventsByObject", params)
+        .await
+        .unwrap();
+    assert_eq!(events_by_object.len(), 1);
+    assert_eq!(events_by_object[0].event, expected_event);
+    assert_eq!(events_by_object[0].tx_digest.unwrap(), digest);
+
+    // query by transaction module
+    let params = rpc_params![
+        ObjectID::from_hex_literal("0x2").unwrap(),
+        "native",
+        10,
+        ts.unwrap() - HOUR_MS,
+        ts.unwrap() + HOUR_MS
+    ];
+    let events_by_module: Vec<SuiEventEnvelope> = jsonrpc_client
+        .request("sui_getEventsByModule", params)
+        .await
+        .unwrap();
+    assert_eq!(events_by_module.len(), 1);
+    assert_eq!(events_by_module[0].event, expected_event);
+    assert_eq!(events_by_module[0].tx_digest.unwrap(), digest);
+
+    let (_sender, _object_id, digest) = emit_move_events(&mut context).await?;
+    wait_for_tx(digest, node.state().clone()).await;
+
+    let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
+    let ts = node.state().get_timestamp_ms(&digest).await?;
+
+    // query by move event struct name
+    let params = rpc_params![
+        struct_tag_str,
+        10,
+        ts.unwrap() - HOUR_MS,
+        ts.unwrap() + HOUR_MS
+    ];
+    let events_by_sender: Vec<SuiEventEnvelope> = jsonrpc_client
+        .request("sui_getEventsByMoveEventStructName", params)
+        .await
+        .unwrap();
+    assert_eq!(events_by_sender.len(), 1);
+    assert_eq!(events_by_sender[0].tx_digest.unwrap(), digest);
+
     Ok(())
 }
 

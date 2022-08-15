@@ -1463,7 +1463,7 @@ impl AuthorityState {
     }
 
     /// Returns events with the given move event struct name, e.g.
-    /// `0x2::devnet_nft::MintNFTEvent` or 
+    /// `0x2::devnet_nft::MintNFTEvent` or
     /// `0x2::SUI::test_foo<address, vector<u8>>` when there're type params
     /// , in order of events were emitted.
     /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
