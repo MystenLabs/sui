@@ -46,7 +46,7 @@ You can sign transactions and interact with the Sui network using any of the fol
 * [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
 * [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for all available methods.
 
-## Sui JSON-RPC Examples
+## Sui JSON-RPC examples
 
 In the following sections we will show how to use Sui's JSON-RPC API with
 the `curl` command. See the [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for the latest list of all available methods.
@@ -62,7 +62,7 @@ curl --location --request POST $SUI_RPC_HOST \
 ```
 
 ### Transfer Object
-#### 1, Create a unsigned transaction to transfer a Sui coin from one address to another:
+#### 1, Create an unsigned transaction to transfer a Sui coin from one address to another:
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
@@ -153,7 +153,7 @@ curl --location --request POST $SUI_RPC_HOST \
 ```
 
 #### 2, Sign the transaction
-Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-signtool).
+Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-keytool).
 
 #### 3, Execute the transaction
 Follow the instructions to [execute the transaction](#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
@@ -221,7 +221,7 @@ Copy the outputting base64 representation of the compiled Move module into the
 REST publish endpoint.
 
 #### 2, Sign the transaction
-Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-signtool).
+Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-keytool).
 
 #### 3, Execute the transaction
 Follow the instructions to [execute the transaction](#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
