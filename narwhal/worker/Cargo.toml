@@ -12,7 +12,7 @@ blake2 = "0.9"
 bytes = "1.2.1"
 futures = "0.3.21"
 multiaddr = "0.14.0"
-serde = { version = "1.0.142", features = ["derive"] }
+serde = { version = "1.0.143", features = ["derive"] }
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-stream = "0.1.9"
 tokio-util = { version = "0.7.3", features = ["codec"] }
