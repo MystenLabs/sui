@@ -9,7 +9,7 @@ Now that you've [learned about Sui](../learn/index.md), it's time to start build
 Here is our recommended workflow to interact with Sui:
 
 1. [Install](../build/install.md) all of the *required tools*.
-1. [Connect](../explore/devnet/md) to the Sui Devnet network.
+1. [Connect](../explore/devnet.md) to the Sui Devnet network.
 1. [Create](../build/move/index.md) *smart contracts* with Move:
    1. [Write](../build/move/write-package.md) a package.
    1. [Build and test](../build/move/build-test.md) a package.
