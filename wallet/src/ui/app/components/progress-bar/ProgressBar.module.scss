@@ -12,6 +12,7 @@
     border-radius: 50px;
     margin: auto;
     gap: 10px;
+    margin-top: 20px;
 
     .step {
         @include utils.typography('table/text-sm');
