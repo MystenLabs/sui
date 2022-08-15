@@ -46,9 +46,9 @@ move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e"}
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e"} 
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"}
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"} 
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
 
 narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "config" }
 narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "consensus" }
@@ -58,6 +58,7 @@ narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 thiserror = "1.0.32"
+eyre = "0.6.8"
 
 [dev-dependencies]
 clap = { version = "3.1.17", features = ["derive"] }
@@ -67,7 +68,7 @@ move-package = { git = "https://github.com/move-language/move", rev = "790715285
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
 
 test-fuzz = "3.0.2"
 test-utils = { path = "../test-utils" }

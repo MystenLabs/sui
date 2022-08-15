@@ -173,8 +173,13 @@ impl<A> ActiveAuthority<A> {
         let follower_store = Arc::new(FollowerStore::open_tables_read_write(
             follower_db_path,
             None,
+            None,
         ));
-        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(sync_db_path, None));
+        let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(
+            sync_db_path,
+            None,
+            None,
+        ));
         Self::new(
             authority,
             node_sync_store,
