@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use futures::future::join_all;
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -15,6 +16,7 @@ use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
 use futures::stream::StreamExt;
 
 use clap::*;
+use sui_core::authority::MAX_ITEMS_LIMIT;
 
 #[derive(Parser)]
 #[clap(
@@ -380,14 +382,26 @@ impl ToolCommand {
                     })
                     .collect();
 
-                let req = BatchInfoRequest {
-                    start: seq,
-                    length: len,
-                };
-
                 for (name, c) in clients.iter() {
                     println!("validator batch stream: {:?}", name);
-                    handle_batch(*c, &req).await;
+                    if let Some(seq) = seq {
+                        let requests =
+                            (seq..(seq + len))
+                                .step_by(MAX_ITEMS_LIMIT as usize)
+                                .map(|start| BatchInfoRequest {
+                                    start: Some(start),
+                                    length: min(MAX_ITEMS_LIMIT, seq + len - start),
+                                });
+                        for request in requests {
+                            handle_batch(*c, &request).await;
+                        }
+                    } else {
+                        let req = BatchInfoRequest {
+                            start: seq,
+                            length: len,
+                        };
+                        handle_batch(*c, &req).await;
+                    }
                 }
             }
             ToolCommand::FetchObject {
