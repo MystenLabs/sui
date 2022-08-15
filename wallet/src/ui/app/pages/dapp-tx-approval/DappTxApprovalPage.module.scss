@@ -19,9 +19,11 @@
     justify-content: space-between;
     font-size: 14px;
     line-height: 13px;
+
     dt {
         color: colors.$gray-80;
     }
+
     dd {
         color: colors.$gray-90;
     }
@@ -35,7 +37,7 @@
     height: 5px;
     position: relative;
     display: block;
-    bottom: 0px;
+    bottom: 0;
     right: 0;
     z-index: 2;
 }

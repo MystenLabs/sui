@@ -39,6 +39,7 @@
     font-weight: 500;
     text-decoration: none;
     color: colors.$sui-dark-blue;
+
     &:visited {
         color: colors.$sui-dark-blue;
     }
@@ -50,14 +51,14 @@
 
 .actions-container {
     position: sticky;
-    bottom: 0px;
+    bottom: 0;
 }
 
 .actions {
-    padding: 15px 25px 25px 25px;
+    padding: 15px 25px 25px;
     background: white;
-    border-radius: 20px 20px 0px 0px;
-    box-shadow: 0px 0px 44px rgba(0, 0, 0, 0.15);
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 0 44px rgba(0 0 0 / 15%);
     display: flex;
     align-items: center;
     gap: 10px;
@@ -88,6 +89,7 @@
     &.approve {
         background: colors.$cta-blue;
         color: colors.$white;
+
         & i {
             color: #adcadd;
         }
@@ -96,6 +98,7 @@
     &.cancel {
         background: colors.$gray-45;
         color: colors.$gray-85;
+
         & i {
             color: colors.$gray-65;
         }
@@ -104,6 +107,7 @@
     &.reject {
         background: #fae4e4;
         color: colors.$error;
+
         & i {
             color: #d28a8a;
         }
