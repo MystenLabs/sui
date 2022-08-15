@@ -150,6 +150,9 @@ pub fn build_move_package(
 /// version of the framework code bundled as compiled package's dependency and this function
 /// verifies this.
 fn verify_framework_version(pkg: &CompiledPackage) -> SuiResult<()> {
+    // We stash compiled modules in the Modules map which is sorted so that we can compare sets of
+    // compiled modules directly.
+
     let dep_framework_modules = pkg.all_modules_map().iter_modules_owned();
     let dep_framework: Vec<&CompiledModule> = dep_framework_modules
         .iter()
