@@ -1,22 +1,28 @@
 ---
-title: Local RPC Server & JSON-RPC API Quick Start
+title: RPC Server & JSON-RPC API Quick Start
 ---
 
 Welcome to the Sui RPC server quick start.
 
-This document walks you through setting up your own local Sui RPC Server and using the Sui JSON-RPC API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
+This document walks you through setting up your own Sui RPC Server and using the Sui JSON-RPC API to interact with the Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
 
 
-## Local RPC server setup
+## RPC server setup
 Follow the instructions to [install Sui binaries](install.md).
 
-### Start local Sui network
-Follow the instructions to [create](cli-client.md#genesis) and [start](cli-client.md#starting-the-network) the Sui network.
+### Connect to Sui network
+
+#### Remote Devnet
+Simply [connect to the Sui Devnet](../explore/devnet.md) to start making RPC calls to our remote server, build on top of Sui, and optionally [join incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/).
+
+#### Local Sui Network
+Alternatively, to [contribute](../contribute/index.md) to Sui itself, you may follow the instructions to [create](cli-client.md#genesis) and [start](cli-client.md#starting-the-network) a local Sui network.
+
 The genesis process will create a `gateway.yaml` configuration file that will be used by the RPC server.
 
-### Start local RPC server
+### Start RPC server
 
-Use the following command to start a local server:
+Use the following command to start an RPC server:
 ```shell
 $ rpc-server
 ```
@@ -61,8 +67,8 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}'
 ```
 
-### Transfer Object
-#### 1, Create an unsigned transaction to transfer a Sui coin from one address to another:
+### Transfer object
+#### 1, Create an unsigned transaction to transfer a Sui coin from one address to another
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
@@ -99,7 +105,7 @@ You will see output resembling:
 2022-04-25T18:50:06.031925Z  INFO sui::sui_commands: Signature : 6vc+ku0RsMKdky8DRfoy/hw6eCQ3YsadH6rZ9WUCwGTAumuWER3TOJRw7u7F4QaHkqUsIPfJN9GRraSX+N8ADQ==
 ```
 
-#### 3, Execute the transaction using the transaction data, signature and public key.
+#### 3, Execute the transaction using the transaction data, signature and public key
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
@@ -130,7 +136,8 @@ be owned by the address represented by `{{owner_address}}`.
 
 ### Invoke Move functions
 
-#### 1, Execute a Move call transaction by calling the specified function in
+#### 1, Execute a Move call transaction
+Execute a Move call transaction by calling the specified function in
 the module of a given package (smart contracts in Sui are written in
 the [Move](move/index.md) language):
 
@@ -235,7 +242,3 @@ Below you can see a truncated sample output of [sui_publish](#sui_publish). One 
     ...
 }
 ```
-
-## Connect to remote JSON-RPC server
-
-Employ alternative ways of working with Sui's JSON-RPC API. Connect to [Sui Devnet](../explore/devnet.md), [Join Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/) and soon Mainnet!
