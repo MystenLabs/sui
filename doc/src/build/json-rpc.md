@@ -80,57 +80,6 @@ curl --location --request POST $SUI_RPC_HOST \
 This will fetch the latest information on all objects owned by each
 address that is managed by this server. This command has no output.
 
-### sui_getOwnedObjects
-
-Return the list of objects owned by an address:
-```shell
-curl --location --request POST $SUI_RPC_HOST \
---header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", "method":"sui_getOwnedObjects", "params":["{{address}}"], "id":1}' | json_pp
-```
-
-You should replace `{{address}}` in the command above with an actual
-address value, you can retrieve the list of the addresses created during
-genesis from `client.yaml`. Ensure you have run [`sui_syncAccountState`](#sui_syncaccountstate)
-
-The output you see should resemble the following (abbreviated to show only two objects):
-
-```shell
-{
-   "id" : 1,
-   "jsonrpc" : "2.0",
-   "result" : {
-      "objects" : [
-         {
-            "digest" : "zpa45U9ANfA9A6iS01NvAoVH0RbYB6a5rjhgh2Hb/GE=",
-            "objectId" : "0x17b348903b0cfb75fc9ab5426bb69d83d1e756a5",
-            "version" : 1
-         },
-         {
-            "digest" : "8SPi0h6xVMVNBvGzzF4RfuOoaXISdtiB5aT7+BYDbxg=",
-            "objectId" : "0x7599d8ea1de4c9616d077f16ca0eb38cdecacc07",
-            "version" : 1
-         },
-         ...
-      ]
-   }
-}
-
-```
-
-### GET sui_getObjectInfoRaw
-
-Return the object information for a specified object, for example:
-
-```shell
-curl --location --request POST $SUI_RPC_HOST \
---header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", "method":"sui_getObjectInfoRaw", "params":["{{object_id}}"], "id":1}' | json_pp
-```
-
-Replace `{{object_id}}` in the command above with an
-actual object ID, for example one obtained from [`sui_getOwnedObjects`](#sui_getownedobjects) (without quotes).
-
 ### sui_transferObject
 #### 1, Create a transaction to transfer a Sui coin from one address to another:
 ```shell
