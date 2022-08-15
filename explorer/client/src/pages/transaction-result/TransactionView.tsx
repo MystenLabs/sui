@@ -151,7 +151,7 @@ type TxItemView = {
 };
 
 function FormatArguments({ value }: { value: string }): JSX.Element {
-    const matchAddress = /(0x[a-f0-9]*)/;
+    const matchAddress = /(0x[a-f0-9]{40})/;
     const split = value.split(matchAddress);
     return (
         <>
