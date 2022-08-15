@@ -4,21 +4,17 @@
 import cl from 'classnames';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
-import { useIntl } from 'react-intl';
 
+import BottomMenuLayout, {
+    Content,
+    Menu,
+} from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
-import Alert from '_components/alert';
-import ActiveCoinCard from '_components/coin-selection';
+import ActiveCoinCard from '_components/active-coin-card';
 import Icon, { SuiIcons } from '_components/icon';
-import LoadingIndicator from '_components/loading/LoadingIndicator';
 import NumberInput from '_components/number-input';
-import {
-    DEFAULT_GAS_BUDGET_FOR_TRANSFER,
-    GAS_SYMBOL,
-} from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
 
-import type { FormValuesStepOne } from '../';
+import type { FormValues } from '../';
 
 import st from './TransferCoinForm.module.scss';
 
@@ -38,11 +34,10 @@ function StepOne({
     onClearSubmitError,
 }: TransferCoinFormProps) {
     const {
-        isSubmitting,
         isValid,
         values: { amount },
-    } = useFormikContext<FormValuesStepOne>();
-    const intl = useIntl();
+    } = useFormikContext<FormValues>();
+
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
     useEffect(() => {
@@ -54,56 +49,45 @@ function StepOne({
             autoComplete="off"
             noValidate={true}
         >
-            <div className={st.group}>
-                <label className={st.label}>Amount:</label>
-                <Field
-                    component={NumberInput}
-                    allowNegative={false}
-                    name="amount"
-                    placeholder={`Total ${coinSymbol.toLocaleUpperCase()} to send`}
-                    className={st.input}
-                />
-                <div className={st.muted}>
-                    Available balance:{' '}
-                    {intl.formatNumber(
-                        BigInt(coinBalance),
-                        balanceFormatOptions
-                    )}{' '}
-                    {coinSymbol}
-                </div>
-                <ErrorMessage
-                    className={st.error}
-                    name="amount"
-                    component="div"
-                />
-            </div>
-            <ActiveCoinCard activeCoinType={coinType} />
-            <div className={st.group}>
-                * Total transaction fee estimate (gas cost):{' '}
-                {DEFAULT_GAS_BUDGET_FOR_TRANSFER} {GAS_SYMBOL}
-            </div>
-            {submitError ? (
-                <div className={st.group}>
-                    <Alert>
-                        <strong>Transfer failed.</strong>{' '}
-                        <small>{submitError}</small>
-                    </Alert>
-                </div>
-            ) : null}
-            <div className={st.group}>
-                <Button
-                    type="submit"
-                    disabled={!isValid || isSubmitting}
-                    mode="primary"
-                    className={st.btn}
-                >
-                    Continue
-                    <Icon
-                        icon={SuiIcons.ArrowLeft}
-                        className={cl(st.arrowLeft)}
-                    />
-                </Button>
-            </div>
+            <BottomMenuLayout>
+                <Content>
+                    <div className={st.group}>
+                        <label className={st.label}>Amount:</label>
+                        <Field
+                            component={NumberInput}
+                            allowNegative={false}
+                            name="amount"
+                            placeholder={`Total ${coinSymbol.toLocaleUpperCase()} to send`}
+                            className={st.input}
+                        />
+
+                        <ErrorMessage
+                            className={st.error}
+                            name="amount"
+                            component="div"
+                        />
+                    </div>
+                    <div className={st.activeCoinCard}>
+                        <ActiveCoinCard activeCoinType={coinType} />
+                    </div>
+                </Content>
+                <Menu stuckClass={st.shadow}>
+                    <div className={cl(st.group, st.cta)}>
+                        <Button
+                            type="submit"
+                            disabled={!isValid}
+                            mode="primary"
+                            className={st.btn}
+                        >
+                            Continue
+                            <Icon
+                                icon={SuiIcons.ArrowLeft}
+                                className={cl(st.arrowLeft)}
+                            />
+                        </Button>
+                    </div>
+                </Menu>
+            </BottomMenuLayout>
         </Form>
     );
 }

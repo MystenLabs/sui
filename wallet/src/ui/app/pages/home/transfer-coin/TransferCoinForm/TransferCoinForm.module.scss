@@ -7,11 +7,12 @@
     flex-flow: column nowrap;
     flex: 1;
     align-self: stretch;
-    height: calc(100% - 75px);
-    margin-top: 10px;
+    height: calc(100% - 85px);
+    margin-top: 20px;
 }
 
-.amount {
+.amount,
+.address {
     input {
         width: 100%;
         border: 1px solid colors.$gray-50;
@@ -23,6 +24,10 @@
             color: colors.$gray-70;
         }
     }
+}
+
+.form-content {
+    margin-top: 20px;
 }
 
 .group {
@@ -37,13 +42,11 @@
 .label {
     margin-bottom: 4px;
     font-weight: 600;
+    color: colors.$gray-80;
 }
 
 .error {
-    color: #8b1111;
-    line-height: 1em;
-    min-height: 1em;
-    margin-top: 2px;
+    @include utils.error-message-box;
 }
 
 .muted {
@@ -55,6 +58,10 @@
 
 .input {
     padding: 12px;
+}
+
+.cta {
+    width: 100%;
 }
 
 .btn {
@@ -72,5 +79,96 @@
 
     &:hover {
         background-color: colors.$sui-steel-blue;
+    }
+}
+
+.active-coin-card {
+    margin-top: 20px;
+}
+
+.response-card {
+    background-color: colors.$gray-40;
+    border-radius: 10px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    padding: 20px;
+    margin-top: 25px;
+
+    .tx-info {
+        border-top: 1px solid colors.$gray-50;
+        border-bottom: 1px solid colors.$gray-50;
+        padding: 10px 0;
+        display: flex;
+        flex-flow: column;
+        gap: 10px;
+        margin: 10px;
+        word-break: break-all;
+        margin-bottom: 0;
+
+        @include utils.typography('table/text-sm');
+
+        .tx-info-label {
+            color: colors.$gray-75;
+            display: flex;
+            gap: 10px;
+        }
+
+        .tx-info-value {
+            color: colors.$gray-100;
+            font-size: 13px;
+            line-height: 18px;
+            display: flex;
+            gap: 10px;
+            overflow-wrap: break-word;
+            font-family: 'Space Mono', ui-monospace, monospace;
+        }
+    }
+
+    .amount {
+        font-weight: 600;
+        font-size: 24px;
+        line-height: 19px;
+        color: colors.$gray-100;
+
+        span {
+            color: colors.$gray-75;
+            font-size: 16px;
+        }
+    }
+
+    &::after {
+        content: '';
+        background-image: url('_assets/images/nft-detail-bg.png');
+        background-repeat: no-repeat;
+        background-position: center bottom;
+        background-size: 100%;
+        width: 104%;
+        height: 15px;
+        display: flex;
+        left: -5px;
+        top: 12px;
+        position: relative;
+    }
+
+    .details {
+        border-top: 1px solid colors.$gray-50;
+        padding: 20px 0;
+        margin-top: 20px;
+    }
+
+    .tx-date,
+    .tx-fees {
+        display: flex;
+        gap: 10px;
+        justify-content: space-between;
+        @include utils.typography('table/text-lg');
+
+        .tx-info-label {
+            color: colors.$gray-80;
+        }
+
+        .tx-info-value {
+            color: colors.$gray-85;
+        }
     }
 }
