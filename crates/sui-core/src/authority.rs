@@ -38,6 +38,7 @@ use std::{
 use sui_adapter::adapter;
 use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
+use sui_json_rpc_types::SuiEventEnvelope;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
@@ -1439,9 +1440,10 @@ impl AuthorityState {
     pub async fn get_events_for_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<Vec<StoredEvent>, SuiError> {
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        es.events_for_transaction(digest).await
+        let stored_events = es.events_for_transaction(digest).await?;
+        StoredEvent::into_event_envelopes(stored_events)
     }
 
     /// Returns a whole set of events for a range of time
@@ -1450,10 +1452,12 @@ impl AuthorityState {
         start_time: u64,
         end_time: u64,
         limit: Option<usize>,
-    ) -> Result<Vec<StoredEvent>, SuiError> {
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        es.event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
-            .await
+        let stored_events = es
+            .event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {

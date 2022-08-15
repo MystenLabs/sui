@@ -1,6 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
+use crate::error::SuiError;
+use crate::object::MoveObject;
+use crate::object::ObjectFormatOptions;
+use crate::object::Owner;
+use crate::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
+    committee::EpochId,
+    messages_checkpoint::CheckpointSequenceNumber,
+};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
@@ -15,16 +26,21 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
+use tracing::error;
 
-use crate::error::SuiError;
-use crate::object::MoveObject;
-use crate::object::ObjectFormatOptions;
-use crate::object::Owner;
-use crate::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
-    committee::EpochId,
-    messages_checkpoint::CheckpointSequenceNumber,
-};
+// /// A slim version of EventEnvelope with a few fields cut out.
+// /// It is mostly used in the event query read path, particularly in
+// /// EventEnvelope conversions as an intermediary struct from StoredEvent
+// /// to SuiEventEnvelope, so that we don't have to expose the `sui-storage`
+// /// crate to the rpc layer.
+// pub struct SlimEventEnvelope {
+//     /// UTC timestamp in milliseconds since epoch (1/1/1970)
+//     pub timestamp: u64,
+//     /// Transaction digest of associated transaction, if any
+//     pub tx_digest: Option<TransactionDigest>,
+//     /// Specific event type
+//     pub event: Event,
+// }
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,8 +80,21 @@ impl EventEnvelope {
 }
 
 #[derive(
-    Eq, Debug, strum_macros::Display, Clone, PartialEq, Deserialize, Serialize, Hash, JsonSchema,
+    EnumVariantNames,
+    Eq,
+    Debug,
+    strum_macros::Display,
+    Copy,
+    Clone,
+    strum_macros::EnumString,
+    PartialEq,
+    Deserialize,
+    Serialize,
+    Hash,
+    JsonSchema,
+    EnumDiscriminants,
 )]
+#[strum_discriminants(name(TransferTypeVariants))]
 pub enum TransferType {
     Coin,
     ToAddress,
@@ -86,8 +115,9 @@ pub enum TransferType {
     EnumDiscriminants,
     EnumVariantNames,
 )]
+#[strum_discriminants(derive(strum_macros::EnumString))]
 #[strum_discriminants(name(EventType), derive(Serialize, Deserialize, JsonSchema))]
-// Developer note: PLEASE only append new entries, do not modify existing entries (binary compat)
+// Developer note: PLEASE only append new entries, do not modify existing entries (binary compact)
 pub enum Event {
     /// Move-specific event
     MoveEvent {
@@ -254,6 +284,66 @@ impl Event {
             }
             _ => None,
         }
+    }
+
+    /// Extracts the serialized recipient from a SuiEvent, if available
+    pub fn recipient_serialized(&self) -> Result<Option<String>, SuiError> {
+        match self {
+            Event::TransferObject { recipient, .. } | Event::NewObject { recipient, .. } => {
+                let res = serde_json::to_string(recipient);
+                if let Err(e) = res {
+                    error!("Failed to serialize recipient field of event: {:?}", self);
+                    Err(SuiError::OwnerFailedToSerialize {
+                        error: (e.to_string()),
+                    })
+                } else {
+                    Ok(res.ok())
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    pub fn move_event_contents(&self) -> Option<&[u8]> {
+        if let Event::MoveEvent { contents, .. } = self {
+            Some(contents)
+        } else {
+            None
+        }
+    }
+
+    pub fn move_event_struct_tag(&self) -> Option<&StructTag> {
+        if let Event::MoveEvent { type_, .. } = self {
+            Some(type_)
+        } else {
+            None
+        }
+    }
+
+    pub fn transfer_type(&self) -> Option<&TransferType> {
+        if let Event::TransferObject { type_, .. } = self {
+            Some(type_)
+        } else {
+            None
+        }
+    }
+
+    pub fn object_version(&self) -> Option<&SequenceNumber> {
+        if let Event::TransferObject { version, .. } = self {
+            Some(version)
+        } else {
+            None
+        }
+    }
+
+    pub fn transfer_type_from_ordinal(ordinal: usize) -> Result<TransferType, SuiError> {
+        TransferType::from_str(TransferType::VARIANTS[ordinal]).map_err(|e| {
+            SuiError::BadObjectType {
+                error: format!(
+                    "Could not parse tranfer type from ordinal: {ordinal} into TransferType: {e:?}"
+                ),
+            }
+        })
     }
 
     pub fn move_event_to_move_struct(
