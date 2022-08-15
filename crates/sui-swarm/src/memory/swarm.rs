@@ -25,7 +25,7 @@ pub struct SwarmBuilder<R = OsRng> {
     committee_size: NonZeroUsize,
     initial_accounts_config: Option<GenesisConfig>,
     fullnode_count: usize,
-    fullnode_rpc_addr: Option<SocketAddr>
+    fullnode_rpc_addr: Option<SocketAddr>,
 }
 
 impl SwarmBuilder {
