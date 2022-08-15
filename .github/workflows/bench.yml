@@ -50,11 +50,6 @@ jobs:
     # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
     #   with:
     #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
-    - name: Install huniq, and cache the binary
-      uses: baptiste0928/cargo-install@v1
-      with:
-        crate: huniq
-        locked: true
     - name: prepare artifact directory
       run: |
         mkdir -p artifacts
@@ -67,7 +62,7 @@ jobs:
     - name: run benchmark
       run: |
         set -o pipefail
-        cargo run --release --bin bench microbench throughput 2>&1 | huniq | tee -a artifacts/bench_results.txt
+        cargo run --release --bin bench microbench throughput 2>&1 | sort -u | uniq | tee -a artifacts/bench_results.txt
     - name: retrieve benchmark results
       id: get-comment-body
       run: |
