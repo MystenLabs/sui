@@ -31,10 +31,6 @@
     @apply pb-[12px];
 }
 
-.openedgroup .summary div:not(:first-child):not(:last-child) {
-    @apply border-solid border-0 border-b border-sui-grey-45;
-}
-
 .closedgroup {
     @apply text-sui-grey-90 hover:bg-[#6fbcf014];
 }
