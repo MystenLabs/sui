@@ -12,6 +12,8 @@ export const navigateWithUnknown = async (
 ) => {
     let searchPromises = [];
 
+    const isSuiAddress = isValidSuiAddress(input);
+
     if (isValidTransactionDigest(input)) {
         searchPromises.push(
             rpc(network)
@@ -26,7 +28,7 @@ export const navigateWithUnknown = async (
     // object IDs and addresses can't be distinguished just by the string, so search both.
     // allow navigating to the standard Move packages at 0x1 & 0x2 as a convenience
     // Get Search results for a given query from both the object and address index
-    else if (isValidSuiAddress(input) || isGenesisLibAddress(input)) {
+    else if (isSuiAddress || isGenesisLibAddress(input)) {
         const addrObjPromise = Promise.allSettled([
             rpc(network)
                 .getObjectsOwnedByAddress(input)
@@ -95,6 +97,12 @@ export const navigateWithUnknown = async (
             })
             //if none of the queries find a result, show missing page
             .catch((error) => {
+                if (isSuiAddress) {
+                    // navigate to empty address page
+                    navigate(`../addresses/${encodeURIComponent(input)}`);
+                    return;
+                }
+
                 // encode url in
                 navigate(`../error/missing/${encodeURIComponent(input)}`);
             })
