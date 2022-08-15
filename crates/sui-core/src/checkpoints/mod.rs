@@ -991,6 +991,24 @@ impl CheckpointStore {
         &mut self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<(), SuiError> {
+        let in_checkpoint = self
+            .tables
+            .transactions_to_checkpoint
+            .multi_get(transactions.iter().map(|(_, tx)| tx))?;
+        let already_in_checkpoint_tx: Vec<_> = transactions
+            .iter()
+            .zip(&in_checkpoint)
+            .filter_map(|((_seq, tx), in_chk)| in_chk.map(|_| tx))
+            .collect();
+        if !already_in_checkpoint_tx.is_empty() {
+            // This should never happen, but if it happens, we should not let it block checkpoint
+            // progress either. Log the error so that we can keep track.
+            error!(
+                "Transactions are processed and updated from batch more than once: {:?}",
+                already_in_checkpoint_tx
+            );
+        }
+
         let batch = self.tables.extra_transactions.batch();
         let batch = batch.insert_batch(
             &self.tables.extra_transactions,
