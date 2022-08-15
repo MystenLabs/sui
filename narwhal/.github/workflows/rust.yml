@@ -53,7 +53,6 @@ jobs:
     strategy:
       matrix:
         os:
-          - ubuntu-latest
           - ubuntu-ghcloud
           - windows-ghcloud
       fail-fast: false
@@ -78,7 +77,7 @@ jobs:
       - run: scripts/changed-files.sh
 
   clippy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1

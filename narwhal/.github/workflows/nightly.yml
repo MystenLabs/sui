@@ -29,7 +29,7 @@ env:
 jobs:
   end-to-end-tests:
     name: Run long-running end-to-end tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -47,7 +47,7 @@ jobs:
 
   beta:
     name: Run test on the beta channel
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@v3
       - name: Install beta toolchain
@@ -67,7 +67,7 @@ jobs:
 
   release:
     name: build release binaries
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
@@ -78,7 +78,7 @@ jobs:
           args: --all-targets --features celo --release --profile=release
 
   cargo-udeps:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
