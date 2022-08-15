@@ -5,7 +5,7 @@ use crate::{
     config::Config,
     multiaddr::{parse_dns, parse_ip4, parse_ip6},
 };
-use anyhow::{anyhow, Context, Result};
+use eyre::{eyre, Context, Result};
 use multiaddr::{Multiaddr, Protocol};
 use tonic::transport::{Channel, Endpoint, Uri};
 
@@ -37,7 +37,7 @@ pub(crate) fn connect_lazy_with_config(address: &Multiaddr, config: &Config) -> 
 fn endpoint_from_multiaddr(addr: &Multiaddr) -> Result<MyEndpoint> {
     let mut iter = addr.iter();
 
-    let channel = match iter.next().ok_or_else(|| anyhow!("address is empty"))? {
+    let channel = match iter.next().ok_or_else(|| eyre!("address is empty"))? {
         Protocol::Dns(_) => {
             let (dns_name, tcp_port, http_or_https) = parse_dns(addr)?;
             let uri = format!("{http_or_https}://{dns_name}:{tcp_port}");
@@ -60,7 +60,7 @@ fn endpoint_from_multiaddr(addr: &Multiaddr) -> Result<MyEndpoint> {
             let uri = format!("{http_or_https}://localhost");
             MyEndpoint::try_from_uri(uri)?.with_uds_connector(path.as_ref().into())
         }
-        unsupported => return Err(anyhow!("unsupported protocol {unsupported}")),
+        unsupported => return Err(eyre!("unsupported protocol {unsupported}")),
     };
 
     Ok(channel)
