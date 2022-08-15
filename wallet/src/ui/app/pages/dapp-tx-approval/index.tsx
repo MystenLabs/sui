@@ -129,7 +129,7 @@ export function DappTxApprovalPage() {
 
         txRequest.metadata.parameters.forEach((param, index) => {
             if (typeof param !== 'object') return;
-            const id = txRequest.tx.arguments[index].toString();
+            const id = txRequest.tx.arguments[index] as string;
             const unwrappedType = unwrapTypeReference(param);
             if (!unwrappedType) return;
 
