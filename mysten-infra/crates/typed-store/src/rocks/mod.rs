@@ -11,6 +11,7 @@ use collectable::TryExtend;
 use rocksdb::{ColumnFamilyDescriptor, DBWithThreadMode, MultiThreaded, WriteBatch};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, env, marker::PhantomData, path::Path, sync::Arc};
+use tap::TapFallible;
 use tracing::{info, instrument};
 
 use self::{iter::Iter, keys::Keys, values::Values};
@@ -438,22 +439,17 @@ where
 }
 
 fn read_size_from_env(var_name: &str) -> Option<usize> {
-    match env::var(var_name) {
-        Ok(val) => match val.parse::<usize>() {
-            Ok(i) => Some(i),
-            Err(e) => {
-                info!(
-                    "Env var {} does not contain valid usize integer: {}",
-                    var_name, e
-                );
-                Option::None
-            }
-        },
-        Err(e) => {
-            info!("Env var {} is not set: {}", var_name, e);
-            Option::None
-        }
-    }
+    env::var(var_name)
+        .tap_err(|e| info!("Env var {} is not set: {}", var_name, e))
+        .ok()?
+        .parse::<usize>()
+        .tap_err(|e| {
+            info!(
+                "Env var {} does not contain valid usize integer: {}",
+                var_name, e
+            )
+        })
+        .ok()
 }
 
 /// Creates a default RocksDB option, to be used when RocksDB option is not specified..
