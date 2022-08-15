@@ -46,17 +46,12 @@ You can sign transactions and interact with the Sui network using any of the fol
 * [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
 * [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for all available methods.
 
-## Sui JSON-RPC API
-
-In the following sections we will show how to use Sui's JSON-RPC API with
-the `curl` command.
-
 ## Sui JSON-RPC examples
 
-This section includes example calls to the SUI JSON-RPC interface using `curl`. See the [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for the latest list of all available methods. 
+In the following sections we will show how to use Sui's JSON-RPC API with
+the `curl` command. See the [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for the latest list of all available methods.
 
-### rpc.discover
-
+### RPC discover
 Sui RPC server supports OpenRPC’s [service discovery method](https://spec.open-rpc.org/#service-discovery-method).
 A `rpc.discover` method is added to provide documentation describing our JSON-RPC APIs service.
 
@@ -66,22 +61,8 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}'
 ```
 
-### sui_syncAccountState
-
-Synchronize client state with validators with the following command,
-replacing `{{address}}` with an actual address value, for example one obtained from `client.yaml`:
-
-```shell
-curl --location --request POST $SUI_RPC_HOST \
---header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", "method":"sui_syncAccountState", "params":["{{address}}"], "id":1}'
-```
-
-This will fetch the latest information on all objects owned by each
-address that is managed by this server. This command has no output.
-
-### sui_transferObject
-#### 1, Create a transaction to transfer a Sui coin from one address to another:
+### Transfer Object
+#### 1, Create an unsigned transaction to transfer a Sui coin from one address to another:
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
@@ -105,7 +86,7 @@ A transaction data response will be returned from the gateway server.
 }
 
 ```
-#### 2, Sign the transaction using the Sui signtool
+#### 2, Sign the transaction using the Sui keytool
 ```shell
 sui keytool sign --address <owner_address> --data <tx_bytes>
 ```
@@ -147,7 +128,7 @@ represented by both `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
 
 
-### sui_moveCall
+### Invoke Move functions
 
 #### 1, Execute a Move call transaction by calling the specified function in
 the module of a given package (smart contracts in Sui are written in
@@ -172,7 +153,7 @@ curl --location --request POST $SUI_RPC_HOST \
 ```
 
 #### 2, Sign the transaction
-Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-signtool).
+Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-keytool).
 
 #### 3, Execute the transaction
 Follow the instructions to [execute the transaction](#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
@@ -192,9 +173,7 @@ would for [`sui_transferObject`](#sui_TransferObject) - please note additional
 
 To learn more about what `args` are accepted in a Move call, refer to the [SuiJSON](sui-json.md) documentation.
 
-### sui_publish
-
-Publish Move module.
+### Publish a Move package
 
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
@@ -218,7 +197,7 @@ You should replace `{{owner_address}}` in the
 command above with an actual address values, for example one obtained
 from `client.yaml`. You should also replace `{{gas_object_id}}` in the command above with
 an actual object ID, for example one obtained from `objectId` in the output
-of [`sui_getOwnedObjects`](#sui_getownedobjects). You can see that all gas objects generated
+of `sui_getObjectsOwnedByAddress`. You can see that all gas objects generated
 during genesis are of `Coin/SUI` type). For this call to work, the object
 represented by `{{gas_object_id}}` must be owned by the address represented by
 `{{owner_address}}`.
@@ -242,7 +221,7 @@ Copy the outputting base64 representation of the compiled Move module into the
 REST publish endpoint.
 
 #### 2, Sign the transaction
-Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-signtool).
+Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-keytool).
 
 #### 3, Execute the transaction
 Follow the instructions to [execute the transaction](#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
