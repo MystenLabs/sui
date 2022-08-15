@@ -264,7 +264,7 @@ impl IntoPoint for TransactionDigest {
 pub struct ObjectDigest(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub [u8; 32],
+    pub [u8; TRANSACTION_DIGEST_LENGTH],
 ); // We use SHA3-256 hence 32 bytes here
 
 #[serde_as]
@@ -278,7 +278,7 @@ pub struct TransactionEffectsDigest(
 impl TransactionEffectsDigest {
     // for testing
     pub fn random() -> Self {
-        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        let random_bytes = rand::thread_rng().gen::<[u8; TRANSACTION_DIGEST_LENGTH]>();
         Self(random_bytes)
     }
 }
@@ -402,7 +402,7 @@ impl TxContext {
 }
 
 impl TransactionDigest {
-    pub fn new(bytes: [u8; 32]) -> Self {
+    pub fn new(bytes: [u8; TRANSACTION_DIGEST_LENGTH]) -> Self {
         Self(bytes)
     }
 
@@ -411,7 +411,7 @@ impl TransactionDigest {
     ///
     /// TODO(https://github.com/MystenLabs/sui/issues/65): we can pick anything here
     pub fn genesis() -> Self {
-        Self::new([0; 32])
+        Self::new([0; TRANSACTION_DIGEST_LENGTH])
     }
 
     /// Create an ObjectID from `self` and `creation_num`.
@@ -430,7 +430,7 @@ impl TransactionDigest {
 
     // for testing
     pub fn random() -> Self {
-        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        let random_bytes = rand::thread_rng().gen::<[u8; TRANSACTION_DIGEST_LENGTH]>();
         Self::new(random_bytes)
     }
 
@@ -473,16 +473,20 @@ impl Borrow<[u8]> for &TransactionDigest {
 }
 
 impl ObjectDigest {
-    pub const MIN: ObjectDigest = ObjectDigest([u8::MIN; 32]);
-    pub const MAX: ObjectDigest = ObjectDigest([u8::MAX; 32]);
+    pub const MIN: ObjectDigest = ObjectDigest([u8::MIN; OBJECT_DIGEST_LENGTH]);
+    pub const MAX: ObjectDigest = ObjectDigest([u8::MAX; OBJECT_DIGEST_LENGTH]);
+    pub const OBJECT_DIGEST_DELETED_BYTE_VAL: u8 = 99;
+    pub const OBJECT_DIGEST_WRAPPED_BYTE_VAL: u8 = 88;
 
     /// A marker that signifies the object is deleted.
-    pub const OBJECT_DIGEST_DELETED: ObjectDigest = ObjectDigest([99; 32]);
+    pub const OBJECT_DIGEST_DELETED: ObjectDigest =
+        ObjectDigest([Self::OBJECT_DIGEST_DELETED_BYTE_VAL; OBJECT_DIGEST_LENGTH]);
 
     /// A marker that signifies the object is wrapped into another object.
-    pub const OBJECT_DIGEST_WRAPPED: ObjectDigest = ObjectDigest([88; 32]);
+    pub const OBJECT_DIGEST_WRAPPED: ObjectDigest =
+        ObjectDigest([Self::OBJECT_DIGEST_WRAPPED_BYTE_VAL; OBJECT_DIGEST_LENGTH]);
 
-    pub fn new(bytes: [u8; 32]) -> Self {
+    pub fn new(bytes: [u8; OBJECT_DIGEST_LENGTH]) -> Self {
         Self(bytes)
     }
 
@@ -492,7 +496,7 @@ impl ObjectDigest {
 
     // for testing
     pub fn random() -> Self {
-        let random_bytes = rand::thread_rng().gen::<[u8; 32]>();
+        let random_bytes = rand::thread_rng().gen::<[u8; OBJECT_DIGEST_LENGTH]>();
         Self::new(random_bytes)
     }
 }
