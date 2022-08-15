@@ -276,8 +276,6 @@ impl AuthorityMetrics {
 pub type StableSyncAuthoritySigner =
     Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
-const DEFAULT_QUERY_LIMIT: usize = 1000;
-
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -1436,26 +1434,100 @@ impl AuthorityState {
             .map(|handler| handler.event_store.clone())
     }
 
-    /// Returns a set of events corresponding to a given transaction, in order events were emitted
-    pub async fn get_events_for_transaction(
+    /// Returns events emitted in the given transaction, in order of events were emitted
+    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_transaction(
         &self,
         digest: TransactionDigest,
+        limit: usize,
     ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        let stored_events = es.events_for_transaction(digest).await?;
+        let stored_events = es.events_by_transaction(digest, limit).await?;
         StoredEvent::into_event_envelopes(stored_events)
     }
 
-    /// Returns a whole set of events for a range of time
-    pub async fn get_events_for_timerange(
+    /// Returns events emitted in the given module, in order of events were emitted.
+    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_transaction_module(
         &self,
+        module_id: &ModuleId,
         start_time: u64,
         end_time: u64,
-        limit: Option<usize>,
+        limit: usize,
     ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
         let stored_events = es
-            .event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
+            .events_by_module_id(start_time, end_time, module_id, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns events with the given move event struct name, e.g.
+    /// `0x2::devnet_nft::MintNFTEvent` or 
+    /// `0x2::SUI::test_foo<address, vector<u8>>` when there're type params
+    /// , in order of events were emitted.
+    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_move_event_struct_name(
+        &self,
+        move_event_struct_name: &str,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_move_event_struct_name(start_time, end_time, move_event_struct_name, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns events associated with the given sender, in order
+    /// of events were emitted.
+    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_sender(
+        &self,
+        sender: &SuiAddress,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_sender(start_time, end_time, sender, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns events associated with the given recipient, in order
+    /// of events were emitted.
+    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_recipient(
+        &self,
+        recipient: &Owner,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_recipient(start_time, end_time, recipient, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns events associated with the given object,
+    /// in order of events were emitted.
+    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_object(
+        &self,
+        object: &ObjectID,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_object(start_time, end_time, object, limit)
             .await?;
         StoredEvent::into_event_envelopes(stored_events)
     }

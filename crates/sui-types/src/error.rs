@@ -185,8 +185,6 @@ pub enum SuiError {
     TransferImmutableError,
 
     // Errors related to batches
-    #[error("The number of items requested exceeds defined limits of {0}.")]
-    TooManyItemsError(u64),
     #[error("The range specified is invalid.")]
     InvalidSequenceRangeError,
     #[error("No batches matched the range requested.")]

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::net::SocketAddr;
+use std::str::FromStr;
 use std::{collections::BTreeMap, sync::Arc};
 
 use futures::future;
@@ -9,6 +10,9 @@ use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::rpc_params;
 use jsonrpsee::ws_client::WsClientBuilder;
+use move_core_types::account_address::AccountAddress;
+use move_core_types::identifier::Identifier;
+use move_core_types::language_storage::ModuleId;
 use sui_types::base_types::SequenceNumber;
 use sui_types::event::TransferType;
 use sui_types::object::Owner;
@@ -262,21 +266,63 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         type_: TransferType::Coin,
     };
 
-    let mut all_events = node
+    // query by sender
+    let events_by_sender = node
         .state()
-        .get_events_for_timerange(ts.unwrap() - HOUR_MS, ts.unwrap() + HOUR_MS, None)
+        .get_events_by_sender(&sender, ts.unwrap() - HOUR_MS, ts.unwrap() + HOUR_MS, 10)
         .await?;
-    assert_eq!(all_events.len(), 1);
-    let event_envelope = all_events.swap_remove(0);
-    assert_eq!(event_envelope.event, expected_event);
-    assert_eq!(event_envelope.tx_digest.unwrap(), digest);
+    assert_eq!(events_by_sender.len(), 1);
+    assert_eq!(events_by_sender[0].event, expected_event);
+    assert_eq!(events_by_sender[0].tx_digest.unwrap(), digest);
 
     // query by tx digest
-    let mut events = node.state().get_events_for_transaction(digest).await?;
-    assert_eq!(events.len(), 1);
-    let event_envelope = events.swap_remove(0);
-    assert_eq!(event_envelope.event, expected_event);
-    assert_eq!(event_envelope.tx_digest.unwrap(), digest);
+    let events_by_tx = node.state().get_events_by_transaction(digest, 10).await?;
+    assert_eq!(events_by_tx.len(), 1);
+    assert_eq!(events_by_tx[0].event, expected_event);
+    assert_eq!(events_by_tx[0].tx_digest.unwrap(), digest);
+
+    // query by recipient
+    let events_by_recipient = node
+        .state()
+        .get_events_by_recipient(
+            &Owner::AddressOwner(receiver),
+            ts.unwrap() - HOUR_MS,
+            ts.unwrap() + HOUR_MS,
+            10,
+        )
+        .await?;
+    assert_eq!(events_by_recipient.len(), 1);
+    assert_eq!(events_by_recipient[0].event, expected_event);
+    assert_eq!(events_by_recipient[0].tx_digest.unwrap(), digest);
+
+    // query by object
+    let events_by_object = node
+        .state()
+        .get_events_by_object(
+            &transfered_object,
+            ts.unwrap() - HOUR_MS,
+            ts.unwrap() + HOUR_MS,
+            10,
+        )
+        .await?;
+    assert_eq!(events_by_object.len(), 1);
+    assert_eq!(events_by_object[0].event, expected_event);
+    assert_eq!(events_by_object[0].tx_digest.unwrap(), digest);
+
+    // query by transaction module
+    // Query by module ID
+    let mod_id = ModuleId::new(
+        AccountAddress::from(ObjectID::from_hex_literal("0x2").unwrap()),
+        Identifier::from_str("native").unwrap(),
+    );
+    let events_by_module = node
+        .state()
+        .get_events_by_transaction_module(&mod_id, ts.unwrap() - HOUR_MS, ts.unwrap() + HOUR_MS, 10)
+        .await?;
+    assert_eq!(events_by_module.len(), 1);
+    assert_eq!(events_by_module[0].event, expected_event);
+    assert_eq!(events_by_module[0].tx_digest.unwrap(), digest);
+
     Ok(())
 }
 
@@ -437,7 +483,7 @@ async fn set_up_jsonrpc(swarm: &Swarm) -> Result<(SuiNode, HttpClient), anyhow::
 }
 
 #[tokio::test]
-async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
+async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
     let (node, ws_client) = set_up_subscription(&swarm).await?;
 
@@ -455,15 +501,17 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
     let (sender, object_id, digest) = emit_move_events(&mut context).await?;
     wait_for_tx(digest, node.state().clone()).await;
 
-    match timeout(Duration::from_secs(5), sub.next()).await {
+    let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
+
+    // Wait for streaming
+    let bcs = match timeout(Duration::from_secs(5), sub.next()).await {
         Ok(Some(Ok(SuiEventEnvelope {
-            event: SuiEvent::MoveEvent { type_, fields, .. },
+            event: SuiEvent::MoveEvent {
+                type_, fields, bcs, ..
+            },
             ..
         }))) => {
-            assert_eq!(
-                type_,
-                sui_framework_address_concat_string("::devnet_nft::MintNFTEvent")
-            );
+            assert_eq!(type_, struct_tag_str,);
             assert_eq!(
                 fields,
                 Some(SuiMoveStruct::WithFields(BTreeMap::from([
@@ -478,11 +526,37 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
                     ),
                 ])))
             );
-            // TODO: verify bcs contents
+            bcs
         }
         other => panic!("Failed to get SuiEvent, but {:?}", other),
-    }
+    };
 
+    let ts = node.state().get_timestamp_ms(&digest).await?;
+
+    let expected_event = SuiEvent::MoveEvent {
+        package_id: ObjectID::from_hex_literal("0x2").unwrap(),
+        transaction_module: "devnet_nft".into(),
+        sender,
+        type_: sui_framework_address_concat_string("::devnet_nft::MintNFTEvent"),
+        fields: None,
+        bcs,
+    };
+
+    // Query by move event struct name
+    let events_by_sender = node
+        .state()
+        .get_events_by_move_event_struct_name(
+            &struct_tag_str,
+            ts.unwrap() - HOUR_MS,
+            ts.unwrap() + HOUR_MS,
+            10,
+        )
+        .await?;
+    assert_eq!(events_by_sender.len(), 1);
+    assert_eq!(events_by_sender[0].event, expected_event);
+    assert_eq!(events_by_sender[0].tx_digest.unwrap(), digest);
+
+    // No more
     match timeout(Duration::from_secs(5), sub.next()).await {
         Err(_) => (),
         other => panic!(
@@ -494,8 +568,7 @@ async fn test_full_node_sub_to_move_event_ok() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-// A test placeholder to verify event read APIs
-// TODO: add real tests when event store integration is done
+// Test fullnode has event read jsonrpc endpoints
 #[tokio::test]
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (swarm, _context, address) = setup_network_and_wallet().await?;
@@ -503,7 +576,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 
     let params = rpc_params![address, 10, 0, 666];
     let response: Vec<SuiEventEnvelope> = jsonrpc_client
-        .request("sui_getEventsByOwner", params)
+        .request("sui_getEventsBySender", params)
         .await
         .unwrap();
     assert!(response.is_empty());

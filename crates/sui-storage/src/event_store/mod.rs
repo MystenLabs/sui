@@ -35,6 +35,9 @@ pub use sql::SqlEventStore;
 
 use flexstr::SharedStr;
 
+/// Maximum number of events one can ask for right now
+pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 100;
+
 /// One event pulled out from the EventStore
 #[allow(unused)]
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -308,9 +311,10 @@ pub trait EventStore {
 
     /// Queries for events emitted by a given transaction, returned in order emitted
     /// NOTE: Not all events come from transactions
-    async fn events_for_transaction(
+    async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
+        limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Queries for all events of a certain EventType within a given time window.
@@ -340,13 +344,53 @@ pub trait EventStore {
         end_checkpoint: u64,
     ) -> Result<StreamedResult, SuiError>;
 
-    /// Queries all Move events belonging to a certain Module ID within a given time window.
-    /// Will return at most limit of the most recent events within the window, sorted in descending time.
+    /// Queries all Move events emitted in a certain Module ID within a given
+    /// time window, sorted in descending time.
     async fn events_by_module_id(
         &self,
         start_time: u64,
         end_time: u64,
-        module: ModuleId,
+        module: &ModuleId,
+        limit: usize,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
+
+    /// Queries for all events with the move event struct name within a given
+    /// time window, sorted in descending time.
+    async fn events_by_move_event_struct_name(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        move_event_struct_name: &str,
+        limit: usize,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
+
+    /// Queries for all events associated with a certain sender within a given
+    /// time window, sorted in descending time.
+    async fn events_by_sender(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        sender: &SuiAddress,
+        limit: usize,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
+
+    /// Queries for all events associated with a certain recipient within a given
+    /// time window, sorted in descending time.
+    async fn events_by_recipient(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        recipient: &Owner,
+        limit: usize,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
+
+    /// Queries for all events associated with a certain object id
+    /// within a given time window, sorted in descending time.
+    async fn events_by_object(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        object: &ObjectID,
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 }
