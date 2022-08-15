@@ -23,10 +23,6 @@
     @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] max-h-[72px] flex items-center;
 }
 
-.fillerbox {
-    @apply invisible;
-}
-
 .ownedobjectheader {
     @apply pb-1;
 }

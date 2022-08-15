@@ -9,9 +9,6 @@ import { type DataType } from '../OwnedObjectConstants';
 import styles from '../styles/OwnedObjects.module.css';
 
 export default function OwnedNFTView({ results }: { results: DataType }) {
-    const lastRowHas2Elements = (itemList: any[]): boolean =>
-        itemList.length % 3 === 2;
-
     return (
         <div id="ownedObjects" className={styles.ownedobjects}>
             {results.map((entryObj, index1) => (
@@ -38,9 +35,6 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
                     </div>
                 </div>
             ))}
-            {lastRowHas2Elements(results) && (
-                <div className={`${styles.objectbox} ${styles.fillerbox}`} />
-            )}
         </div>
     );
 }
