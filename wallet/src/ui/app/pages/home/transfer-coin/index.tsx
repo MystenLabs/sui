@@ -37,10 +37,12 @@ const initialValues = {
 
 export type FormValues = typeof initialValues;
 
+const DEFAULT_FORM_STEP = 1;
+
 // TODO: show out of sync when sui objects locally might be outdated
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
-    const coinType = useMemo(() => searchParams.get('type'), [searchParams]);
+    const coinType = searchParams.get('type');
 
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
@@ -52,6 +54,7 @@ function TransferCoinPage() {
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
     );
+
     const gasAggregateBalance = useMemo(
         () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
@@ -63,7 +66,7 @@ function TransferCoinPage() {
     );
 
     const [sendError, setSendError] = useState<string | null>(null);
-    const [currentStep, setCurrentStep] = useState<number>(1);
+    const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
     const [formData, setFormData] = useState<FormValues>(initialValues);
 
     const intl = useIntl();
@@ -110,9 +113,14 @@ function TransferCoinPage() {
                         tokenTypeArg: coinType,
                     })
                 ).unwrap();
-                const txDigest = response.certificate.transactionDigest;
+
                 resetForm();
-                navigate(`/tx/${encodeURIComponent(txDigest)}`);
+                const txDigest = response.certificate.transactionDigest;
+                const recieptUrl = `/receipt?txdigest=${encodeURIComponent(
+                    txDigest
+                )}&transfer=coin`;
+
+                navigate(recieptUrl);
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
             }
@@ -132,21 +140,19 @@ function TransferCoinPage() {
         []
     );
 
-    const handlePreviousStep = useCallback(() => {
-        setCurrentStep((prev) => prev - 1);
-    }, []);
-
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
     }, []);
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
+
+    // prevent navigating away after submitting form
     if (!coinType) {
         return <Navigate to="/" replace={true} />;
     }
 
-    const StepOneForm = (
+    const StepOneForm = coinType && (
         <Formik
             initialValues={initialValues}
             validateOnMount={true}
@@ -163,22 +169,24 @@ function TransferCoinPage() {
         </Formik>
     );
 
-    const StepTwoForm = (
-        <Formik
-            initialValues={formData}
-            validateOnMount={true}
-            validationSchema={validationSchemaStepTwo}
-            onSubmit={onHandleSubmit}
-        >
-            <StepTwo
-                submitError={sendError}
-                coinBalance={coinBalance.toString()}
-                coinSymbol={coinSymbol}
-                coinType={coinType}
-                onClearSubmitError={handleOnClearSubmitError}
-            />
-        </Formik>
-    );
+    const StepTwoForm =
+        (coinType && (
+            <Formik
+                initialValues={formData}
+                validateOnMount={true}
+                validationSchema={validationSchemaStepTwo}
+                onSubmit={onHandleSubmit}
+            >
+                <StepTwo
+                    submitError={sendError}
+                    coinBalance={coinBalance.toString()}
+                    coinSymbol={coinSymbol}
+                    coinType={coinType}
+                    onClearSubmitError={handleOnClearSubmitError}
+                />
+            </Formik>
+        )) ||
+        null;
 
     const steps = [StepOneForm, StepTwoForm];
 
@@ -186,7 +194,7 @@ function TransferCoinPage() {
         <div className={st.container}>
             <PageTitle
                 title="Send Coins"
-                backLink="/"
+                backLink={'/'}
                 className={st.pageTitle}
             />
 

@@ -16,7 +16,7 @@ import st from './ReceiptCard.module.scss';
 
 type TxResponseProps = {
     txDigest: TxResultState;
-    tranferType?: string | null;
+    tranferType?: 'nft' | 'coin' | null;
 };
 
 function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
@@ -33,9 +33,18 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
         ? formatDate(txDigest.timestampMs, ['month', 'day', 'year'])
         : false;
 
+    const transfersTxt = {
+        nft: {
+            header: 'Successfully Sent!',
+        },
+        coin: {
+            header: 'SUI Transfer Completed!',
+            copy: 'Staking SUI provides SUI holders with rewards to market price gains.',
+        },
+    };
     // TODO add copy for other trafer type like transfer sui, swap, etc.
     const headerCopy = tranferType
-        ? `Successfully Sent!`
+        ? transfersTxt[tranferType].header
         : `${txDigest.isSender ? 'Sent' : 'Received'} ${date || ''}`;
     const SuccessCard = (
         <>
@@ -114,6 +123,16 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                             </div>
                         </div>
                     )}
+
+                    {txDigest.amount && (
+                        <div className={st.txFees}>
+                            <div className={st.txInfoLabel}>Total Amount</div>
+                            <div className={st.walletInfoValue}>
+                                {txDigest.amount + txDigest.txGas} {GAS_SYMBOL}
+                            </div>
+                        </div>
+                    )}
+
                     {date && (
                         <div className={st.txDate}>
                             <div className={st.txInfoLabel}>Date</div>
