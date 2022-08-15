@@ -264,7 +264,7 @@ impl IntoPoint for TransactionDigest {
 pub struct ObjectDigest(
     #[schemars(with = "Base64")]
     #[serde_as(as = "Readable<Base64, Bytes>")]
-    pub [u8; TRANSACTION_DIGEST_LENGTH],
+    pub [u8; OBJECT_DIGEST_LENGTH],
 ); // We use SHA3-256 hence 32 bytes here
 
 #[serde_as]
