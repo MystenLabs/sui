@@ -98,7 +98,7 @@ impl Subscriber {
                         self.store.clone(),
                         self.tx_get_block_commands.clone(),
                         message);
-                    waiting.push(future);
+                    waiting.push_back(future);
                 },
 
                 // Receive here consensus messages for which we have downloaded all transactions data.
