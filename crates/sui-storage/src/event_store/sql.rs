@@ -279,7 +279,7 @@ impl From<SqliteRow> for StoredEvent {
             TransactionDigest::new(
                 bytes
                     .try_into()
-                    .expect("Cannot convert digest bytes to TxDigest"),
+                    .expect("Error converting digest bytes to TxDigest"),
             )
         });
         let event_type: u16 = row.get(EventsTableColumns::EventType as usize);
@@ -393,7 +393,7 @@ impl EventStore for SqlEventStore {
             let sender = event.event.sender().map(|sender| sender.to_vec());
 
             // TODO: use batched API?
-            let q = insert_tx_q
+            let res = insert_tx_q
                 .bind(event.timestamp as i64)
                 .bind(event.seq_num as i64)
                 .bind(checkpoint_num as i64)
@@ -408,8 +408,10 @@ impl EventStore for SqlEventStore {
                 .bind(sender)
                 .bind(event.event.recipient_serialized()?)
                 .bind(object_version)
-                .bind(transfer_type);
-            let res = q.execute(&self.pool).await.map_err(convert_sqlx_err)?;
+                .bind(transfer_type)
+                .execute(&self.pool)
+                .await
+                .map_err(convert_sqlx_err)?;
             rows_affected += res.rows_affected();
         }
 
@@ -576,9 +578,9 @@ mod tests {
         let to_insert = vec![
             test_utils::new_test_newobj_event(1_000_000, 1),
             test_utils::new_test_publish_event(1_001_000, 2),
-            test_utils::new_test_transfer_event(1_002_000, 3, TransferType::Coin),
+            test_utils::new_test_transfer_event(1_002_000, 3, 1, TransferType::Coin),
             test_utils::new_test_deleteobj_event(1_003_000, 3),
-            test_utils::new_test_transfer_event(1_004_000, 4, TransferType::ToAddress),
+            test_utils::new_test_transfer_event(1_004_000, 4, 1, TransferType::ToAddress),
             test_utils::new_test_move_event(
                 1_005_000,
                 5,
@@ -609,7 +611,7 @@ mod tests {
         db.initialize().await?;
 
         // Insert txns from checkpoint 1
-        info!("Inserting records!");
+        info!("Inserting records from checkpoint 1!");
         let checkpoint_1 = vec![
             test_utils::new_test_newobj_event(1_000_000, 1),
             test_utils::new_test_newobj_event(1_001_000, 2),
@@ -620,7 +622,7 @@ mod tests {
             .map(|e| e.tx_digest.unwrap())
             .collect::<HashSet<TransactionDigest>>();
         assert_eq!(db.add_events(&checkpoint_1, 1).await?, 3);
-        info!("Done inserting");
+        info!("Done inserting from checkpoint 1");
         assert_eq!(db.total_event_count().await?, 3);
 
         // Query txns between checkpoint [1, 3), expect 3 txns from checkpoint 1
@@ -633,6 +635,7 @@ mod tests {
         assert_eq!(tx_digests, tx_digests_checkpoint1);
 
         // Insert txns from checkpoint 2
+        info!("Inserting records from checkpoint 2!");
         let checkpoint_2 = vec![
             test_utils::new_test_deleteobj_event(1_003_000, 3),
             test_utils::new_test_deleteobj_event(1_004_000, 4),
@@ -643,6 +646,7 @@ mod tests {
             .map(|e| e.tx_digest.unwrap())
             .collect::<HashSet<TransactionDigest>>();
         assert_eq!(db.add_events(&checkpoint_2, 2).await?, 3);
+        info!("Done inserting from checkpoint 2");
         assert_eq!(db.total_event_count().await?, 6);
 
         // Query txns between checkpoint [2, 3), expect 3 txns from checkpoint 2
@@ -680,9 +684,9 @@ mod tests {
         let to_insert = vec![
             test_utils::new_test_newobj_event(1_000_000, 1),
             test_utils::new_test_publish_event(1_001_000, 2),
-            test_utils::new_test_transfer_event(1_002_000, 3, TransferType::Coin),
+            test_utils::new_test_transfer_event(1_002_000, 3, 1, TransferType::Coin),
             test_utils::new_test_deleteobj_event(1_003_000, 3),
-            test_utils::new_test_transfer_event(1_004_000, 4, TransferType::ToAddress),
+            test_utils::new_test_transfer_event(1_004_000, 4, 1, TransferType::ToAddress),
             test_utils::new_test_move_event(
                 1_005_000,
                 5,
@@ -723,9 +727,9 @@ mod tests {
         let to_insert = vec![
             test_utils::new_test_newobj_event(1_000_000, 1),
             test_utils::new_test_publish_event(1_001_000, 2),
-            test_utils::new_test_transfer_event(1_002_000, 3, TransferType::Coin),
+            test_utils::new_test_transfer_event(1_002_000, 3, 1, TransferType::Coin),
             test_utils::new_test_deleteobj_event(1_003_000, 3),
-            test_utils::new_test_transfer_event(1_004_000, 4, TransferType::ToAddress),
+            test_utils::new_test_transfer_event(1_004_000, 4, 1, TransferType::ToAddress),
             test_utils::new_test_move_event(
                 1_005_000,
                 5,
@@ -803,9 +807,9 @@ mod tests {
         let to_insert = vec![
             test_utils::new_test_newobj_event(1_000_000, 1),
             test_utils::new_test_publish_event(1_001_000, 2),
-            test_utils::new_test_transfer_event(1_002_000, 3, TransferType::Coin),
+            test_utils::new_test_transfer_event(1_002_000, 3, 1, TransferType::Coin),
             test_utils::new_test_deleteobj_event(1_003_000, 3),
-            test_utils::new_test_transfer_event(1_004_000, 4, TransferType::ToAddress),
+            test_utils::new_test_transfer_event(1_004_000, 4, 1, TransferType::ToAddress),
             test_utils::new_test_move_event(
                 1_005_000,
                 5,
@@ -851,6 +855,32 @@ mod tests {
         Ok(())
     }
 
+    // Test we can retrieve u64 object version (aka sequence number) values
+    // stored as i64 in sqlite
+    #[tokio::test]
+    async fn test_eventstore_u64_conversion() -> Result<(), SuiError> {
+        telemetry_subscribers::init_for_testing();
+
+        let db = SqlEventStore::new_memory_only_not_prod().await?;
+        db.initialize().await?;
+
+        let to_insert = vec![test_utils::new_test_transfer_event(
+            1_000_000,
+            1,
+            u64::MAX,
+            TransferType::Coin,
+        )];
+        db.add_events(&to_insert, 1).await?;
+
+        let events = db
+            .events_for_transaction(to_insert[0].tx_digest.unwrap())
+            .await?;
+        assert_eq!(events.len(), 1);
+        info!("events[0]: {:?}", events[0]);
+        assert_eq!(events[0].object_version.unwrap().value(), u64::MAX);
+        Ok(())
+    }
+
     // Test creating and opening file-based database
     #[tokio::test]
     async fn test_eventstore_max_limit() -> Result<(), SuiError> {
@@ -882,9 +912,9 @@ mod tests {
         let to_insert = vec![
             test_utils::new_test_newobj_event(1_000_000, 1),
             test_utils::new_test_publish_event(1_001_000, 2),
-            test_utils::new_test_transfer_event(1_002_000, 3, TransferType::Coin),
+            test_utils::new_test_transfer_event(1_002_000, 3, 1, TransferType::Coin),
             test_utils::new_test_deleteobj_event(1_003_000, 3),
-            test_utils::new_test_transfer_event(1_004_000, 4, TransferType::ToAddress),
+            test_utils::new_test_transfer_event(1_004_000, 4, 1, TransferType::ToAddress),
             test_utils::new_test_move_event(
                 1_005_000,
                 5,

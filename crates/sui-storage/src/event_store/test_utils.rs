@@ -89,7 +89,12 @@ pub fn new_test_deleteobj_event(timestamp: u64, seq_num: u64) -> EventEnvelope {
     )
 }
 
-pub fn new_test_transfer_event(timestamp: u64, seq_num: u64, type_: TransferType) -> EventEnvelope {
+pub fn new_test_transfer_event(
+    timestamp: u64,
+    seq_num: u64,
+    object_version: u64,
+    type_: TransferType,
+) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
         Some(TransactionDigest::random()),
@@ -100,7 +105,7 @@ pub fn new_test_transfer_event(timestamp: u64, seq_num: u64, type_: TransferType
             sender: SuiAddress::random_for_testing_only(),
             recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
             object_id: ObjectID::random(),
-            version: 1.into(),
+            version: object_version.into(),
             type_,
         },
         None,

@@ -28,7 +28,8 @@ async fn test_stored_event_to_sui_event() -> Result<(), anyhow::Error> {
     let delete_obj = test_utils::new_test_deleteobj_event(1_666_002, 3);
     insert_and_fetch_by_tx_digest_then_compare(delete_obj, 1, &db).await?;
 
-    let transfer_obj = test_utils::new_test_transfer_event(1_666_003, 4, TransferType::ToAddress);
+    let transfer_obj =
+        test_utils::new_test_transfer_event(1_666_003, 4, 1, TransferType::ToAddress);
     insert_and_fetch_by_tx_digest_then_compare(transfer_obj, 1, &db).await?;
 
     let publish = test_utils::new_test_publish_event(1_001_000, 5);
@@ -58,7 +59,7 @@ async fn insert_and_fetch_by_tx_digest_then_compare(
     );
 
     let mut events = db.events_for_transaction(tx_digest).await?;
-    assert_eq!(events.len(), 1); // Should be no more events, just that one
+    assert_eq!(events.len(), 1);
     let stored_event = events.pop().unwrap();
     let sui_event: SuiEventEnvelope = stored_event.try_into()?;
     assert!(
