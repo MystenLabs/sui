@@ -16,6 +16,7 @@ use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::object::Owner;
 use sui_types::sui_serde::Base64;
 
 #[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
@@ -343,80 +344,82 @@ pub trait EventStreamingApi {
 #[open_rpc(namespace = "sui", tag = "Event Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventReadApi {
-    /// Return list of events emitted by a specified transaction.
+    /// Return events emitted by the given transaction.
     #[method(name = "getEventsByTransaction")]
     async fn get_events_by_transaction(
         &self,
         /// digest of the transaction, as base-64 encoded string
         digest: TransactionDigest,
+        /// maximum size of the result, capped to 100
+        count: usize,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events emitted by a specified Move module
+    /// Return events emitted in a specified Move module
     #[method(name = "getEventsByModule")]
-    async fn get_events_by_module(
+    async fn get_events_by_transaction_module(
         &self,
         /// the Move package ID
         package: ObjectID,
         /// the module name
         module: String,
-        /// maximum size of the result
-        count: u64,
+        /// maximum size of the result, capped to 100
+        count: usize,
         /// the matching events' timestamp will be after the specified start time
         start_time: u64,
         /// the matching events' timestamp will be before the specified end time
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events matching the specified event type
-    #[method(name = "getEventsByEventType")]
-    async fn get_events_by_event_type(
+    /// Return events with the given move event struct name
+    #[method(name = "getEventsByMoveEventStructName")]
+    async fn get_events_by_move_event_struct_name(
         &self,
-        /// the event type, e.g. '0x2::devnet_nft::MintNFTEvent'
-        event_type: String,
-        /// maximum size of the result
-        count: u64,
+        /// the event struct name type, e.g. `0x2::devnet_nft::MintNFTEvent` or `0x2::SUI::test_foo<address, vector<u8>>` with type params
+        move_event_struct_name: String,
+        /// maximum size of the result, capped to 100
+        count: usize,
         /// the matching events' timestamp will be after the specified start time
         start_time: u64,
         /// the matching events' timestamp will be before the specified end time
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events involving a specified sender.
+    /// Return events associated with the given sender.
     #[method(name = "getEventsBySender")]
     async fn get_events_by_sender(
         &self,
         /// the sender's Sui address
         sender: SuiAddress,
-        /// maximum size of the result
-        count: u64,
+        /// maximum size of the result, capped to 100
+        count: usize,
         /// the matching events' timestamp will be after the specified start time
         start_time: u64,
         /// the matching events' timestamp will be before the specified end time
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events involving a specified object
+    /// Return events associated with the given recipient
+    #[method(name = "getEventsByRecipient")]
+    async fn get_events_by_recipient(
+        &self,
+        /// the recipient
+        recipient: Owner,
+        /// maximum size of the result, capped to 100
+        count: usize,
+        /// the matching events' timestamp will be after the specified start time
+        start_time: u64,
+        /// the matching events' timestamp will be before the specified end time
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>>;
+
+    /// Return events associated with the given object
     #[method(name = "getEventsByObject")]
     async fn get_events_by_object(
         &self,
         /// the object ID
         object: ObjectID,
-        /// maximum size of the result
-        count: u64,
-        /// the matching events' timestamp will be after the specified start time
-        start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
-        end_time: u64,
-    ) -> RpcResult<Vec<SuiEventEnvelope>>;
-
-    /// Return list of events involving a specified owner.
-    #[method(name = "getEventsByOwner")]
-    async fn get_events_by_owner(
-        &self,
-        /// the owner's Sui address
-        owner: SuiAddress,
-        /// maximum size of the result
-        count: u64,
+        /// maximum size of the result, capped to 100
+        count: usize,
         /// the matching events' timestamp will be after the specified start time
         start_time: u64,
         /// the matching events' timestamp will be before the specified end time

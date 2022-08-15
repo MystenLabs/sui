@@ -19,11 +19,11 @@ struct TestEvent {
 }
 
 impl TestEvent {
-    fn struct_tag() -> StructTag {
+    fn struct_tag(name: &'static str) -> StructTag {
         StructTag {
             address: SUI_FRAMEWORK_ADDRESS,
             module: ident_str!("SUI").to_owned(),
-            name: ident_str!("new_foobar").to_owned(),
+            name: ident_str!(name).to_owned(),
             type_params: vec![TypeTag::Address, TypeTag::Vector(Box::new(TypeTag::U8))],
         }
     }
@@ -45,20 +45,30 @@ impl TestEvent {
     }
 }
 
-pub fn new_test_publish_event(timestamp: u64, seq_num: u64) -> EventEnvelope {
+pub fn new_test_publish_event(
+    timestamp: u64,
+    seq_num: u64,
+    sender: Option<SuiAddress>,
+) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
         None,
         seq_num,
         Event::Publish {
-            sender: SuiAddress::random_for_testing_only(),
+            sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
             package_id: ObjectID::random(),
         },
         None,
     )
 }
 
-pub fn new_test_newobj_event(timestamp: u64, seq_num: u64) -> EventEnvelope {
+pub fn new_test_newobj_event(
+    timestamp: u64,
+    seq_num: u64,
+    object_id: Option<ObjectID>,
+    sender: Option<SuiAddress>,
+    recipient: Option<Owner>,
+) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
         Some(TransactionDigest::random()),
@@ -66,15 +76,21 @@ pub fn new_test_newobj_event(timestamp: u64, seq_num: u64) -> EventEnvelope {
         Event::NewObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
-            sender: SuiAddress::random_for_testing_only(),
-            recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
-            object_id: ObjectID::random(),
+            sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
+            recipient: recipient
+                .unwrap_or_else(|| Owner::AddressOwner(SuiAddress::random_for_testing_only())),
+            object_id: object_id.unwrap_or_else(ObjectID::random),
         },
         None,
     )
 }
 
-pub fn new_test_deleteobj_event(timestamp: u64, seq_num: u64) -> EventEnvelope {
+pub fn new_test_deleteobj_event(
+    timestamp: u64,
+    seq_num: u64,
+    object_id: Option<ObjectID>,
+    sender: Option<SuiAddress>,
+) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
         Some(TransactionDigest::random()),
@@ -82,8 +98,8 @@ pub fn new_test_deleteobj_event(timestamp: u64, seq_num: u64) -> EventEnvelope {
         Event::DeleteObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
-            sender: SuiAddress::random_for_testing_only(),
-            object_id: ObjectID::random(),
+            sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
+            object_id: object_id.unwrap_or_else(ObjectID::random),
         },
         None,
     )
@@ -94,6 +110,9 @@ pub fn new_test_transfer_event(
     seq_num: u64,
     object_version: u64,
     type_: TransferType,
+    object_id: Option<ObjectID>,
+    sender: Option<SuiAddress>,
+    recipient: Option<Owner>,
 ) -> EventEnvelope {
     EventEnvelope::new(
         timestamp,
@@ -102,9 +121,10 @@ pub fn new_test_transfer_event(
         Event::TransferObject {
             package_id: ObjectID::random(),
             transaction_module: Identifier::new("module").unwrap(),
-            sender: SuiAddress::random_for_testing_only(),
-            recipient: Owner::AddressOwner(SuiAddress::random_for_testing_only()),
-            object_id: ObjectID::random(),
+            sender: sender.unwrap_or_else(SuiAddress::random_for_testing_only),
+            recipient: recipient
+                .unwrap_or_else(|| Owner::AddressOwner(SuiAddress::random_for_testing_only())),
+            object_id: object_id.unwrap_or_else(ObjectID::random),
             version: object_version.into(),
             type_,
         },
@@ -117,6 +137,7 @@ pub fn new_test_move_event(
     seq_num: u64,
     package_id: ObjectID,
     module_name: &str,
+    event_struct_name: &'static str,
 ) -> EventEnvelope {
     let move_event = TestEvent {
         creator: AccountAddress::random(),
@@ -128,7 +149,7 @@ pub fn new_test_move_event(
             package_id,
             transaction_module: Identifier::new(module_name).unwrap(),
             sender: SuiAddress::random_for_testing_only(),
-            type_: TestEvent::struct_tag(),
+            type_: TestEvent::struct_tag(event_struct_name),
             contents: event_bytes,
         },
         move_event.move_struct(),
