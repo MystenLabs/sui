@@ -379,7 +379,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 <div className={styles.amountbox}>
                                     <div>Amount</div>
                                     <div>
-                                        {amount ? amount : 0}
+                                        {amount ? amount.toString() : 0}
                                         <sup>SUI</sup>
                                     </div>
                                 </div>
