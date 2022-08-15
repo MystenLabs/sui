@@ -2,12 +2,9 @@
 title: RPC Server & JSON-RPC API Quick Start
 ---
 
-Welcome to the Sui RPC server quick start.
+Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through connecting to Sui and using the Sui JSON-RPC API to interact with the Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
 
-This document walks you through setting up your own Sui RPC Server and using the Sui JSON-RPC API to interact with the Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
-
-
-## RPC server setup
+## Set up RPC server
 Follow the instructions to [install Sui binaries](install.md).
 
 ### Connect to Sui network
@@ -44,7 +41,7 @@ Export a local user variable to store the hardcoded hostname + port that the loc
 export SUI_RPC_HOST=http://127.0.0.1:5001
 ```
 
-## Sui software development kits
+## Use Sui software development kits
 
 You can sign transactions and interact with the Sui network using any of the following:
 
@@ -52,7 +49,7 @@ You can sign transactions and interact with the Sui network using any of the fol
 * [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
 * [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for all available methods.
 
-## Sui JSON-RPC examples
+## Follow Sui JSON-RPC examples
 
 In the following sections we will show how to use Sui's JSON-RPC API with
 the `curl` command. See the [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for the latest list of all available methods.
