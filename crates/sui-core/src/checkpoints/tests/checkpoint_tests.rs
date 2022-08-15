@@ -952,8 +952,17 @@ async fn test_batch_to_checkpointing() {
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
 
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let authority_state = Arc::new(
-        AuthorityState::new_for_testing(committee.clone(), &authority_key, None, None, None).await,
+        AuthorityState::new_for_testing(
+            committee.clone(),
+            &authority_key,
+            None,
+            None,
+            None,
+            tx_reconfigure_consensus,
+        )
+        .await,
     );
 
     let inner_state = authority_state.clone();
@@ -1039,6 +1048,7 @@ async fn test_batch_to_checkpointing_init_crash() {
     // Scope to ensure all variables are dropped
     {
         // TODO: May need to set checkpoint store to be None.
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
         let authority_state = Arc::new(
             AuthorityState::new_for_testing(
                 committee.clone(),
@@ -1046,6 +1056,7 @@ async fn test_batch_to_checkpointing_init_crash() {
                 Some(path.clone()),
                 None,
                 None,
+                tx_reconfigure_consensus,
             )
             .await,
         );
@@ -1111,9 +1122,17 @@ async fn test_batch_to_checkpointing_init_crash() {
 
     // Scope to ensure all variables are dropped
     {
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
         let authority_state = Arc::new(
-            AuthorityState::new_for_testing(committee, &authority_key, Some(path), None, None)
-                .await,
+            AuthorityState::new_for_testing(
+                committee,
+                &authority_key,
+                Some(path),
+                None,
+                None,
+                tx_reconfigure_consensus,
+            )
+            .await,
         );
 
         // Init feeds the transactions in
@@ -1600,6 +1619,7 @@ pub async fn checkpoint_tests_setup(
 
     // Make all authorities and their services.
     for k in &keys {
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
         let authority = Arc::new(
             AuthorityState::new_for_testing(
                 committee.clone(),
@@ -1607,6 +1627,7 @@ pub async fn checkpoint_tests_setup(
                 None,
                 None,
                 Some(Box::new(sender.clone())),
+                tx_reconfigure_consensus,
             )
             .await,
         );
