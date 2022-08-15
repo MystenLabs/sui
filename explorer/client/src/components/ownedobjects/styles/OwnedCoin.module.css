@@ -1,9 +1,9 @@
 .groupview {
-    @apply text-left sm:mx-0 mx-[-0.625rem] border-0 border-t border-solid border-sui-grey-45;
+    @apply text-left sm:mx-0 mx-[-0.625rem];
 }
 
 .firstrow {
-    @apply grid uppercase font-semibold text-sui-grey-80 text-[12px] leading-[12px] py-[10px];
+    @apply grid uppercase font-medium text-sui-grey-80 text-[12px] leading-[12px] py-[10px];
 
     grid-template-columns: 35% 30% 35%;
 }
@@ -18,8 +18,13 @@
     grid-template-columns: 5% 30% 30% 30% 5%;
 }
 
-.openedgroup .summary {
-    @apply text-sui-grey-100;
+.summary :nth-child(2) {
+    @apply text-sui-grey-90;
+}
+
+.summary :nth-child(3),
+.summary :nth-child(4) {
+    @apply text-sui-grey-80;
 }
 
 .openedgroup .summary div {
@@ -31,11 +36,7 @@
 }
 
 .closedgroup {
-    @apply text-sui-grey-80 hover:bg-[#6fbcf014];
-}
-
-.openedgroup {
-    @apply bg-sui-grey-40 rounded-md;
+    @apply text-sui-grey-90 hover:bg-[#6fbcf014];
 }
 
 .openbody {
@@ -57,6 +58,10 @@
     @apply pb-[16px];
 }
 
+.balance :nth-child(3) {
+    @apply text-sui-grey-85;
+}
+
 .closedgroup .summary:hover {
     @apply rounded-md bg-[#6fbcf014];
 }
@@ -66,9 +71,12 @@
     @apply p-0 mx-auto sm:pr-[6px] sm:pl-[12px];
 }
 
-.openicon svg path {
-    @apply fill-sui-grey-80;
+.openicon,
+.closedicon svg path {
+    @apply fill-sui-grey-60;
+}
 
+.openicon svg path {
     transform: rotate(90deg);
     transform-origin: 50% 50%;
 }
