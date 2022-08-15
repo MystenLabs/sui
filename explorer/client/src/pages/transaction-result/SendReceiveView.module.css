@@ -79,7 +79,7 @@
 }
 
 .txrecipents {
-    @apply break-all relative mt-[15px] !important;
+    @apply break-all relative mt-0 !important;
 }
 
 .txrecipents li::before {
