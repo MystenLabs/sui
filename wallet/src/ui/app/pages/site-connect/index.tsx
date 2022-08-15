@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
+import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
 import { useAppDispatch, useAppSelector, useInitializedGuard } from '_hooks';
@@ -16,7 +17,6 @@ import type { PermissionType } from '_messages/payloads/permissions';
 import type { RootState } from '_redux/RootReducer';
 
 import st from './SiteConnectPage.module.scss';
-import Icon, { SuiIcons } from '_components/icon';
 
 const permissionTypeToTxt: Record<PermissionType, string> = {
     viewAccount: 'Share wallet address',
