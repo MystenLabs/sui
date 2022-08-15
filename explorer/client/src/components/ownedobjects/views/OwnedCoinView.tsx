@@ -100,9 +100,7 @@ export default function OwnedCoinView({ results }: { results: DataType }) {
                                     <div className={styles.openbody}>
                                         {openedType === typeV &&
                                             subObjList.map((subObj, index) => (
-                                                <React.Fragment
-                                                    key={`${typeV}${index}`}
-                                                >
+                                                <React.Fragment key={index}>
                                                     <div
                                                         className={
                                                             styles.objectid
