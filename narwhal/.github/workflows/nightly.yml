@@ -43,7 +43,7 @@ jobs:
       # These are considered the end-to-end "slow" tests for us
       - name: cargo nextest
         run: |
-          cargo nextest run -E 'kind(test) + package(primary)' --run-ignored ignored-only
+          cargo nextest run -E 'kind(test) + package(primary)' --profile ignored --run-ignored ignored-only
 
   beta:
     name: Run test on the beta channel
@@ -60,10 +60,13 @@ jobs:
       - name: cargo clippy
         run: cargo xclippy -D warnings
       - name: cargo test
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features celo
+        run: |
+          cargo nextest run --features celo --profile ci
+      - name: Doctests
+        run: |
+          cargo test --doc --features celo
+      # Ensure there are no uncommitted changes in the repo after running tests
+      - run: scripts/changed-files.sh
 
   release:
     name: build release binaries
