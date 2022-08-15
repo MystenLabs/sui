@@ -13,7 +13,7 @@ bytes = "1.2.1"
 config = { path = "../config" }
 consensus = { path = "../consensus" }
 crypto = { path = "../crypto" }
-futures = "0.3.21"
+futures = "0.3.23"
 multiaddr = "0.14.0"
 primary = { path = "../primary" }
 serde = { version = "1.0.143", features = ["derive"] }

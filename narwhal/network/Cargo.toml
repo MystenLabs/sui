@@ -11,7 +11,7 @@ async-trait = "0.1.57"
 backoff = { version = "0.4.0", features = ["tokio"] }
 bytes = "1.2.1"
 crypto = { path = "../crypto" }
-futures = "0.3.21"
+futures = "0.3.23"
 multiaddr = "0.14.0"
 prometheus = "0.13.1"
 rand = { version = "0.8.5", features = ["small_rng"] }
