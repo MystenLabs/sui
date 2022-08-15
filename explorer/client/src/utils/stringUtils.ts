@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import type BN from 'bn.js';
+
 const IPFS_START_STRING = 'https://ipfs.io/ipfs/';
 
 export function hexToAscii(hex: string) {
@@ -89,6 +91,9 @@ export async function genFileTypeMsg(
             return `1 Image File`;
         });
 }
+
+export const alttextgen = (value: number | string | boolean | BN): string =>
+    truncate(String(value), 19);
 
 /* Currently unused but potentially useful:
  *
