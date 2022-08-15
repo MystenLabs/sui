@@ -27,12 +27,6 @@ export enum SuiIcons {
   VersionIcon = "sui-icons-version-icon"
 }
 
-<<<<<<< HEAD
-export type SuiIconsClassname = "sui-icons-Buy" | "sui-icons-Info" | "sui-icons-Preview" | "sui-icons-apps" | "sui-icons-arrow-left" | "sui-icons-arrow-right" | "sui-icons-checkmark" | "sui-icons-clipboard" | "sui-icons-close" | "sui-icons-coins" | "sui-icons-globe" | "sui-icons-hand-coins" | "sui-icons-history" | "sui-icons-logout" | "sui-icons-nfts" | "sui-icons-percentage-polygon" | "sui-icons-person" | "sui-icons-sui-chevron-right" | "sui-icons-sui-logo-icon" | "sui-icons-sui-logo-txt" | "sui-icons-tokens" | "sui-icons-version-icon"
-export type SuiIconsIcon = "Buy" | "Info" | "Preview" | "apps" | "arrow-left" | "arrow-right" | "checkmark" | "clipboard" | "close" | "coins" | "globe" | "hand-coins" | "history" | "logout" | "nfts" | "percentage-polygon" | "person" | "sui-chevron-right" | "sui-logo-icon" | "sui-logo-txt" | "tokens" | "version-icon"
-export const SuiIconsPrefix = "sui-icons-"
-=======
 export type SuiIconsClassname = "sui-icons-Buy" | "sui-icons-Info" | "sui-icons-Preview" | "sui-icons-apps" | "sui-icons-arrow-left" | "sui-icons-arrow-right" | "sui-icons-checkmark" | "sui-icons-clipboard" | "sui-icons-close" | "sui-icons-coins" | "sui-icons-globe" | "sui-icons-hand-coins" | "sui-icons-history" | "sui-icons-logout" | "sui-icons-nfts" | "sui-icons-percentage-polygon" | "sui-icons-person" | "sui-icons-search" | "sui-icons-sui-chevron-right" | "sui-icons-sui-logo-icon" | "sui-icons-sui-logo-txt" | "sui-icons-tokens" | "sui-icons-version-icon"
 export type SuiIconsIcon = "Buy" | "Info" | "Preview" | "apps" | "arrow-left" | "arrow-right" | "checkmark" | "clipboard" | "close" | "coins" | "globe" | "hand-coins" | "history" | "logout" | "nfts" | "percentage-polygon" | "person" | "search" | "sui-chevron-right" | "sui-logo-icon" | "sui-logo-txt" | "tokens" | "version-icon"
 export const SuiIconsPrefix = "sui-icons-"
->>>>>>> 24523943e (wip)
