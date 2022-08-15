@@ -1,5 +1,5 @@
 .groupview {
-    @apply w-full text-left;
+    @apply text-left mx-[-0.625rem];
 }
 
 .firstrow {
@@ -63,7 +63,7 @@
 
 .openicon,
 .closedicon {
-    @apply pr-[6px] pl-[12px] invisible sm:visible;
+    @apply p-0 sm:pr-[6px] sm:pl-[12px];
 }
 
 .openicon svg path {
