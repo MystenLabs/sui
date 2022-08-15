@@ -1,7 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, type SuiMoveFunctionArgTypes } from '@mysten/sui.js';
+import {
+    Base64DataBuffer,
+    type SuiMoveNormalizedFunction,
+} from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -23,7 +26,7 @@ const txRequestsAdapter = createEntityAdapter<TransactionRequest>({
 });
 
 export const loadTransactionResponseMetadata = createAsyncThunk<
-    { txRequestID: string; metadata: SuiMoveFunctionArgTypes },
+    { txRequestID: string; metadata: SuiMoveNormalizedFunction },
     {
         txRequestID: string;
         objectId: string;
@@ -43,15 +46,11 @@ export const loadTransactionResponseMetadata = createAsyncThunk<
             throw new Error(`TransactionRequest ${txRequestID} not found`);
         }
 
-        console.log('Making call', { objectId, moduleName, functionName });
-
-        const metadata = await api.instance.fullNode.getMoveFunctionArgTypes(
+        const metadata = await api.instance.fullNode.getNormalizedMoveFunction(
             objectId,
             moduleName,
             functionName
         );
-
-        console.log(metadata);
 
         return { txRequestID, metadata };
     }

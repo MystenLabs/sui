@@ -63,3 +63,26 @@
         }
     }
 }
+
+.objects {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.object-name {
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 17px;
+    color: colors.$gray-85;
+    font-family: 'Space Mono', ui-monospace, monospace;
+}
+
+.object-id {
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 17px;
+    font-family: 'Space Mono', ui-monospace, monospace;
+    color: colors.$sui-dark-blue;
+}

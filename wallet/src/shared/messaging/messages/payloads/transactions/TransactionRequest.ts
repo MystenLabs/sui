@@ -3,7 +3,7 @@
 
 import type {
     MoveCallTransaction,
-    SuiMoveFunctionArgTypes,
+    SuiMoveNormalizedFunction,
     SuiTransactionResponse,
 } from '@mysten/sui.js';
 
@@ -14,7 +14,7 @@ export type TransactionRequest = {
     originFavIcon?: string;
     txResult?: SuiTransactionResponse;
     txResultError?: string;
-    metadata?: SuiMoveFunctionArgTypes;
+    metadata?: SuiMoveNormalizedFunction;
     createdDate: string;
 } & (
     | {

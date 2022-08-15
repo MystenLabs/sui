@@ -5,7 +5,7 @@ import cl from 'classnames';
 import { memo, useCallback, useMemo, useState } from 'react';
 
 import AccountAddress from '_components/account-address';
-import Icon, { SuiIcons } from '_components/icon';
+import Icon from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 import type { MouseEventHandler, ReactNode } from 'react';

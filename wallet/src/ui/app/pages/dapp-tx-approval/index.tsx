@@ -2,34 +2,77 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { useCallback, useEffect, useMemo, Fragment } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
-import { useAppDispatch, useAppSelector, useInitializedGuard } from '_hooks';
+import {
+    useAppDispatch,
+    useAppSelector,
+    useInitializedGuard,
+    useMiddleEllipsis,
+} from '_hooks';
 import {
     loadTransactionResponseMetadata,
     respondToTransactionRequest,
     txRequestsSelectors,
 } from '_redux/slices/transaction-requests';
 
-import type { CallArg, SuiJsonValue, TypeTag } from '@mysten/sui.js';
+import type { SuiMoveNormalizedType } from '@mysten/sui.js';
 import type { RootState } from '_redux/RootReducer';
 
 import st from './DappTxApprovalPage.module.scss';
 
-function toList(items: SuiJsonValue[] | TypeTag[] | CallArg[]) {
-    if (!items.length) {
-        return '-';
+interface MetadataGroup {
+    name: string;
+    children: { id: string; module: string }[];
+}
+
+interface TypeReference {
+    address: string;
+    module: string;
+    name: string;
+    type_arguments: SuiMoveNormalizedType[];
+}
+
+/** Takes a normalized move type and returns the address information contained within it */
+function unwrapTypeReference(
+    type: SuiMoveNormalizedType
+): null | TypeReference {
+    if (typeof type === 'object') {
+        if ('Struct' in type) {
+            return type.Struct;
+        }
+        if ('Reference' in type) {
+            return unwrapTypeReference(type.Reference);
+        }
+        if ('MutableReference' in type) {
+            return unwrapTypeReference(type.MutableReference);
+        }
+        if ('Vector' in type) {
+            return unwrapTypeReference(type.Vector);
+        }
     }
+    return null;
+}
+
+type TabType = 'transfer' | 'modify' | 'read';
+
+const TRUNCATE_MAX_LENGTH = 10;
+const TRUNCATE_PREFIX_LENGTH = 6;
+
+function PassedObject({ id, module }: { id: string; module: string }) {
+    const objectId = useMiddleEllipsis(
+        id,
+        TRUNCATE_MAX_LENGTH,
+        TRUNCATE_PREFIX_LENGTH
+    );
     return (
-        <ul className={st.list}>
-            {items.map((anItem) => {
-                const val = JSON.stringify(anItem, null, 4);
-                return <li key={val}>{val}</li>;
-            })}
-        </ul>
+        <div>
+            <div className={st.objectName}>{module}</div>
+            <div className={st.objectId}>{objectId}</div>
+        </div>
     );
 }
 
@@ -62,20 +105,76 @@ export function DappTxApprovalPage() {
     );
 
     useEffect(() => {
-        console.log('LOADING METADATA');
         if (txRequest?.type === 'move-call' && !txRequest.metadata) {
             dispatch(
                 loadTransactionResponseMetadata({
                     txRequestID: txRequest.id,
                     objectId: txRequest.tx.packageObjectId,
                     moduleName: txRequest.tx.module,
-                    functionName: txRequest.tx.module,
+                    functionName: txRequest.tx.function,
                 })
             );
         }
     }, [txRequest, dispatch]);
 
-    console.log(txRequest);
+    const [tab, setTab] = useState<TabType | null>(null);
+    const metadata = useMemo(() => {
+        if (txRequest?.type !== 'move-call' || !txRequest?.metadata) {
+            return null;
+        }
+
+        const transfer: MetadataGroup = { name: 'Transfer', children: [] };
+        const modify: MetadataGroup = { name: 'Modify', children: [] };
+        const read: MetadataGroup = { name: 'Read', children: [] };
+
+        txRequest.metadata.parameters.forEach((param, index) => {
+            if (typeof param !== 'object') return;
+            const id = txRequest.tx.arguments[index].toString();
+            const unwrappedType = unwrapTypeReference(param);
+            if (!unwrappedType) return;
+
+            const groupedParam = {
+                id,
+                module: `${unwrappedType.address}::${unwrappedType.module}::${unwrappedType.name}`,
+            };
+
+            if ('Struct' in param) {
+                transfer.children.push(groupedParam);
+            } else if ('MutableReference' in param) {
+                modify.children.push(groupedParam);
+            } else if ('Reference' in param) {
+                read.children.push(groupedParam);
+            }
+        });
+
+        if (
+            !transfer.children.length &&
+            !modify.children.length &&
+            !read.children.length
+        ) {
+            return null;
+        }
+
+        return {
+            transfer,
+            modify,
+            read,
+        };
+    }, [txRequest]);
+
+    // Set the initial tab state to whatever is visible:
+    useEffect(() => {
+        if (tab || !metadata) return;
+        setTab(
+            metadata.transfer.children.length
+                ? 'transfer'
+                : metadata.modify.children.length
+                ? 'modify'
+                : metadata.read.children.length
+                ? 'read'
+                : null
+        );
+    }, [tab, metadata]);
 
     useEffect(() => {
         if (
@@ -124,13 +223,41 @@ export function DappTxApprovalPage() {
                             ))}
                         </div>
                     </dl>
-                    <div className={st.tabs}>
-                        <button className={cl(st.tab, st.active)}>
-                            Transfer
-                        </button>
-                        <button className={cl(st.tab)}>Modify</button>
-                        <button className={cl(st.tab)}>Read</button>
-                    </div>
+                    {metadata && tab && (
+                        <>
+                            <div className={st.tabs}>
+                                {Object.entries(metadata).map(
+                                    ([key, value]) =>
+                                        value.children.length > 0 && (
+                                            <button
+                                                type="button"
+                                                className={cl(
+                                                    st.tab,
+                                                    tab === key && st.active
+                                                )}
+                                                // eslint-disable-next-line react/jsx-no-bind
+                                                onClick={() => {
+                                                    setTab(key as TabType);
+                                                }}
+                                            >
+                                                {value.name}
+                                            </button>
+                                        )
+                                )}
+                            </div>
+                            <div className={st.objects}>
+                                {metadata[tab].children.map(
+                                    ({ id, module }, index) => (
+                                        <PassedObject
+                                            key={index}
+                                            id={id}
+                                            module={module}
+                                        />
+                                    )
+                                )}
+                            </div>
+                        </>
+                    )}
                 </UserApproveContainer>
             ) : null}
         </Loading>
