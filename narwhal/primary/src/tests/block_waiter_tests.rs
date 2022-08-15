@@ -143,20 +143,21 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let mut expected_get_block_responses = Vec::new();
     let mut certificates = Vec::new();
 
-    for _ in 0..2 {
+    // Batches to be used as "commons" between headers
+    // Practically we want to test the case where different headers happen
+    // to refer to batches with same id.
+    let common_batch_1 = fixture_batch_with_transactions(10);
+    let common_batch_2 = fixture_batch_with_transactions(10);
+
+    for i in 0..10 {
+        let mut builder = fixture_header_builder();
+
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = fixture_header_builder()
+        builder = builder
             .with_payload_batch(batch_1.clone(), worker_id)
-            .with_payload_batch(batch_2.clone(), worker_id)
-            .build(&key)
-            .unwrap();
-
-        let certificate = certificate(&header);
-        certificates.push(certificate.clone());
-
-        block_ids.push(certificate.digest());
+            .with_payload_batch(batch_2.clone(), worker_id);
 
         expected_batch_messages.insert(
             batch_1.digest(),
@@ -185,8 +186,49 @@ async fn test_successfully_retrieve_multiple_blocks() {
             },
         ];
 
+        // The first 5 headers will have unique payload.
+        // The next 5 will be created with common payload (some similar
+        // batches will be used)
+        if i > 5 {
+            builder = builder
+                .with_payload_batch(common_batch_1.clone(), worker_id)
+                .with_payload_batch(common_batch_2.clone(), worker_id);
+
+            expected_batch_messages.insert(
+                common_batch_1.digest(),
+                BatchMessage {
+                    id: common_batch_1.digest(),
+                    transactions: common_batch_1.clone(),
+                },
+            );
+
+            expected_batch_messages.insert(
+                common_batch_2.digest(),
+                BatchMessage {
+                    id: common_batch_2.digest(),
+                    transactions: common_batch_2.clone(),
+                },
+            );
+
+            batches.push(BatchMessage {
+                id: common_batch_1.digest(),
+                transactions: common_batch_1.clone(),
+            });
+            batches.push(BatchMessage {
+                id: common_batch_2.digest(),
+                transactions: common_batch_2.clone(),
+            });
+        }
+
         // sort the batches to make sure that the response is the expected one.
         batches.sort_by(|a, b| a.id.cmp(&b.id));
+
+        let header = builder.build(&key).unwrap();
+
+        let certificate = certificate(&header);
+        certificates.push(certificate.clone());
+
+        block_ids.push(certificate.digest());
 
         expected_get_block_responses.push(Ok(GetBlockResponse {
             id: certificate.digest(),
