@@ -27,7 +27,7 @@ tracing = "0.1.36"
 tracing-log = "0.1.3"
 tracing-subscriber = { version = "0.3.15", features = ["time", "env-filter"] }
 url = "2.2.2"
-axum = "0.5.13"
+axum = "0.5.15"
 task-group = "0.2.2"
 
 config = { path = "../config" }
