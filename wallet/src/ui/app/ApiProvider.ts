@@ -8,6 +8,7 @@ import type { Ed25519Keypair } from '@mysten/sui.js';
 export enum API_ENV {
     local = 'local',
     devNet = 'devNet',
+    testNet = 'testNet',
     staging = 'staging',
 }
 
@@ -23,6 +24,7 @@ type ApiEndpoints = {
 export const API_ENV_TO_INFO: Record<API_ENV, EnvInfo> = {
     [API_ENV.local]: { name: 'Local', color: '#9064ff' },
     [API_ENV.devNet]: { name: 'DevNet', color: '#29b6af' },
+    [API_ENV.testNet]: { name: 'TestNet', color: '#27b6af' },
     [API_ENV.staging]: { name: 'Staging', color: '#ff4a8d' },
 };
 
@@ -34,6 +36,10 @@ export const ENV_TO_API: Record<API_ENV, ApiEndpoints> = {
     [API_ENV.devNet]: {
         gateway: process.env.API_ENDPOINT_DEV_NET || '',
         fullNode: process.env.API_ENDPOINT_DEV_NET_FULLNODE || '',
+    },
+    [API_ENV.testNet]: {
+        gateway: process.env.API_ENDPOINT_TEST_NET || '',
+        fullNode: process.env.API_ENDPOINT_TEST_NET_FULLNODE || '',
     },
     [API_ENV.staging]: {
         gateway: process.env.API_ENDPOINT_STAGING || '',
