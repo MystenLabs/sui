@@ -76,7 +76,7 @@ pub trait Certifiable {
 /// let pskset = PskSet::from_der(&spkis.iter().map(|spki| &spki[..]).collect::<Vec<_>>()[..]).unwrap();
 /// ```
 ///
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PskSet {
     pub spki_set: BTreeSet<Psk>,
 }
