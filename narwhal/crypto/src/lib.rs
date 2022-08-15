@@ -43,12 +43,19 @@ pub mod bls12377;
 #[path = "tests/bls12381_tests.rs"]
 pub mod bls12381_tests;
 
+#[cfg(test)]
+#[path = "tests/bulletproofs_tests.rs"]
+pub mod bulletproofs_tests;
+
 // Signing traits
 pub mod traits;
 // Key scheme implementations
 pub mod bls12381;
 pub mod ed25519;
 pub mod secp256k1;
+
+pub mod bulletproofs;
+
 // Other tooling
 pub mod hkdf;
 pub mod pubkey_bytes;

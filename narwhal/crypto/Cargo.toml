@@ -21,6 +21,9 @@ serde_with = "2.0.0"
 signature = "1.6.0"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 zeroize = "1.5.7"
+bulletproofs = "4.0.0"
+curve25519-dalek-ng = "4.1.1"
+merlin = "3.0.0"
 
 # TODO: switch to https://github.com/celo-org/celo-bls-snark-rs
 # when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved
