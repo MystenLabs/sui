@@ -369,26 +369,22 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 <ItemView data={typearguments} />
                             </section>
                         )}
-                        {(sender || txKindName === 'TransferSui') && (
-                            <section
-                                className={cl([
-                                    styles.txcomponent,
-                                    styles.txsender,
-                                ])}
-                            >
-                                {txKindName === 'TransferSui' && (
-                                    <div>
-                                        <div>Amount</div>
-                                        <div>{amount ? amount : 0}</div>
-                                    </div>
-                                )}
-                                {sender && (
-                                    <div className={styles.txaddress}>
-                                        <SendReceiveView data={sendreceive} />
-                                    </div>
-                                )}
-                            </section>
-                        )}
+                        <section
+                            className={cl([
+                                styles.txcomponent,
+                                styles.txsender,
+                            ])}
+                        >
+                            {txKindName === 'TransferSui' && (
+                                <div>
+                                    <div>Amount</div>
+                                    <div>{amount ? amount : 0}</div>
+                                </div>
+                            )}
+                            <div className={styles.txaddress}>
+                                <SendReceiveView data={sendreceive} />
+                            </div>
+                        </section>
 
                         <section
                             className={cl([
