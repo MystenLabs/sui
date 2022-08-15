@@ -376,9 +376,12 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                             ])}
                         >
                             {txKindName === 'TransferSui' && (
-                                <div>
+                                <div className={styles.amountbox}>
                                     <div>Amount</div>
-                                    <div>{amount ? amount : 0}</div>
+                                    <div>
+                                        {amount ? amount : 0}
+                                        <sup>SUI</sup>
+                                    </div>
                                 </div>
                             )}
                             <div className={styles.txaddress}>
