@@ -210,26 +210,35 @@ To see nested spans visualized with [Jaeger](https://www.jaegertracing.io), do t
 
 ### Memory profiling
 
-jemalloc has a memory profiling mode that can be enabled at runtime with environment variables. See:
+Sui uses the [jemalloc memory allocator](https://jemalloc.net/) by default on most platforms, and there is code that enables automatic
+memory profiling using jemalloc's sampling profiler, which is very lightweight and designed for production
+use.  The profiling code spits out profiles at most every 5 minutes, and only when total memory has increased
+by a default 20%.  Profiling files are named `jeprof.<TIMESTAMP>.<memorysize>MB.prof` so that it is easy to 
+correlate to metrics and incidents, for ease of debugging.
 
-* https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling
-* https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174
+For the memory profiling to work, you need to set the environment variable `_RJEM_MALLOC_CONF=prof:true`. 
+(If you use the [Docker image](https://hub.docker.com/r/mysten/sui-node), they are set automatically)
 
-For example, set `JE_MALLOC_CONF` or `JEMALLOC_SYS_WITH_MALLOC_CONF` to:
+Note that running some allocator-based heap profilers such as [Bytehound](https://github.com/koute/bytehound) will essentially disable
+automatic jemalloc profiling, because they interfere with or don't implement `jemalloc_ctl` stats APIs.
+
+To view the profile files, one needs to do the following, on the same platform as where the profiles were gathered:
+1. Install `libunwind`, the `dot` utility from graphviz, and jeprof.  On Debian: `apt-get install libjemalloc-dev libunwind-dev graphviz`.
+2. Build with debug symbols: `cargo build --profile bench-profiling`
+2. cd to `$SUI_REPO/target/bench-profiling`
+1. Run `jeprof --svg sui-node jeprof.xxyyzz.heap` - select the heap profile based on 
+   timestamp and memory size in the filename.
+
+Note: with automatic memory profiling, it is no longer necessary to configure environment variables beyond
+what is required above.  It is possible to configure custom profiling options, see the links below:
+
+* [Heap Profiling](https://github.com/jemalloc/jemalloc/wiki/Use-Case%3A-Heap-Profiling)
+* [heap profiling with jemallocator](https://gist.github.com/ordian/928dc2bd45022cddd547528f64db9174)
+
+For example, set `_RJEM_MALLOC_CONF` to:
 `prof:true,lg_prof_interval:24,lg_prof_sample:19`
 
-The above setting means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
-and dump out the profile every 2^24 or 16MB of memory allocated.
-
-To view the profile files:
-1. `brew install jemalloc libunwind gprof2dot`
-1. Start `./sui node --config-path ...`
-1. In the same `target/release` directory, run `jeprof --text sui-node jeprof.66*.heap` where 66 is the starting PID of the current sui-node process.
-
-TODO: Define where the `target/release` directory is since we refer to it as the same but haven't yet referenced it.
-
-If the profiling does not create `.heap` files, check your env vars.  There is a log line dumped at the
-start of sui-node, that should look like this:
-```shell
-   INFO sui_node: Default Jemalloc conf: prof:true,lg_prof_interval:24,lg_prof_sample:19
-```
+The preceding setting means: turn on profiling, sample every 2^19 or 512KB bytes allocated,
+and dump out the profile every 2^24 or 16MB of memory allocated. 
+However, the automatic profiling is designed to produce files that are better named and at less intervals,
+so overriding the default configuration is not usually recommended.

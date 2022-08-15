@@ -7187,6 +7187,7 @@ version = "0.6.2"
 dependencies = [
  "anyhow",
  "axum",
+ "chrono",
  "clap 3.1.18",
  "futures",
  "jemalloc-ctl",
