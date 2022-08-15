@@ -57,4 +57,4 @@ impl<T> std::future::Future for CancelOnDropHandler<T> {
 //
 // The exact number here probably isn't important, the key things is that it should be finite so
 // that we don't create unbounded numbers of tasks.
-pub const MAX_TASK_CONCURRENCY: usize = 200;
+pub const MAX_TASK_CONCURRENCY: usize = 500;

@@ -12,7 +12,6 @@ use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
 use tokio::{runtime::Handle, task::JoinHandle};
 use tonic::transport::Channel;
-use tracing::warn;
 use types::{
     BincodeEncodedPayload, PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient,
     PrimaryWorkerMessage,
@@ -63,13 +62,10 @@ impl PrimaryNetwork {
     fn update_metrics(&self) {
         if let Some(m) = &self.metrics {
             for (addr, executor) in &self.executors {
-                let available = executor.available_capacity();
-
-                m.set_network_available_tasks(available as i64, Some(addr.to_string()));
-
-                if available == 0 {
-                    warn!("Executor in network:{} and module:{} available tasks is 0 for client address: {}", m.network_type(), m.module_tag(), addr);
-                }
+                m.set_network_available_tasks(
+                    executor.available_capacity() as i64,
+                    Some(addr.to_string()),
+                );
             }
         }
     }
