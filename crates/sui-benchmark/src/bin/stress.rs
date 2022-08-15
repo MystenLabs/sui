@@ -20,6 +20,7 @@ use sui_node::metrics;
 use sui_node::SuiNode;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
+use sui_types::crypto::AccountKeyPair;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -34,9 +35,7 @@ use sui_benchmark::workloads::workload::Payload;
 use sui_benchmark::workloads::workload::Workload;
 use sui_core::epoch::epoch_store::EpochStore;
 use sui_sdk::crypto::FileBasedKeystore;
-use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::EncodeDecodeBase64;
-use sui_types::crypto::KeypairTraits;
 
 use test_utils::authority::spawn_test_authorities;
 use test_utils::authority::test_and_configure_authority_configs;
@@ -303,7 +302,7 @@ async fn main() -> Result<()> {
             .key_pairs()
             .iter()
             .find(|x| {
-                let address: SuiAddress = Into::<SuiAddress>::into(x.public());
+                let address: SuiAddress = Into::<SuiAddress>::into(&x.public());
                 address == primary_gas_account
             })
             .map(|x| x.encode_base64())

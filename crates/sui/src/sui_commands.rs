@@ -24,7 +24,7 @@ use sui_config::{
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::Swarm;
-use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::{KeypairTraits, SuiKeyPair};
 use tracing::info;
 
 #[derive(Parser)]
@@ -246,7 +246,7 @@ impl SuiCommand {
                 let mut keystore = KeystoreType::File(keystore_path.clone()).init().unwrap();
 
                 for key in &network_config.account_keys {
-                    keystore.add_key(key.copy())?;
+                    keystore.add_key(SuiKeyPair::Ed25519SuiKeyPair(key.copy()))?;
                 }
 
                 network_config.genesis.save(&genesis_path)?;

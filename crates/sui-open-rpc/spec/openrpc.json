@@ -3037,6 +3037,9 @@
           }
         }
       },
+      "Secp256k1SuiSignature": {
+        "$ref": "#/components/schemas/Base64"
+      },
       "SequenceNumber": {
         "type": "integer",
         "format": "uint64",
@@ -3052,6 +3055,18 @@
             "properties": {
               "Ed25519SuiSignature": {
                 "$ref": "#/components/schemas/Ed25519SuiSignature"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "required": [
+              "Secp256k1SuiSignature"
+            ],
+            "properties": {
+              "Secp256k1SuiSignature": {
+                "$ref": "#/components/schemas/Secp256k1SuiSignature"
               }
             },
             "additionalProperties": false

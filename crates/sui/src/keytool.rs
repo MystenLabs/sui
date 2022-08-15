@@ -10,9 +10,15 @@ use tracing::info;
 
 use sui_sdk::crypto::SuiKeystore;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
-use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits};
+use sui_types::crypto::{
+    AccountKeyPair, AuthorityKeyPair, EncodeDecodeBase64, KeypairTraits, SuiKeyPair,
+};
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{base_types::SuiAddress, crypto::get_key_pair};
+
+#[cfg(test)]
+#[path = "unit_tests/keytool_tests.rs"]
+mod keytool_tests;
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
@@ -25,7 +31,7 @@ pub enum KeyToolCommand {
     },
     /// Extract components
     Unpack {
-        keypair: AccountKeyPair,
+        keypair: SuiKeyPair,
     },
     /// List all keys in the keystore
     List,
@@ -45,18 +51,22 @@ impl KeyToolCommand {
     pub fn execute(self, keystore: &mut SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate => {
+                // TODO: add flag to this command to enable generate Secp256k1 keypair
                 let (_address, keypair): (_, AccountKeyPair) = get_key_pair();
 
                 let hex = encode_bytes_hex(keypair.public());
                 let file_name = format!("{hex}.key");
-                write_keypair_to_file(&keypair, &file_name)?;
+                write_keypair_to_file(&SuiKeyPair::Ed25519SuiKeyPair(keypair), &file_name)?;
                 println!("Ed25519 key generated and saved to '{file_name}'");
             }
 
             KeyToolCommand::Show { file } => {
-                let res: Result<AuthorityKeyPair, anyhow::Error> = read_keypair_from_file(&file);
+                let res: Result<SuiKeyPair, anyhow::Error> = read_keypair_from_file(&file);
                 match res {
-                    Ok(keypair) => println!("Public Key: {}", encode_bytes_hex(keypair.public())),
+                    Ok(keypair) => {
+                        println!("Public Key: {}", encode_bytes_hex(keypair.public()));
+                        println!("Flag: {}", keypair.public().flag());
+                    }
                     Err(e) => {
                         println!("Failed to read keypair at path {:?} err: {:?}", file, e)
                     }
@@ -64,19 +74,20 @@ impl KeyToolCommand {
             }
 
             KeyToolCommand::Unpack { keypair } => {
-                store_and_print_keypair(keypair.public().into(), keypair)
+                store_and_print_keypair((&keypair.public()).into(), keypair)
             }
             KeyToolCommand::List => {
                 println!(
-                    " {0: ^42} | {1: ^45} ",
-                    "Sui Address", "Public Key (Base64)"
+                    " {0: ^42} | {1: ^45} | {2: ^1}",
+                    "Sui Address", "Public Key (Base64)", "Flag"
                 );
-                println!("{}", ["-"; 91].join(""));
+                println!("{}", ["-"; 100].join(""));
                 for pub_key in keystore.keys() {
                     println!(
-                        " {0: ^42} | {1: ^45} ",
+                        " {0: ^42} | {1: ^45} | {2: ^1}",
                         Into::<SuiAddress>::into(&pub_key),
                         Base64::encode(&pub_key),
+                        pub_key.flag()
                     );
                 }
             }
@@ -111,7 +122,7 @@ impl KeyToolCommand {
     }
 }
 
-fn store_and_print_keypair<K: KeypairTraits>(address: SuiAddress, keypair: K) {
+fn store_and_print_keypair(address: SuiAddress, keypair: SuiKeyPair) {
     let path_str = format!("{}.key", address).to_lowercase();
     let path = Path::new(&path_str);
     let address = format!("{}", address);
@@ -122,8 +133,8 @@ fn store_and_print_keypair<K: KeypairTraits>(address: SuiAddress, keypair: K) {
     println!("Address and keypair written to {}", path.to_str().unwrap());
 }
 
-pub fn write_keypair_to_file<K: KeypairTraits, P: AsRef<std::path::Path>>(
-    keypair: &K,
+pub fn write_keypair_to_file<P: AsRef<std::path::Path>>(
+    keypair: &SuiKeyPair,
     path: P,
 ) -> anyhow::Result<()> {
     let contents = keypair.encode_base64();
@@ -131,9 +142,19 @@ pub fn write_keypair_to_file<K: KeypairTraits, P: AsRef<std::path::Path>>(
     Ok(())
 }
 
-pub fn read_keypair_from_file<K: KeypairTraits, P: AsRef<std::path::Path>>(
+pub fn read_authority_keypair_from_file<P: AsRef<std::path::Path>>(
     path: P,
-) -> anyhow::Result<K> {
+) -> anyhow::Result<AuthorityKeyPair> {
+    match read_keypair_from_file(path) {
+        Ok(kp) => match kp {
+            SuiKeyPair::Ed25519SuiKeyPair(k) => Ok(k),
+            SuiKeyPair::Secp256k1SuiKeyPair(_) => Err(anyhow!("Invalid authority keypair type")),
+        },
+        Err(e) => Err(anyhow!("Failed to read keypair file {:?}", e)),
+    }
+}
+
+pub fn read_keypair_from_file<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<SuiKeyPair> {
     let contents = std::fs::read_to_string(path)?;
-    K::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
+    SuiKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
 }
