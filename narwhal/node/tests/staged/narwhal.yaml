@@ -26,7 +26,7 @@ Certificate:
         SEQ:
           TUPLE:
             - TYPENAME: Ed25519PublicKey
-            - SEQ: U8
+            - TYPENAME: Ed25519Signature
 CertificateDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -43,6 +43,9 @@ Committee:
     - epoch: U64
 Ed25519PublicKey:
   NEWTYPESTRUCT: STR
+Ed25519Signature:
+  STRUCT:
+    - raw: BYTES
 Header:
   STRUCT:
     - author:
@@ -60,7 +63,7 @@ Header:
     - id:
         TYPENAME: HeaderDigest
     - signature:
-        SEQ: U8
+        TYPENAME: Ed25519Signature
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -152,4 +155,3 @@ WorkerPrimaryMessage:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification
-

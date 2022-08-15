@@ -16,12 +16,13 @@ hkdf = { version = "0.12.3", features = ["std"] }
 rand = { version = "0.8.5", features = ["std"] }
 rust_secp256k1 = { version = "0.24.0", package = "secp256k1", features = ["recovery", "rand-std", "bitcoin_hashes", "global-context"] }
 serde = { version = "1.0.142", features = ["derive"] }
+serde_bytes = "0.11.7"
 serde_with = "2.0.0"
 signature = "1.6.0"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 zeroize = "1.5.7"
 
-# TODO: switch to https://github.com/celo-org/celo-bls-snark-rs 
+# TODO: switch to https://github.com/celo-org/celo-bls-snark-rs
 # when https://github.com/celo-org/celo-bls-snark-rs/issues/228 is solved
 celo-bls = { git = "https://github.com/huitseeker/celo-bls-snark-rs", branch = "updates-2", package = "bls-crypto", optional = true }
 
@@ -55,3 +56,4 @@ proptest = "1.0.0"
 proptest-derive = "0.3.0"
 serde_json = "1.0.83"
 sha3 = "0.10.2"
+serde-reflection = "0.3.6"

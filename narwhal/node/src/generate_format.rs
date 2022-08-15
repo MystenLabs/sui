@@ -126,18 +126,6 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<HeaderDigest>(&samples)?;
     tracer.trace_type::<CertificateDigest>(&samples)?;
 
-    // Caveat: the following (trace_type) won't work, but not because of generics.
-    //
-    // Generic types instantiated multiple times in the same tracing session requires a work around.
-    // https://docs.rs/serde-reflection/latest/serde_reflection/#features-and-limitations
-    // but here we should be fine.
-    //
-    // This doesn't work because of the custom ser/de in PublicKey, which carries through to most top-level messages
-    //
-    // tracer.trace_type::<Header<Ed25519PublicKey>>(&samples)?;
-    // tracer.trace_type::<Certificate<Ed25519PublicKey>>(&samples)?;
-    // tracer.trace_type::<PrimaryWorkerMessage<Ed25519PublicKey>>(&samples)?;
-
     // The final entry points that we must document
     tracer.trace_type::<WorkerPrimaryMessage>(&samples)?;
     tracer.trace_type::<WorkerPrimaryError>(&samples)?;
