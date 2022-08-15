@@ -84,7 +84,7 @@ cfg-if-c65f7effa3be6d31 = { package = "cfg-if", version = "0.1", default-feature
 cfg-if-dff4ba8e3ae991db = { package = "cfg-if", version = "1", default-features = false }
 chrono = { version = "0.4", features = ["clock", "libc", "oldtime", "std", "time", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
-clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
+clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "std", "strsim", "suggestions", "termcolor"] }
 clap_lex = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
 codespan-reporting = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
