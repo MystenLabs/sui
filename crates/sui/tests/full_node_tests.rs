@@ -21,8 +21,8 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletCont
 use sui_config::utils::get_available_port;
 use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
-    SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue, SuiObjectRead,
-    SplitCoinResponse, SuiExecuteTransactionResponse,
+    SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveStruct,
+    SuiMoveValue, SuiObjectRead,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;

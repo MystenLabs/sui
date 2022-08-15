@@ -676,10 +676,10 @@ impl Transaction {
 
     pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
         (
-            Base64::from_bytes(&self.data.to_bytes()),
-            self.tx_signature.scheme(),
-            Base64::from_bytes(self.tx_signature.signature_bytes()),
-            Base64::from_bytes(self.tx_signature.public_key_bytes()),
+            Base64::from_bytes(&self.signed_data.data.to_bytes()),
+            self.signed_data.tx_signature.scheme(),
+            Base64::from_bytes(self.signed_data.tx_signature.signature_bytes()),
+            Base64::from_bytes(self.signed_data.tx_signature.public_key_bytes()),
         )
     }
 }
