@@ -21,6 +21,7 @@ collectable = "0.0.2"
 fdlimit = "0.2.1"
 anyhow = { version = "1.0.58" }
 pre = "0.2.0"
+tap = "1.0.1"
 
 [dev-dependencies]
 tempfile = "3.3.0"
