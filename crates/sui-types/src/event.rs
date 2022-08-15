@@ -28,20 +28,6 @@ use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
 use tracing::error;
 
-// /// A slim version of EventEnvelope with a few fields cut out.
-// /// It is mostly used in the event query read path, particularly in
-// /// EventEnvelope conversions as an intermediary struct from StoredEvent
-// /// to SuiEventEnvelope, so that we don't have to expose the `sui-storage`
-// /// crate to the rpc layer.
-// pub struct SlimEventEnvelope {
-//     /// UTC timestamp in milliseconds since epoch (1/1/1970)
-//     pub timestamp: u64,
-//     /// Transaction digest of associated transaction, if any
-//     pub tx_digest: Option<TransactionDigest>,
-//     /// Specific event type
-//     pub event: Event,
-// }
-
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EventEnvelope {
@@ -304,6 +290,7 @@ impl Event {
         }
     }
 
+    /// Extracts the bcs move content from a SuiEvent, if available
     pub fn move_event_contents(&self) -> Option<&[u8]> {
         if let Event::MoveEvent { contents, .. } = self {
             Some(contents)
@@ -312,6 +299,7 @@ impl Event {
         }
     }
 
+    /// Extracts the move StructTag from a SuiEvent, if available
     pub fn move_event_struct_tag(&self) -> Option<&StructTag> {
         if let Event::MoveEvent { type_, .. } = self {
             Some(type_)
@@ -320,6 +308,7 @@ impl Event {
         }
     }
 
+    /// Extracts the TransferType from a SuiEvent, if available
     pub fn transfer_type(&self) -> Option<&TransferType> {
         if let Event::TransferObject { type_, .. } = self {
             Some(type_)
@@ -328,6 +317,7 @@ impl Event {
         }
     }
 
+    /// Extracts the Object Version from a SuiEvent, if available
     pub fn object_version(&self) -> Option<&SequenceNumber> {
         if let Event::TransferObject { version, .. } = self {
             Some(version)

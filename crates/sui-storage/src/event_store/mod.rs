@@ -70,7 +70,6 @@ pub struct StoredEvent {
     /// StructTag for MoveEvent
     move_event_struct_tag: Option<String>,
     /// Sender in the event
-    /// FIXME - Owner
     sender: Option<SuiAddress>,
     /// Recipient in the event
     recipient: Option<Owner>,
@@ -177,18 +176,19 @@ impl StoredEvent {
 
     fn package_id(&self) -> Result<ObjectID, anyhow::Error> {
         self.package_id.ok_or_else(|| {
-            let msg = format!("Missing package_id for event {:?}", self);
-            // error!(msg);
-            anyhow::anyhow!(StorageMissingFieldError(msg))
+            anyhow::anyhow!(StorageMissingFieldError(format!(
+                "Missing package_id for event {:?}",
+                self
+            )))
         })
     }
 
     fn transaction_module(&self) -> Result<String, anyhow::Error> {
         let module_name = self.module_name.as_ref().ok_or_else(|| {
-            let msg = format!("Missing transaction_module for event {:?}", self);
-            // FIXME log in the upper layer
-            // error!(msg);
-            anyhow::anyhow!(StorageMissingFieldError(msg))
+            anyhow::anyhow!(StorageMissingFieldError(format!(
+                "Missing transaction_module for event {:?}",
+                self
+            )))
         })?;
         Ok(Identifier::from_str(module_name.as_str())
             .map_err(|e| {
