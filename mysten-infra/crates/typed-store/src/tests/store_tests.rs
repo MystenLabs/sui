@@ -158,7 +158,7 @@ async fn iter_successfully() {
     // Iter through the keys
     let output = store.iter(None).await;
     for (k, v) in &key_values {
-        let v1 = output.get(&*k).unwrap();
+        let v1 = output.get(k).unwrap();
         assert_eq!(v1.first(), v.first());
         assert_eq!(v1.last(), v.last());
     }
@@ -193,11 +193,11 @@ async fn iter_and_filter_successfully() {
     for (k, v) in &key_values {
         let int = u16::from_le_bytes(k[..2].try_into().unwrap());
         if int % 2 == 0 {
-            let v1 = output.get(&*k).unwrap();
+            let v1 = output.get(k).unwrap();
             assert_eq!(v1.first(), v.first());
             assert_eq!(v1.last(), v.last());
         } else {
-            assert!(output.get(&*k).is_none());
+            assert!(output.get(k).is_none());
         }
     }
     assert_eq!(output.len(), key_values.len());
