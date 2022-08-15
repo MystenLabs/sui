@@ -19,6 +19,12 @@ use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
 use sui_types::sui_serde::Base64;
 
+/// Maximum number of events returned in an event query.
+/// This is equivalent to EVENT_STORE_QUERY_MAX_LIMIT in `sui-storage` crate.
+/// To avoid unnecessary dependency on that crate, we have a reference here
+/// for document purposes.
+pub const EVENT_QUERY_MAX_LIMIT: usize = 100;
+
 #[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcGatewayApi {
@@ -350,7 +356,7 @@ pub trait EventReadApi {
         &self,
         /// digest of the transaction, as base-64 encoded string
         digest: TransactionDigest,
-        /// maximum size of the result, capped to 100
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
@@ -362,7 +368,7 @@ pub trait EventReadApi {
         package: ObjectID,
         /// the module name
         module: String,
-        /// maximum size of the result, capped to 100
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
         /// the matching events' timestamp will be after the specified start time
         start_time: u64,
@@ -376,7 +382,7 @@ pub trait EventReadApi {
         &self,
         /// the event struct name type, e.g. `0x2::devnet_nft::MintNFTEvent` or `0x2::SUI::test_foo<address, vector<u8>>` with type params
         move_event_struct_name: String,
-        /// maximum size of the result, capped to 100
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
         /// the matching events' timestamp will be after the specified start time
         start_time: u64,
@@ -390,7 +396,7 @@ pub trait EventReadApi {
         &self,
         /// the sender's Sui address
         sender: SuiAddress,
-        /// maximum size of the result, capped to 100
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
         /// the matching events' timestamp will be after the specified start time
         start_time: u64,
@@ -404,7 +410,7 @@ pub trait EventReadApi {
         &self,
         /// the recipient
         recipient: Owner,
-        /// maximum size of the result, capped to 100
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
         /// the matching events' timestamp will be after the specified start time
         start_time: u64,
@@ -418,7 +424,7 @@ pub trait EventReadApi {
         &self,
         /// the object ID
         object: ObjectID,
-        /// maximum size of the result, capped to 100
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
         /// the matching events' timestamp will be after the specified start time
         start_time: u64,

@@ -138,7 +138,7 @@ impl EventReadApiServer for EventReadApiImpl {
     ) -> RpcResult<Vec<SuiEventEnvelope>> {
         let module_id = ModuleId::new(
             AccountAddress::from(package),
-            Identifier::from_str(&module).unwrap(),
+            Identifier::from_str(&module)?,
         );
 
         let events = self
