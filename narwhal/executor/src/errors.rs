@@ -4,6 +4,7 @@ use config::WorkerId;
 use std::fmt::Debug;
 use store::StoreError;
 use thiserror::Error;
+use types::CertificateDigest;
 
 #[macro_export]
 macro_rules! bail {
@@ -27,6 +28,9 @@ pub type SubscriberResult<T> = Result<T, SubscriberError>;
 pub enum SubscriberError {
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),
+
+    #[error("Error occurred while retrieving certificate {0} payload: {1}")]
+    PayloadRetrieveError(CertificateDigest, String),
 
     #[error("Consensus referenced unexpected worker id {0}")]
     UnexpectedWorkerId(WorkerId),

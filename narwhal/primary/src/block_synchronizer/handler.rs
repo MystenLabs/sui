@@ -126,7 +126,6 @@ impl BlockSynchronizerHandler {
         }
     }
 
-    #[instrument(level = "debug", skip_all)]
     async fn wait_all(&self, certificates: Vec<Certificate>) -> Vec<Result<Certificate, Error>> {
         let futures: Vec<_> = certificates
             .into_iter()
@@ -136,7 +135,6 @@ impl BlockSynchronizerHandler {
         join_all(futures).await
     }
 
-    #[instrument(level = "debug", skip_all, err)]
     async fn wait(&self, block_id: CertificateDigest) -> Result<Certificate, Error> {
         if let Ok(result) = timeout(
             self.certificate_deliver_timeout,
@@ -164,7 +162,7 @@ impl Handler for BlockSynchronizerHandler {
     /// * Internal: An internal error caused
     /// * BlockDeliveryTimeout: Timed out while waiting for the certificate to become available
     /// after submitting it for processing to core
-    #[instrument(level="debug", skip_all, fields(num_block_ids = block_ids.len()))]
+    #[instrument(level="trace", skip_all, fields(num_block_ids = block_ids.len()))]
     async fn get_and_synchronize_block_headers(
         &self,
         block_ids: Vec<CertificateDigest>,
@@ -229,7 +227,7 @@ impl Handler for BlockSynchronizerHandler {
         results
     }
 
-    #[instrument(level="debug", skip_all, fields(num_block_ids = block_ids.len()))]
+    #[instrument(level="trace", skip_all, fields(num_block_ids = block_ids.len()))]
     async fn get_block_headers(
         &self,
         block_ids: Vec<CertificateDigest>,
@@ -266,7 +264,7 @@ impl Handler for BlockSynchronizerHandler {
         results
     }
 
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn synchronize_block_payloads(
         &self,
         certificates: Vec<Certificate>,

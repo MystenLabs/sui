@@ -69,7 +69,9 @@ pub struct PrimaryChannelMetrics {
     pub tx_primary_messages: IntGauge,
     /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Helper`
     pub tx_helper_requests: IntGauge,
-    /// occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockWaiter`
+    /// occupancy of the channel from the `primary::ConsensusAPIGrpc` (when external consensus is being
+    /// used) & `executor::Subscriber` (when internal consensus, ex Bullshark, is being used)  to
+    /// the `primary::BlockWaiter`.
     pub tx_get_block_commands: IntGauge,
     /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::BlockWaiter`
     pub tx_batches: IntGauge,
@@ -94,14 +96,21 @@ pub struct PrimaryChannelMetrics {
 }
 
 impl PrimaryChannelMetrics {
-    // The consistent use of this constant in the below, as well as in `node::spawn_primary` is load-bearing, see `replace_registered_committed_certificates_metric`.
+    // The consistent use of this constant in the below, as well as in `node::spawn_primary` is
+    // load-bearing, see `replace_registered_committed_certificates_metric`.
     pub const NAME_COMMITTED_CERTS: &'static str = "tx_committed_certificates";
     pub const DESC_COMMITTED_CERTS: &'static str =
         "occupancy of the channel from the `Consensus` to the `primary::Core`";
-    // The consistent use of this constant in the below, as well as in `node::spawn_primary` is load-bearing, see `replace_registered_new_certificates_metric`.
+    // The consistent use of this constant in the below, as well as in `node::spawn_primary` is
+    // load-bearing, see `replace_registered_new_certificates_metric`.
     pub const NAME_NEW_CERTS: &'static str = "tx_new_certificates";
     pub const DESC_NEW_CERTS: &'static str =
         "occupancy of the channel from the `primary::Core` to the `Consensus`";
+    // The consistent use of this constant in the below, as well as in `node::spawn_primary` is
+    // load-bearing, see `replace_registered_tx_get_block_commands_metric`.
+    pub const NAME_GET_BLOCK_COMMANDS: &'static str = "tx_get_block_commands";
+    pub const DESC_GET_BLOCK_COMMANDS: &'static str =
+        "occupancy of the channel from the `primary::ConsensusAPIGrpc` & `executor::Subscriber` to the `primary::BlockWaiter`";
 
     pub fn new(registry: &Registry) -> Self {
         Self {
@@ -157,7 +166,7 @@ impl PrimaryChannelMetrics {
             ).unwrap(),
             tx_get_block_commands: register_int_gauge_with_registry!(
                 "tx_get_block_commands",
-                "occupancy of the channel from the `primary::ConsensusAPIGrpc` to the `primary::BlockWaiter`",
+                "occupancy of the channel from the `primary::ConsensusAPIGrpc` & `executor::Subscriber` to the `primary::BlockWaiter`",
                 registry
             ).unwrap(),
             tx_batches: register_int_gauge_with_registry!(
@@ -241,6 +250,21 @@ impl PrimaryChannelMetrics {
             .unwrap();
         registry.register(collector).unwrap();
         self.tx_committed_certificates = committed_certificates_counter;
+    }
+
+    pub fn replace_registered_get_block_commands_metric(
+        &mut self,
+        registry: &Registry,
+        collector: Box<GenericGauge<AtomicI64>>,
+    ) {
+        let tx_get_block_commands_counter =
+            IntGauge::new(Self::NAME_GET_BLOCK_COMMANDS, Self::DESC_GET_BLOCK_COMMANDS).unwrap();
+        // TODO: Sanity-check by hashing the descs against one another
+        registry
+            .unregister(Box::new(tx_get_block_commands_counter.clone()))
+            .unwrap();
+        registry.register(collector).unwrap();
+        self.tx_get_block_commands = tx_get_block_commands_counter;
     }
 }
 

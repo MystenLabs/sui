@@ -1,54 +1,72 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::errors::{SubscriberError, SubscriberResult};
+use crate::{errors::SubscriberResult, SubscriberError, SubscriberError::PayloadRetrieveError};
+use backoff::{Error, ExponentialBackoff};
 use consensus::ConsensusOutput;
-use futures::{
-    future::try_join_all,
-    stream::{FuturesOrdered, StreamExt},
-};
+use crypto::Hash;
+use futures::stream::{FuturesOrdered, StreamExt};
+use primary::BlockCommand;
+use std::time::Duration;
 use store::Store;
-use tokio::{sync::watch, task::JoinHandle};
-use tracing::debug;
-use types::{metered_channel, BatchDigest, ReconfigureNotification, SerializedBatchMessage};
+use tokio::{
+    sync::{oneshot, watch},
+    task::JoinHandle,
+};
+use tracing::{debug, error};
+use types::{metered_channel, Batch, BatchDigest, ReconfigureNotification};
 
 #[cfg(test)]
 #[path = "tests/subscriber_tests.rs"]
 pub mod subscriber_tests;
 
 /// The `Subscriber` receives certificates sequenced by the consensus and waits until the
-/// `BatchLoader` downloaded all the transactions references by the certificates; it then
+/// downloaded all the transactions references by the certificates; it then
 /// forward the certificates to the Executor Core.
 pub struct Subscriber {
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
-    store: Store<BatchDigest, SerializedBatchMessage>,
+    store: Store<BatchDigest, Batch>,
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// A channel to receive consensus messages.
     rx_consensus: metered_channel::Receiver<ConsensusOutput>,
-    /// A channel to the batch loader to download transaction's data.
-    tx_batch_loader: metered_channel::Sender<ConsensusOutput>,
     /// A channel to send the complete and ordered list of consensus outputs to the executor. This
     /// channel is used once all transactions data are downloaded.
     tx_executor: metered_channel::Sender<ConsensusOutput>,
+    // A channel to send commands to the block waiter to receive
+    // a certificate's batches (block).
+    tx_get_block_commands: metered_channel::Sender<BlockCommand>,
+    // When asking for a certificate's payload we want to retry until we succeed, unless
+    // some irrecoverable error occurs. For that reason a backoff policy is defined
+    get_block_retry_policy: ExponentialBackoff,
 }
 
 impl Subscriber {
     /// Spawn a new subscriber in a new tokio task.
     #[must_use]
     pub fn spawn(
-        store: Store<BatchDigest, SerializedBatchMessage>,
+        store: Store<BatchDigest, Batch>,
+        tx_get_block_commands: metered_channel::Sender<BlockCommand>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_consensus: metered_channel::Receiver<ConsensusOutput>,
-        tx_batch_loader: metered_channel::Sender<ConsensusOutput>,
         tx_executor: metered_channel::Sender<ConsensusOutput>,
     ) -> JoinHandle<()> {
+        let get_block_retry_policy = ExponentialBackoff {
+            initial_interval: Duration::from_millis(500),
+            randomization_factor: backoff::default::RANDOMIZATION_FACTOR,
+            multiplier: backoff::default::MULTIPLIER,
+            max_interval: Duration::from_secs(10), // Maximum backoff is 10 seconds
+            max_elapsed_time: None, // Never end retrying unless a non recoverable error occurs.
+            ..Default::default()
+        };
+
         tokio::spawn(async move {
             Self {
                 store,
                 rx_reconfigure,
                 rx_consensus,
-                tx_batch_loader,
                 tx_executor,
+                tx_get_block_commands,
+                get_block_retry_policy,
             }
             .run()
             .await
@@ -56,21 +74,14 @@ impl Subscriber {
         })
     }
 
-    /// Wait for particular data to become available in the storage and then returns.
-    async fn waiter<T>(
-        missing: Vec<BatchDigest>,
-        store: Store<BatchDigest, SerializedBatchMessage>,
-        deliver: T,
-    ) -> SubscriberResult<T> {
-        let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
-        try_join_all(waiting)
-            .await
-            .map(|_| deliver)
-            .map_err(SubscriberError::from)
-    }
-
     /// Main loop connecting to the consensus to listen to sequence messages.
     async fn run(&mut self) -> SubscriberResult<()> {
+        // It's important to have the futures in ordered fashion as we want
+        // to guarantee that will deliver to the executor the certificates
+        // in the same order we received from rx_consensus. So it doesn't
+        // mater if we somehow managed to fetch the batches from a later
+        // certificate. Unless the earlier certificate's payload has been
+        // fetched, no later certificate will be delivered.
         let mut waiting = FuturesOrdered::new();
 
         // Listen to sequenced consensus message and process them.
@@ -78,18 +89,15 @@ impl Subscriber {
             tokio::select! {
                 // Receive the ordered sequence of consensus messages from a consensus node.
                 Some(message) = self.rx_consensus.recv() => {
-                    // Send the certificate to the batch loader to download all transactions' data.
-                    self.tx_batch_loader
-                        .send(message.clone())
-                        .await
-                        .expect("Failed to send message ot batch loader");
-
-                    // Wait for the transaction data to be available in the store. This will happen for sure because
-                    // the primary already successfully processed the certificate. This implies that the primary notified
-                    // its worker to download any missing batch. We may however have to wait for these batch be available
-                    // on our workers. Once all batches are available, we forward the certificate o the Executor Core.
-                    let digests = message.certificate.header.payload.keys().cloned().collect();
-                    let future = Self::waiter(digests, self.store.clone(), message);
+                    // Fetch the certificate's payload from the workers. This is done via the
+                    // block_waiter component. If the batches are not available in the workers then
+                    // block_waiter will do its best to sync from the other peers. Once all batches
+                    // are available, we forward the certificate o the Executor Core.
+                    let future = Self::wait_on_payload(
+                        self.get_block_retry_policy.clone(),
+                        self.store.clone(),
+                        self.tx_get_block_commands.clone(),
+                        message);
                     waiting.push(future);
                 },
 
@@ -111,5 +119,56 @@ impl Subscriber {
                 }
             }
         }
+    }
+
+    /// The wait_on_payload will try to retrieve the certificate's payload
+    /// from the workers via the block_waiter component and relase the
+    /// `deliver` once successfully done. Since we want the output to be
+    /// sequenced we will not quit this method until we have successfully
+    /// fetched the payload.
+    async fn wait_on_payload(
+        back_off_policy: ExponentialBackoff,
+        store: Store<BatchDigest, Batch>,
+        tx_get_block_commands: metered_channel::Sender<BlockCommand>,
+        deliver: ConsensusOutput,
+    ) -> SubscriberResult<ConsensusOutput> {
+        let get_block = move || {
+            let message = deliver.clone();
+            let id = message.certificate.digest();
+            let tx_get_block = tx_get_block_commands.clone();
+            let batch_store = store.clone();
+
+            async move {
+                let (sender, receiver) = oneshot::channel();
+
+                tx_get_block
+                    .send(BlockCommand::GetBlock { id, sender })
+                    .await
+                    .map_err(|err| Error::permanent(PayloadRetrieveError(id, err.to_string())))?;
+
+                return match receiver
+                    .await
+                    .map_err(|err| Error::permanent(PayloadRetrieveError(id, err.to_string())))?
+                {
+                    Ok(block) => {
+                        // we successfully received the payload. Now let's add to store
+                        batch_store
+                            .write_all(block.batches.into_iter().map(|b| (b.id, b.transactions)))
+                            .await
+                            .map_err(|err| Error::permanent(SubscriberError::from(err)))?;
+
+                        Ok(message)
+                    }
+                    Err(err) => {
+                        // whatever the error might be at this point we don't
+                        // have many options apart from retrying.
+                        error!("Error while retrieving block via block waiter: {}", err);
+                        Err(Error::transient(PayloadRetrieveError(id, err.to_string())))
+                    }
+                };
+            }
+        };
+
+        backoff::future::retry(back_off_policy, get_block).await
     }
 }

@@ -23,6 +23,7 @@ tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = "0.7.2"
 tracing = "0.1.36"
 prometheus = "0.13.1"
+backoff = { version = "0.4.0", features = ["tokio"] }
 
 types = { path = "../types" }
 worker = { path = "../worker" }
@@ -36,5 +37,7 @@ match_opt = "0.1.2"
 indexmap = { version = "1.9.1", features = ["serde"] }
 rand = "0.8.5"
 tempfile = "3.3.0"
+primary = { path = "../primary" }
 test_utils = { path = "../test_utils" }
 types = { path = "../types" }
+telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "d965a5a795dcdb4d1c7964acf556bc249fdc58aa" }

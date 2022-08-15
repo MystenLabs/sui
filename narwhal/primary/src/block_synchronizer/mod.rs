@@ -373,7 +373,7 @@ impl BlockSynchronizer {
     /// logic of waiting and gathering the replies from the primary nodes
     /// for the payload availability. This future is returning the next State
     /// to be executed.
-    #[instrument(level="debug", skip_all, fields(num_certificates = certificates.len()))]
+    #[instrument(level="trace", skip_all, fields(num_certificates = certificates.len()))]
     async fn handle_synchronize_block_payload_command<'a>(
         &mut self,
         certificates: Vec<Certificate>,
@@ -404,6 +404,9 @@ impl BlockSynchronizer {
         } else {
             trace!("Certificate payloads need sync");
         }
+
+        // TODO: add metric here to track the number of certificates
+        // requested that are missing a payload
 
         let key = RequestID::from_iter(certificates_to_sync.iter());
 
@@ -555,7 +558,7 @@ impl BlockSynchronizer {
     /// a reply is immediately sent to the consumer via the provided respond_to
     /// channel. For the ones that haven't been found, are returned back on the
     /// returned vector.
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn reply_with_payload_already_in_storage(
         &self,
         certificates: Vec<Certificate>,
@@ -616,7 +619,7 @@ impl BlockSynchronizer {
 
     // Broadcasts a message to all the other primary nodes.
     // It returns back the primary names to which we have sent the requests.
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn broadcast_batch_request(&mut self, message: PrimaryMessage) -> Vec<PublicKey> {
         // Naively now just broadcast the request to all the primaries
 
@@ -634,7 +637,7 @@ impl BlockSynchronizer {
         primaries_names
     }
 
-    #[instrument(level="debug", skip_all, fields(request_id = ?request_id))]
+    #[instrument(level="trace", skip_all, fields(request_id = ?request_id))]
     async fn handle_synchronize_block_payloads<'a>(
         &mut self,
         request_id: RequestID,
@@ -677,7 +680,7 @@ impl BlockSynchronizer {
     ///
     /// * `primary_peer_name` - The primary from which we are looking to sync the batches.
     /// * `certificates` - The certificates for which we want to sync their batches.
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn send_synchronize_payload_requests(
         &mut self,
         primary_peer_name: PublicKey,
@@ -743,7 +746,7 @@ impl BlockSynchronizer {
         }
     }
 
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn handle_payload_availability_response(
         &mut self,
         response: PayloadAvailabilityResponse,
@@ -766,7 +769,7 @@ impl BlockSynchronizer {
         }
     }
 
-    #[instrument(level = "debug", skip_all)]
+    #[instrument(level = "trace", skip_all)]
     async fn handle_certificates_response(&mut self, response: CertificatesResponse) {
         let sender = self
             .map_certificate_responses_senders

@@ -15,7 +15,8 @@ use crate::{
     proposer::Proposer,
     state_handler::StateHandler,
     synchronizer::Synchronizer,
-    BlockRemover, CertificatesResponse, DeleteBatchMessage, PayloadAvailabilityResponse,
+    BlockCommand, BlockRemover, CertificatesResponse, DeleteBatchMessage,
+    PayloadAvailabilityResponse,
 };
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, WorkerId, WorkerInfo};
@@ -60,6 +61,7 @@ impl Primary {
     const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
     // Spawns the primary and returns the JoinHandles of its tasks, as well as a metered receiver for the Consensus.
+    #[allow(clippy::too_many_arguments)]
     pub fn spawn<Signatory: Signer<Signature> + Send + 'static>(
         name: PublicKey,
         signer: Signatory,
@@ -70,6 +72,8 @@ impl Primary {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_consensus: Sender<Certificate>,
         rx_consensus: Receiver<Certificate>,
+        tx_get_block_commands: Sender<BlockCommand>,
+        rx_get_block_commands: Receiver<BlockCommand>,
         dag: Option<Arc<Dag>>,
         network_model: NetworkModel,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
@@ -117,10 +121,6 @@ impl Primary {
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_helper_requests,
         );
-        let (tx_get_block_commands, rx_get_block_commands) = channel(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_get_block_commands,
-        );
         let (tx_batches, rx_batches) =
             channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_batches);
         let (tx_block_removal_commands, rx_block_removal_commands) = channel(
@@ -152,9 +152,16 @@ impl Primary {
             registry,
             Box::new(committed_certificates_gauge),
         );
+
         let new_certificates_gauge = tx_consensus.gauge().clone();
         primary_channel_metrics
             .replace_registered_new_certificates_metric(registry, Box::new(new_certificates_gauge));
+
+        let tx_get_block_commands_gauge = tx_get_block_commands.gauge().clone();
+        primary_channel_metrics.replace_registered_get_block_commands_metric(
+            registry,
+            Box::new(tx_get_block_commands_gauge),
+        );
 
         let (tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
