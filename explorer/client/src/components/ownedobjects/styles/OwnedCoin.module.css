@@ -1,5 +1,5 @@
 .groupview {
-    @apply text-left sm:mx-0 mx-[-0.625rem];
+    @apply text-left;
 }
 
 .firstrow {
