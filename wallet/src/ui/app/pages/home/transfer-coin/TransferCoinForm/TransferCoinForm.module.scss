@@ -91,7 +91,6 @@
     border-radius: 10px;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
-    padding: 20px;
     margin-top: 25px;
 
     .tx-info {
@@ -129,6 +128,7 @@
         font-size: 24px;
         line-height: 19px;
         color: colors.$gray-100;
+        padding: 20px;
 
         span {
             color: colors.$gray-75;
@@ -153,7 +153,10 @@
     .details {
         border-top: 1px solid colors.$gray-50;
         padding: 20px 0;
-        margin-top: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        margin: 0 20px;
     }
 
     .tx-date,
@@ -171,4 +174,12 @@
             color: colors.$gray-85;
         }
     }
+}
+
+.label-direction {
+    text-align: center;
+    width: 90%;
+    color: colors.$gray-80;
+    margin: auto;
+    margin-bottom: 20px;
 }

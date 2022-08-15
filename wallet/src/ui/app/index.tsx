@@ -66,7 +66,7 @@ const App = () => {
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="send/select" element={<CoinsSelectorPage />} />
-
+                <Route path="receipt" element={<ReceiptPage />} />
                 <Route path="stake" element={<StakePage />} />
                 {process.env.NODE_ENV === 'development' ? (
                     <Route path="stake-new" element={<StakeNew />} />
@@ -75,7 +75,6 @@ const App = () => {
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}
                 />
-                <Route path="receipt" element={<ReceiptPage />} />
             </Route>
             <Route path="welcome" element={<WelcomePage />} />
             <Route path="/initialize" element={<InitializePage />}>

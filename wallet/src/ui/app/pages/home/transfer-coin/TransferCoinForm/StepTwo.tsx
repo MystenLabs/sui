@@ -10,7 +10,9 @@ import BottomMenuLayout, {
     Content,
     Menu,
 } from '_app/shared/bottom-menu-layout';
+import Button from '_app/shared/button';
 import AddressInput from '_components/address-input';
+import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { DEFAULT_GAS_BUDGET_FOR_TRANSFER } from '_redux/slices/sui-objects/Coin';
 
@@ -53,8 +55,11 @@ function StepTwo({
         <Form className={st.container} autoComplete="off" noValidate={true}>
             <BottomMenuLayout>
                 <Content>
+                    <div className={st.labelDirection}>
+                        Enter or search the address of the recepient below to
+                        start sending coins.
+                    </div>
                     <div className={cl(st.group, st.address)}>
-                        <label className={st.label}>To:</label>
                         <Field
                             component={AddressInput}
                             name="to"
@@ -77,30 +82,44 @@ function StepTwo({
                             <span>{coinSymbol}</span>
                         </div>
 
-                        <div className={cl(st.txFees, st.details)}>
-                            <div className={st.txInfoLabel}>Gas Fee</div>
-                            <div className={st.walletInfoValue}>
-                                40 {coinSymbol}
+                        <div className={st.details}>
+                            <div className={st.txFees}>
+                                <div className={st.txInfoLabel}>Gas Fee</div>
+                                <div className={st.walletInfoValue}>
+                                    {DEFAULT_GAS_BUDGET_FOR_TRANSFER}{' '}
+                                    {coinSymbol}
+                                </div>
                             </div>
-                        </div>
 
-                        <div className={st.txDate}>
-                            <div className={st.txInfoLabel}>Total Amount</div>
-                            <div className={st.walletInfoValue}>
-                                {totalAmount} {coinSymbol}
+                            <div className={st.txDate}>
+                                <div className={st.txInfoLabel}>
+                                    Total Amount
+                                </div>
+                                <div className={st.walletInfoValue}>
+                                    {totalAmount} {coinSymbol}
+                                </div>
                             </div>
                         </div>
                     </div>
                 </Content>
                 <Menu stuckClass={st.shadow}>
                     <div className={cl(st.group, st.cta)}>
-                        <button
+                        <Button
                             type="submit"
                             disabled={!isValid || isSubmitting}
-                            className="btn"
+                            mode="primary"
+                            className={st.btn}
                         >
-                            {isSubmitting ? <LoadingIndicator /> : 'Send'}
-                        </button>
+                            {isSubmitting ? (
+                                <LoadingIndicator />
+                            ) : (
+                                'Send Coins Now'
+                            )}
+                            <Icon
+                                icon={SuiIcons.ArrowLeft}
+                                className={cl(st.arrowLeft)}
+                            />
+                        </Button>
                     </div>
                 </Menu>
             </BottomMenuLayout>
