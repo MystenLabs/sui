@@ -27,7 +27,7 @@ jobs:
           node-version: "16"
           cache: "pnpm"
       - name: Install dependencies
-        run: pnpm install
+        run: pnpm install --frozen-lockfile
       - name: Test
         run: pnpm --filter @mysten/sui.js test
       - name: Build
