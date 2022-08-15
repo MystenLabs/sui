@@ -10,7 +10,12 @@ import {
 } from 'react';
 
 import { Network } from './utils/api/DefaultRpcClient';
-import { IS_LOCAL_ENV, IS_STAGING_ENV, CURRENT_ENV } from './utils/envUtil';
+import {
+    IS_LOCAL_ENV,
+    IS_STAGING_ENV,
+    CURRENT_ENV,
+    IS_TESTNET_ENV,
+} from './utils/envUtil';
 
 const LOCALSTORE_RPC_KEY = CURRENT_ENV + 'sui-explorer-rpc';
 const LOCALSTORE_RPC_TIME_KEY = CURRENT_ENV + 'sui-explorer-rpc-lastset';
@@ -53,7 +58,7 @@ export function useNetwork(): [
         // null or was set a long time ago, then instead use website's default value:
         defaultNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
         if (!defaultNetwork || wasNetworkSetLongTimeAgo()) {
-            defaultNetwork = IS_STAGING_ENV ? Network.Staging : Network.Devnet;
+            defaultNetwork = getDefaultNetwork();
             window.localStorage.setItem(LOCALSTORE_RPC_KEY, defaultNetwork);
         }
     }
@@ -66,4 +71,13 @@ export function useNetwork(): [
     }, [network]);
 
     return [network, setNetwork];
+}
+
+function getDefaultNetwork(): Network {
+    if (IS_STAGING_ENV) {
+        return Network.Staging;
+    } else if (IS_TESTNET_ENV) {
+        return Network.Testnet;
+    }
+    return Network.Devnet;
 }

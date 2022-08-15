@@ -88,6 +88,12 @@ export default function NetworkSelect() {
                     <h2>Choose a Network</h2>
                     <div>
                         <div
+                            onClick={chooseNetwork(Network.Testnet)}
+                            className={networkStyle(Network.Testnet)}
+                        >
+                            Testnet
+                        </div>
+                        <div
                             onClick={chooseNetwork(Network.Devnet)}
                             className={networkStyle(Network.Devnet)}
                         >

@@ -5,12 +5,14 @@ export enum Network {
     Local = 'Local',
     Devnet = 'Devnet',
     Staging = 'Staging',
+    Testnet = 'Testnet',
 }
 
 const ENDPOINTS = {
     [Network.Local]: 'http://127.0.0.1:9000',
     [Network.Devnet]: 'https://fullnode.devnet.sui.io:443',
     [Network.Staging]: 'https://fullnode.staging.sui.io:443',
+    [Network.Testnet]: 'https://fullnode.testnet.sui.io:443',
 };
 
 export function getEndpoint(network: Network | string): string {

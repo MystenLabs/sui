@@ -8,12 +8,17 @@ import ReactDOM from 'react-dom';
 import { BrowserRouter as Router } from 'react-router-dom';
 
 import App from './app/App';
-import { CURRENT_ENV, IS_PROD_ENV, IS_STAGING_ENV } from './utils/envUtil';
+import {
+    CURRENT_ENV,
+    IS_DEVNET_ENV,
+    IS_STAGING_ENV,
+    IS_TESTNET_ENV,
+} from './utils/envUtil';
 import reportWebVitals from './utils/reportWebVitals';
 
 import './index.css';
 
-if (IS_STAGING_ENV || IS_PROD_ENV) {
+if (IS_STAGING_ENV || IS_DEVNET_ENV || IS_TESTNET_ENV) {
     Sentry.init({
         dsn: 'https://e4251274d1b141d7ba272103fa0f8d83@o1314142.ingest.sentry.io/6564988',
         integrations: [new BrowserTracing()],
