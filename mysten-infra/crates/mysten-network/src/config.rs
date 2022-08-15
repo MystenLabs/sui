@@ -5,7 +5,7 @@ use crate::{
     client::{connect_lazy_with_config, connect_with_config},
     server::ServerBuilder,
 };
-use anyhow::Result;
+use eyre::Result;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;

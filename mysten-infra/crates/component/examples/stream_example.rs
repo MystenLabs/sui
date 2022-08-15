@@ -3,9 +3,9 @@
 
 extern crate component;
 
-use anyhow::anyhow;
 use async_trait::async_trait;
 use component::{IrrecoverableError, Manageable, Supervisor};
+use eyre::eyre;
 use std::cmp::min;
 use std::sync::Once;
 use tokio::sync::mpsc::Sender;
@@ -39,12 +39,12 @@ impl MockTcpStream {
 
     /// This function will fail on the first call and then succeed on preceding calls to create
     /// a situation where we have an irrecoverable error.
-    fn mock_read(&self, buf: &mut [u8]) -> Result<usize, anyhow::Error> {
+    fn mock_read(&self, buf: &mut [u8]) -> Result<usize, eyre::Report> {
         // failure should happen once
         unsafe {
             if SHOULD_FAIL {
                 fix();
-                return Result::Err(anyhow!("Could not read from stream."));
+                return Result::Err(eyre!("Could not read from stream."));
             }
         }
 
@@ -71,7 +71,7 @@ impl MockTcpStreamComponent {
     /// component panics without a user caught irrecoverable error, a descriptive error message and/
     /// or stacktrace can be forwarded to the supervisor.
     pub async fn listen(
-        tx_irrecoverable: Sender<anyhow::Error>,
+        tx_irrecoverable: Sender<eyre::Report>,
         rx_cancellation: oneshotReceiver<()>,
     ) {
         // Initialize the concrete type
@@ -82,7 +82,7 @@ impl MockTcpStreamComponent {
             match m_tcp.mock_read(&mut buf) {
                 Ok(_) => {} // process
                 Err(_) => {
-                    let e = anyhow!("missing something required");
+                    let e = eyre!("missing something required");
                     tx_irrecoverable
                         .send(e)
                         .await
@@ -116,7 +116,7 @@ impl Manageable for MockTcpStreamComponent {
     /// should be constantly running.
     async fn start(
         &self,
-        tx_irrecoverable: Sender<anyhow::Error>,
+        tx_irrecoverable: Sender<eyre::Report>,
         rx_cancellation: oneshotReceiver<()>,
     ) -> tokio::task::JoinHandle<()> {
         println!("starting component task");
@@ -129,14 +129,14 @@ impl Manageable for MockTcpStreamComponent {
     fn handle_irrecoverable(
         &mut self,
         irrecoverable: IrrecoverableError,
-    ) -> Result<(), anyhow::Error> {
+    ) -> Result<(), eyre::Report> {
         println!("Received irrecoverable error: {irrecoverable}");
         Ok(())
     }
 }
 
 #[tokio::main]
-pub async fn main() -> Result<(), anyhow::Error> {
+pub async fn main() -> Result<(), eyre::Report> {
     // Create a component
     let stream_component = MockTcpStreamComponent {};
 
