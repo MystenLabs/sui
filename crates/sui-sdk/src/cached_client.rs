@@ -12,11 +12,11 @@ use move_core_types::language_storage::{StructTag, TypeTag};
 use tokio::sync::RwLock;
 
 use sui_json_rpc_types::{
-    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, SuiObjectInfo,
-    SuiParsedObject, SuiTransactionResponse,
+    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse,
+    SuiExecuteTransactionResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
 };
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::messages::Transaction;
+use sui_types::messages::{ExecuteTransactionRequestType, Transaction};
 use sui_types::object::{Data, Object, ObjectFormatOptions};
 
 use crate::{ClientCache, QuorumDriver, QuorumDriverImpl, ReadApi, ReadApiImpl, ResolverWrapper};
@@ -33,14 +33,20 @@ impl ReadApi for CachedReadApi {
         &self,
         address: SuiAddress,
     ) -> anyhow::Result<Vec<SuiObjectInfo>> {
-        self.read_api.get_objects_owned_by_address(address).await
+        let objects = self.read_api.get_objects_owned_by_address(address).await?;
+        let orefs = objects.iter().map(|oref| oref.to_object_ref()).collect();
+        self.state.write().await.update_refs(orefs);
+        Ok(objects)
     }
 
     async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
     ) -> anyhow::Result<Vec<SuiObjectInfo>> {
-        self.read_api.get_objects_owned_by_object(object_id).await
+        let objects = self.read_api.get_objects_owned_by_object(object_id).await?;
+        let orefs = objects.iter().map(|oref| oref.to_object_ref()).collect();
+        self.state.write().await.update_refs(orefs);
+        Ok(objects)
     }
 
     async fn get_parsed_object(
@@ -50,6 +56,7 @@ impl ReadApi for CachedReadApi {
         let response = self.get_object(object_id).await?;
         self.parse_object_response(response).await
     }
+
     async fn get_object(&self, object_id: ObjectID) -> anyhow::Result<GetRawObjectDataResponse> {
         let response = self.state.read().await.get_object(object_id).cloned();
         Ok(if let Some(response) = response {
@@ -210,5 +217,15 @@ impl QuorumDriver for CachedQuorumDriver {
             .collect::<Vec<_>>();
         self.state.write().await.update_refs(all_changes);
         Ok(response)
+    }
+
+    async fn execute_transaction_by_fullnode(
+        &self,
+        tx: Transaction,
+        request_type: ExecuteTransactionRequestType,
+    ) -> anyhow::Result<SuiExecuteTransactionResponse> {
+        self.quorum_driver
+            .execute_transaction_by_fullnode(tx, request_type)
+            .await
     }
 }

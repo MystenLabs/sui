@@ -401,7 +401,11 @@ impl SuiClientCommands {
 
             SuiClientCommands::SyncClientState { address } => {
                 let address = address.unwrap_or(context.active_address()?);
-                context.gateway.sync_client_state(address).await?;
+                context
+                    .gateway
+                    .wallet_sync_api()
+                    .sync_account_state(address)
+                    .await?;
                 SuiClientCommandResult::SyncClientState
             }
             SuiClientCommands::NewAddress => {

@@ -61,7 +61,8 @@ impl WalletClient {
 
     pub async fn sync_account_state(&self) -> Result<(), anyhow::Error> {
         self.get_gateway()
-            .sync_client_state(self.get_wallet_address())
+            .wallet_sync_api()
+            .sync_account_state(self.get_wallet_address())
             .await
     }
 

@@ -13,13 +13,11 @@ use jsonrpsee::core::client::Subscription;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use move_bytecode_utils::module_cache::SyncModuleCache;
-use move_core_types::identifier::Identifier;
-use move_core_types::language_storage::{StructTag, TypeTag};
-use rpc_types::SuiExecuteTransactionResponse;
 use serde::Deserialize;
 use serde::Serialize;
 use tokio::sync::RwLock;
 
+use rpc_types::SuiExecuteTransactionResponse;
 pub use sui_config::gateway;
 use sui_config::gateway::GatewayConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
@@ -38,9 +36,7 @@ use sui_json_rpc_types::{
 };
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::crypto::SuiSignature;
 use sui_types::messages::Transaction;
-use sui_types::sui_serde::Base64;
 use types::messages::ExecuteTransactionRequestType;
 
 // re-export essential sui crates
@@ -54,12 +50,12 @@ pub mod crypto;
 mod transaction_builder;
 
 pub struct SuiClient {
-    api: Arc<SuiClientApi>,
     transaction_builder: TransactionBuilder,
     read_api: Arc<dyn ReadApi + Send + Sync>,
     full_node_api: FullNodeApi,
     event_api: EventApi,
     quorum_driver: Box<dyn QuorumDriver + Sync + Send>,
+    wallet_sync_api: WalletSyncApi,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -99,17 +95,16 @@ impl SuiClient {
 
         let full_node_api = FullNodeApi(api.clone());
         let event_api = EventApi(api.clone());
-        let transaction_builder = TransactionBuilder {
-            read_api: read_api.clone(),
-        };
+        let transaction_builder = TransactionBuilder(read_api.clone());
+        let wallet_sync_api = WalletSyncApi(api);
 
         SuiClient {
-            api,
             transaction_builder,
             read_api,
             full_node_api,
             event_api,
             quorum_driver,
+            wallet_sync_api,
         }
     }
 
@@ -129,17 +124,16 @@ impl SuiClient {
 
         let full_node_api = FullNodeApi(api.clone());
         let event_api = EventApi(api.clone());
-        let transaction_builder = TransactionBuilder {
-            read_api: read_api.clone(),
-        };
+        let transaction_builder = TransactionBuilder(read_api.clone());
+        let wallet_sync_api = WalletSyncApi(api);
 
         SuiClient {
-            api,
             transaction_builder,
             read_api,
             full_node_api,
             event_api,
             quorum_driver,
+            wallet_sync_api,
         }
     }
 }
@@ -352,6 +346,11 @@ impl EventApi {
 #[async_trait]
 pub trait QuorumDriver {
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<SuiTransactionResponse>;
+    async fn execute_transaction_by_fullnode(
+        &self,
+        tx: Transaction,
+        request_type: ExecuteTransactionRequestType,
+    ) -> anyhow::Result<SuiExecuteTransactionResponse>;
 }
 
 pub struct QuorumDriverImpl {
@@ -361,40 +360,23 @@ pub struct QuorumDriverImpl {
 #[async_trait]
 impl QuorumDriver for QuorumDriverImpl {
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<SuiTransactionResponse> {
-        Ok(match &self {
-            Self::Http(c) => {
+        Ok(match &*self.api {
+            SuiClientApi::Rpc(c, _) => {
                 let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
                 RpcGatewayApiClient::execute_transaction(c, tx_bytes, flag, signature, pub_key)
                     .await?
             }
-            Self::Ws(c) => {
-                let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
-                RpcGatewayApiClient::execute_transaction(c, tx_bytes, flag, signature, pub_key)
-                    .await?
-            }
-            Self::Embedded(c) => c.execute_transaction(tx).await?,
+            SuiClientApi::Embedded(c) => c.execute_transaction(tx).await?,
         })
     }
 
-    pub async fn execute_transaction_by_fullnode(
+    async fn execute_transaction_by_fullnode(
         &self,
         tx: Transaction,
         request_type: ExecuteTransactionRequestType,
     ) -> anyhow::Result<SuiExecuteTransactionResponse> {
-        Ok(match &self {
-            Self::Http(c) => {
-                let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
-                QuorumDriverApiClient::execute_transaction(
-                    c,
-                    tx_bytes,
-                    flag,
-                    signature,
-                    pub_key,
-                    request_type,
-                )
-                .await?
-            }
-            Self::Ws(c) => {
+        Ok(match &*self.api {
+            SuiClientApi::Rpc(c, _) => {
                 let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
                 QuorumDriverApiClient::execute_transaction(
                     c,
@@ -407,8 +389,20 @@ impl QuorumDriver for QuorumDriverImpl {
                 .await?
             }
             // TODO do we want to support an embedded quorum driver?
-            Self::Embedded(_c) => unimplemented!(),
+            SuiClientApi::Embedded(_c) => unimplemented!(),
         })
+    }
+}
+
+pub struct WalletSyncApi(Arc<SuiClientApi>);
+
+impl WalletSyncApi {
+    pub async fn sync_account_state(&self, address: SuiAddress) -> anyhow::Result<()> {
+        match &*self.0 {
+            SuiClientApi::Rpc(c, _) => c.sync_account_state(address).await?,
+            SuiClientApi::Embedded(c) => c.sync_account_state(address).await?,
+        }
+        Ok(())
     }
 }
 
@@ -428,12 +422,8 @@ impl SuiClient {
     pub fn quorum_driver(&self) -> &(dyn QuorumDriver + Sync + Send) {
         &*self.quorum_driver
     }
-    pub async fn sync_client_state(&self, address: SuiAddress) -> anyhow::Result<()> {
-        match &*self.api {
-            SuiClientApi::Rpc(c, _) => c.sync_account_state(address).await?,
-            SuiClientApi::Embedded(c) => c.sync_account_state(address).await?,
-        }
-        Ok(())
+    pub fn wallet_sync_api(&self) -> &WalletSyncApi {
+        &self.wallet_sync_api
     }
 }
 

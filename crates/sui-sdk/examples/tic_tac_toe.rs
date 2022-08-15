@@ -69,7 +69,10 @@ impl TicTacToe {
         let player_o = player_o.unwrap_or_else(|| self.keystore.addresses()[1]);
 
         // Force a sync of signer's state in gateway.
-        self.client.sync_client_state(player_x).await?;
+        self.client
+            .wallet_sync_api()
+            .sync_account_state(player_x)
+            .await?;
 
         // Create a move call transaction using the TransactionBuilder API.
         let create_game_call = self
