@@ -31,4 +31,4 @@ jobs:
       - name: Test
         run: pnpm --filter @mysten/sui.js test
       - name: Build
-        run: yarn --filter @mysten/sui.js build
+        run: pnpm --filter @mysten/sui.js build
