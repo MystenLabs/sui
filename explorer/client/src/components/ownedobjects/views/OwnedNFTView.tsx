@@ -1,19 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { trimStdLibPrefix, truncate } from '../../../utils/stringUtils';
+import { trimStdLibPrefix, alttextgen } from '../../../utils/stringUtils';
 import DisplayBox from '../../displaybox/DisplayBox';
 import Longtext from '../../longtext/Longtext';
 import { type DataType } from '../OwnedObjectConstants';
 
-import type BN from 'bn.js';
-
 import styles from '../styles/OwnedObjects.module.css';
 
 export default function OwnedNFTView({ results }: { results: DataType }) {
-    const alttextgen = (value: number | string | boolean | BN): string =>
-        truncate(String(value), 19);
-
     const lastRowHas2Elements = (itemList: any[]): boolean =>
         itemList.length % 3 === 2;
 
