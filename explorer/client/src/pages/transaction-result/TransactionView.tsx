@@ -23,6 +23,7 @@ import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
 import { type Link, TxAddresses } from '../../components/table/TableCard';
 import Tabs from '../../components/tabs/Tabs';
+import { presentBN } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 import TxResultHeader from './TxResultHeader';
@@ -379,7 +380,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 <div className={styles.amountbox}>
                                     <div>Amount</div>
                                     <div>
-                                        {amount ? amount.toString() : 0}
+                                        {amount ? presentBN(amount) : 0}
                                         <sup>SUI</sup>
                                     </div>
                                 </div>

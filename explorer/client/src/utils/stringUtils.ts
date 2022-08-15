@@ -95,6 +95,9 @@ export async function genFileTypeMsg(
 export const alttextgen = (value: number | string | boolean | BN): string =>
     truncate(String(value), 19);
 
+export const presentBN = (amount: BN) =>
+    amount.toString().replace(/(\d)(?=(\d{3})+$)/g, '$1,');
+
 /* Currently unused but potentially useful:
  *
  * export const isValidHttpUrl = (url: string) => {
