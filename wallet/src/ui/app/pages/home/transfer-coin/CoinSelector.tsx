@@ -21,8 +21,7 @@ import st from './CoinSelector.module.scss';
 
 function CoinsSelectorPage() {
     const [searchParams] = useSearchParams();
-    const coinType =
-        useMemo(() => searchParams.get('type'), [searchParams]) || GAS_TYPE_ARG;
+    const coinType = searchParams.get('type') || GAS_TYPE_ARG;
     const intl = useIntl();
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
 

@@ -91,7 +91,7 @@ function StepTwo({
                                 </div>
                             </div>
 
-                            <div className={st.txDate}>
+                            <div className={st.txFees}>
                                 <div className={st.txInfoLabel}>
                                     Total Amount
                                 </div>

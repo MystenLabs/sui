@@ -56,15 +56,13 @@ function AddressInput<FormValues>({
                 <TextareaAutosize
                     maxRows={2}
                     minRows={1}
-                    {...{
-                        disabled,
-                        placeholder,
-                        className,
-                        onBlur,
-                        value: formattedValue,
-                        name,
-                        onChange: handleOnChange,
-                    }}
+                    disabled={disabled}
+                    placeholder={placeholder}
+                    value={formattedValue}
+                    onChange={handleOnChange}
+                    onBlur={onBlur}
+                    className={className}
+                    name={name}
                 />
             </div>
             <div

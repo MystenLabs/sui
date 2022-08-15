@@ -92,6 +92,8 @@
     justify-content: space-between;
     @include utils.typography('table/text-lg');
 
+    line-height: 17px;
+
     .tx-info-label {
         color: colors.$gray-80;
     }
@@ -111,11 +113,11 @@
     .tx-info {
         border-top: 1px solid colors.$gray-50;
         border-bottom: 1px solid colors.$gray-50;
-        padding: 10px 0;
+        padding: 20px 0;
         display: flex;
         flex-flow: column;
-        gap: 10px;
-        margin: 10px;
+        gap: 15px;
+        margin: 20px 10px;
         word-break: break-all;
         margin-bottom: 0;
 
@@ -142,7 +144,7 @@
                 position: absolute;
                 margin-left: 5px;
                 margin-top: 4px;
-                height: 20px;
+                height: 25px;
                 border: 1px dashed colors.$sui-steel-blue;
                 border-right: none;
                 border-bottom: none;
@@ -183,8 +185,8 @@
 
             .tx-info-label {
                 &::after {
-                    height: 30px;
-                    margin-top: -30px;
+                    height: 40px;
+                    margin-top: -40px;
                 }
 
                 &.failed::before {
@@ -282,5 +284,11 @@
         color: colors.$gray-75;
 
         @include utils.typography('table/text-lg');
+    }
+
+    .wallet-info-value {
+        @include utils.typography('page-title');
+
+        color: colors.$gray-100;
     }
 }
