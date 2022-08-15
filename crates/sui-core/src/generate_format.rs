@@ -28,7 +28,10 @@ use sui_types::{
 use typed_store::rocks::TypedStoreError;
 
 fn get_registry() -> Result<Registry> {
-    let mut tracer = Tracer::new(TracerConfig::default());
+    let config = TracerConfig::default()
+        .record_samples_for_structs(true)
+        .record_samples_for_newtype_structs(true);
+    let mut tracer = Tracer::new(config);
     let mut samples = Samples::new();
     // 1. Record samples for types with custom deserializers.
     // We want to call

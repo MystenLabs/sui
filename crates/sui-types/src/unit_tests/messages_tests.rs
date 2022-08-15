@@ -188,12 +188,13 @@ fn test_certificates() {
 
 #[test]
 fn test_new_with_signatures() {
+    let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
     let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
     for _ in 0..5 {
         let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
-        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
+        let sig = AuthoritySignature::new(&message, &sec);
         signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
         authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
     }
@@ -217,6 +218,12 @@ fn test_new_with_signatures() {
             .unwrap(),
         alphabetical_authorities
     );
+
+    let (mut obligation, idx) = get_obligation_input(&message);
+    assert!(quorum
+        .add_to_verification_obligation(&committee, &mut obligation, idx)
+        .is_ok());
+    assert!(obligation.verify_all().is_ok());
 }
 
 #[test]

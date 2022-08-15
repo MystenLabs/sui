@@ -27,6 +27,7 @@ use sui_swarm::memory::Swarm;
 use sui_types::crypto::{KeypairTraits, SuiKeyPair};
 use tracing::info;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
 #[clap(
     name = "sui",

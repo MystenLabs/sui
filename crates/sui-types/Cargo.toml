@@ -11,7 +11,7 @@ anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
 itertools = "0.10.3"
 once_cell = "1.11.0"
-rand = "0.7.3"
+rand = "0.8.5"
 serde = { version = "1.0.141", features = ["derive"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde"] }
 serde-name = "0.2.1"
@@ -20,7 +20,7 @@ sha3 = "0.10.2"
 thiserror = "1.0.31"
 tracing = "0.1"
 hex = "0.4.3"
-serde_bytes = "0.11.6"
+serde_bytes = "0.11.7"
 serde_json = "1.0.83"
 serde_with = "1.14.0"
 signature = "1.6.0"
@@ -38,9 +38,6 @@ roaring = "0.9.0"
 enum_dispatch = "^0.3"
 eyre = "0.6.8"
 
-# This version is incompatible with ed25519-dalek
-rand_latest = { version = "0.8.5", package = "rand" }
-
 name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
 
@@ -51,8 +48,8 @@ move-disassembler = { git = "https://github.com/move-language/move", rev = "7907
 move-ir-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "executor" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "crypto" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "6a28e2ff64e4a567d7aee599c3774893598cb133", package = "executor" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "6a28e2ff64e4a567d7aee599c3774893598cb133", package = "crypto" }
 
 workspace-hack = { path = "../workspace-hack"}
 

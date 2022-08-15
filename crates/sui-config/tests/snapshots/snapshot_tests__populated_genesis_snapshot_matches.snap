@@ -3,7 +3,7 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: genesis.validator_set()
 ---
 - name: "0"
-  public-key: IP26ybELdYe7p7W8FjvOaeeW1x5O1EwQ/LRIhon3oUQ=
+  public-key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
   stake: 1
   delegation: 0
   gas-price: 1
