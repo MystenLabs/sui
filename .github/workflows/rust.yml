@@ -41,16 +41,25 @@ jobs:
 
   license-check:
     name: license-check
-    runs-on: [ubuntu-latest]
+    runs-on: [ubuntu-ghcloud]
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
+
       - name: Install cargo-hakari, and cache the binary
-        uses: baptiste0928/cargo-install@v1
+
+        uses: actions-rs/install@v0.1
         with:
           crate: cargo-hakari
-          locked: true
+          version: latest
+          use-tool-cache: true
+
+      #  uses: baptiste0928/cargo-install@v1
+      #  with:
+      #    crate: cargo-hakari
+      #    locked: true
+
       - run: scripts/license_check.sh
       - run: cargo xlint
       - run: |
@@ -74,7 +83,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: cargo test
         run: |
-         cargo nextest run --all-features --profile ci
+          cargo nextest run --all-features --profile ci
       - name: Doctests
         run: |
           cargo test --doc --all-features
