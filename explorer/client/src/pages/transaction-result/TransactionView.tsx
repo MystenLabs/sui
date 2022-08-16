@@ -274,7 +274,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     const validatorSignatureData = {
         title: 'Validator Signatures',
         content: txdata.authSignInfo.signature.map((validatorSign) => ({
-            value: validatorSign,
+            value: Object.values(validatorSign).join(''),
             monotypeClass: true,
         })),
     };
