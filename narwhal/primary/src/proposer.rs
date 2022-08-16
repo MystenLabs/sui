@@ -137,7 +137,7 @@ impl Proposer {
     // Main loop listening to incoming messages.
     /// Update the last leader certificate. This is only relevant in partial synchrony.
     fn update_leader(&mut self) -> bool {
-        let leader_name = self.committee.leader(self.round as usize);
+        let leader_name = self.committee.leader(self.round);
         self.last_leader = self
             .last_parents
             .iter()
