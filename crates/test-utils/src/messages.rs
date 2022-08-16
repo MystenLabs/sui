@@ -51,7 +51,6 @@ pub async fn get_account_and_gas_coins(
     Ok(res)
 }
 
-
 pub async fn get_gas_objects_with_wallet_context(
     context: &WalletContext,
     address: SuiAddress,
