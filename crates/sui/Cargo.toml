@@ -58,7 +58,7 @@ jemalloc-ctl = "^0.5"
 
 [dev-dependencies]
 tempfile = "3.3.0"
-futures = "0.3.21"
+futures = "0.3.23"
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e"}
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e"} 
 jsonrpsee = { version = "0.15.1", features = ["full"] }
