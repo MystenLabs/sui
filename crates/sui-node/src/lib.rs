@@ -234,11 +234,8 @@ impl SuiNode {
                             now.elapsed()
                         );
                     }
-                    (
-                        Some(active_authority.spawn_node_sync_process().await),
-                        None,
-                        None,
-                    )
+                    active_authority.respawn_node_sync_process().await;
+                    (None, None, None)
                 }
             } else {
                 (None, None, None)
