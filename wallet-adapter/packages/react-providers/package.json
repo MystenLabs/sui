@@ -14,7 +14,7 @@
     "react-dom": "*"
   },
   "dependencies": {
-    "sui-base-wallet-adapter": "file:../adapters/base-adapter"
+    "sui-base-wallet-adapter": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^4.7.4",

@@ -299,7 +299,7 @@ pub struct AuthorityState {
 
     indexes: Option<Arc<IndexStore>>,
 
-    pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
+    pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     pub event_handler: Option<Arc<EventHandler>>,
 
@@ -894,7 +894,9 @@ impl AuthorityState {
                                 .await?
                         };
                         let layout = match request_layout {
-                            Some(format) => object.get_layout(format, &self.module_cache)?,
+                            Some(format) => {
+                                object.get_layout(format, self.module_cache.as_ref())?
+                            }
                             None => None,
                         };
 
@@ -1073,7 +1075,7 @@ impl AuthorityState {
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
-            module_cache: SyncModuleCache::new(ResolverWrapper(store.clone())),
+            module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone()))),
             event_handler,
             checkpoints,
             epoch_store,
@@ -1325,8 +1327,10 @@ impl AuthorityState {
                             })
                         }
                         Some(object) => {
-                            let layout = object
-                                .get_layout(ObjectFormatOptions::default(), &self.module_cache)?;
+                            let layout = object.get_layout(
+                                ObjectFormatOptions::default(),
+                                self.module_cache.as_ref(),
+                            )?;
                             Ok(ObjectRead::Exists(obj_ref, object, layout))
                         }
                     }

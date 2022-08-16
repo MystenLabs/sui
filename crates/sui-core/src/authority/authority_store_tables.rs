@@ -6,12 +6,13 @@ use super::{
     *,
 };
 use narwhal_executor::ExecutionIndices;
+use rocksdb::Options;
+use sui_storage::default_db_options;
 use sui_types::base_types::{ExecutionDigests, SequenceNumber};
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use typed_store::rocks::DBMap;
 use typed_store::traits::DBMapTableUtil;
 use typed_store_macros::DBMapUtils;
-
 #[derive(DBMapUtils)]
 pub struct AuthorityStoreTables<S> {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
@@ -20,7 +21,7 @@ pub struct AuthorityStoreTables<S> {
     ///
     /// Note that while this map can store all versions of an object, in practice it only stores
     /// the most recent version.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "objects_table_default_config"]
     pub(crate) objects: DBMap<ObjectKey, Object>,
 
     /// This is a an index of object references to currently existing objects, indexed by the
@@ -30,14 +31,14 @@ pub struct AuthorityStoreTables<S> {
     pub(crate) owner_index: DBMap<(Owner, ObjectID), ObjectInfo>,
 
     /// This is map between the transaction digest and transactions found in the `transaction_lock`.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "transactions_table_default_config"]
     pub(crate) transactions: DBMap<TransactionDigest, TransactionEnvelope<S>>,
 
     /// This is a map between the transaction digest and the corresponding certificate for all
     /// certificates that have been successfully processed by this authority. This set of certificates
     /// along with the genesis allows the reconstruction of all other state, and a full sync to this
     /// authority.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "certificates_table_default_config"]
     pub(crate) certificates: DBMap<TransactionDigest, CertifiedTransaction>,
 
     /// The pending execution table holds a sequence of transactions that are present
@@ -60,7 +61,7 @@ pub struct AuthorityStoreTables<S> {
     /// (ie in `certificates`) and the effects its execution has on the authority state. This
     /// structure is used to ensure we do not double process a certificate, and that we can return
     /// the same response for any call after the first (ie. make certificate processing idempotent).
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "effects_table_default_config"]
     pub(crate) effects: DBMap<TransactionDigest, TransactionEffectsEnvelope<S>>,
 
     /// Hold the lock for shared objects. These locks are written by a single task: upon receiving a valid
@@ -92,4 +93,18 @@ pub struct AuthorityStoreTables<S> {
     /// by a single process acting as consensus (light) client. It is used to ensure the authority processes
     /// every message output by consensus (and in the right order).
     pub(crate) last_consensus_index: DBMap<u64, ExecutionIndices>,
+}
+
+// These functions are used to initialize the DB tables
+fn objects_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn transactions_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn certificates_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn effects_table_default_config() -> Options {
+    default_db_options(None, None).1
 }

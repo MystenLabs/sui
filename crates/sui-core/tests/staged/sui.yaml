@@ -82,7 +82,8 @@ Ed25519KeyPair:
 Ed25519PublicKey:
   NEWTYPESTRUCT: STR
 Ed25519Signature:
-  NEWTYPESTRUCT: BYTES
+  STRUCT:
+    - raw: BYTES
 EntryArgumentError:
   STRUCT:
     - argument_idx: U8

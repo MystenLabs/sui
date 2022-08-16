@@ -13,6 +13,7 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::{collections::HashSet, path::Path, sync::Arc};
+use sui_storage::default_db_options;
 use sui_types::messages_checkpoint::CheckpointProposal;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -93,7 +94,7 @@ pub enum FragmentInternalError {
 pub struct CheckpointStoreTables {
     /// The list of all transaction/effects that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "transactions_to_checkpoint_table_default_config"]
     pub transactions_to_checkpoint:
         DBMap<ExecutionDigests, (CheckpointSequenceNumber, TxSequenceNumber)>,
 
@@ -106,11 +107,11 @@ pub struct CheckpointStoreTables {
     /// The set of transaction/effects this authority has processed but have not yet been
     /// included in a checkpoint, and their sequence number in the local sequence
     /// of this authority.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "extra_transactions_table_default_config"]
     pub extra_transactions: DBMap<ExecutionDigests, TxSequenceNumber>,
 
     /// The list of checkpoint, along with their authentication information
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "checkpoints_table_default_config"]
     pub checkpoints: DBMap<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
 
     // --- Logic related to fragments on the way to making checkpoints
@@ -118,7 +119,7 @@ pub struct CheckpointStoreTables {
     // A list of own fragments indexed by the other node that the fragment connects
     // to. These are used for the local node to potentially reconstruct the full
     // transaction set.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "local_fragments_table_default_config"]
     pub local_fragments: DBMap<AuthorityName, CheckpointFragment>,
 
     /// Store the fragments received in order, the counter is purely internal,
@@ -128,8 +129,27 @@ pub struct CheckpointStoreTables {
     pub fragments: DBMap<ExecutionIndices, CheckpointFragment>,
 
     /// A single entry table to store locals.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "locals_table_default_config"]
     pub locals: DBMap<DBLabel, CheckpointLocals>,
+}
+
+// These functions are used to initialize the DB tables
+fn transactions_to_checkpoint_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn extra_transactions_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+
+fn checkpoints_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn local_fragments_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+
+fn locals_table_default_config() -> Options {
+    default_db_options(None, None).1
 }
 
 pub struct CheckpointStore {
@@ -255,7 +275,11 @@ impl CheckpointStore {
             secret,
             memory_locals: None,
             sender: None,
-            tables: CheckpointStoreTables::open_tables_read_write(path.to_path_buf(), db_options),
+            tables: CheckpointStoreTables::open_tables_read_write(
+                path.to_path_buf(),
+                db_options,
+                None,
+            ),
         };
 
         // Initialize the locals

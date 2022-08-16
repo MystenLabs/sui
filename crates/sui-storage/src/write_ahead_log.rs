@@ -176,7 +176,7 @@ where
     C: Serialize + DeserializeOwned + Debug,
 {
     pub fn new(path: PathBuf) -> Self {
-        let tables = DBWriteAheadLogTables::open_tables_read_write(path, None);
+        let tables = DBWriteAheadLogTables::open_tables_read_write(path, None, None);
 
         // Read in any digests that were left in the log, e.g. due to a crash.
         //

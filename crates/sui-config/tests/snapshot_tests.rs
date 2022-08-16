@@ -69,6 +69,7 @@ fn populated_genesis_snapshot_matches() {
         public_key: key.public().into(),
         stake: 1,
         delegation: 0,
+        gas_price: 1,
         network_address: Multiaddr::empty(),
         narwhal_primary_to_primary: Multiaddr::empty(),
         narwhal_worker_to_primary: Multiaddr::empty(),

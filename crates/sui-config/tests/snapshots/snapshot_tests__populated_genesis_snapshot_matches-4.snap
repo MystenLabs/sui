@@ -11,45 +11,46 @@ validators:
   quorum_stake_threshold: 1
   active_validators:
     - metadata:
-        sui_address: 89dca66cd6a15bc3ebaa44ceecfb58c70a032485
+        sui_address: 375741c9373ae27bde5e6b5f5cc79f074cd84587
         pubkey_bytes:
-          - 32
-          - 253
-          - 186
-          - 201
-          - 177
-          - 11
-          - 117
-          - 135
-          - 187
-          - 167
-          - 181
-          - 188
+          - 185
+          - 198
+          - 238
           - 22
-          - 59
-          - 206
-          - 105
-          - 231
-          - 150
-          - 215
-          - 30
-          - 78
-          - 212
-          - 76
-          - 16
-          - 252
-          - 180
-          - 72
-          - 134
-          - 137
-          - 247
-          - 161
+          - 48
+          - 239
+          - 62
+          - 113
+          - 17
           - 68
+          - 166
+          - 72
+          - 219
+          - 6
+          - 187
+          - 178
+          - 40
+          - 79
+          - 114
+          - 116
+          - 207
+          - 190
+          - 229
+          - 63
+          - 252
+          - 238
+          - 80
+          - 60
+          - 193
+          - 164
+          - 146
+          - 0
         name:
           - 48
         net_address: []
         next_epoch_stake: 1
         next_epoch_delegation: 0
+        next_epoch_gas_price: 1
       stake_amount: 1
       delegation: 0
       pending_stake: 0
@@ -59,48 +60,50 @@ validators:
       delegator_count: 0
       pending_delegator_count: 0
       pending_delegator_withdraw_count: 0
+      gas_price: 1
   pending_validators: []
   pending_removals: []
   next_epoch_validators:
-    - sui_address: 89dca66cd6a15bc3ebaa44ceecfb58c70a032485
+    - sui_address: 375741c9373ae27bde5e6b5f5cc79f074cd84587
       pubkey_bytes:
-        - 32
-        - 253
-        - 186
-        - 201
-        - 177
-        - 11
-        - 117
-        - 135
-        - 187
-        - 167
-        - 181
-        - 188
+        - 185
+        - 198
+        - 238
         - 22
-        - 59
-        - 206
-        - 105
-        - 231
-        - 150
-        - 215
-        - 30
-        - 78
-        - 212
-        - 76
-        - 16
-        - 252
-        - 180
-        - 72
-        - 134
-        - 137
-        - 247
-        - 161
+        - 48
+        - 239
+        - 62
+        - 113
+        - 17
         - 68
+        - 166
+        - 72
+        - 219
+        - 6
+        - 187
+        - 178
+        - 40
+        - 79
+        - 114
+        - 116
+        - 207
+        - 190
+        - 229
+        - 63
+        - 252
+        - 238
+        - 80
+        - 60
+        - 193
+        - 164
+        - 146
+        - 0
       name:
         - 48
       net_address: []
       next_epoch_stake: 1
       next_epoch_delegation: 0
+      next_epoch_gas_price: 1
 treasury_cap:
   value: 100000000000001
 storage_fund:
@@ -111,4 +114,5 @@ parameters:
   storage_gas_price: 1
 delegation_reward:
   value: 0
+reference_gas_price: 0
 

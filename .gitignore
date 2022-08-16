@@ -23,6 +23,9 @@ storage/
 # Python
 .pyc
 
+# Node.js
+node_modules
+
 # logs
 wallet.log.*
 sui.log.*

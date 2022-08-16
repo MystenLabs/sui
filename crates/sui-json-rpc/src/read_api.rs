@@ -109,7 +109,7 @@ impl RpcReadApiServer for ReadApi {
         let (cert, effects) = self.state.get_transaction(digest).await?;
         Ok(SuiTransactionResponse {
             certificate: cert.try_into()?,
-            effects: SuiTransactionEffects::try_from(effects, &self.state.module_cache)?,
+            effects: SuiTransactionEffects::try_from(effects, self.state.module_cache.as_ref())?,
             timestamp_ms: self.state.get_timestamp_ms(&digest).await?,
             parsed_data: None,
         })
