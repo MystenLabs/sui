@@ -56,7 +56,7 @@ Sui provides a gateway service that enables third parties, such as app or game d
 
 Genesis is the initial act of creating accounts and gas objects. Sui provides a `genesis` command that allows users to create and inspect the genesis object setting up the network for operation.
 
-For more information, see [Genesis](../build/cli-client.md#genesis).
+For more information, see [Genesis](../contribute/cli-client.md#genesis).
 
 ### Multi-writer objects
 
@@ -107,10 +107,10 @@ More *complex transactions* affecting objects that are shared or owned by multip
 ### Transfer
 
 A transfer is switching the owner address of a token to a new one via command in Sui. This is accomplished via the
-[Sui CLI client](../build/cli-client.md) command line interface. It is one of the more common of many commands
+[Sui CLI client](../contribute/cli-client.md) command line interface. It is one of the more common of many commands
 available in the CLI client.
 
-For more information, see [Transferring objects](../build/cli-client.md#transferring-objects).
+For more information, see [Transferring objects](../contribute/cli-client.md#transferring-objects).
 
 ### Validator
 
