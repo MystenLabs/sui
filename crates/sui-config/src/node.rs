@@ -51,6 +51,12 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_reconfig: bool,
 
+    #[serde(default)]
+    pub grpc_load_shed: Option<bool>,
+
+    #[serde(default)]
+    pub grpc_concurrency_limit: Option<usize>,
+
     pub genesis: Genesis,
 }
 
