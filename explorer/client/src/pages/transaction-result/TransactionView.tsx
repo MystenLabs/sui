@@ -11,6 +11,7 @@ import {
     getMovePackageContent,
     getObjectId,
     getTransferSuiTransaction,
+    getTransferSuiAmount,
 } from '@mysten/sui.js';
 import cl from 'classnames';
 
@@ -22,6 +23,7 @@ import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
 import { type Link, TxAddresses } from '../../components/table/TableCard';
 import Tabs from '../../components/tabs/Tabs';
+import { presentBN } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 import TxResultHeader from './TxResultHeader';
@@ -219,13 +221,14 @@ function ItemView({ data }: { data: TxItemView }) {
 
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
+    const amount = getTransferSuiAmount(txdetails);
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
     const recipient =
         getTransferObjectTransaction(txdetails) ||
         getTransferSuiTransaction(txdetails);
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
-    const TabName = `${txKindName} Details`;
+    const TabName = `Details`;
 
     const txHeaderData = {
         txId: txdata.txId,
@@ -367,18 +370,26 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 <ItemView data={typearguments} />
                             </section>
                         )}
-                        {sender && (
-                            <section
-                                className={cl([
-                                    styles.txcomponent,
-                                    styles.txsender,
-                                ])}
-                            >
-                                <div className={styles.txaddress}>
-                                    <SendReceiveView data={sendreceive} />
+                        <section
+                            className={cl([
+                                styles.txcomponent,
+                                styles.txsender,
+                            ])}
+                        >
+                            {amount !== null && (
+                                <div className={styles.amountbox}>
+                                    <div>Amount</div>
+                                    <div>
+                                        {presentBN(amount)}
+                                        <sup>SUI</sup>
+                                    </div>
                                 </div>
-                            </section>
-                        )}
+                            )}
+                            <div className={styles.txaddress}>
+                                <SendReceiveView data={sendreceive} />
+                            </div>
+                        </section>
+
                         <section
                             className={cl([
                                 styles.txcomponent,
