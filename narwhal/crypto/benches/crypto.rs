@@ -113,21 +113,21 @@ mod ed25519_benches {
                 BenchmarkId::new("Ed25519 batch verification", *size),
                 &(msg.clone(), ed_public_keys, ed_signatures),
                 |b, i| {
-                    b.iter(|| VerifyingKey::verify_batch(&i.0, &i.1[..], &i.2[..]));
+                    b.iter(|| VerifyingKey::verify_batch_empty_fail(&i.0, &i.1[..], &i.2[..]));
                 },
             );
             c.bench_with_input(
                 BenchmarkId::new("BLS12377 batch verification", *size),
                 &(msg.clone(), bls_public_keys, bls_signatures),
                 |b, i| {
-                    b.iter(|| VerifyingKey::verify_batch(&i.0, &i.1[..], &i.2[..]));
+                    b.iter(|| VerifyingKey::verify_batch_empty_fail(&i.0, &i.1[..], &i.2[..]));
                 },
             );
             c.bench_with_input(
                 BenchmarkId::new("BLS12381 batch verification", *size),
                 &(msg, blst_public_keys, blst_signatures),
                 |b, i| {
-                    b.iter(|| VerifyingKey::verify_batch(&i.0, &i.1[..], &i.2[..]));
+                    b.iter(|| VerifyingKey::verify_batch_empty_fail(&i.0, &i.1[..], &i.2[..]));
                 },
             );
         }

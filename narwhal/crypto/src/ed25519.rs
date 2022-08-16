@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use base64ct::{Base64, Encoding};
 use ed25519_consensus::{batch, VerificationKeyBytes};
+use eyre::eyre;
 use once_cell::sync::OnceCell;
 use serde::{
     de::{self, MapAccess, SeqAccess, Visitor},
@@ -76,7 +77,20 @@ impl VerifyingKey for Ed25519PublicKey {
     type Sig = Ed25519Signature;
     const LENGTH: usize = ED25519_PUBLIC_KEY_LENGTH;
 
-    fn verify_batch(msg: &[u8], pks: &[Self], sigs: &[Self::Sig]) -> Result<(), signature::Error> {
+    fn verify_batch_empty_fail(
+        msg: &[u8],
+        pks: &[Self],
+        sigs: &[Self::Sig],
+    ) -> Result<(), eyre::Report> {
+        if sigs.is_empty() {
+            return Err(eyre!("Critical Error! This behavious can signal something dangerous, and that someone may be trying to bypass signature verification through providing empty batches."));
+        }
+        if sigs.len() != pks.len() {
+            return Err(eyre!(
+                "Mismatch between number of signatures and public keys provided"
+            ));
+        }
+
         let mut batch = batch::Verifier::new();
 
         for i in 0..sigs.len() {
@@ -85,7 +99,7 @@ impl VerifyingKey for Ed25519PublicKey {
         }
         batch
             .verify(&mut OsRng)
-            .map_err(|_| signature::Error::new())
+            .map_err(|_| eyre!("Signature verification failed"))
     }
 }
 

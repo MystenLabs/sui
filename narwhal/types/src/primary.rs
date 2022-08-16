@@ -419,7 +419,9 @@ impl Certificate {
         let (pks, sigs): (Vec<PublicKey>, Vec<Signature>) = self.votes.iter().cloned().unzip();
         // Verify the signatures
         let certificate_digest: Digest = Digest::from(self.digest());
-        PublicKey::verify_batch(certificate_digest.as_ref(), &pks, &sigs).map_err(DagError::from)
+        PublicKey::verify_batch_empty_fail(certificate_digest.as_ref(), &pks, &sigs)
+            .map_err(|_| signature::Error::new())
+            .map_err(DagError::from)
     }
 
     pub fn round(&self) -> Round {

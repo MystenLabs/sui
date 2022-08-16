@@ -98,13 +98,17 @@ pub trait VerifyingKey:
     const LENGTH: usize;
 
     // Expected to be overridden by implementations
-    fn verify_batch(msg: &[u8], pks: &[Self], sigs: &[Self::Sig]) -> Result<(), signature::Error> {
+    fn verify_batch_empty_fail(msg: &[u8], pks: &[Self], sigs: &[Self::Sig]) -> Result<(), eyre::Report> {
+        if sigs.is_empty() {
+            return Err(eyre!("Critical Error! This behavious can signal something dangerous, and that someone may be trying to bypass signature verification through providing empty batches."));
+        }
         if pks.len() != sigs.len() {
-            return Err(signature::Error::new());
+            return Err(eyre!("Mismatch between number of signatures and public keys provided"));
         }
         pks.iter()
             .zip(sigs)
             .try_for_each(|(pk, sig)| pk.verify(msg, sig))
+            .map_err(|_| eyre!("Signature verification failed"))
     }
 }
 

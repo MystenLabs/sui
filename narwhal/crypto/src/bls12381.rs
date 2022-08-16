@@ -19,6 +19,7 @@ use crate::{
     pubkey_bytes::PublicKeyBytes,
     serde_helpers::{keypair_decode_base64, BlsSignature},
 };
+use eyre::eyre;
 use serde::{
     de::{self},
     Deserialize, Serialize,
@@ -190,10 +191,19 @@ impl VerifyingKey for BLS12381PublicKey {
 
     const LENGTH: usize = BLS_PUBLIC_KEY_LENGTH;
 
-    fn verify_batch(msg: &[u8], pks: &[Self], sigs: &[Self::Sig]) -> Result<(), signature::Error> {
+    fn verify_batch_empty_fail(
+        msg: &[u8],
+        pks: &[Self],
+        sigs: &[Self::Sig],
+    ) -> Result<(), eyre::Report> {
         let num_sigs = sigs.len();
-        if pks.len() != num_sigs {
-            return Err(signature::Error::new());
+        if sigs.is_empty() {
+            return Err(eyre!("Critical Error! This behavious can signal something dangerous, and that someone may be trying to bypass signature verification through providing empty batches."));
+        }
+        if sigs.len() != pks.len() {
+            return Err(eyre!(
+                "Mismatch between number of signatures and public keys provided"
+            ));
         }
         let mut rands: Vec<blst_scalar> = Vec::with_capacity(num_sigs);
         let mut rng = OsRng;
@@ -228,7 +238,7 @@ impl VerifyingKey for BLS12381PublicKey {
         if result == BLST_ERROR::BLST_SUCCESS {
             Ok(())
         } else {
-            Err(signature::Error::new())
+            Err(eyre!("Verification failed!"))
         }
     }
 }

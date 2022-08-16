@@ -7,7 +7,7 @@ use crate::{
         Secp256k1KeyPair, Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1PublicKeyBytes,
         Secp256k1Signature,
     },
-    traits::{EncodeDecodeBase64, KeyPair, ToFromBytes},
+    traits::{EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey},
 };
 
 use rand::{rngs::StdRng, SeedableRng as _};
@@ -156,6 +156,65 @@ fn verify_valid_signature_against_hashed_msg() {
             &signature
         )
         .is_ok());
+}
+
+fn signature_test_inputs() -> (Vec<u8>, Vec<Secp256k1PublicKey>, Vec<Secp256k1Signature>) {
+    // Make signatures.
+    let message: &[u8] = b"Hello, world!";
+    let digest = message.digest();
+    let (pubkeys, signatures): (Vec<Secp256k1PublicKey>, Vec<Secp256k1Signature>) = keys()
+        .into_iter()
+        .take(3)
+        .map(|kp| {
+            let sig = kp.sign(&digest.0);
+            (kp.public().clone(), sig)
+        })
+        .unzip();
+
+    (digest.to_vec(), pubkeys, signatures)
+}
+
+#[test]
+fn verify_valid_batch() {
+    let (digest, pubkeys, signatures) = signature_test_inputs();
+
+    let res = Secp256k1PublicKey::verify_batch_empty_fail(&digest[..], &pubkeys, &signatures);
+    assert!(res.is_ok(), "{:?}", res);
+}
+
+#[test]
+fn verify_invalid_batch() {
+    let (digest, pubkeys, mut signatures) = signature_test_inputs();
+    // mangle one signature
+    signatures[0] = Secp256k1Signature::default();
+
+    let res = Secp256k1PublicKey::verify_batch_empty_fail(&digest, &pubkeys, &signatures);
+    assert!(res.is_err(), "{:?}", res);
+}
+
+#[test]
+fn verify_empty_batch() {
+    let (digest, _, _) = signature_test_inputs();
+
+    let res = Secp256k1PublicKey::verify_batch_empty_fail(&digest[..], &[], &[]);
+    assert!(res.is_err(), "{:?}", res);
+}
+
+#[test]
+fn verify_batch_missing_public_keys() {
+    let (digest, pubkeys, signatures) = signature_test_inputs();
+
+    // missing leading public keys
+    let res = Secp256k1PublicKey::verify_batch_empty_fail(&digest, &pubkeys[1..], &signatures);
+    assert!(res.is_err(), "{:?}", res);
+
+    // missing trailing public keys
+    let res = Secp256k1PublicKey::verify_batch_empty_fail(
+        &digest,
+        &pubkeys[..pubkeys.len() - 1],
+        &signatures,
+    );
+    assert!(res.is_err(), "{:?}", res);
 }
 
 #[test]

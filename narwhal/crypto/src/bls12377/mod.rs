@@ -20,6 +20,7 @@ use ark_ff::{
 };
 use base64ct::{Base64, Encoding};
 use celo_bls::{hash_to_curve::try_and_increment, PublicKey};
+use eyre::eyre;
 use once_cell::sync::OnceCell;
 use serde::{de, Deserialize, Serialize};
 use serde_with::serde_as;
@@ -265,9 +266,18 @@ impl VerifyingKey for BLS12377PublicKey {
     type Sig = BLS12377Signature;
     const LENGTH: usize = CELO_BLS_PUBLIC_KEY_LENGTH;
 
-    fn verify_batch(msg: &[u8], pks: &[Self], sigs: &[Self::Sig]) -> Result<(), signature::Error> {
-        if pks.len() != sigs.len() {
-            return Err(signature::Error::new());
+    fn verify_batch_empty_fail(
+        msg: &[u8],
+        pks: &[Self],
+        sigs: &[Self::Sig],
+    ) -> Result<(), eyre::Report> {
+        if sigs.is_empty() {
+            return Err(eyre!("Critical Error! This behavious can signal something dangerous, and that someone may be trying to bypass signature verification through providing empty batches."));
+        }
+        if sigs.len() != pks.len() {
+            return Err(eyre!(
+                "Mismatch between number of signatures and public keys provided"
+            ));
         }
         let mut batch = celo_bls::bls::Batch::new(msg, &[]);
         pks.iter()
@@ -276,7 +286,7 @@ impl VerifyingKey for BLS12377PublicKey {
         let hash_to_g1 = &*celo_bls::hash_to_curve::try_and_increment::COMPOSITE_HASH_TO_G1;
         batch
             .verify(hash_to_g1)
-            .map_err(|_| signature::Error::new())
+            .map_err(|_| eyre!("Signature verification failed"))
     }
 }
 
