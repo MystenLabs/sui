@@ -13,6 +13,7 @@ use move_package::BuildConfig;
 use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use sui_types::messages::Transaction;
 
 use crate::examples::RpcExampleProvider;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
@@ -34,8 +35,6 @@ use sui_json_rpc_types::{
     SuiTransactionResponse, TransactionBytes,
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::SuiSignature;
-use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::{start_rpc_test_network, TestNetwork};
 
@@ -369,10 +368,10 @@ async fn create_error_response(
     let signature = context
         .keystore
         .sign(&address, &response.tx_bytes.to_vec()?)?;
-    let sig_scheme = signature.scheme();
-    let signature_byte = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
-    let tx_data = response.tx_bytes;
+
+    let tx = Transaction::new(response.to_data().unwrap(), signature);
+
+    let (tx_data, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
     let client = Client::new();
     let request = Request::builder()
@@ -383,7 +382,7 @@ async fn create_error_response(
             "{{ \"jsonrpc\": \"2.0\",\"method\": \"sui_executeTransaction\",\"params\": [{}, {}, {}, {}],\"id\": 1 }}",
             json![tx_data],
             json![sig_scheme],
-            json![signature_byte],
+            json![signature_bytes],
             json![pub_key]
         )))?;
 

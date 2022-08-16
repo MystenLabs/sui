@@ -1,18 +1,19 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
     sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
     AuthorityStrongQuorumSignInfo, Ed25519SuiSignature, EmptySignInfo, Signable, Signature,
-    SuiAuthoritySignature, SuiSignature, SuiSignatureInner, ToFromBytes, VerificationObligation,
+    SignatureScheme, SuiAuthoritySignature, SuiSignature, SuiSignatureInner, ToFromBytes,
+    VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::DeleteKind;
+use crate::sui_serde::Base64;
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
 use itertools::Either;
@@ -671,6 +672,15 @@ impl Transaction {
 
     pub fn verify(&self) -> Result<(), SuiError> {
         self.verify_sender_signature()
+    }
+
+    pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
+        (
+            Base64::from_bytes(&self.signed_data.data.to_bytes()),
+            self.signed_data.tx_signature.scheme(),
+            Base64::from_bytes(self.signed_data.tx_signature.signature_bytes()),
+            Base64::from_bytes(self.signed_data.tx_signature.public_key_bytes()),
+        )
     }
 }
 
@@ -1807,7 +1817,7 @@ impl ConsensusTransaction {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
 pub enum ExecuteTransactionRequestType {
     ImmediateReturn,
     WaitForTxCert,
