@@ -7035,10 +7035,24 @@ dependencies = [
 name = "sui-cost"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "insta",
  "move-binary-format",
+ "move-cli",
  "move-core-types",
+ "move-package",
+ "move-prover",
+ "move-prover-boogie-backend",
+ "move-unit-test",
  "move-vm-types",
  "once_cell",
+ "serde 1.0.142",
+ "sui",
+ "sui-adapter",
+ "sui-json-rpc-types",
+ "sui-types",
+ "test-utils",
+ "tokio",
  "workspace-hack 0.1.0",
 ]
 
