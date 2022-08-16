@@ -10,7 +10,7 @@ edition = "2021"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
 itertools = "0.10.3"
-once_cell = "1.11.0"
+once_cell = "1.13.1"
 rand = "0.8.5"
 serde = { version = "1.0.141", features = ["derive"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde"] }
