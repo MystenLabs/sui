@@ -51,9 +51,23 @@ pub async fn get_account_and_gas_coins(
     Ok(res)
 }
 
-/// A helper function to get all accounts and their owned objects
+
+pub async fn get_gas_objects_with_wallet_context(
+    context: &WalletContext,
+    address: SuiAddress,
+) -> Vec<SuiObjectInfo> {
+    context
+        .gas_objects(address)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|(_val, _object, object_ref)| object_ref)
+        .collect()
+}
+
+/// A helper function to get all accounts and their owned gas objects
 /// with a WalletContext.
-pub async fn get_account_and_objects(
+pub async fn get_account_and_gas_objects(
     context: &WalletContext,
 ) -> Vec<(SuiAddress, Vec<SuiObjectInfo>)> {
     let owned_gas_objects = futures::future::join_all(
@@ -61,7 +75,7 @@ pub async fn get_account_and_objects(
             .keystore
             .addresses()
             .iter()
-            .map(|account| context.gateway.get_objects_owned_by_address(*account)),
+            .map(|account| get_gas_objects_with_wallet_context(context, *account)),
     )
     .await;
     context
@@ -69,7 +83,7 @@ pub async fn get_account_and_objects(
         .addresses()
         .iter()
         .zip(owned_gas_objects.into_iter())
-        .map(|(address, objects)| (*address, objects.unwrap()))
+        .map(|(address, objects)| (*address, objects))
         .collect::<Vec<_>>()
 }
 
@@ -87,7 +101,7 @@ pub async fn make_transactions_with_wallet_context(
     max_txn_num: usize,
 ) -> Vec<Transaction> {
     let recipient = get_key_pair::<AuthorityKeyPair>().0;
-    let accounts_and_objs = get_account_and_objects(context).await;
+    let accounts_and_objs = get_account_and_gas_objects(context).await;
     let mut res = Vec::with_capacity(max_txn_num);
     for (address, objs) in &accounts_and_objs {
         for obj in objs {

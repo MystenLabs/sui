@@ -407,7 +407,7 @@ impl SuiClientCommands {
                     .await?
                     .iter()
                     // Ok to unwrap() since `get_gas_objects` guarantees gas
-                    .map(|(_, object)| GasCoin::try_from(object).unwrap())
+                    .map(|(_val, object, _object_ref)| GasCoin::try_from(object).unwrap())
                     .collect();
                 SuiClientCommandResult::Gas(coins)
             }
@@ -561,7 +561,7 @@ impl WalletContext {
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiParsedObject)>, anyhow::Error> {
+    ) -> Result<Vec<(u64, SuiParsedObject, SuiObjectInfo)>, anyhow::Error> {
         let object_refs = self.gateway.get_objects_owned_by_address(address).await?;
 
         // TODO: We should ideally fetch the objects from local cache
@@ -572,7 +572,7 @@ impl WalletContext {
                     if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
                         // Okay to unwrap() since we already checked type
                         let gas_coin = GasCoin::try_from(&o)?;
-                        values_objects.push((gas_coin.value(), o));
+                        values_objects.push((gas_coin.value(), o, oref));
                     }
                 }
                 _ => continue,
@@ -607,7 +607,7 @@ impl WalletContext {
     ) -> Result<(u64, SuiParsedObject), anyhow::Error> {
         for o in self.gas_objects(address).await.unwrap() {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
-                return Ok(o);
+                return Ok((o.0, o.1));
             }
         }
         Err(anyhow!(
