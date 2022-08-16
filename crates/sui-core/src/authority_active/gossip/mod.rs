@@ -498,7 +498,7 @@ where
                             last_seq_in_cur_batch = seq;
 
                             let fut = handler.handle_digest(self, digests).await?;
-                            results.push(async move {
+                            results.push_back(async move {
                                 fut.await?;
                                 Ok::<(TxSequenceNumber, ExecutionDigests), SuiError>((seq, digests))
                             });

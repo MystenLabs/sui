@@ -17,7 +17,7 @@ anyhow = "1.0.58"
 tracing = "0.1.36"
 async-trait = "0.1.57"
 serde = { version = "1.0.141", features = ["derive"] }
-futures = "0.3.21"
+futures = "0.3.23"
 tokio = { version = "1.20.1", features = ["full"] }
 signature = "1.6.0"
 

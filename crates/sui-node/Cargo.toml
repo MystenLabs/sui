@@ -15,7 +15,7 @@ prometheus = "0.13.1"
 tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.36"
 parking_lot = "0.12.1"
-futures = "0.3.21"
+futures = "0.3.23"
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"}
 chrono = "0.4.0"
 

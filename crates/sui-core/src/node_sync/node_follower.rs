@@ -705,7 +705,7 @@ impl NodeSyncHandle {
             let (tx, rx) = oneshot::channel();
             let msg = DigestsMessage::new_for_ckpt(digests, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
-            futures.push(Self::map_rx(rx));
+            futures.push_back(Self::map_rx(rx));
         }
 
         Ok(futures)
@@ -720,7 +720,7 @@ impl NodeSyncHandle {
             let (tx, rx) = oneshot::channel();
             let msg = DigestsMessage::new_for_exec_driver(&digest, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
-            futures.push(Self::map_rx(rx));
+            futures.push_back(Self::map_rx(rx));
         }
 
         Ok(futures)
