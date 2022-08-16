@@ -1,12 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{
-    authority::AuthorityState,
-    authority_aggregator::{AuthorityAggregator, CertificateHandler},
-    authority_client::AuthorityAPI,
-    safe_client::SafeClient,
-};
+use crate::{authority::AuthorityState, authority_client::AuthorityAPI, safe_client::SafeClient};
 use async_trait::async_trait;
 use futures::{
     future::BoxFuture,
@@ -34,6 +29,7 @@ use sui_types::{
         BatchInfoRequest, BatchInfoResponseItem, TransactionInfoRequest, TransactionInfoResponse,
     },
 };
+use tap::TapFallible;
 use tracing::{debug, error, info, trace};
 
 #[cfg(test)]
@@ -41,8 +37,6 @@ mod configurable_batch_action_client;
 
 #[cfg(test)]
 pub(crate) mod tests;
-
-use sui_types::messages::CertifiedTransaction;
 
 #[derive(Copy, Clone)]
 pub(crate) enum GossipType {
@@ -59,7 +53,6 @@ pub(crate) struct Follower<A> {
     state: Arc<AuthorityState>,
     follower_store: Arc<FollowerStore>,
     max_seq: Option<TxSequenceNumber>,
-    aggregator: Arc<AuthorityAggregator<A>>,
 }
 
 const REQUEST_FOLLOW_NUM_DIGESTS: u64 = 100_000;
@@ -287,24 +280,6 @@ async fn wait_for_one_gossip_task_to_finish<A>(
     peer_names.remove(&finished_name);
 }
 
-pub struct LocalCertificateHandler {
-    pub state: Arc<AuthorityState>,
-}
-
-#[async_trait]
-impl CertificateHandler for LocalCertificateHandler {
-    async fn handle(
-        &self,
-        certificate: CertifiedTransaction,
-    ) -> SuiResult<TransactionInfoResponse> {
-        self.state.handle_certificate(certificate).await
-    }
-
-    fn destination_name(&self) -> String {
-        format!("{:?}", self.state.name)
-    }
-}
-
 pub async fn select_gossip_peer<A>(
     my_name: AuthorityName,
     peer_names: HashSet<AuthorityName>,
@@ -357,26 +332,18 @@ impl GossipDigestHandler {
         Self { metrics }
     }
 
-    async fn process_response<A>(
-        aggregator: Arc<AuthorityAggregator<A>>,
+    async fn process_response(
         state: Arc<AuthorityState>,
         peer_name: AuthorityName,
         response: TransactionInfoResponse,
-    ) -> Result<(), SuiError>
-    where
-        A: AuthorityAPI + Send + Sync + 'static + Clone,
-    {
+    ) -> Result<(), SuiError> {
         if let Some(certificate) = response.certified_transaction {
-            // Process the certificate from one authority to ourselves
-            aggregator
-                .sync_authority_source_to_destination(
-                    certificate,
-                    peer_name,
-                    &LocalCertificateHandler {
-                        state: state.clone(),
-                    },
-                )
-                .await?;
+            let digest = *certificate.digest();
+            state
+                .database
+                .add_pending_certificates(vec![(digest, Some(certificate))])
+                .tap_err(|e| error!(?digest, "add_pending_certificates failed: {}", e))?;
+
             state.metrics.gossip_sync_count.inc();
             Ok(())
         } else {
@@ -404,7 +371,6 @@ where
     ) -> SuiResult<Self::DigestResult> {
         let state = follower.state.clone();
         let client = follower.client.clone();
-        let aggregator = follower.aggregator.clone();
         let name = follower.peer_name;
         Ok(Box::pin(async move {
             if !state.database.effects_exists(&digest.transaction)? {
@@ -414,7 +380,7 @@ where
                         digest.transaction,
                     ))
                     .await?;
-                Self::process_response(aggregator, state, name, response).await?;
+                Self::process_response(state, name, response).await?;
             }
             Ok(())
         }))
@@ -463,7 +429,6 @@ where
             state: active_authority.state.clone(),
             follower_store: active_authority.follower_store.clone(),
             max_seq,
-            aggregator: active_authority.net.load().clone(),
         }
     }
 
