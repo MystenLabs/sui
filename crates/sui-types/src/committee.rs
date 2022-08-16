@@ -22,7 +22,6 @@ pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
-    // Note: this is a derived structure, no need to store.
     #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
     #[serde(skip)]

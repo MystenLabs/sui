@@ -484,6 +484,7 @@ pub fn generate_genesis_system_object(
         TemporaryStore::new(&*store, InputObjects::new(vec![]), genesis_digest);
 
     let mut pubkeys = Vec::new();
+    let mut network_pubkeys = Vec::new();
     let mut sui_addresses = Vec::new();
     let mut network_addresses = Vec::new();
     let mut names = Vec::new();
@@ -492,6 +493,7 @@ pub fn generate_genesis_system_object(
 
     for validator in committee {
         pubkeys.push(validator.public_key());
+        network_pubkeys.push(validator.network_key());
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
         names.push(validator.name().to_owned().into_bytes());
@@ -507,6 +509,7 @@ pub fn generate_genesis_system_object(
         vec![],
         vec![
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
             CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
@@ -537,7 +540,7 @@ mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
     use narwhal_crypto::traits::KeyPair;
-    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
+    use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 
     #[test]
     fn roundtrip() {
@@ -558,9 +561,11 @@ mod test {
             .unwrap();
 
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let network_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
             public_key: key.public().into(),
+            network_key: network_key.public().clone().into(),
             stake: 1,
             delegation: 0,
             gas_price: 1,
