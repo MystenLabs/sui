@@ -22,7 +22,7 @@
         align-items: center;
         gap: 5px;
 
-        .setp-index {
+        .step-index {
             @include utils.typography('table/text-sm');
 
             line-height: 17px;
@@ -41,7 +41,7 @@
         &.current-step {
             color: colors.$sui-dark-blue;
 
-            .setp-index {
+            .step-index {
                 background-color: colors.$sui-dark-blue;
                 border-color: colors.$sui-dark-blue;
                 color: colors.$white;
@@ -49,7 +49,7 @@
         }
 
         &.completed-step {
-            .setp-index {
+            .step-index {
                 background-color: colors.$sui-steel-blue;
             }
         }

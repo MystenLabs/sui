@@ -24,7 +24,7 @@ function ProgressBar({ currentStep, stepsName }: Props) {
                     )}
                     key={index}
                 >
-                    <div className={st.setpIndex}>
+                    <div className={st.stepIndex}>
                         {activeStep > index ? (
                             <Icon
                                 icon={SuiIcons.Checkmark}
