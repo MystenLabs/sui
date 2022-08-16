@@ -606,7 +606,7 @@ export function isTransferObjectEvent(obj: any, _argumentName?: string): obj is 
         isTransactionDigest(obj.sender) as boolean &&
         isObjectOwner(obj.recipient) as boolean &&
         isTransactionDigest(obj.objectId) as boolean &&
-        isSuiMoveTypeParameterIndex(obj.version) as boolean &&
+        isSequenceNumber(obj.version) as boolean &&
         isTransactionDigest(obj.type) as boolean
     )
 }
@@ -765,7 +765,7 @@ export function isAuthorityQuorumSignInfo(obj: any, _argumentName?: string): obj
         isSuiMoveTypeParameterIndex(obj.epoch) as boolean &&
         Array.isArray(obj.signature) &&
         obj.signature.every((e: any) =>
-            isEmptySignInfo(e) as boolean
+            isTransactionDigest(e) as boolean
         )
     )
 }
@@ -963,7 +963,7 @@ export function isAuthorityName(obj: any, _argumentName?: string): obj is Author
 
 export function isAuthoritySignature(obj: any, _argumentName?: string): obj is AuthoritySignature {
     return (
-        typeof obj === "object"
+        typeof obj === "string"
     )
 }
 
