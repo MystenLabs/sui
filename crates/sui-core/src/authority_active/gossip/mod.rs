@@ -146,19 +146,6 @@ where
     .await;
 }
 
-pub async fn node_sync_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    follower_process(
-        active_authority,
-        degree,
-        active_authority.node_sync_handle(),
-        GossipType::Full,
-    )
-    .await;
-}
-
 async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
     active_authority: &ActiveAuthority<A>,
     degree: usize,
