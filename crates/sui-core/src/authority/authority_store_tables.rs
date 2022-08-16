@@ -16,11 +16,16 @@ use typed_store_macros::DBMapUtils;
 #[derive(DBMapUtils)]
 pub struct AuthorityStoreTables<S> {
     /// This is a map between the object (ID, version) and the latest state of the object, namely the
-    /// state that is needed to process new transactions. If an object is deleted its entry is
-    /// removed from this map.
+    /// state that is needed to process new transactions.
     ///
-    /// Note that while this map can store all versions of an object, in practice it only stores
-    /// the most recent version.
+    /// Note that while this map can store all versions of an object, we will eventually
+    /// prune old object versions from the db.
+    ///
+    /// IMPORTANT: object versions must *only* be pruned if they appear as inputs in some
+    /// TransactionEffects. Simply pruning all objects but the most recent is an error!
+    /// This is because there can be partially executed transactions whose effects have not yet
+    /// been written out, and which must be retried. But, they cannot be retried unless their input
+    /// objects are still accessible!
     #[default_options_override_fn = "objects_table_default_config"]
     pub(crate) objects: DBMap<ObjectKey, Object>,
 

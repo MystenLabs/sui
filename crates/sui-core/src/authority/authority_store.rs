@@ -338,6 +338,26 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(result)
     }
 
+    /// Get many objects by their (id, version number) key.
+    pub fn get_input_objects(
+        &self,
+        objects: &[InputObjectKind],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
+        let mut result = Vec::new();
+        for kind in objects {
+            let obj = match kind {
+                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject(id) => {
+                    self.get_object(id)?
+                }
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    self.get_object_by_key(&objref.0, objref.1)?
+                }
+            };
+            result.push(obj);
+        }
+        Ok(result)
+    }
+
     /// Read a transaction envelope via lock or returns Err(TransactionLockDoesNotExist) if the lock does not exist.
     pub async fn get_transaction_envelope(
         &self,
