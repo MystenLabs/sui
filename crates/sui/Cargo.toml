@@ -39,7 +39,7 @@ rocksdb = "0.19.0"
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"}
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"} 
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "6a28e2ff64e4a567d7aee599c3774893598cb133", package = "executor" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 move-prover = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
@@ -65,7 +65,7 @@ jsonrpsee = { version = "0.15.1", features = ["full"] }
 
 test-utils = { path = "../test-utils" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
-rand = "0.7.3"
+rand = "0.8.5"
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }

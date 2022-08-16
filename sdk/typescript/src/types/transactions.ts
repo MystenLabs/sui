@@ -133,7 +133,7 @@ export type SuiJsonValue =
 
 export type EmptySignInfo = object;
 export type AuthorityName = string;
-export type AuthoritySignature = string;
+export type AuthoritySignature = object;
 
 export type TransactionBytes = {
   txBytes: string;

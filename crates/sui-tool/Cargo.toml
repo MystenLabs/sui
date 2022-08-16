@@ -19,7 +19,7 @@ rocksdb = "0.19.0"
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"}
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"} 
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "6a28e2ff64e4a567d7aee599c3774893598cb133", package = "executor" }
 serde_with = { version = "1.14.0", features = ["hex"] }
 sui-storage = { path = "../sui-storage" }
 strum_macros = "^0.24"

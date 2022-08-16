@@ -16,7 +16,7 @@ jsonrpsee-http-client = "0.15.1"
 prometheus = "0.13.1"
 tokio = { version = "1.20.1", features = ["full", "tracing", "test-util"] }
 serde_json = "1.0.83"
-rand = "0.7.3"
+rand = "0.8.5"
 sui = { path = "../sui" }
 sui-adapter = { path = "../sui-adapter" }
 sui-config = { path = "../sui-config" }
