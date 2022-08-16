@@ -1,8 +1,13 @@
 ---
-title: Experiment with Sui Devnet
+title: Connect to Sui Devnet
 ---
 
-Welcome to the beginnings of the Sui Devnet. It exists now to gain operational experience with the Sui software in a public setting. The Sui Devnet currently consists of:
+Welcome to the Sui Devnet. We are hosting a public Devnet for the community to experiment with our tech and help to shape the future of the Sui network. It exists to gain operational experience with the Sui software in a public setting prior to our Mainnet launch.
+
+To instead [contribute](../contribute/index.md) to Sui itself, you may experiment with the advanced [Sui CLI client](../build/cli-client.md) at the command line.
+
+
+The Sui Devnet currently consists of:
 
 * A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: gateway.devnet.sui.io:443 using [JSON-RPC](../build/json-rpc.md)
 * A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing transaction history: https://explorer.devnet.sui.io
@@ -43,7 +48,28 @@ In addition, to conduct advanced work such as publishing a Move module or making
 
 ### Set up Sui CLI client, connect to gateway
 
-Now [set up your Sui CLI client and connect to Devnet](../build/cli-client.md#connect-to-devnet) in a single step. Note you can [manually change the Gateway URL](../build/cli-client.md#manually-change-the-rpc-server-url) if you have already configured a Sui CLI client.
+Now set up your Sui CLI client and connect to Devnet. Note you can manually change the Gateway URL if you have already configured a Sui CLI client.
+
+ To connect the Sui client to the Devnet, run the following command:
+```shell
+$ sui client
+```
+The Sui CLI will print the following line if the client is starting up for the first time:
+```shell
+Config file ["/Users/dir/.sui/sui_config/client.yaml"] doesn't exist, do you want to connect to a Sui RPC server [y/n]?
+```
+Type `y` and then press `Enter`. You should see the following output:
+```shell
+Sui RPC server Url (Default to Sui Devnet if not specified) :
+```
+The Sui client will prompt for the RPC server URL; press 'Enter' and it will default to Devnet.
+Or enter a custom URL to connect to a server hosted elsewhere.
+
+If you have used the Sui client before with a local network, you will have an existing `client.yaml` configuration
+file needing update. Change the configured RPC server URL to Devnet by using:
+```shell
+$ sui client switch --gateway https://gateway.devnet.sui.io:443
+```
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).
 
