@@ -4,46 +4,39 @@
 import { bcs, decodeStr, encodeStr } from '@mysten/bcs';
 import { SuiObjectRef } from './objects';
 
-// This buddy collects definitions for BCS.
-const initializers: Function[] = [];
+bcs
+  .registerVectorType('vector<u8>', 'u8')
+  .registerVectorType('vector<vector<u8>>', 'vector<u8>')
+  .registerAddressType('ObjectID', 20)
+  .registerAddressType('SuiAddress', 20)
+  .registerType(
+    'utf8string',
+    (writer, str) => {
+      let bytes = Array.from(Buffer.from(str));
+      return writer.writeVec(bytes, (writer, el) => writer.write8(el));
+    },
+    reader => {
+      let bytes = reader.readVec(reader => reader.read8());
+      return Buffer.from(bytes).toString('utf-8');
+    }
+  )
+  .registerType(
+    'ObjectDigest',
+    (writer, str) => {
+      let bytes = Array.from(decodeStr(str, 'base64'));
+      return writer.writeVec(bytes, (writer, el) => writer.write8(el));
+    },
+    reader => {
+      let bytes = reader.readVec(reader => reader.read8());
+      return encodeStr(new Uint8Array(bytes), 'base64');
+    }
+  );
 
-initializers.push((b: typeof bcs) =>
-  b
-    .registerVectorType('vector<u8>', 'u8')
-    .registerVectorType('vector<vector<u8>>', 'vector<u8>')
-    .registerAddressType('ObjectID', 20)
-    .registerAddressType('SuiAddress', 20)
-    .registerType(
-      'utf8string',
-      (writer, str) => {
-        let bytes = Array.from(Buffer.from(str));
-        return writer.writeVec(bytes, (writer, el) => writer.write8(el));
-      },
-      reader => {
-        let bytes = reader.readVec(reader => reader.read8());
-        return Buffer.from(bytes).toString('utf-8');
-      }
-    )
-    .registerType(
-      'ObjectDigest',
-      (writer, str) => {
-        let bytes = Array.from(decodeStr(str, 'base64'));
-        return writer.writeVec(bytes, (writer, el) => writer.write8(el));
-      },
-      reader => {
-        let bytes = reader.readVec(reader => reader.read8());
-        return encodeStr(new Uint8Array(bytes), 'base64');
-      }
-    )
-);
-
-initializers.push((b: typeof bcs) =>
-  b.registerStructType('SuiObjectRef', {
-    objectId: 'ObjectID',
-    version: 'u64',
-    digest: 'ObjectDigest',
-  })
-);
+bcs.registerStructType('SuiObjectRef', {
+  objectId: 'ObjectID',
+  version: 'u64',
+  digest: 'ObjectDigest',
+});
 
 /**
  * Transaction type used for transferring objects.
@@ -57,12 +50,10 @@ export type TransferObjectTx = {
   };
 };
 
-initializers.push((b: typeof bcs) =>
-  b.registerStructType('TransferObjectTx', {
-    recipient: 'SuiAddress',
-    object_ref: 'SuiObjectRef',
-  })
-);
+bcs.registerStructType('TransferObjectTx', {
+  recipient: 'SuiAddress',
+  object_ref: 'SuiObjectRef',
+});
 
 /**
  * Transaction type used for publishing Move modules to the Sui.
@@ -88,11 +79,9 @@ export type PublishTx = {
   };
 };
 
-initializers.push((b: typeof bcs) =>
-  b.registerStructType('PublishTx', {
-    modules: 'vector<vector<u8>>',
-  })
-);
+bcs.registerStructType('PublishTx', {
+  modules: 'vector<vector<u8>>',
+});
 
 // ========== Move Call Tx ===========
 
@@ -122,17 +111,15 @@ export type ObjectArg = { ImmOrOwned: SuiObjectRef } | { Shared: string };
  */
 export type CallArg = { Pure: Iterable<number> } | { Object: ObjectArg };
 
-initializers.push((b: typeof bcs) =>
-  b
-    .registerEnumType('ObjectArg', {
-      ImmOrOwned: 'SuiObjectRef',
-      Shared: 'ObjectID',
-    })
-    .registerEnumType('CallArg', {
-      Pure: 'vector<u8>',
-      Object: 'ObjectArg',
-    })
-);
+bcs
+  .registerEnumType('ObjectArg', {
+    ImmOrOwned: 'SuiObjectRef',
+    Shared: 'ObjectID',
+  })
+  .registerEnumType('CallArg', {
+    Pure: 'vector<u8>',
+    Object: 'ObjectArg',
+  });
 
 /**
  * Kind of a TypeTag which is represented by a Move type identifier.
@@ -157,26 +144,24 @@ export type TypeTag =
   | { vector: TypeTag }
   | { struct: StructTag };
 
-initializers.push((b: typeof bcs) =>
-  b
-    .registerEnumType('TypeTag', {
-      bool: null,
-      u8: null,
-      u64: null,
-      u128: null,
-      address: null,
-      signer: null,
-      vector: 'TypeTag',
-      struct: 'StructTag',
-    })
-    .registerVectorType('vector<TypeTag>', 'TypeTag')
-    .registerStructType('StructTag', {
-      address: 'SuiAddress',
-      module: 'string',
-      name: 'string',
-      typeParams: 'vector<TypeTag>',
-    })
-);
+bcs
+  .registerEnumType('TypeTag', {
+    bool: null,
+    u8: null,
+    u64: null,
+    u128: null,
+    address: null,
+    signer: null,
+    vector: 'TypeTag',
+    struct: 'StructTag',
+  })
+  .registerVectorType('vector<TypeTag>', 'TypeTag')
+  .registerStructType('StructTag', {
+    address: 'SuiAddress',
+    module: 'string',
+    name: 'string',
+    typeParams: 'vector<TypeTag>',
+  });
 
 /**
  * Transaction type used for calling Move modules' functions.
@@ -193,30 +178,25 @@ export type MoveCallTx = {
   };
 };
 
-initializers.push((b: typeof bcs) =>
-  b
-    .registerVectorType('vector<CallArg>', 'CallArg')
-    .registerStructType('MoveCallTx', {
-      package: 'SuiObjectRef',
-      module: 'string',
-      function: 'string',
-      typeArguments: 'vector<TypeTag>',
-      arguments: 'vector<CallArg>',
-    })
-);
+bcs
+  .registerVectorType('vector<CallArg>', 'CallArg')
+  .registerStructType('MoveCallTx', {
+    package: 'SuiObjectRef',
+    module: 'string',
+    function: 'string',
+    typeArguments: 'vector<TypeTag>',
+    arguments: 'vector<CallArg>',
+  });
 
 // ========== TransactionData ===========
 
 export type Transaction = MoveCallTx | PublishTx | TransferObjectTx;
 
-initializers.push((b: typeof bcs) =>
-  b.registerEnumType('Transaction', {
-    TransferObject: 'TransferObjectTx',
-    Publish: 'PublishTx',
-    Call: 'MoveCallTx',
-  })
-);
-
+bcs.registerEnumType('Transaction', {
+  TransferObject: 'TransferObjectTx',
+  Publish: 'PublishTx',
+  Call: 'MoveCallTx',
+});
 /**
  * Transaction kind - either Batch or Single.
  *
@@ -227,14 +207,12 @@ export type TransactionKind =
   | { Single: Transaction }
   | { Batch: Transaction[] };
 
-initializers.push((b: typeof bcs) =>
-  b
-    .registerVectorType('vector<Transaction>', 'Transaction')
-    .registerEnumType('TransactionKind', {
-      Single: 'Transaction',
-      Batch: 'vector<Transaction>',
-    })
-);
+bcs
+  .registerVectorType('vector<Transaction>', 'Transaction')
+  .registerEnumType('TransactionKind', {
+    Single: 'Transaction',
+    Batch: 'vector<Transaction>',
+  });
 
 /**
  * The TransactionData to be signed and sent to the Gateway service.
@@ -250,28 +228,12 @@ export type TransactionData = {
   gasPayment: SuiObjectRef;
 };
 
-initializers.push((b: typeof bcs) =>
-  b.registerStructType('TransactionData', {
-    kind: 'TransactionKind',
-    sender: 'SuiAddress',
-    gasPayment: 'SuiObjectRef',
-    gasPrice: 'u64',
-    gasBudget: 'u64',
-  })
-);
+bcs.registerStructType('TransactionData', {
+  kind: 'TransactionKind',
+  sender: 'SuiAddress',
+  gasPayment: 'SuiObjectRef',
+  gasPrice: 'u64',
+  gasBudget: 'u64',
+});
 
-/**
- * Initialize BCS definitions.
- * @param {BCS} bcs
- */
-export function registerTypes(b: typeof bcs): typeof bcs {
-  for (let init of initializers) {
-    init(b);
-  }
-
-  return b;
-}
-
-// For commonjs scenario need to figure out how to do it differently
-const suiBCS = registerTypes(bcs);
-export { suiBCS as bcs };
+export { bcs };

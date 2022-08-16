@@ -21,6 +21,8 @@ import {
 } from './txn-data-serializer';
 import { Provider } from '../../providers/provider';
 
+const TYPE_TAG = Array.from('TransactionData::').map(e => e.charCodeAt(0));
+
 export class LocalTxnDataSerializer implements TxnDataSerializer {
   /**
    * Need a provider to fetch the latest object reference. Ideally the provider
@@ -121,10 +123,9 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     size: number = 2048
   ): Base64DataBuffer {
     const dataBytes = bcs.ser('TransactionData', tx, size).toBytes();
-    const typeTag = Array.from('TransactionData::').map(e => e.charCodeAt(0));
-    const serialized = new Uint8Array(typeTag.length + dataBytes.length);
-    serialized.set(typeTag);
-    serialized.set(dataBytes, typeTag.length);
+    const serialized = new Uint8Array(TYPE_TAG.length + dataBytes.length);
+    serialized.set(TYPE_TAG);
+    serialized.set(dataBytes, TYPE_TAG.length);
     return new Base64DataBuffer(serialized);
   }
 }
