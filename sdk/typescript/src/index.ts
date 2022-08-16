@@ -7,6 +7,7 @@ export * from './cryptography/publickey';
 
 export * from './providers/provider';
 export * from './providers/json-rpc-provider';
+export * from './providers/json-rpc-provider-with-cache';
 
 export * from './serialization/base64';
 export * from './serialization/hex';
