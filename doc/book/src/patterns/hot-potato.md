@@ -5,3 +5,7 @@ Hot Potato is a name for a struct that has no abilities, hence it can only be pa
 ```move
 {{#include ../../examples/sources/patterns/hot-potato.move:4:}}
 ```
+
+This pattern is used in these examples:
+
+- [Flash Loan](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/flash_lender.move)
