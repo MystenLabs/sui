@@ -26,7 +26,6 @@ prometheus = "0.13.1"
 backoff = { version = "0.4.0", features = ["tokio"] }
 
 types = { path = "../types" }
-worker = { path = "../worker" }
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
 
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }

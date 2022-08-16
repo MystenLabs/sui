@@ -50,6 +50,7 @@ jobs:
     runs-on: ubuntu-ghcloud
     steps:
       - uses: actions/checkout@v3
+      - uses: taiki-e/install-action@nextest
       - name: Install beta toolchain
         uses: actions-rs/toolchain@v1
         with:
