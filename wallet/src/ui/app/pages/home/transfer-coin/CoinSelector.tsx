@@ -6,7 +6,7 @@ import { useSearchParams } from 'react-router-dom';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import PageTitle from '_app/shared/page-title';
-import ActiveCoinCard from '_components/active-coin-card';
+import ActiveCoinsCard from '_components/active-coins-card';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 import st from './CoinSelector.module.scss';
@@ -33,7 +33,7 @@ function CoinsSelectorPage() {
                         className={st.searchInput}
                     />
                 </div>
-                <ActiveCoinCard
+                <ActiveCoinsCard
                     activeCoinType={coinType}
                     showActiveCoin={false}
                 />

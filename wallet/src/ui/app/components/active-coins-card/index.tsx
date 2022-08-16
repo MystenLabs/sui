@@ -14,12 +14,12 @@ import {
 } from '_redux/slices/sui-objects/Coin';
 import { balanceFormatOptions } from '_shared/formatting';
 
-import st from './CoinSelection.module.scss';
+import st from './ActiveCoinsCard.module.scss';
 
 // Get all the coins that are available in the account.
 // default coin type is GAS_TYPE_ARG unless specified in props
 // create a list of coins that are available in the account
-function ActiveCoinCard({
+function ActiveCoinsCard({
     activeCoinType = GAS_TYPE_ARG,
     showActiveCoin = true,
 }: {
@@ -122,4 +122,4 @@ function ActiveCoinCard({
     );
 }
 
-export default ActiveCoinCard;
+export default ActiveCoinsCard;

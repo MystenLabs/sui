@@ -10,7 +10,7 @@ import BottomMenuLayout, {
     Menu,
 } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
-import ActiveCoinCard from '_components/active-coin-card';
+import ActiveCoinsCard from '_components/active-coins-card';
 import Icon, { SuiIcons } from '_components/icon';
 import NumberInput from '_components/number-input';
 
@@ -68,7 +68,7 @@ function StepOne({
                         />
                     </div>
                     <div className={st.activeCoinCard}>
-                        <ActiveCoinCard activeCoinType={coinType} />
+                        <ActiveCoinsCard activeCoinType={coinType} />
                     </div>
                 </Content>
                 <Menu stuckClass={st.shadow}>
