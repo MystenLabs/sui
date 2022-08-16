@@ -392,6 +392,7 @@ const LOCKSERVICE_QUEUE_LEN: usize = 500;
 #[derive(Clone)]
 pub struct LockService {
     inner: Arc<LockServiceInner>,
+    inner_svc_impl: LockServiceImpl,
 }
 
 struct LockServiceInner {
@@ -445,7 +446,7 @@ impl LockService {
     /// namely each SuiDataStore creates its own LockService.
     pub fn new(path: PathBuf, db_options: Option<Options>) -> Result<Self, SuiError> {
         let inner_service = LockServiceImpl::open_tables_read_write(path, db_options);
-
+        let inner_service_cloned = inner_service.clone();
         // Now, create a sync channel and spawn a thread
         let (sender, receiver) = channel(LOCKSERVICE_QUEUE_LEN);
         let inner2 = inner_service.clone();
@@ -465,6 +466,7 @@ impl LockService {
                 run_command_loop: Some(run_command_loop),
                 run_queries_loop: Some(run_queries_loop),
             }),
+            inner_svc_impl: inner_service_cloned,
         })
     }
 
@@ -478,6 +480,7 @@ impl LockService {
         refs: Vec<ObjectRef>,
         tx_digest: TransactionDigest,
     ) -> SuiResult {
+        return self.inner_svc_impl.acquire_locks(&refs, tx_digest);
         let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
         // NOTE: below is blocking, switch to Tokio channels which are async?
         self.inner
@@ -499,6 +502,7 @@ impl LockService {
     /// Otherwise, if the lock already exists and is locked to a transaction, then return TransactionLockExists
     /// Only the gateway could set is_force_reset to true.
     pub async fn initialize_locks(&self, refs: &[ObjectRef], is_force_reset: bool) -> SuiResult {
+        return self.inner_svc_impl.initialize_locks(refs, is_force_reset);
         let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
         self.inner
             .sender()
@@ -519,6 +523,7 @@ impl LockService {
     /// * Some(None) - lock exists and is initialized, but not locked to a particular transaction
     /// * Some(Some(tx_digest)) - lock exists and set to transaction
     pub async fn get_lock(&self, object: ObjectRef) -> SuiLockResult {
+        return self.inner_svc_impl.get_lock(object);
         let (os_sender, os_receiver) = oneshot::channel::<SuiLockResult>();
         self.inner
             .query_sender()
@@ -534,6 +539,7 @@ impl LockService {
     }
 
     pub async fn create_locks_for_genesis_objects(&self, objects: Vec<ObjectRef>) -> SuiResult {
+        return self.inner_svc_impl.create_locks_for_genesis_objects(&objects);
         let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
         self.inner
             .sender()
@@ -566,6 +572,7 @@ impl LockService {
         inputs: Vec<ObjectRef>,
         outputs: Vec<ObjectRef>,
     ) -> SuiResult<TxSequenceNumber> {
+        return self.inner_svc_impl.sequence_transaction(tx, seq, &inputs, &outputs);
         let (os_sender, os_receiver) = oneshot::channel::<SuiResult<TxSequenceNumber>>();
         self.inner
             .sender()
@@ -586,6 +593,7 @@ impl LockService {
     /// Checks multiple object locks exist.
     /// Returns Err(TransactionLockDoesNotExist) if at least one object lock is not initialized.
     pub async fn locks_exist(&self, objects: Vec<ObjectRef>) -> SuiResult {
+        return self.inner_svc_impl.locks_exist(&objects);
         let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
         self.inner
             .query_sender()
