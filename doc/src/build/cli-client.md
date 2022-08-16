@@ -64,7 +64,33 @@ it once again, using the `--working-dir` argument:
 $ sui genesis --force --working-dir /path/to/sui/config/dir
 ```
 
-## Client configuration
+### Customizing genesis
+
+The genesis process can be customized by providing a genesis configuration
+file using the `--config` flag.
+
+```shell
+$ sui genesis --config <Path to genesis config file>
+```
+
+Example `genesis.yaml`:
+
+```yaml
+---
+validator_genesis_info: ~
+committee_size: 4
+accounts:
+  - gas_objects:
+      - object_id: "0xdbac75c4e5a5064875cb8566a533547957092f93"
+        gas_value: 100000
+    gas_object_ranges: []
+move_packages: ["<Paths to custom move packages>"]
+sui_framework_lib_path: ~
+move_framework_lib_path: ~
+
+```
+
+## Configuring client
 
 The genesis process creates a configuration file `client.yaml`, and a keystore file `sui.keystore` for the
 Sui client.  The config file contains information of the accounts and
@@ -1073,29 +1099,3 @@ initializers.
 
 Finally, we see that the gas object that was used to pay for
 publishing was updated as well.
-
-## Customize genesis
-
-The genesis process can be customized by providing a genesis configuration
-file using the `--config` flag.
-
-```shell
-$ sui genesis --config <Path to genesis config file>
-```
-
-Example `genesis.yaml`:
-
-```yaml
----
-validator_genesis_info: ~
-committee_size: 4
-accounts:
-  - gas_objects:
-      - object_id: "0xdbac75c4e5a5064875cb8566a533547957092f93"
-        gas_value: 100000
-    gas_object_ranges: []
-move_packages: ["<Paths to custom move packages>"]
-sui_framework_lib_path: ~
-move_framework_lib_path: ~
-
-```
