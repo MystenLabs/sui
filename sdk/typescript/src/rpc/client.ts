@@ -24,7 +24,7 @@ const portRegex = new RegExp(':[0-9]{1,5}$');
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
   let wsUrl = httpUrl.replace(httpRegex, 'ws');
   wsUrl = wsUrl.replace(portRegex, '');
-  return `${wsUrl}:${port ?? 9001}`;
+  return `${wsUrl}:${port ?? 9001}`;    // 9001 is full node websocket
 };
 
 export class JsonRpcClient {

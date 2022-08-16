@@ -10,6 +10,8 @@ import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 
 import styles from './EventSubscription.module.css';
 
+//const DEVNFT_FILTER = '{"All": [{"EventType": "MoveEvent"}, {"Package": "0x2"}, {"Module": "devnet_nft"}]}';
+
 function EventSubscription() {
     const [input, setInput] = useState('');
     const [network] = useContext(NetworkContext);
@@ -24,7 +26,6 @@ function EventSubscription() {
 
             // remove empty char from input
             let query = input.trim();
-            console.log('query', query);
 
             try {
                 let filter: SuiEventFilter = JSON.parse(query);
