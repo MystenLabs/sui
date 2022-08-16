@@ -24,11 +24,11 @@ use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiParsedObject, SuiTra
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
 use sui_types::crypto::{
-    generate_proof_of_possession, AccountKeyPair, AuthorityKeyPair, KeypairTraits, SuiKeyPair,
+    generate_proof_of_possession, AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature,
+    KeypairTraits, Secp256k1SuiSignature, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
-
 use test_utils::network::{setup_network_and_wallet, start_test_network};
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
@@ -769,10 +769,10 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     context.config.active_address = None;
 
     // Create a new address
-    let os = SuiClientCommands::NewAddress {}
+    let os = SuiClientCommands::NewAddress { key_scheme: None }
         .execute(&mut context)
         .await?;
-    let new_addr = if let SuiClientCommandResult::NewAddress((a, _)) = os {
+    let new_addr = if let SuiClientCommandResult::NewAddress((a, _, _)) = os {
         a
     } else {
         panic!("Command failed")
@@ -798,6 +798,66 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
                 fullnode: None,
             })
         )
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
+    // Create Wallet context.
+    let network = start_test_network(None).await?;
+    let wallet_conf = network.dir().join(SUI_CLIENT_CONFIG);
+    let mut context = WalletContext::new(&wallet_conf).await?;
+
+    // keypairs loaded from config are Ed25519
+    assert_eq!(
+        context
+            .keystore
+            .keys()
+            .iter()
+            .filter(|k| k.flag() == Ed25519SuiSignature::SCHEME.flag())
+            .count(),
+        5
+    );
+
+    SuiClientCommands::NewAddress {
+        key_scheme: Some("secp256k1".to_string()),
+    }
+    .execute(&mut context)
+    .await?;
+
+    // new keypair generated is Secp256k1
+    assert_eq!(
+        context
+            .keystore
+            .keys()
+            .iter()
+            .filter(|k| k.flag() == Secp256k1SuiSignature::SCHEME.flag())
+            .count(),
+        1
+    );
+
+    // random key scheme errors out
+    assert!(SuiClientCommands::NewAddress {
+        key_scheme: Some("random".to_string()),
+    }
+    .execute(&mut context)
+    .await
+    .is_err());
+
+    SuiClientCommands::NewAddress { key_scheme: None }
+        .execute(&mut context)
+        .await?;
+
+    // None key scheme defaults to Ed25519
+    assert_eq!(
+        context
+            .keystore
+            .keys()
+            .iter()
+            .filter(|k| k.flag() == Ed25519SuiSignature::SCHEME.flag())
+            .count(),
+        6
     );
     Ok(())
 }

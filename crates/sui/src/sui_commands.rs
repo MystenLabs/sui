@@ -400,8 +400,15 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 .unwrap_or(&sui_config_dir()?)
                 .join(SUI_KEYSTORE_FILENAME);
             let keystore = KeystoreType::File(keystore_path);
-            let (new_address, phrase) = keystore.init()?.generate_new_key()?;
-            println!("Generated new keypair for address [{new_address}]");
+            println!("Generating keypair ...\n");
+
+            println!("Do you want to generate a secp256k1 keypair instead? [y/N] No will select Ed25519 by default. ");
+            let key_scheme = match read_line()?.trim() {
+                "y" => Some(String::from("secp256k1")),
+                _ => None,
+            };
+            let (new_address, phrase, flag) = keystore.init()?.generate_new_key(key_scheme)?;
+            println!("Generated new keypair for address with flag {flag} [{new_address}]");
             println!("Secret Recovery Phrase : [{phrase}]");
             SuiClientConfig {
                 keystore,
