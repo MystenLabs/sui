@@ -72,9 +72,17 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
+
       - name: testing
         run: |
           id && ls -la $HOME && ls -la $PWD
+
+      - name: Install huniq, and cache the binary
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: huniq
+          locked: true
+
       # TODO(bradh): uncomment this before committing
       # - name: cargo test
       #   run: |
