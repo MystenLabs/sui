@@ -20,7 +20,6 @@ Here is our recommended workflow to interact with Sui:
    1. [Freeze](../build//programming-with-objects/ch3-immutable-objects.md) an object, using immutable objects.
    1. [Wrap](../build/programming-with-objects/ch4-object-wrapping.md) objects in another object.
    1. [Enable](../build/programming-with-objects/ch5-child-objects.md) objects to own other objects.
-1. [Start](../build/json-rpc.md) a *JSON-RPC Gateway server* to communicate with Sui.
 1. [Talk](../build/comms.md) with Sui using our API and SDKs:
    * [Use](../build/json-rpc.md) the *Sui RPC Server and JSON-RPC API* to interact with a local Sui network.
    * [Employ](../build/sui-json.md) *SuiJSON format* to align JSON inputs more closely with Move call arguments.
