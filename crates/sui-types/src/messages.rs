@@ -538,25 +538,6 @@ pub struct SenderSignedData {
 }
 
 impl<S> TransactionEnvelope<S> {
-    #[allow(dead_code)]
-    fn add_sender_sig_to_verification_obligation(
-        &self,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
-            return Ok(());
-        }
-
-        self.signed_data
-            .tx_signature
-            .add_to_verification_obligation_or_verify(self.signed_data.data.sender, obligation, idx)
-    }
-
     pub fn verify_sender_signature(&self) -> SuiResult<()> {
         if self.is_verified || self.signed_data.data.kind.is_system_tx() {
             return Ok(());

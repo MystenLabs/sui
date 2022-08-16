@@ -111,7 +111,7 @@ impl Message for AuthorityBatch {
         Ok(())
     }
 
-    fn add_to_verification_obligation(&self, _: &mut VerificationObligation) -> SuiResult<()> {
+    fn add_to_verification_obligation(&self, _: &mut VerificationObligation<'_>) -> SuiResult<()> {
         Ok(())
     }
 }

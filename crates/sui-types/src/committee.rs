@@ -22,7 +22,9 @@ pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
-    #[serde(skip)]
+    // TODO: We should find a way to skip serializing this, and instead
+    // recompute it during deserialization. This is not a huge deal for now
+    // as commitees are pretty small in size.
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
     #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
@@ -120,13 +122,14 @@ impl Committee {
         self.epoch
     }
 
-    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<AuthorityPublicKey> {
+    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<&AuthorityPublicKey> {
         match self.expanded_keys.get(authority) {
             // TODO: Check if this is unnecessary copying.
-            Some(v) => Ok(v.clone()),
-            None => (*authority).try_into().map_err(|_| {
-                SuiError::InvalidCommittee(format!("Authority #{} not found", authority))
-            }),
+            Some(v) => Ok(v),
+            None => Err(SuiError::InvalidCommittee(format!(
+                "Authority #{} not found",
+                authority
+            ))),
         }
     }
 

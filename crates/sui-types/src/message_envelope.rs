@@ -25,7 +25,7 @@ pub trait Message {
     /// to be verified. In most messages this function can be a noop.
     fn add_to_verification_obligation(
         &self,
-        obligation: &mut VerificationObligation,
+        obligation: &mut VerificationObligation<'_>,
     ) -> SuiResult<()>;
 }
 
@@ -75,10 +75,11 @@ where
     /// Add this message to `obligation` for verification.
     /// This allows batch verification. This message can be
     /// one of the many messages that need to be verified.
-    pub fn add_to_verification_obligation(
+    #[allow(dead_code)]
+    fn add_to_verification_obligation<'a, 'b: 'a>(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
+        committee: &'b Committee,
+        obligation: &mut VerificationObligation<'a>,
     ) -> SuiResult<()> {
         self.data.add_to_verification_obligation(obligation)?;
 

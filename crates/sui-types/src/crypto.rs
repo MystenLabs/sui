@@ -678,10 +678,6 @@ impl SuiSignatureInner for Secp256k1SuiSignature {
     const LENGTH: usize = Secp256k1PublicKey::LENGTH + Secp256k1Signature::LENGTH + 1;
 }
 
-// impl Default for Secp256k1SuiSignature {
-//     []
-// }
-
 impl SuiPublicKey for Secp256k1PublicKey {
     const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::Secp256k1;
 }
@@ -775,13 +771,6 @@ pub trait SuiSignature: Sized + signature::Signature {
     fn verify<T>(&self, value: &T, author: SuiAddress) -> SuiResult<()>
     where
         T: Signable<Vec<u8>>;
-
-    fn add_to_verification_obligation_or_verify(
-        &self,
-        author: SuiAddress,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()>;
 }
 
 impl<S: SuiSignatureInner + Sized> SuiSignature for S {
@@ -797,25 +786,6 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
             .map_err(|_| SuiError::InvalidSignature {
                 error: "hello".to_string(),
             })
-    }
-
-    fn add_to_verification_obligation_or_verify(
-        &self,
-        author: SuiAddress,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()> {
-        let (sig, pk) = self.get_verification_inputs(author)?;
-        match obligation.add_signature_and_public_key(sig.clone(), pk.clone(), idx) {
-            Ok(_) => Ok(()),
-            Err(err) => {
-                let msg = &obligation.messages[idx][..];
-                pk.verify(msg, &sig)
-                    .map_err(|_| SuiError::InvalidSignature {
-                        error: err.to_string(),
-                    })
-            }
-        }
     }
 
     fn signature_bytes(&self) -> &[u8] {
@@ -839,10 +809,10 @@ impl<S: SuiSignatureInner + Sized> SuiSignature for S {
 pub trait AuthoritySignInfoTrait: private::SealedAuthoritySignInfoTrait {
     fn verify<T: Signable<Vec<u8>>>(&self, data: &T, committee: &Committee) -> SuiResult;
 
-    fn add_to_verification_obligation(
+    fn add_to_verification_obligation<'a, 'b: 'a>(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
+        committee: &'b Committee,
+        obligation: &mut VerificationObligation<'a>,
         message_index: usize,
     ) -> SuiResult<()>;
 }
@@ -854,10 +824,10 @@ impl AuthoritySignInfoTrait for EmptySignInfo {
         Ok(())
     }
 
-    fn add_to_verification_obligation(
+    fn add_to_verification_obligation<'a, 'b: 'a>(
         &self,
-        _committee: &Committee,
-        _obligation: &mut VerificationObligation,
+        _committee: &'b Committee,
+        _obligation: &mut VerificationObligation<'a>,
         _message_index: usize,
     ) -> SuiResult<()> {
         Ok(())
@@ -891,10 +861,10 @@ impl AuthoritySignInfoTrait for AuthoritySignInfo {
         add_to_verification_obligation_and_verify(self, data, committee)
     }
 
-    fn add_to_verification_obligation(
+    fn add_to_verification_obligation<'a, 'b: 'a>(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
+        committee: &'b Committee,
+        obligation: &mut VerificationObligation<'a>,
         message_index: usize,
     ) -> SuiResult<()> {
         let weight = committee.weight(&self.authority);
@@ -982,10 +952,10 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
         add_to_verification_obligation_and_verify(self, data, committee)
     }
 
-    fn add_to_verification_obligation(
+    fn add_to_verification_obligation<'a, 'b: 'a>(
         &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation,
+        committee: &'b Committee,
+        obligation: &mut VerificationObligation<'a>,
         message_index: usize,
     ) -> SuiResult<()> {
         // Check epoch
@@ -1222,14 +1192,14 @@ impl ToObligationSignature for AuthoritySignature {
 impl ToObligationSignature for Secp256k1Signature {}
 
 #[derive(Default)]
-pub struct VerificationObligation {
+pub struct VerificationObligation<'a> {
     pub messages: Vec<Vec<u8>>,
     pub signatures: Vec<AggregateAuthoritySignature>,
-    pub public_keys: Vec<Vec<AuthorityPublicKey>>,
+    pub public_keys: Vec<Vec<&'a AuthorityPublicKey>>,
 }
 
-impl VerificationObligation {
-    pub fn new() -> VerificationObligation {
+impl<'a> VerificationObligation<'a> {
+    pub fn new() -> VerificationObligation<'a> {
         VerificationObligation {
             ..Default::default()
         }
@@ -1250,44 +1220,12 @@ impl VerificationObligation {
         self.messages.len() - 1
     }
 
-    // Attempts to add signature and public key to the obligation. If this fails, ensure to call `verify` manually.
-    pub fn add_signature_and_public_key<
-        S: ToObligationSignature + Authenticator<PubKey = P>,
-        P: VerifyingKey<Sig = S>,
-    >(
-        &mut self,
-        signature: S,
-        public_key: P,
-        idx: usize,
-    ) -> SuiResult<()> {
-        match signature.to_obligation_signature(&public_key) {
-            ObligationSignature::AuthoritySig((sig, pubkey)) => {
-                self.public_keys
-                    .get_mut(idx)
-                    .ok_or(SuiError::InvalidAuthenticator)?
-                    .push(pubkey.clone());
-                self.signatures
-                    .get_mut(idx)
-                    .ok_or(SuiError::InvalidAuthenticator)?
-                    .add_signature(sig.clone())
-                    .map_err(|_| SuiError::InvalidSignature {
-                        error: "Failed to add signature to obligation".to_string(),
-                    })?;
-                Ok(())
-            }
-            ObligationSignature::None => Err(SuiError::SenderSigUnbatchable),
-        }
-    }
-
     pub fn verify_all(self) -> SuiResult<()> {
         AggregateAuthoritySignature::batch_verify(
-            &self
-                .signatures
-                .iter()
-                .collect::<Vec<&Ed25519AggregateSignature>>(),
+            &self.signatures.iter().collect::<Vec<_>>(),
             self.public_keys
                 .iter()
-                .map(|x| x.iter())
+                .map(|x| x.iter().copied())
                 .collect::<Vec<_>>(),
             &self.messages.iter().map(|x| &x[..]).collect::<Vec<_>>()[..],
         )
@@ -1313,7 +1251,7 @@ pub mod bcs_signable_test {
     use super::VerificationObligation;
 
     #[cfg(test)]
-    pub fn get_obligation_input<T>(value: &T) -> (VerificationObligation, usize)
+    pub fn get_obligation_input<T>(value: &T) -> (VerificationObligation<'_>, usize)
     where
         T: super::bcs_signable::BcsSignable,
     {
