@@ -3,6 +3,7 @@
 
 use rocksdb::Options;
 use std::path::PathBuf;
+use sui_storage::default_db_options;
 use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::error::SuiResult;
@@ -16,13 +17,18 @@ use typed_store_macros::DBMapUtils;
 pub struct EpochStore {
     /// Map from each epoch ID to the epoch information. The epoch is either signed by this node,
     /// or is certified (signed by a quorum).
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "epochs_table_default_config"]
     pub(crate) epochs: DBMap<EpochId, AuthenticatedEpoch>,
+}
+
+// These functions are used to initialize the DB tables
+fn epochs_table_default_config() -> Options {
+    default_db_options(None, None).1
 }
 
 impl EpochStore {
     pub fn new(path: PathBuf, genesis_committee: &Committee, db_options: Option<Options>) -> Self {
-        let epoch_store = Self::open_tables_read_write(path, db_options);
+        let epoch_store = Self::open_tables_read_write(path, db_options, None);
         if epoch_store.database_is_empty() {
             epoch_store
                 .init_genesis_epoch(genesis_committee.clone())
