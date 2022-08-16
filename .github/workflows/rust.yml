@@ -46,20 +46,11 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
-
       - name: Install cargo-hakari, and cache the binary
-
-        uses: actions-rs/install@v0.1
+        uses: baptiste0928/cargo-install@v1
         with:
           crate: cargo-hakari
-          version: latest
-          use-tool-cache: true
-
-      #  uses: baptiste0928/cargo-install@v1
-      #  with:
-      #    crate: cargo-hakari
-      #    locked: true
-
+          locked: true
       - run: scripts/license_check.sh
       - run: cargo xlint
       - run: |
@@ -81,11 +72,6 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
       - uses: taiki-e/install-action@nextest
-      - name: Install huniq
-        uses: actions-rs/install@v0.1
-        with:
-          crate: huniq
-
       - name: cargo test
         run: |
           cargo nextest run --all-features --profile ci
