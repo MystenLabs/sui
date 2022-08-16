@@ -2,12 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::AuthorityState,
-    authority_active::gossip::{DigestHandler, Follower, GossipMetrics},
-    authority_aggregator::AuthorityAggregator,
-    authority_client::AuthorityAPI,
+    authority::AuthorityState, authority_active::gossip::GossipMetrics,
+    authority_aggregator::AuthorityAggregator, authority_client::AuthorityAPI,
 };
-use async_trait::async_trait;
 
 use tokio_stream::{Stream, StreamExt};
 
@@ -21,6 +18,7 @@ use sui_types::{
     messages_checkpoint::CheckpointContents,
 };
 
+use std::future::Future;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
@@ -252,7 +250,7 @@ pub struct NodeSyncState<A> {
     committee: Arc<Committee>,
     effects_stake: Mutex<EffectsStakeMap>,
     state: Arc<AuthorityState>,
-    node_sync_store: Arc<NodeSyncStore>,
+    pub(super) node_sync_store: Arc<NodeSyncStore>,
     aggregator: Arc<AuthorityAggregator<A>>,
 
     // Used to single-shot multiple concurrent downloads.
@@ -655,7 +653,7 @@ where
 #[derive(Clone)]
 pub struct NodeSyncHandle {
     sender: mpsc::Sender<DigestsMessage>,
-    metrics: GossipMetrics,
+    pub metrics: GossipMetrics,
 }
 
 impl NodeSyncHandle {
@@ -725,32 +723,16 @@ impl NodeSyncHandle {
 
         Ok(futures)
     }
-}
 
-#[async_trait]
-impl<A> DigestHandler<A> for NodeSyncHandle
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    type DigestResult = BoxFuture<'static, SuiResult>;
-
-    async fn handle_digest(
+    pub async fn handle_sync_digest(
         &self,
-        follower: &Follower<A>,
+        peer: AuthorityName,
         digests: ExecutionDigests,
-    ) -> SuiResult<Self::DigestResult> {
+    ) -> SuiResult<impl Future<Output = SuiResult>> {
         let (tx, rx) = oneshot::channel();
         let sender = self.sender.clone();
-        Self::send_msg_with_tx(
-            sender,
-            DigestsMessage::new(&digests, follower.peer_name, tx),
-        )
-        .await?;
+        Self::send_msg_with_tx(sender, DigestsMessage::new(&digests, peer, tx)).await?;
         Ok(Self::map_rx(rx))
-    }
-
-    fn get_metrics(&self) -> &GossipMetrics {
-        &self.metrics
     }
 }
 
