@@ -46,41 +46,45 @@ function AddressInput<FormValues>({
         setFieldValue('to', '');
     }, [setFieldValue]);
     return (
-        <div
-            className={cl(
-                st.group,
-                dirty && formattedValue !== '' && !isValid ? st.invalidAddr : ''
-            )}
-        >
-            <div className={st.textarea}>
-                <TextareaAutosize
-                    maxRows={2}
-                    minRows={1}
-                    disabled={disabled}
-                    placeholder={placeholder}
-                    value={formattedValue}
-                    onChange={handleOnChange}
-                    onBlur={onBlur}
-                    className={className}
-                    name={name}
-                />
-            </div>
+        <>
             <div
-                onClick={clearAddress}
                 className={cl(
-                    st.inputGroupAppend,
-                    dirty && formattedValue !== ''
-                        ? st.changeAddrIcon + ' sui-icons-close'
-                        : st.qrCode
+                    st.group,
+                    dirty && formattedValue !== '' && !isValid
+                        ? st.invalidAddr
+                        : ''
                 )}
-            ></div>
-
-            {isValid && (
+            >
+                <div className={st.textarea}>
+                    <TextareaAutosize
+                        maxRows={2}
+                        minRows={1}
+                        disabled={disabled}
+                        placeholder={placeholder}
+                        value={formattedValue}
+                        onChange={handleOnChange}
+                        onBlur={onBlur}
+                        className={className}
+                        name={name}
+                    />
+                </div>
+                <div
+                    onClick={clearAddress}
+                    className={cl(
+                        st.inputGroupAppend,
+                        dirty && formattedValue !== ''
+                            ? st.changeAddrIcon + ' sui-icons-close'
+                            : st.qrCode
+                    )}
+                ></div>
+            </div>
+            {isValid && formattedValue !== '' && dirty && (
                 <div className={st.validAddress}>
                     <Icon icon={SuiIcons.Checkmark} className={st.checkmark} />
+                    Valid address
                 </div>
             )}
-        </div>
+        </>
     );
 }
 

@@ -7,6 +7,8 @@ import {
     isSuiMoveObject,
 } from '@mysten/sui.js';
 
+import { SuiIcons } from '_font-icons/output/sui-icons';
+
 import type {
     ObjectId,
     SuiObject,
@@ -38,7 +40,7 @@ export const SUPPORTED_COINS_LIST = [
         coinName: 'SUI Coin',
         coinSymbol: GAS_SYMBOL,
         coinType: GAS_TYPE_ARG,
-        coinIconName: 'SuiLogoIcon',
+        coinIconName: SuiIcons.SuiLogoIcon,
     },
 ];
 

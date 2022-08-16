@@ -41,7 +41,7 @@ function ReceiptPage() {
 
     //TODO: redo the CTA links
     const ctaLinks = tranferType === 'nft' ? '/nfts' : '/';
-    const linkTo = ctaLinks ? ctaLinks : '/transactions';
+    const linkTo = tranferType ? ctaLinks : '/transactions';
 
     if (!txDigest && txResults && !txnItem) {
         return <Navigate to={linkTo} replace={true} />;

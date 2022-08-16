@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useMemo } from 'react';
+import { useMemo, useCallback } from 'react';
 import { useIntl } from 'react-intl';
-import { Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
@@ -21,8 +21,10 @@ import st from './CoinSelection.module.scss';
 // create a list of coins that are available in the account
 function ActiveCoinCard({
     activeCoinType = GAS_TYPE_ARG,
+    showActiveCoin = true,
 }: {
     activeCoinType: string;
+    showActiveCoin?: boolean;
 }) {
     const intl = useIntl();
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
@@ -44,37 +46,78 @@ function ActiveCoinCard({
         return coins.filter((coin) => coin.coinType === activeCoinType)[0];
     }, [activeCoinType, coins]);
 
-    const IconName = activeCoin.coinIconName as keyof typeof SuiIcons;
+    const IconName = activeCoin.coinIconName;
+
+    const SelectedCoinCard = (
+        <div className={st.selectCoin}>
+            <Link
+                to={`/send/select?${new URLSearchParams({
+                    type: activeCoinType,
+                }).toString()}`}
+                className={st.coin}
+            >
+                <div className={st.suiIcon}>
+                    <Icon icon={IconName} />
+                </div>
+                <div className={st.coinLabel}>
+                    {activeCoin.coinName}{' '}
+                    <span className={st.coinSymbol}>
+                        {activeCoin.coinSymbol}
+                    </span>
+                </div>
+                <div className={st.chevron}>
+                    <Icon icon={SuiIcons.SuiChevronRight} />
+                </div>
+            </Link>
+            <div className={st.coinBalance}>
+                <div className={st.coinBalanceLabel}>Total Available</div>
+                <div className={st.coinBalanceValue}>
+                    {activeCoin.balance} {activeCoin.coinSymbol}
+                </div>
+            </div>
+        </div>
+    );
+
+    const navigate = useNavigate();
+
+    const changeConType = useCallback(
+        (event: React.MouseEvent<HTMLDivElement>) => {
+            const cointype = event.currentTarget.dataset.cointype as string;
+            navigate(
+                `/send?${new URLSearchParams({
+                    type: cointype,
+                }).toString()}`
+            );
+        },
+        [navigate]
+    );
+
+    const CoinListCard = (
+        <div className={st.coinList}>
+            {coins.map((coin, index) => (
+                <div
+                    className={st.coinDetail}
+                    key={index}
+                    onClick={changeConType}
+                    data-cointype={coin.coinType}
+                >
+                    <div className={st.coinIcon}>
+                        <Icon icon={coin.coinIconName} />
+                    </div>
+                    <div className={st.coinLabel}>
+                        {coin.coinName} <span>{coin.coinSymbol}</span>
+                    </div>
+                    <div className={st.coinAmount}>
+                        {coin.balance} <span>{coin.coinSymbol}</span>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
 
     return (
         <div className={st.content}>
-            <div className={st.selectCoin}>
-                <Link
-                    to={`/send/select?${new URLSearchParams({
-                        type: activeCoinType,
-                    }).toString()}`}
-                    className={st.coin}
-                >
-                    <div className={st.suiIcon}>
-                        <Icon icon={SuiIcons[IconName]} />
-                    </div>
-                    <div className={st.coinLabel}>
-                        {activeCoin.coinName}{' '}
-                        <span className={st.coinSymbol}>
-                            {activeCoin.coinSymbol}
-                        </span>
-                    </div>
-                    <div className={st.chevron}>
-                        <Icon icon={SuiIcons.SuiChevronRight} />
-                    </div>
-                </Link>
-                <div className={st.coinBalance}>
-                    <div className={st.coinBalanceLabel}>Total Available</div>
-                    <div className={st.coinBalanceValue}>
-                        {activeCoin.balance} {activeCoin.coinSymbol}
-                    </div>
-                </div>
-            </div>
+            {showActiveCoin ? SelectedCoinCard : CoinListCard}
         </div>
     );
 }

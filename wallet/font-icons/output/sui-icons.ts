@@ -1,6 +1,5 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 export enum SuiIcons {
   Buy = "sui-icons-Buy",
   Info = "sui-icons-Info",

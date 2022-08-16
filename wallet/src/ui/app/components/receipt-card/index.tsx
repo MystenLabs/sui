@@ -147,17 +147,9 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                                 transactionID={txDigest.txId}
                                 title="View on Sui Explorer"
                                 className={st['explorer-link']}
-                                showIcon={false}
+                                showIcon={true}
                             >
                                 View in Explorer
-                                <Icon
-                                    icon={SuiIcons.ArrowLeft}
-                                    className={cl(
-                                        st.arrowActionIcon,
-                                        st.angledArrow,
-                                        st.iconExplorer
-                                    )}
-                                />
                             </ExplorerLink>
                         </div>
                     )}

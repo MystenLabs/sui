@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppType } from './redux/slices/app/AppType';
-import { routes as stakeRoutes } from './staking';
+// import { routes as stakeRoutes } from './staking';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
 import HomePage, {
@@ -28,8 +28,13 @@ import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
 import { setNavVisibility } from '_redux/slices/app';
 
-const HIDDEN_MENU_PATHS = ['/stake', '/nft-details', '/receipt', '/send', '/send/select'];
-
+const HIDDEN_MENU_PATHS = [
+    '/stake',
+    '/nft-details',
+    '/receipt',
+    '/send',
+    '/send/select',
+];
 
 const App = () => {
     const dispatch = useAppDispatch();
@@ -57,7 +62,7 @@ const App = () => {
                 <Route path="send" element={<TransferCoinPage />} />
                 <Route path="send/select" element={<CoinsSelectorPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
-                {stakeRoutes}
+
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}

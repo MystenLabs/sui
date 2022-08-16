@@ -67,7 +67,6 @@ function TransferCoinPage() {
 
     const [sendError, setSendError] = useState<string | null>(null);
     const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
-    const [formData, setFormData] = useState<FormValues>(initialValues);
 
     const intl = useIntl();
     const validationSchemaStepOne = useMemo(
@@ -131,14 +130,18 @@ function TransferCoinPage() {
     const handleNextStep = useCallback(
         (
             { amount }: FormValues,
-            { setSubmitting }: FormikHelpers<FormValues>
+            { setSubmitting, setFieldValue }: FormikHelpers<FormValues>
         ) => {
-            setFormData((prev) => ({ ...prev, amount }));
-            setCurrentStep((prev) => prev + 1);
             setSubmitting(false);
+            setFieldValue('amount', amount);
+            setCurrentStep((prev) => prev + 1);
         },
         []
     );
+
+    const handleBackStep = useCallback(() => {
+        setCurrentStep(DEFAULT_FORM_STEP);
+    }, []);
 
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
@@ -147,7 +150,6 @@ function TransferCoinPage() {
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
 
-    // prevent navigating away after submitting form
     if (!coinType) {
         return <Navigate to="/" replace={true} />;
     }
@@ -172,7 +174,7 @@ function TransferCoinPage() {
     const StepTwoForm =
         (coinType && (
             <Formik
-                initialValues={formData}
+                initialValues={initialValues}
                 validateOnMount={true}
                 validationSchema={validationSchemaStepTwo}
                 onSubmit={onHandleSubmit}
@@ -196,6 +198,7 @@ function TransferCoinPage() {
                 title="Send Coins"
                 backLink={'/'}
                 className={st.pageTitle}
+                {...(currentStep > 1 && { onClick: handleBackStep })}
             />
 
             <Content>
