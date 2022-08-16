@@ -5,7 +5,7 @@ module examples::trade_in {
     use sui::transfer;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::tx_context::{TxContext};
 
     /// Price for the first phone model in series
@@ -21,7 +21,7 @@ module examples::trade_in {
     const EIncorrectAmount: u64 = 2;
 
     /// A phone; can be purchased or traded in for a newer model
-    struct Phone has key, store { info: Info, model: u8 }
+    struct Phone has key, store { id: UID, model: u8 }
 
     /// Payable receipt. Has to be paid directly or paid with a trade-in option.
     /// Cannot be stored, owned or dropped - has to be used to select one of the
@@ -37,7 +37,7 @@ module examples::trade_in {
         let price = if (model == 1) MODEL_ONE_PRICE else MODEL_TWO_PRICE;
 
         (
-            Phone { info: object::new(ctx), model },
+            Phone { id: object::new(ctx), model },
             Receipt { price }
         )
     }
