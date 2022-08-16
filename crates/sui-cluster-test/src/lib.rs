@@ -7,11 +7,8 @@ use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
-<<<<<<< HEAD
 use sui_json_rpc_types::SuiTransactionResponse;
-=======
 use test_utils::messages::make_transactions_with_wallet_context;
->>>>>>> 140896288 (add cluster test)
 
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
