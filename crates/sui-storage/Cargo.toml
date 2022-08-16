@@ -23,6 +23,7 @@ strum = "^0.24"
 strum_macros = "^0.24"
 anyhow = "1.0.58"
 tempfile = "3.3.0"
+tap = "1.0.1"
 
 sui-types = { path = "../sui-types" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"}

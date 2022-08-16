@@ -32,6 +32,8 @@ use sui_types::{
 };
 use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
 
+use tokio::time::{timeout, Duration};
+
 pub enum TestCallArg {
     Object(ObjectID),
     U64(u64),
@@ -1003,6 +1005,67 @@ async fn test_handle_confirmation_transaction_ok() {
             .unwrap()
             .count(),
         2
+    );
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_handle_certificate_timeout_retry() {
+    telemetry_subscribers::init_for_testing();
+
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        Arc::new(init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await);
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let certified_transfer_transaction = init_certified_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        object.compute_object_reference(),
+        gas_object.compute_object_reference(),
+        &authority_state,
+    );
+
+    let clone1 = certified_transfer_transaction.clone();
+    let state1 = authority_state.clone();
+    timeout(Duration::from_millis(100), async move {
+        state1.handle_certificate(clone1).await.unwrap();
+    })
+    .await
+    .unwrap_err();
+
+    let g = authority_state
+        .database
+        .acquire_tx_guard(&certified_transfer_transaction)
+        .await
+        .unwrap();
+
+    // assert that the tx was dropped mid-stream due to the timeout.
+    assert_eq!(g.retry_num(), 1);
+
+    authority_state
+        .handle_certificate(certified_transfer_transaction.clone())
+        .await
+        .unwrap();
+
+    println!(
+        "{:?}",
+        authority_state
+            .make_transaction_info(certified_transfer_transaction.digest())
+            .await
+            .unwrap()
     );
 }
 
