@@ -28,19 +28,17 @@ describe('Unit Tests', () => {
     });
 
     describe('presentBN', () => {
-        it('handles increasing numbers', () => {
-            for (const [input, output] of [
-                [1, '1'],
-                [10, '10'],
-                [100, '100'],
-                [1000, '1,000'],
-                [10000, '10,000'],
-                [100000, '100,000'],
-                [1000000, '1,000,000'],
-                [10000000, '10,000,000'],
-            ]) {
-                expect(presentBN(new BN(input, 10))).toEqual(output);
-            }
+        it.each([
+            [1, '1'],
+            [10, '10'],
+            [100, '100'],
+            [1000, '1,000'],
+            [10000, '10,000'],
+            [100000, '100,000'],
+            [1000000, '1,000,000'],
+            [10000000, '10,000,000'],
+        ])('handles increasing numbers', (input, output) => {
+            expect(presentBN(new BN(input, 10))).toEqual(output);
         });
     });
 });
