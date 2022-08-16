@@ -121,6 +121,10 @@ function formatByTransactionKind(
                     value: moveCall.arguments,
                     list: true,
                 },
+                typeArguments: {
+                    value: moveCall.typeArguments,
+                    list: true,
+                },
             };
         case 'Publish':
             const publish = getPublishTransaction(data)!;
@@ -343,6 +347,15 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                   ],
               }
             : false;
+
+    if (typearguments && txKindData.typeArguments?.value) {
+        typearguments.content.push({
+            label: 'Type Arguments',
+            monotypeClass: true,
+            value: JSON.stringify(txKindData.typeArguments.value),
+        });
+    }
+
     const defaultActiveTab = 0;
 
     const modules =
