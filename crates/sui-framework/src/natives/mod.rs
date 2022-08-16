@@ -26,6 +26,36 @@ pub fn all_natives(
             "bls12381_verify_g1_sig",
             crypto::bls12381_verify_g1_sig,
         ),
+        (
+            "crypto",
+            "native_verify_full_range_proof",
+            crypto::verify_range_proof,
+        ),
+        (
+            "elliptic_curve",
+            "native_add_ristretto_point",
+            crypto::add_ristretto_point,
+        ),
+        (
+            "elliptic_curve",
+            "native_subtract_ristretto_point",
+            crypto::subtract_ristretto_point,
+        ),
+        (
+            "elliptic_curve",
+            "native_create_pedersen_commitment",
+            crypto::pedersen_commit,
+        ),
+        (
+            "elliptic_curve",
+            "native_scalar_from_u64",
+            crypto::scalar_from_u64,
+        ),
+        (
+            "elliptic_curve",
+            "native_scalar_from_bytes",
+            crypto::scalar_from_bytes,
+        ),
         ("event", "emit", event::emit),
         ("object", "bytes_to_address", object::bytes_to_address),
         ("object", "delete_impl", object::delete_impl),
