@@ -951,7 +951,7 @@ export function isSuiJsonValue(obj: any, _argumentName?: string): obj is SuiJson
 
 export function isEmptySignInfo(obj: any, _argumentName?: string): obj is EmptySignInfo {
     return (
-        typeof obj === "object"
+        typeof obj === "string"
     )
 }
 
