@@ -1,0 +1,106 @@
+@use '_utils';
+@use '_values/colors';
+
+.nftimage {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+
+    img {
+        width: 100%;
+        object-fit: cover;
+        border-radius: 6px;
+        height: 100%;
+    }
+
+    .small {
+        height: 98px;
+        width: 98px;
+    }
+
+    .medium {
+        height: 150px;
+        width: 150px;
+    }
+
+    .large {
+        height: 180px;
+        width: 180px;
+    }
+
+    .nftfields {
+        line-height: 12px;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 13px;
+        padding-top: 10px;
+        color: colors.$gray-100;
+        width: 100%;
+        text-overflow: ellipsis;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    .expandable {
+        @include utils.typography('table/title-sm');
+
+        margin-top: 10px;
+
+        a {
+            text-decoration: none;
+            color: colors.$gray-80;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        i {
+            color: colors.$gray-65;
+            font-size: 14px;
+            margin-left: 5px;
+            font-weight: 300;
+            line-height: 100%;
+        }
+    }
+
+    &.wideview {
+        background-color: colors.$gray-40;
+        padding: 10px;
+        border-radius: 10px;
+        width: 100%;
+        justify-content: space-between;
+        flex-flow: row-reverse;
+        gap: 10px;
+
+        .img {
+            width: 50px;
+            height: 50px;
+        }
+
+        .nftfields {
+            padding-top: 0;
+            height: 49px;
+            display: flex;
+            flex-flow: column;
+            justify-content: center;
+        }
+
+        .nft-name {
+            text-transform: capitalize;
+            color: colors.$gray-100;
+            margin-bottom: 4px;
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+
+            @include utils.typography('nft-title');
+        }
+
+        .nft-type {
+            color: colors.$gray-75;
+
+            @include utils.typography('table/text-lg');
+        }
+    }
+}

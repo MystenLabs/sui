@@ -51,9 +51,16 @@ impl TransactionNotifier {
         self.low_watermark.load(Ordering::SeqCst)
     }
 
-    // TODO: Return a future instead so that the caller can await for.
-    pub fn ticket_drained(&self) -> bool {
-        self.inner.lock().high_watermark == self.low_watermark.load(Ordering::SeqCst)
+    /// Check that we have drained all tickets (i.e. low watermark reached high watermark),
+    /// and that the issued tickets ends before `end`.
+    pub fn ticket_drained_til(&self, end: TxSequenceNumber) -> bool {
+        let high_watermark = self.inner.lock().high_watermark;
+        let low_watermark = self.low_watermark.load(Ordering::SeqCst);
+        let result = high_watermark == low_watermark && high_watermark == end;
+        if !result {
+            debug!(?high_watermark, ?low_watermark, checkpoint_end_tx=?end, "Ticket not drained yet.");
+        }
+        result
     }
 
     /// Get a ticket with a sequence number
@@ -124,6 +131,7 @@ impl TransactionNotifier {
                     if let Ok(iter) = transaction_notifier
                         .clone()
                         .state
+                        .tables
                         .executed_sequence
                         .iter()
                         .skip_to(&next_seq)
@@ -239,7 +247,7 @@ mod tests {
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         fs::create_dir(&path).unwrap();
 
-        let store = Arc::new(AuthorityStore::open(path, None));
+        let store = Arc::new(AuthorityStore::open(&path, None));
 
         let notifier = Arc::new(TransactionNotifier::new(store.clone()).unwrap());
 

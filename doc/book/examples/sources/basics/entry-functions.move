@@ -3,17 +3,17 @@
 
 module examples::object {
     use sui::transfer;
-    use sui::id::VersionedID;
-    use sui::tx_context::{Self, TxContext};
+    use sui::object::{Self, UID};
+    use sui::tx_context::TxContext;
 
     struct Object has key {
-        id: VersionedID
+        id: UID
     }
 
     /// If function is defined as public - any module can call it.
     /// Non-entry functions are also allowed to have return values.
     public fun create(ctx: &mut TxContext): Object {
-        Object { id: tx_context::new_id(ctx) }
+        Object { id: object::new(ctx) }
     }
 
     /// Entrypoints can't have return values as they can only be called

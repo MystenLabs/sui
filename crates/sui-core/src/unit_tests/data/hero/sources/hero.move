@@ -7,7 +7,7 @@ module examples::hero {
     use examples::trusted_coin::EXAMPLE;
     use sui::coin::{Self, Coin};
     use sui::event;
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, UID};
     use sui::math;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -15,7 +15,7 @@ module examples::hero {
 
     /// Our hero!
     struct Hero has key, store {
-        id: VersionedID,
+        id: UID,
         /// Hit points. If they go to zero, the hero can't do anything
         hp: u64,
         /// Experience of the hero. Begins at zero
@@ -26,7 +26,7 @@ module examples::hero {
 
     /// The hero's trusty sword
     struct Sword has key, store {
-        id: VersionedID,
+        id: UID,
         /// Constant set at creation. Acts as a multiplier on sword's strength.
         /// Swords with high magic are rarer (because they cost more).
         magic: u64,
@@ -36,14 +36,14 @@ module examples::hero {
 
     /// For healing wounded heroes
     struct Potion has key, store {
-        id: VersionedID,
+        id: UID,
         /// Effectiveness of the potion
         potency: u64
     }
 
     /// A creature that the hero can slay to level up
     struct Boar has key {
-        id: VersionedID,
+        id: UID,
         /// Hit points before the boar is slain
         hp: u64,
         /// Strength of this particular boar
@@ -52,7 +52,7 @@ module examples::hero {
 
     /// Capability conveying the authority to create boars and potions
     struct GameAdmin has key {
-        id: VersionedID,
+        id: UID,
         /// Total number of boars the admin has created
         boars_created: u64,
         /// Total number of potions the admin has created
@@ -102,7 +102,7 @@ module examples::hero {
         assert!(&tx_context::sender(ctx) == &admin, ENOT_ADMIN);
         transfer::transfer(
             GameAdmin {
-                id: tx_context::new_id(ctx),
+                id: object::new(ctx),
                 boars_created: 0,
                 potions_created: 0
             },
@@ -140,10 +140,10 @@ module examples::hero {
         // let the world know about the hero's triumph by emitting an event!
         event::emit(BoarSlainEvent {
             slayer_address: tx_context::sender(ctx),
-            hero: *id::inner(&hero.id),
-            boar: *id::inner(&boar_id),
+            hero: object::uid_to_inner(&hero.id),
+            boar: object::uid_to_inner(&boar_id),
         });
-        id::delete(boar_id);
+        object::delete(boar_id);
 
     }
 
@@ -178,7 +178,7 @@ module examples::hero {
     /// Heal the weary hero with a potion
     public fun heal(hero: &mut Hero, potion: Potion) {
         let Potion { id, potency } = potion;
-        id::delete(id);
+        object::delete(id);
         let new_hp = hero.hp + potency;
         // cap hero's HP at MAX_HP to avoid int overflows
         hero.hp = math::min(new_hp, MAX_HP)
@@ -216,7 +216,7 @@ module examples::hero {
         // a max. one can only imbue a sword with so much magic
         let magic = (value - MIN_SWORD_COST) / MIN_SWORD_COST;
         Sword {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             magic: math::min(magic, MAX_MAGIC),
             strength: 1
         }
@@ -232,7 +232,7 @@ module examples::hero {
     /// same attributes.
     public fun create_hero(sword: Sword, ctx: &mut TxContext): Hero {
         Hero {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             hp: 100,
             experience: 0,
             sword: option::some(sword),
@@ -249,7 +249,7 @@ module examples::hero {
         admin.potions_created = admin.potions_created + 1;
         // send potion to the designated player
         transfer::transfer(
-            Potion { id: tx_context::new_id(ctx), potency },
+            Potion { id: object::new(ctx), potency },
             player
         )
     }
@@ -265,7 +265,7 @@ module examples::hero {
         admin.boars_created = admin.boars_created + 1;
         // send boars to the designated player
         transfer::transfer(
-            Boar { id: tx_context::new_id(ctx), hp, strength },
+            Boar { id: object::new(ctx), hp, strength },
             player
         )
     }
@@ -282,16 +282,16 @@ module examples::hero {
     #[test_only]
     public fun delete_hero_for_testing(hero: Hero) {
         let Hero { id, hp: _, experience: _, sword } = hero;
-        id::delete(id);
+        object::delete(id);
         let sword = option::destroy_some(sword);
         let Sword { id, magic: _, strength: _ } = sword;
-        id::delete(id)
+        object::delete(id)
     }
 
     #[test_only]
     public fun delete_game_admin_for_testing(admin: GameAdmin) {
         let GameAdmin { id, boars_created: _, potions_created: _ } = admin;
-        id::delete(id);
+        object::delete(id);
     }
 
     #[test]

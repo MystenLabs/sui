@@ -8,13 +8,13 @@ Objects in Sui can have different types of [ownership](../objects.md#object-owne
 
 ### Create immutable object
 
-Regardless of whether an object was just created or already owned by an account, to turn this object into an immutable object, we need to call the following API in the [Transfer Library](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
+Regardless of whether an object was just created or already owned by an account, to turn this object into an immutable object, we need to call the following API in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
 ```rust
 public native fun freeze_object<T: key>(obj: T);
 ```
 After this call, the specified object will become permanently immutable. This is a non-reversible operation; hence, freeze an object only when you are certain that it will never need to be mutated.
 
-Let's add an entry function to the [ColorObject](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move) module to turn an existing (owned) `ColorObject` into an immutable object:
+Let's add an entry function to the [color_object module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/objects_tutorial/sources/color_object.move) to turn an existing (owned) `ColorObject` into an immutable object:
 ```rust
 public entry fun freeze_object(object: ColorObject) {
     transfer::freeze_object(object)
@@ -34,7 +34,7 @@ In this function, a fresh new `ColorObject` is created and immediately turned in
 
 ### Use immutable object
 Once an object becomes immutable, the rules of who could use this object in Move calls change:
-1. An immutable object can be passed only as a read-only reference to Move entry functions as `&T`.
+1. An immutable object can be passed only as a read-only, immutable reference to Move entry functions as `&T`.
 2. Anyone can use immutable objects.
 
 Recall that we defined a function that copies the value of one object to another:

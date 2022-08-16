@@ -118,7 +118,7 @@ describe('PublicKey', () => {
   it('toSuiAddress', () => {
     const key = new PublicKey(new Uint8Array(BASE64_KEY_BYTES));
     expect(key.toSuiAddress()).toEqual(
-      '0828a42b0c541de0277ce21cb2cc4c451bea5aed'
+      '98fc1c8179b95274327069cf3b0ed051fb14e0bc'
     );
   });
 });

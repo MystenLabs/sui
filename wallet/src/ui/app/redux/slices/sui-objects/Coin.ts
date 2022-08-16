@@ -11,7 +11,7 @@ import type {
     ObjectId,
     SuiObject,
     SuiMoveObject,
-    TransactionResponse,
+    SuiTransactionResponse,
     RawSigner,
     SuiAddress,
     JsonRpcProvider,
@@ -22,6 +22,7 @@ const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 export const DEFAULT_GAS_BUDGET_FOR_SPLIT = 1000;
 export const DEFAULT_GAS_BUDGET_FOR_MERGE = 500;
 export const DEFAULT_GAS_BUDGET_FOR_TRANSFER = 100;
+export const DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI = 100;
 export const DEFAULT_GAS_BUDGET_FOR_STAKE = 1000;
 export const GAS_TYPE_ARG = '0x2::sui::SUI';
 export const GAS_SYMBOL = 'SUI';
@@ -74,12 +75,41 @@ export class Coin {
         coins: SuiMoveObject[],
         amount: bigint,
         recipient: SuiAddress
-    ): Promise<TransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
+        await signer.syncAccountState();
         const coin = await Coin.selectCoin(signer, coins, amount);
         return await signer.transferObject({
             objectId: coin,
             gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER,
             recipient: recipient,
+        });
+    }
+
+    /**
+     * Transfer `amount` of Coin<Sui> to `recipient`.
+     *
+     * @param signer A signer with connection to the gateway:e.g., new RawSigner(keypair, new JsonRpcProvider(endpoint))
+     * @param coins A list of Sui Coins owned by the signer
+     * @param amount The amount to be transferred
+     * @param recipient The sui address of the recipient
+     */
+    public static async transferSui(
+        signer: RawSigner,
+        coins: SuiMoveObject[],
+        amount: bigint,
+        recipient: SuiAddress
+    ): Promise<SuiTransactionResponse> {
+        await signer.syncAccountState();
+        const coin = await Coin.prepareCoinWithEnoughBalance(
+            signer,
+            coins,
+            amount + BigInt(DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI)
+        );
+        return await signer.transferSui({
+            suiObjectId: Coin.getID(coin),
+            gasBudget: DEFAULT_GAS_BUDGET_FOR_TRANSFER_SUI,
+            recipient: recipient,
+            amount: Number(amount),
         });
     }
 
@@ -97,8 +127,9 @@ export class Coin {
         coins: SuiMoveObject[],
         amount: bigint,
         validator: SuiAddress
-    ): Promise<TransactionResponse> {
+    ): Promise<SuiTransactionResponse> {
         const coin = await Coin.selectCoin(signer, coins, amount);
+        await signer.syncAccountState();
         return await signer.executeMoveCall({
             packageObjectId: '0x2',
             module: 'sui_system',
@@ -114,7 +145,11 @@ export class Coin {
         coins: SuiMoveObject[],
         amount: bigint
     ): Promise<ObjectId> {
-        const coin = await Coin.selectCoinForSplit(signer, coins, amount);
+        const coin = await Coin.prepareCoinWithEnoughBalance(
+            signer,
+            coins,
+            amount
+        );
         const coinID = Coin.getID(coin);
         const balance = Coin.getBalance(coin);
         if (balance === amount) {
@@ -131,7 +166,7 @@ export class Coin {
         }
     }
 
-    private static async selectCoinForSplit(
+    private static async prepareCoinWithEnoughBalance(
         signer: RawSigner,
         coins: SuiMoveObject[],
         amount: bigint

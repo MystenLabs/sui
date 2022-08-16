@@ -3,21 +3,24 @@
 
 module sui::coin {
     use sui::balance::{Self, Balance, Supply};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::vector;
 
+    /// For when a type passed to create_supply is not a one-time witness.
+    const EBadWitness: u64 = 0;
+
     /// A coin of type `T` worth `value`. Transferable and storable
     struct Coin<phantom T> has key, store {
-        id: VersionedID,
+        id: UID,
         balance: Balance<T>
     }
 
     /// Capability allowing the bearer to mint and burn
     /// coins of type `T`. Transferable
     struct TreasuryCap<phantom T> has key, store {
-        id: VersionedID,
+        id: UID,
         total_supply: Supply<T>
     }
 
@@ -28,15 +31,10 @@ module sui::coin {
         balance::supply_value(&cap.total_supply)
     }
 
-    /// Wrap a `Supply` into a transferable `TreasuryCap`.
-    public fun treasury_from_supply<T>(total_supply: Supply<T>, ctx: &mut TxContext): TreasuryCap<T> {
-        TreasuryCap { id: tx_context::new_id(ctx), total_supply }
-    }
-
     /// Unwrap `TreasuryCap` getting the `Supply`.
     public fun treasury_into_supply<T>(treasury: TreasuryCap<T>): Supply<T> {
         let TreasuryCap { id, total_supply } = treasury;
-        id::delete(id);
+        object::delete(id);
         total_supply
     }
 
@@ -69,13 +67,13 @@ module sui::coin {
 
     /// Wrap a balance into a Coin to make it transferable.
     public fun from_balance<T>(balance: Balance<T>, ctx: &mut TxContext): Coin<T> {
-        Coin { id: tx_context::new_id(ctx), balance }
+        Coin { id: object::new(ctx), balance }
     }
 
     /// Destruct a Coin wrapper and keep the balance.
     public fun into_balance<T>(coin: Coin<T>): Balance<T> {
         let Coin { id, balance } = coin;
-        id::delete(id);
+        object::delete(id);
         balance
     }
 
@@ -85,7 +83,7 @@ module sui::coin {
         balance: &mut Balance<T>, value: u64, ctx: &mut TxContext,
     ): Coin<T> {
         Coin {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             balance: balance::split(balance, value)
         }
     }
@@ -111,7 +109,7 @@ module sui::coin {
     /// Aborts if `c.value + self.value > U64_MAX`
     public entry fun join<T>(self: &mut Coin<T>, c: Coin<T>) {
         let Coin { id, balance } = c;
-        id::delete(id);
+        object::delete(id);
         balance::join(&mut self.balance, balance);
     }
 
@@ -131,7 +129,7 @@ module sui::coin {
     /// Destroy a coin with value zero
     public fun destroy_zero<T>(c: Coin<T>) {
         let Coin { id, balance } = c;
-        id::delete(id);
+        object::delete(id);
         balance::destroy_zero(balance)
     }
 
@@ -140,7 +138,7 @@ module sui::coin {
     /// Make any Coin with a zero value. Useful for placeholding
     /// bids/payments or preemptively making empty balances.
     public fun zero<T>(ctx: &mut TxContext): Coin<T> {
-        Coin { id: tx_context::new_id(ctx), balance: balance::zero() }
+        Coin { id: object::new(ctx), balance: balance::zero() }
     }
 
     /// Create a new currency type `T` as and return the `TreasuryCap`
@@ -153,8 +151,11 @@ module sui::coin {
         witness: T,
         ctx: &mut TxContext
     ): TreasuryCap<T> {
+        // Make sure there's only one instance of the type T
+        assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
+
         TreasuryCap {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             total_supply: balance::create_supply(witness)
         }
     }
@@ -165,7 +166,7 @@ module sui::coin {
         cap: &mut TreasuryCap<T>, value: u64, ctx: &mut TxContext,
     ): Coin<T> {
         Coin {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             balance: balance::increase_supply(&mut cap.total_supply, value)
         }
     }
@@ -183,7 +184,7 @@ module sui::coin {
     /// accordingly.
     public fun burn<T>(cap: &mut TreasuryCap<T>, c: Coin<T>): u64 {
         let Coin { id, balance } = c;
-        id::delete(id);
+        object::delete(id);
         balance::decrease_supply(&mut cap.total_supply, balance)
     }
 
@@ -239,14 +240,14 @@ module sui::coin {
     #[test_only]
     /// Mint coins of any type for (obviously!) testing purposes only
     public fun mint_for_testing<T>(value: u64, ctx: &mut TxContext): Coin<T> {
-        Coin { id: tx_context::new_id(ctx), balance: balance::create_for_testing(value) }
+        Coin { id: object::new(ctx), balance: balance::create_for_testing(value) }
     }
 
     #[test_only]
     /// Destroy a `Coin` with any value in it for testing purposes.
     public fun destroy_for_testing<T>(self: Coin<T>): u64 {
         let Coin { id, balance } = self;
-        id::delete(id);
+        object::delete(id);
         balance::destroy_for_testing(balance)
     }
 }

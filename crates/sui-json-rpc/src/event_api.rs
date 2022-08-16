@@ -6,9 +6,10 @@ use crate::SuiRpcModule;
 use async_trait::async_trait;
 use futures::{StreamExt, TryStream};
 use jsonrpsee::core::RpcResult;
+use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee_core::error::SubscriptionClosed;
 use jsonrpsee_core::server::rpc_module::RpcModule;
-use jsonrpsee_core::server::rpc_module::{PendingSubscription, SubscriptionSink};
+use jsonrpsee_core::server::rpc_module::SubscriptionSink;
 use serde::Serialize;
 use std::fmt::Display;
 use std::sync::Arc;
@@ -35,31 +36,33 @@ impl EventStreamingApiImpl {
 
 #[async_trait]
 impl EventStreamingApiServer for EventStreamingApiImpl {
-    fn subscribe_event(&self, pending: PendingSubscription, filter: SuiEventFilter) {
+    fn subscribe_event(
+        &self,
+        mut sink: SubscriptionSink,
+        filter: SuiEventFilter,
+    ) -> SubscriptionResult {
         let filter = match filter.try_into() {
             Ok(filter) => filter,
             Err(e) => {
-                let e: anyhow::Error = e;
-                let e: jsonrpsee_core::Error = e.into();
+                let e = jsonrpsee_core::Error::from(e);
                 warn!(error = ?e, "Rejecting subscription request.");
-                pending.reject(e);
-                return;
+                return Ok(sink.reject(e)?);
             }
         };
 
-        if let Some(sink) = pending.accept() {
-            let state = self.state.clone();
-            let stream = self.event_handler.subscribe(filter);
-            let stream = stream.map(move |e| {
-                let event = SuiEvent::try_from(e.event, &state.module_cache);
-                event.map(|event| SuiEventEnvelope {
-                    timestamp: e.timestamp,
-                    tx_digest: e.tx_digest,
-                    event,
-                })
-            });
-            spawn_subscript(sink, stream);
-        }
+        let state = self.state.clone();
+        let stream = self.event_handler.subscribe(filter);
+        let stream = stream.map(move |e| {
+            let event = SuiEvent::try_from(e.event, &state.module_cache);
+            event.map(|event| SuiEventEnvelope {
+                timestamp: e.timestamp,
+                tx_digest: e.tx_digest,
+                event,
+            })
+        });
+        spawn_subscript(sink, stream);
+
+        Ok(())
     }
 }
 

@@ -11,7 +11,7 @@ module games::sea_hero_helper {
     use games::sea_hero::{Self, SeaMonster, RUM};
     use games::hero::Hero;
     use sui::coin::{Self, Coin};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -20,7 +20,7 @@ module games::sea_hero_helper {
     /// The two players split the reward for slaying the monster according to
     /// the `helper_reward` parameter.
     struct HelpMeSlayThisMonster has key {
-        id: VersionedID,
+        id: UID,
         /// Monster to be slay by the owner of this object
         monster: SeaMonster,
         /// Identity of the user that originally owned the monster
@@ -50,7 +50,7 @@ module games::sea_hero_helper {
         );
         transfer::transfer(
             HelpMeSlayThisMonster {
-                id: tx_context::new_id(ctx),
+                id: object::new(ctx),
                 monster,
                 monster_owner: tx_context::sender(ctx),
                 helper_reward
@@ -70,7 +70,7 @@ module games::sea_hero_helper {
             monster_owner,
             helper_reward
         } = wrapper;
-        id::delete(id);
+        object::delete(id);
         let owner_reward = sea_hero::slay(hero, monster);
         let helper_reward = coin::take(&mut owner_reward, helper_reward, ctx);
         transfer::transfer(coin::from_balance(owner_reward, ctx), monster_owner);
@@ -86,7 +86,7 @@ module games::sea_hero_helper {
             monster_owner,
             helper_reward: _
         } = wrapper;
-        id::delete(id);
+        object::delete(id);
         sea_hero::transfer_monster(monster, monster_owner)
     }
 

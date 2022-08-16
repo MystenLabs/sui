@@ -16,6 +16,7 @@ use test_utils::authority::{
 };
 use test_utils::messages::make_transfer_sui_transaction;
 use test_utils::objects::test_gas_objects;
+use test_utils::test_account_keys;
 
 async fn setup() -> (
     Vec<SuiNode>,
@@ -25,8 +26,15 @@ async fn setup() -> (
     let mut gas_objects = test_gas_objects();
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let clients = test_authority_aggregator(&configs);
-    let tx = make_transfer_sui_transaction(gas_objects.pop().unwrap(), SuiAddress::default());
+    let clients = test_authority_aggregator(&configs, handles[0].state().epoch_store().clone());
+    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let tx = make_transfer_sui_transaction(
+        gas_objects.pop().unwrap().compute_object_reference(),
+        SuiAddress::default(),
+        None,
+        sender,
+        &keypair,
+    );
     (handles, clients, tx)
 }
 

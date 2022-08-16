@@ -3,7 +3,7 @@
 }
 
 .table {
-    @apply w-full text-sm text-left text-[#4E555D]  overflow-x-auto min-w-max;
+    @apply w-full text-sm text-left text-[#4E555D]  overflow-x-auto min-w-max border-collapse;
 
     border-bottom: 1px solid #f0f1f2;
 }

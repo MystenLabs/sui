@@ -7,7 +7,7 @@
 /// be accessed by putting a 'key' into the 'lock'. Lock is shared and is visible
 /// and discoverable by the key owner.
 module basics::lock {
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::option::{Self, Option};
@@ -23,14 +23,14 @@ module basics::lock {
 
     /// Lock that stores any content inside it.
     struct Lock<T: store + key> has key, store {
-        id: VersionedID,
+        id: UID,
         locked: Option<T>
     }
 
     /// A key that is created with a Lock; is transferable
     /// and contains all the needed information to open the Lock.
     struct Key<phantom T: store + key> has key, store {
-        id: VersionedID,
+        id: UID,
         for: ID,
     }
 
@@ -42,8 +42,8 @@ module basics::lock {
     /// Lock some content inside a shared object. A Key is created and is
     /// sent to the transaction sender.
     public entry fun create<T: store + key>(obj: T, ctx: &mut TxContext) {
-        let id = tx_context::new_id(ctx);
-        let for = *id::inner(&id);
+        let id = object::new(ctx);
+        let for = object::uid_to_inner(&id);
 
         transfer::share_object(Lock<T> {
             id,
@@ -52,7 +52,7 @@ module basics::lock {
 
         transfer::transfer(Key<T> {
             for,
-            id: tx_context::new_id(ctx)
+            id: object::new(ctx)
         }, tx_context::sender(ctx));
     }
 
@@ -64,7 +64,7 @@ module basics::lock {
         key: &Key<T>,
     ) {
         assert!(option::is_none(&lock.locked), ELockIsFull);
-        assert!(&key.for == id::id(lock), EKeyMismatch);
+        assert!(&key.for == object::borrow_id(lock), EKeyMismatch);
 
         option::fill(&mut lock.locked, obj);
     }
@@ -78,7 +78,7 @@ module basics::lock {
         key: &Key<T>,
     ): T {
         assert!(option::is_some(&lock.locked), ELockIsEmpty);
-        assert!(&key.for == id::id(lock), EKeyMismatch);
+        assert!(&key.for == object::borrow_id(lock), EKeyMismatch);
 
         option::extract(&mut lock.locked)
     }
@@ -95,15 +95,14 @@ module basics::lock {
 
 #[test_only]
 module basics::lockTest {
-    use sui::id::VersionedID;
+    use sui::object::{Self, UID};
     use sui::test_scenario;
-    use sui::tx_context;
     use sui::transfer;
     use basics::lock::{Self, Lock, Key};
 
     /// Custom structure which we will store inside a Lock.
     struct Treasure has store, key {
-        id: VersionedID
+        id: UID
     }
 
     #[test]
@@ -117,7 +116,7 @@ module basics::lockTest {
         test_scenario::next_tx(scenario, &user1);
         {
             let ctx = test_scenario::ctx(scenario);
-            let id = tx_context::new_id(ctx);
+            let id = object::new(ctx);
 
             lock::create(Treasure { id }, ctx);
         };

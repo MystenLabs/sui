@@ -62,7 +62,7 @@ impl EventHandler {
             .await?;
         trace!(
             num_events = envelopes.len(),
-            digest =? effects.transaction_digest,
+            tx_digest =? effects.transaction_digest,
             checkpoint_num, "Finished writing events to event store"
         );
 

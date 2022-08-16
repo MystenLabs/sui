@@ -8,7 +8,7 @@ module examples::donuts {
     use sui::transfer;
     use sui::sui::SUI;
     use sui::coin::{Self, Coin};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, UID};
     use sui::balance::{Self, Balance};
     use sui::tx_context::{Self, TxContext};
 
@@ -16,14 +16,14 @@ module examples::donuts {
     const ENotEnough: u64 = 0;
 
     /// Capability that grants an owner the right to collect profits.
-    struct ShopOwnerCap has key { id: VersionedID }
+    struct ShopOwnerCap has key { id: UID }
 
     /// A purchasable Donut. For simplicity's sake we ignore implementation.
-    struct Donut has key { id: VersionedID }
+    struct Donut has key { id: UID }
 
     /// A shared object. `key` ability is required.
     struct DonutShop has key {
-        id: VersionedID,
+        id: UID,
         price: u64,
         balance: Balance<SUI>
     }
@@ -34,12 +34,12 @@ module examples::donuts {
     /// To share an object `transfer::share_object` is used.
     fun init(ctx: &mut TxContext) {
         transfer::transfer(ShopOwnerCap {
-            id: tx_context::new_id(ctx)
+            id: object::new(ctx)
         }, tx_context::sender(ctx));
 
         // Share the object to make it accessible to everyone!
         transfer::share_object(DonutShop {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             price: 1000,
             balance: balance::zero()
         })
@@ -59,14 +59,14 @@ module examples::donuts {
         balance::join(&mut shop.balance, paid);
 
         transfer::transfer(Donut {
-            id: tx_context::new_id(ctx)
+            id: object::new(ctx)
         }, tx_context::sender(ctx))
     }
 
     /// Consume donut and get nothing...
     public entry fun eat_donut(d: Donut) {
         let Donut { id } = d;
-        id::delete(id);
+        object::delete(id);
     }
 
     /// Take coin from `DonutShop` and transfer it to tx sender.

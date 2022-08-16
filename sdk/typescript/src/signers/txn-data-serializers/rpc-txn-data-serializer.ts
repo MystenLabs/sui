@@ -10,6 +10,7 @@ import {
   MergeCoinTransaction,
   SplitCoinTransaction,
   TransferObjectTransaction,
+  TransferSuiTransaction,
   PublishTransaction,
   TxnDataSerializer,
 } from './txn-data-serializer';
@@ -45,7 +46,23 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
-      throw new Error(`Error transferring coin: ${err} with args ${t}`);
+      throw new Error(`Error transferring object: ${err} with args ${t}`);
+    }
+  }
+
+  async newTransferSui(
+    signerAddress: SuiAddress,
+    t: TransferSuiTransaction
+  ): Promise<Base64DataBuffer> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_transferSui',
+        [signerAddress, t.suiObjectId, t.gasBudget, t.recipient, t.amount],
+        isTransactionBytes
+      );
+      return new Base64DataBuffer(resp.txBytes);
+    } catch (err) {
+      throw new Error(`Error transferring Sui coin: ${err} with args ${t}`);
     }
   }
 

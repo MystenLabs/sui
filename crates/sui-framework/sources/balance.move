@@ -39,7 +39,7 @@ module sui::balance {
     }
 
     /// Create a new supply for type T.
-    public fun create_supply<T: drop>(_witness: T): Supply<T> {
+    public fun create_supply<T: drop>(_: T): Supply<T> {
         Supply { value: 0 }
     }
 
@@ -72,12 +72,12 @@ module sui::balance {
     public fun join<T>(self: &mut Balance<T>, balance: Balance<T>): u64 {
         let Balance { value } = balance;
         self.value = self.value + value;
-        value
+        self.value
     }
 
     spec join {
         ensures self.value == old(self.value) + balance.value;
-        ensures result == balance.value;
+        ensures result == self.value;
     }
 
     /// Split a `Balance` and take a sub balance from it.

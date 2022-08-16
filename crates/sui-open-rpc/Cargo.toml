@@ -1,6 +1,6 @@
 [package]
 name = "sui-open-rpc"
-version = "0.1.0"
+version = "0.6.1"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -8,15 +8,16 @@ edition = "2021"
 
 [dependencies]
 schemars = "0.8.10"
-serde = "1.0.139"
+serde = "1.0.141"
+serde_json = "1.0.83"
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 clap = { version = "3.1.17", features = ["derive"] }
 pretty_assertions = "1.2.0"
-serde_json = "1.0.80"
-tokio = { version = "1.18.2", features = ["full"] }
+serde_json = "1.0.83"
+tokio = { version = "1.20.1", features = ["full"] }
 hyper = { version = "0.14.20", features = ["full"] }
 
 sui = { path = "../sui" }
@@ -26,8 +27,10 @@ sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
+rand = "0.8.5"
 
-move-package = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
+move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 
 [[example]]
 name = "generate-json-rpc-spec"

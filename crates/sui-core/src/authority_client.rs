@@ -3,27 +3,25 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use mysten_network::config::Config;
+use narwhal_crypto::traits::ToFromBytes;
+use std::collections::BTreeMap;
 use std::sync::Arc;
-
+use sui_config::genesis::Genesis;
 use sui_network::{api::ValidatorClient, tonic};
+use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::SuiError, messages::*};
 
-use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-
 #[cfg(test)]
-use sui_types::{
-    base_types::ObjectID,
-    committee::Committee,
-    crypto::{KeyPair, PublicKeyBytes},
-    object::Object,
-};
+use sui_types::{committee::Committee, crypto::AuthorityKeyPair, object::Object};
 
 use crate::epoch::reconfiguration::Reconfigurable;
-#[cfg(test)]
-use sui_config::genesis::Genesis;
 use sui_network::tonic::transport::Channel;
 
 #[async_trait]
@@ -67,6 +65,8 @@ pub trait AuthorityAPI {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError>;
+
+    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError>;
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
@@ -78,12 +78,15 @@ pub struct NetworkAuthorityClient {
 
 impl NetworkAuthorityClient {
     pub async fn connect(address: &Multiaddr) -> anyhow::Result<Self> {
-        let channel = mysten_network::client::connect(address).await?;
+        let channel = mysten_network::client::connect(address)
+            .await
+            .map_err(|err| anyhow!(err.to_string()))?;
         Ok(Self::new(channel))
     }
 
     pub fn connect_lazy(address: &Multiaddr) -> anyhow::Result<Self> {
-        let channel = mysten_network::client::connect_lazy(address)?;
+        let channel = mysten_network::client::connect_lazy(address)
+            .map_err(|err| anyhow!(err.to_string()))?;
         Ok(Self::new(channel))
     }
 
@@ -195,6 +198,47 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
     }
+
+    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        self.client()
+            .epoch_info(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into)
+    }
+}
+
+pub fn make_network_authority_client_sets_from_system_state(
+    sui_system_state: &SuiSystemState,
+    network_config: &Config,
+) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+    let mut authority_clients = BTreeMap::new();
+    for validator in &sui_system_state.validators.active_validators {
+        let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
+        let channel = network_config
+            .connect_lazy(&address)
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let client = NetworkAuthorityClient::new(channel);
+        let name: &[u8] = &validator.metadata.name;
+        let public_key_bytes = AuthorityPublicKeyBytes::from_bytes(name)?;
+        authority_clients.insert(public_key_bytes, client);
+    }
+    Ok(authority_clients)
+}
+
+pub fn make_network_authority_client_sets_from_genesis(
+    genesis: &Genesis,
+    network_config: &Config,
+) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+    let mut authority_clients = BTreeMap::new();
+    for validator in genesis.validator_set() {
+        let channel = network_config
+            .connect_lazy(validator.network_address())
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let client = NetworkAuthorityClient::new(channel);
+        authority_clients.insert(validator.public_key(), client);
+    }
+    Ok(authority_clients)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -309,54 +353,19 @@ impl AuthorityAPI for LocalAuthorityClient {
 
         state.handle_checkpoint_request(&request)
     }
+
+    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        let state = self.state.clone();
+
+        state.handle_epoch_request(&request)
+    }
 }
 
 impl LocalAuthorityClient {
     #[cfg(test)]
-    pub async fn new(
-        committee: Committee,
-        address: PublicKeyBytes,
-        secret: KeyPair,
-        genesis: &Genesis,
-    ) -> Self {
-        use crate::authority::AuthorityStore;
-        use crate::checkpoints::CheckpointStore;
-        use parking_lot::Mutex;
-        use std::{env, fs};
-
-        // Random directory
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        let secret = Arc::pin(secret);
-
-        let mut store_path = path.clone();
-        store_path.push("store");
-        let store = Arc::new(AuthorityStore::open(&store_path, None));
-        let mut checkpoints_path = path.clone();
-        checkpoints_path.push("checkpoints");
-        let checkpoints = CheckpointStore::open(
-            &checkpoints_path,
-            None,
-            committee.epoch,
-            address,
-            secret.clone(),
-        )
-        .expect("Should not fail to open local checkpoint DB");
-
-        let state = AuthorityState::new(
-            committee.clone(),
-            address,
-            secret.clone(),
-            store,
-            None,
-            None,
-            Some(Arc::new(Mutex::new(checkpoints))),
-            genesis,
-            &prometheus::Registry::new(),
-        )
-        .await;
+    pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
+        let state =
+            AuthorityState::new_for_testing(committee, &secret, None, Some(genesis), None).await;
         Self {
             state: Arc::new(state),
             fault_config: LocalAuthorityClientFaultConfig::default(),
@@ -366,12 +375,11 @@ impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new_with_objects(
         committee: Committee,
-        address: PublicKeyBytes,
-        secret: KeyPair,
+        secret: AuthorityKeyPair,
         objects: Vec<Object>,
         genesis: &Genesis,
     ) -> Self {
-        let client = Self::new(committee, address, secret, genesis).await;
+        let client = Self::new(committee, secret, genesis).await;
 
         for object in objects {
             client.state.insert_genesis_object(object).await;

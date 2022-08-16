@@ -5,7 +5,6 @@ import nacl from 'tweetnacl';
 import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
 import { PublicKey } from './publickey';
-import { TextEncoder } from 'util';
 
 /**
  * Ed25519 Keypair data

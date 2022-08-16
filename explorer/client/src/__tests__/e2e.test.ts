@@ -11,17 +11,19 @@ const BASE_URL = 'http://localhost:8080';
 //Standardized CSS Selectors
 
 const coinGroup = (num: number) => {
-    const trunk = `#groupCollection > div:nth-child(${num})`;
+    const trunk = `#groupCollection > div:nth-child(2) > div:nth-child(${num}) > div`;
     return {
         base: () => trunk,
         field: (numField: number) =>
-            `${trunk} > div > div:nth-child(${numField})`,
+            `${trunk} > div:nth-child(${numField + 1})`,
     };
 };
 
 const mainBodyCSS = 'main > section > div';
 
-const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num})`;
+const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num}) a`;
+
+const ownerButton = 'td#owner span:first-child';
 
 //Standardized Expectations
 const cssInteract = (page: Page) => ({
@@ -224,9 +226,7 @@ describe('End-to-end Tests', () => {
             expect(childText.trim()).toBe(childValue);
 
             //Click on Owner text:
-            await cssInteract(page)
-                .with('div#owner > div >span:first-child')
-                .click();
+            await cssInteract(page).with(ownerButton).click();
 
             //Looking for object or address?
             const lookingFor =
@@ -254,86 +254,76 @@ describe('End-to-end Tests', () => {
             const parentValue = 'ObjectWBrokenChild';
             await page.goto(`${BASE_URL}/objects/${parentValue}`);
 
-            //Click on child in Owned Objects List:
+            // 1) Click on child in Owned Objects List:
             await cssInteract(page).with(nftObject(1)).click();
 
-            const noImageCSS = `${mainBodyCSS} > div:first-child > div > div`;
-
-            // First see Please Wait Message:
-            expect(
-                await cssInteract(page).with(noImageCSS).get.attribute('id')
-            ).toBe('pleaseWaitImage');
-
-            await page.waitForFunction(
-                () => !document.querySelector('#pleaseWaitImage')
+            await page.waitForFunction(() =>
+                document.querySelector('#noImage')
             );
 
-            //Then see No Image Warning:
-            expect(
-                await cssInteract(page).with(noImageCSS).get.attribute('id')
-            ).toBe('noImage');
-
-            //Parent Object contains an image:
-            await page.click('div#owner > div > span:first-child');
-            await page.waitForFunction(
-                () => !document.querySelector('#pleaseWaitImage')
-            );
+            // 2) This leads to a no image warning:
             expect(
                 await cssInteract(page)
-                    .with(`${mainBodyCSS} > div:first-child > div > img`)
+                    .with('div#displayContainer > div')
+                    .get.attribute('id')
+            ).toBe('noImage');
+
+            // 3) Click on owner:
+            await page.click(ownerButton);
+
+            await page.waitForFunction(() =>
+                document.querySelector('#loadedImage')
+            );
+
+            // 4) This leads to an image:
+            expect(
+                await cssInteract(page)
+                    .with('div#displayContainer > img')
                     .get.attribute('id')
             ).toBe('loadedImage');
-
-            //And no No Image / Please Wait message:
-            await expect(
-                page.$eval(
-                    `${mainBodyCSS} > div:first-child > div > div`,
-                    () => {}
-                )
-            ).rejects.toThrow(
-                `Error: failed to find element matching selector "${mainBodyCSS} > div:first-child > div > div"`
-            );
         });
     });
     describe('PaginationWrapper has buttons', () => {
         it('to go to the next page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            await cssInteract(page).with('#nextBtn').click();
+            await cssInteract(page).with('#NFTSection #nextBtn').click();
             await cssInteract(page).with(nftObject(1)).click();
             const value = await cssInteract(page)
                 .with('#objectID')
                 .get.textContent();
-            expect(value.trim()).toBe('player0');
+            expect(value.trim()).toBe('Image2');
         });
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            await cssInteract(page).with('#lastBtn').click();
+            await cssInteract(page).with('#NFTSection #lastBtn').click();
             await cssInteract(page).with(nftObject(1)).click();
             const value = await cssInteract(page)
                 .with('#objectID')
                 .get.textContent();
-            expect(value.trim()).toBe(
-                '7bc832ec31709638cd8d9323e90edf332gff4389'
-            );
+            expect(value.trim()).toBe('CollectionObject');
         });
 
         it('where last and next disappear in final page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            await cssInteract(page).with('#lastBtn').click();
+            await cssInteract(page).with('#NFTSection #lastBtn').click();
 
             //Back and First buttons are not disabled:
             for (const cssValue of ['#backBtn', '#firstBtn']) {
                 expect(
-                    await cssInteract(page).with(cssValue).get.isDisabled()
+                    await cssInteract(page)
+                        .with(`#NFTSection ${cssValue}`)
+                        .get.isDisabled()
                 ).toBeFalsy();
             }
             //Next and Last buttons are disabled:
             for (const cssValue of ['#nextBtn', '#lastBtn']) {
                 expect(
-                    await cssInteract(page).with(cssValue).get.isDisabled()
+                    await cssInteract(page)
+                        .with(`#NFTSection ${cssValue}`)
+                        .get.isDisabled()
                 ).toBeTruthy();
             }
         });
@@ -342,21 +332,21 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
 
-            await cssInteract(page).with('#lastBtn').click();
-            await cssInteract(page).with('#backBtn').click();
+            await cssInteract(page).with('#NFTSection #lastBtn').click();
+            await cssInteract(page).with('#NFTSection #backBtn').click();
             await cssInteract(page).with(nftObject(1)).click();
             const value = await cssInteract(page)
                 .with('#objectID')
                 .get.textContent();
-            expect(value.trim()).toBe('player0');
+            expect(value.trim()).toBe('player5');
         });
 
         it('to go to first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            await cssInteract(page).with('#lastBtn').click();
-            await cssInteract(page).with('#backBtn').click();
-            await cssInteract(page).with('#firstBtn').click();
+            await cssInteract(page).with('#NFTSection #lastBtn').click();
+            await cssInteract(page).with('#NFTSection #backBtn').click();
+            await cssInteract(page).with('#NFTSection #firstBtn').click();
             await cssInteract(page).with(nftObject(1)).click();
             const value = await cssInteract(page)
                 .with('#objectID')
@@ -370,13 +360,17 @@ describe('End-to-end Tests', () => {
             //Back and First buttons are disabled:
             for (const cssValue of ['#backBtn', '#firstBtn']) {
                 expect(
-                    await cssInteract(page).with(cssValue).get.isDisabled()
+                    await cssInteract(page)
+                        .with(`#NFTSection ${cssValue}`)
+                        .get.isDisabled()
                 ).toBeTruthy();
             }
             //Next and Last buttons are not disabled:
             for (const cssValue of ['#nextBtn', '#lastBtn']) {
                 expect(
-                    await cssInteract(page).with(cssValue).get.isDisabled()
+                    await cssInteract(page)
+                        .with(`#NFTSection ${cssValue}`)
+                        .get.isDisabled()
                 ).toBeFalsy();
             }
         });
@@ -390,46 +384,58 @@ describe('End-to-end Tests', () => {
                 await cssInteract(page)
                     .with(coinGroup(1).field(1))
                     .get.textContent()
-            ).toBe('Type0x2::USD::USD');
-
+            ).toBe('0x2::USD::USD');
             expect(
                 await cssInteract(page)
                     .with(coinGroup(1).field(2))
                     .get.textContent()
-            ).toBe('Balance9007199254740993');
+            ).toBe('2');
+
+            expect(
+                await cssInteract(page)
+                    .with(coinGroup(1).field(3))
+                    .get.textContent()
+            ).toBe('9007199254740993');
 
             expect(
                 await cssInteract(page)
                     .with(coinGroup(2).field(1))
                     .get.textContent()
-            ).toBe('TypeSUI');
+            ).toBe('SUI');
 
             expect(
                 await cssInteract(page)
-                    .with(coinGroup(2).field(2))
+                    .with(coinGroup(1).field(2))
                     .get.textContent()
-            ).toBe('Balance200');
+            ).toBe('2');
+
+            expect(
+                await cssInteract(page)
+                    .with(coinGroup(2).field(3))
+                    .get.textContent()
+            ).toBe('200');
         });
     });
     describe('Transactions for ID', () => {
-        const txResults =
-            'TxIdTimeTxTypeStatusAddressesXHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressYHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZHTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZITP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZJTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZKTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZLTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZMTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZNTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZOTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressZPTP9gcFmF5K...KFhdqfpdK8=<1secagoTransfer✔From:senderAddressTo:receiv...dressGHTP9gcFmF5K...KFhdqfpdK8=1min3secsagoTransfer✖From:senderAddressTo:receiv...dress';
-
-        it('are displayed deduplicated from and to address', async () => {
+        it('are displayed from and to address', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
-                .with('#tx')
+                .with('[data-testid="tx"]')
                 .get.textContent();
-            expect(fromResults.replace(/\s/g, '')).toBe(txResults);
+            expect(fromResults.replace(/\s/g, '')).toMatchInlineSnapshot(
+                `"TimeTxTypeTransactionIDAddressesGas<1secagoTransferXHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferYHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZITP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZJTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZKTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZLTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZMTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZNTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZOTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZPTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress411m3sagoTransferGHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress4117d1hagoTransferDa4vHc9IwbvO...+xnJ7Zx5E4=senderAddressreceiv...dress41"`
+            );
         });
-        it('are displayed deduplicated for input and mutated object', async () => {
+        it('are displayed for input and mutated object', async () => {
             const address = 'CollectionObject';
             await page.goto(`${BASE_URL}/addresses/${address}`);
             const fromResults = await cssInteract(page)
-                .with('#tx')
+                .with('[data-testid="tx"]')
                 .get.textContent();
-            expect(fromResults.replace(/\s/g, '')).toBe(txResults);
+            expect(fromResults.replace(/\s/g, '')).toMatchInlineSnapshot(
+                `"TimeTxTypeTransactionIDAddressesGas<1secagoTransferXHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferYHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZITP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZJTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZKTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZLTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZMTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZNTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZOTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress41<1secagoTransferZPTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress411m3sagoTransferGHTP9gcFmF5K...KFhdqfpdK8=senderAddressreceiv...dress4117d1hagoTransferDa4vHc9IwbvO...+xnJ7Zx5E4=senderAddressreceiv...dress41"`
+            );
         });
     });
 });

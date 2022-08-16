@@ -12,9 +12,7 @@ async function loadAndEnableAnalytics() {
 export function CookiesConsent() {
     useEffect(() => {
         (async () => {
-            // @ts-expect-error no types
             await import('vanilla-cookieconsent');
-            // @ts-expect-error initialized from vanilla-cookieconsent
             const cc = global.initCookieConsent();
             document.body.classList.add('c_darkmode');
             cc.run({
@@ -34,10 +32,8 @@ export function CookiesConsent() {
                         transition: 'slide',
                     },
                 },
-                onAccept: function (cookie: {
-                    level: ('necessary' | 'analytics')[];
-                }) {
-                    if (cookie?.level?.includes('analytics')) {
+                onAccept(cookie) {
+                    if (cookie.categories.includes('analytics')) {
                         loadAndEnableAnalytics();
                     }
                 },
@@ -56,6 +52,7 @@ export function CookiesConsent() {
                                 role: 'accept_necessary',
                             },
                         },
+                        // @ts-expect-error no types
                         settings_modal: {
                             title: 'Cookie preferences',
                             save_settings_btn: 'Save settings',

@@ -1,0 +1,43 @@
+@use '_values/colors';
+@use 'sass:color';
+
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    background-color: color.adjust(colors.$sui-steel-blue, $alpha: -0.9);
+    border-radius: 10px;
+    padding: 10px 14px;
+    text-decoration: none;
+    color: colors.$sui-dark-blue;
+    flex-basis: 98px;
+
+    & + & {
+        margin-left: 8px;
+    }
+}
+
+.disabled {
+    pointer-events: none;
+    opacity: 0.5;
+}
+
+.icon-container {
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    background-color: colors.$cta-blue;
+    color: colors.$white;
+    padding: 10px;
+    font-size: 16px;
+}
+
+.text {
+    margin-top: 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 13px;
+    letter-spacing: -0.03em;
+}

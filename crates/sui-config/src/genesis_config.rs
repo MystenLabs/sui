@@ -4,11 +4,13 @@
 use anyhow::Result;
 use multiaddr::Multiaddr;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::StakeUnit;
-use sui_types::crypto::{get_key_pair_from_rng, KeyPair};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
 use sui_types::object::Object;
+use sui_types::sui_serde::KeyPairBase64;
 use tracing::info;
 
 use crate::Config;
@@ -26,7 +28,7 @@ impl GenesisConfig {
     pub fn generate_accounts<R: ::rand::RngCore + ::rand::CryptoRng>(
         &self,
         mut rng: R,
-    ) -> Result<(Vec<KeyPair>, Vec<Object>)> {
+    ) -> Result<(Vec<AccountKeyPair>, Vec<Object>)> {
         let mut addresses = Vec::new();
         let mut preload_objects = Vec::new();
         let mut all_preload_objects_set = BTreeSet::new();
@@ -79,11 +81,14 @@ impl GenesisConfig {
     }
 }
 
+#[serde_as]
 #[derive(Serialize, Deserialize, Debug)]
 pub struct ValidatorGenesisInfo {
-    pub key_pair: KeyPair,
+    #[serde_as(as = "KeyPairBase64")]
+    pub key_pair: AuthorityKeyPair,
     pub network_address: Multiaddr,
     pub stake: StakeUnit,
+    pub gas_price: u64,
     pub narwhal_primary_to_primary: Multiaddr,
     pub narwhal_worker_to_primary: Multiaddr,
     pub narwhal_primary_to_worker: Multiaddr,

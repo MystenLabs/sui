@@ -1,10 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    type TransactionEffectsResponse,
-    getTransactionSender,
-} from '@mysten/sui.js';
+import { getTransactionSender } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import React, { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
@@ -14,12 +11,12 @@ import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
-import ObjectLoaded from './ObjectLoaded';
 import {
     instanceOfDataType,
     translate,
     type DataType,
 } from './ObjectResultType';
+import ObjectView from './views/ObjectView';
 
 const DATATYPE_DEFAULT: DataType = {
     id: '',
@@ -53,7 +50,7 @@ function getObjectDataWithPackageAddress(objID: string, network: string) {
             if (resp.objType === 'Move Package' && resp.data.tx_digest) {
                 return rpc(network)
                     .getTransactionWithEffects(resp.data.tx_digest)
-                    .then((txEff: TransactionEffectsResponse) => ({
+                    .then((txEff) => ({
                         ...resp,
                         publisherAddress: getTransactionSender(
                             txEff.certificate
@@ -92,7 +89,7 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
     }, [objID, network]);
 
     if (showObjectState.loadState === 'loaded') {
-        return <ObjectLoaded data={showObjectState as DataType} />;
+        return <ObjectView data={showObjectState as DataType} />;
     }
     if (showObjectState.loadState === 'pending') {
         return (
@@ -111,10 +108,10 @@ const ObjectResultStatic = ({ objID }: { objID: string }): JSX.Element => {
     const data = findDataFromID(objID, undefined);
 
     if (instanceOfDataType(data)) {
-        return <ObjectLoaded data={data} />;
+        return <ObjectView data={data} />;
     } else {
         try {
-            return <ObjectLoaded data={translate(data)} />;
+            return <ObjectView data={translate(data)} />;
         } catch (err) {
             console.error("Couldn't parse data", err);
             Sentry.captureException(err);
@@ -128,7 +125,7 @@ const ObjectResult = (): JSX.Element => {
     const { state } = useLocation();
 
     if (instanceOfDataType(state)) {
-        return <ObjectLoaded data={state} />;
+        return <ObjectView data={state} />;
     }
 
     if (objID !== undefined) {

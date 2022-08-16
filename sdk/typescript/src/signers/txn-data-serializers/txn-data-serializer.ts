@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Base64DataBuffer } from '../../serialization/base64';
-import { ObjectId, SuiAddress, SuiJsonValue } from '../../types';
+import {
+  CallArg,
+  ObjectId,
+  SuiAddress,
+  SuiJsonValue,
+  TypeTag,
+} from '../../types';
 
 ///////////////////////////////
 // Exported Types
@@ -11,6 +17,13 @@ export interface TransferObjectTransaction {
   gasPayment?: ObjectId;
   gasBudget: number;
   recipient: SuiAddress;
+}
+
+export interface TransferSuiTransaction {
+  suiObjectId: ObjectId;
+  gasBudget: number;
+  recipient: SuiAddress;
+  amount?: number;
 }
 
 export interface MergeCoinTransaction {
@@ -31,18 +44,26 @@ export interface MoveCallTransaction {
   packageObjectId: ObjectId;
   module: string;
   function: string;
-  typeArguments: string[];
-  arguments: SuiJsonValue[];
+  /**
+   * Usage: pass in string[] if you use RpcTxnDataSerializer,
+   * Otherwise you need to pass in TypeTag[]. We will remove
+   * RpcTxnDataSerializer soon.
+   */
+  typeArguments: string[] | TypeTag[];
+  /**
+   * Usage: pass in SuiJsonValue[] if you use RpcTxnDataSerializer,
+   * Otherwise you need to pass in CallArg[].
+   */
+  arguments: SuiJsonValue[] | CallArg[];
   gasPayment?: ObjectId;
   gasBudget: number;
 }
 
 export interface PublishTransaction {
-  compiledModules: string[],
+  compiledModules: string[];
   gasPayment?: ObjectId;
   gasBudget: number;
 }
-
 
 ///////////////////////////////
 // Exported Abstracts
@@ -53,6 +74,11 @@ export interface TxnDataSerializer {
   newTransferObject(
     signerAddress: SuiAddress,
     txn: TransferObjectTransaction
+  ): Promise<Base64DataBuffer>;
+
+  newTransferSui(
+    signerAddress: SuiAddress,
+    txn: TransferSuiTransaction
   ): Promise<Base64DataBuffer>;
 
   newMoveCall(

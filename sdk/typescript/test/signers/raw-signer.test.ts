@@ -3,7 +3,6 @@
 
 import nacl from 'tweetnacl';
 import { Base64DataBuffer, Ed25519Keypair, RawSigner } from '../../src';
-import { TextEncoder } from 'util';
 
 describe('RawSigner', () => {
   it('signData', async () => {

@@ -7,16 +7,14 @@
 
 use async_trait::async_trait;
 
+use crate::mutex_table::{LockGuard, MutexTable};
 use serde::{de::DeserializeOwned, Serialize};
-
-use std::path::Path;
+use std::fmt::Debug;
+use std::path::PathBuf;
 use std::sync::Mutex;
-
-use crate::{
-    default_db_options,
-    mutex_table::{LockGuard, MutexTable},
-};
 use sui_types::base_types::TransactionDigest;
+use typed_store::traits::DBMapTableUtil;
+use typed_store_macros::DBMapUtils;
 
 use sui_types::error::{SuiError, SuiResult};
 
@@ -47,6 +45,7 @@ pub trait TxGuard<'a>: Drop {
 #[async_trait]
 pub trait WriteAheadLog<'a, C> {
     type Guard: TxGuard<'a>;
+    type LockGuard;
 
     /// Begin a confirmation transaction identified by its digest, with the associated cert.
     ///
@@ -69,6 +68,9 @@ pub trait WriteAheadLog<'a, C> {
         cert: &'b C,
     ) -> SuiResult<Option<Self::Guard>>;
 
+    #[must_use]
+    async fn acquire_lock(&'a self, tx: &TransactionDigest) -> Self::LockGuard;
+
     /// Recoverable TXes are TXes that we find in the log at start up (which indicates we crashed
     /// while processing them) or implicitly dropped TXes (which can happen because we errored
     /// out of the write path and implicitly dropped the TxGuard).
@@ -88,22 +90,18 @@ pub trait WriteAheadLog<'a, C> {
     fn get_tx_data(&self, g: &Self::Guard) -> SuiResult<(C, u32)>;
 }
 
-pub struct DBTxGuard<'a, C: Serialize + DeserializeOwned> {
+pub struct DBTxGuard<'a, C: Serialize + DeserializeOwned + Debug> {
     tx: TransactionDigest,
-    _mutex_guard: LockGuard<'a>,
+    _mutex_guard: LockGuard,
     wal: &'a DBWriteAheadLog<C>,
     dead: bool,
 }
 
 impl<'a, C> DBTxGuard<'a, C>
 where
-    C: Serialize + DeserializeOwned,
+    C: Serialize + DeserializeOwned + Debug,
 {
-    fn new(
-        tx: &TransactionDigest,
-        _mutex_guard: LockGuard<'a>,
-        wal: &'a DBWriteAheadLog<C>,
-    ) -> Self {
+    fn new(tx: &TransactionDigest, _mutex_guard: LockGuard, wal: &'a DBWriteAheadLog<C>) -> Self {
         Self {
             tx: *tx,
             _mutex_guard,
@@ -115,7 +113,7 @@ where
 
 impl<'a, C> TxGuard<'a> for DBTxGuard<'a, C>
 where
-    C: Serialize + DeserializeOwned,
+    C: Serialize + DeserializeOwned + Debug,
 {
     fn tx_id(&self) -> TransactionDigest {
         self.tx
@@ -139,7 +137,7 @@ where
 
 impl<C> Drop for DBTxGuard<'_, C>
 where
-    C: Serialize + DeserializeOwned,
+    C: Serialize + DeserializeOwned + Debug,
 {
     fn drop(&mut self) {
         if !self.dead {
@@ -150,12 +148,17 @@ where
     }
 }
 
-// A WriteAheadLog implementation built on rocksdb.
-pub struct DBWriteAheadLog<C> {
+#[derive(DBMapUtils)]
+pub struct DBWriteAheadLogTables<C> {
     log: DBMap<TransactionDigest, C>,
     // We use two tables, because if we instead have one table mapping digest -> (C, u32), we have
     // to clone C to make a tuple ref to pass to insert.
     retry_count: DBMap<TransactionDigest, u32>,
+}
+
+// A WriteAheadLog implementation built on rocksdb.
+pub struct DBWriteAheadLog<C> {
+    tables: DBWriteAheadLogTables<C>,
 
     // Can't use tokio Mutex - must be accessible synchronously from drop trait.
     // Only acquire this lock in sync functions to make sure we don't hold it across an await.
@@ -166,28 +169,14 @@ pub struct DBWriteAheadLog<C> {
 }
 
 const MUTEX_TABLE_SIZE: usize = 1024;
+const MUTEX_TABLE_SHARD_SIZE: usize = 128;
 
 impl<C> DBWriteAheadLog<C>
 where
-    C: Serialize + DeserializeOwned,
+    C: Serialize + DeserializeOwned + Debug,
 {
-    pub fn new<P: AsRef<Path>>(path: P) -> Self {
-        let (options, _) = default_db_options(None, None);
-        let db = {
-            let path = &path;
-            let db_options = Some(options.clone());
-            let opt_cfs: &[(&str, &rocksdb::Options)] = &[
-                ("tx_write_ahead_log", &options),
-                ("tx_retry_count", &options),
-            ];
-            typed_store::rocks::open_cf_opts(path, db_options, opt_cfs)
-        }
-        .expect("Cannot open DB.");
-
-        let log: DBMap<TransactionDigest, C> =
-            DBMap::reopen(&db, Some("tx_write_ahead_log")).expect("Cannot open CF.");
-        let retry_count: DBMap<TransactionDigest, u32> =
-            DBMap::reopen(&db, Some("tx_retry_count")).expect("Cannot open CF.");
+    pub fn new(path: PathBuf) -> Self {
+        let tables = DBWriteAheadLogTables::open_tables_read_write(path, None, None);
 
         // Read in any digests that were left in the log, e.g. due to a crash.
         //
@@ -196,27 +185,28 @@ where
         //
         // If, however, we were hitting repeated errors while trying to store txes, we could have
         // accumulated many txes in this list.
-        let recoverable_txes: Vec<_> = log.iter().map(|(tx, _)| tx).collect();
+        let recoverable_txes: Vec<_> = tables.log.iter().map(|(tx, _)| tx).collect();
 
         Self {
-            log,
-            retry_count,
+            tables,
             recoverable_txes: Mutex::new(recoverable_txes),
-            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE),
+            mutex_table: MutexTable::new(MUTEX_TABLE_SIZE, MUTEX_TABLE_SHARD_SIZE),
         }
     }
 
     fn commit_tx(&self, tx: &TransactionDigest) -> SuiResult {
         debug!(digest = ?tx, "committing tx");
-        let write_batch = self.log.batch();
-        let write_batch = write_batch.delete_batch(&self.log, std::iter::once(tx))?;
-        let write_batch = write_batch.delete_batch(&self.retry_count, std::iter::once(tx))?;
+        let write_batch = self.tables.log.batch();
+        let write_batch = write_batch.delete_batch(&self.tables.log, std::iter::once(tx))?;
+        let write_batch =
+            write_batch.delete_batch(&self.tables.retry_count, std::iter::once(tx))?;
         write_batch.write().map_err(SuiError::from)
     }
 
     fn increment_retry_count(&self, tx: &TransactionDigest) -> SuiResult {
-        let cur = self.retry_count.get(tx)?.unwrap_or(0);
-        self.retry_count
+        let cur = self.tables.retry_count.get(tx)?.unwrap_or(0);
+        self.tables
+            .retry_count
             .insert(tx, &(cur + 1))
             .map_err(SuiError::from)
     }
@@ -255,9 +245,10 @@ where
 #[async_trait]
 impl<'a, C: 'a> WriteAheadLog<'a, C> for DBWriteAheadLog<C>
 where
-    C: Serialize + DeserializeOwned + std::marker::Send + std::marker::Sync,
+    C: Serialize + DeserializeOwned + std::marker::Send + std::marker::Sync + Debug,
 {
     type Guard = DBTxGuard<'a, C>;
+    type LockGuard = LockGuard;
 
     #[must_use]
     #[instrument(level = "debug", name = "begin_tx", skip_all)]
@@ -266,10 +257,10 @@ where
         tx: &'b TransactionDigest,
         cert: &'b C,
     ) -> SuiResult<Option<DBTxGuard<'a, C>>> {
-        let mutex_guard = self.mutex_table.acquire_lock(tx).await;
+        let mutex_guard = self.mutex_table.acquire_lock(*tx).await;
         trace!(digest = ?tx, "acquired tx lock");
 
-        if self.log.contains_key(tx)? {
+        if self.tables.log.contains_key(tx)? {
             // A concurrent tx will have held the mutex guard until it finished. If the tx is
             // committed it is removed from the log. This means that if the tx is still in the
             // log, it was dropped (errored out) and not committed. Return None to indicate
@@ -280,9 +271,16 @@ where
             return Ok(None);
         }
 
-        self.log.insert(tx, cert)?;
+        self.tables.log.insert(tx, cert)?;
 
         Ok(Some(DBTxGuard::new(tx, mutex_guard, self)))
+    }
+
+    #[must_use]
+    async fn acquire_lock(&'a self, tx: &TransactionDigest) -> Self::LockGuard {
+        let res = self.mutex_table.acquire_lock(*tx).await;
+        trace!(digest = ?tx, "acquired tx lock");
+        res
     }
 
     #[must_use]
@@ -292,7 +290,7 @@ where
         match candidate {
             None => None,
             Some(digest) => {
-                let guard = self.mutex_table.acquire_lock(&digest).await;
+                let guard = self.mutex_table.acquire_lock(digest).await;
                 Some(DBTxGuard::new(&digest, guard, self))
             }
         }
@@ -300,10 +298,11 @@ where
 
     fn get_tx_data(&self, g: &DBTxGuard<'a, C>) -> SuiResult<(C, u32)> {
         let cert = self
+            .tables
             .log
             .get(&g.tx)?
             .ok_or(SuiError::TransactionNotFound { digest: g.tx })?;
-        let attempt_num = self.retry_count.get(&g.tx)?.unwrap_or(0);
+        let attempt_num = self.tables.retry_count.get(&g.tx)?.unwrap_or(0);
         Ok((cert, attempt_num))
     }
 }
@@ -328,7 +327,7 @@ mod tests {
         let tx3_id = TransactionDigest::random();
 
         {
-            let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(&working_dir);
+            let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
             assert!(recover_queue_empty(&log).await);
 
             let tx1 = log.begin_tx(&tx1_id, &1).await?.unwrap();
@@ -352,7 +351,7 @@ mod tests {
 
         {
             // recover the log
-            let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(&working_dir);
+            let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
 
             // recoverable txes still there
             let r = log.read_one_recoverable_tx().await.unwrap();
@@ -366,7 +365,7 @@ mod tests {
 
         {
             // recover the log again
-            let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(&working_dir);
+            let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
             // empty, because we committed the tx before.
             assert!(recover_queue_empty(&log).await);
         }

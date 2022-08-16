@@ -6,7 +6,7 @@ module sui::sui_system {
     use sui::coin::{Self, Coin};
     use sui::delegation::{Self, Delegation};
     use sui::epoch_reward_record::{Self, EpochRewardRecord};
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, UID};
     use sui::locked_coin::{Self, LockedCoin};
     use sui::sui::SUI;
     use sui::transfer;
@@ -39,7 +39,7 @@ module sui::sui_system {
 
     /// The top-level object containing all information of the Sui system.
     struct SuiSystemState has key {
-        id: VersionedID,
+        id: UID,
         /// The current epoch ID, starting from 0.
         epoch: u64,
         /// Contains all information about the validators.
@@ -53,6 +53,8 @@ module sui::sui_system {
         /// The delegation reward pool. All delegation reward goes into this.
         /// Delegation reward claims withdraw from this.
         delegation_reward: Balance<SUI>,
+        /// The reference gas price for the current epoch.
+        reference_gas_price: u64,
     }
 
     // ==== functions that can only be called by Genesis ====
@@ -67,11 +69,13 @@ module sui::sui_system {
         min_validator_stake: u64,
         storage_gas_price: u64,
     ) {
+        let validators = validator_set::new(validators);
+        let reference_gas_price = validator_set::derive_reference_gas_price(&validators);
         let state = SuiSystemState {
             // Use a hardcoded ID.
-            id: id::get_sui_system_state_object_id(),
+            id: object::sui_system_state(),
             epoch: 0,
-            validators: validator_set::new(validators),
+            validators,
             sui_supply,
             storage_fund,
             parameters: SystemParameters {
@@ -80,6 +84,7 @@ module sui::sui_system {
                 storage_gas_price
             },
             delegation_reward: balance::zero(),
+            reference_gas_price,
         };
         transfer::share_object(state);
     }
@@ -97,10 +102,11 @@ module sui::sui_system {
         name: vector<u8>,
         net_address: vector<u8>,
         stake: Coin<SUI>,
+        gas_price: u64,
         ctx: &mut TxContext,
     ) {
         assert!(
-            validator_set::total_validator_candidate_count(&self.validators) < self.parameters.max_validator_candidate_count,
+            validator_set::next_epoch_validator_count(&self.validators) < self.parameters.max_validator_candidate_count,
             0
         );
         let stake_amount = coin::value(&stake);
@@ -115,6 +121,7 @@ module sui::sui_system {
             net_address,
             coin::into_balance(stake),
             option::none(),
+            gas_price,
             ctx
         );
 
@@ -133,6 +140,20 @@ module sui::sui_system {
         validator_set::request_remove_validator(
             &mut self.validators,
             ctx,
+        )
+    }
+
+    /// A validator can call this entry function to submit a new gas price quote, to be
+    /// used for the reference gas price calculation at the end of the epoch.
+    public entry fun request_set_gas_price(
+        self: &mut SuiSystemState,
+        new_gas_price: u64,
+        ctx: &mut TxContext,
+    ) {
+        validator_set::request_set_gas_price(
+            &mut self.validators,
+            new_gas_price,
+            ctx
         )
     }
 
@@ -226,7 +247,7 @@ module sui::sui_system {
         delegation::undelegate(delegation, self.epoch, ctx)
     }
 
-    // Switch delegation from the current validator to a new one. 
+    // Switch delegation from the current validator to a new one.
     public entry fun request_switch_delegation(
         self: &mut SuiSystemState,
         delegation: &mut Delegation,
@@ -305,6 +326,8 @@ module sui::sui_system {
             &mut computation_reward,
             ctx,
         );
+        // Derive the reference gas price for the new epoch
+        self.reference_gas_price = validator_set::derive_reference_gas_price(&self.validators);
         // Because of precision issues with integer divisions, we expect that there will be some
         // remaining balance in `computation_reward`. All of these go to the storage fund.
         balance::join(&mut self.storage_fund, computation_reward);
@@ -316,17 +339,17 @@ module sui::sui_system {
         self.epoch
     }
 
-    /// Returns the amount of stake delegated to `validator_addr`. 
+    /// Returns the amount of stake delegated to `validator_addr`.
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_delegate_amount(self: &SuiSystemState, validator_addr: address): u64 {
         validator_set::validator_delegate_amount(&self.validators, validator_addr)
-    } 
+    }
 
-    /// Returns the amount of delegators who have delegated to `validator_addr`. 
+    /// Returns the amount of delegators who have delegated to `validator_addr`.
     /// Aborts if `validator_addr` is not an active validator.
     public fun validator_delegator_count(self: &SuiSystemState, validator_addr: address): u64 {
         validator_set::validator_delegator_count(&self.validators, validator_addr)
-    } 
+    }
 
     #[test_only]
     public fun set_epoch_for_testing(self: &mut SuiSystemState, epoch_num: u64) {

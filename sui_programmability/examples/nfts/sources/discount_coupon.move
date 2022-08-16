@@ -3,7 +3,7 @@
 
 module nfts::discount_coupon {
     use sui::coin;
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, UID};
     use sui::sui::{Self, SUI};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -16,7 +16,7 @@ module nfts::discount_coupon {
 
     /// Discount coupon NFT.
     struct DiscountCoupon has key, store {
-        id: VersionedID,
+        id: UID,
         // coupon issuer
         issuer: address,
         // percentage discount [1-100]
@@ -40,7 +40,7 @@ module nfts::discount_coupon {
     ) {
         assert!(discount > 0 && discount <= 100, EOutOfRangeDiscount);
         let coupon = DiscountCoupon {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             issuer: tx_context::sender(ctx),
             discount,
             expiration,
@@ -52,7 +52,7 @@ module nfts::discount_coupon {
     /// Burn DiscountCoupon.
     public entry fun burn(nft: DiscountCoupon) {
         let DiscountCoupon { id, issuer: _, discount: _, expiration: _ } = nft;
-        id::delete(id);
+        object::delete(id);
     }
 
     /// Transfer DiscountCoupon to issuer only.

@@ -10,10 +10,10 @@ module fungible_tokens::basket {
     use fungible_tokens::managed::MANAGED;
     use sui::coin::{Self, Coin};
     use sui::balance::{Self, Balance, Supply};
-    use sui::id::VersionedID;
+    use sui::object::{Self, UID};
     use sui::sui::SUI;
     use sui::transfer;
-    use sui::tx_context::{Self, TxContext};
+    use sui::tx_context::TxContext;
 
     /// Name of the coin. By convention, this type has the same name as its parent module
     /// and has no fields. The full type of the coin defined by this module will be `COIN<BASKET>`.
@@ -21,7 +21,7 @@ module fungible_tokens::basket {
 
     /// Singleton shared object holding the reserve assets and the capability.
     struct Reserve has key {
-        id: VersionedID,
+        id: UID,
         /// capability allowing the reserve to mint and burn BASKET
         total_supply: Supply<BASKET>,
         /// SUI coins held in the reserve
@@ -33,12 +33,12 @@ module fungible_tokens::basket {
     /// Needed to deposit a 1:1 ratio of SUI and MANAGED for minting, but deposited a different ratio
     const EBadDepositRatio: u64 = 0;
 
-    fun init(ctx: &mut TxContext) {
+    fun init(witness: BASKET, ctx: &mut TxContext) {
         // Get a treasury cap for the coin put it in the reserve
-        let total_supply = balance::create_supply<BASKET>(BASKET {});
+        let total_supply = balance::create_supply<BASKET>(witness);
 
         transfer::share_object(Reserve {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             total_supply,
             sui: balance::zero<SUI>(),
             managed: balance::zero<MANAGED>(),
@@ -92,6 +92,6 @@ module fungible_tokens::basket {
 
     #[test_only]
     public fun init_for_testing(ctx: &mut TxContext) {
-        init(ctx)
+        init(BASKET {}, ctx)
     }
 }

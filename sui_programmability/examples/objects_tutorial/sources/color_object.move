@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module tutorial::color_object {
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct ColorObject has key {
-        id: VersionedID,
+        id: UID,
         red: u8,
         green: u8,
         blue: u8,
@@ -17,7 +17,7 @@ module tutorial::color_object {
 
     fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
         ColorObject {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             red,
             green,
             blue,
@@ -44,7 +44,7 @@ module tutorial::color_object {
 
     public entry fun delete(object: ColorObject) {
         let ColorObject { id, red: _, green: _, blue: _ } = object;
-        id::delete(id);
+        object::delete(id);
     }
 
     public entry fun transfer(object: ColorObject, recipient: address) {
@@ -76,6 +76,7 @@ module tutorial::color_object {
 module tutorial::color_objectTests {
     use sui::test_scenario;
     use tutorial::color_object::{Self, ColorObject};
+    use sui::object;
     use sui::tx_context;
 
     // == Tests covered in Chapter 1 ==
@@ -116,9 +117,11 @@ module tutorial::color_objectTests {
         let (id1, id2) = {
             let ctx = test_scenario::ctx(scenario);
             color_object::create(255, 255, 255, ctx);
-            let id1 = tx_context::last_created_object_id(ctx);
+            let id1 =
+                object::id_from_address(tx_context::last_created_object_id(ctx));
             color_object::create(0, 0, 0, ctx);
-            let id2 = tx_context::last_created_object_id(ctx);
+            let id2 =
+                object::id_from_address(tx_context::last_created_object_id(ctx));
             (id1, id2)
         };
         test_scenario::next_tx(scenario, &owner);

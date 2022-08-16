@@ -1,5 +1,6 @@
 @use '_variables' as v;
 @use '_values' as values;
+@use '_values/colors';
 
 .container {
     display: flex;
@@ -14,6 +15,10 @@
     justify-content: stretch;
     padding: 5px 10px;
     overflow: hidden;
+    border-top-left-radius: 20px;
+    border-top-right-radius: 20px;
+    transition: transform 300ms ease-in-out;
+    opacity: 1;
 }
 
 .link {
@@ -35,6 +40,7 @@
 .icon {
     font-size: 32px;
     margin-bottom: 2px;
+    color: colors.$sui-steel-blue;
 
     .active > & {
         color: v.use(v.$colors-nav-item-icon-highlighted-color);
@@ -53,4 +59,10 @@
     .active > & {
         font-weight: 700;
     }
+}
+
+.hidden {
+    transform: translateY(100%);
+    opacity: 0;
+    transition: transform 300ms ease-in-out, opacity 0ms ease-in 300ms;
 }

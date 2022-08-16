@@ -1,3 +1,22 @@
-.tx-container {
-    font-size: 15px;
+.container {
+    display: flex;
+    flex-flow: column nowrap;
+    overflow-x: visible;
+    height: 100%;
+
+    .page-title {
+        justify-content: center;
+    }
+
+    .tx-content {
+        margin-top: 20px;
+        padding-bottom: 50px;
+        flex-grow: 1;
+        padding-left: 25px;
+        padding-right: 25px;
+        margin-left: -25px;
+        margin-right: -25px;
+        height: 450px;
+        overflow-y: scroll;
+    }
 }

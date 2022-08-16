@@ -4,4 +4,6 @@ div.home {
 
 div.container {
     @apply mx-auto grid md:grid-cols-2 grid-cols-1;
+
+    column-gap: 2%;
 }

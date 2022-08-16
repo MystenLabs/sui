@@ -8,6 +8,7 @@ use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
 };
+use uuid::Uuid;
 
 mod simple_faucet;
 pub use self::simple_faucet::SimpleFaucet;
@@ -28,6 +29,7 @@ pub trait Faucet {
     /// Send `Coin<SUI>` of the specified amount to the recipient
     async fn send(
         &self,
+        id: Uuid,
         recipient: SuiAddress,
         amounts: &[u64],
     ) -> Result<FaucetReceipt, FaucetError>;
@@ -48,29 +50,5 @@ impl From<&SuiParsedObject> for CoinInfo {
             amount: gas_coin.value(),
             id: *gas_coin.id(),
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use test_utils::network::setup_network_and_wallet;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn simple_faucet_basic_interface_should_work() {
-        let (_network, context, _address) = setup_network_and_wallet().await.unwrap();
-        let faucet = SimpleFaucet::new(context).await.unwrap();
-        test_basic_interface(faucet).await;
-    }
-
-    async fn test_basic_interface(faucet: impl Faucet) {
-        let recipient = SuiAddress::random_for_testing_only();
-        let amounts = vec![1, 2, 3];
-
-        let FaucetReceipt { sent } = faucet.send(recipient, &amounts).await.unwrap();
-        let mut actual_amounts: Vec<u64> = sent.iter().map(|c| c.amount).collect();
-        actual_amounts.sort_unstable();
-        assert_eq!(actual_amounts, amounts);
     }
 }

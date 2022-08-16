@@ -2,7 +2,9 @@
 title: How Sui Move differs from Core Move
 ---
 
-This document describes the Sui programming model and highlights the differences between the core (previously Diem) Move language and the Move we use in Sui. First remember, Move is a language and Sui a platform.
+This document describes the Sui programming model and highlights the differences between the core (previously Diem) Move language and the Move we use in Sui. First remember, Move is a language and Sui a platform. 
+
+To learn more about the motivations behind creating Sui Move, see [Why We Created Sui Move](https://medium.com/mysten-labs/why-we-created-sui-move-6a234656c36b).
 
 In general, Move code written for other systems will work in Sui with these exceptions:
 
@@ -31,7 +33,7 @@ So there is no global storage in Sui Move. None of the global storage-related op
 
 In Move, there is a special _address_ type. This type is used to represent account addresses in core Move. Core Move needs to know the address of an account when dealing with the global storage. The _address_ type is 16 bytes, which is sufficient for the core Move security model.
 
-In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [id.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/id.move) file in Sui framework for an understanding of address use.
+In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [object.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) file in Sui framework for an understanding of address use.
 
 ## Object with key ability, globally unique IDs
 
@@ -50,7 +52,7 @@ As described in [Object-centric global storage](#object-centric-global-storage),
 
 ## Entry points take object references as input
 
-Sui offers entry functions that can be called directly from Sui, in addition to functions callable from other functions. See [Entry functions](../build/move.md#entry-functions).
+Sui offers entry functions that can be called directly from Sui, in addition to functions callable from other functions. See [Entry functions](../build/move/index.md#entry-functions).
 
 ## Conclusion
 

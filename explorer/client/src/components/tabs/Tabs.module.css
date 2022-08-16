@@ -22,7 +22,7 @@
 }
 
 .tabsfooter {
-    @apply flex justify-between text-xs text-gray-500 capitalize items-center p-0;
+    @apply flex justify-between text-gray-500 capitalize items-center p-0 mt-2 md:mt-0 text-sm;
 }
 
 .tabsfooter a {
@@ -30,9 +30,5 @@
 }
 
 .stats {
-    @apply ml-auto w-full text-right;
-}
-
-.tabsfooter nav {
-    @apply flex flex-row items-center;
+    @apply ml-auto w-full text-right flex gap-2 justify-end items-center;
 }

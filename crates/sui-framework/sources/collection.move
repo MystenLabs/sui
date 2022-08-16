@@ -12,7 +12,7 @@
 /// access and operate on each individual object.
 /// In contrast to `Bag`, `Collection` requires all objects have the same type.
 module sui::collection {
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
@@ -35,13 +35,13 @@ module sui::collection {
     const DEFAULT_MAX_CAPACITY: u64 = 0x10000;
 
     struct Collection<phantom T: store> has key {
-        id: VersionedID,
+        id: UID,
         objects: VecSet<ID>,
         max_capacity: u64,
     }
 
     struct Item<T: store> has key {
-        id: VersionedID,
+        id: UID,
         value: T,
     }
 
@@ -57,7 +57,7 @@ module sui::collection {
     ): Collection<T> {
         assert!(max_capacity <= DEFAULT_MAX_CAPACITY && max_capacity > 0, EInvalidMaxCapacity);
         Collection {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             objects: vec_set::empty(),
             max_capacity,
         }
@@ -80,8 +80,8 @@ module sui::collection {
         ctx: &mut TxContext,
     ): TypedID<Item<T>> {
         assert!(size(c) + 1 <= c.max_capacity, EMaxCapacityExceeded);
-        let id = tx_context::new_id(ctx);
-        vec_set::insert(&mut c.objects, *id::inner(&id));
+        let id = object::new(ctx);
+        vec_set::insert(&mut c.objects, object::uid_to_inner(&id));
         let item = Item { id, value };
         let item_id = typed_id::new(&item);
         transfer::transfer_to_object(item, c);
@@ -98,8 +98,8 @@ module sui::collection {
     /// Abort if the object is not found.
     public fun remove<T: store>(c: &mut Collection<T>, item: Item<T>): T {
         let Item { id, value } = item;
-        vec_set::remove(&mut c.objects, id::inner(&id));
-        id::delete(id);
+        vec_set::remove(&mut c.objects, object::uid_as_inner(&id));
+        object::delete(id);
         value
     }
 
@@ -120,7 +120,7 @@ module sui::collection {
 
     public fun transfer_to_object_id<T: key + store>(
         obj: Collection<T>,
-        owner_id: &VersionedID,
+        owner_id: &mut UID,
     ) {
         transfer::transfer_to_object_id(obj, owner_id)
     }

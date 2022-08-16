@@ -28,6 +28,8 @@ const txKindToTxt: Record<TransactionKindName, string> = {
     TransferObject: 'Object transfer',
     Call: 'Call',
     Publish: 'Publish',
+    TransferSui: 'Sui transfer',
+    ChangeEpoch: 'Change epoch',
 };
 
 function TransactionDetailsPage() {
@@ -39,14 +41,11 @@ function TransactionDetailsPage() {
     );
     // TODO: load tx if not found locally
     const txDetails = useAppSelector(txSelector);
-    const status =
-        txDetails && getExecutionStatusType(txDetails.EffectResponse);
+    const status = txDetails && getExecutionStatusType(txDetails);
     const statusIcon = status === 'success' ? 'check2-circle' : 'x-circle';
     const transferKind =
         txDetails &&
-        getTransactionKindName(
-            getTransactions(txDetails.EffectResponse.certificate)[0]
-        );
+        getTransactionKindName(getTransactions(txDetails.certificate)[0]);
     return (
         <div className={cl('container')}>
             {txDetails ? (

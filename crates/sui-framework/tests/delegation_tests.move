@@ -4,6 +4,7 @@
 #[test_only]
 module sui::delegation_tests {
     use sui::coin;
+    use sui::epoch_reward_record::EpochRewardRecord;
     use sui::test_scenario::{Self, Scenario};
     use sui::sui_system::{Self, SuiSystemState};
     use sui::delegation::{Self, Delegation};
@@ -124,6 +125,100 @@ module sui::delegation_tests {
             assert!(sui_system::validator_delegator_count(system_state_mut_ref, VALIDATOR_ADDR_2) == 0, 104);
             test_scenario::return_shared(scenario, system_state_wrapper);
         };
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 0)]
+    fun test_double_claim_reward_active() {
+        let scenario = &mut test_scenario::begin(&VALIDATOR_ADDR_1);
+        let ctx = test_scenario::ctx(scenario);
+        create_sui_system_state_for_testing(
+            vector[create_validator_for_testing(VALIDATOR_ADDR_1, 100, ctx)], 300, 100);
+
+        test_scenario::next_tx(scenario, &DELEGATOR_ADDR_1);
+        {
+            let system_state_wrapper = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state_mut_ref = test_scenario::borrow_mut(&mut system_state_wrapper);
+
+            let ctx = test_scenario::ctx(scenario);
+
+            sui_system::request_add_delegation(
+                system_state_mut_ref, coin::mint_for_testing(10, ctx), VALIDATOR_ADDR_1, ctx);
+
+            // Advance the epoch twice so that the delegation and rewards can take into effect.
+            governance_test_utils::advance_epoch(system_state_mut_ref, scenario);
+            governance_test_utils::advance_epoch(system_state_mut_ref, scenario);
+            test_scenario::return_shared(scenario, system_state_wrapper);
+        };
+
+        test_scenario::next_tx(scenario, &DELEGATOR_ADDR_1);
+        {
+            let delegation = test_scenario::take_last_created_owned<Delegation>(scenario);
+            let system_state_wrapper = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state_mut_ref = test_scenario::borrow_mut(&mut system_state_wrapper);
+            let epoch_reward_record_wrapper = test_scenario::take_last_created_shared<EpochRewardRecord>(scenario);
+            let epoch_reward_record_ref = test_scenario::borrow_mut(&mut epoch_reward_record_wrapper);
+            let ctx = test_scenario::ctx(scenario);
+
+            sui_system::claim_delegation_reward(system_state_mut_ref, &mut delegation, epoch_reward_record_ref, ctx);
+
+            // We are claiming the same reward twice so this call should fail.
+            sui_system::claim_delegation_reward(system_state_mut_ref, &mut delegation, epoch_reward_record_ref, ctx);
+
+            test_scenario::return_owned(scenario, delegation);
+            test_scenario::return_shared(scenario, epoch_reward_record_wrapper);
+            test_scenario::return_shared(scenario, system_state_wrapper);
+        }
+
+    }
+
+    #[test]
+    #[expected_failure(abort_code = 0)]
+    fun test_double_claim_reward_inactive() {
+        let scenario = &mut test_scenario::begin(&VALIDATOR_ADDR_1);
+        let ctx = test_scenario::ctx(scenario);
+        create_sui_system_state_for_testing(
+            vector[create_validator_for_testing(VALIDATOR_ADDR_1, 100, ctx)], 300, 100);
+
+        test_scenario::next_tx(scenario, &DELEGATOR_ADDR_1);
+        {
+            let system_state_wrapper = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state_mut_ref = test_scenario::borrow_mut(&mut system_state_wrapper);
+
+            let ctx = test_scenario::ctx(scenario);
+
+            sui_system::request_add_delegation(
+                system_state_mut_ref, coin::mint_for_testing(10, ctx), VALIDATOR_ADDR_1, ctx);
+            sui_system::request_add_delegation(
+                system_state_mut_ref, coin::mint_for_testing(20, ctx), VALIDATOR_ADDR_1, ctx);
+
+            // Advance the epoch twice so that the delegation and rewards can take into effect.
+            governance_test_utils::advance_epoch(system_state_mut_ref, scenario);
+            governance_test_utils::advance_epoch(system_state_mut_ref, scenario);
+            test_scenario::return_shared(scenario, system_state_wrapper);
+        };
+
+        test_scenario::next_tx(scenario, &DELEGATOR_ADDR_1);
+        {
+            let delegation = test_scenario::take_last_created_owned<Delegation>(scenario);
+            let system_state_wrapper = test_scenario::take_shared<SuiSystemState>(scenario);
+            let system_state_mut_ref = test_scenario::borrow_mut(&mut system_state_wrapper);
+            let epoch_reward_record_wrapper = test_scenario::take_last_created_shared<EpochRewardRecord>(scenario);
+            let epoch_reward_record_ref = test_scenario::borrow_mut(&mut epoch_reward_record_wrapper);
+            let ctx = test_scenario::ctx(scenario);
+
+            // Remove delegation. Rewards claiming should still work.
+            sui_system::request_remove_delegation(system_state_mut_ref, &mut delegation, ctx);
+            sui_system::claim_delegation_reward(system_state_mut_ref, &mut delegation, epoch_reward_record_ref, ctx);
+
+            // We are claiming the same reward twice so this call should fail.
+            sui_system::claim_delegation_reward(system_state_mut_ref, &mut delegation, epoch_reward_record_ref, ctx);
+
+            test_scenario::return_owned(scenario, delegation);
+            test_scenario::return_shared(scenario, epoch_reward_record_wrapper);
+            test_scenario::return_shared(scenario, system_state_wrapper);
+        };
+
     }
 
     fun set_up_sui_system_state(scenario: &mut Scenario) {

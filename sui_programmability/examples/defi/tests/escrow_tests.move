@@ -3,9 +3,8 @@
 
 #[test_only]
 module defi::escrow_tests {
-    use sui::id::{Self, VersionedID};
+    use sui::object::{Self, UID};
     use sui::test_scenario::{Self, Scenario};
-    use sui::tx_context::{Self};
 
     use defi::escrow::{Self, EscrowedObj};
 
@@ -20,12 +19,12 @@ module defi::escrow_tests {
 
     // Example of an object type used for exchange
     struct ItemA has key, store {
-        id: VersionedID
+        id: UID
     }
 
     // Example of the other object type used for exchange
     struct ItemB has key, store {
-        id: VersionedID
+        id: UID
     }
 
     #[test]
@@ -102,16 +101,16 @@ module defi::escrow_tests {
         let new_scenario = test_scenario::begin(&alice);
         let scenario = &mut new_scenario;
         let ctx = test_scenario::ctx(scenario);
-        let item_a_versioned_id = tx_context::new_id(ctx);
+        let item_a_versioned_id = object::new(ctx);
 
         test_scenario::next_tx(scenario, &bob);
         let ctx = test_scenario::ctx(scenario);
-        let item_b_versioned_id = tx_context::new_id(ctx);
+        let item_b_versioned_id = object::new(ctx);
 
-        let item_a_id = *id::inner(&item_a_versioned_id);
-        let item_b_id = *id::inner(&item_b_versioned_id);
+        let item_a_id = object::uid_to_inner(&item_a_versioned_id);
+        let item_b_id = object::uid_to_inner(&item_b_versioned_id);
         if (override_exchange_for) {
-            item_b_id = id::new(RANDOM_ADDRESS);
+            item_b_id = object::id_from_address(RANDOM_ADDRESS);
         };
 
         // Alice sends item A to the third party

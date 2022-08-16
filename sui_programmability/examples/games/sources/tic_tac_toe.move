@@ -21,7 +21,7 @@ module games::tic_tac_toe {
     use std::option::{Self, Option};
     use std::vector;
 
-    use sui::id::{Self, ID, VersionedID};
+    use sui::object::{Self, ID, UID};
     use sui::event;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
@@ -38,7 +38,7 @@ module games::tic_tac_toe {
     const ENoMoreMark: u64 = 1;
 
     struct TicTacToe has key {
-        id: VersionedID,
+        id: UID,
         gameboard: vector<vector<Option<Mark>>>,
         cur_turn: u8,
         game_status: u8,
@@ -47,20 +47,20 @@ module games::tic_tac_toe {
     }
 
     struct MarkMintCap has key {
-        id: VersionedID,
+        id: UID,
         game_id: ID,
         remaining_supply: u8,
     }
 
     struct Mark has key, store {
-        id: VersionedID,
+        id: UID,
         player: address,
         row: u64,
         col: u64,
     }
 
     struct Trophy has key {
-        id: VersionedID,
+        id: UID,
     }
 
     struct MarkSentEvent has copy, drop {
@@ -79,8 +79,8 @@ module games::tic_tac_toe {
     public entry fun create_game(x_address: address, o_address: address, ctx: &mut TxContext) {
         // TODO: Validate sender address, only GameAdmin can create games.
 
-        let id = tx_context::new_id(ctx);
-        let game_id = *id::inner(&id);
+        let id = object::new(ctx);
+        let game_id = object::uid_to_inner(&id);
         let gameboard = vector[
             vector[option::none(), option::none(), option::none()],
             vector[option::none(), option::none(), option::none()],
@@ -96,13 +96,13 @@ module games::tic_tac_toe {
         };
         transfer::transfer(game, tx_context::sender(ctx));
         let cap = MarkMintCap {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             game_id,
             remaining_supply: 5,
         };
         transfer::transfer(cap, x_address);
         let cap = MarkMintCap {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             game_id,
             remaining_supply: 5,
         };
@@ -126,7 +126,7 @@ module games::tic_tac_toe {
         // The game server will then call `place_mark` to place this mark.
         event::emit(MarkSentEvent {
             game_id: *&cap.game_id,
-            mark_id: *id::inner(&mark.id),
+            mark_id: object::id(&mark),
         });
         transfer::transfer(mark, game_address);
     }
@@ -152,11 +152,11 @@ module games::tic_tac_toe {
 
         if (game.game_status != IN_PROGRESS) {
             // Notify the server that the game ended so that it can delete the game.
-            event::emit(GameEndEvent { game_id: *id::inner(&game.id) });
+            event::emit(GameEndEvent { game_id: object::id(game) });
             if (game.game_status == X_WIN) {
-                transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.x_address);
+                transfer::transfer( Trophy { id: object::new(ctx) }, *&game.x_address);
             } else if (game.game_status == O_WIN) {
-                transfer::transfer( Trophy { id: tx_context::new_id(ctx) }, *&game.o_address);
+                transfer::transfer( Trophy { id: object::new(ctx) }, *&game.o_address);
             }
         }
     }
@@ -176,17 +176,17 @@ module games::tic_tac_toe {
             vector::destroy_empty(row);
         };
         vector::destroy_empty(gameboard);
-        id::delete(id);
+        object::delete(id);
     }
 
     public entry fun delete_trophy(trophy: Trophy) {
         let Trophy { id } = trophy;
-        id::delete(id);
+        object::delete(id);
     }
 
     public entry fun delete_cap(cap: MarkMintCap) {
         let MarkMintCap { id, game_id: _, remaining_supply: _ } = cap;
-        id::delete(id);
+        object::delete(id);
     }
 
     public fun get_status(game: &TicTacToe): u8 {
@@ -199,7 +199,7 @@ module games::tic_tac_toe {
         };
         cap.remaining_supply = cap.remaining_supply - 1;
         Mark {
-            id: tx_context::new_id(ctx),
+            id: object::new(ctx),
             player: tx_context::sender(ctx),
             row,
             col,
@@ -275,7 +275,7 @@ module games::tic_tac_toe {
 
     fun delete_mark(mark: Mark) {
         let Mark { id, player: _, row: _, col: _ } = mark;
-        id::delete(id);
+        object::delete(id);
     }
 
     public fun mark_player(mark: &Mark): &address {

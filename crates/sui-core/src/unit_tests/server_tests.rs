@@ -7,6 +7,7 @@ use crate::{
     authority_client::{
         AuthorityAPI, LocalAuthorityClient, LocalAuthorityClientFaultConfig, NetworkAuthorityClient,
     },
+    safe_client::SafeClientMetrics,
 };
 use futures::StreamExt;
 use std::sync::Arc;
@@ -121,7 +122,8 @@ async fn test_subscription() {
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
         let ticket = state.batch_notifier.ticket().expect("all good");
-        db.executed_sequence
+        db.tables
+            .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
     }
@@ -148,7 +150,7 @@ async fn test_subscription() {
         match item {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                 num_batches += 1;
-                if signed_batch.batch.next_sequence_number >= 34 {
+                if signed_batch.data().next_sequence_number >= 34 {
                     break;
                 }
             }
@@ -171,7 +173,8 @@ async fn test_subscription() {
         for i in 105..120 {
             tokio::time::sleep(Duration::from_millis(20)).await;
             let ticket = inner_server2.batch_notifier.ticket().expect("all good");
-            db2.executed_sequence
+            db2.tables
+                .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
             println!("Send item {i}");
@@ -198,7 +201,7 @@ async fn test_subscription() {
         match item {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                 num_batches += 1;
-                if signed_batch.batch.next_sequence_number >= 112 {
+                if signed_batch.data().next_sequence_number >= 112 {
                     break;
                 }
             }
@@ -210,6 +213,7 @@ async fn test_subscription() {
     }
 
     assert_eq!(3, num_batches);
+
     // On Linux, this is 20 because the batch forms continuously from 100 to 109,
     // and then from 110 to 119.
     // while On Mac, this is 15 because the batch stops at 105, and then restarts
@@ -243,7 +247,8 @@ async fn test_subscription() {
     loop {
         // Send a transaction
         let ticket = inner_server2.batch_notifier.ticket().expect("all good");
-        db3.executed_sequence
+        db3.tables
+            .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
         println!("Send item {i}");
@@ -254,9 +259,9 @@ async fn test_subscription() {
         if let Some(data) = resp.next().await {
             match data.expect("No error expected here") {
                 BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                    println!("Batch(next={})", signed_batch.batch.next_sequence_number);
+                    println!("Batch(next={})", signed_batch.data().next_sequence_number);
                     num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 129 {
+                    if signed_batch.data().next_sequence_number >= 129 {
                         break;
                     }
                 }
@@ -302,8 +307,9 @@ async fn test_subscription_safe_client() {
             state: state.clone(),
             fault_config: LocalAuthorityClientFaultConfig::default(),
         },
-        state.clone_committee(),
+        state.epoch_store().clone(),
         state.name,
+        SafeClientMetrics::new_for_tests(),
     );
 
     let _join = server
@@ -316,7 +322,8 @@ async fn test_subscription_safe_client() {
     let tx_zero = ExecutionDigests::random();
     for _i in 0u64..105 {
         let ticket = server.state.batch_notifier.ticket().expect("all good");
-        db.executed_sequence
+        db.tables
+            .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
         drop(ticket);
@@ -351,7 +358,7 @@ async fn test_subscription_safe_client() {
         match data.expect("Bad response") {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                 num_batches += 1;
-                if signed_batch.batch.next_sequence_number >= 34 {
+                if signed_batch.data().next_sequence_number >= 34 {
                     break;
                 }
             }
@@ -378,7 +385,8 @@ async fn test_subscription_safe_client() {
                 .batch_notifier
                 .ticket()
                 .expect("all good");
-            db2.executed_sequence
+            db2.tables
+                .executed_sequence
                 .insert(&ticket.seq(), &tx_zero)
                 .expect("Failed to write.");
             println!("Send item {i}");
@@ -405,9 +413,9 @@ async fn test_subscription_safe_client() {
     while let Some(data) = stream1.next().await {
         match &data.expect("No error") {
             BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
-                println!("Batch(next={})", signed_batch.batch.next_sequence_number);
+                println!("Batch(next={})", signed_batch.data().next_sequence_number);
                 num_batches += 1;
-                if signed_batch.batch.next_sequence_number >= 112 {
+                if signed_batch.data().next_sequence_number >= 112 {
                     break;
                 }
             }
@@ -450,7 +458,8 @@ async fn test_subscription_safe_client() {
             .batch_notifier
             .ticket()
             .expect("all good");
-        db3.executed_sequence
+        db3.tables
+            .executed_sequence
             .insert(&ticket.seq(), &tx_zero)
             .expect("Failed to write.");
         println!("Send item {i}");
@@ -462,7 +471,7 @@ async fn test_subscription_safe_client() {
             match data.expect("Bad response") {
                 BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) => {
                     num_batches += 1;
-                    if signed_batch.batch.next_sequence_number >= 129 {
+                    if signed_batch.data().next_sequence_number >= 129 {
                         break;
                     }
                 }

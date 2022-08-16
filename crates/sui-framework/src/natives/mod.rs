@@ -1,11 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+mod crypto;
 mod event;
-mod id;
+mod object;
 mod test_scenario;
 mod transfer;
 mod tx_context;
+mod types;
 
 use move_binary_format::errors::PartialVMError;
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
@@ -17,10 +19,17 @@ pub fn all_natives(
     sui_framework_addr: AccountAddress,
 ) -> NativeFunctionTable {
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
+        ("crypto", "ecrecover", crypto::ecrecover),
+        ("crypto", "keccak256", crypto::keccak256),
+        (
+            "crypto",
+            "bls12381_verify_g1_sig",
+            crypto::bls12381_verify_g1_sig,
+        ),
         ("event", "emit", event::emit),
-        ("id", "bytes_to_address", id::bytes_to_address),
-        ("id", "delete_id", id::delete_id),
-        ("id", "get_versioned_id", id::get_versioned_id),
+        ("object", "bytes_to_address", object::bytes_to_address),
+        ("object", "delete_impl", object::delete_impl),
+        ("object", "borrow_uid", object::borrow_uid),
         (
             "test_scenario",
             "drop_object_for_testing",
@@ -61,6 +70,7 @@ pub fn all_natives(
             "new_signer_from_address",
             tx_context::new_signer_from_address,
         ),
+        ("types", "is_one_time_witness", types::is_one_time_witness),
     ];
     SUI_NATIVES
         .iter()
@@ -77,10 +87,10 @@ pub fn all_natives(
         .collect()
 }
 
-// Object { id: VersionedID { id: UniqueID { id: ID { bytes: address } } } .. }
-// Extract the first field of the struct 4 times to get the id bytes.
+// Object { info: Info { id: ID { bytes: address } } .. }
+// Extract the first field of the struct 3 times to get the id bytes.
 pub fn get_object_id(object: Value) -> Result<Value, PartialVMError> {
-    get_nested_struct_field(object, &[0, 0, 0, 0])
+    get_nested_struct_field(object, &[0, 0, 0])
 }
 
 // Extract a field valye that's nested inside value `v`. The offset of each nesting

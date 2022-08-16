@@ -29,6 +29,7 @@ use move_bytecode_verifier::absint::{
 use std::collections::BTreeMap;
 use sui_types::{
     error::{ExecutionError, ExecutionErrorKind},
+    id::OBJECT_MODULE_NAME,
     SUI_FRAMEWORK_ADDRESS,
 };
 
@@ -162,7 +163,7 @@ impl<'a> TransferFunctions for IDLeakAnalysis<'a> {
 
 impl<'a> AbstractInterpreter for IDLeakAnalysis<'a> {}
 
-/// Certain Sui Framework functions can safely take a `VersionedID` by value
+/// Certain Sui Framework functions can safely take a `ID` by value
 fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHandle) -> bool {
     let m = verifier
         .binary_view
@@ -173,8 +174,8 @@ fn is_call_safe_to_leak(verifier: &IDLeakAnalysis, function_handle: &FunctionHan
         return false;
     }
 
-    // sui::id::delete
-    (verifier.binary_view.identifier_at(m.name).as_str() == "id"
+    // sui::object::delete
+    (verifier.binary_view.identifier_at(m.name) == OBJECT_MODULE_NAME
         && verifier
             .binary_view
             .identifier_at(function_handle.name)

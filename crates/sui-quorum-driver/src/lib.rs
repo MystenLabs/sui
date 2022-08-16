@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::task::JoinHandle;
-use tracing::log::{error, warn};
 use tracing::Instrument;
+use tracing::{debug, error, warn};
 
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::AuthorityAPI;
@@ -191,27 +191,36 @@ where
             if let Some(task) = task_receiver.recv().await {
                 match task {
                     QuorumTask::ProcessTransaction(transaction) => {
+                        let tx_digest = *transaction.digest();
                         // TODO: We entered here because callers do not want to wait for a
                         // transaction to finish execution. When this failed, we do not have a
                         // way to notify the caller. In the future, we may want to maintain
                         // some data structure for callers to come back and query the status
-                        // of a transaction latter.
+                        // of a transaction later.
                         match quorum_driver.process_transaction(transaction).await {
                             Ok(cert) => {
+                                debug!(?tx_digest, "Transaction processing succeeded");
                                 if let Err(err) = quorum_driver.process_certificate(cert).await {
-                                    warn!("Certificate processing failed: {:?}", err);
+                                    warn!(?tx_digest, "Certificate processing failed: {:?}", err);
                                 }
+                                debug!(?tx_digest, "Certificate processing succeeded");
                             }
                             Err(err) => {
-                                warn!("Transaction processing failed: {:?}", err);
+                                warn!(?tx_digest, "Transaction processing failed: {:?}", err);
                             }
                         }
                     }
                     QuorumTask::ProcessCertificate(certificate) => {
+                        let tx_digest = *certificate.digest();
                         // TODO: Similar to ProcessTransaction, we may want to allow callers to
                         // query the status.
-                        if let Err(err) = quorum_driver.process_certificate(certificate).await {
-                            warn!("Certificate processing failed: {:?}", err);
+                        match quorum_driver.process_certificate(certificate).await {
+                            Err(err) => {
+                                warn!("Certificate processing failed: {:?}", err);
+                            }
+                            Ok(_) => {
+                                debug!(?tx_digest, "Certificate processing succeeded");
+                            }
                         }
                     }
                     QuorumTask::UpdateCommittee(new_validators) => {

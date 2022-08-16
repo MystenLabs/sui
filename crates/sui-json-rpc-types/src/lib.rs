@@ -12,6 +12,11 @@ use std::fmt::{Display, Formatter};
 use colored::Colorize;
 use either::Either;
 use itertools::Itertools;
+use move_binary_format::file_format::{Ability, AbilitySet, StructTypeParameter, Visibility};
+use move_binary_format::normalized::{
+    Field as NormalizedField, Function as SuiNormalizedFunction, Module as NormalizedModule,
+    Struct as NormalizedStruct, Type as NormalizedType,
+};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
@@ -23,6 +28,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use tracing::warn;
 
 use sui_json::SuiJsonValue;
 use sui_types::base_types::{
@@ -50,57 +56,303 @@ use sui_types::sui_serde::{Base64, Encoding};
 mod rpc_types_tests;
 
 pub type GatewayTxSeqNumber = u64;
+pub type SuiMoveTypeParameterIndex = u16;
 
 #[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub struct TransactionEffectsResponse {
+pub enum SuiMoveAbility {
+    Copy,
+    Drop,
+    Store,
+    Key,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiMoveAbilitySet {
+    pub abilities: Vec<SuiMoveAbility>,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub enum SuiMoveVisibility {
+    Private,
+    Public,
+    Friend,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiMoveStructTypeParameter {
+    pub constraints: SuiMoveAbilitySet,
+    pub is_phantom: bool,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiMoveNormalizedField {
+    pub name: String,
+    pub type_: SuiMoveNormalizedType,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiMoveNormalizedStruct {
+    pub abilities: SuiMoveAbilitySet,
+    pub type_parameters: Vec<SuiMoveStructTypeParameter>,
+    pub fields: Vec<SuiMoveNormalizedField>,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub enum SuiMoveNormalizedType {
+    Bool,
+    U8,
+    U64,
+    U128,
+    Address,
+    Signer,
+    Struct {
+        address: String,
+        module: String,
+        name: String,
+        type_arguments: Vec<SuiMoveNormalizedType>,
+    },
+    Vector(Box<SuiMoveNormalizedType>),
+    TypeParameter(SuiMoveTypeParameterIndex),
+    Reference(Box<SuiMoveNormalizedType>),
+    MutableReference(Box<SuiMoveNormalizedType>),
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiMoveNormalizedFunction {
+    pub visibility: SuiMoveVisibility,
+    pub is_entry: bool,
+    pub type_parameters: Vec<SuiMoveAbilitySet>,
+    pub parameters: Vec<SuiMoveNormalizedType>,
+    pub return_: Vec<SuiMoveNormalizedType>,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiMoveModuleId {
+    address: String,
+    name: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiMoveNormalizedModule {
+    pub file_format_version: u32,
+    pub address: String,
+    pub name: String,
+    pub friends: Vec<SuiMoveModuleId>,
+    pub structs: BTreeMap<String, SuiMoveNormalizedStruct>,
+    pub exposed_functions: BTreeMap<String, SuiMoveNormalizedFunction>,
+}
+
+impl From<NormalizedModule> for SuiMoveNormalizedModule {
+    fn from(module: NormalizedModule) -> Self {
+        Self {
+            file_format_version: module.file_format_version,
+            address: module.address.to_hex_literal(),
+            name: module.name.to_string(),
+            friends: module
+                .friends
+                .into_iter()
+                .map(|module_id| SuiMoveModuleId {
+                    address: module_id.address().to_hex_literal(),
+                    name: module_id.name().to_string(),
+                })
+                .collect::<Vec<SuiMoveModuleId>>(),
+            structs: module
+                .structs
+                .into_iter()
+                .map(|(name, struct_)| (name.to_string(), SuiMoveNormalizedStruct::from(struct_)))
+                .collect::<BTreeMap<String, SuiMoveNormalizedStruct>>(),
+            exposed_functions: module
+                .exposed_functions
+                .into_iter()
+                .map(|(name, function)| {
+                    (name.to_string(), SuiMoveNormalizedFunction::from(function))
+                })
+                .collect::<BTreeMap<String, SuiMoveNormalizedFunction>>(),
+        }
+    }
+}
+
+impl From<SuiNormalizedFunction> for SuiMoveNormalizedFunction {
+    fn from(function: SuiNormalizedFunction) -> Self {
+        Self {
+            visibility: match function.visibility {
+                Visibility::Private => SuiMoveVisibility::Private,
+                Visibility::Public => SuiMoveVisibility::Public,
+                Visibility::Friend => SuiMoveVisibility::Friend,
+            },
+            is_entry: function.is_entry,
+            type_parameters: function
+                .type_parameters
+                .into_iter()
+                .map(|a| a.into())
+                .collect::<Vec<SuiMoveAbilitySet>>(),
+            parameters: function
+                .parameters
+                .into_iter()
+                .map(SuiMoveNormalizedType::from)
+                .collect::<Vec<SuiMoveNormalizedType>>(),
+            return_: function
+                .return_
+                .into_iter()
+                .map(SuiMoveNormalizedType::from)
+                .collect::<Vec<SuiMoveNormalizedType>>(),
+        }
+    }
+}
+
+impl From<NormalizedStruct> for SuiMoveNormalizedStruct {
+    fn from(struct_: NormalizedStruct) -> Self {
+        Self {
+            abilities: struct_.abilities.into(),
+            type_parameters: struct_
+                .type_parameters
+                .into_iter()
+                .map(SuiMoveStructTypeParameter::from)
+                .collect::<Vec<SuiMoveStructTypeParameter>>(),
+            fields: struct_
+                .fields
+                .into_iter()
+                .map(SuiMoveNormalizedField::from)
+                .collect::<Vec<SuiMoveNormalizedField>>(),
+        }
+    }
+}
+
+impl From<StructTypeParameter> for SuiMoveStructTypeParameter {
+    fn from(type_parameter: StructTypeParameter) -> Self {
+        Self {
+            constraints: type_parameter.constraints.into(),
+            is_phantom: type_parameter.is_phantom,
+        }
+    }
+}
+
+impl From<NormalizedField> for SuiMoveNormalizedField {
+    fn from(normalized_field: NormalizedField) -> Self {
+        Self {
+            name: normalized_field.name.to_string(),
+            type_: SuiMoveNormalizedType::from(normalized_field.type_),
+        }
+    }
+}
+
+impl From<NormalizedType> for SuiMoveNormalizedType {
+    fn from(type_: NormalizedType) -> Self {
+        match type_ {
+            NormalizedType::Bool => SuiMoveNormalizedType::Bool,
+            NormalizedType::U8 => SuiMoveNormalizedType::U8,
+            NormalizedType::U64 => SuiMoveNormalizedType::U64,
+            NormalizedType::U128 => SuiMoveNormalizedType::U128,
+            NormalizedType::Address => SuiMoveNormalizedType::Address,
+            NormalizedType::Signer => SuiMoveNormalizedType::Signer,
+            NormalizedType::Struct {
+                address,
+                module,
+                name,
+                type_arguments,
+            } => SuiMoveNormalizedType::Struct {
+                address: address.to_hex_literal(),
+                module: module.to_string(),
+                name: name.to_string(),
+                type_arguments: type_arguments
+                    .into_iter()
+                    .map(SuiMoveNormalizedType::from)
+                    .collect::<Vec<SuiMoveNormalizedType>>(),
+            },
+            NormalizedType::Vector(v) => {
+                SuiMoveNormalizedType::Vector(Box::new(SuiMoveNormalizedType::from(*v)))
+            }
+            NormalizedType::TypeParameter(t) => SuiMoveNormalizedType::TypeParameter(t),
+            NormalizedType::Reference(r) => {
+                SuiMoveNormalizedType::Reference(Box::new(SuiMoveNormalizedType::from(*r)))
+            }
+            NormalizedType::MutableReference(mr) => {
+                SuiMoveNormalizedType::MutableReference(Box::new(SuiMoveNormalizedType::from(*mr)))
+            }
+        }
+    }
+}
+
+impl From<AbilitySet> for SuiMoveAbilitySet {
+    fn from(set: AbilitySet) -> SuiMoveAbilitySet {
+        Self {
+            abilities: set
+                .into_iter()
+                .map(|a| match a {
+                    Ability::Copy => SuiMoveAbility::Copy,
+                    Ability::Drop => SuiMoveAbility::Drop,
+                    Ability::Key => SuiMoveAbility::Key,
+                    Ability::Store => SuiMoveAbility::Store,
+                })
+                .collect::<Vec<SuiMoveAbility>>(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub enum ObjectValueKind {
+    ByImmutableReference,
+    ByMutableReference,
+    ByValue,
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub enum MoveFunctionArgType {
+    Pure,
+    Object(ObjectValueKind),
+}
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema)]
+pub struct SuiTransactionResponse {
     pub certificate: SuiCertifiedTransaction,
     pub effects: SuiTransactionEffects,
     pub timestamp_ms: Option<u64>,
+    pub parsed_data: Option<SuiParsedTransactionResponse>,
 }
 
-#[derive(Serialize, Deserialize, Debug, JsonSchema)]
-pub enum TransactionResponse {
-    EffectResponse(TransactionEffectsResponse),
-    PublishResponse(PublishResponse),
-    MergeCoinResponse(MergeCoinResponse),
-    SplitCoinResponse(SplitCoinResponse),
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+pub enum SuiParsedTransactionResponse {
+    Publish(SuiParsedPublishResponse),
+    MergeCoin(SuiParsedMergeCoinResponse),
+    SplitCoin(SuiParsedSplitCoinResponse),
 }
 
-impl TransactionResponse {
-    pub fn to_publish_response(self) -> Result<PublishResponse, SuiError> {
+impl SuiParsedTransactionResponse {
+    pub fn to_publish_response(self) -> Result<SuiParsedPublishResponse, SuiError> {
         match self {
-            TransactionResponse::PublishResponse(resp) => Ok(resp),
+            SuiParsedTransactionResponse::Publish(resp) => Ok(resp),
             _ => Err(SuiError::UnexpectedMessage),
         }
     }
 
-    pub fn to_merge_coin_response(self) -> Result<MergeCoinResponse, SuiError> {
+    pub fn to_merge_coin_response(self) -> Result<SuiParsedMergeCoinResponse, SuiError> {
         match self {
-            TransactionResponse::MergeCoinResponse(resp) => Ok(resp),
+            SuiParsedTransactionResponse::MergeCoin(resp) => Ok(resp),
             _ => Err(SuiError::UnexpectedMessage),
         }
     }
 
-    pub fn to_split_coin_response(self) -> Result<SplitCoinResponse, SuiError> {
+    pub fn to_split_coin_response(self) -> Result<SuiParsedSplitCoinResponse, SuiError> {
         match self {
-            TransactionResponse::SplitCoinResponse(resp) => Ok(resp),
+            SuiParsedTransactionResponse::SplitCoin(resp) => Ok(resp),
             _ => Err(SuiError::UnexpectedMessage),
         }
     }
+}
 
-    pub fn to_effect_response(self) -> Result<TransactionEffectsResponse, SuiError> {
+impl Display for SuiParsedTransactionResponse {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
-            TransactionResponse::EffectResponse(resp) => Ok(resp),
-            _ => Err(SuiError::UnexpectedMessage),
+            SuiParsedTransactionResponse::Publish(r) => r.fmt(f),
+            SuiParsedTransactionResponse::MergeCoin(r) => r.fmt(f),
+            SuiParsedTransactionResponse::SplitCoin(r) => r.fmt(f),
         }
     }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct SplitCoinResponse {
-    /// Certificate of the transaction
-    pub certificate: SuiCertifiedTransaction,
+pub struct SuiParsedSplitCoinResponse {
     /// The updated original coin object after split
     pub updated_coin: SuiParsedObject,
     /// All the newly created coin objects generated from the split
@@ -109,11 +361,9 @@ pub struct SplitCoinResponse {
     pub updated_gas: SuiParsedObject,
 }
 
-impl Display for SplitCoinResponse {
+impl Display for SuiParsedSplitCoinResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
-        writeln!(writer, "{}", "----- Certificate ----".bold())?;
-        write!(writer, "{}", self.certificate)?;
         writeln!(writer, "{}", "----- Split Coin Results ----".bold())?;
 
         let coin = GasCoin::try_from(&self.updated_coin).map_err(fmt::Error::custom)?;
@@ -136,20 +386,16 @@ impl Display for SplitCoinResponse {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct MergeCoinResponse {
-    /// Certificate of the transaction
-    pub certificate: SuiCertifiedTransaction,
+pub struct SuiParsedMergeCoinResponse {
     /// The updated original coin object after merge
     pub updated_coin: SuiParsedObject,
     /// The updated gas payment object after deducting payment
     pub updated_gas: SuiParsedObject,
 }
 
-impl Display for MergeCoinResponse {
+impl Display for SuiParsedMergeCoinResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
-        writeln!(writer, "{}", "----- Certificate ----".bold())?;
-        write!(writer, "{}", self.certificate)?;
         writeln!(writer, "{}", "----- Merge Coin Results ----".bold())?;
 
         let coin = GasCoin::try_from(&self.updated_coin).map_err(fmt::Error::custom)?;
@@ -435,9 +681,9 @@ impl TryFrom<&SuiMoveStruct> for GasCoin {
     fn try_from(move_struct: &SuiMoveStruct) -> Result<Self, Self::Error> {
         match move_struct {
             SuiMoveStruct::WithFields(fields) | SuiMoveStruct::WithTypes { type_: _, fields } => {
-                if let SuiMoveValue::Number(balance) = fields["balance"].clone() {
-                    if let SuiMoveValue::VersionedID { id, version } = fields["id"].clone() {
-                        return Ok(GasCoin::new(id, SequenceNumber::from(version), balance));
+                if let Some(SuiMoveValue::Number(balance)) = fields.get("balance") {
+                    if let Some(SuiMoveValue::UID { id }) = fields.get("id") {
+                        return Ok(GasCoin::new(*id, *balance));
                     }
                 }
             }
@@ -472,9 +718,7 @@ impl<T: SuiMoveObject> SuiData<T> {
 
 #[derive(Serialize, Deserialize, Clone, Debug, JsonSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct PublishResponse {
-    /// Certificate of the transaction
-    pub certificate: SuiCertifiedTransaction,
+pub struct SuiParsedPublishResponse {
     /// The newly published package object reference.
     pub package: SuiObjectRef,
     /// List of Move objects created as part of running the module initializers in the package
@@ -483,11 +727,9 @@ pub struct PublishResponse {
     pub updated_gas: SuiParsedObject,
 }
 
-impl Display for PublishResponse {
+impl Display for SuiParsedPublishResponse {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
-        writeln!(writer, "{}", "----- Certificate ----".bold())?;
-        write!(writer, "{}", self.certificate)?;
         writeln!(writer, "{}", "----- Publish Results ----".bold())?;
         writeln!(
             writer,
@@ -573,7 +815,7 @@ pub enum SuiMoveValue {
     Vector(Vec<SuiMoveValue>),
     Bytearray(Base64),
     String(String),
-    VersionedID { id: ObjectID, version: u64 },
+    UID { id: ObjectID },
     Struct(SuiMoveStruct),
     Option(Box<Option<SuiMoveValue>>),
 }
@@ -601,8 +843,8 @@ impl Display for SuiMoveValue {
             SuiMoveValue::String(value) => {
                 write!(writer, "{}", value)?;
             }
-            SuiMoveValue::VersionedID { id, version } => {
-                write!(writer, "{id}[{version}]")?;
+            SuiMoveValue::UID { id } => {
+                write!(writer, "{id}")?;
             }
             SuiMoveValue::Struct(value) => {
                 write!(writer, "{}", value)?;
@@ -755,7 +997,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
         "0x2::utf8::String" | "0x1::ascii::String" => {
-            if let SuiMoveValue::Bytearray(bytes) = fields["bytes"].clone() {
+            if let Some(SuiMoveValue::Bytearray(bytes)) = fields.get("bytes") {
                 if let Ok(bytes) = bytes.to_vec() {
                     if let Ok(s) = String::from_utf8(bytes) {
                         return Some(SuiMoveValue::String(s));
@@ -763,39 +1005,39 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
                 }
             }
         }
-        "0x2::url::Url" => return Some(fields["url"].clone()),
-        "0x2::id::ID" => {
-            if let SuiMoveValue::Address(id) = fields["bytes"] {
-                return Some(SuiMoveValue::Address(id));
+        "0x2::url::Url" => {
+            if let Some(url) = fields.get("url") {
+                return Some(url.clone());
             }
         }
-        "0x2::id::UniqueID" => {
-            if let SuiMoveValue::Address(id) = fields["id"].clone() {
-                return Some(SuiMoveValue::Address(id));
+        "0x2::object::ID" => {
+            if let Some(SuiMoveValue::Address(id)) = fields.get("bytes") {
+                return Some(SuiMoveValue::Address(*id));
             }
         }
-        "0x2::id::VersionedID" => {
-            if let SuiMoveValue::Address(address) = fields["id"].clone() {
-                if let SuiMoveValue::Number(version) = fields["version"].clone() {
-                    return Some(SuiMoveValue::VersionedID {
-                        id: address.into(),
-                        version,
-                    });
-                }
+        "0x2::object::UID" => {
+            if let Some(SuiMoveValue::Address(address)) = fields.get("id") {
+                return Some(SuiMoveValue::UID {
+                    id: ObjectID::from(*address),
+                });
             }
         }
         "0x2::balance::Balance" => {
-            if let SuiMoveValue::Number(value) = fields["value"].clone() {
-                return Some(SuiMoveValue::Number(value));
+            if let Some(SuiMoveValue::Number(value)) = fields.get("value") {
+                return Some(SuiMoveValue::Number(*value));
             }
         }
         "0x1::option::Option" => {
-            if let SuiMoveValue::Vector(values) = fields["vec"].clone() {
+            if let Some(SuiMoveValue::Vector(values)) = fields.get("vec") {
                 return Some(SuiMoveValue::Option(Box::new(values.first().cloned())));
             }
         }
-        _ => {}
+        _ => return None,
     }
+    warn!(
+        fields =? fields,
+        "Failed to convert {struct_name} to SuiMoveValue"
+    );
     None
 }
 
@@ -843,7 +1085,7 @@ impl TryFrom<MoveModulePublish> for SuiMovePackage {
 pub struct SuiTransactionData {
     pub transactions: Vec<SuiTransactionKind>,
     pub sender: SuiAddress,
-    gas_payment: SuiObjectRef,
+    pub gas_payment: SuiObjectRef,
     pub gas_budget: u64,
 }
 
@@ -1046,8 +1288,8 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
     fn try_from(cert: CertifiedTransaction) -> Result<Self, Self::Error> {
         Ok(Self {
             transaction_digest: *cert.digest(),
-            data: cert.data.try_into()?,
-            tx_signature: cert.tx_signature,
+            data: cert.signed_data.data.try_into()?,
+            tx_signature: cert.signed_data.tx_signature,
             auth_sign_info: cert.auth_sign_info,
         })
     }
@@ -1120,7 +1362,6 @@ impl SuiTransactionEffects {
             events: effect
                 .events
                 .into_iter()
-                // TODO: figure out how to map the non-Move events
                 .map(|event| SuiEvent::try_from(event, resolver))
                 .collect::<Result<_, _>>()?,
             dependencies: effect.dependencies,
@@ -1269,7 +1510,8 @@ pub enum SuiEvent {
         transaction_module: String,
         sender: SuiAddress,
         type_: String,
-        fields: SuiMoveStruct,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        fields: Option<SuiMoveStruct>,
         #[serde_as(as = "Base64")]
         #[schemars(with = "Base64")]
         bcs: Vec<u8>,
@@ -1325,9 +1567,20 @@ impl SuiEvent {
                 contents,
             } => {
                 let bcs = contents.to_vec();
-                let move_struct = Event::move_event_to_move_struct(&type_, &contents, resolver)?;
-                let (type_, fields) =
-                    SuiParsedMoveObject::try_type_and_fields_from_move_struct(&type_, move_struct)?;
+
+                // Resolver is not guaranteed to have knowledge of the event struct layout in the gateway server.
+                let (type_, fields) = if let Ok(move_struct) =
+                    Event::move_event_to_move_struct(&type_, &contents, resolver)
+                {
+                    let (type_, field) = SuiParsedMoveObject::try_type_and_fields_from_move_struct(
+                        &type_,
+                        move_struct,
+                    )?;
+                    (type_, Some(field))
+                } else {
+                    (type_.to_string(), None)
+                };
+
                 SuiEvent::MoveEvent {
                     package_id,
                     transaction_module: transaction_module.to_string(),
@@ -1430,6 +1683,12 @@ pub struct SuiObjectInfo {
     pub type_: String,
     pub owner: Owner,
     pub previous_transaction: TransactionDigest,
+}
+
+impl SuiObjectInfo {
+    pub fn to_object_ref(&self) -> ObjectRef {
+        (self.object_id, self.version, self.digest)
+    }
 }
 
 impl From<ObjectInfo> for SuiObjectInfo {
@@ -1560,8 +1819,11 @@ impl TryInto<EventFilter> for SuiEventFilter {
 #[derive(Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TransactionBytes {
+    /// transaction data bytes, as base-64 encoded string
     pub tx_bytes: Base64,
+    /// the gas object to be used
     pub gas: SuiObjectRef,
+    /// objects to be used in this transaction
     pub input_objects: Vec<SuiInputObjectKind>,
 }
 

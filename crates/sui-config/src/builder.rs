@@ -5,7 +5,7 @@ use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorGenesisInfo},
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
-    CONSENSUS_DB_NAME, DEFAULT_STAKE,
+    CONSENSUS_DB_NAME, DEFAULT_GAS_PRICE, DEFAULT_STAKE,
 };
 use rand::rngs::OsRng;
 use std::{
@@ -13,7 +13,10 @@ use std::{
     path::{Path, PathBuf},
     sync::Arc,
 };
-use sui_types::{base_types::encode_bytes_hex, crypto::get_key_pair_from_rng};
+use sui_types::{
+    base_types::encode_bytes_hex,
+    crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes, KeypairTraits},
+};
 
 pub struct ConfigBuilder<R = OsRng> {
     rng: R,
@@ -67,10 +70,11 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     pub fn build(mut self) -> NetworkConfig {
         let validators = (0..self.committee_size.get())
             .map(|_| get_key_pair_from_rng(&mut self.rng).1)
-            .map(|key_pair| ValidatorGenesisInfo {
+            .map(|key_pair: AuthorityKeyPair| ValidatorGenesisInfo {
                 key_pair,
                 network_address: utils::new_network_address(),
                 stake: DEFAULT_STAKE,
+                gas_price: DEFAULT_GAS_PRICE,
                 narwhal_primary_to_primary: utils::new_network_address(),
                 narwhal_worker_to_primary: utils::new_network_address(),
                 narwhal_primary_to_worker: utils::new_network_address(),
@@ -88,7 +92,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .enumerate()
             .map(|(i, validator)| {
                 let name = format!("validator-{i}");
-                let public_key = *validator.key_pair.public_key_bytes();
+                let public_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
 
@@ -97,6 +101,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     public_key,
                     stake,
                     delegation: 0, // no delegation yet at genesis
+                    gas_price: validator.gas_price,
                     network_address,
                     narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
                     narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
@@ -127,17 +132,17 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let validator_configs = validators
             .into_iter()
             .map(|validator| {
-                let public_key = validator.key_pair.public_key_bytes();
+                let public_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
-                    .join(encode_bytes_hex(public_key));
+                    .join(encode_bytes_hex(&public_key));
                 let network_address = validator.network_address;
                 let consensus_address = validator.narwhal_consensus_address;
                 let consensus_db_path = self
                     .config_directory
                     .join(CONSENSUS_DB_NAME)
-                    .join(encode_bytes_hex(public_key));
+                    .join(encode_bytes_hex(&public_key));
                 let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,
@@ -149,6 +154,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
+                    admin_interface_port: utils::get_available_port(),
                     json_rpc_address: utils::available_local_socket_address(),
                     websocket_address: None,
                     consensus_config: Some(consensus_config),

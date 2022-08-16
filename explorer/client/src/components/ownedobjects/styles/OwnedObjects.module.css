@@ -1,0 +1,44 @@
+.layout {
+    @apply flex flex-wrap mt-0;
+}
+
+.layout > div {
+    @apply w-full sm:w-[600px];
+}
+
+.previewimage > div,
+.previewimage > div > img {
+    @apply h-[60px] w-[60px] mr-[20px];
+}
+
+.layout > div:first-child {
+    @apply sm:pr-[4vw] sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-sui-grey-45;
+}
+
+.ownedobjects {
+    @apply w-[100%] lg:min-h-[240px] lg:flex lg:flex-wrap lg:justify-between;
+}
+
+.objectbox {
+    @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] max-h-[72px] flex items-center;
+}
+
+.ownedobjectheader {
+    @apply pb-1;
+}
+
+.ownedobjectheader > h2 {
+    @apply text-lg text-sui-grey-100;
+}
+
+.typevalue {
+    @apply text-sui-grey-80;
+}
+
+.gray {
+    @apply text-slate-500;
+}
+
+.fail {
+    @apply text-red-600 font-sans font-semibold mt-2;
+}

@@ -1,43 +1,51 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use anyhow::Result;
 use futures::TryFutureExt;
-use jsonrpsee::http_server::HttpServerHandle;
-use jsonrpsee::ws_server::WsServerHandle;
-use multiaddr::Multiaddr;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::option::Option::None;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
-use tracing::info;
-
+use std::{sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
+use sui_core::safe_client::SafeClientMetrics;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::ActiveAuthority,
-    authority_client::NetworkAuthorityClient,
+    authority_active::{gossip::GossipMetrics, ActiveAuthority},
+    authority_client::{
+        make_network_authority_client_sets_from_genesis,
+        make_network_authority_client_sets_from_system_state, NetworkAuthorityClient,
+    },
     checkpoints::CheckpointStore,
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
-use sui_json_rpc::JsonRpcServerBuilder;
 use sui_network::api::ValidatorServer;
+use sui_quorum_driver::{QuorumDriver, QuorumDriverHandler};
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
     follower_store::FollowerStore,
     node_sync_store::NodeSyncStore,
     IndexStore,
 };
+use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
+use tracing::info;
 
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
+use sui_json_rpc::http_server::HttpServerHandle;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
-use sui_types::crypto::PublicKeyBytes;
+use sui_json_rpc::ws_server::WsServerHandle;
+use sui_json_rpc::JsonRpcServerBuilder;
+use sui_types::crypto::KeypairTraits;
+use typed_store::traits::DBMapTableUtil;
 
+pub mod admin;
 pub mod metrics;
 
 pub struct SuiNode {
@@ -50,6 +58,8 @@ pub struct SuiNode {
     _execute_driver_handle: Option<tokio::task::JoinHandle<()>>,
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
+    active: Option<Arc<ActiveAuthority<NetworkAuthorityClient>>>,
+    quorum_driver_handler: Option<QuorumDriverHandler<NetworkAuthorityClient>>,
 }
 
 impl SuiNode {
@@ -71,29 +81,36 @@ impl SuiNode {
 
         let secret = Arc::pin(config.key_pair().copy());
         let committee = genesis.committee()?;
-        let store = Arc::new(AuthorityStore::open(config.db_path().join("store"), None));
-        let checkpoint_store = if config.consensus_config().is_some() {
-            Some(Arc::new(Mutex::new(CheckpointStore::open(
-                config.db_path().join("checkpoints"),
-                None,
-                committee.epoch,
-                config.public_key(),
-                secret.clone(),
-            )?)))
-        } else {
-            None
-        };
+        let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
+        let epoch_store = Arc::new(EpochStore::new(
+            config.db_path().join("epochs"),
+            &committee,
+            None,
+        ));
+
+        let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
+            &config.db_path().join("checkpoints"),
+            None,
+            committee.epoch,
+            config.public_key(),
+            secret.clone(),
+        )?));
 
         let index_store = if config.consensus_config().is_some() {
             None
         } else {
-            Some(Arc::new(IndexStore::open(
+            Some(Arc::new(IndexStore::open_tables_read_write(
                 config.db_path().join("indexes"),
+                None,
                 None,
             )))
         };
 
-        let follower_store = Arc::new(FollowerStore::open(config.db_path().join("follower_db"))?);
+        let follower_store = Arc::new(FollowerStore::open_tables_read_write(
+            config.db_path().join("follower_db"),
+            None,
+            None,
+        ));
 
         let event_store = if config.enable_event_processing {
             let path = config.db_path().join("events.db");
@@ -106,69 +123,68 @@ impl SuiNode {
 
         let state = Arc::new(
             AuthorityState::new(
-                committee,
                 config.public_key(),
                 secret,
                 store,
+                epoch_store.clone(),
                 index_store.clone(),
                 event_store,
-                checkpoint_store,
+                Some(checkpoint_store),
                 genesis,
                 &prometheus_registry,
             )
             .await,
         );
 
+        let mut net_config = mysten_network::config::Config::new();
+        net_config.connect_timeout = Some(Duration::from_secs(5));
+        net_config.request_timeout = Some(Duration::from_secs(5));
+        net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
+
+        let sui_system_state = state.get_sui_system_state_object().await?;
+
+        let authority_clients = if config.enable_reconfig && sui_system_state.epoch > 0 {
+            make_network_authority_client_sets_from_system_state(&sui_system_state, &net_config)
+        } else {
+            make_network_authority_client_sets_from_genesis(genesis, &net_config)
+        }?;
+        let net = AuthorityAggregator::new(
+            state.clone_committee(),
+            epoch_store,
+            authority_clients,
+            AuthAggMetrics::new(&prometheus_registry),
+            SafeClientMetrics::new(&prometheus_registry),
+        );
+
         // TODO: maybe have a config enum that takes care of this for us.
         let is_validator = config.consensus_config().is_some();
-        let is_node = !is_validator;
+        let is_full_node = !is_validator;
 
-        let should_start_follower = is_node || config.enable_gossip;
+        let quorum_driver_handler = if is_full_node {
+            Some(QuorumDriverHandler::new(net.clone()))
+        } else {
+            None
+        };
+        let should_start_follower = is_full_node || config.enable_gossip;
+
+        let mut active = None;
 
         let (gossip_handle, execute_driver_handle, checkpoint_process_handle) =
             if should_start_follower {
-                let mut net_config = mysten_network::config::Config::new();
-                net_config.connect_timeout = Some(Duration::from_secs(5));
-                net_config.request_timeout = Some(Duration::from_secs(5));
-                net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
+                let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
+                    config.db_path().join("node_sync_db"),
+                    None,
+                    None,
+                ));
 
-                let mut authority_clients = BTreeMap::new();
-
-                let sui_system_state = state.get_sui_system_state_object().await?;
-
-                if config.enable_reconfig && sui_system_state.epoch > 0 {
-                    // Create NetworkAuthorityClient with this epoch's network information
-                    let epoch_validators = &sui_system_state.validators.active_validators;
-
-                    for validator in epoch_validators {
-                        let net_addr: &[u8] = &validator.metadata.net_address.clone();
-                        let str_addr = std::str::from_utf8(net_addr)?;
-                        let address: Multiaddr = str_addr.parse()?;
-                        //let address = Multiaddr::try_from(net_addr)?;
-                        let channel = net_config.connect_lazy(&address)?;
-                        let client = NetworkAuthorityClient::new(channel);
-                        let name: &[u8] = &validator.metadata.name;
-                        let public_key_bytes = PublicKeyBytes::try_from(name)?;
-                        authority_clients.insert(public_key_bytes, client);
-                    }
-                } else {
-                    // Create NetworkAuthorityClient with the genesis set
-                    for validator in genesis.validator_set() {
-                        let channel = net_config
-                            .connect_lazy(validator.network_address())
-                            .unwrap();
-                        let client = NetworkAuthorityClient::new(channel);
-                        authority_clients.insert(validator.public_key(), client);
-                    }
-                }
-                let net = AuthorityAggregator::new(
-                    state.clone_committee(),
-                    authority_clients,
-                    AuthAggMetrics::new(&prometheus_registry),
-                );
-
-                let active_authority =
-                    Arc::new(ActiveAuthority::new(state.clone(), follower_store, net)?);
+                let active_authority = Arc::new(ActiveAuthority::new(
+                    state.clone(),
+                    pending_store,
+                    follower_store,
+                    net,
+                    GossipMetrics::new(&prometheus_registry),
+                )?);
+                active = Some(Arc::clone(&active_authority));
 
                 if is_validator {
                     // TODO: get degree from config file.
@@ -178,22 +194,19 @@ impl SuiNode {
                         Some(active_authority.clone().spawn_execute_process().await),
                         Some(
                             active_authority
-                                .spawn_checkpoint_process(CheckpointMetrics::new(
-                                    &prometheus_registry,
-                                ))
+                                .spawn_checkpoint_process(
+                                    CheckpointMetrics::new(&prometheus_registry),
+                                    config.enable_reconfig,
+                                )
                                 .await,
                         ),
                     )
                 } else {
-                    let pending_store =
-                        Arc::new(NodeSyncStore::open(config.db_path().join("node_sync_db"))?);
-
+                    // TODO: enable checkpoint sync on fullnode
+                    // let metrics = CheckpointMetrics::new(&prometheus_registry);
+                    // active_authority.sync_to_latest_checkpoint(&metrics).await?;
                     (
-                        Some(
-                            active_authority
-                                .spawn_node_sync_process(pending_store)
-                                .await,
-                        ),
+                        Some(active_authority.spawn_node_sync_process().await),
                         None,
                         None,
                     )
@@ -240,7 +253,10 @@ impl SuiNode {
                     server_builder.add_service(ValidatorServer::new(validator_service));
             }
 
-            let server = server_builder.bind(config.network_address()).await?;
+            let server = server_builder
+                .bind(config.network_address())
+                .await
+                .map_err(|err| anyhow!(err.to_string()))?;
             let local_addr = server.local_addr();
             info!("Listening to traffic on {local_addr}");
             tokio::spawn(server.serve().map_err(Into::into))
@@ -259,6 +275,8 @@ impl SuiNode {
             _batch_subsystem_handle: batch_subsystem_handle,
             _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,
+            active,
+            quorum_driver_handler,
         };
 
         info!("SuiNode started!");
@@ -268,6 +286,26 @@ impl SuiNode {
 
     pub fn state(&self) -> Arc<AuthorityState> {
         self.state.clone()
+    }
+
+    pub fn active(&self) -> Option<Arc<ActiveAuthority<NetworkAuthorityClient>>> {
+        self.active.clone()
+    }
+
+    pub fn quorum_driver(&self) -> Option<Arc<QuorumDriver<NetworkAuthorityClient>>> {
+        self.quorum_driver_handler
+            .as_ref()
+            .map(|qdh| qdh.clone_quorum_driver())
+    }
+
+    pub fn subscribe_to_quorum_driver_effects(
+        &self,
+    ) -> Result<tokio::sync::broadcast::Receiver<(CertifiedTransaction, CertifiedTransactionEffects)>>
+    {
+        self.quorum_driver_handler
+            .as_ref()
+            .map(|qdh| qdh.subscribe())
+            .ok_or_else(|| anyhow::anyhow!("Quorum Driver is not enabled in this node."))
     }
 
     //TODO watch/wait on all the components

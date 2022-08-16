@@ -11,7 +11,10 @@ use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::BatchInfoRequest;
 use sui_types::messages::BatchInfoResponseItem;
 
+use crate::authority::AuthorityMetrics;
+
 use std::collections::VecDeque;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::time::interval;
 
@@ -20,7 +23,7 @@ use futures::StreamExt;
 use typed_store::Map;
 
 use tokio::sync::broadcast::{error::RecvError, Receiver};
-use tracing::error;
+use tracing::{debug, error};
 
 #[cfg(test)]
 #[path = "unit_tests/batch_tests.rs"]
@@ -57,6 +60,7 @@ impl crate::authority::AuthorityState {
     pub fn last_batch(&self) -> Result<Option<SignedBatch>, SuiError> {
         let last_batch = self
             .db()
+            .tables
             .batches
             .iter()
             .skip_prior_to(&TxSequenceNumber::MAX)?
@@ -75,24 +79,30 @@ impl crate::authority::AuthorityState {
         // First read the last batch in the db
         let mut last_batch = match self
             .db()
+            .tables
             .batches
             .iter()
             .skip_prior_to(&TxSequenceNumber::MAX)?
             .next()
         {
-            Some((_, last_batch)) => last_batch.batch,
+            Some((_, last_batch)) => last_batch.into_data(),
             None => {
                 // Make a batch at zero
-                let zero_batch =
-                    SignedBatch::new(AuthorityBatch::initial(), &*self.secret, self.name);
-                self.db().batches.insert(&0, &zero_batch)?;
-                zero_batch.batch
+                let zero_batch = SignedBatch::new(
+                    self.epoch(),
+                    AuthorityBatch::initial(),
+                    &*self.secret,
+                    self.name,
+                );
+                self.db().tables.batches.insert(&0, &zero_batch)?;
+                zero_batch.into_data()
             }
         };
 
         // See if there are any transactions in the database not in a batch
         let transactions: Vec<_> = self
             .db()
+            .tables
             .executed_sequence
             .iter()
             .skip_to(&last_batch.next_sequence_number)?
@@ -101,16 +111,17 @@ impl crate::authority::AuthorityState {
         if !transactions.is_empty() {
             // Make a new batch, to put the old transactions not in a batch in.
             let last_signed_batch = SignedBatch::new(
+                self.epoch(),
                 // Unwrap safe due to check not empty
                 AuthorityBatch::make_next(&last_batch, &transactions)?,
                 &*self.secret,
                 self.name,
             );
-            self.db().batches.insert(
-                &last_signed_batch.batch.next_sequence_number,
+            self.db().tables.batches.insert(
+                &last_signed_batch.data().next_sequence_number,
                 &last_signed_batch,
             )?;
-            last_batch = last_signed_batch.batch;
+            last_batch = last_signed_batch.into_data();
         }
 
         Ok(last_batch)
@@ -121,9 +132,11 @@ impl crate::authority::AuthorityState {
         min_batch_size: u64,
         max_delay: Duration,
     ) -> SuiResult<()> {
+        debug!("Batch service started");
         // This assumes we have initialized the database with a batch.
         let (next_sequence_number, prev_signed_batch) = self
             .db()
+            .tables
             .batches
             .iter()
             .skip_prior_to(&TxSequenceNumber::MAX)?
@@ -141,7 +154,7 @@ impl crate::authority::AuthorityState {
         let mut exit = false;
         let mut make_batch;
 
-        let mut prev_batch = prev_signed_batch.batch;
+        let mut prev_batch = prev_signed_batch.into_data();
 
         // The structures we use to build the next batch. The current_batch holds the sequence
         // of transactions in order, following the last batch. The loose transactions holds
@@ -187,22 +200,25 @@ impl crate::authority::AuthorityState {
 
                 // Make and store a new batch.
                 let new_batch = SignedBatch::new(
+                    self.epoch(),
                     // Unwrap safe since we tested above it is not empty
                     AuthorityBatch::make_next(&prev_batch, &current_batch).unwrap(),
                     &*self.secret,
                     self.name,
                 );
                 self.db()
+                    .tables
                     .batches
-                    .insert(&new_batch.batch.next_sequence_number, &new_batch)?;
+                    .insert(&new_batch.data().next_sequence_number, &new_batch)?;
+                debug!(next_sequence_number=?new_batch.data().next_sequence_number, "New batch created. Transactions: {:?}", current_batch);
 
                 // If a checkpointing service is present, register the batch with it
                 // to insert the transactions into future checkpoint candidates
                 if let Some(checkpoint) = &self.checkpoints {
-                    if let Err(err) = checkpoint
-                        .lock()
-                        .handle_internal_batch(new_batch.batch.next_sequence_number, &current_batch)
-                    {
+                    if let Err(err) = checkpoint.lock().handle_internal_batch(
+                        new_batch.data().next_sequence_number,
+                        &current_batch,
+                    ) {
                         error!("Checkpointing service error: {}", err);
                     }
                 }
@@ -213,7 +229,7 @@ impl crate::authority::AuthorityState {
                     .send(UpdateItem::Batch(new_batch.clone()));
 
                 // A new batch is actually made, so we reset the conditions.
-                prev_batch = new_batch.batch;
+                prev_batch = new_batch.into_data();
                 current_batch.clear();
 
                 // We rest the interval here to ensure that blocks
@@ -231,6 +247,15 @@ impl crate::authority::AuthorityState {
         &self,
         request: BatchInfoRequest,
     ) -> Result<impl Stream<Item = Result<BatchInfoResponseItem, SuiError>>, SuiError> {
+        let metrics = self.metrics.clone();
+        metrics.follower_connections.inc();
+
+        metrics.follower_connections_concurrent.inc();
+
+        let follower_connections_concurrent_guard = scopeguard::guard(metrics.clone(), |metrics| {
+            metrics.follower_connections_concurrent.dec();
+        });
+
         // Register a subscriber to not miss any updates
         let subscriber = self.subscribe_batch();
 
@@ -238,14 +263,21 @@ impl crate::authority::AuthorityState {
         let (items, (should_subscribe, _start, end)) =
             self.handle_batch_info_request(request).await?;
 
+        // unwrap safe - converting usize -> u64
+        metrics
+            .follower_items_loaded
+            .inc_by(items.len().try_into().unwrap());
+
         // Define a local structure to support the stream construction.
-        struct BatchStreamingLocals {
+        struct BatchStreamingLocals<GuardT> {
             items: VecDeque<UpdateItem>,
             next_expected_seq: TxSequenceNumber,
             next_expected_batch: TxSequenceNumber,
             subscriber: Receiver<UpdateItem>,
             exit: bool,
             should_subscribe: bool,
+            metrics: Arc<AuthorityMetrics>,
+            _guard: GuardT,
         }
 
         let local_state = BatchStreamingLocals {
@@ -260,6 +292,8 @@ impl crate::authority::AuthorityState {
             exit: false,
             // A flag indicating if real-time subscrition is needed.
             should_subscribe,
+            metrics,
+            _guard: follower_connections_concurrent_guard,
         };
 
         // Construct the stream
@@ -278,10 +312,11 @@ impl crate::authority::AuthorityState {
                     }
                     UpdateItem::Batch(signed_batch) => {
                         local_state.next_expected_batch =
-                            signed_batch.batch.next_sequence_number + 1;
+                            signed_batch.data().next_sequence_number + 1;
                     }
                 }
 
+                local_state.metrics.follower_items_streamed.inc();
                 Some((Ok(BatchInfoResponseItem(item)), local_state))
             } else {
                 // Release memory now that the historical items have been processed.
@@ -304,7 +339,7 @@ impl crate::authority::AuthorityState {
                                     UpdateItem::Batch(signed_batch) => {
                                         // Do not re-send batches already sent from the database
                                         if !(local_state.next_expected_batch
-                                            <= signed_batch.batch.next_sequence_number)
+                                            <= signed_batch.data().next_sequence_number)
                                         {
                                             continue;
                                         }
@@ -313,11 +348,12 @@ impl crate::authority::AuthorityState {
 
                                 // Only stop at the batch boundary, once we have covered the last item.
                                 if let UpdateItem::Batch(signed_batch) = &item {
-                                    if end <= signed_batch.batch.next_sequence_number {
+                                    if end <= signed_batch.data().next_sequence_number {
                                         local_state.exit = true;
                                     }
                                 }
 
+                                local_state.metrics.follower_items_streamed.inc();
                                 return Some((Ok(BatchInfoResponseItem(item)), local_state));
                             }
                             Err(RecvError::Closed) => {

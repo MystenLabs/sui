@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::base_types::{AuthorityName, ExecutionDigests};
-use crate::crypto::{sha3_hash, AuthoritySignature, BcsSignable};
-use crate::error::SuiError;
+use crate::crypto::{sha3_hash, AuthoritySignInfo, AuthoritySignature, VerificationObligation};
+use crate::error::{SuiError, SuiResult};
+use crate::message_envelope::{Envelope, Message};
 use serde::{Deserialize, Serialize};
 
 pub type TxSequenceNumber = u64;
 
 /// Either a freshly sequenced transaction/effects tuple of hashes or a batch
+#[allow(clippy::large_enum_variant)]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum UpdateItem {
     Transaction((TxSequenceNumber, ExecutionDigests)),
@@ -19,7 +21,6 @@ pub type BatchDigest = [u8; 32];
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Hash, Default, Debug, Serialize, Deserialize)]
 pub struct TransactionBatch(pub Vec<(TxSequenceNumber, ExecutionDigests)>);
-impl BcsSignable for TransactionBatch {}
 
 #[derive(Eq, PartialEq, Ord, PartialOrd, Clone, Default, Debug, Serialize, Deserialize)]
 pub struct AuthorityBatch {
@@ -40,13 +41,7 @@ pub struct AuthorityBatch {
     pub transactions_digest: [u8; 32],
 }
 
-impl BcsSignable for AuthorityBatch {}
-
 impl AuthorityBatch {
-    pub fn digest(&self) -> BatchDigest {
-        sha3_hash(self)
-    }
-
     /// The first batch for any authority indexes at zero
     /// and has zero length.
     pub fn initial() -> AuthorityBatch {
@@ -97,30 +92,38 @@ impl AuthorityBatch {
     }
 }
 
-/// An transaction signed by a single authority
-#[derive(Eq, Clone, Debug, Serialize, Deserialize)]
-pub struct SignedBatch {
-    pub batch: AuthorityBatch,
-    pub authority: AuthorityName,
-    pub signature: AuthoritySignature,
+impl Message for AuthorityBatch {
+    type DigestType = BatchDigest;
+
+    fn digest(&self) -> Self::DigestType {
+        sha3_hash(self)
+    }
+
+    fn verify(&self) -> SuiResult {
+        fp_ensure!(
+            self.initial_sequence_number <= self.next_sequence_number,
+            SuiError::from("Invalid AuthorityBatch sequence number")
+        );
+        fp_ensure!(
+            self.next_sequence_number - self.initial_sequence_number >= self.size,
+            SuiError::from("Invalid AuthorityBatch size")
+        );
+        Ok(())
+    }
+
+    fn add_to_verification_obligation(&self, _: &mut VerificationObligation) -> SuiResult<()> {
+        Ok(())
+    }
 }
 
+pub type SignedBatch = Envelope<AuthorityBatch, AuthoritySignInfo>;
+
 impl SignedBatch {
-    pub fn new(
+    pub fn new_with_zero_epoch(
         batch: AuthorityBatch,
         secret: &dyn signature::Signer<AuthoritySignature>,
         authority: AuthorityName,
     ) -> SignedBatch {
-        SignedBatch {
-            signature: AuthoritySignature::new(&batch, secret),
-            batch,
-            authority,
-        }
-    }
-}
-
-impl PartialEq for SignedBatch {
-    fn eq(&self, other: &Self) -> bool {
-        self.batch == other.batch && self.authority == other.authority
+        Self::new(0, batch, secret, authority)
     }
 }

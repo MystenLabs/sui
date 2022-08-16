@@ -22,6 +22,14 @@ pub enum Command {
     New(new::New),
     Prove(prove::Prove),
     Test(unit_test::Test),
+    CalibrateCosts(Calib),
+}
+#[derive(Parser)]
+pub struct Calib {
+    #[clap(name = "runs", short = 'r', long = "runs", default_value = "1")]
+    runs: usize,
+    #[clap(name = "summarize", short = 's', long = "summarize")]
+    summarize: bool,
 }
 
 pub fn execute_move_command(
@@ -55,6 +63,10 @@ pub fn execute_move_command(
                 std::process::exit(1)
             }
 
+            Ok(())
+        }
+        Command::CalibrateCosts(c) => {
+            sui_framework::cost_calib::run_calibration(c.runs, c.summarize);
             Ok(())
         }
     }

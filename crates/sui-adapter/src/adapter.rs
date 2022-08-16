@@ -3,7 +3,7 @@
 
 use std::{
     borrow::Borrow,
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet},
     convert::TryFrom,
     fmt::Debug,
 };
@@ -30,15 +30,15 @@ use sui_types::{
     error::{ExecutionErrorKind, SuiError},
     event::{Event, TransferType},
     gas::SuiGasStatus,
-    id::VersionedID,
+    id::UID,
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
-    object::{self, Data, MoveObject, Object, Owner},
-    storage::{DeleteKind, Storage},
+    object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
+    storage::{DeleteKind, ObjectChange, ParentSync, Storage},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_verifier::{
-    entry_points_verifier::{is_tx_context, INIT_FN_NAME, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
-    verifier,
+    entry_points_verifier::{is_tx_context, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
+    verifier, INIT_FN_NAME,
 };
 
 use crate::bytecode_rewriter::ModuleHandleRewriter;
@@ -58,7 +58,10 @@ pub fn new_move_vm(natives: NativeFunctionTable) -> Result<MoveVM, SuiError> {
 /// otherwise we return Ok(Ok).
 /// TODO: Do we really need the two layers?
 #[allow(clippy::too_many_arguments)]
-pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+pub fn execute<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+>(
     vm: &MoveVM,
     state_view: &mut S,
     module_id: ModuleId,
@@ -113,7 +116,7 @@ pub fn execute<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 #[allow(clippy::too_many_arguments)]
 fn execute_internal<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
 >(
     vm: &MoveVM,
     state_view: &mut S,
@@ -122,7 +125,7 @@ fn execute_internal<
     type_args: Vec<TypeTag>,
     args: Vec<Vec<u8>>,
     has_ctx_arg: bool,
-    object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
+    object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber, Option<u32>)>,
     by_value_objects: BTreeSet<ObjectID>,
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     gas_status: &mut SuiGasStatus, // gas status for the current call operation
@@ -134,7 +137,7 @@ fn execute_internal<
     // by objects.
     let object_owner_map: BTreeMap<SuiAddress, SuiAddress> = object_data
         .iter()
-        .filter_map(|(id, (owner, _))| match owner {
+        .filter_map(|(id, (owner, _, _))| match owner {
             Owner::ObjectOwner(owner) => Some(((*id).into(), *owner)),
             _ => None,
         })
@@ -221,7 +224,10 @@ fn execute_internal<
     Ok(())
 }
 
-pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+pub fn publish<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+>(
     state_view: &mut S,
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
@@ -253,7 +259,7 @@ pub fn publish<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error =
 /// Store package in state_view and call module initializers
 pub fn store_package_and_init_modules<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
 >(
     state_view: &mut S,
     vm: &MoveVM,
@@ -264,35 +270,55 @@ pub fn store_package_and_init_modules<
     let modules_to_init = modules
         .iter()
         .filter_map(|module| {
-            module.function_defs.iter().find(|fdef| {
-                let fhandle = module.function_handle_at(fdef.function).name;
-                let fname = module.identifier_at(fhandle);
-                fname == INIT_FN_NAME
-            })?;
-            Some(module.self_id())
+            for fdef in &module.function_defs {
+                let fhandle = module.function_handle_at(fdef.function);
+                let fname = module.identifier_at(fhandle.name);
+                if fname == INIT_FN_NAME {
+                    return Some((
+                        module.self_id(),
+                        module.signature_at(fhandle.parameters).len(),
+                    ));
+                }
+            }
+            None
         })
         .collect();
 
     // wrap the modules in an object, write it to the store
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
     let package_object = Object::new_package(modules, ctx.digest());
-    state_view.set_create_object_ids(HashSet::from([package_object.id()]));
-    state_view.write_object(package_object);
+    let id = package_object.id();
+    state_view.set_create_object_ids(BTreeSet::from([id]));
+    let changes = BTreeMap::from([(id, ObjectChange::Write(package_object))]);
+    state_view.apply_object_changes(changes);
 
     init_modules(state_view, vm, modules_to_init, ctx, gas_status)
 }
 
 /// Modules in module_ids_to_init must have the init method defined
-fn init_modules<E: Debug, S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage>(
+fn init_modules<
+    E: Debug,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
+>(
     state_view: &mut S,
     vm: &MoveVM,
-    module_ids_to_init: Vec<ModuleId>,
+    module_ids_to_init: Vec<(ModuleId, usize)>,
     ctx: &mut TxContext,
     gas_status: &mut SuiGasStatus,
 ) -> Result<(), ExecutionError> {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
-    for module_id in module_ids_to_init {
-        let args = vec![ctx.to_vec()];
+    for (module_id, num_args) in module_ids_to_init {
+        let mut args = vec![];
+        // an init function can have one or two arguments, with the last one always being of type
+        // &mut TxContext and the additional (first) one representing a characteristic type (see
+        // char_type verfier pass for additional explanation)
+        if num_args == 2 {
+            // characteristic type is a struct with a single bool filed which in bcs is encoded as
+            // 0x01
+            let bcs_char_type_value = vec![0x01];
+            args.push(bcs_char_type_value);
+        }
+        args.push(ctx.to_vec());
         let has_ctx_arg = true;
 
         execute_internal(
@@ -410,16 +436,17 @@ type MoveEvent = (Vec<u8>, u64, TypeTag, AbilitySet, Vec<u8>);
 #[allow(clippy::too_many_arguments)]
 fn process_successful_execution<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
 >(
     state_view: &mut S,
     module_id: &ModuleId,
-    mut by_value_objects: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
+    mut by_value_objects: BTreeMap<ObjectID, (object::Owner, SequenceNumber, Option<u32>)>,
     mutable_refs: Vec<(ObjectID, Vec<u8>)>,
     events: Vec<MoveEvent>,
     ctx: &TxContext,
     mut object_owner_map: BTreeMap<SuiAddress, SuiAddress>,
 ) -> Result<(), ExecutionError> {
+    let mut changes = BTreeMap::new();
     for (obj_id, new_contents) in mutable_refs {
         // update contents and increment sequence number
         let mut obj = state_view
@@ -430,7 +457,7 @@ fn process_successful_execution<
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
             .update_contents_and_increment_version(new_contents);
-        state_view.write_object(obj);
+        changes.insert(obj_id, ObjectChange::Write(obj));
     }
     let tx_digest = ctx.digest();
     // newly_generated_ids contains all object IDs generated in this transaction.
@@ -440,6 +467,11 @@ fn process_successful_execution<
     // It's a bit hacky. Ideally, we want `newly_generated_ids` to include it. But it's unclear how.
     let newly_generated_ids = ctx.recreate_all_ids();
     state_view.set_create_object_ids(newly_generated_ids.clone());
+    let mut unwrap_and_deleted = BTreeSet::new();
+    let mut frozen_object_ids = BTreeSet::new();
+    let mut child_count_deltas: BTreeMap<ObjectID, i64> = BTreeMap::new();
+    let mut newly_generated_deleted = BTreeSet::new();
+    let mut newly_generated_unused = newly_generated_ids.clone();
     // process events to identify transfers, freezes
     for e in events {
         let (recipient, event_type, type_, abilities, event_bytes) = e;
@@ -461,7 +493,7 @@ fn process_successful_execution<
                     EventType::ShareObject => Owner::Shared,
                     _ => unreachable!(),
                 };
-                handle_transfer(
+                let obj = handle_transfer(
                     ctx.sender(),
                     new_owner,
                     type_,
@@ -473,49 +505,81 @@ fn process_successful_execution<
                     module_id,
                     &mut object_owner_map,
                     &newly_generated_ids,
-                )
+                    &mut newly_generated_unused,
+                    &mut frozen_object_ids,
+                    &mut child_count_deltas,
+                )?;
+                changes.insert(obj.id(), ObjectChange::Write(obj));
             }
             EventType::DeleteObjectID => {
                 // unwrap safe because this event can only be emitted from processing
                 // native call delete_id, which guarantees the type of the id.
-                let id: VersionedID = bcs::from_bytes(&event_bytes).unwrap();
-                let obj_id = id.object_id();
-                // We don't care about IDs that are generated in this same transaction
-                // but only to be deleted.
-                if !newly_generated_ids.contains(obj_id) {
-                    match by_value_objects.remove(id.object_id()) {
-                        Some(_) => {
+                let uid: UID = bcs::from_bytes(&event_bytes).unwrap();
+                let obj_id = uid.object_id();
+                newly_generated_unused.remove(obj_id);
+                if newly_generated_ids.contains(obj_id) {
+                    // we will need to make sure that this deleted object did not receive any
+                    // children
+                    newly_generated_deleted.insert(*obj_id);
+                } else {
+                    match by_value_objects.remove(obj_id) {
+                        Some((owner, version, child_count_opt)) => {
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
                                 module_id.name(),
                                 ctx.sender(),
                                 *obj_id,
                             ));
-                            state_view.delete_object(obj_id, id.version(), DeleteKind::Normal)
+                            if let Owner::ObjectOwner(parent_id) = owner {
+                                let delta = child_count_deltas.entry(parent_id.into()).or_insert(0);
+                                *delta -= 1
+                            }
+                            // update the child_count for the object being deleted
+                            // this must be zero at the end
+                            if let Some(child_count) = child_count_opt {
+                                let delta = child_count_deltas.entry(*obj_id).or_insert(0);
+                                *delta += child_count as i64;
+                            }
+                            changes
+                                .insert(*obj_id, ObjectChange::Delete(version, DeleteKind::Normal));
                         }
                         None => {
                             // This object wasn't in the input, and is being deleted. It must
                             // be unwrapped in this transaction and then get deleted.
                             // When an object was wrapped at version `v`, we added an record into `parent_sync`
                             // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
-                            // it will also have version `v+1`, leading to a violation of the invariant that any
-                            // object_id and version pair must be unique. Hence for any object that's just unwrapped,
-                            // we force incrementing its version number again to make it `v+2` before writing to the store.
+                            // we force it to `v+2` by fetching the old version from `parent_sync`.
+                            // This ensures that the object_id and version pair will be unique.
+                            // Here it is set to `v+1` and will be incremented in `delete_object`
                             state_view.log_event(Event::delete_object(
                                 module_id.address(),
                                 module_id.name(),
                                 ctx.sender(),
                                 *obj_id,
                             ));
-                            state_view.delete_object(
-                                obj_id,
-                                id.version().increment(),
-                                DeleteKind::UnwrapThenDelete,
-                            )
+                            let previous_version =
+                                match state_view.get_latest_parent_entry_ref(*obj_id) {
+                                    Ok(Some((_, previous_version, _))) => previous_version,
+                                    // TODO this error is (hopefully) transient and should not be
+                                    // a normal execution error
+                                    _ => {
+                                        return Err(ExecutionError::new_with_source(
+                                            ExecutionErrorKind::InvariantViolation,
+                                            missing_unwrapped_msg(obj_id),
+                                        ));
+                                    }
+                                };
+                            unwrap_and_deleted.insert(*obj_id);
+                            changes.insert(
+                                *obj_id,
+                                ObjectChange::Delete(
+                                    previous_version,
+                                    DeleteKind::UnwrapThenDelete,
+                                ),
+                            );
                         }
                     }
                 }
-                Ok(())
             }
             EventType::User => {
                 match type_ {
@@ -530,16 +594,106 @@ fn process_successful_execution<
                         "Native function emit_event<T> ensures that T is always bound to structs"
                     ),
                 };
-                Ok(())
             }
-        }?;
+        };
     }
 
-    // any object left in `by_value_objects` is an input passed by value that was not transferred or frozen.
-    // this means that either the object was (1) deleted from the Sui system altogether, or
-    // (2) wrapped inside another object that is in the Sui object pool
-    for (id, (_owner, version)) in by_value_objects {
-        state_view.delete_object(&id, version, DeleteKind::Wrap);
+    // any object left in `by_value_objects` is an input passed by value that was not transferred,
+    // frozen, shared, or deleted.
+    // This means that either the object was wrapped inside another object that is in the Sui object
+    // pool
+    for (id, (owner, version, child_count_opt)) in by_value_objects {
+        if let Owner::ObjectOwner(parent) = owner {
+            let delta = child_count_deltas.entry(parent.into()).or_insert(0);
+            *delta -= 1
+        }
+        if let Some(child_count) = child_count_opt {
+            let delta = child_count_deltas.entry(id).or_insert(0);
+            *delta += child_count as i64;
+        }
+        changes.insert(id, ObjectChange::Delete(version, DeleteKind::Wrap));
+    }
+
+    // Check validity of child object counts
+    // - Any newly generated, and then deleted object, cannot have child objects
+    // - Any deleted object (wrapped or deleted) cannot have child objects
+    // - Any frozen object (made immutable) cannot have child objects
+    for id in newly_generated_deleted {
+        // check that the newly generated (but not used) object does not have children
+        // we remove it here as it is not needed for updating the written object child counts
+        let delta = child_count_deltas.remove(&id).unwrap_or(0);
+        if delta != 0 {
+            return Err(ExecutionErrorKind::InvalidParentDeletion {
+                parent: id,
+                kind: None,
+            }
+            .into());
+        }
+    }
+
+    for id in newly_generated_unused {
+        // check that any remaining non-zero delta was created this transaction and wrapped
+        // we remove it here as it is not needed for updating the written object child counts
+        let delta = child_count_deltas.remove(&id).unwrap_or(0);
+        if delta != 0 {
+            debug_assert!(delta > 0);
+            return Err(ExecutionErrorKind::InvalidParentDeletion {
+                parent: id,
+                kind: Some(DeleteKind::Wrap),
+            }
+            .into());
+        }
+    }
+
+    // check that all deleted objects have a child count of zero
+    for (id, delta) in child_count_deltas {
+        if delta == 0 {
+            continue;
+        }
+        let change = changes.entry(id).or_insert_with(|| {
+            let mut object = state_view.read_object(&id).unwrap().clone();
+            // Active input object must be Move object.
+            object.data.try_as_move_mut().unwrap().increment_version();
+            ObjectChange::Write(object)
+        });
+        match change {
+            ObjectChange::Write(object) => {
+                object
+                    .data
+                    .try_as_move_mut()
+                    .expect("must be move object")
+                    .change_child_count(delta)
+                    .map_err(|()| ExecutionErrorKind::TooManyChildObjects { object: id })?;
+            }
+            ObjectChange::Delete(_, kind) => {
+                if delta != 0 {
+                    return Err(ExecutionErrorKind::InvalidParentDeletion {
+                        parent: id,
+                        kind: Some(*kind),
+                    }
+                    .into());
+                }
+            }
+        }
+    }
+
+    // apply object writes and object deletions
+    state_view.apply_object_changes(changes);
+
+    // check all frozen objects have a child count of zero
+    for frozen_object_id in frozen_object_ids {
+        let frozen_object = state_view
+            .read_object(&frozen_object_id)
+            .unwrap()
+            .data
+            .try_as_move()
+            .unwrap();
+        if frozen_object.child_count().unwrap_or(0) != 0 {
+            return Err(ExecutionErrorKind::InvalidParentFreezing {
+                parent: frozen_object_id,
+            }
+            .into());
+        }
     }
 
     Ok(())
@@ -548,7 +702,7 @@ fn process_successful_execution<
 #[allow(clippy::too_many_arguments)]
 fn handle_transfer<
     E: Debug,
-    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage,
+    S: ResourceResolver<Error = E> + ModuleResolver<Error = E> + Storage + ParentSync,
 >(
     sender: SuiAddress,
     recipient: Owner,
@@ -556,120 +710,158 @@ fn handle_transfer<
     abilities: AbilitySet,
     contents: Vec<u8>,
     tx_digest: TransactionDigest,
-    by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
+    by_value_objects: &mut BTreeMap<ObjectID, (object::Owner, SequenceNumber, Option<u32>)>,
     state_view: &mut S,
     module_id: &ModuleId,
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
-    newly_generated_ids: &HashSet<ObjectID>,
-) -> Result<(), ExecutionError> {
-    match type_ {
-        TypeTag::Struct(s_type) => {
-            let has_public_transfer = abilities.has_store();
-            // safe because `has_public_transfer` was properly determined from the abilities
-            let mut move_obj =
-                unsafe { MoveObject::new_from_execution(s_type, has_public_transfer, contents) };
-            let old_object = by_value_objects.remove(&move_obj.id());
-
-            #[cfg(debug_assertions)]
-            {
-                check_transferred_object_invariants(&move_obj, &old_object)
-            }
-
-            // increment the object version. note that if the transferred object was
-            // freshly created, this means that its version will now be 1.
-            // thus, all objects in the global object pool have version > 0
-            move_obj.increment_version();
-            let obj_id = move_obj.id();
-            // A to-be-transferred object can come from 3 sources:
-            //   1. Passed in by-value (in `by_value_objects`, i.e. old_object is not none)
-            //   2. Created in this transaction (in `newly_generated_ids`)
-            //   3. Unwrapped in this transaction
-            // The following condition checks if this object was unwrapped in this transaction.
-            if old_object.is_none() {
-                // Newly created object
-                if newly_generated_ids.contains(&obj_id) || obj_id == SUI_SYSTEM_STATE_OBJECT_ID {
-                    state_view.log_event(Event::new_object(
-                        module_id.address(),
-                        module_id.name(),
-                        sender,
-                        recipient,
-                        obj_id,
-                    ));
-                } else {
-                    // When an object was wrapped at version `v`, we added an record into `parent_sync`
-                    // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
-                    // it will also have version `v+1`, leading to a violation of the invariant that any
-                    // object_id and version pair must be unique. Hence for any object that's just unwrapped,
-                    // we force incrementing its version number again to make it `v+2` before writing to the store.
-                    move_obj.increment_version();
-                }
-            } else if let Some((_, old_obj_ver)) = old_object {
-                // Some kind of transfer since there's an old object
-                // Add an event for the transfer
-                let transfer_type = match recipient {
-                    Owner::AddressOwner(_) => Some(TransferType::ToAddress),
-                    Owner::ObjectOwner(_) => Some(TransferType::ToObject),
-                    _ => None,
-                };
-                if let Some(type_) = transfer_type {
-                    state_view.log_event(Event::TransferObject {
-                        package_id: ObjectID::from(*module_id.address()),
-                        transaction_module: Identifier::from(module_id.name()),
-                        sender,
-                        recipient,
-                        object_id: obj_id,
-                        version: old_obj_ver,
-                        type_,
-                    })
-                }
-            }
-            let obj = Object::new_move(move_obj, recipient, tx_digest);
-            if old_object.is_none() {
-                // Charge extra gas based on object size if we are creating a new object.
-                // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
-            }
-            let obj_address: SuiAddress = obj_id.into();
-            object_owner_map.remove(&obj_address);
-            if let Owner::ObjectOwner(new_owner) = recipient {
-                // Below we check whether the transfer introduced any circular ownership.
-                // We know that for any mutable object, all its ancenstors (if it was owned by another object)
-                // must be in the input as well. Prior to this we have recorded the original ownership mapping
-                // in object_owner_map. For any new transfer, we trace the new owner through the ownership
-                // chain to see if a cycle is detected.
-                // TODO: Set a constant upper bound to the depth of the new ownership chain.
-                let mut parent = new_owner;
-                while parent != obj_address && object_owner_map.contains_key(&parent) {
-                    parent = *object_owner_map.get(&parent).unwrap();
-                }
-                if parent == obj_address {
-                    return Err(ExecutionErrorKind::circular_object_ownership(parent.into()).into());
-                }
-                object_owner_map.insert(obj_address, new_owner);
-            }
-
-            state_view.write_object(obj);
-        }
+    newly_generated_ids: &BTreeSet<ObjectID>,
+    newly_generated_unused: &mut BTreeSet<ObjectID>,
+    frozen_object_ids: &mut BTreeSet<ObjectID>,
+    child_count_deltas: &mut BTreeMap<ObjectID, i64>,
+) -> Result<Object, ExecutionError> {
+    let s_type = match type_ {
+        TypeTag::Struct(s_type) => s_type,
         _ => unreachable!("Only structs can be transferred"),
+    };
+    let has_public_transfer = abilities.has_store();
+    debug_assert!(abilities.has_key(), "objects should have key");
+    let id = ObjectID::try_from(&contents[0..ID_END_INDEX])
+        .expect("object contents should start with an id");
+    newly_generated_unused.remove(&id);
+    let old_object = by_value_objects.remove(&id);
+    let is_unwrapped = !(newly_generated_ids.contains(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID);
+    let (version, child_count) = match old_object {
+        Some((_, version, child_count)) => (version, child_count),
+        // When an object was wrapped at version `v`, we added an record into `parent_sync`
+        // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
+        // it will also have version `v+1`, leading to a violation of the invariant that any
+        // object_id and version pair must be unique. We use the version from parent_sync and
+        // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
+        None if is_unwrapped => match state_view.get_latest_parent_entry_ref(id) {
+            Ok(Some((_, last_version, _))) => (last_version, None),
+            _ => {
+                // TODO this error is (hopefully) transient and should not be
+                // a normal execution error
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::InvariantViolation,
+                    missing_unwrapped_msg(&id),
+                ));
+            }
+        },
+        None => (SequenceNumber::new(), None),
+    };
+
+    // safe because `has_public_transfer` was properly determined from the abilities
+    let mut move_obj = unsafe {
+        MoveObject::new_from_execution(s_type, has_public_transfer, version, child_count, contents)
+    };
+
+    debug_assert_eq!(id, move_obj.id());
+
+    #[cfg(debug_assertions)]
+    {
+        check_transferred_object_invariants(&move_obj, &old_object)
     }
-    Ok(())
+
+    // increment the object version. note that if the transferred object was
+    // freshly created, this means that its version will now be 1.
+    // thus, all objects in the global object pool have version > 0
+    move_obj.increment_version();
+    let obj_id = move_obj.id();
+    // A to-be-transferred object can come from 3 sources:
+    //   1. Passed in by-value (in `by_value_objects`, i.e. old_object is not none)
+    //   2. Created in this transaction (in `newly_generated_ids`)
+    //   3. Unwrapped in this transaction
+    // The following condition checks if this object was unwrapped in this transaction.
+    if let Some((old_owner, old_obj_ver, _)) = old_object {
+        // decrement old owner count
+        if let Owner::ObjectOwner(old_parent) = old_owner {
+            let delta = child_count_deltas.entry(old_parent.into()).or_insert(0);
+            *delta -= 1
+        }
+        // Some kind of transfer since there's an old object
+        // Add an event for the transfer
+        let transfer_type = match recipient {
+            Owner::AddressOwner(_) => Some(TransferType::ToAddress),
+            Owner::ObjectOwner(_) => Some(TransferType::ToObject),
+            _ => None,
+        };
+        if let Some(type_) = transfer_type {
+            state_view.log_event(Event::TransferObject {
+                package_id: ObjectID::from(*module_id.address()),
+                transaction_module: Identifier::from(module_id.name()),
+                sender,
+                recipient,
+                object_id: obj_id,
+                version: old_obj_ver,
+                type_,
+            })
+        }
+    } else {
+        // Newly created object
+        if !is_unwrapped {
+            state_view.log_event(Event::new_object(
+                module_id.address(),
+                module_id.name(),
+                sender,
+                recipient,
+                obj_id,
+            ));
+        }
+    }
+    let obj = Object::new_move(move_obj, recipient, tx_digest);
+    if old_object.is_none() {
+        // Charge extra gas based on object size if we are creating a new object.
+        // TODO: Do we charge extra gas when creating new objects (on top of storage write cost)?
+    }
+    let obj_address: SuiAddress = obj_id.into();
+    object_owner_map.remove(&obj_address);
+    // increment new owner count, if applicable
+    match recipient {
+        Owner::Shared | Owner::AddressOwner(_) => (),
+        Owner::Immutable => {
+            frozen_object_ids.insert(id);
+        }
+        Owner::ObjectOwner(new_owner) => {
+            let delta = child_count_deltas.entry(new_owner.into()).or_insert(0);
+            *delta += 1;
+            // Below we check whether the transfer introduced any circular ownership.
+            // We know that for any mutable object, all its ancenstors (if it was owned by another object)
+            // must be in the input as well. Prior to this we have recorded the original ownership mapping
+            // in object_owner_map. For any new transfer, we trace the new owner through the ownership
+            // chain to see if a cycle is detected.
+            // TODO: Set a constant upper bound to the depth of the new ownership chain.
+            let mut parent = new_owner;
+            while parent != obj_address && object_owner_map.contains_key(&parent) {
+                parent = *object_owner_map.get(&parent).unwrap();
+            }
+            if parent == obj_address {
+                return Err(ExecutionErrorKind::circular_object_ownership(parent.into()).into());
+            }
+            object_owner_map.insert(obj_address, new_owner);
+        }
+    }
+
+    Ok(obj)
 }
 
 #[cfg(debug_assertions)]
 fn check_transferred_object_invariants(
     new_object: &MoveObject,
-    old_object: &Option<(object::Owner, SequenceNumber)>,
+    old_object: &Option<(object::Owner, SequenceNumber, Option<u32>)>,
 ) {
-    if let Some((_owner, old_version)) = old_object {
+    if let Some((_owner, old_version, old_child_count)) = old_object {
         // check consistency between the transferred object `new_object` and the tx input `o`
         // specifically, the object id, type, and version should be unchanged
         // we can only check the version here
         debug_assert_eq!(*old_version, new_object.version());
+        debug_assert_eq!(*old_child_count, new_object.child_count());
     }
 }
 
 pub struct TypeCheckSuccess {
     pub module_id: ModuleId,
-    pub object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber)>,
+    pub object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber, Option<u32>)>,
     pub by_value_objects: BTreeSet<ObjectID>,
     pub mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
     pub args: Vec<Vec<u8>>,
@@ -841,7 +1033,6 @@ pub fn resolve_and_type_check(
                 _ => (),
             }
 
-            object_data.insert(id, (object.owner, object.version()));
             let move_object = match &object.data {
                 Data::Move(m) => m,
                 Data::Package(_) => {
@@ -858,6 +1049,10 @@ pub fn resolve_and_type_check(
                     ));
                 }
             };
+            object_data.insert(
+                id,
+                (object.owner, object.version(), move_object.child_count()),
+            );
             let object_arg = move_object.contents().to_vec();
             // check that m.type_ matches the parameter types of the function
             let inner_param_type = match &param_type {
@@ -1173,4 +1368,11 @@ fn struct_tag_equals_struct_inst(
                 )
             },
         )
+}
+
+fn missing_unwrapped_msg(id: &ObjectID) -> String {
+    format!(
+        "Unable to unwrap object {}. Was unable to retrieve last known version in the parent sync",
+        id
+    )
 }

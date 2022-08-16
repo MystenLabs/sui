@@ -7,28 +7,37 @@ use anyhow::Result;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
-use sui_types::crypto::{KeyPair, PublicKeyBytes};
+use sui_types::crypto::AuthorityKeyPair;
+use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::crypto::KeypairTraits;
+use sui_types::sui_serde::KeyPairBase64;
 
+#[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct NodeConfig {
     #[serde(default = "default_key_pair")]
-    pub key_pair: Arc<KeyPair>,
+    #[serde_as(as = "Arc<KeyPairBase64>")]
+    pub key_pair: Arc<AuthorityKeyPair>,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
-    #[serde(default = "default_metrics_address")]
-    pub metrics_address: SocketAddr,
     #[serde(default = "default_json_rpc_address")]
     pub json_rpc_address: SocketAddr,
     #[serde(default = "default_websocket_address")]
     pub websocket_address: Option<SocketAddr>,
+
+    #[serde(default = "default_metrics_address")]
+    pub metrics_address: SocketAddr,
+    #[serde(default = "default_admin_interface_port")]
+    pub admin_interface_port: u16,
 
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consensus_config: Option<ConsensusConfig>,
@@ -45,7 +54,7 @@ pub struct NodeConfig {
     pub genesis: Genesis,
 }
 
-fn default_key_pair() -> Arc<KeyPair> {
+fn default_key_pair() -> Arc<AuthorityKeyPair> {
     Arc::new(sui_types::crypto::get_key_pair().1)
 }
 
@@ -57,6 +66,10 @@ fn default_grpc_address() -> Multiaddr {
 fn default_metrics_address() -> SocketAddr {
     use std::net::{IpAddr, Ipv4Addr};
     SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9184)
+}
+
+pub fn default_admin_interface_port() -> u16 {
+    1337
 }
 
 pub fn default_json_rpc_address() -> SocketAddr {
@@ -72,16 +85,16 @@ pub fn default_websocket_address() -> Option<SocketAddr> {
 impl Config for NodeConfig {}
 
 impl NodeConfig {
-    pub fn key_pair(&self) -> &KeyPair {
+    pub fn key_pair(&self) -> &AuthorityKeyPair {
         &self.key_pair
     }
 
-    pub fn public_key(&self) -> PublicKeyBytes {
-        *self.key_pair.public_key_bytes()
+    pub fn public_key(&self) -> AuthorityPublicKeyBytes {
+        self.key_pair.public().into()
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
+        (&self.public_key()).into()
     }
 
     pub fn db_path(&self) -> &Path {
@@ -130,9 +143,10 @@ impl ConsensusConfig {
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub name: String,
-    pub public_key: PublicKeyBytes,
+    pub public_key: AuthorityPublicKeyBytes,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
+    pub gas_price: u64,
     pub network_address: Multiaddr,
     pub narwhal_primary_to_primary: Multiaddr,
 
@@ -149,10 +163,10 @@ impl ValidatorInfo {
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        SuiAddress::from(self.public_key())
+        (&self.public_key()).into()
     }
 
-    pub fn public_key(&self) -> PublicKeyBytes {
+    pub fn public_key(&self) -> AuthorityPublicKeyBytes {
         self.public_key
     }
 
@@ -164,11 +178,15 @@ impl ValidatorInfo {
         self.delegation
     }
 
+    pub fn gas_price(&self) -> u64 {
+        self.gas_price
+    }
+
     pub fn network_address(&self) -> &Multiaddr {
         &self.network_address
     }
 
-    pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<PublicKeyBytes, u64> {
+    pub fn voting_rights(validator_set: &[Self]) -> BTreeMap<AuthorityPublicKeyBytes, u64> {
         validator_set
             .iter()
             .map(|validator| {

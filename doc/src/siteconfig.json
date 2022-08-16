@@ -25,13 +25,14 @@
             "link": "/build/move"
           },
           {
-            "title": "SDK Reference",
-            "link": "https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/sui/open_rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false",
+            "title": "API Reference",
+            "link": "https://docs.sui.io/sui-jsonrpc",
             "external": true
           },
           {
-            "title": "Prototypes",
-            "link": "/explore/prototypes"
+            "title": "Examples",
+            "link": "https://examples.sui.io/",
+            "external": true
           }
         ]
       },
@@ -125,6 +126,19 @@
         "name": "See what's New",
         "sublist": [
           {
+            "name": "Make Rust SDK Calls",
+            "url": "/build/rust-sdk"
+          },
+          {
+            "name": "Run Windows, Linux, macOS",
+            "url": "/build/install#supported-oses"
+          },
+          {
+            "name": "Apply to be a Validator",
+            "url": "https://sui.io/resources-sui/validator-registration-open/",
+            "external": true
+          },
+          {
             "name": "Try Sui Wallet Browser Extension",
             "url": "/explore/wallet-browser"
           },
@@ -137,19 +151,6 @@
             "name": "Use Move VSCode Plugin",
             "url": "https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin",
             "external": true
-          },
-          {
-            "name": "Join Incentivized Testnet",
-            "url": "https://sui.io/resources-sui/announcing-sui-incentivized-testnet/",
-            "external": true
-          },
-          {
-            "name": "Run a Fullnode",
-            "url": "/build/fullnode"
-          },
-          {
-            "name": "Learn Sui Tokenomics",
-            "url": "/learn/tokenomics/index"
           }
         ]
       },

@@ -9,8 +9,13 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::{
+    future::BoxFuture,
     stream::{FuturesOrdered, FuturesUnordered},
     StreamExt,
+};
+use prometheus::{
+    register_histogram_with_registry, register_int_counter_with_registry,
+    register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use std::future::Future;
 use std::ops::Deref;
@@ -19,7 +24,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
+use sui_storage::follower_store::FollowerStore;
 use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -37,12 +42,10 @@ mod configurable_batch_action_client;
 #[cfg(test)]
 pub(crate) mod tests;
 
-mod node_sync;
-use node_sync::NodeSyncDigestHandler;
 use sui_types::messages::CertifiedTransaction;
 
 #[derive(Copy, Clone)]
-enum GossipType {
+pub(crate) enum GossipType {
     /// Must get the full sequence of the peers it is connecting to. This is used for the full node sync logic
     /// where a full node follows all validators.
     Full,
@@ -50,8 +53,8 @@ enum GossipType {
     BestEffort,
 }
 
-struct Follower<A> {
-    peer_name: AuthorityName,
+pub(crate) struct Follower<A> {
+    pub peer_name: AuthorityName,
     client: SafeClient<A>,
     state: Arc<AuthorityState>,
     follower_store: Arc<FollowerStore>,
@@ -64,6 +67,72 @@ const REFRESH_FOLLOWER_PERIOD_SECS: u64 = 60;
 
 use super::ActiveAuthority;
 
+/// See the `new` function for description for each metrics.
+#[derive(Clone, Debug)]
+pub struct GossipMetrics {
+    pub concurrent_followed_validators: IntGauge,
+    pub reconnect_interval_ms: IntGauge,
+    pub total_tx_received: IntCounter,
+    pub total_batch_received: IntCounter,
+    pub wait_for_finality_latency_sec: Histogram,
+    pub total_attempts_cert_downloads: IntCounter,
+    pub total_successful_attempts_cert_downloads: IntCounter,
+}
+
+impl GossipMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            concurrent_followed_validators: register_int_gauge_with_registry!(
+                "gossip_concurrent_followed_validators",
+                "Number of validators being followed concurrently at the moment.",
+                registry,
+            )
+            .unwrap(),
+            reconnect_interval_ms: register_int_gauge_with_registry!(
+                "gossip_reconnect_interval_ms",
+                "Interval to start the next gossip/node sync task, in millisec",
+                registry,
+            )
+            .unwrap(),
+            total_tx_received: register_int_counter_with_registry!(
+                "gossip_total_tx_received",
+                "Total number of transactions received through gossip/node sync",
+                registry,
+            )
+            .unwrap(),
+            total_batch_received: register_int_counter_with_registry!(
+                "gossip_total_batch_received",
+                "Total number of signed batches received through gossip/node sync",
+                registry,
+            )
+            .unwrap(),
+            wait_for_finality_latency_sec: register_histogram_with_registry!(
+                "gossip_wait_for_finality_latency_sec",
+                "Latency histogram for gossip/node sync process to wait for txs to become final, in sec",
+                registry,
+            )
+            .unwrap(),
+            total_attempts_cert_downloads: register_int_counter_with_registry!(
+                "gossip_total_attempts_cert_downloads",
+                "Total number of certs/effects download attemps through gossip/node sync process",
+                registry,
+            )
+            .unwrap(),
+            total_successful_attempts_cert_downloads: register_int_counter_with_registry!(
+                "gossip_total_successful_attempts_cert_downloads",
+                "Total number of success certs/effects downloads through gossip/node sync process",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = Registry::new();
+        Self::new(&registry)
+    }
+}
+
 pub async fn gossip_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -71,25 +140,20 @@ where
     follower_process(
         active_authority,
         degree,
-        GossipDigestHandler::new(),
+        GossipDigestHandler::new(active_authority.gossip_metrics.clone()),
         GossipType::BestEffort,
     )
     .await;
 }
 
-pub async fn node_sync_process<A>(
-    active_authority: &ActiveAuthority<A>,
-    degree: usize,
-    node_sync_store: Arc<NodeSyncStore>,
-) where
+pub async fn node_sync_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
+where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let state = active_authority.state.clone();
-    let aggregator = active_authority.net.load().clone();
     follower_process(
         active_authority,
         degree,
-        NodeSyncDigestHandler::new(state, aggregator, node_sync_store),
+        active_authority.node_sync_handle(),
         GossipType::Full,
     )
     .await;
@@ -120,7 +184,10 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
     // Keep track of names of active peers
     let mut peer_names = HashSet::new();
     let mut gossip_tasks = FuturesUnordered::new();
-
+    let metrics_concurrent_followed_validators = &active_authority
+        .gossip_metrics
+        .concurrent_followed_validators;
+    let metrics_reconnect_interval_ms = &active_authority.gossip_metrics.reconnect_interval_ms;
     loop {
         if active_authority.state.committee.load().epoch != committee.epoch {
             // If epoch has changed, we need to make a new copy of the active authority,
@@ -132,11 +199,9 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
             local_active = Arc::new(active_authority.clone());
             committee = local_active.state.committee.load().deref().clone();
             target_num_tasks = usize::min(committee.num_members() - 1, degree);
-            peer_names = peer_names
-                .into_iter()
-                .filter(|name| committee.authority_exists(name))
-                .collect();
+            peer_names.retain(|name| committee.authority_exists(name));
         }
+
         let mut k = 0;
         while gossip_tasks.len() < target_num_tasks {
             // Find out what is the earliest time that we are allowed to reconnect
@@ -144,10 +209,10 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
             let next_connect = local_active
                 .minimum_wait_for_majority_honest_available()
                 .await;
-            debug!(
-                "Waiting for {:?}",
-                next_connect - tokio::time::Instant::now()
-            );
+            let wait_duration = next_connect - tokio::time::Instant::now();
+            debug!("Waiting for {:?}", wait_duration);
+            metrics_reconnect_interval_ms.set(wait_duration.as_millis() as i64);
+
             tokio::time::sleep_until(next_connect).await;
 
             let name_result =
@@ -191,6 +256,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
             continue;
         }
 
+        metrics_concurrent_followed_validators.set(gossip_tasks.len() as i64);
         wait_for_one_gossip_task_to_finish(&local_active, &mut peer_names, &mut gossip_tasks).await;
     }
 }
@@ -268,21 +334,33 @@ where
 }
 
 #[async_trait]
-trait DigestHandler<A> {
+pub(crate) trait DigestHandler<A> {
+    type DigestResult: Future<Output = SuiResult>;
+
     /// handle_digest
-    async fn handle_digest(&self, follower: &Follower<A>, digest: ExecutionDigests) -> SuiResult;
+    async fn handle_digest(
+        &self,
+        follower: &Follower<A>,
+        digest: ExecutionDigests,
+    ) -> SuiResult<Self::DigestResult>;
+
+    fn get_metrics(&self) -> &GossipMetrics;
 }
 
-#[derive(Clone, Copy)]
-struct GossipDigestHandler {}
+#[derive(Clone)]
+struct GossipDigestHandler {
+    metrics: GossipMetrics,
+}
 
 impl GossipDigestHandler {
-    fn new() -> Self {
-        Self {}
+    fn new(metrics: GossipMetrics) -> Self {
+        Self { metrics }
     }
 
     async fn process_response<A>(
-        follower: &Follower<A>,
+        aggregator: Arc<AuthorityAggregator<A>>,
+        state: Arc<AuthorityState>,
+        peer_name: AuthorityName,
         response: TransactionInfoResponse,
     ) -> Result<(), SuiError>
     where
@@ -290,23 +368,23 @@ impl GossipDigestHandler {
     {
         if let Some(certificate) = response.certified_transaction {
             // Process the certificate from one authority to ourselves
-            follower
-                .aggregator
+            aggregator
                 .sync_authority_source_to_destination(
                     certificate,
-                    follower.peer_name,
+                    peer_name,
                     &LocalCertificateHandler {
-                        state: follower.state.clone(),
+                        state: state.clone(),
                     },
                 )
                 .await?;
-            follower.state.metrics.gossip_sync_count.inc();
+            state.metrics.gossip_sync_count.inc();
             Ok(())
         } else {
             // The authority did not return the certificate, despite returning info
             // But it should know the certificate!
             Err(SuiError::ByzantineAuthoritySuspicion {
-                authority: follower.peer_name,
+                authority: peer_name,
+                reason: "Gossip peer is expected to have certificate".to_string(),
             })
         }
     }
@@ -317,20 +395,33 @@ impl<A> DigestHandler<A> for GossipDigestHandler
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    async fn handle_digest(&self, follower: &Follower<A>, digest: ExecutionDigests) -> SuiResult {
-        if !follower
-            .state
-            .database
-            .effects_exists(&digest.transaction)?
-        {
-            // Download the certificate
-            let response = follower
-                .client
-                .handle_transaction_info_request(TransactionInfoRequest::from(digest.transaction))
-                .await?;
-            Self::process_response(follower, response).await?;
-        }
-        Ok(())
+    type DigestResult = BoxFuture<'static, SuiResult>;
+
+    async fn handle_digest(
+        &self,
+        follower: &Follower<A>,
+        digest: ExecutionDigests,
+    ) -> SuiResult<Self::DigestResult> {
+        let state = follower.state.clone();
+        let client = follower.client.clone();
+        let aggregator = follower.aggregator.clone();
+        let name = follower.peer_name;
+        Ok(Box::pin(async move {
+            if !state.database.effects_exists(&digest.transaction)? {
+                // Download the certificate
+                let response = client
+                    .handle_transaction_info_request(TransactionInfoRequest::from(
+                        digest.transaction,
+                    ))
+                    .await?;
+                Self::process_response(aggregator, state, name, response).await?;
+            }
+            Ok(())
+        }))
+    }
+
+    fn get_metrics(&self) -> &GossipMetrics {
+        &self.metrics
     }
 }
 
@@ -399,14 +490,17 @@ where
 
         let mut latest_seq = self.max_seq;
 
+        self.client
+            .metrics_seq_number_to_handle_batch_stream
+            .set(latest_seq.unwrap_or_default() as i64);
+
         let req = BatchInfoRequest {
             start: latest_seq,
             length: REQUEST_FOLLOW_NUM_DIGESTS,
         };
-
         let mut last_seq_in_cur_batch: TxSequenceNumber = 0;
         let mut streamx = Box::pin(self.client.handle_batch_stream(req).await?);
-
+        let metrics = handler.get_metrics();
         loop {
             tokio::select! {
                 _ = &mut timeout => {
@@ -417,7 +511,9 @@ where
                 items = &mut streamx.next() => {
                     match items {
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch)) )) => {
-                            let next_seq = signed_batch.batch.next_sequence_number;
+                            metrics.total_batch_received.inc();
+
+                            let next_seq = signed_batch.data().next_sequence_number;
                             debug!(?peer, batch_next_seq = ?next_seq, "Received signed batch");
                             batch_seq_to_record.push_back((next_seq, last_seq_in_cur_batch));
                             if let Some(max_seq) = latest_seq {
@@ -430,12 +526,13 @@ where
                         // Upon receiving a transaction digest, store it if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests))))) => {
                             trace!(?peer, ?digests, ?seq, "received tx from peer");
+                            metrics.total_tx_received.inc();
 
                             // track the last observed sequence in a batch, so we can tell when the
                             // batch has been fully processed.
                             last_seq_in_cur_batch = seq;
 
-                            let fut = handler.handle_digest(self, digests);
+                            let fut = handler.handle_digest(self, digests).await?;
                             results.push(async move {
                                 fut.await?;
                                 Ok::<(TxSequenceNumber, ExecutionDigests), SuiError>((seq, digests))
@@ -451,6 +548,9 @@ where
 
                         // The stream has closed, re-request:
                         None => {
+                            info!(peer = ?self.peer_name, ?latest_seq, "Gossip stream was closed. Restarting");
+                            self.client.metrics_seq_number_to_handle_batch_stream.set(latest_seq.unwrap_or_default() as i64);
+                            self.client.metrics_total_times_reconnect_follower_stream.inc();
                             tokio::time::sleep(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS / 12)).await;
                             let req = BatchInfoRequest {
                                 start: latest_seq,

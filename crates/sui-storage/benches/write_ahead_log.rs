@@ -16,7 +16,9 @@ fn main() {
         .unwrap();
 
     let working_dir = tempfile::tempdir().unwrap();
-    let wal = Arc::new(DBWriteAheadLog::<usize>::new(working_dir));
+    let wal = Arc::new(DBWriteAheadLog::<usize>::new(
+        working_dir.path().to_path_buf(),
+    ));
 
     let num_tasks = 20000;
     let num_txes_per_task = 10;

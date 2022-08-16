@@ -4,7 +4,7 @@ title: Experiment with Sui Devnet
 
 Welcome to the beginnings of the Sui Devnet. It exists now to gain operational experience with the Sui software in a public setting. The Sui Devnet currently consists of:
 
-* A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: https://gateway.devnet.sui.io:443/ using [JSON-RPC](../build/json-rpc.md)
+* A four-validator network with all nodes operated by Mysten Labs. Clients send transactions and read requests via this endpoint: gateway.devnet.sui.io:443 using [JSON-RPC](../build/json-rpc.md)
 * A public network [Sui Explorer](https://github.com/MystenLabs/sui/tree/main/explorer/client#readme) for browsing transaction history: https://explorer.devnet.sui.io
 * A [Discord channel](https://discordapp.com/channels/916379725201563759/971488439931392130) for requesting test coins that can be used to pay for gas on the test network. These coins have no financial value and will disappear each time we reset the network.
 
@@ -121,7 +121,7 @@ See the [Sui Explorer README](https://github.com/MystenLabs/sui/tree/main/explor
 
 ### Publish a Move module
 
-Publish a sample Move package containing code developed in the [Sui Move tutorial](../build/move.md#writing-a-package) as follows (assuming you installed the source code in `~sui` as advised in set up):
+Publish a sample Move package containing code developed in the [Sui Move tutorial](../build/move/write-package.md) as follows (assuming you installed the source code in `~sui` as advised in set up):
 ```shell
 $ sui client publish --path <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
 ```
@@ -147,7 +147,7 @@ Updated Gas : Coin { id: 58C4DAA98694266F4DF47BA436CD99659B6A5342, value: 49552 
 Two important things happened as a result of publishing this package:
 
 * a package object (with ID `0689E58788C875E9C354F359792CEC016DA0A1B0`)  has been created
-* a `Forge` object (with ID `898922A9CABE93C6C38C55BBE047BFB0A8C864BF`) has been created as a result of running a [module initializer](../build/move.md#module-initializers) for one (and the only one) module of this package
+* a `Forge` object (with ID `898922A9CABE93C6C38C55BBE047BFB0A8C864BF`) has been created as a result of running a [module initializer](../build/move/debug-publish.md#module-initializers) for one (and the only one) module of this package
 
 Specific object IDs displayed above may differ from one Sui installation to the other, so we will use the following placeholders for them (respectively): <PACKAGE_ID> and <FORGE_ID>. Whenever you see these used in the command line, for example when calling Move functions in the next section, *replace them with actual object IDs*.
 

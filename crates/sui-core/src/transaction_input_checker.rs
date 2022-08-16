@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::SuiDataStore;
-use prometheus::IntCounter;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
+use std::fmt::Debug;
+use sui_types::messages::TransactionKind;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
@@ -21,25 +22,22 @@ use tracing::instrument;
 pub async fn check_transaction_input<S, T>(
     store: &SuiDataStore<S>,
     transaction: &TransactionEnvelope<T>,
-    shared_obj_metric: &IntCounter,
 ) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let mut gas_status = check_gas(
         store,
         transaction.gas_payment_object_ref().0,
-        transaction.data.gas_budget,
-        transaction.data.gas_price,
-        transaction.data.kind.is_system_tx(),
+        transaction.signed_data.data.gas_budget,
+        transaction.signed_data.data.gas_price,
+        &transaction.signed_data.data.kind,
     )
     .await?;
 
-    let input_objects = check_locks(store, &transaction.data).await?;
+    let input_objects = check_objects(store, &transaction.signed_data.data).await?;
 
     if transaction.contains_shared_object() {
-        shared_obj_metric.inc();
-
         // It's important that we do this here to make sure there is enough
         // gas to cover shared objects, before we lock all objects.
         gas_status.charge_consensus()?;
@@ -58,12 +56,12 @@ async fn check_gas<S>(
     gas_payment_id: ObjectID,
     gas_budget: u64,
     computation_gas_price: u64,
-    is_system_tx: bool,
+    tx_kind: &TransactionKind,
 ) -> SuiResult<SuiGasStatus<'static>>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    if is_system_tx {
+    if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered())
     } else {
         let gas_object = store.get_object(&gas_payment_id)?;
@@ -77,8 +75,18 @@ where
             .parameters
             .storage_gas_price;
 
+        // If the transaction is TransferSui, we ensure that the gas balance is enough to cover
+        // both gas budget and the transfer amount.
+        let extra_amount =
+            if let TransactionKind::Single(SingleTransactionKind::TransferSui(t)) = tx_kind {
+                t.amount.unwrap_or_default()
+            } else {
+                0
+            };
+        // TODO: We should revisit how we compute gas price and compare to gas budget.
         let gas_price = std::cmp::max(computation_gas_price, storage_gas_price);
-        gas::check_gas_balance(&gas_object, gas_budget, gas_price)?;
+
+        gas::check_gas_balance(&gas_object, gas_budget, gas_price, extra_amount)?;
         let gas_status =
             gas::start_gas_metering(gas_budget, computation_gas_price, storage_gas_price)?;
         Ok(gas_status)
@@ -91,7 +99,7 @@ async fn fetch_objects<S>(
     input_objects: &[InputObjectKind],
 ) -> Result<Vec<Option<Object>>, SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
     store.get_objects(&ids[..])
@@ -100,12 +108,12 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_locks<S>(
+async fn check_objects<S>(
     store: &SuiDataStore<S>,
     transaction: &TransactionData,
 ) -> Result<InputObjects, SuiError>
 where
-    S: Eq + Serialize + for<'de> Deserialize<'de>,
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let input_objects = transaction.input_objects()?;
     // These IDs act as authenticators that can own other objects.
@@ -164,7 +172,7 @@ where
         }
         // Check if the object contents match the type of lock we need for
         // this object.
-        match check_one_lock(
+        match check_one_object(
             &transaction.signer(),
             object_kind,
             &object,
@@ -179,7 +187,7 @@ where
     // If any errors with the locks were detected, we return all errors to give the client
     // a chance to update the authority if possible.
     if !errors.is_empty() {
-        return Err(SuiError::LockErrors { errors });
+        return Err(SuiError::ObjectErrors { errors });
     }
     fp_ensure!(!all_objects.is_empty(), SuiError::ObjectInputArityViolation);
 
@@ -188,7 +196,7 @@ where
 
 /// The logic to check one object against a reference, and return the object if all is well
 /// or an error if not.
-fn check_one_lock(
+fn check_one_object(
     sender: &SuiAddress,
     object_kind: InputObjectKind,
     object: &Object,
@@ -208,8 +216,10 @@ fn check_one_lock(
                 !object.is_package(),
                 SuiError::MovePackageAsObject { object_id }
             );
+            // wrapped objects that are then deleted will be set to MAX,
+            // so we need to cap the sequence number at MAX - 1
             fp_ensure!(
-                sequence_number < SequenceNumber::MAX,
+                sequence_number < SequenceNumber::MAX.decrement().unwrap(),
                 SuiError::InvalidSequenceNumber
             );
 
