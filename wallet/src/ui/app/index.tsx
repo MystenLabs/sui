@@ -30,7 +30,7 @@ import { loadAccountFromStorage } from '_redux/slices/account';
 import { setNavVisibility } from '_redux/slices/app';
 
 const HIDDEN_MENU_PATHS = [
-    '/stake-new',
+    '/stake',
     '/nft-details',
     '/receipt',
     '/send',
