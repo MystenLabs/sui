@@ -10,6 +10,7 @@ use serde::{
     Deserialize, Serialize,
 };
 use serde_bytes::{ByteBuf, Bytes};
+use serde_with::serde_as;
 use signature::{rand_core::OsRng, Signature, Signer, Verifier};
 use std::{
     fmt::{self, Display},
@@ -18,7 +19,7 @@ use std::{
 
 use crate::{
     pubkey_bytes::PublicKeyBytes,
-    serde_helpers::keypair_decode_base64,
+    serde_helpers::{keypair_decode_base64, Ed25519Signature as Ed25519Sig},
     traits::{
         AggregateAuthenticator, Authenticator, EncodeDecodeBase64, KeyPair, SigningKey,
         ToFromBytes, VerifyingKey,
@@ -59,9 +60,11 @@ pub struct Ed25519Signature {
     pub bytes: OnceCell<[u8; ED25519_SIGNATURE_LENGTH]>,
 }
 
+#[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub struct Ed25519AggregateSignature(pub Vec<ed25519_consensus::Signature>);
-
+pub struct Ed25519AggregateSignature(
+    #[serde_as(as = "Vec<Ed25519Sig>")] pub Vec<ed25519_consensus::Signature>,
+);
 ///
 /// Implement VerifyingKey
 ///
