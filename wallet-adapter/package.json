@@ -1,6 +1,6 @@
 {
   "name": "sui-wallet-adapter",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "private": true,
   "dependencies": {
     "@emotion/react": "^11.9.3",
@@ -8,7 +8,10 @@
     "@mui/icons-material": "^5.8.4",
     "@mui/material": "^5.9.0",
     "@mysten/sui.js": "workspace:*",
-    "@sui-wallet-adapter/all-wallets": "workspace:*",
+    "@mysten/wallet-adapter-all-wallets": "workspace:*",
+    "@mysten/base-wallet-adapter": "workspace:*",
+    "@mysten/wallet-adapter-react": "workspace:*",
+    "@mysten/wallet-adapter-ui": "workspace:*",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
     "@testing-library/user-event": "^13.5.0",
@@ -19,9 +22,6 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "sui-base-wallet-adapter": "workspace:*",
-    "sui-wallet-adapter-react": "workspace:*",
-    "sui-wallet-adapter-ui": "workspace:*",
     "typescript": "^4.7.4",
     "web-vitals": "^2.1.4"
   },
