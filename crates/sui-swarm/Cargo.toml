@@ -11,7 +11,7 @@ anyhow = { version = "1.0.58", features = ["backtrace"] }
 rand = "0.8.5"
 tracing = "0.1.36"
 tokio = { version = "1.20.1", features = ["full"] }
-futures = "0.3.21"
+futures = "0.3.23"
 tempfile = "3.3.0"
 tonic-health = "0.6.0"
 tap = "1.0.1"
