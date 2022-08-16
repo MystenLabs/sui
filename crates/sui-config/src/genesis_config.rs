@@ -88,6 +88,7 @@ pub struct ValidatorGenesisInfo {
     pub key_pair: AuthorityKeyPair,
     pub network_address: Multiaddr,
     pub stake: StakeUnit,
+    pub gas_price: u64,
     pub narwhal_primary_to_primary: Multiaddr,
     pub narwhal_worker_to_primary: Multiaddr,
     pub narwhal_primary_to_worker: Multiaddr,

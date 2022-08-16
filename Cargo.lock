@@ -2099,9 +2099,9 @@ dependencies = [
 
 [[package]]
 name = "flume"
-version = "0.10.14"
+version = "0.10.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1657b4441c3403d9f7b3409e47575237dac27b1b5726df654a6ecbf92f0f7577"
+checksum = "1ceeb589a3157cac0ab8cc585feb749bd2cea5cb55a6ee802ad72d9fd38303da"
 dependencies = [
  "futures-core",
  "futures-sink",
@@ -7080,7 +7080,10 @@ dependencies = [
  "crypto",
  "linked-hash-map",
  "move-binary-format",
+ "move-bytecode-utils",
+ "move-bytecode-verifier",
  "move-cli",
+ "move-compiler",
  "move-core-types",
  "move-package",
  "move-stdlib",
@@ -7093,6 +7096,7 @@ dependencies = [
  "smallvec",
  "sui-framework-build",
  "sui-types",
+ "sui-verifier",
  "workspace-hack 0.1.0",
 ]
 
@@ -7101,10 +7105,12 @@ name = "sui-framework-build"
 version = "0.0.0"
 dependencies = [
  "move-binary-format",
+ "move-bytecode-utils",
  "move-bytecode-verifier",
  "move-compiler",
  "move-core-types",
  "move-package",
+ "once_cell",
  "sui-types",
  "sui-verifier",
  "workspace-hack 0.1.0",
@@ -8330,9 +8336,9 @@ dependencies = [
 
 [[package]]
 name = "tracing-test"
-version = "0.2.3"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e3d272c44878d2bbc9f4a20ad463724f03e19dbc667c6e84ac433ab7ffcc70b"
+checksum = "f6992d8a98f570be1c729fe8b6f464fb18c4117054c10f1f952c22d533b48a74"
 dependencies = [
  "lazy_static 1.4.0",
  "tracing-core",

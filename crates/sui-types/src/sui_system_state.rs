@@ -39,6 +39,7 @@ pub struct ValidatorMetadata {
     pub net_address: Vec<u8>,
     pub next_epoch_stake: u64,
     pub next_epoch_delegation: u64,
+    pub next_epoch_gas_price: u64,
 }
 
 /// Rust version of the Move sui::validator::Validator type
@@ -54,6 +55,7 @@ pub struct Validator {
     pub delegator_count: u64,
     pub pending_delegator_count: u64,
     pub pending_delegator_withdraw_count: u64,
+    pub gas_price: u64,
 }
 
 /// Rust version of the Move sui::validator_set::ValidatorSet type
@@ -78,6 +80,7 @@ pub struct SuiSystemState {
     pub storage_fund: Balance,
     pub parameters: SystemParameters,
     pub delegation_reward: Balance,
+    pub reference_gas_price: u64,
     // TODO: Use getters instead of all pub.
 }
 
