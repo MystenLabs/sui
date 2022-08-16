@@ -16,6 +16,7 @@ import {
   SuiMoveNormalizedModules,
   SuiEventFilter,
   SuiEventEnvelope,
+  SubscriptionId,
 } from '../types';
 
 ///////////////////////////////
@@ -130,5 +131,6 @@ export abstract class Provider {
     onMessage: (event: SuiEventEnvelope) => void
   ): Promise<any>;
 
+  abstract unsubscribeEvent(id: SubscriptionId): boolean;
   // TODO: add more interface methods
 }

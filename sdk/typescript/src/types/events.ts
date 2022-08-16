@@ -87,3 +87,5 @@ export type SuiEventEnvelope = {
     txDigest: TransactionDigest,
     event: SuiEvent
 }
+
+export type SubscriptionId = number;

@@ -13,6 +13,7 @@ import {
   isSuiMoveNormalizedModule,
   isSuiMoveNormalizedFunction,
   isSuiMoveNormalizedStruct,
+  isSubscriptionEvent,
 } from '../index.guard';
 import {
   GatewayTxSeqNumber,
@@ -31,6 +32,7 @@ import {
   Coin,
   SuiEventFilter,
   SuiEventEnvelope,
+  SubscriptionId,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import { Client as WsRpcClient} from 'rpc-websockets';
@@ -38,7 +40,6 @@ import { Client as WsRpcClient} from 'rpc-websockets';
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
-export type SubscriptionId = number;
 
 enum ConnectionState {
   NotConnected,
@@ -46,12 +47,15 @@ enum ConnectionState {
   Connected
 }
 
+export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
+
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
   private wsClient: WsRpcClient;
   private wsConnectionState: ConnectionState = ConnectionState.NotConnected;
+  private wsEndpoint: string;
 
-  private activeSubscriptions: Map<number, (event: SuiEventEnvelope) => any> = new Map();
+  private activeSubscriptions: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -60,23 +64,51 @@ export class JsonRpcProvider extends Provider {
    */
   constructor(public endpoint: string) {
     super();
-
     this.client = new JsonRpcClient(endpoint);
-    this.wsClient = new WsRpcClient(getWebsocketUrl(endpoint))
+    this.wsEndpoint = getWebsocketUrl(endpoint);
+    this.wsClient = new WsRpcClient(this.wsEndpoint, { reconnect_interval: 3000 })
+    this.wsClient.connect();
+
+    this.getWsConnection();
     console.log('client & wsClient', this.client, this.wsClient);
   }
 
-  private getWsConnection(): WsRpcClient {
-    if(this.wsConnectionState === ConnectionState.NotConnected) {
-      this.wsClient.connect();
-      this.wsConnectionState = ConnectionState.Connecting;
-      this.wsClient.on('open', () => {
-        this.wsConnectionState = ConnectionState.Connected;
-        console.log('ws connection opened');
-      });
-      this.wsClient.on('message', console.log);
+  private getWsConnection(): WsRpcClient | null {
+    console.log('trying websocket connection...');
+
+    switch(this.wsConnectionState) {
+      case ConnectionState.NotConnected:
+        this.wsClient = new WsRpcClient(this.wsEndpoint, { reconnect_interval: 3000 })
+        this.wsClient.connect();
+        this.wsConnectionState = ConnectionState.Connecting;
+
+        this.wsClient.on('close', () => {
+          console.log('connection closed');
+          this.wsConnectionState = ConnectionState.NotConnected;
+        });
+        this.wsClient.on('open', () => {
+          this.wsConnectionState = ConnectionState.Connected;
+
+          console.log('ws connection opened');
+        });
+        this.wsClient.on('message', (msg: any) => {
+          console.log('socket message received', msg);
+
+          if(isSubscriptionEvent(msg)) {
+            // call any registered handler for the message's subscription
+            const onMessage = this.activeSubscriptions.get(msg.subscription);
+            if (onMessage) {
+              onMessage(msg.result);
+              console.log(`call onMessage(), subscription ${msg.subscription}`);
+            }
+          }
+        });
+        return null;
+      case ConnectionState.Connecting:
+        return null;
+      case ConnectionState.Connected:
+        return this.wsClient;
     }
-    return this.wsClient
   }
 
   // Move info
@@ -397,8 +429,7 @@ export class JsonRpcProvider extends Provider {
     onMessage: (event: SuiEventEnvelope) => void
   ): Promise<SubscriptionId> {
     try {
-      let ws = this.getWsConnection();
-      let subId = await ws.call(
+      let subId = await this.wsClient.call(
         'sui_subscribeEvent',
         [filter],
         30000
@@ -413,20 +444,8 @@ export class JsonRpcProvider extends Provider {
       );
     }
   }
-  /*
-    request = {
-      "jsonrpc":"2.0",
-      "id": 1,
-      "method": "sui_subscribeEvent",
-      "params": [
-        {
-          "All": [
-            {"EventType":"MoveEvent"},
-            {"Package":"0x2"},
-            {"Module":"devnet_nft"}
-          ]
-        }
-      ]
-    }
-  */
+
+  unsubscribeEvent(id: SubscriptionId): boolean {
+    return this.activeSubscriptions.delete(id);
+  }
 }
