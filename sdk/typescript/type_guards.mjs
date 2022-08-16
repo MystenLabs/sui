@@ -11,6 +11,10 @@ const LICENSE =
 async function main() {
   const tsconfig = new URL('./tsconfig.json', import.meta.url);
 
+  // Change the directory to be the resolved directory of this file so that
+  // the path resolution done in `generate` is guaranteed to work.
+  process.chdir(new URL('.', import.meta.url).pathname);
+
   await generate({
     project: tsconfig.pathname,
     paths: ['src/rpc/client.ts', 'src/**.ts'],
