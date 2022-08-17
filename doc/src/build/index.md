@@ -27,6 +27,6 @@ Here is our recommended workflow to interact with Sui:
    * [Make](../build/rust-sdk.md) Rust SDK calls to Sui from your app.
    * [Write](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/) TypeScript/JavaScript apps.
    * [Run](../build/fullnode.md) a Sui Fullnode and [subscribe](../build/pubsub.md) to events.
-1. Optionally, [create](../build/cli-client.md#genesis) and [start](../build/cli-client.md#starting-the-network) a *local Sui network* to contribute to the blockchain.
+1. Optionally, [create](../contribute/cli-client.md#genesis) and [start](../contribute/cli-client.md#starting-the-network) a *local Sui network* to contribute to the blockchain.
 
 Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
