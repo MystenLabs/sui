@@ -315,6 +315,12 @@ available for manipulation by the Move code. (For now, we assume that
 there is only one such object.) In this case, the object retrieved
 from storage is transferred to another address.
 
+> **Important:** Transaction effects, such as object creation/transfer become visible only after a
+> given transaction completes. For example, if the second transaction in our running example created
+> a sword and transferred it to the admin's address, it would become available for retrieval
+> from the admin's address (via `test_scenario`s `take_owned` or `take_last_created_owned`
+> functions) only in the third transaction.
+
 The final transaction is executed by the final owner - it retrieves
 the sword object from storage and checks if it has the expected
 properties. Remember, as described in

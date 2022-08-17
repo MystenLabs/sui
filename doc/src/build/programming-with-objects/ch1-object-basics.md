@@ -101,7 +101,7 @@ An instance of the `Scenario` struct contains a per-address object pool emulatin
 
 Now let's try to write a test for the `create` function. Tests that need to use `test_scenario` must be in a separate module, either under a `tests` directory, or in the same file but in a module annotated with `#[test_only]`. This is because `test_scenario` itself is a test-only module, and can be used only by test-only modules.
 
-First of all, we begin the test with a hardcoded test address, which will also give us a transaction context as if we are sending a transaction from this address. We then call the `create` function, which should create a `ColorObject` and transfer it to the test address:
+First of all, we begin the test with a hardcoded test address, which will also give us a transaction context as if we are sending the transaction started with `test_scenario::begin` from this address. We then call the `create` function, which should create a `ColorObject` and transfer it to the test address:
 ```rust
 let owner = @0x1;
 // Create a ColorObject and transfer it to @owner.
@@ -113,7 +113,7 @@ let scenario = &mut test_scenario::begin(&owner);
 ```
 >:books: Note there is a "`;`" after "`}`". `;` is required to sequence a series of expressions, and even the block `{ ... }` is an expression! Refer to the [Move book](https://move-book.com/syntax-basics/expression-and-scope.html) for a detailed explanation.
 
-Now account `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
+Now, after the first transaction completes (**and only after the first transaction completes**), account `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
 ```rust
 let not_owner = @0x2;
 // Check that not_owner does not own the just-created ColorObject.
