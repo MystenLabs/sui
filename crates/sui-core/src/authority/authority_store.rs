@@ -1050,14 +1050,20 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         Ok(())
     }
 
+    pub fn write_consensus_index(&self, consensus_index: &ExecutionIndices) -> SuiResult<DBBatch> {
+        let write_batch = self.tables.last_consensus_index.batch();
+        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
+        Ok(write_batch.insert_batch(&self.tables.last_consensus_index, index_to_write)?)
+    }
+
     /// Lock a sequence number for the shared objects of the input transaction. Also update the
     /// last consensus index.
     /// This function must only be called from the consensus task (i.e. from handle_consensus_transaction).
     pub async fn persist_certificate_and_lock_shared_objects(
         &self,
+        mut write_batch: DBBatch,
         certificate: CertifiedTransaction,
-        consensus_index: ExecutionIndices,
-    ) -> Result<(), SuiError> {
+    ) -> Result<DBBatch, SuiError> {
         // Make an iterator to save the certificate.
         let transaction_digest = *certificate.digest();
 
@@ -1068,7 +1074,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             .consensus_message_processed
             .contains_key(&transaction_digest)?
         {
-            return Ok(());
+            return Ok(write_batch);
         }
 
         // Make an iterator to update the locks of the transaction's shared objects.
@@ -1092,13 +1098,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             })
             .unzip();
 
-        trace!(tx_digest = ?transaction_digest,
-               ?sequenced_to_write, ?schedule_to_write,
-               "locking shared objects");
-
-        // Make an iterator to update the last consensus index.
-        let index_to_write = std::iter::once((LAST_CONSENSUS_INDEX_ADDR, consensus_index));
-
         // Schedule the certificate for execution
         self.add_pending_certificates(vec![(transaction_digest, Some(certificate.clone()))])?;
 
@@ -1112,9 +1111,6 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
         // Note: if we crash here we are not in an inconsistent state since
         //       it is ok to just update the pending list without updating the sequence.
-
-        // Atomically store all elements.
-        let mut write_batch = self.tables.assigned_object_versions.batch();
 
         // If the tx has already been executed, we don't need to populate assigned_object_versions,
         // and indeed we shouldn't because it will never be cleaned up.
@@ -1134,19 +1130,25 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // (Both checkpoints and the node follower system ensure that at least one
         // honest validator has vouched for the TransactionEffects that were used).
         if !self.effects_exists(&transaction_digest)? {
+            debug!(digest = ?transaction_digest,
+                   shared_object_versions = ?sequenced_to_write,
+                   "locking shared objects");
+
             write_batch = write_batch
                 .insert_batch(&self.tables.assigned_object_versions, sequenced_to_write)?;
         }
 
+        debug!(digest = ?transaction_digest,
+               next_object_versions = ?schedule_to_write,
+               "updating next_object_versions");
+
         write_batch =
             write_batch.insert_batch(&self.tables.next_object_versions, schedule_to_write)?;
-        write_batch =
-            write_batch.insert_batch(&self.tables.last_consensus_index, index_to_write)?;
         write_batch = write_batch.insert_batch(
             &self.tables.consensus_message_processed,
             std::iter::once((transaction_digest, true)),
         )?;
-        write_batch.write().map_err(SuiError::from)
+        Ok(write_batch)
     }
 
     pub fn transactions_in_seq_range(

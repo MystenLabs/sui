@@ -58,6 +58,7 @@ use sui_types::{
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
 use tracing::{debug, error, instrument, warn};
+use typed_store::rocks::DBBatch;
 use typed_store::Map;
 
 #[cfg(test)]
@@ -1604,22 +1605,16 @@ impl AuthorityState {
     }
 }
 
-#[async_trait]
-impl ExecutionState for AuthorityState {
-    type Transaction = ConsensusTransaction;
-    type Error = SuiError;
-    type Outcome = Vec<u8>;
-
-    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
-    #[instrument(level = "trace", skip_all)]
-    async fn handle_consensus_transaction(
+impl AuthorityState {
+    async fn handle_consensus_transaction_inner(
         &self,
+        mut write_batch: DBBatch,
         // TODO [2533]: use this once integrating Narwhal reconfiguration
         _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
-        transaction: Self::Transaction,
-    ) -> Result<Self::Outcome, Self::Error> {
-        self.metrics.total_consensus_txns.inc();
+        transaction: ConsensusTransaction,
+        // TODO [2533]: use this once integrating Narwhal reconfiguration
+    ) -> SuiResult<(Vec<u8>, DBBatch)> {
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
                 // Ensure the input is a shared object certificate. Remember that Byzantine authorities
@@ -1635,13 +1630,14 @@ impl ExecutionState for AuthorityState {
 
                 debug!(tx_digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
 
-                self.database
-                    .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
+                write_batch = self
+                    .database
+                    .persist_certificate_and_lock_shared_objects(write_batch, *certificate)
                     .await?;
 
                 // TODO: This return time is not ideal.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok(Vec::default())
+                Ok((Vec::default(), write_batch))
             }
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
@@ -1670,9 +1666,41 @@ impl ExecutionState for AuthorityState {
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
                 // is not expecting any reply.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok(Vec::default())
+                Ok((Vec::default(), write_batch))
             }
         }
+    }
+}
+
+#[async_trait]
+impl ExecutionState for AuthorityState {
+    type Transaction = ConsensusTransaction;
+    type Error = SuiError;
+    type Outcome = Vec<u8>;
+
+    /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
+    #[instrument(level = "trace", skip_all)]
+    async fn handle_consensus_transaction(
+        &self,
+        consensus_output: &narwhal_consensus::ConsensusOutput,
+        consensus_index: ExecutionIndices,
+        transaction: Self::Transaction,
+    ) -> Result<Self::Outcome, Self::Error> {
+        self.metrics.total_consensus_txns.inc();
+
+        let write_batch = self.database.write_consensus_index(&consensus_index)?;
+        let (ret, write_batch) = self
+            .handle_consensus_transaction_inner(
+                write_batch,
+                consensus_output,
+                consensus_index,
+                transaction,
+            )
+            .await?;
+
+        write_batch.write().map_err(SuiError::from)?;
+
+        Ok(ret)
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
