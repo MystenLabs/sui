@@ -30,7 +30,7 @@ jobs:
           cache: 'npm'
           cache-dependency-path: ./wallet/package-lock.json
       - name: Install sdk dependencies
-        run: pnpm --filter @mysten/sui.js install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Build SDK
         run: pnpm --filter @mysten/sui.js build
       - name: Install dependencies
