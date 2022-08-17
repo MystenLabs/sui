@@ -46,11 +46,7 @@ impl TestCaseImpl for NativeTransferTest {
             .await
             .expect("Failed to get transaction data for transfer.");
 
-        let response = ctx
-            .sign_and_execute(data, "coin transfer")
-            .await
-            .to_effect_response()
-            .unwrap();
+        let response = ctx.sign_and_execute(data, "coin transfer").await;
 
         let mut effects = response.effects;
         if !matches!(effects.status, SuiExecutionStatus::Success { .. }) {

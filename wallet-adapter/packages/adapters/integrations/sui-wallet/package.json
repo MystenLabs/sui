@@ -11,7 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@mysten/sui.js": "^0.8.0",
-    "sui-base-wallet-adapter": "file:../../base-adapter"
+    "sui-base-wallet-adapter": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^4.7.4"

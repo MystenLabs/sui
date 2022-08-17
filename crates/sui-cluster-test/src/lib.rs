@@ -7,8 +7,9 @@ use cluster::{Cluster, ClusterFactory};
 use config::ClusterTestOpt;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
+use sui_json_rpc_types::SuiTransactionResponse;
+use test_utils::messages::make_transactions_with_wallet_context;
 
-use sui_json_rpc_types::TransactionResponse;
 use sui_sdk::SuiClient;
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
@@ -17,6 +18,7 @@ use sui_types::{
 };
 use test_case::{
     call_contract_test::CallContractTest, coin_merge_split_test::CoinMergeSplitTest,
+    fullnode_execute_transaction_test::FullNodeExecuteTransactionTest,
     native_transfer_test::NativeTransferTest, shared_object_test::SharedCounterTest,
 };
 use tokio::time::{sleep, Duration};
@@ -44,7 +46,7 @@ pub struct TestContext {
 impl TestContext {
     async fn get_sui_from_faucet(&self, minimum_coins: Option<usize>) -> Vec<GasCoin> {
         self.faucet
-            .request_sui_coins(self.get_context(), minimum_coins)
+            .request_sui_coins(self.get_context(), minimum_coins, None)
             .await
             .unwrap_or_else(|e| panic!("Failed to get test SUI coins from faucet, {e}"))
     }
@@ -73,7 +75,17 @@ impl TestContext {
         self.client.get_wallet_address()
     }
 
-    async fn sign_and_execute(&self, txn_data: TransactionData, desc: &str) -> TransactionResponse {
+    /// See `make_transactions_with_wallet_context` for potential caveats
+    /// of this helper function.
+    pub async fn make_transactions(&mut self, max_txn_num: usize) -> Vec<Transaction> {
+        make_transactions_with_wallet_context(self.get_wallet_mut(), max_txn_num).await
+    }
+
+    async fn sign_and_execute(
+        &self,
+        txn_data: TransactionData,
+        desc: &str,
+    ) -> SuiTransactionResponse {
         let signature = self.get_context().sign(&txn_data, desc);
         self.get_gateway()
             .execute_transaction(Transaction::new(txn_data, signature))
@@ -152,6 +164,7 @@ impl ClusterTest {
             TestCase::new(CoinMergeSplitTest {}),
             TestCase::new(CallContractTest {}),
             TestCase::new(SharedCounterTest {}),
+            TestCase::new(FullNodeExecuteTransactionTest {}),
         ];
 
         // TODO: improve the runner parallelism for efficiency

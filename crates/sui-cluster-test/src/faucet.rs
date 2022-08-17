@@ -56,6 +56,7 @@ pub trait FaucetClient {
         &self,
         client: &WalletClient,
         minimum_coins: Option<usize>,
+        request_address: Option<SuiAddress>,
     ) -> Result<Vec<GasCoin>, anyhow::Error>;
 }
 
@@ -79,10 +80,11 @@ impl FaucetClient for RemoteFaucetClient {
         &self,
         client: &WalletClient,
         minimum_coins: Option<usize>,
+        request_address: Option<SuiAddress>,
     ) -> Result<Vec<GasCoin>, anyhow::Error> {
         let gas_url = format!("{}/gas", self.remote_url);
         debug!("Getting coin from remote faucet {}", gas_url);
-        let address = client.get_wallet_address();
+        let address = request_address.unwrap_or_else(|| client.get_wallet_address());
         let data = HashMap::from([("recipient", encode_bytes_hex(&address))]);
         let map = HashMap::from([("FixedAmountRequest", data)]);
 
@@ -91,19 +93,24 @@ impl FaucetClient for RemoteFaucetClient {
             .json(&map)
             .send()
             .await
-            .unwrap()
-            .json::<FaucetResponse>()
-            .await
+            .unwrap_or_else(|e| panic!("Failed to talk to remote faucet {:?}: {:?}", gas_url, e));
+        let full_bytes = response.bytes().await.unwrap();
+        let faucet_response: FaucetResponse = serde_json::from_slice(&full_bytes)
+            .map_err(|e| anyhow::anyhow!("json deser failed with bytes {:?}: {e}", full_bytes))
             .unwrap();
 
-        if let Some(error) = response.error {
+        if let Some(error) = faucet_response.error {
             panic!("Failed to get gas tokens with error: {}", error)
         }
 
         sleep(Duration::from_secs(2)).await;
 
-        let gas_coins =
-            into_gas_coin_with_owner_check(response.transferred_gas_objects, address, client).await;
+        let gas_coins = into_gas_coin_with_owner_check(
+            faucet_response.transferred_gas_objects,
+            address,
+            client,
+        )
+        .await;
 
         let minimum_coins = minimum_coins.unwrap_or(5);
 
@@ -135,8 +142,9 @@ impl FaucetClient for LocalFaucetClient {
         &self,
         client: &WalletClient,
         minimum_coins: Option<usize>,
+        request_address: Option<SuiAddress>,
     ) -> Result<Vec<GasCoin>, anyhow::Error> {
-        let address = client.get_wallet_address();
+        let address = request_address.unwrap_or_else(|| client.get_wallet_address());
         let receipt = self
             .simple_faucet
             .send(Uuid::new_v4(), address, &[50000; 5])

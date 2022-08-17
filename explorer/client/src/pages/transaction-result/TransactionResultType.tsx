@@ -5,6 +5,7 @@ import type {
     CertifiedTransaction,
     ExecutionStatusType,
     SuiObjectRef,
+    SuiEvent,
 } from '@mysten/sui.js';
 
 export type DataType = CertifiedTransaction & {
@@ -15,6 +16,7 @@ export type DataType = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
+    events?: SuiEvent[];
     timestamp_ms: number | null;
 };
 

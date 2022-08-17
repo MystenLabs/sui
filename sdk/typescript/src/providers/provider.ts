@@ -7,8 +7,13 @@ import {
   SuiObjectInfo,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
-  TransactionResponse,
+  SuiTransactionResponse,
   SuiObjectRef,
+  SuiMoveFunctionArgTypes,
+  SuiMoveNormalizedFunction,
+  SuiMoveNormalizedStruct,
+  SuiMoveNormalizedModule,
+  SuiMoveNormalizedModules,
 } from '../types';
 
 ///////////////////////////////
@@ -69,7 +74,49 @@ export abstract class Provider {
     signatureScheme: SignatureScheme,
     signature: string,
     pubkey: string
-  ): Promise<TransactionResponse>;
+  ): Promise<SuiTransactionResponse>;
+
+  // Move info
+  /**
+   * Get Move function argument types like read, write and full access
+   */
+  abstract getMoveFunctionArgTypes(
+    objectId: string,
+    moduleName: string,
+    functionName: string
+  ): Promise<SuiMoveFunctionArgTypes>;
+
+  /**
+   * Get a map from module name to
+   * structured representations of Move modules
+   */
+  abstract getNormalizedMoveModulesByPackage(objectId: string,): Promise<SuiMoveNormalizedModules>;
+
+  /**
+   * Get a structured representation of Move module
+   */
+  abstract getNormalizedMoveModule(
+    objectId: string,
+    moduleName: string,
+  ): Promise<SuiMoveNormalizedModule>;
+
+  /**
+   * Get a structured representation of Move function
+   */
+  abstract getNormalizedMoveFunction(
+    objectId: string,
+    moduleName: string,
+    functionName: string
+  ): Promise<SuiMoveNormalizedFunction> 
+
+  /**
+   * Get a structured representation of Move struct
+   */
+  abstract getNormalizedMoveStruct(
+    objectId: string,
+    moduleName: string,
+    structName: string
+  ): Promise<SuiMoveNormalizedStruct>;
 
   abstract syncAccountState(address: string): Promise<any>;
   // TODO: add more interface methods

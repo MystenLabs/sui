@@ -56,8 +56,7 @@ function TokensPage() {
                 />
                 <IconLink
                     icon={SuiIcons.PercentagePolygon}
-                    to="/stake-new"
-                    disabled={process.env.NODE_ENV !== 'development'}
+                    to="/stake"
                     text="Stake & Earn"
                 />
             </div>

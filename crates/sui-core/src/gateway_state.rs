@@ -21,7 +21,7 @@ use prometheus::{
     Registry,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
-use tracing::{debug, error, Instrument};
+use tracing::{debug, error, trace, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_config::gateway::GatewayConfig;
@@ -42,6 +42,7 @@ use sui_types::{
 use crate::authority::ResolverWrapper;
 use crate::authority_aggregator::AuthAggMetrics;
 use crate::authority_client::NetworkAuthorityClient;
+use crate::safe_client::SafeClientMetrics;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -49,13 +50,14 @@ use crate::{
 };
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
-    GetObjectDataResponse, GetRawObjectDataResponse, MergeCoinResponse, MoveCallParams,
-    PublishResponse, RPCTransactionRequestParams, SplitCoinResponse, SuiMoveObject, SuiObject,
-    SuiObjectInfo, SuiTransactionEffects, SuiTypeTag, TransactionEffectsResponse,
-    TransactionResponse, TransferObjectParams,
+    GetObjectDataResponse, GetRawObjectDataResponse, MoveCallParams, RPCTransactionRequestParams,
+    SuiMoveObject, SuiObject, SuiObjectInfo, SuiParsedMergeCoinResponse, SuiParsedPublishResponse,
+    SuiParsedSplitCoinResponse, SuiParsedTransactionResponse, SuiTransactionEffects,
+    SuiTransactionResponse, SuiTypeTag, TransferObjectParams,
 };
 use sui_types::error::SuiError::ConflictingTransaction;
 
+use crate::epoch::epoch_store::EpochStore;
 use tap::TapFallible;
 
 #[cfg(test)]
@@ -175,33 +177,41 @@ pub struct GatewayState<A> {
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
     pub fn new(
-        path: &Path,
+        base_path: &Path,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         prometheus_registry: &Registry,
     ) -> SuiResult<Self> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
+        let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
+        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None));
+        let epoch_store = Arc::new(EpochStore::new(base_path.join("epochs"), &committee, None));
         Self::new_with_authorities(
-            path,
-            AuthorityAggregator::new(committee, authority_clients, auth_agg_metrics),
+            gateway_store,
+            AuthorityAggregator::new(
+                committee,
+                epoch_store,
+                authority_clients,
+                auth_agg_metrics,
+                safe_client_metrics,
+            ),
             gateway_metrics,
         )
     }
 
     pub fn new_with_authorities(
-        path: &Path,
+        gateway_store: Arc<GatewayStore>,
         authorities: AuthorityAggregator<A>,
         metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
-        let store = Arc::new(GatewayStore::open(path, None));
-        let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
+        let next_tx_seq_number = AtomicU64::new(gateway_store.next_sequence_number()?);
         Ok(Self {
-            store: store.clone(),
+            store: gateway_store.clone(),
             authorities,
             next_tx_seq_number,
             metrics,
-            module_cache: SyncModuleCache::new(ResolverWrapper(store)),
+            module_cache: SyncModuleCache::new(ResolverWrapper(gateway_store)),
         })
     }
 
@@ -275,7 +285,7 @@ pub trait GatewayAPI {
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<TransactionResponse, anyhow::Error>;
+    ) -> Result<SuiTransactionResponse, anyhow::Error>;
 
     /// Send an object to a Sui address. The object's type must allow public transfers
     async fn public_transfer_object(
@@ -409,7 +419,7 @@ pub trait GatewayAPI {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEffectsResponse, anyhow::Error>;
+    ) -> Result<SuiTransactionResponse, anyhow::Error>;
 }
 
 impl<A> GatewayState<A>
@@ -564,7 +574,7 @@ where
     /// If any object does not exist in the store, give it a chance
     /// to download from authorities.
     async fn sync_input_objects_with_authorities(&self, transaction: &Transaction) -> SuiResult {
-        let input_objects = transaction.data.input_objects()?;
+        let input_objects = transaction.signed_data.data.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
             if object_opt.is_none() {
@@ -598,7 +608,7 @@ where
         let span = tracing::debug_span!(
             "execute_transaction",
             tx_digest = ?tx_digest,
-            tx_kind = transaction.data.kind_as_str()
+            tx_kind = transaction.signed_data.data.kind_as_str()
         );
         let exec_result = self
             .authorities
@@ -810,11 +820,52 @@ where
         Ok(objects)
     }
 
+    async fn create_parsed_transaction_response(
+        &self,
+        tx_kind: TransactionKind,
+        certificate: CertifiedTransaction,
+        effects: TransactionEffects,
+    ) -> Result<Option<SuiParsedTransactionResponse>, anyhow::Error> {
+        if let TransactionKind::Single(tx_kind) = tx_kind {
+            match tx_kind {
+                SingleTransactionKind::Publish(_) => {
+                    self.metrics.num_tx_publish.inc();
+                    return Ok(Some(
+                        self.create_publish_response(certificate, effects).await?,
+                    ));
+                }
+                // Work out if the transaction is split coin or merge coin transaction
+                SingleTransactionKind::Call(move_call) => {
+                    self.metrics.num_tx_movecall.inc();
+                    if move_call.package == self.get_framework_object_ref().await?
+                        && move_call.module.as_ref() == coin::COIN_MODULE_NAME
+                    {
+                        if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
+                            self.metrics.num_tx_splitcoin.inc();
+                            return Ok(Some(
+                                self.create_split_coin_response(certificate, effects)
+                                    .await?,
+                            ));
+                        } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
+                            self.metrics.num_tx_mergecoin.inc();
+                            return Ok(Some(
+                                self.create_merge_coin_response(certificate, effects)
+                                    .await?,
+                            ));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        Ok(None)
+    }
+
     async fn create_publish_response(
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
-    ) -> Result<TransactionResponse, anyhow::Error> {
+    ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
         if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
@@ -886,22 +937,23 @@ where
             "Created Publish response"
         );
 
-        Ok(TransactionResponse::PublishResponse(PublishResponse {
-            certificate: certificate.try_into()?,
-            package,
-            created_objects,
-            updated_gas,
-        }))
+        Ok(SuiParsedTransactionResponse::Publish(
+            SuiParsedPublishResponse {
+                package,
+                created_objects,
+                updated_gas,
+            },
+        ))
     }
 
     async fn create_split_coin_response(
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
-    ) -> Result<TransactionResponse, anyhow::Error> {
+    ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
-        let signer = certificate.data.signer();
-        let (gas_payment, _, _) = certificate.data.gas();
+        let signer = certificate.signed_data.data.signer();
+        let (gas_payment, _, _) = certificate.signed_data.data.gas();
         let (coin_object_id, split_arg) = match call.arguments.as_slice() {
             [CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))), CallArg::Pure(arg)] => {
                 (id, arg)
@@ -943,19 +995,20 @@ where
             "Created Split Coin response"
         );
 
-        Ok(TransactionResponse::SplitCoinResponse(SplitCoinResponse {
-            certificate: certificate.try_into()?,
-            updated_coin,
-            new_coins,
-            updated_gas,
-        }))
+        Ok(SuiParsedTransactionResponse::SplitCoin(
+            SuiParsedSplitCoinResponse {
+                updated_coin,
+                new_coins,
+                updated_gas,
+            },
+        ))
     }
 
     async fn create_merge_coin_response(
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
-    ) -> Result<TransactionResponse, anyhow::Error> {
+    ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
         let primary_coin = match call.arguments.first() {
             Some(CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))) => id,
@@ -966,7 +1019,7 @@ where
                 .into())
             }
         };
-        let (gas_payment, _, _) = certificate.data.gas();
+        let (gas_payment, _, _) = certificate.signed_data.data.gas();
 
         if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
@@ -988,16 +1041,17 @@ where
             "Created Merge Coin response"
         );
 
-        Ok(TransactionResponse::MergeCoinResponse(MergeCoinResponse {
-            certificate: certificate.try_into()?,
-            updated_coin,
-            updated_gas,
-        }))
+        Ok(SuiParsedTransactionResponse::MergeCoin(
+            SuiParsedMergeCoinResponse {
+                updated_coin,
+                updated_gas,
+            },
+        ))
     }
 
     fn try_get_move_call(certificate: &CertifiedTransaction) -> Result<&MoveCall, anyhow::Error> {
         if let TransactionKind::Single(SingleTransactionKind::Call(ref call)) =
-            certificate.data.kind
+            certificate.signed_data.data.kind
         {
             Ok(call)
         } else {
@@ -1159,8 +1213,8 @@ where
     async fn execute_transaction(
         &self,
         tx: Transaction,
-    ) -> Result<TransactionResponse, anyhow::Error> {
-        let tx_kind = tx.data.kind.clone();
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
+        let tx_kind = tx.signed_data.data.kind.clone();
         let tx_digest = tx.digest();
 
         debug!(tx_digest = ?tx_digest, "Received execute_transaction request");
@@ -1172,7 +1226,7 @@ where
                 let span = tracing::debug_span!(
                     "gateway_execute_transaction",
                     ?tx_digest,
-                    tx_kind = tx.data.kind_as_str()
+                    tx_kind = tx.signed_data.data.kind_as_str()
                 );
 
                 // Use start_coarse_time() if the below turns out to have a perf impact
@@ -1221,37 +1275,16 @@ where
         };
 
         // Create custom response base on the request type
-        if let TransactionKind::Single(tx_kind) = tx_kind {
-            match tx_kind {
-                SingleTransactionKind::Publish(_) => {
-                    self.metrics.num_tx_publish.inc();
-                    return self.create_publish_response(certificate, effects).await;
-                }
-                // Work out if the transaction is split coin or merge coin transaction
-                SingleTransactionKind::Call(move_call) => {
-                    self.metrics.num_tx_movecall.inc();
-                    if move_call.package == self.get_framework_object_ref().await?
-                        && move_call.module.as_ref() == coin::COIN_MODULE_NAME
-                    {
-                        if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
-                            self.metrics.num_tx_splitcoin.inc();
-                            return self.create_split_coin_response(certificate, effects).await;
-                        } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
-                            self.metrics.num_tx_mergecoin.inc();
-                            return self.create_merge_coin_response(certificate, effects).await;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-        return Ok(TransactionResponse::EffectResponse(
-            TransactionEffectsResponse {
-                certificate: certificate.try_into()?,
-                effects: SuiTransactionEffects::try_from(effects, &self.module_cache)?,
-                timestamp_ms: None,
-            },
-        ));
+        let parsed_data = self
+            .create_parsed_transaction_response(tx_kind, certificate.clone(), effects.clone())
+            .await?;
+
+        return Ok(SuiTransactionResponse {
+            certificate: certificate.try_into()?,
+            effects: SuiTransactionEffects::try_from(effects, &self.module_cache)?,
+            timestamp_ms: None,
+            parsed_data,
+        });
     }
 
     async fn public_transfer_object(
@@ -1345,7 +1378,8 @@ where
             .sync_all_owned_objects(account_addr, Duration::from_secs(60))
             .await?;
 
-        debug!(
+        // This is quite spammy when there are a number of huge objects
+        trace!(
             ?active_object_certs,
             deletec = ?_deleted_refs_certs,
             ?account_addr,
@@ -1540,13 +1574,14 @@ where
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<TransactionEffectsResponse, anyhow::Error> {
+    ) -> Result<SuiTransactionResponse, anyhow::Error> {
         let (cert, effect) = QueryHelpers::get_transaction(&self.store, &digest)?;
 
-        Ok(TransactionEffectsResponse {
+        Ok(SuiTransactionResponse {
             certificate: cert.try_into()?,
             effects: SuiTransactionEffects::try_from(effect, &self.module_cache)?,
             timestamp_ms: None,
+            parsed_data: None,
         })
     }
 }

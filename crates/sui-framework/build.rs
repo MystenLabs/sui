@@ -51,9 +51,12 @@ fn build_framework_and_stdlib(
     sui_framework_path: &Path,
     move_stdlib_path: &Path,
 ) -> (Vec<CompiledModule>, Vec<CompiledModule>) {
-    let sui_framework =
-        sui_framework_build::build_move_package(sui_framework_path, BuildConfig::default())
-            .unwrap();
+    let pkg = sui_framework_build::build_move_package_with_deps(
+        sui_framework_path,
+        BuildConfig::default(),
+    )
+    .unwrap();
+    let sui_framework = sui_framework_build::filter_package_modules(&pkg).unwrap();
     let move_stdlib = sui_framework_build::build_move_stdlib_modules(move_stdlib_path).unwrap();
     (sui_framework, move_stdlib)
 }

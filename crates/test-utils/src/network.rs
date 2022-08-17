@@ -27,6 +27,7 @@ use sui_sdk::{ClientType, SuiClient};
 use sui_swarm::memory::{Swarm, SwarmBuilder};
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::SuiKeyPair::Ed25519SuiKeyPair;
 const NUM_VALIDAOTR: usize = 4;
 
 pub async fn start_test_network(
@@ -60,7 +61,7 @@ pub async fn start_test_network_with_fullnodes(
     swarm.config().save(&network_path)?;
     let mut keystore = KeystoreType::File(keystore_path.clone()).init()?;
     for key in &swarm.config().account_keys {
-        keystore.add_key(key.copy())?;
+        keystore.add_key(Ed25519SuiKeyPair(key.copy()))?;
     }
 
     let validators = swarm.config().validator_set().to_owned();
@@ -110,8 +111,10 @@ pub async fn setup_network_and_wallet() -> Result<(Swarm, WalletContext, SuiAddr
 
 async fn start_rpc_gateway(
     config_path: &Path,
+    port: Option<u16>,
 ) -> Result<(SocketAddr, HttpServerHandle), anyhow::Error> {
-    let server = HttpServerBuilder::default().build("127.0.0.1:0").await?;
+    let server_url = format!("127.0.0.1:{}", port.unwrap_or(0));
+    let server = HttpServerBuilder::default().build(server_url).await?;
     let addr = server.local_addr()?;
 
     let config = PersistedConfig::read(config_path)?;
@@ -129,17 +132,18 @@ async fn start_rpc_gateway(
 pub async fn start_rpc_test_network(
     genesis_config: Option<GenesisConfig>,
 ) -> Result<TestNetwork, anyhow::Error> {
-    start_rpc_test_network_with_fullnode(genesis_config, 0).await
+    start_rpc_test_network_with_fullnode(genesis_config, 0, None).await
 }
 
 pub async fn start_rpc_test_network_with_fullnode(
     genesis_config: Option<GenesisConfig>,
     fullnode_count: usize,
+    gateway_port: Option<u16>,
 ) -> Result<TestNetwork, anyhow::Error> {
     let network = start_test_network_with_fullnodes(genesis_config, fullnode_count).await?;
     let working_dir = network.dir();
     let (server_addr, rpc_server_handle) =
-        start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG)).await?;
+        start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG), gateway_port).await?;
     let mut wallet_conf: SuiClientConfig =
         PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
     let rpc_url = format!("http://{}", server_addr);

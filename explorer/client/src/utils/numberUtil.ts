@@ -11,3 +11,6 @@ export const numberSuffix = (num: number): string => {
     }
     return num.toString();
 };
+
+export const isBigIntOrNumber = (val: any): val is bigint | number =>
+    typeof val === 'bigint' || typeof val === 'number';

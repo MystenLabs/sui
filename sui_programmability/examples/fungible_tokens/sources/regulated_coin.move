@@ -92,9 +92,9 @@ module rc::regulated_coin {
 module abc::abc {
     use rc::regulated_coin::{Self as rcoin, RegulatedCoin as RCoin};
     use sui::tx_context::{Self, TxContext};
-    use sui::balance::{Self, Balance};
-    use sui::coin::{Self, Coin, TreasuryCap};
+    use sui::balance::{Self, Supply, Balance};
     use sui::object::{Self, UID};
+    use sui::coin::{Self, Coin};
     use sui::transfer;
     use std::vector;
 
@@ -115,19 +115,28 @@ module abc::abc {
         swapped_amount: u64,
     }
 
+    /// A AbcTreasuryCap for the balance::Supply.
+    struct AbcTreasuryCap has key, store {
+        id: UID,
+        supply: Supply<Abc>
+    }
+
     /// For when an attempting to interact with another account's RegulatedCoin<Abc>.
     const ENotOwner: u64 = 1;
 
     /// For when address has been banned and someone is trying to access the balance
     const EAddressBanned: u64 = 2;
 
-    /// Create the Abc currency and send the TreasuryCap to the creator
+    /// Create the Abc currency and send the AbcTreasuryCap to the creator
     /// as well as the first (and empty) balance of the RegulatedCoin<Abc>.
     ///
     /// Also creates a shared Registry which holds banned addresses.
     fun init(ctx: &mut TxContext) {
-        let treasury_cap = coin::create_currency(Abc {}, ctx);
         let sender = tx_context::sender(ctx);
+        let treasury_cap = AbcTreasuryCap {
+            id: object::new(ctx),
+            supply: balance::create_supply(Abc {})
+        };
 
         transfer::transfer(zero(sender, ctx), sender);
         transfer::transfer(treasury_cap, sender);
@@ -153,27 +162,30 @@ module abc::abc {
 
     // === Admin actions: creating balances, minting coins and banning addresses ===
 
-    /// Create an empty `RCoin<Abc>` instance for account `for`. TreasuryCap is passed for
+    /// Create an empty `RCoin<Abc>` instance for account `for`. AbcTreasuryCap is passed for
     /// authentification purposes - only admin can create new accounts.
-    public entry fun create(_: &TreasuryCap<Abc>, for: address, ctx: &mut TxContext) {
+    public entry fun create(_: &AbcTreasuryCap, for: address, ctx: &mut TxContext) {
         transfer::transfer(zero(for, ctx), for)
     }
 
-    /// Mint more Abc. Requires TreasuryCap for authorization, so can only be done by admins.
-    public entry fun mint(treasury: &mut TreasuryCap<Abc>, owned: &mut RCoin<Abc>, value: u64) {
-        balance::join(borrow_mut(owned), coin::mint_balance(treasury, value));
+    /// Mint more Abc. Requires AbcTreasuryCap for authorization, so can only be done by admins.
+    public entry fun mint(treasury: &mut AbcTreasuryCap, owned: &mut RCoin<Abc>, value: u64) {
+        balance::join(borrow_mut(owned), balance::increase_supply(&mut treasury.supply, value));
     }
 
-    /// Burn `value` amount of `RCoin<Abc>`. Requires TreasuryCap for authorization, so can only be done by admins.
+    /// Burn `value` amount of `RCoin<Abc>`. Requires AbcTreasuryCap for authorization, so can only be done by admins.
     ///
-    /// TODO: Make TreasuryCap a part of Balance module instead of Coin.
-    public entry fun burn(treasury: &mut TreasuryCap<Abc>, owned: &mut RCoin<Abc>, value: u64, ctx: &mut TxContext) {
-        coin::burn(treasury, coin::take(borrow_mut(owned), value, ctx));
+    /// TODO: Make AbcTreasuryCap a part of Balance module instead of Coin.
+    public entry fun burn(treasury: &mut AbcTreasuryCap, owned: &mut RCoin<Abc>, value: u64) {
+        balance::decrease_supply(
+            &mut treasury.supply,
+            balance::split(borrow_mut(owned), value)
+        );
     }
 
     /// Ban some address and forbid making any transactions from or to this address.
-    /// Only owner of the TreasuryCap can perform this action.
-    public entry fun ban(_cap: &TreasuryCap<Abc>, registry: &mut Registry, to_ban: address) {
+    /// Only owner of the AbcTreasuryCap can perform this action.
+    public entry fun ban(_cap: &AbcTreasuryCap, registry: &mut Registry, to_ban: address) {
         vector::push_back(&mut registry.banned, to_ban)
     }
 
@@ -283,10 +295,10 @@ module abc::abc {
 /// |               +-- test_not_owned_balance_fail
 /// ```
 module abc::tests {
-    use abc::abc::{Self, Abc, Registry};
+    use abc::abc::{Self, Abc, AbcTreasuryCap, Registry};
     use rc::regulated_coin::{Self as rcoin, RegulatedCoin as RCoin};
 
-    use sui::coin::{Coin, TreasuryCap};
+    use sui::coin::{Coin};
     use sui::test_scenario::{Self, Scenario, next_tx, ctx};
 
     // === Test handlers; this trick helps reusing scenarios ==
@@ -319,8 +331,8 @@ module abc::tests {
 
     // === Helpers and basic test organization ===
 
-    fun scenario(): Scenario { test_scenario::begin(&@0xABC) }
-    fun people(): (address, address, address) { (@0xABC, @0xE05, @0xFACE) }
+    fun scenario(): Scenario { test_scenario::begin(&@0xAbc) }
+    fun people(): (address, address, address) { (@0xAbc, @0xE05, @0xFACE) }
 
     // Admin creates a regulated coin Abc and mints 1,000,000 of it.
     fun test_minting_(test: &mut Scenario) {
@@ -331,7 +343,7 @@ module abc::tests {
         };
 
         next_tx(test, &admin); {
-            let cap = test_scenario::take_owned<TreasuryCap<Abc>>(test);
+            let cap = test_scenario::take_owned<AbcTreasuryCap>(test);
             let coin = test_scenario::take_owned<RCoin<Abc>>(test);
 
             abc::mint(&mut cap, &mut coin, 1000000);
@@ -350,7 +362,7 @@ module abc::tests {
         test_minting_(test);
 
         next_tx(test, &admin); {
-            let cap = test_scenario::take_owned<TreasuryCap<Abc>>(test);
+            let cap = test_scenario::take_owned<AbcTreasuryCap>(test);
 
             abc::create(&cap, user1, ctx(test));
 
@@ -408,9 +420,9 @@ module abc::tests {
 
         next_tx(test, &admin); {
             let coin = test_scenario::take_owned<RCoin<Abc>>(test);
-            let treasury_cap = test_scenario::take_owned<TreasuryCap<Abc>>(test);
+            let treasury_cap = test_scenario::take_owned<AbcTreasuryCap>(test);
 
-            abc::burn(&mut treasury_cap, &mut coin, 100000, ctx(test));
+            abc::burn(&mut treasury_cap, &mut coin, 100000);
 
             assert!(rcoin::value(&coin) == 400000, 4);
 
@@ -478,7 +490,7 @@ module abc::tests {
         test_transfer_(test);
 
         next_tx(test, &admin); {
-            let cap = test_scenario::take_owned<TreasuryCap<Abc>>(test);
+            let cap = test_scenario::take_owned<AbcTreasuryCap>(test);
             let reg = test_scenario::take_shared<Registry>(test);
             let reg_ref = test_scenario::borrow_mut(&mut reg);
 

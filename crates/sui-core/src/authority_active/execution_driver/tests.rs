@@ -41,8 +41,11 @@ async fn pending_exec_storage_notify() {
     for inner_state in authorities.clone() {
         let inner_agg = aggregator.clone();
         let active_state = Arc::new(
-            ActiveAuthority::new_with_ephemeral_storage(inner_state.authority.clone(), inner_agg)
-                .unwrap(),
+            ActiveAuthority::new_with_ephemeral_storage_for_test(
+                inner_state.authority.clone(),
+                inner_agg,
+            )
+            .unwrap(),
         );
         let _active_handle = active_state
             .spawn_checkpoint_process(CheckpointMetrics::new_for_tests(), false)
@@ -122,7 +125,7 @@ async fn pending_exec_full() {
         let inner_agg = aggregator.clone();
         let _active_handle = tokio::task::spawn(async move {
             let active_state = Arc::new(
-                ActiveAuthority::new_with_ephemeral_storage(
+                ActiveAuthority::new_with_ephemeral_storage_for_test(
                     inner_state.authority.clone(),
                     inner_agg,
                 )
@@ -247,8 +250,11 @@ async fn test_parent_cert_exec() {
     // the 4th authority has never heard of either of these transactions. Tell it to execute the
     // cert and verify that it is able to fetch parents and apply.
     let active_state = Arc::new(
-        ActiveAuthority::new_with_ephemeral_storage(authorities[3].clone(), aggregator.clone())
-            .unwrap(),
+        ActiveAuthority::new_with_ephemeral_storage_for_test(
+            authorities[3].clone(),
+            aggregator.clone(),
+        )
+        .unwrap(),
     );
 
     let batch_state = authorities[3].clone();

@@ -1,10 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    type TransactionEffectsResponse,
-    getTransactionSender,
-} from '@mysten/sui.js';
+import { getTransactionSender } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import React, { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
@@ -53,7 +50,7 @@ function getObjectDataWithPackageAddress(objID: string, network: string) {
             if (resp.objType === 'Move Package' && resp.data.tx_digest) {
                 return rpc(network)
                     .getTransactionWithEffects(resp.data.tx_digest)
-                    .then((txEff: TransactionEffectsResponse) => ({
+                    .then((txEff) => ({
                         ...resp,
                         publisherAddress: getTransactionSender(
                             txEff.certificate

@@ -3,6 +3,7 @@
 
 use anyhow::anyhow;
 use clap::Parser;
+use eyre::eyre;
 use rocksdb::MultiThreaded;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -87,10 +88,11 @@ pub fn dump_table(
         ),
         StoreName::Checkpoints => CheckpointStoreTables::open_tables_read_only(db_path, None, None)
             .dump(table_name, page_size, page_number),
-        StoreName::Wal => Err(anyhow!(
+        StoreName::Wal => Err(eyre!(
             "Dumping WAL not yet supported. It requires kmowing the value type"
         )),
     }
+    .map_err(|err| anyhow!(err.to_string()))
 }
 
 #[cfg(test)]
@@ -107,7 +109,7 @@ mod test {
 
         // Open the DB for writing
         let _: AuthorityStoreTables<AuthoritySignInfo> =
-            AuthorityStoreTables::open_tables_read_write(primary_path.clone(), None);
+            AuthorityStoreTables::open_tables_read_write(primary_path.clone(), None, None);
 
         // Get all the tables
         let tables = list_tables(primary_path.clone()).unwrap();

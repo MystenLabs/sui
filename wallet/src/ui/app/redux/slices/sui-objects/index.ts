@@ -4,7 +4,6 @@
 import {
     getObjectExistsResponse,
     getTotalGasUsed,
-    getTransactionEffectsResponse,
     getTransactionDigest,
 } from '@mysten/sui.js';
 import {
@@ -13,6 +12,7 @@ import {
     createSlice,
 } from '@reduxjs/toolkit';
 
+import { SUI_SYSTEM_STATE_OBJECT_ID } from './Coin';
 import { ExampleNFT } from './NFT';
 
 import type { SuiObject, SuiAddress, ObjectId } from '@mysten/sui.js';
@@ -25,7 +25,7 @@ const objectsAdapter = createEntityAdapter<SuiObject>({
         a.reference.objectId.localeCompare(b.reference.objectId),
 });
 
-export const fetchAllOwnedObjects = createAsyncThunk<
+export const fetchAllOwnedAndRequiredObjects = createAsyncThunk<
     SuiObject[],
     void,
     AppThunkConfig
@@ -36,6 +36,7 @@ export const fetchAllOwnedObjects = createAsyncThunk<
         const allObjectRefs =
             await api.instance.fullNode.getObjectsOwnedByAddress(`${address}`);
         const objectIDs = allObjectRefs.map((anObj) => anObj.objectId);
+        objectIDs.push(SUI_SYSTEM_STATE_OBJECT_ID);
         const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
         for (const objRes of allObjRes) {
             const suiObj = getObjectExistsResponse(objRes);
@@ -47,13 +48,29 @@ export const fetchAllOwnedObjects = createAsyncThunk<
     return allSuiObjects;
 });
 
+export const batchFetchObject = createAsyncThunk<
+    SuiObject[],
+    ObjectId[],
+    AppThunkConfig
+>('sui-objects/batch', async (objectIDs, { extra: { api } }) => {
+    const allSuiObjects: SuiObject[] = [];
+    const allObjRes = await api.instance.fullNode.getObjectBatch(objectIDs);
+    for (const objRes of allObjRes) {
+        const suiObj = getObjectExistsResponse(objRes);
+        if (suiObj) {
+            allSuiObjects.push(suiObj);
+        }
+    }
+    return allSuiObjects;
+});
+
 export const mintDemoNFT = createAsyncThunk<void, void, AppThunkConfig>(
     'mintDemoNFT',
     async (_, { extra: { api, keypairVault }, dispatch }) => {
         await ExampleNFT.mintExampleNFT(
             api.getSignerInstance(keypairVault.getKeyPair())
         );
-        await dispatch(fetchAllOwnedObjects());
+        await dispatch(fetchAllOwnedAndRequiredObjects());
     }
 );
 
@@ -71,16 +88,15 @@ export const transferSuiNFT = createAsyncThunk<
 >(
     'transferSuiNFT',
     async (data, { extra: { api, keypairVault }, dispatch }) => {
-        const txRes = await ExampleNFT.TransferNFT(
+        const txn = await ExampleNFT.TransferNFT(
             api.getSignerInstance(keypairVault.getKeyPair()),
             data.nftId,
             data.recipientAddress,
             data.transferCost
         );
 
-        await dispatch(fetchAllOwnedObjects());
-        const txn = getTransactionEffectsResponse(txRes);
-        const txnDigest = txn ? getTransactionDigest(txn.certificate) : null;
+        await dispatch(fetchAllOwnedAndRequiredObjects());
+        const txnDigest = getTransactionDigest(txn.certificate);
         const txnResp = {
             timestamp_ms: txn?.timestamp_ms,
             status: txn?.effects?.status?.status,
@@ -114,17 +130,23 @@ const slice = createSlice({
     },
     extraReducers: (builder) => {
         builder
-            .addCase(fetchAllOwnedObjects.fulfilled, (state, action) => {
-                objectsAdapter.setAll(state, action.payload);
-                state.loading = false;
-                state.error = false;
-                state.lastSync = Date.now();
-            })
-            .addCase(fetchAllOwnedObjects.pending, (state, action) => {
-                state.loading = true;
-            })
             .addCase(
-                fetchAllOwnedObjects.rejected,
+                fetchAllOwnedAndRequiredObjects.fulfilled,
+                (state, action) => {
+                    objectsAdapter.setAll(state, action.payload);
+                    state.loading = false;
+                    state.error = false;
+                    state.lastSync = Date.now();
+                }
+            )
+            .addCase(
+                fetchAllOwnedAndRequiredObjects.pending,
+                (state, action) => {
+                    state.loading = true;
+                }
+            )
+            .addCase(
+                fetchAllOwnedAndRequiredObjects.rejected,
                 (state, { error: { code, name, message } }) => {
                     state.loading = false;
                     state.error = { code, message, name };
@@ -140,3 +162,6 @@ export const { clearForNetworkSwitch } = slice.actions;
 export const suiObjectsAdapterSelectors = objectsAdapter.getSelectors(
     (state: RootState) => state.suiObjects
 );
+
+export const suiSystemObjectSelector = (state: RootState) =>
+    suiObjectsAdapterSelectors.selectById(state, SUI_SYSTEM_STATE_OBJECT_ID);

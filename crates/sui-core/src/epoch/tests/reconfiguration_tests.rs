@@ -42,16 +42,14 @@ async fn test_start_epoch_change() {
     let state = states[0].clone();
 
     // Check that we initialized the genesis epoch.
-    let init_epoch = state.epoch_store.get_latest_authenticated_epoch();
+    let init_epoch = state.epoch_store().get_latest_authenticated_epoch();
     assert!(matches!(init_epoch, AuthenticatedEpoch::Genesis(..)));
     assert_eq!(init_epoch.epoch(), 0);
 
     // Set the checkpoint number to be near the end of epoch.
 
-    state
-        .checkpoints
-        .as_ref()
-        .unwrap()
+    let checkpoints = state.checkpoints.as_ref().unwrap();
+    checkpoints
         .lock()
         .set_locals_for_testing(CheckpointLocals {
             next_checkpoint: CHECKPOINT_COUNT_PER_EPOCH,
@@ -62,7 +60,8 @@ async fn test_start_epoch_change() {
         })
         .unwrap();
     // Create an active authority for the first authority state.
-    let active = ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone()).unwrap();
+    let active =
+        ActiveAuthority::new_with_ephemeral_storage_for_test(state.clone(), net.clone()).unwrap();
     // Make the high watermark differ from low watermark.
     let ticket = state.batch_notifier.ticket().unwrap();
 
@@ -73,15 +72,21 @@ async fn test_start_epoch_change() {
         active.start_epoch_change().await.unwrap();
         epoch_change_started_copy.store(true, Ordering::SeqCst);
     });
-    tokio::time::sleep(Duration::from_millis(100)).await;
+    tokio::time::sleep(Duration::from_secs(3)).await;
     // Validator should now be halted, but epoch change hasn't finished.
     assert!(state.is_halted());
     assert!(!epoch_change_started.load(Ordering::SeqCst));
 
     // Drain ticket.
     drop(ticket);
-    tokio::time::sleep(Duration::from_millis(100)).await;
-    // After we drained ticket, epoch change started.
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    // After we drained ticket, epoch change still hasn't started as the latest ticket
+    // hasn't made into batch yet.
+    assert!(!epoch_change_started.load(Ordering::SeqCst));
+
+    checkpoints.lock().handle_internal_batch(1, &[]).unwrap();
+    tokio::time::sleep(Duration::from_secs(3)).await;
+    // Now epoch change should have started.
     assert!(epoch_change_started.load(Ordering::SeqCst));
     handle.await.unwrap();
 
@@ -110,7 +115,7 @@ async fn test_start_epoch_change() {
         cert = sigs
             .append(
                 state.name,
-                AuthoritySignature::new(&transaction.data, &*state.secret),
+                AuthoritySignature::new(&transaction.signed_data, &*state.secret),
             )
             .unwrap();
     }
@@ -130,6 +135,7 @@ async fn test_start_epoch_change() {
         state.database.clone(),
         InputObjects::new(
             transaction
+                .signed_data
                 .data
                 .input_objects()
                 .unwrap()
@@ -142,7 +148,7 @@ async fn test_start_epoch_change() {
     let (inner_temporary_store, effects, _) = execution_engine::execute_transaction_to_effects(
         vec![],
         temporary_store,
-        transaction.data.clone(),
+        transaction.signed_data.data.clone(),
         tx_digest,
         BTreeSet::new(),
         &state.move_vm,
@@ -168,7 +174,8 @@ async fn test_finish_epoch_change() {
     let actives: Vec<_> = states
         .iter()
         .map(|state| {
-            ActiveAuthority::new_with_ephemeral_storage(state.clone(), net.clone()).unwrap()
+            ActiveAuthority::new_with_ephemeral_storage_for_test(state.clone(), net.clone())
+                .unwrap()
         })
         .collect();
 
@@ -214,7 +221,7 @@ async fn test_finish_epoch_change() {
     for active in actives {
         assert_eq!(active.state.epoch(), 1);
         assert_eq!(active.net.load().committee.epoch, 1);
-        let latest_epoch = active.state.epoch_store.get_latest_authenticated_epoch();
+        let latest_epoch = active.state.epoch_store().get_latest_authenticated_epoch();
         assert_eq!(latest_epoch.epoch(), 1);
         assert!(matches!(latest_epoch, AuthenticatedEpoch::Certified(..)));
         assert_eq!(latest_epoch.epoch_info().epoch(), 1);

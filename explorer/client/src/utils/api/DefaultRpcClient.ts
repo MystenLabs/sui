@@ -17,7 +17,6 @@ import { getEndpoint, Network } from './rpcSetting';
 
 import type {
     GetTxnDigestsResponse,
-    TransactionEffectsResponse,
     CertifiedTransaction,
 } from '@mysten/sui.js';
 
@@ -32,7 +31,7 @@ export const getDataOnTxDigests = (
 ) =>
     DefaultRpcClient(network)
         .getTransactionWithEffectsBatch(deduplicate(transactions))
-        .then((txEffs: TransactionEffectsResponse[]) => {
+        .then((txEffs) => {
             return (
                 txEffs
                     .map((txEff) => {

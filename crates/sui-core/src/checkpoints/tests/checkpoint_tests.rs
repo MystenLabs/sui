@@ -10,6 +10,7 @@ use crate::{
     },
     authority_batch::batch_tests::init_state_parameters_from_rng,
     authority_client::LocalAuthorityClient,
+    safe_client::SafeClientMetrics,
 };
 use rand::prelude::StdRng;
 use rand::SeedableRng;
@@ -26,6 +27,7 @@ use sui_types::{
 };
 
 use crate::authority_aggregator::AuthAggMetrics;
+use crate::epoch::epoch_store::EpochStore;
 use parking_lot::Mutex;
 
 pub struct TestCausalOrderPendCertNoop;
@@ -1667,6 +1669,7 @@ pub async fn checkpoint_tests_setup(
     // Now make an authority aggregator
     let aggregator = AuthorityAggregator::new(
         committee.clone(),
+        Arc::new(EpochStore::new_for_testing(&committee)),
         authorities
             .iter()
             .map(|a| {
@@ -1677,6 +1680,7 @@ pub async fn checkpoint_tests_setup(
             })
             .collect(),
         AuthAggMetrics::new_for_tests(),
+        SafeClientMetrics::new_for_tests(),
     );
 
     TestSetup {

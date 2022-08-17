@@ -4,7 +4,8 @@
     url("{{cssPath}}{{fontname}}.woff2") format("woff2"),
     url("{{cssPath}}{{fontname}}.woff") format("woff"),
     url('{{cssPath}}{{fontname}}.ttf') format('truetype'),
-url('{{cssPath}}{{fontname}}.svg#{{fontname}}') format('svg');
+    url('{{cssPath}}{{fontname}}.svg#{{fontname}}') format('svg');
+    font-display: block;
 }
 
 [class^="{{prefix}}-"], [class*=" {{prefix}}-"] {

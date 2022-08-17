@@ -42,7 +42,7 @@ pub(crate) mod tests;
 
 use super::ActiveAuthority;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CheckpointProcessControl {
     /// The time to allow upon quorum failure for sufficient
     /// authorities to come online, to proceed with the checkpointing
@@ -374,6 +374,7 @@ where
                         if state.bad_weight > validity {
                             return Err(SuiError::TooManyIncorrectAuthorities {
                                 errors: state.errors,
+                                action: "get_latest_checkpoint_from_all",
                             });
                         }
                     }

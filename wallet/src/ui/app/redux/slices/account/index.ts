@@ -91,8 +91,27 @@ export const { setMnemonic, setAddress } = accountSlice.actions;
 
 export default accountSlice.reducer;
 
-export const accountCoinsSelector = createSelector(
+export const activeAccountSelector = ({ account }: RootState) =>
+    account.address;
+
+export const ownedObjects = createSelector(
     suiObjectsAdapterSelectors.selectAll,
+    activeAccountSelector,
+    (objects, address) => {
+        if (address) {
+            return objects.filter(
+                ({ owner }) =>
+                    typeof owner === 'object' &&
+                    'AddressOwner' in owner &&
+                    owner.AddressOwner === address
+            );
+        }
+        return [];
+    }
+);
+
+export const accountCoinsSelector = createSelector(
+    ownedObjects,
     (allSuiObjects) => {
         return allSuiObjects
             .filter(Coin.isCoin)
@@ -135,11 +154,8 @@ export const accountItemizedBalancesSelector = createSelector(
 );
 
 export const accountNftsSelector = createSelector(
-    suiObjectsAdapterSelectors.selectAll,
+    ownedObjects,
     (allSuiObjects) => {
         return allSuiObjects.filter((anObj) => !Coin.isCoin(anObj));
     }
 );
-
-export const activeAccountSelector = ({ account }: RootState) =>
-    account.address;

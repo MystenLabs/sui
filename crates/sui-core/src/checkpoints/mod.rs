@@ -13,6 +13,7 @@ use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::{collections::HashSet, path::Path, sync::Arc};
+use sui_storage::default_db_options;
 use sui_types::messages_checkpoint::CheckpointProposal;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -26,6 +27,7 @@ use sui_types::{
         CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
+use thiserror::Error;
 use tracing::{debug, error, info};
 use typed_store::traits::DBMapTableUtil;
 use typed_store::{
@@ -79,9 +81,11 @@ pub trait ConsensusSender: Send + Sync + 'static {
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum FragmentInternalError {
+    #[error("Sui error: {0}")]
     Error(SuiError),
+    #[error("Error processing fragment, retrying")]
     Retry(Box<CheckpointFragment>),
 }
 
@@ -90,7 +94,7 @@ pub enum FragmentInternalError {
 pub struct CheckpointStoreTables {
     /// The list of all transaction/effects that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "transactions_to_checkpoint_table_default_config"]
     pub transactions_to_checkpoint:
         DBMap<ExecutionDigests, (CheckpointSequenceNumber, TxSequenceNumber)>,
 
@@ -103,11 +107,11 @@ pub struct CheckpointStoreTables {
     /// The set of transaction/effects this authority has processed but have not yet been
     /// included in a checkpoint, and their sequence number in the local sequence
     /// of this authority.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "extra_transactions_table_default_config"]
     pub extra_transactions: DBMap<ExecutionDigests, TxSequenceNumber>,
 
     /// The list of checkpoint, along with their authentication information
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "checkpoints_table_default_config"]
     pub checkpoints: DBMap<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
 
     // --- Logic related to fragments on the way to making checkpoints
@@ -115,7 +119,7 @@ pub struct CheckpointStoreTables {
     // A list of own fragments indexed by the other node that the fragment connects
     // to. These are used for the local node to potentially reconstruct the full
     // transaction set.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "local_fragments_table_default_config"]
     pub local_fragments: DBMap<AuthorityName, CheckpointFragment>,
 
     /// Store the fragments received in order, the counter is purely internal,
@@ -125,8 +129,27 @@ pub struct CheckpointStoreTables {
     pub fragments: DBMap<ExecutionIndices, CheckpointFragment>,
 
     /// A single entry table to store locals.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "locals_table_default_config"]
     pub locals: DBMap<DBLabel, CheckpointLocals>,
+}
+
+// These functions are used to initialize the DB tables
+fn transactions_to_checkpoint_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn extra_transactions_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+
+fn checkpoints_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn local_fragments_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+
+fn locals_table_default_config() -> Options {
+    default_db_options(None, None).1
 }
 
 pub struct CheckpointStore {
@@ -252,7 +275,11 @@ impl CheckpointStore {
             secret,
             memory_locals: None,
             sender: None,
-            tables: CheckpointStoreTables::open_tables_read_write(path.to_path_buf(), db_options),
+            tables: CheckpointStoreTables::open_tables_read_write(
+                path.to_path_buf(),
+                db_options,
+                None,
+            ),
         };
 
         // Initialize the locals
@@ -844,6 +871,12 @@ impl CheckpointStore {
 
         let transactions = CheckpointContents::new(self.tables.extra_transactions.keys());
         let size = transactions.transactions.len();
+        info!(cp_seq=?checkpoint_sequence, ?size, "A new checkpoint proposal is created");
+        debug!(
+            "Transactions included in the checkpoint: {:?}",
+            transactions.transactions
+        );
+
         let checkpoint_proposal = CheckpointProposal::new(
             epoch,
             checkpoint_sequence,
@@ -858,7 +891,6 @@ impl CheckpointStore {
         new_locals.proposal_next_transaction = Some(next_local_tx_sequence);
         self.set_locals(locals, new_locals)?;
 
-        info!(cp_seq=?checkpoint_sequence, ?size, "A new checkpoint proposal is created");
         Ok(checkpoint_proposal)
     }
 
@@ -978,8 +1010,7 @@ impl CheckpointStore {
     }
 
     /// Updates the store on the basis of transactions that have been processed. This is idempotent
-    /// and nothing unsafe happens if it is called twice. Returns the lowest checkpoint number with
-    /// unprocessed transactions (this is the low watermark).
+    /// and nothing unsafe happens if it is called twice.
     fn update_processed_transactions(
         &mut self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
@@ -988,66 +1019,33 @@ impl CheckpointStore {
             .tables
             .transactions_to_checkpoint
             .multi_get(transactions.iter().map(|(_, tx)| tx))?;
-
-        let batch = self.tables.transactions_to_checkpoint.batch();
-
-        // Check we are not re-proposing the same transactions that are already in a
-        // final checkpoint. This should not be possible since we only accept (sign /
-        // record) a checkpoint if we have already processed all transactions within.
-        let already_in_checkpoint_tx = transactions
+        let already_in_checkpoint_tx: Vec<_> = transactions
             .iter()
             .zip(&in_checkpoint)
-            .filter_map(
-                |((_seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some(tx)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .count();
-
-        if already_in_checkpoint_tx != 0 {
-            return Err(SuiError::CheckpointingError {
-                error: "Processing transactions already in a checkpoint.".to_string(),
-            });
+            .filter_map(|((_seq, tx), in_chk)| in_chk.map(|_| tx))
+            .collect();
+        if !already_in_checkpoint_tx.is_empty() {
+            // This should never happen, but if it happens, we should not let it block checkpoint
+            // progress either. Log the error so that we can keep track.
+            error!(
+                "Transactions are processed and updated from batch more than once: {:?}",
+                already_in_checkpoint_tx
+            );
         }
 
-        // Update the entry to the transactions_to_checkpoint
-
-        let batch = batch.insert_batch(
-            &self.tables.transactions_to_checkpoint,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some((tx, (in_chk.unwrap().0, *seq)))
-                    } else {
-                        None
-                    }
-                }),
-        )?;
-
-        // If the transactions processed did not belong to a checkpoint yet, we add them to the list
-        // of `extra` transactions, that we should be actively propagating to others.
+        let batch = self.tables.extra_transactions.batch();
         let batch = batch.insert_batch(
             &self.tables.extra_transactions,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_none() {
-                        Some((tx, seq))
-                    } else {
-                        None
-                    }
-                }),
+            transactions.iter().map(|(seq, digest)| (digest, seq)),
         )?;
 
         // Write to the database.
         batch.write()?;
+
+        debug!(
+            "Transactions added to extra_transactions: {:?}",
+            transactions
+        );
 
         Ok(())
     }

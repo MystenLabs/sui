@@ -1,23 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import cl from 'classnames';
 import { Formik } from 'formik';
-import { useCallback, useMemo, useState, memo, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useMemo, useState, memo } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import TransferNFTForm from './TransferNFTForm';
 import { createValidationSchema } from './validation';
 import PageTitle from '_app/shared/page-title';
-import Icon, { SuiIcons } from '_components/icon';
 import NFTDisplayCard from '_components/nft-display';
-import TxResponseCard from '_components/transaction-response-card';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import {
     accountNftsSelector,
     accountAggregateBalancesSelector,
 } from '_redux/slices/account';
-import { setSelectedNFT, clearActiveNFT } from '_redux/slices/selected-nft';
 import { transferSuiNFT } from '_redux/slices/sui-objects';
 import {
     GAS_TYPE_ARG,
@@ -37,21 +33,10 @@ const initialValues = {
 
 export type FormValues = typeof initialValues;
 
-type TxResponse = {
-    address?: string;
-    gasFee?: number;
-    date?: number;
-    txId?: string;
-    status: 'success' | 'failure';
-} | null;
-
-const initTxResponse: TxResponse = null;
-
 interface TransferProps {
     objectId: ObjectId;
 }
 
-// Cache NFT object data before transfer of the NFT to use it in the TxResponse card
 function TransferNFTCard({ objectId }: TransferProps) {
     const address = useAppSelector(({ account: { address } }) => address);
     const dispatch = useAppDispatch();
@@ -65,22 +50,13 @@ function TransferNFTCard({ objectId }: TransferProps) {
         [nftCollections, objectId]
     );
 
-    useEffect(() => {
-        dispatch(clearActiveNFT());
-        if (selectedNFTObj) {
-            dispatch(setSelectedNFT({ data: selectedNFTObj, loaded: true }));
-        }
-    }, [dispatch, objectId, selectedNFTObj]);
-
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
-    const nftObj = useAppSelector(({ selectedNft }) => selectedNft);
 
     const gasAggregateBalance = useMemo(
         () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
     );
 
-    const [txResponse, setTxResponse] = useState<TxResponse>(initTxResponse);
     const [sendError, setSendError] = useState<string | null>(null);
 
     const validationSchema = useMemo(
@@ -92,7 +68,7 @@ function TransferNFTCard({ objectId }: TransferProps) {
             ),
         [gasAggregateBalance, address, objectId]
     );
-
+    const navigate = useNavigate();
     const onHandleSubmit = useCallback(
         async (
             { to }: FormValues,
@@ -111,41 +87,36 @@ function TransferNFTCard({ objectId }: TransferProps) {
                     })
                 ).unwrap();
 
-                setTxResponse((state) => ({
-                    ...state,
-                    address: to,
-                    gasFee: resp.gasFee,
-                    date: resp?.timestamp_ms,
-                    txId: resp?.txId,
-                    status: resp.status === 'success' ? 'success' : 'failure',
-                }));
                 resetForm();
+                if (resp.txId) {
+                    navigate(
+                        `/receipt?${new URLSearchParams({
+                            txdigest: resp.txId,
+                            transfer: 'nft',
+                        }).toString()}`
+                    );
+                }
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
-                setTxResponse((state) => ({
-                    ...state,
-                    address: to,
-                    status: 'failure',
-                }));
             }
         },
-        [dispatch, objectId]
+        [dispatch, navigate, objectId]
     );
 
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
     }, []);
 
-    const TransferNFT = (
-        <>
+    return (
+        <div className={st.container}>
             <PageTitle
                 title="Send NFT"
                 backLink="/nfts"
                 className={st.pageTitle}
             />
             <div className={st.content}>
-                {nftObj.data && (
-                    <NFTDisplayCard nftobj={nftObj.data} wideview={true} />
+                {selectedNFTObj && (
+                    <NFTDisplayCard nftobj={selectedNFTObj} wideview={true} />
                 )}
                 <Formik
                     initialValues={initialValues}
@@ -160,54 +131,6 @@ function TransferNFTCard({ objectId }: TransferProps) {
                     />
                 </Formik>
             </div>
-        </>
-    );
-
-    const TransferResponse = (
-        <>
-            {txResponse?.address ? (
-                <div className={st.nftResponse}>
-                    <TxResponseCard
-                        status={txResponse.status}
-                        address={txResponse.address}
-                        date={
-                            txResponse.date
-                                ? new Date(txResponse.date).toDateString()
-                                : null
-                        }
-                        errorMessage={sendError}
-                        txId={txResponse.txId}
-                        gasFee={txResponse.gasFee}
-                    >
-                        {nftObj.data && (
-                            <NFTDisplayCard
-                                nftobj={nftObj.data}
-                                wideview={true}
-                            />
-                        )}
-                    </TxResponseCard>
-                    <div className={st.formcta}>
-                        <Link
-                            to="/nfts"
-                            className={cl('btn', st.action, st.done, 'neutral')}
-                        >
-                            <Icon
-                                icon={SuiIcons.Checkmark}
-                                className={st.checkmark}
-                            />
-                            Done
-                        </Link>
-                    </div>
-                </div>
-            ) : (
-                <></>
-            )}
-        </>
-    );
-
-    return (
-        <div className={st.container}>
-            {txResponse?.address ? TransferResponse : TransferNFT}
         </div>
     );
 }

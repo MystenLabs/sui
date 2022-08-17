@@ -4,6 +4,8 @@
 import { ObjectOwner, SuiAddress, TransactionDigest } from './common';
 import { SuiMovePackage, SuiObject, SuiObjectRef } from './objects';
 
+import BN from 'bn.js';
+
 export type TransferObject = {
   recipient: SuiAddress;
   objectRef: SuiObjectRef;
@@ -32,7 +34,7 @@ export type SuiTransactionKind =
   | { Call: MoveCall }
   | { TransferSui: SuiTransferSui }
   | { ChangeEpoch: SuiChangeEpoch };
-export type TransactionData = {
+export type SuiTransactionData = {
   transactions: SuiTransactionKind[];
   sender: SuiAddress;
   gasPayment: SuiObjectRef;
@@ -49,7 +51,7 @@ export type AuthorityQuorumSignInfo = {
 
 export type CertifiedTransaction = {
   transactionDigest: TransactionDigest;
-  data: TransactionData;
+  data: SuiTransactionData;
   txSignature: string;
   authSignInfo: AuthorityQuorumSignInfo;
 };
@@ -106,10 +108,11 @@ export type TransactionEffects = {
   dependencies?: TransactionDigest[];
 };
 
-export type TransactionEffectsResponse = {
+export type SuiTransactionResponse = {
   certificate: CertifiedTransaction;
   effects: TransactionEffects;
   timestamp_ms: number | null;
+  parsed_data: SuiParsedTransactionResponse | null;
 };
 
 export type GatewayTxSeqNumber = number;
@@ -140,21 +143,18 @@ export type TransactionBytes = {
   // TODO: Add input_objects field
 };
 
-export type MergeCoinResponse = {
-  certificate: CertifiedTransaction;
+export type SuiParsedMergeCoinResponse = {
   updatedCoin: SuiObject;
   updatedGas: SuiObject;
 };
 
-export type SplitCoinResponse = {
-  certificate: CertifiedTransaction;
+export type SuiParsedSplitCoinResponse = {
   updatedCoin: SuiObject;
   newCoins: SuiObject[];
   updatedGas: SuiObject;
 };
 
-export type PublishResponse = {
-  certificate: CertifiedTransaction;
+export type SuiParsedPublishResponse = {
   createdObjects: SuiObject[];
   package: SuiPackage;
   updatedGas: SuiObject;
@@ -166,18 +166,15 @@ export type SuiPackage = {
   version: number;
 };
 
-export type TransactionResponse =
+export type SuiParsedTransactionResponse =
   | {
-      EffectResponse: TransactionEffectsResponse;
+      SplitCoin: SuiParsedSplitCoinResponse;
     }
   | {
-      SplitCoinResponse: SplitCoinResponse;
+      MergeCoin: SuiParsedMergeCoinResponse;
     }
   | {
-      MergeCoinResponse: MergeCoinResponse;
-    }
-  | {
-      PublishResponse: PublishResponse;
+      Publish: SuiParsedPublishResponse;
     };
 
 /* -------------------------------------------------------------------------- */
@@ -201,7 +198,9 @@ export function getTransactionAuthorityQuorumSignInfo(
   return tx.authSignInfo;
 }
 
-export function getTransactionData(tx: CertifiedTransaction): TransactionData {
+export function getTransactionData(
+  tx: CertifiedTransaction
+): SuiTransactionData {
   return tx.data;
 }
 
@@ -257,6 +256,12 @@ export function getTransactions(
   return data.data.transactions;
 }
 
+export function getTransferSuiAmount(
+  data: SuiTransactionKind
+): BN | null {
+  return ("TransferSui" in data && data.TransferSui.amount) ? new BN.BN(data.TransferSui.amount, 10) : null; 
+}
+
 export function getTransactionKindName(
   data: SuiTransactionKind
 ): TransactionKindName {
@@ -266,30 +271,30 @@ export function getTransactionKindName(
 /* ----------------------------- ExecutionStatus ---------------------------- */
 
 export function getExecutionStatusType(
-  data: TransactionEffectsResponse
+  data: SuiTransactionResponse
 ): ExecutionStatusType {
   return getExecutionStatus(data).status;
 }
 
 export function getExecutionStatus(
-  data: TransactionEffectsResponse
+  data: SuiTransactionResponse
 ): ExecutionStatus {
   return data.effects.status;
 }
 
 export function getExecutionStatusError(
-  data: TransactionEffectsResponse
+  data: SuiTransactionResponse
 ): string | undefined {
   return getExecutionStatus(data).error;
 }
 
 export function getExecutionStatusGasSummary(
-  data: TransactionEffectsResponse
+  data: SuiTransactionResponse
 ): GasCostSummary {
   return data.effects.gasUsed;
 }
 
-export function getTotalGasUsed(data: TransactionEffectsResponse): number {
+export function getTotalGasUsed(data: SuiTransactionResponse): number {
   const gasSummary = getExecutionStatusGasSummary(data);
   return (
     gasSummary.computationCost +
@@ -300,28 +305,25 @@ export function getTotalGasUsed(data: TransactionEffectsResponse): number {
 
 /* --------------------------- TransactionResponse -------------------------- */
 
-export function getTransactionEffectsResponse(
-  data: TransactionResponse
-): TransactionEffectsResponse | undefined {
-  return 'EffectResponse' in data ? data.EffectResponse : undefined;
+export function getParsedSplitCoinResponse(
+  data: SuiTransactionResponse
+): SuiParsedSplitCoinResponse | undefined {
+  const parsed = data.parsed_data;
+  return parsed && 'SplitCoin' in parsed ? parsed.SplitCoin : undefined;
 }
 
-export function getSplitCoinResponse(
-  data: TransactionResponse
-): SplitCoinResponse | undefined {
-  return 'SplitCoinResponse' in data ? data.SplitCoinResponse : undefined;
+export function getParsedMergeCoinResponse(
+  data: SuiTransactionResponse
+): SuiParsedMergeCoinResponse | undefined {
+  const parsed = data.parsed_data;
+  return parsed && 'MergeCoin' in parsed ? parsed.MergeCoin : undefined;
 }
 
-export function getMergeCoinResponse(
-  data: TransactionResponse
-): MergeCoinResponse | undefined {
-  return 'MergeCoinResponse' in data ? data.MergeCoinResponse : undefined;
-}
-
-export function getPublishResponse(
-  data: TransactionResponse
-): PublishResponse | undefined {
-  return 'PublishResponse' in data ? data.PublishResponse : undefined;
+export function getParsedPublishResponse(
+  data: SuiTransactionResponse
+): SuiParsedPublishResponse | undefined {
+  const parsed = data.parsed_data;
+  return parsed && 'Publish' in parsed ? parsed.Publish : undefined;
 }
 
 /**
@@ -330,9 +332,9 @@ export function getPublishResponse(
  * @returns the updated state of the primary coin after the merge
  */
 export function getCoinAfterMerge(
-  data: TransactionResponse
+  data: SuiTransactionResponse
 ): SuiObject | undefined {
-  return getMergeCoinResponse(data)?.updatedCoin;
+  return getParsedMergeCoinResponse(data)?.updatedCoin;
 }
 
 /**
@@ -341,9 +343,9 @@ export function getCoinAfterMerge(
  * @returns the updated state of the original coin object used for the split
  */
 export function getCoinAfterSplit(
-  data: TransactionResponse
+  data: SuiTransactionResponse
 ): SuiObject | undefined {
-  return getSplitCoinResponse(data)?.updatedCoin;
+  return getParsedSplitCoinResponse(data)?.updatedCoin;
 }
 
 /**
@@ -352,7 +354,7 @@ export function getCoinAfterSplit(
  * @returns the updated state of the original coin object used for the split
  */
 export function getNewlyCreatedCoinsAfterSplit(
-  data: TransactionResponse
+  data: SuiTransactionResponse
 ): SuiObject[] | undefined {
-  return getSplitCoinResponse(data)?.newCoins;
+  return getParsedSplitCoinResponse(data)?.newCoins;
 }

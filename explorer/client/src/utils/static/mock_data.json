@@ -644,7 +644,76 @@
                 }
             }
         },
-
+        {
+            "id": "standaloneObjectABC",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::abc::ABC>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectDEF",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::def::DEF>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectGHI",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::ghi::GHI>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectJKL",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::jkl::JKL>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectMNO",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::mno::MNO>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
         {
             "id": "ProblemObject",
             "category": "object"
@@ -1128,6 +1197,8 @@
                     {
                         "moveEvent": {
                             "type": "0x2::devnet_nft::MintNFTEvent",
+                            "transactionModule": "devnet_nft",
+                            "sender": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
                             "fields": {
                                 "creator": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
                                 "name": "Example NFT",
@@ -1137,7 +1208,51 @@
                         }
                     },
                     {
-                        "newObject": "0xd070e8251a5e094dbd7175906b24a5c1ae8d2f41"
+                        "newObject": {
+                            "packageId": "0x2",
+                            "transactionModule": "devnet_nft",
+                            "sender": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
+                            "recipient": {
+                                "AddressOwner": "0x15090b0b58e2cffdf41f82bb79aa61d101669511"
+                            },
+                            "objectId": "0xd070e8251a5e094dbd7175906b24a5c1ae8d2f41"
+                        }
+                    },
+                    {
+                        "transferObject": {
+                            "objectId": "0x010669175cee34d61c4ab84a839895188ad8663d",
+                            "sender": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
+                            "recipient": {
+                                "AddressOwner": "0x15090b0b58e2cffdf41f82bb79aa61d101669511"
+                            },
+                            "version": 5,
+                            "type": "0x2::coin::Coin",
+                            "packageId": "0x2",
+                            "transactionModule": "coin"
+                        }
+                    },
+                    {
+                        "deleteObject": {
+                            "objectId": "0x010669175cee34d61c4ab84a839895188ad8663d",
+                            "sender": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
+                            "recipient": {
+                                "AddressOwner": "0x15090b0b58e2cffdf41f82bb79aa61d101669511"
+                            },
+                            "packageId": "0x2",
+                            "transactionModule": "coin"
+                        }
+                    },
+                    {
+                        "publish": {
+                            "sender": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
+                            "packageId": "0x2"
+                        }
+                    },
+                    {
+                        "epochChange": 676767
+                    },
+                    {
+                        "checkpoint": 47000
                     }
                 ]
             },
@@ -1225,9 +1340,14 @@
                     {
                         "transferObject": {
                             "objectId": "0x010669175cee34d61c4ab84a839895188ad8663d",
+                            "sender": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
+                            "recipient": {
+                                "AddressOwner": "0x15090b0b58e2cffdf41f82bb79aa61d101669511"
+                            },
                             "version": 5,
-                            "destinationAddr": "0x15090b0b58e2cffdf41f82bb79aa61d101669511",
-                            "type": "Coin"
+                            "type": "0x2::coin::Coin",
+                            "packageId": "0x2",
+                            "transactionModule": "coin"
                         }
                     }
                 ],

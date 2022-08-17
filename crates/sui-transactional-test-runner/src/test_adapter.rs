@@ -375,10 +375,15 @@ impl<'a> MoveTestAdapter<'a> for SuiTestAdapter<'a> {
                             .unwrap();
                         let move_struct =
                             MoveStruct::simple_deserialize(move_obj.contents(), &layout).unwrap();
+                        let child_count = match move_obj.child_count() {
+                            None => "None".to_owned(),
+                            Some(c) => format!("Some({c})"),
+                        };
                         self.stabilize_str(format!(
-                            "Owner: {}\nVersion: {}\nContents: {}",
+                            "Owner: {}\nVersion: {}\nChild Count: {}\nContents: {}",
                             &obj.owner,
                             obj.version().value(),
+                            child_count,
                             move_struct
                         ))
                     }
@@ -461,6 +466,7 @@ impl<'a> SuiTestAdapter<'a> {
         let gas_status = gas::start_gas_metering(gas_budget, 1, 1).unwrap();
         let transaction_digest = TransactionDigest::new(self.rng.gen());
         let objects_by_kind = transaction
+            .signed_data
             .data
             .input_objects()
             .unwrap()
@@ -496,7 +502,7 @@ impl<'a> SuiTestAdapter<'a> {
         ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             temporary_store,
-            transaction.data,
+            transaction.signed_data.data,
             transaction_digest,
             transaction_dependencies,
             &self.vm,

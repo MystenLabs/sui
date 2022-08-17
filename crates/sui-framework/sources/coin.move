@@ -8,6 +8,9 @@ module sui::coin {
     use sui::tx_context::{Self, TxContext};
     use std::vector;
 
+    /// For when a type passed to create_supply is not a one-time witness.
+    const EBadWitness: u64 = 0;
+
     /// A coin of type `T` worth `value`. Transferable and storable
     struct Coin<phantom T> has key, store {
         id: UID,
@@ -26,11 +29,6 @@ module sui::coin {
     /// Return the total number of `T`'s in circulation.
     public fun total_supply<T>(cap: &TreasuryCap<T>): u64 {
         balance::supply_value(&cap.total_supply)
-    }
-
-    /// Wrap a `Supply` into a transferable `TreasuryCap`.
-    public fun treasury_from_supply<T>(total_supply: Supply<T>, ctx: &mut TxContext): TreasuryCap<T> {
-        TreasuryCap { id: object::new(ctx), total_supply }
     }
 
     /// Unwrap `TreasuryCap` getting the `Supply`.
@@ -153,6 +151,9 @@ module sui::coin {
         witness: T,
         ctx: &mut TxContext
     ): TreasuryCap<T> {
+        // Make sure there's only one instance of the type T
+        assert!(sui::types::is_one_time_witness(&witness), EBadWitness);
+
         TreasuryCap {
             id: object::new(ctx),
             total_supply: balance::create_supply(witness)

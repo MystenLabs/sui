@@ -20,7 +20,7 @@ use sui_types::{
     object::Object,
 };
 
-use crate::keytool::read_keypair_from_file;
+use crate::keytool::read_authority_keypair_from_file;
 
 const GENESIS_BUILDER_SIGNATURE_DIR: &str = "signatures";
 
@@ -106,12 +106,13 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             narwhal_consensus_address,
         } => {
             let mut builder = Builder::load(&dir)?;
-            let keypair: AuthorityKeyPair = read_keypair_from_file(key_file)?;
+            let keypair: AuthorityKeyPair = read_authority_keypair_from_file(key_file)?;
             builder = builder.add_validator(sui_config::ValidatorInfo {
                 name,
                 public_key: keypair.public().into(),
                 stake: 1,
                 delegation: 0,
+                gas_price: 1,
                 network_address,
                 narwhal_primary_to_primary,
                 narwhal_worker_to_primary,
@@ -151,7 +152,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         }
 
         CeremonyCommand::VerifyAndSign { key_file } => {
-            let keypair: AuthorityKeyPair = read_keypair_from_file(key_file)?;
+            let keypair: AuthorityKeyPair = read_authority_keypair_from_file(key_file)?;
             let loaded_genesis = Genesis::load(dir.join(SUI_GENESIS_FILENAME))?;
             let loaded_genesis_bytes = loaded_genesis.to_bytes();
 
@@ -252,7 +253,7 @@ mod test {
     use crate::keytool::write_keypair_to_file;
     use anyhow::Result;
     use sui_config::{utils, ValidatorInfo};
-    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
+    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, SuiKeyPair};
 
     #[test]
     fn ceremony() -> Result<()> {
@@ -266,6 +267,7 @@ mod test {
                     public_key: AuthorityPublicKeyBytes::from(keypair.public()),
                     stake: 1,
                     delegation: 0,
+                    gas_price: 1,
                     network_address: utils::new_network_address(),
                     narwhal_primary_to_primary: utils::new_network_address(),
                     narwhal_worker_to_primary: utils::new_network_address(),
@@ -274,7 +276,8 @@ mod test {
                     narwhal_consensus_address: utils::new_network_address(),
                 };
                 let key_file = dir.path().join(format!("{}.key", info.name));
-                write_keypair_to_file(&keypair, &key_file).unwrap();
+                write_keypair_to_file(&SuiKeyPair::Ed25519SuiKeyPair(keypair), &key_file).unwrap();
+
                 (key_file, info)
             })
             .collect::<Vec<_>>();

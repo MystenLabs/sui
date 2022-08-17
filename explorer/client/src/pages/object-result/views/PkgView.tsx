@@ -14,7 +14,6 @@ function PkgView({ data }: { data: DataType }) {
     const viewedData = {
         ...data,
         objType: trimStdLibPrefix(data.objType),
-        name: data.name,
         tx_digest: data.data.tx_digest,
         owner: getOwnerStr(data.owner),
     };
@@ -35,7 +34,6 @@ function PkgView({ data }: { data: DataType }) {
     return (
         <div>
             <div>
-                {viewedData.name && <h1>{viewedData.name}</h1>}{' '}
                 <Tabs selected={defaultactivetab}>
                     <table
                         title="Details"
@@ -77,13 +75,16 @@ function PkgView({ data }: { data: DataType }) {
                     </table>
                 </Tabs>
                 <ModulesWrapper
+                    id={data.id}
                     data={{
                         title: 'Modules',
                         content: properties,
                     }}
                 />
-                <h2 className={styles.header}>Transactions </h2>
-                <TxForID id={viewedData.id} category="object" />
+                <div className={styles.txsection}>
+                    <h2 className={styles.header}>Transactions </h2>
+                    <TxForID id={viewedData.id} category="object" />
+                </div>
             </div>
         </div>
     );

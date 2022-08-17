@@ -3,10 +3,10 @@
 
 pub mod verifier;
 
-pub mod char_type_verifier;
 pub mod entry_points_verifier;
 pub mod global_storage_access_verifier;
 pub mod id_leak_verifier;
+pub mod one_time_witness_verifier;
 pub mod private_generics;
 pub mod struct_with_key_verifier;
 

@@ -75,7 +75,7 @@ impl Genesis {
                 };
                 let workers = [(
                     0, // worker_id
-                    narwhal_config::WorkerAddresses {
+                    narwhal_config::WorkerInfo {
                         primary_to_worker: validator.narwhal_primary_to_worker.clone(),
                         transactions: validator.narwhal_consensus_address.clone(),
                         worker_to_worker: validator.narwhal_worker_to_worker.clone(),
@@ -461,9 +461,12 @@ fn process_package(
         &mut gas_status,
     )?;
 
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = temporary_store.into_inner();
+    let (
+        InnerTemporaryStore {
+            written, deleted, ..
+        },
+        _events,
+    ) = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -485,6 +488,7 @@ pub fn generate_genesis_system_object(
     let mut network_addresses = Vec::new();
     let mut names = Vec::new();
     let mut stakes = Vec::new();
+    let mut gas_prices = Vec::new();
 
     for validator in committee {
         pubkeys.push(validator.public_key());
@@ -492,6 +496,7 @@ pub fn generate_genesis_system_object(
         network_addresses.push(validator.network_address());
         names.push(validator.name().to_owned().into_bytes());
         stakes.push(validator.stake());
+        gas_prices.push(validator.gas_price());
     }
 
     adapter::execute(
@@ -506,14 +511,18 @@ pub fn generate_genesis_system_object(
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
         ],
         &mut SuiGasStatus::new_unmetered(),
         genesis_ctx,
     )?;
 
-    let InnerTemporaryStore {
-        written, deleted, ..
-    } = temporary_store.into_inner();
+    let (
+        InnerTemporaryStore {
+            written, deleted, ..
+        },
+        _events,
+    ) = temporary_store.into_inner();
 
     store.finish(written, deleted);
 
@@ -554,6 +563,7 @@ mod test {
             public_key: key.public().into(),
             stake: 1,
             delegation: 0,
+            gas_price: 1,
             network_address: utils::new_network_address(),
             narwhal_primary_to_primary: utils::new_network_address(),
             narwhal_worker_to_primary: utils::new_network_address(),

@@ -1,17 +1,21 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiObjectInfo, SuiTypeTag,
-    TransactionBytes, TransactionEffectsResponse, TransactionResponse,
+    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
+    SuiTransactionResponse, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::SignatureScheme;
+use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::sui_serde::Base64;
 
 #[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
@@ -29,7 +33,7 @@ pub trait RpcGatewayApi {
         signature: Base64,
         /// signer's public key, as base-64 encoded string
         pub_key: Base64,
-    ) -> RpcResult<TransactionResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Wallet Sync API")]
@@ -91,7 +95,7 @@ pub trait RpcReadApi {
         &self,
         /// the digest of the queried transaction
         digest: TransactionDigest,
-    ) -> RpcResult<TransactionEffectsResponse>;
+    ) -> RpcResult<SuiTransactionResponse>;
 
     /// Return the object information for a specified object
     #[method(name = "getObject")]
@@ -110,10 +114,43 @@ pub trait RpcFullNodeReadApi {
     #[method(name = "getMoveFunctionArgTypes")]
     async fn get_move_function_arg_types(
         &self,
-        object_id: ObjectID,
+        package: ObjectID,
         module: String,
         function: String,
     ) -> RpcResult<Vec<MoveFunctionArgType>>;
+
+    /// Return structured representations of all modules in the given package
+    #[method(name = "getNormalizedMoveModulesByPackage")]
+    async fn get_normalized_move_modules_by_package(
+        &self,
+        package: ObjectID,
+    ) -> RpcResult<BTreeMap<String, SuiMoveNormalizedModule>>;
+
+    /// Return a structured representation of Move module
+    #[method(name = "getNormalizedMoveModule")]
+    async fn get_normalized_move_module(
+        &self,
+        package: ObjectID,
+        module_name: String,
+    ) -> RpcResult<SuiMoveNormalizedModule>;
+
+    /// Return a structured representation of Move struct
+    #[method(name = "getNormalizedMoveStruct")]
+    async fn get_normalized_move_struct(
+        &self,
+        package: ObjectID,
+        module_name: String,
+        struct_name: String,
+    ) -> RpcResult<SuiMoveNormalizedStruct>;
+
+    /// Return a structured representation of Move function
+    #[method(name = "getNormalizedMoveFunction")]
+    async fn get_normalized_move_function(
+        &self,
+        package: ObjectID,
+        module_name: String,
+        function_name: String,
+    ) -> RpcResult<SuiMoveNormalizedFunction>;
 
     /// Return list of transactions for a specified input object.
     #[method(name = "getTransactionsByInputObject")]
@@ -385,4 +422,24 @@ pub trait EventReadApi {
         /// the matching events' timestamp will be before the specified end time
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
+}
+
+#[open_rpc(namespace = "sui", tag = "Quorum Driver APIs to execute transactions.")]
+#[rpc(server, client, namespace = "sui")]
+pub trait QuorumDriverApi {
+    /// Execute the transaction and wait for results if desired
+    #[method(name = "executeTransaction")]
+    async fn execute_transaction(
+        &self,
+        /// transaction data bytes, as base-64 encoded string
+        tx_bytes: Base64,
+        /// Flag of the signature scheme that is used.
+        sig_scheme: SignatureScheme,
+        /// transaction signature, as base-64 encoded string
+        signature: Base64,
+        /// signer's public key, as base-64 encoded string
+        pub_key: Base64,
+        /// The request type
+        request_type: ExecuteTransactionRequestType,
+    ) -> RpcResult<SuiExecuteTransactionResponse>;
 }
