@@ -6,11 +6,14 @@ use futures::future::join_all;
 use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 
-use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use sui_core::authority_client::{
+    AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
+};
 use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
 
 use anyhow::anyhow;
@@ -134,7 +137,10 @@ fn make_clients(genesis: PathBuf) -> Result<BTreeMap<AuthorityName, NetworkAutho
         let channel = net_config
             .connect_lazy(&validator.network_address)
             .map_err(|err| anyhow!(err.to_string()))?;
-        let client = NetworkAuthorityClient::new(channel);
+        let client = NetworkAuthorityClient::new(
+            channel,
+            Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+        );
         let public_key_bytes = validator.public_key();
         authority_clients.insert(public_key_bytes, client);
     }

@@ -5,13 +5,12 @@
 use crate::authority::AuthorityState;
 use anyhow::anyhow;
 use async_trait::async_trait;
-use futures::{stream::BoxStream, FutureExt, TryStreamExt};
+use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use mysten_network::config::Config;
 use narwhal_crypto::traits::ToFromBytes;
 use prometheus::{register_histogram_with_registry, Histogram};
 use std::collections::BTreeMap;
-use std::mem;
 use std::sync::Arc;
 use sui_config::genesis::Genesis;
 use sui_network::{api::ValidatorClient, tonic};
@@ -135,9 +134,10 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.metrics
-            .handle_transaction_request_bytes
-            .observe(mem::size_of_val(&transaction) as f64);
+        let timer = self
+            .metrics
+            .handle_transaction_request_latency
+            .start_timer();
 
         let response = self
             .client()
@@ -146,9 +146,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into);
 
-        self.metrics
-            .handle_transaction_response_bytes
-            .observe(mem::size_of_val(&response) as f64);
+        timer.stop_and_record();
 
         response
     }
@@ -158,9 +156,10 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.metrics
-            .handle_certificate_request_bytes
-            .observe(mem::size_of_val(&certificate) as f64);
+        let timer = self
+            .metrics
+            .handle_certificate_request_latency
+            .start_timer();
 
         let response = self
             .client()
@@ -169,9 +168,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into);
 
-        self.metrics
-            .handle_certificate_response_bytes
-            .observe(mem::size_of_val(&response) as f64);
+        timer.stop_and_record();
 
         response
     }
@@ -180,9 +177,10 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
-        self.metrics
-            .handle_account_info_request_bytes
-            .observe(mem::size_of_val(&request) as f64);
+        let timer = self
+            .metrics
+            .handle_account_info_request_latency
+            .start_timer();
 
         let response = self
             .client()
@@ -191,9 +189,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into);
 
-        self.metrics
-            .handle_account_info_response_bytes
-            .observe(mem::size_of_val(&response) as f64);
+        timer.stop_and_record();
 
         response
     }
@@ -202,9 +198,10 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
-        self.metrics
-            .handle_object_info_request_bytes
-            .observe(mem::size_of_val(&request) as f64);
+        let timer = self
+            .metrics
+            .handle_object_info_request_latency
+            .start_timer();
 
         let response = self
             .client()
@@ -213,9 +210,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into);
 
-        self.metrics
-            .handle_object_info_response_bytes
-            .observe(mem::size_of_val(&response) as f64);
+        timer.stop_and_record();
 
         response
     }
@@ -225,9 +220,10 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.metrics
-            .handle_transaction_info_request_bytes
-            .observe(mem::size_of_val(&request) as f64);
+        let timer = self
+            .metrics
+            .handle_transaction_info_request_latency
+            .start_timer();
 
         let response = self
             .client()
@@ -236,9 +232,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into);
 
-        self.metrics
-            .handle_transaction_info_response_bytes
-            .observe(mem::size_of_val(&response) as f64);
+        timer.stop_and_record();
 
         response
     }
@@ -252,18 +246,9 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .batch_info_request_start_seq
             .observe(request.start.unwrap_or(0) as f64);
 
-        self.metrics
-            .handle_batch_stream_request_bytes
-            .observe(mem::size_of_val(&request) as f64);
-
         let stream = self
             .client()
             .batch_info(request)
-            .inspect(|item| {
-                self.metrics
-                    .handle_batch_stream_response_bytes
-                    .observe(mem::size_of_val(&item) as f64);
-            })
             .await
             .map(tonic::Response::into_inner)?
             .map_err(Into::into);
@@ -276,9 +261,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        self.metrics
-            .handle_checkpoint_request_bytes
-            .observe(mem::size_of_val(&request) as f64);
+        let timer = self.metrics.handle_checkpoint_request_latency.start_timer();
 
         let response = self
             .client()
@@ -287,9 +270,7 @@ impl AuthorityAPI for NetworkAuthorityClient {
             .map(tonic::Response::into_inner)
             .map_err(Into::into);
 
-        self.metrics
-            .handle_checkpoint_response_bytes
-            .observe(mem::size_of_val(&response) as f64);
+        timer.stop_and_record();
 
         response
     }
@@ -495,20 +476,12 @@ impl LocalAuthorityClient {
 
 #[derive(Clone)]
 pub struct NetworkAuthorityClientMetrics {
-    pub handle_transaction_request_bytes: Histogram,
-    pub handle_transaction_response_bytes: Histogram,
-    pub handle_certificate_request_bytes: Histogram,
-    pub handle_certificate_response_bytes: Histogram,
-    pub handle_account_info_request_bytes: Histogram,
-    pub handle_account_info_response_bytes: Histogram,
-    pub handle_object_info_request_bytes: Histogram,
-    pub handle_object_info_response_bytes: Histogram,
-    pub handle_transaction_info_request_bytes: Histogram,
-    pub handle_transaction_info_response_bytes: Histogram,
-    pub handle_batch_stream_request_bytes: Histogram,
-    pub handle_batch_stream_response_bytes: Histogram,
-    pub handle_checkpoint_request_bytes: Histogram,
-    pub handle_checkpoint_response_bytes: Histogram,
+    pub handle_transaction_request_latency: Histogram,
+    pub handle_certificate_request_latency: Histogram,
+    pub handle_account_info_request_latency: Histogram,
+    pub handle_object_info_request_latency: Histogram,
+    pub handle_transaction_info_request_latency: Histogram,
+    pub handle_checkpoint_request_latency: Histogram,
 
     pub batch_info_request_start_seq: Histogram,
 }
@@ -516,87 +489,39 @@ pub struct NetworkAuthorityClientMetrics {
 impl NetworkAuthorityClientMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
         Self {
-            handle_transaction_request_bytes: register_histogram_with_registry!(
-                "handle_transaction_request_bytes",
-                "Number of bytes sent by handle transaction request",
+            handle_transaction_request_latency: register_histogram_with_registry!(
+                "handle_transaction_request_latency",
+                "Latency of handle transaction request",
                 registry
             )
             .unwrap(),
-            handle_transaction_response_bytes: register_histogram_with_registry!(
-                "handle_transaction_response_bytes",
-                "Number of bytes sent by handle transaction response",
+            handle_certificate_request_latency: register_histogram_with_registry!(
+                "handle_certificate_request_latency",
+                "Latency of handle certificate request",
                 registry
             )
             .unwrap(),
-            handle_certificate_request_bytes: register_histogram_with_registry!(
-                "handle_certificate_request_bytes",
-                "Number of bytes sent by handle certrificate request",
+            handle_account_info_request_latency: register_histogram_with_registry!(
+                "handle_account_info_request_latency",
+                "Latency of handle account info request",
                 registry
             )
             .unwrap(),
-            handle_certificate_response_bytes: register_histogram_with_registry!(
-                "handle_certificate_response_bytes",
-                "Number of bytes sent by handle certificate response",
+            handle_object_info_request_latency: register_histogram_with_registry!(
+                "handle_object_info_request_latency",
+                "Latency of handle object info request",
                 registry
             )
             .unwrap(),
-            handle_account_info_request_bytes: register_histogram_with_registry!(
-                "handle_account_info_request_bytes",
-                "Number of bytes sent by handle account info request",
+            handle_transaction_info_request_latency: register_histogram_with_registry!(
+                "handle_transaction_info_request_latency",
+                "Latency of handle transaction info request",
                 registry
             )
             .unwrap(),
-            handle_account_info_response_bytes: register_histogram_with_registry!(
-                "handle_account_info_response_bytes",
-                "Number of bytes sent by handle account info response",
-                registry
-            )
-            .unwrap(),
-            handle_object_info_request_bytes: register_histogram_with_registry!(
-                "handle_object_info_request_bytes",
-                "Number of bytes sent by handle object info request",
-                registry
-            )
-            .unwrap(),
-            handle_object_info_response_bytes: register_histogram_with_registry!(
-                "handle_object_info_response_bytes",
-                "Number of bytes sent by handle object info response",
-                registry
-            )
-            .unwrap(),
-            handle_transaction_info_request_bytes: register_histogram_with_registry!(
-                "handle_transaction_info_request_bytes",
-                "Number of bytes sent by handle transaction info request",
-                registry
-            )
-            .unwrap(),
-            handle_transaction_info_response_bytes: register_histogram_with_registry!(
-                "handle_transaction_info_response_bytes",
-                "Number of bytes sent by handle transaction info response",
-                registry
-            )
-            .unwrap(),
-            handle_batch_stream_request_bytes: register_histogram_with_registry!(
-                "handle_batch_stream_request_bytes",
-                "Number of bytes sent by handle batch stream request",
-                registry
-            )
-            .unwrap(),
-            handle_batch_stream_response_bytes: register_histogram_with_registry!(
-                "handle_batch_stream_response_bytes",
-                "Number of bytes sent by handle batch request",
-                registry
-            )
-            .unwrap(),
-            handle_checkpoint_request_bytes: register_histogram_with_registry!(
-                "handle_checkpoint_request_bytes",
-                "Number of bytes sent by handle checkpoint request",
-                registry
-            )
-            .unwrap(),
-            handle_checkpoint_response_bytes: register_histogram_with_registry!(
-                "handle_checkpoint_response_bytes",
-                "Number of bytes sent by handle checkpoint response",
+            handle_checkpoint_request_latency: register_histogram_with_registry!(
+                "handle_checkpoint_request_latency",
+                "Latency of handle checkpoint request",
                 registry
             )
             .unwrap(),

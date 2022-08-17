@@ -372,7 +372,7 @@ async fn shared_object_on_gateway() {
     let path = tempfile::tempdir().unwrap().into_path();
     let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None));
     let gateway = Arc::new(
-        GatewayState::new_with_authorities(gateway_store, clients, GatewayMetrics::new_for_network_metricstests())
+        GatewayState::new_with_authorities(gateway_store, clients, GatewayMetrics::new_for_tests())
             .unwrap(),
     );
 
