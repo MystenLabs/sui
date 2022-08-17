@@ -309,16 +309,17 @@ pub trait EventStore {
         checkpoint_num: u64,
     ) -> Result<u64, SuiError>;
 
-    /// Queries for events emitted by a given transaction, returned in order emitted
-    /// NOTE: Not all events come from transactions
+    /// Returns at most `limit` events emitted by a given
+    /// transaction, returned in order emitted.
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
-    /// Queries for all events of a certain EventType within a given time window.
-    /// Will return at most limit of the most recent events within the window, sorted in descending time.
+    /// Returns at most `limit` events of a certain EventType
+    /// (e.g. `TransferObject`) within [start_time, end_time).
+    /// Sorted in in descending time.
     async fn events_by_type(
         &self,
         start_time: u64,
@@ -327,25 +328,16 @@ pub trait EventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
-    /// Generic event iteration bounded by time.  Return in ingestion order.
-    /// start_time is inclusive and end_time is exclusive.
-    async fn event_iterator(
-        &self,
-        start_time: u64,
-        end_time: u64,
-        limit: usize,
-    ) -> Result<Vec<StoredEvent>, SuiError>;
-
-    /// Generic event iteration bounded by checkpoint number.  Return in ingestion order.
-    /// Checkpoint numbers are inclusive on both ends.
+    /// Generic event iterator to return events emitted in checkpoints
+    /// [start_checkpoint, end_checkpoint). Return in ingestion order.
     fn events_by_checkpoint(
         &self,
         start_checkpoint: u64,
         end_checkpoint: u64,
     ) -> Result<StreamedResult, SuiError>;
 
-    /// Queries all Move events emitted in a certain Module ID within a given
-    /// time window, sorted in descending time.
+    /// Returns at most `limit` events emitted in a certain Module ID during
+    /// [start_time, end_time), sorted in descending time.
     async fn events_by_module_id(
         &self,
         start_time: u64,
@@ -354,8 +346,9 @@ pub trait EventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
-    /// Queries for all events with the move event struct name within a given
-    /// time window, sorted in descending time.
+    /// Returns at most `limit` events with the move event struct name
+    /// (e.g. `0x2::devnet_nft::MintNFTEvent`) emitted
+    /// during [start_time, end_time), sorted in descending time.
     async fn events_by_move_event_struct_name(
         &self,
         start_time: u64,
@@ -364,8 +357,8 @@ pub trait EventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
-    /// Queries for all events associated with a certain sender within a given
-    /// time window, sorted in descending time.
+    /// Returns at most `limit` events associated with a certain sender
+    /// emitted during [start_time, end_time), sorted in descending time.
     async fn events_by_sender(
         &self,
         start_time: u64,
@@ -374,8 +367,8 @@ pub trait EventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
-    /// Queries for all events associated with a certain recipient within a given
-    /// time window, sorted in descending time.
+    /// Returns at most `limit` events associated with a certain recipient
+    /// emitted during [start_time, end_time), sorted in descending time.
     async fn events_by_recipient(
         &self,
         start_time: u64,
@@ -384,13 +377,22 @@ pub trait EventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
-    /// Queries for all events associated with a certain object id
-    /// within a given time window, sorted in descending time.
+    /// Returns at most `limit` events associated with a certain object id
+    /// emitted during [start_time, end_time), sorted in descending time.
     async fn events_by_object(
         &self,
         start_time: u64,
         end_time: u64,
         object: &ObjectID,
+        limit: usize,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
+
+    /// Generic event iterator that returns events emitted between
+    /// [start_time, end_time). Return in ingestion order.
+    async fn event_iterator(
+        &self,
+        start_time: u64,
+        end_time: u64,
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 }

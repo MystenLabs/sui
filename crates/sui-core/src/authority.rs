@@ -1434,8 +1434,8 @@ impl AuthorityState {
             .map(|handler| handler.event_store.clone())
     }
 
-    /// Returns events emitted in the given transaction, in order of events were emitted
-    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    /// Returns events emitted in the given transaction, in order of events emitted.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_transaction(
         &self,
         digest: TransactionDigest,
@@ -1446,8 +1446,8 @@ impl AuthorityState {
         StoredEvent::into_event_envelopes(stored_events)
     }
 
-    /// Returns events emitted in the given module, in order of events were emitted.
-    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    /// Returns events emitted in the given module, in order of events emitted.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_transaction_module(
         &self,
         module_id: &ModuleId,
@@ -1464,9 +1464,9 @@ impl AuthorityState {
 
     /// Returns events with the given move event struct name, e.g.
     /// `0x2::devnet_nft::MintNFTEvent` or
-    /// `0x2::SUI::test_foo<address, vector<u8>>` when there're type params
-    /// , in order of events were emitted.
-    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    /// `0x2::SUI::test_foo<address, vector<u8>>` with type params
+    /// , in order of events emitted.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_move_event_struct_name(
         &self,
         move_event_struct_name: &str,
@@ -1482,8 +1482,8 @@ impl AuthorityState {
     }
 
     /// Returns events associated with the given sender, in order
-    /// of events were emitted.
-    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    /// of events emitted.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_sender(
         &self,
         sender: &SuiAddress,
@@ -1499,8 +1499,8 @@ impl AuthorityState {
     }
 
     /// Returns events associated with the given recipient, in order
-    /// of events were emitted.
-    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    /// of events emitted.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_recipient(
         &self,
         recipient: &Owner,
@@ -1516,8 +1516,8 @@ impl AuthorityState {
     }
 
     /// Returns events associated with the given object,
-    /// in order of events were emitted.
-    /// Number of returned items are capped to EVENT_STORE_QUERY_MAX_LIMIT
+    /// in order of events emitted.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_object(
         &self,
         object: &ObjectID,
