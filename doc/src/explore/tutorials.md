@@ -26,7 +26,7 @@ network charges for gas using its native currency SUI. This transaction fee
 equals the computational effort of executing operations on the Sui network (i.e.
 gas units) times the price of gas in the SUI currency (i.e. the gas price).
 
-When you complete the setup steps, you can use the either use following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather accounts and gas objects](#gather-accounts-and-gas-objects) section.
+When you complete the setup steps, you can use the either use following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather addresses and gas objects](#gather-addresses-and-gas-objects) section.
 
 ## Quick script
 If you prefer not to enter command step by step, or need to go though it multiple
@@ -76,9 +76,9 @@ sui client call --package $PACKAGE_ID --module tic_tac_toe --function create_gam
 # start playing the game ...
 ```
 
-## Gather accounts and gas objects
+## Gather addresses and gas objects
 
-In the new terminal session you started, use the following command in the Sui CLI client to view the account addresses we own:
+In the new terminal session you started, use the following command in the Sui CLI client to view the addresses we own:
 ```shell
 $ sui client addresses
 ```
@@ -101,7 +101,7 @@ export PLAYER_X=7B61DA6AACED7F28C1187D998955F10464BEAE55
 export PLAYER_O=251CF224B6BA3A019D04B6041357C20490F7A322
 ```
 
-For each of these addresses, let's discover the gas objects associated with each account address:
+For each of these addresses, let's discover the gas objects associated with each address:
 ```
 $ sui client gas --address $ADMIN
                 Object ID                 |  Version   |  Gas Value
@@ -128,7 +128,7 @@ $ sui client gas --address $PLAYER_O
  A0DBF58C3801EC2FEDA1D039E190A6B31A25B199 |     0      |   100000
  D5EBB8A19A35874A18B7A1D883EBFC8D897F5693 |     0      |   100000
 ```
-We only need one gas object per account address. So let's pick the first gas object of each account. In the above example, it's `38B89FE9F4A4823F1406938E87A8767CBD7F0B93`, `6F675038CAA48184707DBBE95ACFBA2030E87CD8` and `2110ADFB7BAF889A05EA6F5889AF7724299F9BED`, respectively. Again, you will see different IDs. Let's also add them to our environment variables:
+We only need one gas object per address. So let's pick the first gas object of each address. In the above example, it's `38B89FE9F4A4823F1406938E87A8767CBD7F0B93`, `6F675038CAA48184707DBBE95ACFBA2030E87CD8` and `2110ADFB7BAF889A05EA6F5889AF7724299F9BED`, respectively. Again, you will see different IDs. Let's also add them to our environment variables:
 ```
 $ export ADMIN_GAS=38B89FE9F4A4823F1406938E87A8767CBD7F0B93
 export X_GAS=6F675038CAA48184707DBBE95ACFBA2030E87CD8

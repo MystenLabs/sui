@@ -24,7 +24,7 @@ Use these online resources:
 
 ### What does Sui offer over other blockchains?
 
-Sui offers ease of development, a developer interface, fast transaction speeds, a sane object model, and better security. Sui calls the [consensus protocol](../learn/architecture/consensus.md) only for transactions affecting objects owned by multiple accounts. This means simple transactions complete almost immediately.
+Sui offers ease of development, a developer interface, fast transaction speeds, a sane object model, and better security. Sui calls the [consensus protocol](../learn/architecture/consensus.md) only for transactions affecting objects owned by multiple addresses. This means simple transactions complete almost immediately.
 
 See these resources on the [Sui Developer Portal](https://docs.sui.io/) for the complete story on why we built Sui:
 
