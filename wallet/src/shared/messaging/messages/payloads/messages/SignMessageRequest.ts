@@ -8,7 +8,7 @@ export type SignMessageRequest = {
     approved: boolean | null;
     origin: string;
     originFavIcon?: string;
-    message: Uint8Array;
+    message?: Uint8Array;
     createdDate: string;
     signature?: SignaturePubkeyPair;
 };

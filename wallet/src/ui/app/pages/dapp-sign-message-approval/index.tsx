@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -66,17 +67,25 @@ export function DappSignMessageApprovalPage() {
         <Loading loading={loading}>
             {signMessageRequest && (
                 <UserApproveContainer
-                    title="Sign Message"
-                    approveTitle="Sign Message"
+                    approveTitle="Sign"
                     rejectTitle="Reject"
                     origin={signMessageRequest.origin}
                     originFavIcon={signMessageRequest.originFavIcon}
                     onSubmit={handleOnSubmit}
                 >
-                    <h4 className={st.title}>Message</h4>
-                    <pre className={st.message}>
+                    <div className={st.card}>
+                        <div className={st.content}>
+                            <h2>Sign Message Request</h2>
+                        </div>
+                    </div>
+                    <div className={st.tabs}>
+                        <button type="button" className={cl(st.tab, st.active)}>
+                            Message Contents
+                        </button>
+                    </div>
+                    <div className={st.message}>
                         {signMessageRequest.message}
-                    </pre>
+                    </div>
                 </UserApproveContainer>
             )}
         </Loading>

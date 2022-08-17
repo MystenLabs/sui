@@ -11,12 +11,12 @@ import type { ContentScriptConnection } from './connections/ContentScriptConnect
 import type { SignMessageRequest } from '_payloads/messages/SignMessageRequest';
 import type { SignMessageRequestResponse } from '_payloads/messages/ui/SignMessageRequestResponse';
 
-const MESSAGES_STORE_KEY = 'messages';
+const MESSAGES_STORE_KEY = 'sign-messages';
 
 function openSignMessageWindow(signMessageRequestID: string) {
     return new Window(
         Browser.runtime.getURL('ui.html') +
-            `#/sign-message-approval/${encodeURIComponent(
+            `#/dapp/sign-message-approval/${encodeURIComponent(
                 signMessageRequestID
             )}`
     );
@@ -52,7 +52,7 @@ class Messages {
             race(popUpClose, signMessageResponseMessage).pipe(
                 take(1),
                 map(async (response) => {
-                    if (response) {
+                    if (response && response.approved) {
                         const { approved, signature } = response;
                         signMessageRequest.approved = approved;
                         signMessageRequest.signature = signature;
@@ -71,18 +71,21 @@ class Messages {
     }
 
     private createSignMessageRequest(
-        message: Uint8Array,
+        message: Uint8Array | undefined,
         origin: string,
         originFavIcon?: string
     ): SignMessageRequest {
-        return {
-            id: uuidV4(),
-            approved: null,
-            origin,
-            originFavIcon,
-            message,
-            createdDate: new Date().toISOString(),
-        };
+        if (message !== undefined) {
+            return {
+                id: uuidV4(),
+                approved: null,
+                origin,
+                originFavIcon,
+                message,
+                createdDate: new Date().toISOString(),
+            };
+        }
+        throw new Error('Message must be defined.');
     }
 
     public async getSignMessageRequests(): Promise<

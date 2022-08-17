@@ -49,9 +49,13 @@ export const respondToSignMessageRequest = createAsyncThunk<
         if (approved) {
             const signer = api.getSignerInstance(keypairVault.getKeyPair());
             try {
-                signMessageResult = await signer.signData(
-                    new Base64DataBuffer(signMessageRequest.message)
-                );
+                if (signMessageRequest.message) {
+                    signMessageResult = await signer.signData(
+                        new Base64DataBuffer(signMessageRequest.message)
+                    );
+                } else {
+                    throw new Error('Message must be defined.');
+                }
             } catch (e) {
                 signMessageResultError = (e as Error).message;
             }
