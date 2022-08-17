@@ -15,8 +15,8 @@ See instructions for all of the above at:
 https://docs.sui.io
 
 In the coming months, we will release:
-2. A public testnet that onboards a diverse set of non-Mysten authorities to the network
-3. A public mainnet with real assets and production applications!
+1. A public testnet that onboards a diverse set of non-Mysten authorities to the network
+1. A public mainnet with real assets and production applications!
 
 A more fine-grained description of the upcoming features and improvements to the Sui codebase follows.
 
