@@ -113,7 +113,7 @@ let scenario = &mut test_scenario::begin(&owner);
 ```
 >:books: Note there is a "`;`" after "`}`". `;` is required to sequence a series of expressions, and even the block `{ ... }` is an expression! Refer to the [Move book](https://move-book.com/syntax-basics/expression-and-scope.html) for a detailed explanation.
 
-Now, that is after the first transaction completes (**and only after the first transaction completes**) account `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
+Now, after the first transaction completes (**and only after the first transaction completes**), account `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
 ```rust
 let not_owner = @0x2;
 // Check that not_owner does not own the just-created ColorObject.
