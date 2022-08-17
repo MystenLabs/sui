@@ -5,6 +5,7 @@ import cl from 'classnames';
 import { memo, useCallback, useMemo, useState } from 'react';
 
 import AccountAddress from '_components/account-address';
+import ExternalLink from '_components/external-link';
 import Icon from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
@@ -57,18 +58,9 @@ function UserApproveContainer({
                     ) : null}
                     <div className={st.host}>{parsedOrigin.host}</div>
                     <AccountAddress showLink={false} />
-                    <a
-                        className={st.origin}
-                        href={origin}
-                        target="_blank"
-                        rel="noreferrer"
-                    >
+                    <ExternalLink href={origin} className={st.origin}>
                         {origin}
-                        <Icon
-                            icon="arrow-up-right"
-                            className={st.externalLink}
-                        />
-                    </a>
+                    </ExternalLink>
                 </div>
                 <div className={st.children}>{children}</div>
             </div>
