@@ -64,6 +64,23 @@ const App = () => {
                     element={<Navigate to="/tokens" replace={true} />}
                 />
             </Route>
+
+            <Route
+                path="/dapp/*"
+                element={
+                    <HomePage disableNavigation limitToPopUpSize={false} />
+                }
+            >
+                <Route
+                    path="connect/:requestID"
+                    element={<SiteConnectPage />}
+                />
+                <Route
+                    path="tx-approval/:txID"
+                    element={<DappTxApprovalPage />}
+                />
+            </Route>
+
             <Route path="welcome" element={<WelcomePage />} />
             <Route path="/initialize" element={<InitializePage />}>
                 <Route path="select" element={<SelectPage />} />
@@ -71,8 +88,6 @@ const App = () => {
                 <Route path="import" element={<ImportPage />} />
                 <Route path="backup" element={<BackupPage />} />
             </Route>
-            <Route path="/connect/:requestID" element={<SiteConnectPage />} />
-            <Route path="/tx-approval/:txID" element={<DappTxApprovalPage />} />
         </Routes>
     );
 };
