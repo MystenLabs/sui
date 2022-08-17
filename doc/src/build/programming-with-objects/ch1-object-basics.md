@@ -101,7 +101,7 @@ An instance of the `Scenario` struct contains a per-address object pool emulatin
 
 Now let's try to write a test for the `create` function. Tests that need to use `test_scenario` must be in a separate module, either under a `tests` directory, or in the same file but in a module annotated with `#[test_only]`. This is because `test_scenario` itself is a test-only module, and can be used only by test-only modules.
 
-First of all, we begin the test with a hardcoded test address, which will also give us a transaction context as if we are sending the transaction started with `test_scenarion::begin` from this address. We then call the `create` function, which should create a `ColorObject` and transfer it to the test address:
+First of all, we begin the test with a hardcoded test address, which will also give us a transaction context as if we are sending the transaction started with `test_scenario::begin` from this address. We then call the `create` function, which should create a `ColorObject` and transfer it to the test address:
 ```rust
 let owner = @0x1;
 // Create a ColorObject and transfer it to @owner.
