@@ -245,7 +245,7 @@ impl GatewayState<NetworkAuthorityClient> {
         let committee = Self::make_committee(config)?;
         let default_registry = Registry::new();
         let prometheus_registry = prometheus_registry.unwrap_or(&default_registry);
-        let network_metrics = NetworkAuthorityClientMetrics::new(&prometheus_registry);
+        let network_metrics = NetworkAuthorityClientMetrics::new(prometheus_registry);
         let authority_clients = Self::make_authority_clients(config, network_metrics);
 
         Ok(Arc::new(GatewayState::new(

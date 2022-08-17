@@ -70,6 +70,7 @@ pub struct GossipMetrics {
     pub wait_for_finality_latency_sec: Histogram,
     pub total_attempts_cert_downloads: IntCounter,
     pub total_successful_attempts_cert_downloads: IntCounter,
+    pub follower_stream_duration: Histogram,
 }
 
 impl GossipMetrics {
@@ -101,7 +102,7 @@ impl GossipMetrics {
             .unwrap(),
             wait_for_finality_latency_sec: register_histogram_with_registry!(
                 "gossip_wait_for_finality_latency_sec",
-                "Latency histogram for gossip/node sync process to wait for txs to become final, in sec",
+                "Latency histogram for gossip/node sync process to wait for txs to become final, in seconds",
                 registry,
             )
             .unwrap(),
@@ -117,6 +118,12 @@ impl GossipMetrics {
                 registry,
             )
             .unwrap(),
+            follower_stream_duration: register_histogram_with_registry!(
+                "follower_stream_duration",
+                "Latency histogram of the duration of the follower streams to peers, in seconds",
+                registry,
+            )
+                .unwrap(),
         }
     }
 
@@ -263,8 +270,8 @@ async fn wait_for_one_gossip_task_to_finish<A>(
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    let (finished_name, _result) = gossip_tasks.select_next_some().await;
-    if let Err(err) = _result {
+    let (finished_name, result) = gossip_tasks.select_next_some().await;
+    if let Err(err) = result {
         active_authority.set_failure_backoff(finished_name).await;
         active_authority.state.metrics.gossip_task_error_count.inc();
         error!(peer = ?finished_name, "Peer returned error: {:?}", err);
@@ -466,6 +473,8 @@ where
         let mut last_seq_in_cur_batch: TxSequenceNumber = 0;
         let mut streamx = Box::pin(self.client.handle_batch_stream(req).await?);
         let metrics = handler.get_metrics();
+        let mut timer = metrics.follower_stream_duration.start_timer();
+
         loop {
             tokio::select! {
                 _ = &mut timeout => {
@@ -513,6 +522,8 @@ where
 
                         // The stream has closed, re-request:
                         None => {
+                            timer.stop_and_record();
+                            timer = metrics.follower_stream_duration.start_timer();
                             info!(peer = ?self.peer_name, ?latest_seq, "Gossip stream was closed. Restarting");
                             self.client.metrics_seq_number_to_handle_batch_stream.set(latest_seq.unwrap_or_default() as i64);
                             self.client.metrics_total_times_reconnect_follower_stream.inc();
@@ -545,6 +556,7 @@ where
                 }
             };
         }
+        timer.stop_and_record();
         Ok(())
     }
 }
