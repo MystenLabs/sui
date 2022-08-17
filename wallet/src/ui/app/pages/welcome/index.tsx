@@ -1,8 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { Link } from 'react-router-dom';
 
+import BottomMenuLayout, { Content } from '_app/shared/bottom-menu-layout';
+import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import Logo from '_components/logo';
 import { useInitializedGuard } from '_hooks';
@@ -13,14 +16,31 @@ import st from './Welcome.module.scss';
 const WelcomePage = () => {
     const checkingInitialized = useInitializedGuard(false);
     return (
-        <PageLayout forceFullscreen={true}>
+        <PageLayout forceFullscreen={false}>
             <Loading loading={checkingInitialized}>
                 <div className={st.container}>
-                    <Logo size="bigger" />
-                    <h1 className={st.title}>Welcome to Sui Wallet</h1>
-                    <Link to="/initialize/select" className="btn">
-                        Get Started
-                    </Link>
+                    <BottomMenuLayout>
+                        <Content className={st.welcome}>
+                            <Logo
+                                size="bigger"
+                                className={st.suiBlue}
+                                txt={true}
+                            />
+                            <h1 className={st.title}>Welcome to Sui Wallet</h1>
+                        </Content>
+                        <div className={st.getStarted}>
+                            <Link
+                                to="/initialize/select"
+                                className={cl(st.cta, 'btn', 'primary')}
+                            >
+                                Get Started
+                                <Icon
+                                    icon={SuiIcons.ArrowLeft}
+                                    className={cl(st.arrowLeft)}
+                                />
+                            </Link>
+                        </div>
+                    </BottomMenuLayout>
                 </div>
             </Loading>
         </PageLayout>
