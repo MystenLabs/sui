@@ -137,7 +137,7 @@ describe('End-to-end Tests', () => {
         });
     });
 
-    describe.only('PaginationWrapper has buttons', () => {
+    describe('PaginationWrapper has buttons', () => {
         const paginationContext = '#NFTSection';
 
         it('to go to the next page', () => {
@@ -228,15 +228,22 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             cy.visit(`/addresses/${address}`);
 
-            cy.get('#groupCollection tr:first-child td')
-                .first()
+            // TODO: Add test IDs to make this selection less structural
+            cy.get('#groupCollection > div:nth-child(2) > div:nth-child(1) > div')
+                .children()
+                .eq(1)
                 .contains('0x2::USD::USD')
+                .next()
+                .contains('2')
                 .next()
                 .contains('9007199254740993');
 
-            cy.get('#groupCollection tr:last-child td')
-                .first()
+            cy.get('#groupCollection > div:nth-child(2) > div:nth-child(2) > div')
+                .children()
+                .eq(1)
                 .contains('SUI')
+                .next()
+                .contains('2')
                 .next()
                 .contains('200');
         });
