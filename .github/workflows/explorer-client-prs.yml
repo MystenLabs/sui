@@ -28,7 +28,7 @@ jobs:
           cache: "yarn"
           cache-dependency-path: ./explorer/client/yarn.lock
       - name: Install sdk dependencies
-        run: pnpm --filter @mysten/sui.js install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Build SDK
         run: pnpm --filter @mysten/sui.js build
       - name: Install yarn dependencies
