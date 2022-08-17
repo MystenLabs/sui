@@ -55,7 +55,7 @@ function generateMutatedCreated(tx: TxDataProps) {
         ...(tx.mutated?.length
             ? [
                   {
-                      label: 'Mutated',
+                      label: 'Updated',
                       links: tx.mutated.map((obj) => obj.objectId),
                   },
               ]
