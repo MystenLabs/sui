@@ -6,8 +6,9 @@
 use super::*;
 
 use async_trait::async_trait;
-use serde_json::Value;
+use serde_json::{json, Value};
 use sqlx::ConnectOptions;
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use strum::{EnumMessage, IntoEnumIterator};
@@ -73,16 +74,16 @@ enum EventsTableColumns {
     Sender,
     /// recipient TEXT
     Recipient,
-    /// object_version INTEGER
-    ObjectVersion,
-    /// transfer_type INTEGER
-    TransferType,
+    // /// object_version INTEGER
+    // ObjectVersion,
+    // /// transfer_type INTEGER
+    // TransferType,
 }
 
 const SQL_INSERT_TX: &str =
     "INSERT INTO events (timestamp, seq_num, checkpoint, tx_digest, event_type, \
     package_id, module_name, object_id, fields, type_struct, contents, sender,  \
-    recipient, object_version, transfer_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    recipient) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 const INDEXED_COLUMNS: &[&str] = &[
     "timestamp",
@@ -90,7 +91,13 @@ const INDEXED_COLUMNS: &[&str] = &[
     "event_type",
     "package_id",
     "module_name",
+    "sender",
+    "recipient",
+    "object_id",
 ];
+
+const TRANSFER_TYPE_KEY: &str = "transfer_type";
+const OBJECT_VERSION_KEY: &str = "object_version";
 
 impl SqlEventStore {
     /// Creates a new SQLite in-memory database, mostly for testing
@@ -200,19 +207,56 @@ impl SqlEventStore {
         }
     }
 
-    fn try_extract_transfer_type(row: &SqliteRow) -> Result<Option<TransferType>, SuiError> {
-        let ordinal: Option<u16> = row.get(EventsTableColumns::TransferType as usize);
-        match ordinal {
-            Some(ordinal) => Ok(Some(Event::transfer_type_from_ordinal(ordinal as usize)?)),
-            None => Ok(None),
+    fn try_extract_extra_fields(row: &SqliteRow) -> Result<Value, SuiError> {
+        let fields: String = row.get(EventsTableColumns::Fields as usize);
+        serde_json::from_str(&fields).map_err(|_e| SuiError::ExtraFieldFailedToDeserialize {
+            error: format!("Error parsing event extra fields: {fields}"),
+        })
+    }
+
+    fn try_extract_transfer_type_from_json_value(
+        json_value: &Value,
+    ) -> Result<Option<TransferType>, SuiError> {
+        match &json_value[TRANSFER_TYPE_KEY] {
+            serde_json::Value::Null => Ok(None),
+            serde_json::Value::String(transfer_type_ordinal) => {
+                let transfer_type_ordinal =
+                    transfer_type_ordinal.parse::<usize>().map_err(|_e| {
+                        SuiError::ExtraFieldFailedToDeserialize {
+                            error: format!(
+                                "Error parsing transfer type from extra fields: {json_value}"
+                            ),
+                        }
+                    })?;
+                Ok(Some(Event::transfer_type_from_ordinal(
+                    transfer_type_ordinal,
+                )?))
+            }
+            _ => Err(SuiError::ExtraFieldFailedToDeserialize {
+                error: format!("Error parsing transfer type from extra fields: {json_value}"),
+            }),
         }
     }
 
-    fn try_extract_object_version(row: &SqliteRow) -> Option<SequenceNumber> {
-        // sqlite does not support u64 so we store it as i64
-        let index = EventsTableColumns::ObjectVersion as usize;
-        let object_version: Option<i64> = row.get(index);
-        object_version.map(|ov| SequenceNumber::from_u64(ov as u64))
+    fn try_extract_object_version_from_json_value(
+        json_value: &Value,
+    ) -> Result<Option<SequenceNumber>, SuiError> {
+        match &json_value[OBJECT_VERSION_KEY] {
+            serde_json::Value::Null => Ok(None),
+            serde_json::Value::String(object_version) => {
+                let object_version = object_version.parse::<u64>().map_err(|_e| {
+                    SuiError::ExtraFieldFailedToDeserialize {
+                        error: format!(
+                            "Error parsing object version from extra fields: {json_value}"
+                        ),
+                    }
+                })?;
+                Ok(Some(SequenceNumber::from_u64(object_version)))
+            }
+            _ => Err(SuiError::ExtraFieldFailedToDeserialize {
+                error: format!("Error parsing object version from extra fields: {json_value}"),
+            }),
+        }
     }
 
     fn try_extract_sender_address(row: &SqliteRow) -> Result<Option<SuiAddress>, SuiError> {
@@ -246,12 +290,26 @@ impl SqlEventStore {
         }
     }
 
-    // Adds JSON fields for items not in any of the standard columns in table definition, eg for MOVE events.
+    // convert an event's extra fields into a stringifed JSON Value.
     fn event_to_json(event: &EventEnvelope) -> String {
+        // For move events, we only store the move_struct_json_value
         if let Some(json_value) = &event.move_struct_json_value {
             json_value.to_string()
         } else {
-            String::new()
+            // For non-move-events, extract whatever we can to rebuild the event
+            // and store them
+            let mut fields = BTreeMap::new();
+            if let Some(transfer_type_u16) = event
+                .event
+                .transfer_type()
+                .map(|tt| TransferTypeVariants::from(tt) as u16)
+            {
+                fields.insert(TRANSFER_TYPE_KEY, transfer_type_u16.to_string());
+            };
+            if let Some(object_version) = event.event.object_version().map(|ov| ov.value()) {
+                fields.insert(OBJECT_VERSION_KEY, object_version.to_string());
+            }
+            json!(fields).to_string()
         }
     }
 
@@ -313,9 +371,16 @@ impl From<SqliteRow> for StoredEvent {
             .expect("Error converting stored sender address bytes to SuiAddress");
         let recipient = SqlEventStore::try_extract_recipient(&row)
             .expect("Error converting stored recipient address to Owner");
-        let object_version = SqlEventStore::try_extract_object_version(&row);
-        let transfer_type = SqlEventStore::try_extract_transfer_type(&row)
-            .expect("Error converting stored transfer type to TransferType");
+
+        let fields_json_value = SqlEventStore::try_extract_extra_fields(&row)
+            .expect("Error parsed extra fields into JSON value");
+
+        let object_version =
+            SqlEventStore::try_extract_object_version_from_json_value(&fields_json_value)
+                .expect("Error converting stored object version to SequenceNumber");
+        let transfer_type =
+            SqlEventStore::try_extract_transfer_type_from_json_value(&fields_json_value)
+                .expect("Error converting stored transfer type to TransferType");
 
         StoredEvent {
             timestamp: timestamp as u64,
@@ -390,14 +455,6 @@ impl EventStore for SqlEventStore {
             let insert_tx_q = sqlx::query(SQL_INSERT_TX).persistent(true);
             let event_type = EventType::from(&event.event);
 
-            let transfer_type = event
-                .event
-                .transfer_type()
-                .map(|tt| TransferTypeVariants::from(tt) as u16);
-
-            // sqlite does not support u64, so we have to cast it to i64 before storing
-            let object_version = event.event.object_version().map(|ov| ov.value() as i64);
-
             let sender = event.event.sender().map(|sender| sender.to_vec());
             let type_struct = event.event.move_event_struct_tag().map(|st| st.to_string());
 
@@ -416,8 +473,6 @@ impl EventStore for SqlEventStore {
                 .bind(event.event.move_event_contents())
                 .bind(sender)
                 .bind(event.event.recipient_serialized()?)
-                .bind(object_version)
-                .bind(transfer_type)
                 .execute(&self.pool)
                 .await
                 .map_err(convert_sqlx_err)?;
@@ -844,8 +899,7 @@ mod tests {
 
         test_queried_event_vs_test_envelope(&transfer_event, target_event, 1);
 
-        // expect empty fields
-        assert_eq!(transfer_event.fields.len(), 0);
+        assert_eq!(transfer_event.fields.len(), 2);
 
         Ok(())
     }
@@ -909,6 +963,7 @@ mod tests {
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4], 1);
+        assert_eq!(queried_events[0].fields.len(), 2);
 
         // Query with wrong time range, return 0 events
         let queried_events = db
@@ -922,6 +977,7 @@ mod tests {
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[1], 1);
+        assert_eq!(queried_events[0].fields.len(), 0);
 
         // Query NewObject Event
         let queried_events = db
@@ -929,6 +985,7 @@ mod tests {
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[0], 1);
+        assert_eq!(queried_events[0].fields.len(), 0);
 
         // Query DeleteObject Event
         let queried_events = db
@@ -936,6 +993,7 @@ mod tests {
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[3], 1);
+        assert_eq!(queried_events[0].fields.len(), 0);
 
         // Query Move Event
         let queried_events = db
@@ -943,6 +1001,7 @@ mod tests {
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5], 1);
+        assert_ne!(queried_events[0].fields.len(), 0);
 
         Ok(())
     }
@@ -1198,7 +1257,7 @@ mod tests {
     }
 
     // Test we can retrieve u64 object version (aka sequence number) values
-    // stored as i64 in sqlite
+    // stored as string in sqlite
     #[tokio::test]
     async fn test_eventstore_u64_conversion() -> Result<(), SuiError> {
         telemetry_subscribers::init_for_testing();
