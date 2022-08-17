@@ -9,7 +9,7 @@ the Sui client and execute commands through its command line
 interface, *Sui CLI*.
 
 Note, this is an advanced option and an alternative to simply connecting to our public
-[Devnet](../explore/devnet.md). Use Devnet to build upon Sui. Use the Sui CLI here to
+[Devnet](../build/devnet.md). Use Devnet to build upon Sui. Use the Sui CLI here to
 [contribute](../contribute/index.md) to Sui itself.
 
 ## Set up

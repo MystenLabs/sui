@@ -14,7 +14,7 @@ Follow the instructions to [install Sui binaries](install.md).
 ### Connect to Sui network
 
 #### Remote Devnet
-Simply [connect to the Sui Devnet](../explore/devnet.md) to start making RPC calls to our remote server, build on top of Sui.
+Simply [connect to the Sui Devnet](../build/devnet.md) to start making RPC calls to our remote server, build on top of Sui.
 
 #### Local Sui Network
 Alternatively, to [contribute](../contribute/index.md) to Sui itself, you may follow the instructions to [create](cli-client.md#genesis) and [start](cli-client.md#starting-the-network) a local Sui network.
