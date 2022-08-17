@@ -149,15 +149,26 @@ impl Cluster for LocalNewCluster {
         // Let the faucet account hold 1000 gas objects on genesis
         let genesis_config = GenesisConfig::custom_genesis(4, 1, 1000);
 
-        let port = options.gateway_address.as_ref().map(|addr| {
+        let gateway_port = options.gateway_address.as_ref().map(|addr| {
             addr.parse::<SocketAddr>()
                 .expect("Unable to parse gateway address")
                 .port()
         });
 
-        let mut test_network = start_rpc_test_network_with_fullnode(Some(genesis_config), 1, port)
-            .await
-            .unwrap_or_else(|e| panic!("Failed to start a local network, e: {e}"));
+        let fullnode_port = options.fullnode_address.as_ref().map(|addr| {
+            addr.parse::<SocketAddr>()
+                .expect("Unable to parse fullnode address")
+                .port()
+        });
+
+        let mut test_network = start_rpc_test_network_with_fullnode(
+            Some(genesis_config),
+            1,
+            gateway_port,
+            fullnode_port,
+        )
+        .await
+        .unwrap_or_else(|e| panic!("Failed to start a local network, e: {e}"));
 
         // Use the wealthy account for faucet
         let faucet_key = test_network
