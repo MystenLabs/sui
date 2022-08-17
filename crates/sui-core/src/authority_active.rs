@@ -321,9 +321,11 @@ where
     }
 
     pub async fn respawn_node_sync_process(&self) {
+        info!("respawn_node_sync_process");
         let mut lock_guard = self.node_sync_process.lock().await;
 
         if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {
+            info!("sending cancel request to node sync task");
             let _ = cancel_sender
                 .send(())
                 .tap_err(|_| warn!("failed to request cancellation of node sync task"));
@@ -331,10 +333,12 @@ where
             pin_mut!(join_handle);
 
             // try to join the task, then kill it if it doesn't cancel on its own.
+            info!("waiting node sync task to exit");
             if timeout(Duration::from_secs(1), &mut join_handle)
                 .await
                 .is_err()
             {
+                info!("aborting node sync task");
                 join_handle.abort();
             }
         }
@@ -346,6 +350,7 @@ where
         let node_sync_handle = self.node_sync_handle();
         let node_sync_state = self.node_sync_state.clone();
 
+        info!("spawning node sync task");
         let join_handle = tokio::task::spawn(async move {
             node_sync_process(
                 committee,
