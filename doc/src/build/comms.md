@@ -2,7 +2,7 @@
 title: Connect and Communicate with the Sui Network
 ---
 
-Now that you have [installed Sui](install.md), [connected to Devnet](../explore/devnet.md), and started to [create smart contracts in Move](move/index.md) and [program Sui objects](programming-with-objects/index.md), it's time to let your apps talk to Sui.
+Now that you have [installed Sui](install.md), [connected to Devnet](../build/devnet.md), and started to [create smart contracts in Move](move/index.md) and [program Sui objects](programming-with-objects/index.md), it's time to let your apps talk to Sui.
 
 The pages in this section provide various options for communicating with Sui:
 

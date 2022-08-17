@@ -4,7 +4,7 @@ title: Connect to Sui Devnet
 
 Welcome to the Sui Devnet. We are hosting a public Devnet for the community to experiment with our tech and help to shape the future of the Sui network. It exists to gain operational experience with the Sui software in a public setting prior to our Mainnet launch.
 
-To instead [contribute](../contribute/index.md) to Sui itself, you may experiment with the advanced [Sui CLI client](../build/cli-client.md) at the command line.
+To instead [contribute](../contribute/index.md) to Sui itself, you may experiment with the advanced [Sui CLI client](../contribute/cli-client.md) at the command line.
 
 
 The Sui Devnet currently consists of:
@@ -19,7 +19,7 @@ Many improvements to the Sui Devnet are underway, such as the ability to run ful
 
 We provide the following tools for users to interact with the Sui Devnet:
 
-* The [Sui Wallet command line interface (CLI)](../build/cli-client.md)
+* The [Sui Wallet command line interface (CLI)](../contribute/cli-client.md)
     * create and manage your private keys
     * submit transactions for creating example NFTs
     * call and publish Move modules
