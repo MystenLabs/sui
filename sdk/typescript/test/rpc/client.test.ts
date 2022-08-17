@@ -22,32 +22,64 @@ const EXAMPLE_OBJECT: SuiObjectInfo = {
   previousTransaction: '4RJfkN9SgLYdb0LqxBHh6lfRPicQ8FLJgzi9w2COcTo=',
 };
 
+const OBJECT_WITH_WRONG_SCHEMA = {
+  objectId: '8dc6a6f70564e29a01c7293a9c03818fda2d049f',
+  version: 0,
+  digest: 'CI8Sf+t3Xrt5h9ENlmyR8bbMVfg6df3vSDc08Gbk9/g=',
+  owner: {
+    AddressOwner1: '0x215592226abfec8d03fbbeb8b30eb0d2129c94b0',
+  },
+  type: 'moveObject',
+  previousTransaction: '4RJfkN9SgLYdb0LqxBHh6lfRPicQ8FLJgzi9w2COcTo=',
+};
+
 describe('JSON-RPC Client', () => {
   const server = mockServer;
   let client: JsonRpcClient;
 
-  beforeEach(() => {
+  beforeAll(() => {
     server.start(MOCK_PORT);
     client = new JsonRpcClient(MOCK_ENDPOINT);
   });
 
-  afterEach(() => {
+  afterAll(() => {
     server.stop();
   });
 
   it('requestWithType', async () => {
+    await requestAndValidate(EXAMPLE_OBJECT, false);
+  });
+
+  it('requestWithType should throw on type mismatch', async () => {
+    await setMockValue(OBJECT_WITH_WRONG_SCHEMA);
+    expect(fetchOwnedObject(false)).rejects.toThrowError();
+  });
+
+  it('requestWithType should succeed if skipDataValidation if true', async () => {
+    await requestAndValidate(OBJECT_WITH_WRONG_SCHEMA, true);
+  });
+
+  async function requestAndValidate(mockValue: any, skipValidation: boolean) {
+    await setMockValue(mockValue);
+    const resp = await fetchOwnedObject(skipValidation);
+    expect(resp.length).toEqual(1);
+    expect(resp[0]).toEqual(mockValue);
+  }
+
+  async function setMockValue(value: any) {
     await mockRpcResponse({
       method: 'sui_getOwnedObjectsByAddress',
       params: [],
-      value: [EXAMPLE_OBJECT],
+      value: [value],
     });
+  }
 
-    const resp = await client.requestWithType(
+  async function fetchOwnedObject(skipValidation: boolean): Promise<any> {
+    return await client.requestWithType(
       'sui_getOwnedObjectsByAddress',
       [],
-      isGetOwnedObjectsResponse
+      isGetOwnedObjectsResponse,
+      skipValidation
     );
-    expect(resp.length).toEqual(1);
-    expect(resp[0]).toEqual(EXAMPLE_OBJECT);
-  });
+  }
 });

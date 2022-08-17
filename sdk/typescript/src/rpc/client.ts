@@ -83,18 +83,19 @@ export class JsonRpcClient {
   async requestWithType<T>(
     method: string,
     args: Array<any>,
-    isT: (val: any) => val is T
+    isT: (val: any) => val is T,
+    skipDataValidation: boolean = false
   ): Promise<T> {
     const response = await this.request(method, args);
     if (isErrorResponse(response)) {
       throw new Error(`RPC Error: ${response.error.message}`);
     } else if (isValidResponse(response)) {
-      if (isT(response.result)) return response.result;
-        throw new Error(
-          `RPC Error: result not of expected type. Result received was: ${JSON.stringify(
-            response.result
-          )}`
-        );
+      if (skipDataValidation || isT(response.result)) return response.result;
+      throw new Error(
+        `RPC Error: result not of expected type. Result received was: ${JSON.stringify(
+          response.result
+        )}`
+      );
     }
     throw new Error(`Unexpected RPC Response: ${response}`);
   }
@@ -113,12 +114,15 @@ export class JsonRpcClient {
 
   async batchRequestWithType<T>(
     requests: RpcParams[],
-    isT: (val: any) => val is T
+    isT: (val: any) => val is T,
+    skipDataValidation: boolean = false
   ): Promise<T[]> {
     const responses = await this.batchRequest(requests);
     // TODO: supports other error modes such as throw or return
     const validResponses = responses.filter(
-      (response: any) => isValidResponse(response) && isT(response.result)
+      (response: any) =>
+        isValidResponse(response) &&
+        (skipDataValidation || isT(response.result))
     );
 
     return validResponses.map((response: ValidResponse) => response.result);
