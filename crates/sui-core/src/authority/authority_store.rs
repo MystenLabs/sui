@@ -105,23 +105,17 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         cert: &'b CertifiedTransaction,
     ) -> SuiResult<CertTxGuard<'a>> {
         let digest = cert.digest();
-        match self.wal.begin_tx(digest, cert).await? {
-            Some(g) => Ok(g),
-            None => {
-                // If the tx previously errored out without committing, we return an
-                // error now as well. We could retry the transaction on behalf of
-                // the client right now, but:
-                //
-                // a) This keeps the normal and recovery paths separated.
-                // b) If a client finds a way to create a tx that always fails here,
-                //    allowing them to retry it on command could be a DoS channel.
-                let err = "previous attempt of transaction resulted in an error - \
-                          transaction will be retried offline"
-                    .to_owned();
-                debug!(?digest, "{}", err);
-                Err(SuiError::ErrorWhileProcessingConfirmationTransaction { err })
-            }
+        let guard = self.wal.begin_tx(digest, cert).await?;
+
+        if guard.retry_num() > MAX_TX_RECOVERY_RETRY {
+            // If the tx has been retried too many times, it could be a poison pill, and we should
+            // prevent the client from continually retrying it.
+            let err = "tx has exceeded the maximum retry limit for transient errors".to_owned();
+            debug!(?digest, "{}", err);
+            return Err(SuiError::ErrorWhileProcessingConfirmationTransaction { err });
         }
+
+        Ok(guard)
     }
 
     /// Acquire the lock for a tx without writing to the WAL.
@@ -340,6 +334,26 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let mut result = Vec::new();
         for id in objects {
             result.push(self.get_object(id)?);
+        }
+        Ok(result)
+    }
+
+    /// Get many objects by their (id, version number) key.
+    pub fn get_input_objects(
+        &self,
+        objects: &[InputObjectKind],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
+        let mut result = Vec::new();
+        for kind in objects {
+            let obj = match kind {
+                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject(id) => {
+                    self.get_object(id)?
+                }
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    self.get_object_by_key(&objref.0, objref.1)?
+                }
+            };
+            result.push(obj);
         }
         Ok(result)
     }

@@ -98,7 +98,7 @@ pub mod authority_notifier;
 pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
-const MAX_TX_RECOVERY_RETRY: u32 = 3;
+pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
@@ -1201,13 +1201,11 @@ impl AuthorityState {
         let mut limit = limit.unwrap_or(usize::max_value());
         while limit > 0 {
             limit -= 1;
-            if let Some(tx_guard) = self.database.wal.read_one_recoverable_tx().await {
+            if let Some((cert, tx_guard)) = self.database.wal.read_one_recoverable_tx().await? {
                 let digest = tx_guard.tx_id();
                 debug!(?digest, "replaying failed cert from log");
 
-                let (cert, retry_count) = self.database.wal.get_tx_data(&tx_guard)?;
-
-                if retry_count >= MAX_TX_RECOVERY_RETRY {
+                if tx_guard.retry_num() >= MAX_TX_RECOVERY_RETRY {
                     // This tx will be only partially executed, however the store will be in a safe
                     // state. We will simply never reach eventual consistency for this TX.
                     // TODO: Should we revert the tx entirely? I'm not sure the effort is

@@ -19,6 +19,10 @@ use rand::{
 };
 use std::collections::BTreeMap;
 use std::fs;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
 use sui_types::{
@@ -31,6 +35,8 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
+
+use tracing::info;
 
 pub enum TestCallArg {
     Object(ObjectID),
@@ -1004,6 +1010,121 @@ async fn test_handle_confirmation_transaction_ok() {
             .count(),
         2
     );
+}
+
+struct LimitedPoll<F: Future> {
+    inner: Pin<Box<F>>,
+    count: u64,
+    limit: u64,
+}
+
+impl<F: Future> LimitedPoll<F> {
+    fn new(limit: u64, inner: F) -> Self {
+        Self {
+            inner: Box::pin(inner),
+            count: 0,
+            limit,
+        }
+    }
+}
+
+impl<F: Future> Future for LimitedPoll<F> {
+    type Output = Option<F::Output>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.count >= self.limit {
+            return Poll::Ready(None);
+        }
+        self.count += 1;
+        match self.inner.as_mut().poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(val) => Poll::Ready(Some(val)),
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_handle_certificate_interrupted_retry() {
+    telemetry_subscribers::init_for_testing();
+
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let gas_object_id = ObjectID::random();
+
+    // We repeatedly timeout certs after a variety of delays, using LimitedPoll to ensure that we
+    // interrupt the future at every point at which it is possible to be interrupted.
+    // At the time of writing this comment, there is only 1 point at which the future is
+    // interruptible (probably when it contacts the lock service), so the loop below runs
+    // only once. However, if more .await points are added later, this test will automatically
+    // exercise them.
+    let delays: Vec<_> = (1..100).collect();
+
+    let mut objects: Vec<_> = delays
+        .iter()
+        .map(|_| (sender, ObjectID::random()))
+        .collect();
+    objects.push((sender, gas_object_id));
+
+    let authority_state = Arc::new(init_state_with_ids(objects.clone()).await);
+
+    let mut interrupted_count = 0;
+    for (limit, (_, object_id)) in delays.iter().zip(objects) {
+        info!("Testing with poll limit {}", limit);
+        let object = authority_state
+            .get_object(&object_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let gas_object = authority_state
+            .get_object(&gas_object_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let certified_transfer_transaction = init_certified_transfer_transaction(
+            sender,
+            &sender_key,
+            recipient,
+            object.compute_object_reference(),
+            gas_object.compute_object_reference(),
+            &authority_state,
+        );
+
+        let clone1 = certified_transfer_transaction.clone();
+        let state1 = authority_state.clone();
+
+        let limited_fut = Box::pin(LimitedPoll::new(*limit, async move {
+            state1.handle_certificate(clone1).await.unwrap();
+        }));
+
+        let res = limited_fut.await;
+        if res.is_some() {
+            info!(?limit, "limit was high enough that future completed");
+            break;
+        }
+        interrupted_count += 1;
+
+        let g = authority_state
+            .database
+            .acquire_tx_guard(&certified_transfer_transaction)
+            .await
+            .unwrap();
+
+        // assert that the tx was dropped mid-stream due to the timeout.
+        assert_eq!(g.retry_num(), 1);
+        std::mem::drop(g);
+
+        // Now run the tx to completion
+        let info = authority_state
+            .handle_certificate(certified_transfer_transaction.clone())
+            .await
+            .unwrap();
+
+        assert!(info.signed_effects.is_some());
+    }
+
+    // ensure we tested something
+    assert!(interrupted_count >= 1);
 }
 
 #[tokio::test]

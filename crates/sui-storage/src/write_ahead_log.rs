@@ -22,6 +22,8 @@ use typed_store::{rocks::DBMap, traits::Map};
 
 use tracing::{debug, error, instrument, trace, warn};
 
+use tap::TapFallible;
+
 /// TxGuard is a handle on an in-progress transaction.
 ///
 /// TxGuard must implement Drop, which should mark the tx as unfinished
@@ -33,6 +35,9 @@ pub trait TxGuard<'a>: Drop {
 
     /// Mark the TX as completed.
     fn commit_tx(self);
+
+    /// How many times has this tx previously been attempted?
+    fn retry_num(&self) -> u32;
 
     /// Mark the TX as abandoned/aborted but not requiring any recovery or rollback.
     fn release(self);
@@ -66,7 +71,7 @@ pub trait WriteAheadLog<'a, C> {
         &'a self,
         tx: &'b TransactionDigest,
         cert: &'b C,
-    ) -> SuiResult<Option<Self::Guard>>;
+    ) -> SuiResult<Self::Guard>;
 
     #[must_use]
     async fn acquire_lock(&'a self, tx: &TransactionDigest) -> Self::LockGuard;
@@ -82,16 +87,12 @@ pub trait WriteAheadLog<'a, C> {
     ///
     /// Recoverable TXes will remain in the on-disk log until they are explicitly committed.
     #[must_use]
-    async fn read_one_recoverable_tx(&'a self) -> Option<Self::Guard>;
-
-    /// Get the data associated with a given digest - returns an error if no such transaction is
-    /// currently open.
-    /// Requires a TxGuard to prevent asking about transactions that aren't in the log.
-    fn get_tx_data(&self, g: &Self::Guard) -> SuiResult<(C, u32)>;
+    async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, Self::Guard)>>;
 }
 
 pub struct DBTxGuard<'a, C: Serialize + DeserializeOwned + Debug> {
     tx: TransactionDigest,
+    retry_num: u32,
     _mutex_guard: LockGuard,
     wal: &'a DBWriteAheadLog<C>,
     dead: bool,
@@ -101,12 +102,28 @@ impl<'a, C> DBTxGuard<'a, C>
 where
     C: Serialize + DeserializeOwned + Debug,
 {
-    fn new(tx: &TransactionDigest, _mutex_guard: LockGuard, wal: &'a DBWriteAheadLog<C>) -> Self {
+    fn new(
+        tx: &TransactionDigest,
+        retry_num: u32,
+        _mutex_guard: LockGuard,
+        wal: &'a DBWriteAheadLog<C>,
+    ) -> Self {
         Self {
             tx: *tx,
+            retry_num,
             _mutex_guard,
             wal,
             dead: false,
+        }
+    }
+
+    fn commit_tx_impl(mut self, is_commit: bool) {
+        self.dead = true;
+        // Note: if commit_tx fails, the tx will still be in the log and will re-enter
+        // recoverable_txes when we restart. But the tx is fully processed at that point, so at
+        // worst we will do a needless retry.
+        if let Err(e) = self.wal.commit_tx(&self.tx, is_commit) {
+            warn!(digest = ?self.tx, "Couldn't write tx completion to WriteAheadLog: {}", e);
         }
     }
 }
@@ -119,19 +136,17 @@ where
         self.tx
     }
 
-    fn commit_tx(mut self) {
-        self.dead = true;
-        // Note: if commit_tx fails, the tx will still be in the log and will re-enter
-        // recoverable_txes when we restart. But the tx is fully processed at that point, so at
-        // worst we will do a needless retry.
-        if let Err(e) = self.wal.commit_tx(&self.tx) {
-            warn!(digest = ?self.tx, "Couldn't write tx completion to WriteAheadLog: {}", e);
-        }
+    fn retry_num(&self) -> u32 {
+        self.retry_num
+    }
+
+    fn commit_tx(self) {
+        self.commit_tx_impl(true)
     }
 
     // Identical to commit_tx (for now), but we provide different names to make intent clearer.
     fn release(self) {
-        self.commit_tx()
+        self.commit_tx_impl(false)
     }
 }
 
@@ -194,8 +209,10 @@ where
         }
     }
 
-    fn commit_tx(&self, tx: &TransactionDigest) -> SuiResult {
-        debug!(digest = ?tx, "committing tx");
+    fn commit_tx(&self, tx: &TransactionDigest, is_commit: bool) -> SuiResult {
+        if is_commit {
+            debug!(digest = ?tx, "committing tx");
+        }
         let write_batch = self.tables.log.batch();
         let write_batch = write_batch.delete_batch(&self.tables.log, std::iter::once(tx))?;
         let write_batch =
@@ -203,12 +220,17 @@ where
         write_batch.write().map_err(SuiError::from)
     }
 
-    fn increment_retry_count(&self, tx: &TransactionDigest) -> SuiResult {
-        let cur = self.tables.retry_count.get(tx)?.unwrap_or(0);
+    fn get_retry_count(&self, tx: &TransactionDigest) -> SuiResult<u32> {
+        Ok(self.tables.retry_count.get(tx)?.unwrap_or(0))
+    }
+
+    fn increment_retry_count(&self, tx: &TransactionDigest) -> SuiResult<u32> {
+        let retry_count = self.get_retry_count(tx)? + 1;
         self.tables
             .retry_count
-            .insert(tx, &(cur + 1))
-            .map_err(SuiError::from)
+            .insert(tx, &retry_count)
+            .map_err(SuiError::from)?;
+        Ok(retry_count)
     }
 
     fn implicit_drop_tx(&self, tx: &TransactionDigest) {
@@ -222,23 +244,7 @@ where
         // hold it across an .await - unwrap okay because we should crash if a mutex is
         // poisoned.
         let recoverable_txes = &mut self.recoverable_txes.lock().unwrap();
-
-        while let Some(tx) = recoverable_txes.pop() {
-            if let Err(e) = self.increment_retry_count(&tx) {
-                // Note that this does not remove the tx from the log, so we will find it again
-                // next time we restart. But we will never retry a tx that we can't increment the
-                // retry count for.
-                error!(digest = ?tx,
-                       "Failed to increment retry count for recovered tx. \
-                       refusing to return it to avoid possible infinite \
-                       crash loop. Error: {}", e);
-                continue;
-            } else {
-                return Some(tx);
-            }
-        }
-
-        None
+        recoverable_txes.pop()
     }
 }
 
@@ -256,24 +262,23 @@ where
         &'a self,
         tx: &'b TransactionDigest,
         cert: &'b C,
-    ) -> SuiResult<Option<DBTxGuard<'a, C>>> {
+    ) -> SuiResult<DBTxGuard<'a, C>> {
         let mutex_guard = self.mutex_table.acquire_lock(*tx).await;
         trace!(digest = ?tx, "acquired tx lock");
 
-        if self.tables.log.contains_key(tx)? {
-            // A concurrent tx will have held the mutex guard until it finished. If the tx is
-            // committed it is removed from the log. This means that if the tx is still in the
-            // log, it was dropped (errored out) and not committed. Return None to indicate
-            // that the caller does not hold a guard on this tx and cannot proceed.
-            //
-            // (The dropped tx must be retried later by calling read_one_recoverable_tx() and
-            // obtaining a TxGuard).
-            return Ok(None);
-        }
+        let retry_count = if self.tables.log.contains_key(tx)? {
+            self.increment_retry_count(tx).tap_err(|e| {
+                error!(digest = ?tx,
+                       "Failed to increment retry count tx. \
+                       Refusing to return tx guard to avoid possible infinite \
+                       crash loop. Error: {}", e)
+            })?
+        } else {
+            self.tables.log.insert(tx, cert)?;
+            0
+        };
 
-        self.tables.log.insert(tx, cert)?;
-
-        Ok(Some(DBTxGuard::new(tx, mutex_guard, self)))
+        Ok(DBTxGuard::new(tx, retry_count, mutex_guard, self))
     }
 
     #[must_use]
@@ -284,26 +289,22 @@ where
     }
 
     #[must_use]
-    async fn read_one_recoverable_tx(&'a self) -> Option<DBTxGuard<'a, C>> {
+    async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, DBTxGuard<'a, C>)>> {
         let candidate = self.pop_one_tx();
 
         match candidate {
-            None => None,
+            None => Ok(None),
             Some(digest) => {
-                let guard = self.mutex_table.acquire_lock(digest).await;
-                Some(DBTxGuard::new(&digest, guard, self))
+                let cert = self
+                    .tables
+                    .log
+                    .get(&digest)?
+                    .ok_or(SuiError::TransactionNotFound { digest })?;
+
+                let guard = self.begin_tx(&digest, &cert).await?;
+                Ok(Some((cert, guard)))
             }
         }
-    }
-
-    fn get_tx_data(&self, g: &DBTxGuard<'a, C>) -> SuiResult<(C, u32)> {
-        let cert = self
-            .tables
-            .log
-            .get(&g.tx)?
-            .ok_or(SuiError::TransactionNotFound { digest: g.tx })?;
-        let attempt_num = self.tables.retry_count.get(&g.tx)?.unwrap_or(0);
-        Ok((cert, attempt_num))
     }
 }
 
@@ -315,7 +316,7 @@ mod tests {
     use sui_types::base_types::TransactionDigest;
 
     async fn recover_queue_empty(log: &DBWriteAheadLog<u32>) -> bool {
-        log.read_one_recoverable_tx().await.is_none()
+        log.read_one_recoverable_tx().await.unwrap().is_none()
     }
 
     #[tokio::test]
@@ -330,18 +331,18 @@ mod tests {
             let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
             assert!(recover_queue_empty(&log).await);
 
-            let tx1 = log.begin_tx(&tx1_id, &1).await?.unwrap();
+            let tx1 = log.begin_tx(&tx1_id, &1).await.unwrap();
             tx1.commit_tx();
 
-            let tx2 = log.begin_tx(&tx2_id, &2).await?.unwrap();
+            let tx2 = log.begin_tx(&tx2_id, &2).await.unwrap();
             tx2.commit_tx();
 
             {
-                let _tx3 = log.begin_tx(&tx3_id, &3).await?.unwrap();
+                let _tx3 = log.begin_tx(&tx3_id, &3).await.unwrap();
                 // implicit drop
             }
 
-            let r = log.read_one_recoverable_tx().await.unwrap();
+            let (_, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
             // tx3 in recoverable txes because we dropped the guard.
             assert_eq!(r.tx_id(), tx3_id);
 
@@ -354,9 +355,9 @@ mod tests {
             let log: DBWriteAheadLog<u32> = DBWriteAheadLog::new(working_dir.path().to_path_buf());
 
             // recoverable txes still there
-            let r = log.read_one_recoverable_tx().await.unwrap();
+            let (_, r) = log.read_one_recoverable_tx().await.unwrap().unwrap();
             assert_eq!(r.tx_id(), tx3_id);
-            assert_eq!(log.get_tx_data(&r).unwrap(), (3, 2 /* retry */));
+            assert_eq!(r.retry_num(), 2);
             assert!(recover_queue_empty(&log).await);
 
             // commit the recoverable tx
