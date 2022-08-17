@@ -14,7 +14,6 @@ import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';
 
 import styles from './TxResultHeader.module.css';
 
-// Show the <- Go Back button
 // Display the transaction Type (e.g. TransferCoin,TransferObject, etc.)
 // Display the transaction ID and Copy button and Status (e.g. Pending, Success, Failure)
 type TxResultState = {
