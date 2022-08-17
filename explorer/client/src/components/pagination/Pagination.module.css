@@ -43,7 +43,7 @@ button.gone {
 
 /* RHS stats styling */
 .rhs > div {
-    @apply capitalize text-sui-grey-75 text-sm mx-auto mt-2 sm:mt-0;
+    @apply capitalize text-sui-grey-75 text-sm mx-auto sm:mr-[12px] mt-2 sm:mt-0;
 }
 
 .rhs {
