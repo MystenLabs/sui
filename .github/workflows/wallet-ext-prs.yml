@@ -20,15 +20,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7
       - name: Install Nodejs
         uses: actions/setup-node@v3
         with:
           node-version: "16"
           cache: 'npm'
           cache-dependency-path: ./wallet/package-lock.json
-      - name: Build sdk
-        working-directory: ./sdk/typescript
-        run: yarn
+      - name: Install sdk dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build SDK
+        run: pnpm --filter @mysten/sui.js build
       - name: Install dependencies
         working-directory: ${{env.working-directory}}
         run: npm ci

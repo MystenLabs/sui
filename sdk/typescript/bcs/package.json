@@ -11,7 +11,8 @@
   "scripts": {
     "prepublish": "tsdx lint && tsdx build",
     "build": "tsdx build",
-    "test": "tsdx test"
+    "test": "tsdx test",
+    "prepare": "tsdx build"
   },
   "repository": {
     "type": "git",

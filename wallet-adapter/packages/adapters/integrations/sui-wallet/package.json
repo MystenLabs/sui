@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@mysten/sui.js": "^0.8.0",
+    "@mysten/sui.js": "workspace:*",
     "sui-base-wallet-adapter": "workspace:*"
   },
   "devDependencies": {

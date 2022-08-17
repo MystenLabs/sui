@@ -1,5 +1,12 @@
 {
   "name": "sui-monorepo",
   "private": true,
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "pnpm": {
+    "overrides": {
+      "node-notifier": "10.0.0",
+      "jest": "27",
+      "ts-jest": "27"
+    }
+  }
 }

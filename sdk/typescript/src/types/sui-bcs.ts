@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { bcs, decodeStr, encodeStr } from '@mysten/bcs';
+import { Buffer } from 'buffer';
 import { SuiObjectRef } from './objects';
 
 bcs

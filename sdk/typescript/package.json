@@ -11,8 +11,8 @@
     "node": ">=10"
   },
   "scripts": {
-    "start": "./type_guards.sh; tsdx watch",
-    "build": "./type_guards.sh; tsdx build",
+    "start": "node ./type_guards.mjs; tsdx watch",
+    "build": "node ./type_guards.mjs; tsdx build",
     "doc": "typedoc",
     "test": "tsdx test",
     "lint": "tsdx lint",
@@ -54,12 +54,14 @@
   "devDependencies": {
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/bn.js": "^5.1.0",
+    "@types/jest": "^27.5.2",
     "@types/lossless-json": "^1.0.1",
-    "@types/mocha": "^9.1.0",
     "husky": "^7.0.4",
     "mockttp": "^2.7.0",
     "size-limit": "^7.0.8",
     "ts-auto-guard": "^2.4.1",
+    "ts-node": "^10.9.1",
+    "tsconfig": "^7.0.0",
     "tsdx": "^0.14.1",
     "tslib": "^2.3.1",
     "typedoc": "^0.22.17",
@@ -74,8 +76,5 @@
     "js-sha3": "^0.8.0",
     "lossless-json": "^1.0.5",
     "tweetnacl": "^1.0.3"
-  },
-  "resolutions": {
-    "tsdx/**/node-notifier": "10.0.0"
   }
 }
