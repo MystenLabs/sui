@@ -1,6 +1,6 @@
 {
-  "name": "@sui-wallet-adapter/mock-wallet",
-  "version": "1.0.0",
+  "name": "@mysten/wallet-adapter-mock-wallet",
+  "version": "0.0.0",
   "description": "",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -12,7 +12,7 @@
   "license": "ISC",
   "dependencies": {
     "@mysten/sui.js": "workspace:*",
-    "sui-base-wallet-adapter": "workspace:*"
+    "@mysten/base-wallet-adapter": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^4.7.4"

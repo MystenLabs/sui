@@ -1,6 +1,6 @@
 {
-  "name": "@sui-wallet-adapter/all-wallets",
-  "version": "1.0.0",
+  "name": "@mysten/wallet-adapter-all-wallets",
+  "version": "0.0.0",
   "description": "Module exporting all integrated wallets for Sui Wallet Adapter",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
@@ -11,8 +11,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@sui-wallet-adapter/mock-wallet": "workspace:*",
-    "@sui-wallet-adapter/sui-wallet": "workspace:*"
+    "@mysten/wallet-adapter-mock-wallet": "workspace:*",
+    "@mysten/wallet-adapter-sui-wallet": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^4.7.4"
