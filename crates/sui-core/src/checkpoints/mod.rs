@@ -25,7 +25,7 @@ use sui_types::{
     messages_checkpoint::{
         AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest,
         CheckpointFragment, CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary,
-        SignedCheckpointSummary,
+        SignedCheckpointSummary, VerifiedCheckpointFragment,
     },
 };
 use tap::TapFallible;
@@ -141,7 +141,7 @@ pub struct CheckpointStoreTables {
     /// to allow us to provide a list in order they were received. We only store
     /// the fragments that are relevant to the next checkpoints. Past checkpoints
     /// already contain all relevant information from previous checkpoints.
-    pub fragments: DBMap<ExecutionIndices, CheckpointFragment>,
+    pub fragments: DBMap<ExecutionIndices, VerifiedCheckpointFragment>,
 
     /// A single entry table to store locals.
     #[default_options_override_fn = "locals_table_default_config"]
@@ -559,7 +559,7 @@ impl CheckpointStore {
         committee: &Committee,
     ) -> SuiResult {
         // Check structure is correct and signatures verify
-        fragment.verify(committee)?;
+        fragment.verify_signatures(committee)?;
 
         // Does the fragment event suggest it is for the current round?
         let next_checkpoint_seq = self.next_checkpoint();
@@ -623,7 +623,7 @@ impl CheckpointStore {
     pub fn handle_internal_fragment(
         &mut self,
         seq: ExecutionIndices,
-        fragment: CheckpointFragment,
+        fragment: VerifiedCheckpointFragment,
         handle_pending_cert: impl PendCertificateForExecution,
         committee: &Committee,
     ) -> SuiResult {
@@ -639,9 +639,8 @@ impl CheckpointStore {
         // TODO: We should not schedule a cert if it has already been executed.
         handle_pending_cert.add_pending_certificates(
             fragment
-                .certs
-                .iter()
-                .map(|(digest, cert)| (digest.transaction, Some(cert.clone())))
+                .certs()
+                .map(|(digest, cert)| (digest.transaction, Some(cert)))
                 .collect(),
         )?;
 

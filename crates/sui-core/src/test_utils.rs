@@ -11,7 +11,9 @@ use sui_types::{
     base_types::{dbg_addr, ObjectID, TransactionDigest},
     batch::UpdateItem,
     crypto::{get_key_pair, AccountKeyPair, Signature},
-    messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData},
+    messages::{
+        BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData, VerifiedTransaction,
+    },
     object::Object,
 };
 
@@ -86,7 +88,7 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
 
 // Creates a fake sender-signed transaction for testing. This transaction will
 // not actually work.
-pub fn create_fake_transaction() -> Transaction {
+pub fn create_fake_transaction() -> VerifiedTransaction {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
@@ -105,8 +107,9 @@ pub fn create_fake_transaction() -> Transaction {
 pub fn to_sender_signed_transaction(
     data: TransactionData,
     signer: &dyn Signer<Signature>,
-) -> Transaction {
+) -> VerifiedTransaction {
     let signature = Signature::new_temp(&data.to_bytes(), signer);
     // let signature = Signature::new_secure(&data, Intent::default(), signer).unwrap();
-    Transaction::new(data, signature)
+    let tx = Transaction::new(data, signature);
+    VerifiedTransaction::new_unchecked(tx)
 }

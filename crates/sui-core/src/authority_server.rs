@@ -97,7 +97,6 @@ impl AuthorityServer {
         let metrics = ConsensusAdapterMetrics::new_test();
         let consensus_adapter = ConsensusAdapter::new(
             consensus_address,
-            state.clone_committee(),
             tx_consensus_listener,
             Duration::from_secs(20),
             metrics,
@@ -300,7 +299,6 @@ impl ValidatorService {
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
             consensus_config.address().to_owned(),
-            state.clone_committee(),
             tx_consensus_listener.clone(),
             timeout,
             ca_metrics.clone(),
@@ -340,7 +338,7 @@ impl ValidatorService {
         request: tonic::Request<Transaction>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let mut transaction = request.into_inner();
+        let transaction = request.into_inner();
         let is_consensus_tx = transaction.contains_shared_object();
 
         let _metrics_guard = start_timer(if is_consensus_tx {
@@ -350,12 +348,10 @@ impl ValidatorService {
         });
         let tx_verif_metrics_guard = start_timer(metrics.tx_verification_latency.clone());
 
-        transaction
+        let transaction = transaction
             .verify()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         drop(tx_verif_metrics_guard);
-        // TODO This is really really bad, we should have different types for signature-verified transactions
-        transaction.is_verified = true;
 
         let tx_digest = transaction.digest();
 
@@ -372,7 +368,7 @@ impl ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(info))
+        Ok(tonic::Response::new(info.into()))
     }
 
     async fn handle_certificate(
@@ -381,7 +377,7 @@ impl ValidatorService {
         request: tonic::Request<CertifiedTransaction>,
         metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let mut certificate = request.into_inner();
+        let certificate = request.into_inner();
         let is_consensus_tx = certificate.contains_shared_object();
 
         let _metrics_guard = start_timer(if is_consensus_tx {
@@ -397,18 +393,15 @@ impl ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
-            return Ok(tonic::Response::new(response));
+            return Ok(tonic::Response::new(response.into()));
         }
 
         // 2) Verify cert signatures
         let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
-
-        certificate
+        let certificate = certificate
             .verify(&state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
         drop(cert_verif_metrics_guard);
-        // TODO This is really really bad, we should have different types for signature verified transactions
-        certificate.is_verified = true;
 
         // 3) If the validator is already halted, we stop here, to avoid
         // sending the transaction to consensus.
@@ -481,7 +474,7 @@ impl ValidatorService {
                     return Err(tonic::Status::internal(e.to_string()));
                 }
                 Ok(response) => {
-                    return Ok(tonic::Response::new(response));
+                    return Ok(tonic::Response::new(response.into()));
                 }
             }
         }
@@ -548,7 +541,7 @@ impl Validator for ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(response))
+        Ok(tonic::Response::new(response.into()))
     }
 
     async fn transaction_info(
@@ -563,7 +556,7 @@ impl Validator for ValidatorService {
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
-        Ok(tonic::Response::new(response))
+        Ok(tonic::Response::new(response.into()))
     }
 
     type FollowTxStreamStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;

@@ -159,10 +159,12 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         let signature =
             Signature::from_bytes(&[&*flag, &*signature.to_vec()?, &pub_key.to_vec()?].concat())
                 .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(data, signature);
+        let txn = Transaction::new(data, signature)
+            .verify()
+            .map_err(|e| anyhow!(e))?;
         let txn_digest = *txn.digest();
 
-        Ok(self.state.dry_run_transaction(&txn, txn_digest).await?)
+        Ok(self.state.dry_run_transaction(txn, txn_digest).await?)
     }
 
     async fn get_normalized_move_modules_by_package(

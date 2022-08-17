@@ -18,13 +18,13 @@ use crate::authority_client::AuthorityAPI;
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     CertifiedTransaction, CertifiedTransactionEffects, QuorumDriverRequest,
-    QuorumDriverRequestType, QuorumDriverResponse, Transaction,
+    QuorumDriverRequestType, QuorumDriverResponse, VerifiedTransaction,
 };
 
 const TASK_QUEUE_SIZE: usize = 5000;
 
 pub enum QuorumTask {
-    ProcessTransaction(Transaction),
+    ProcessTransaction(VerifiedTransaction),
     ProcessCertificate(CertifiedTransaction),
 }
 
@@ -138,7 +138,7 @@ where
 
     async fn execute_transaction_immediate_return(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
     ) -> SuiResult<QuorumDriverResponse> {
         self.task_sender
             .send(QuorumTask::ProcessTransaction(transaction))
@@ -151,7 +151,7 @@ where
 
     async fn execute_transaction_wait_for_tx_cert(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
     ) -> SuiResult<QuorumDriverResponse> {
         let certificate = self
             .process_transaction(transaction)
@@ -168,7 +168,7 @@ where
 
     async fn execute_transaction_wait_for_effects_cert(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
     ) -> SuiResult<QuorumDriverResponse> {
         let certificate = self
             .process_transaction(transaction)
@@ -183,7 +183,7 @@ where
 
     pub async fn process_transaction(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
     ) -> SuiResult<CertifiedTransaction> {
         let tx_digest = *transaction.digest();
         self.validators

@@ -123,7 +123,11 @@ async fn test_move_call() {
         gas_object.compute_object_reference(),
     );
 
-    let effects = gateway.execute_transaction(tx).await.unwrap().effects;
+    let effects = gateway
+        .execute_transaction(tx.into_inner())
+        .await
+        .unwrap()
+        .effects;
     assert!(effects.status.is_ok());
     assert_eq!(effects.mutated.len(), 1);
     assert_eq!(effects.created.len(), 1);
@@ -443,7 +447,11 @@ async fn test_public_transfer_object_with_retry() {
         .fail_after_handle_confirmation = false;
 
     // Retry transaction, and this time it should succeed.
-    let effects = gateway.execute_transaction(tx).await.unwrap().effects;
+    let effects = gateway
+        .execute_transaction(tx.into_inner())
+        .await
+        .unwrap()
+        .effects;
     let oref = effects.mutated_excluding_gas().next().unwrap();
     let updated_obj_ref = &oref.reference;
     let new_owner = &oref.owner;

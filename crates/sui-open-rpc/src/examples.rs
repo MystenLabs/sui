@@ -433,7 +433,7 @@ impl RpcExampleProvider {
 
         let tx = to_sender_signed_transaction(data, &kp);
         let tx1 = tx.clone();
-        let signature = tx.signed_data.tx_signature;
+        let signature = tx.into_inner().signed_data.tx_signature;
 
         let tx_digest = tx1.digest();
         let sui_event = SuiEvent::TransferObject {

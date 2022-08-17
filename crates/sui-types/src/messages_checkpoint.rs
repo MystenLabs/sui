@@ -10,7 +10,7 @@ use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::gas::GasCostSummary;
-use crate::messages::CertifiedTransaction;
+use crate::messages::{CertifiedTransaction, VerifiedCertificate};
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::AuthorityName,
@@ -622,8 +622,38 @@ pub struct CheckpointFragment {
     pub certs: BTreeMap<ExecutionDigests, CertifiedTransaction>,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct VerifiedCheckpointFragment(CheckpointFragment);
+
+impl VerifiedCheckpointFragment {
+    /// Escape hatch for when it is too awkward / inefficient to use CheckpointFragment::verify().
+    /// Use carefully!
+    pub fn new_unchecked(fragment: CheckpointFragment) -> Self {
+        Self(fragment)
+    }
+
+    pub fn certs(&self) -> impl Iterator<Item = (&ExecutionDigests, VerifiedCertificate)> {
+        self.0
+            .certs
+            .iter()
+            .map(|(digests, cert)| (digests, VerifiedCertificate::new_unchecked(cert.clone())))
+    }
+}
+
+impl std::ops::Deref for VerifiedCheckpointFragment {
+    type Target = CheckpointFragment;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl CheckpointFragment {
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCheckpointFragment> {
+        self.verify_signatures(committee)?;
+        Ok(VerifiedCheckpointFragment(self))
+    }
+
+    pub fn verify_signatures(&self, committee: &Committee) -> SuiResult {
         fp_ensure!(
             self.proposer.summary.sequence_number == self.other.summary.sequence_number,
             SuiError::from("Proposer and other have inconsistent sequence number")
@@ -658,7 +688,7 @@ impl CheckpointFragment {
             let cert = self.certs.get(digest).ok_or_else(|| {
                 SuiError::from(format!("Missing cert with digest {digest:?}").as_str())
             })?;
-            cert.verify(committee)?;
+            cert.verify_signatures(committee)?;
         }
 
         Ok(())

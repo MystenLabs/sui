@@ -332,7 +332,7 @@ mod test {
     use sui_types::{
         base_types::ObjectID,
         crypto::get_account_key_pair,
-        messages::{ExecutionStatus, Transaction},
+        messages::{ExecutionStatus, VerifiedTransaction},
         object::Object,
     };
     use test_utils::{
@@ -405,7 +405,7 @@ mod test {
 
     async fn execute_transactions(
         aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
-        transactions: &[Transaction],
+        transactions: &[VerifiedTransaction],
     ) {
         for transaction in transactions {
             let (_, effects) = aggregator

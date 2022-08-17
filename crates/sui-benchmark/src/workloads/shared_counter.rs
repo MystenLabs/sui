@@ -11,8 +11,8 @@ use futures::future::join_all;
 use std::{path::PathBuf, sync::Arc};
 use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber, SuiAddress},
-    crypto::{get_key_pair, AccountKeyPair, EmptySignInfo},
-    messages::TransactionEnvelope,
+    crypto::{get_key_pair, AccountKeyPair},
+    messages::VerifiedTransaction,
     object::Owner,
 };
 use test_utils::messages::{make_counter_create_transaction, make_counter_increment_transaction};
@@ -40,7 +40,7 @@ impl Payload for SharedCounterTestPayload {
             keypair: self.keypair.clone(),
         })
     }
-    fn make_transaction(&self) -> TransactionEnvelope<EmptySignInfo> {
+    fn make_transaction(&self) -> VerifiedTransaction {
         make_counter_increment_transaction(
             self.gas.0,
             self.package_ref,

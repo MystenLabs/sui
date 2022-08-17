@@ -518,7 +518,7 @@ struct TransferResult {
     pub authority_state: AuthorityState,
     pub object_id: ObjectID,
     pub gas_object_id: ObjectID,
-    pub response: SuiResult<TransactionInfoResponse>,
+    pub response: SuiResult<VerifiedTransactionInfoResponse>,
 }
 
 async fn execute_transfer(gas_balance: u64, gas_budget: u64, run_confirm: bool) -> TransferResult {

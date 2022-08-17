@@ -21,7 +21,7 @@ use sui_types::sui_serde::Base64;
 use sui_types::{
     crypto,
     crypto::SignableBytes,
-    messages::{Transaction, TransactionData},
+    messages::{Transaction, TransactionData, VerifiedTransaction},
 };
 
 pub struct FullNodeTransactionExecutionApi {
@@ -57,7 +57,7 @@ impl TransactionExecutionApiServer for FullNodeTransactionExecutionApi {
             &[&*flag, &*signature.to_vec()?, &pub_key.to_vec()?].concat(),
         )
         .map_err(|e| anyhow!(e))?;
-        let txn = Transaction::new(data, signature);
+        let txn = VerifiedTransaction::new_unchecked(Transaction::new(data, signature));
         let txn_digest = *txn.digest();
 
         let response = self

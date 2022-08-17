@@ -38,7 +38,7 @@ use sui_json_rpc_types::{
 use sui_transaction_builder::{DataReader, TransactionBuilder};
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
-use sui_types::messages::Transaction;
+use sui_types::messages::VerifiedTransaction;
 use sui_types::query::{Ordering, TransactionQuery};
 use types::base_types::SequenceNumber;
 use types::committee::EpochId;
@@ -393,7 +393,7 @@ impl QuorumDriver {
     /// error is returned from this call.
     pub async fn execute_transaction(
         &self,
-        tx: Transaction,
+        tx: VerifiedTransaction,
         request_type: Option<ExecuteTransactionRequestType>,
     ) -> anyhow::Result<TransactionExecutionResult> {
         Ok(match &*self.api {
@@ -481,7 +481,7 @@ impl QuorumDriver {
             }
             // TODO do we want to support an embedded quorum driver?
             SuiClientApi::Embedded(c) => {
-                let resp = c.execute_transaction(tx).await?;
+                let resp = c.execute_transaction(tx.into_inner()).await?;
                 TransactionExecutionResult {
                     tx_digest: resp.certificate.transaction_digest,
                     tx_cert: Some(resp.certificate),

@@ -38,6 +38,7 @@ use std::fmt::{Display, Formatter};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
+    ops::{Deref, DerefMut},
 };
 use tracing::debug;
 
@@ -780,11 +781,6 @@ pub struct TransactionEnvelope<S> {
     // DO NOT serialize or deserialize from the network or disk.
     #[serde(skip)]
     transaction_digest: OnceCell<TransactionDigest>,
-    // Deserialization sets this to "false"
-    // TODO: is_verified is only set to true in some callsites after verification.
-    // Hence it's not optimal.
-    #[serde(skip)]
-    pub is_verified: bool,
 
     // The packet of data that authorities will sign on. Stores the tx data and the sender signature.
     pub signed_data: SenderSignedData,
@@ -804,27 +800,8 @@ pub struct SenderSignedData {
 }
 
 impl<S> TransactionEnvelope<S> {
-    #[allow(dead_code)]
-    fn add_sender_sig_to_verification_obligation(
-        &self,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
-            return Ok(());
-        }
-
-        self.signed_data
-            .tx_signature
-            .add_to_verification_obligation_or_verify(self.signed_data.data.sender, obligation, idx)
-    }
-
     pub fn verify_sender_signature(&self) -> SuiResult<()> {
-        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
+        if self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
         self.signed_data
@@ -922,6 +899,7 @@ where
 // TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction.
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = TransactionEnvelope<EmptySignInfo>;
+pub type VerifiedTransaction = VerifiedTransactionEnvelope<EmptySignInfo>;
 
 impl Transaction {
     #[cfg(test)]
@@ -933,7 +911,6 @@ impl Transaction {
     pub fn new(data: TransactionData, signature: Signature) -> Self {
         Self {
             transaction_digest: OnceCell::new(),
-            is_verified: false,
             signed_data: SenderSignedData {
                 data,
                 tx_signature: signature,
@@ -942,8 +919,9 @@ impl Transaction {
         }
     }
 
-    pub fn verify(&self) -> Result<(), SuiError> {
-        self.verify_sender_signature()
+    pub fn verify(self) -> SuiResult<VerifiedTransaction> {
+        self.verify_sender_signature()?;
+        Ok(VerifiedTransactionEnvelope::<EmptySignInfo>(self))
     }
 
     pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
@@ -969,25 +947,31 @@ impl PartialEq for Transaction {
 }
 impl Eq for Transaction {}
 
+impl VerifiedTransaction {
+    pub fn new_unchecked(tx: Transaction) -> Self {
+        Self(tx)
+    }
+}
+
 /// A transaction that is signed by a sender and also by an authority.
 pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
 
-impl SignedTransaction {
+pub type VerifiedSignedTransaction = VerifiedTransactionEnvelope<AuthoritySignInfo>;
+
+impl VerifiedSignedTransaction {
     /// Use signing key to create a signed object.
     pub fn new(
         epoch: EpochId,
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        let auth_sign_info =
-            AuthoritySignInfo::new(epoch, &transaction.signed_data, authority, secret);
-        Self {
-            transaction_digest: OnceCell::new(),
-            is_verified: transaction.is_verified,
-            signed_data: transaction.signed_data,
-            auth_sign_info,
-        }
+        Self(SignedTransaction::new(
+            epoch,
+            transaction,
+            authority,
+            secret,
+        ))
     }
 
     pub fn new_change_epoch(
@@ -998,6 +982,51 @@ impl SignedTransaction {
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
+        Self(SignedTransaction::new_change_epoch(
+            next_epoch,
+            storage_charge,
+            computation_charge,
+            storage_rebate,
+            authority,
+            secret,
+        ))
+    }
+
+    pub fn to_transaction(self) -> VerifiedTransaction {
+        let SenderSignedData {
+            data, tx_signature, ..
+        } = self.into_inner().signed_data;
+        // safe because VerifiedSignedTransaction has already passed verification
+        VerifiedTransaction::new_unchecked(Transaction::new(data, tx_signature))
+    }
+}
+
+impl SignedTransaction {
+    /// Use signing key to create a signed object.
+    fn new(
+        epoch: EpochId,
+        transaction: VerifiedTransaction,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> SignedTransaction {
+        let transaction = transaction.into_inner();
+        let auth_sign_info =
+            AuthoritySignInfo::new(epoch, &transaction.signed_data, authority, secret);
+        Self {
+            transaction_digest: OnceCell::new(),
+            signed_data: transaction.signed_data,
+            auth_sign_info,
+        }
+    }
+
+    fn new_change_epoch(
+        next_epoch: EpochId,
+        storage_charge: u64,
+        computation_charge: u64,
+        storage_rebate: u64,
+        authority: AuthorityName,
+        secret: &dyn signature::Signer<AuthoritySignature>,
+    ) -> SignedTransaction {
         let kind = TransactionKind::Single(SingleTransactionKind::ChangeEpoch(ChangeEpoch {
             epoch: next_epoch,
             storage_charge,
@@ -1019,16 +1048,21 @@ impl SignedTransaction {
                 .into(),
         };
         let auth_sign_info = AuthoritySignInfo::new(next_epoch, &signed_data, authority, secret);
+
         Self {
             transaction_digest: OnceCell::new(),
-            is_verified: false,
             signed_data,
             auth_sign_info,
         }
     }
 
     /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedSignedTransaction> {
+        self.verify_signatures(committee)?;
+        Ok(VerifiedTransactionEnvelope::<AuthoritySignInfo>(self))
+    }
+
+    pub fn verify_signatures(&self, committee: &Committee) -> SuiResult {
         self.verify_sender_signature()?;
 
         let mut obligation = VerificationObligation::default();
@@ -1062,9 +1096,69 @@ impl PartialEq for SignedTransaction {
         self.signed_data == other.signed_data && self.auth_sign_info == other.auth_sign_info
     }
 }
+impl Eq for SignedTransaction {}
 
 pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
 pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffects);
+
+// We do allow serialization/deserialization of this type so that we can write verified data to the
+// db and not re-verify it after loading it. However, be careful not to deserialize this type from
+// an untrusted source such as the network!
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VerifiedTransactionEnvelope<T>(TransactionEnvelope<T>);
+
+impl<T> VerifiedTransactionEnvelope<T> {
+    pub fn into_inner(self) -> TransactionEnvelope<T> {
+        self.0
+    }
+}
+
+impl<T> Deref for VerifiedTransactionEnvelope<T> {
+    type Target = TransactionEnvelope<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for VerifiedTransactionEnvelope<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl<T> From<VerifiedTransactionEnvelope<T>> for TransactionEnvelope<T> {
+    fn from(v: VerifiedTransactionEnvelope<T>) -> Self {
+        v.0
+    }
+}
+
+impl<T> PartialEq for VerifiedTransactionEnvelope<T>
+where
+    TransactionEnvelope<T>: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T> Eq for VerifiedTransactionEnvelope<T> where TransactionEnvelope<T>: Eq {}
+
+pub type VerifiedCertificate = VerifiedTransactionEnvelope<AuthorityStrongQuorumSignInfo>;
+
+impl VerifiedCertificate {
+    /// There are some situations (e.g. fragment verification) where its very awkward and/or
+    /// inefficient to obtain verified certificates from calling CertifiedTransaction::verify()
+    /// Use this carefully.
+    pub fn new_unchecked(cert: CertifiedTransaction) -> Self {
+        Self(cert)
+    }
+}
+
+impl Display for VerifiedCertificate {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {
@@ -1171,40 +1265,74 @@ pub struct AccountInfoResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectResponse {
+pub struct ObjectResponse<T = SignedTransaction> {
     /// Value of the requested object in this authority
     pub object: Object,
     /// Transaction the object is locked on in this authority.
     /// None if the object is not currently locked by this authority.
-    pub lock: Option<SignedTransaction>,
+    pub lock: Option<T>,
     /// Schema of the Move value inside this object.
     /// None if the object is a Move package, or the request did not ask for the layout
     pub layout: Option<MoveStructLayout>,
 }
 
+impl From<ObjectResponse<VerifiedSignedTransaction>> for ObjectResponse {
+    fn from(o: ObjectResponse<VerifiedSignedTransaction>) -> Self {
+        let ObjectResponse {
+            object,
+            lock,
+            layout,
+        } = o;
+
+        Self {
+            object,
+            lock: lock.map(|l| l.into()),
+            layout,
+        }
+    }
+}
+
 /// This message provides information about the latest object and its lock
 /// as well as the parent certificate of the object at a specific version.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ObjectInfoResponse {
+pub struct ObjectInfoResponse<TxnT = SignedTransaction, CertT = CertifiedTransaction> {
     /// The certificate that created or mutated the object at a given version.
     /// If no parent certificate was requested the latest certificate concerning
     /// this object is sent. If the parent was requested and not found a error
     /// (ParentNotfound or CertificateNotfound) will be returned.
-    pub parent_certificate: Option<CertifiedTransaction>,
+    pub parent_certificate: Option<CertT>,
     /// The full reference created by the above certificate
     pub requested_object_reference: Option<ObjectRef>,
 
     /// The object and its current lock, returned only if we are requesting
     /// the latest state of an object.
     /// If the object does not exist this is also None.
-    pub object_and_lock: Option<ObjectResponse>,
+    pub object_and_lock: Option<ObjectResponse<TxnT>>,
 }
+
+pub type VerifiedObjectInfoResponse =
+    ObjectInfoResponse<VerifiedSignedTransaction, VerifiedCertificate>;
 
 impl ObjectInfoResponse {
     pub fn object(&self) -> Option<&Object> {
         match &self.object_and_lock {
             Some(ObjectResponse { object, .. }) => Some(object),
             _ => None,
+        }
+    }
+}
+
+impl From<VerifiedObjectInfoResponse> for ObjectInfoResponse {
+    fn from(o: VerifiedObjectInfoResponse) -> Self {
+        let ObjectInfoResponse {
+            parent_certificate,
+            requested_object_reference,
+            object_and_lock,
+        } = o;
+        Self {
+            parent_certificate: parent_certificate.map(|p| p.into()),
+            requested_object_reference,
+            object_and_lock: object_and_lock.map(|o| o.into()),
         }
     }
 }
@@ -1221,14 +1349,35 @@ impl From<TransactionDigest> for TransactionInfoRequest {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionInfoResponse {
+pub struct TransactionInfoResponse<TxnT = SignedTransaction, CertT = CertifiedTransaction> {
     // The signed transaction response to handle_transaction
-    pub signed_transaction: Option<SignedTransaction>,
+    pub signed_transaction: Option<TxnT>,
     // The certificate in case one is available
-    pub certified_transaction: Option<CertifiedTransaction>,
+    pub certified_transaction: Option<CertT>,
     // The effects resulting from a successful execution should
     // contain ObjectRef created, mutated, deleted and events.
     pub signed_effects: Option<SignedTransactionEffects>,
+}
+
+pub type VerifiedTransactionInfoResponse =
+    TransactionInfoResponse<VerifiedSignedTransaction, VerifiedCertificate>;
+
+impl From<VerifiedTransactionInfoResponse> for TransactionInfoResponse {
+    fn from(v: VerifiedTransactionInfoResponse) -> Self {
+        let VerifiedTransactionInfoResponse {
+            signed_transaction,
+            certified_transaction,
+            signed_effects,
+        } = v;
+
+        let certified_transaction = certified_transaction.map(|c| c.into_inner());
+        let signed_transaction = signed_transaction.map(|c| c.into_inner());
+        TransactionInfoResponse {
+            signed_transaction,
+            certified_transaction,
+            signed_effects,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -2021,13 +2170,13 @@ impl From<Vec<Object>> for InputObjects {
 
 impl CertifiedTransaction {
     pub fn new_with_auth_sign_infos(
-        transaction: Transaction,
+        transaction: VerifiedTransaction,
         signatures: Vec<AuthoritySignInfo>,
         committee: &Committee,
     ) -> SuiResult<CertifiedTransaction> {
+        let transaction = transaction.into_inner();
         Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
-            is_verified: false,
             signed_data: transaction.signed_data,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new_from_auth_sign_infos(
                 signatures, committee,
@@ -2035,20 +2184,16 @@ impl CertifiedTransaction {
         })
     }
 
-    pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
+    pub fn to_transaction(self) -> VerifiedTransaction {
+        // safe because CertifiedTransaction can only be constructed from a VerifiedTransaction
+        VerifiedTransaction::new_unchecked(Transaction::new(
+            self.signed_data.data,
+            self.signed_data.tx_signature,
+        ))
     }
 
     /// Verify the certificate.
-    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified {
-            return Ok(());
-        }
-
+    pub fn verify_signatures(&self, committee: &Committee) -> SuiResult {
         // Add the obligation of the sender signature verification.
         self.verify_sender_signature()?;
 
@@ -2059,6 +2204,11 @@ impl CertifiedTransaction {
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
         obligation.verify_all().map(|_| ())
+    }
+
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedCertificate> {
+        self.verify_signatures(committee)?;
+        Ok(VerifiedTransactionEnvelope::<AuthorityStrongQuorumSignInfo>(self))
     }
 
     pub fn epoch(&self) -> EpochId {
@@ -2145,8 +2295,10 @@ impl ConsensusTransaction {
 
     pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
         match &self.kind {
-            ConsensusTransactionKind::UserTransaction(certificate) => certificate.verify(committee),
-            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify(committee),
+            ConsensusTransactionKind::UserTransaction(certificate) => {
+                certificate.verify_signatures(committee)
+            }
+            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify_signatures(committee),
         }
     }
 }
@@ -2161,7 +2313,7 @@ pub enum ExecuteTransactionRequestType {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ExecuteTransactionRequest {
-    pub transaction: Transaction,
+    pub transaction: VerifiedTransaction,
     pub request_type: ExecuteTransactionRequestType,
 }
 
@@ -2194,7 +2346,7 @@ pub enum QuorumDriverRequestType {
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct QuorumDriverRequest {
-    pub transaction: Transaction,
+    pub transaction: VerifiedTransaction,
     pub request_type: QuorumDriverRequestType,
 }
 
@@ -2202,7 +2354,6 @@ pub struct QuorumDriverRequest {
 pub enum QuorumDriverResponse {
     ImmediateReturn,
     TxCert(Box<CertifiedTransaction>),
-    // TODO: Change to CertifiedTransactionEffects eventually.
     EffectsCert(Box<(CertifiedTransaction, CertifiedTransactionEffects)>),
 }
 

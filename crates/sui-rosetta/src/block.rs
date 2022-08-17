@@ -47,7 +47,7 @@ pub async fn transaction(
     let digest = request.transaction_identifier.hash;
     let (cert, effects) = context.state.get_transaction(digest).await?;
     let hash = *cert.digest();
-    let data = cert.signed_data.data;
+    let data = &cert.signed_data.data;
 
     let mut new_coins = vec![];
     for ((id, version, _), _) in &effects.created {
@@ -60,7 +60,7 @@ pub async fn transaction(
         }
     }
 
-    let operations = Operation::from_data_and_effect(&data, &effects, &new_coins)?;
+    let operations = Operation::from_data_and_effect(data, &effects, &new_coins)?;
 
     let transaction = Transaction {
         transaction_identifier: TransactionIdentifier { hash },

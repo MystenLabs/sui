@@ -159,7 +159,6 @@ async fn submit_transaction_to_consensus() {
     // Make a new consensus submitter instance.
     let submitter = ConsensusAdapter::new(
         consensus_address.clone(),
-        committee,
         tx_consensus_listener,
         /* timeout */ Duration::from_secs(5),
         metrics,
@@ -196,6 +195,8 @@ async fn submit_transaction_to_consensus() {
             replier.0.send(result).unwrap();
         }
     });
+
+    let certificate = certificate.verify(&committee).unwrap();
 
     // Submit the transaction and ensure the submitter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).

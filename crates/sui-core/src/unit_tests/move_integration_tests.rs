@@ -1831,7 +1831,7 @@ pub async fn build_and_try_publish_test_package(
     gas_object_id: &ObjectID,
     test_dir: &str,
     gas_budget: u64,
-) -> TransactionInfoResponse {
+) -> VerifiedTransactionInfoResponse {
     let build_config = BuildConfig::default();
     let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     path.push("src/unit_tests/data/");

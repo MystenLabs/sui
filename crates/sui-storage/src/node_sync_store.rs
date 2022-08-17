@@ -10,7 +10,7 @@ use sui_types::{
     batch::TxSequenceNumber,
     committee::StakeUnit,
     error::SuiResult,
-    messages::{CertifiedTransaction, SignedTransactionEffects},
+    messages::{SignedTransactionEffects, VerifiedCertificate},
 };
 
 use typed_store::rocks::DBMap;
@@ -30,7 +30,7 @@ use std::sync::Arc;
 pub struct NodeSyncStore {
     /// Certificates that have been fetched from remote validators, but not sequenced.
     /// Entries are cleared after execution.
-    pending_certs: DBMap<(EpochId, TransactionDigest), CertifiedTransaction>,
+    pending_certs: DBMap<(EpochId, TransactionDigest), VerifiedCertificate>,
 
     /// Verified true effects.
     /// Entries are cleared after execution.
@@ -62,16 +62,13 @@ impl NodeSyncStore {
         Arc::new(NodeSyncStore::open_tables_read_write(db_path, None, None))
     }
 
-    pub fn store_cert(&self, epoch_id: EpochId, cert: &CertifiedTransaction) -> SuiResult {
+    pub fn store_cert(&self, epoch_id: EpochId, cert: &VerifiedCertificate) -> SuiResult {
         Ok(self
             .pending_certs
             .insert(&(epoch_id, *cert.digest()), cert)?)
     }
 
-    pub fn batch_store_certs(
-        &self,
-        certs: impl Iterator<Item = CertifiedTransaction>,
-    ) -> SuiResult {
+    pub fn batch_store_certs(&self, certs: impl Iterator<Item = VerifiedCertificate>) -> SuiResult {
         let batch = self.pending_certs.batch().insert_batch(
             &self.pending_certs,
             certs.map(|cert| ((cert.epoch(), *cert.digest()), cert)),
@@ -94,7 +91,7 @@ impl NodeSyncStore {
         epoch_id: EpochId,
         tx: &TransactionDigest,
     ) -> SuiResult<(
-        Option<CertifiedTransaction>,
+        Option<VerifiedCertificate>,
         Option<SignedTransactionEffects>,
     )> {
         Ok((
@@ -107,7 +104,7 @@ impl NodeSyncStore {
         &self,
         epoch_id: EpochId,
         tx: &TransactionDigest,
-    ) -> SuiResult<Option<CertifiedTransaction>> {
+    ) -> SuiResult<Option<VerifiedCertificate>> {
         Ok(self.pending_certs.get(&(epoch_id, *tx))?)
     }
 

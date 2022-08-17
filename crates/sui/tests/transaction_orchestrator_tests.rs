@@ -10,7 +10,7 @@ use sui_node::SuiNode;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress, TransactionDigest};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    QuorumDriverRequest, QuorumDriverRequestType, Transaction,
+    QuorumDriverRequest, QuorumDriverRequestType, VerifiedTransaction,
 };
 use test_utils::messages::{
     make_counter_increment_transaction_with_wallet_context, make_transactions_with_wallet_context,
@@ -285,7 +285,7 @@ async fn node_does_not_know_txes(node: &SuiNode, digests: &Vec<TransactionDigest
 
 async fn execute_with_orchestrator(
     orchestrator: &TransactiondOrchestrator<NetworkAuthorityClient>,
-    txn: Transaction,
+    txn: VerifiedTransaction,
     request_type: ExecuteTransactionRequestType,
 ) -> ExecuteTransactionResponse {
     let digest = *txn.digest();
