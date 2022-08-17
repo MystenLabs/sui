@@ -204,22 +204,13 @@ describe('End-to-end Tests', () => {
             cy.visit(`/addresses/${address}`);
             cy.get(paginationContext).within(() => {
                 //Back and First buttons are disabled:
-                cy
-                    .get('[data-testid=backBtn]:visible')
-                    .should('be.disabled');
-                cy
-                    .get('[data-testid=firstBtn]:visible')
-                    .should('be.disabled');
+                cy.get('[data-testid=backBtn]:visible').should('be.disabled');
+                cy.get('[data-testid=firstBtn]:visible').should('be.disabled');
 
                 //Next and Last buttons are not disabled:
-                cy
-                    .get('[data-testid=nextBtn]:visible')
-                    .should('be.enabled');
-                cy
-                    .get('[data-testid=lastBtn]:visible')
-                    .should('be.enabled');
+                cy.get('[data-testid=nextBtn]:visible').should('be.enabled');
+                cy.get('[data-testid=lastBtn]:visible').should('be.enabled');
             });
-
         });
     });
 
@@ -229,7 +220,9 @@ describe('End-to-end Tests', () => {
             cy.visit(`/addresses/${address}`);
 
             // TODO: Add test IDs to make this selection less structural
-            cy.get('#groupCollection > div:nth-child(2) > div:nth-child(1) > div')
+            cy.get(
+                '#groupCollection > div:nth-child(2) > div:nth-child(1) > div'
+            )
                 .children()
                 .eq(1)
                 .contains('0x2::USD::USD')
@@ -238,7 +231,9 @@ describe('End-to-end Tests', () => {
                 .next()
                 .contains('9007199254740993');
 
-            cy.get('#groupCollection > div:nth-child(2) > div:nth-child(2) > div')
+            cy.get(
+                '#groupCollection > div:nth-child(2) > div:nth-child(2) > div'
+            )
                 .children()
                 .eq(1)
                 .contains('SUI')
