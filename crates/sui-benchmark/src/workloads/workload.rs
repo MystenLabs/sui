@@ -1,12 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashMap;
-
 use async_trait::async_trait;
+use std::collections::HashMap;
 use sui_core::{
     authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
 };
+use sui_quorum_driver::QuorumDriverMetrics;
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
     crypto::EmptySignInfo,
@@ -52,7 +52,8 @@ pub async fn transfer_sui_for_testing(
         gas.1.get_owner_address().unwrap(),
         keypair,
     );
-    let quorum_driver_handler = QuorumDriverHandler::new(client.clone());
+    let quorum_driver_handler =
+        QuorumDriverHandler::new(client.clone(), QuorumDriverMetrics::new_for_tests());
     let qd = quorum_driver_handler.clone_quorum_driver();
     qd.execute_transaction(ExecuteTransactionRequest {
         transaction: tx.clone(),
@@ -98,7 +99,7 @@ pub async fn submit_transaction(
     transaction: Transaction,
     aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
 ) -> Option<TransactionEffects> {
-    let qd = QuorumDriverHandler::new(aggregator.clone());
+    let qd = QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
     if let ExecuteTransactionResponse::EffectsCert(result) = qd
         .clone_quorum_driver()
         .execute_transaction(ExecuteTransactionRequest {

@@ -7351,6 +7351,8 @@ name = "sui-quorum-driver"
 version = "0.1.0"
 dependencies = [
  "arc-swap",
+ "prometheus",
+ "scopeguard",
  "sui-core",
  "sui-types",
  "tokio",

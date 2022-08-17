@@ -24,6 +24,7 @@ use sui_core::{
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_network::api::ValidatorServer;
+use sui_quorum_driver::QuorumDriverMetrics;
 use sui_quorum_driver::{QuorumDriver, QuorumDriverHandler};
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
@@ -162,7 +163,10 @@ impl SuiNode {
         );
 
         let quorum_driver_handler = if is_full_node {
-            Some(QuorumDriverHandler::new(net.clone()))
+            Some(QuorumDriverHandler::new(
+                net.clone(),
+                QuorumDriverMetrics::new(&prometheus_registry),
+            ))
         } else {
             None
         };
