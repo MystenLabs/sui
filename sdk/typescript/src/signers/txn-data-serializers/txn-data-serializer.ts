@@ -23,7 +23,7 @@ export interface TransferSuiTransaction {
   suiObjectId: ObjectId;
   gasBudget: number;
   recipient: SuiAddress;
-  amount?: number;
+  amount: number | null;
 }
 
 export interface MergeCoinTransaction {

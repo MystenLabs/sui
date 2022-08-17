@@ -57,10 +57,27 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
   }
 
   async newTransferSui(
-    _signerAddress: SuiAddress,
-    _t: TransferSuiTransaction
+    signerAddress: SuiAddress,
+    t: TransferSuiTransaction
   ): Promise<Base64DataBuffer> {
-    throw new Error('Not implemented');
+    try {
+      const tx = {
+        TransferSui: {
+          recipient: t.recipient,
+          amount: t.amount == null ? { None: null } : { Some: t.amount },
+        },
+      };
+      return await this.constructTransactionData(
+        tx,
+        t.suiObjectId,
+        t.gasBudget,
+        signerAddress
+      );
+    } catch (err) {
+      throw new Error(
+        `Error constructing a TransferSui transaction: ${err} with args ${t}`
+      );
+    }
   }
 
   async newMoveCall(

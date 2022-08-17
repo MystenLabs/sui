@@ -62,14 +62,18 @@ bcs.registerStructType('TransferObjectTx', {
 export type TransferSuiTx = {
   TransferSui: {
     recipient: string;
-    amount: number | null;
+    amount: { Some: number } | { None: null };
   };
 };
 
+bcs.registerEnumType('Option<u64>', {
+  None: null,
+  Some: 'u64',
+});
+
 bcs.registerStructType('TransferSuiTx', {
   recipient: 'SuiAddress',
-  // TODO: figure out how to represent Option<u64> field
-  object_ref: 'u64',
+  amount: 'Option<u64>',
 });
 
 /**
@@ -207,12 +211,17 @@ bcs
 
 // ========== TransactionData ===========
 
-export type Transaction = MoveCallTx | PublishTx | TransferObjectTx;
+export type Transaction =
+  | MoveCallTx
+  | PublishTx
+  | TransferObjectTx
+  | TransferSuiTx;
 
 bcs.registerEnumType('Transaction', {
   TransferObject: 'TransferObjectTx',
   Publish: 'PublishTx',
   Call: 'MoveCallTx',
+  TransferSui: 'TransferSuiTx',
 });
 /**
  * Transaction kind - either Batch or Single.
