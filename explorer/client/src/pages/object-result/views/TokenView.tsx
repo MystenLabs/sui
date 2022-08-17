@@ -75,6 +75,18 @@ function TokenView({ data }: { data: DataType }) {
                                 <td>Type</td>
                                 <td>{trimStdLibPrefix(viewedData.objType)}</td>
                             </tr>
+                            {viewedData.tx_digest && (
+                                <tr>
+                                    <td>Module</td>
+                                    <td>{viewedData?.module}</td>
+                                </tr>
+                            )}
+                            {viewedData.tx_digest && (
+                                <tr>
+                                    <td>Package</td>
+                                    <td>{viewedData?.package}</td>
+                                </tr>
+                            )}
 
                             <tr>
                                 <td>Object ID</td>

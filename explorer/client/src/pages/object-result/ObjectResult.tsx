@@ -46,7 +46,9 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
     );
 };
 
-// Get the data for the object ID and address that publishes a Package
+// Get the data for the object ID and either:
+// address that publishes a Package or
+// module and package associated with token
 function getObjectDataWithPackageAddress(objID: string, network: string) {
     return rpc(network)
         .getObject(objID as string)
