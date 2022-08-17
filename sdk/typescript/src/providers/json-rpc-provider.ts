@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Provider } from './provider';
-import { getWebsocketUrl, JsonRpcClient } from '../rpc/client';
+import { JsonRpcClient } from '../rpc/client';
 import {
   isGetObjectDataResponse,
   isGetOwnedObjectsResponse,
@@ -40,6 +40,13 @@ import { Client as WsRpcClient} from 'rpc-websockets';
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
+const httpRegex = new RegExp('^http');
+const portRegex = new RegExp(':[0-9]{1,5}$');
+export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
+  let wsUrl = httpUrl.replace(httpRegex, 'ws');
+  wsUrl = wsUrl.replace(portRegex, '');
+  return `${wsUrl}:${port ?? 9001}`;    // 9001 is full node websocket
+};
 
 enum ConnectionState {
   NotConnected,
@@ -73,6 +80,19 @@ export class JsonRpcProvider extends Provider {
     console.log('client & wsClient', this.client, this.wsClient);
   }
 
+  private onMessage(msg: any): void {
+    console.log('socket message received', msg);
+
+    if(isSubscriptionEvent(msg)) {
+      // call any registered handler for the message's subscription
+      const onMessage = this.activeSubscriptions.get(msg.subscription);
+      if (onMessage) {
+        onMessage(msg.result);
+        console.log(`call onMessage(), subscription ${msg.subscription}`);
+      }
+    }
+  }
+
   private getWsConnection(): WsRpcClient | null {
     console.log('trying websocket connection...');
 
@@ -88,21 +108,9 @@ export class JsonRpcProvider extends Provider {
         });
         this.wsClient.on('open', () => {
           this.wsConnectionState = ConnectionState.Connected;
-
           console.log('ws connection opened');
         });
-        this.wsClient.on('message', (msg: any) => {
-          console.log('socket message received', msg);
-
-          if(isSubscriptionEvent(msg)) {
-            // call any registered handler for the message's subscription
-            const onMessage = this.activeSubscriptions.get(msg.subscription);
-            if (onMessage) {
-              onMessage(msg.result);
-              console.log(`call onMessage(), subscription ${msg.subscription}`);
-            }
-          }
-        });
+        this.wsClient.on('message', this.onMessage);
         return null;
       case ConnectionState.Connecting:
         return null;

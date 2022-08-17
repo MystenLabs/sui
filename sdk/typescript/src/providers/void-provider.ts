@@ -120,7 +120,7 @@ export class VoidProvider extends Provider {
       throw this.newError('subscribeEvent');
   }
 
-  unsubscribeEvent(id: SubscriptionId): boolean {
+  unsubscribeEvent(_id: SubscriptionId): boolean {
     throw this.newError('unsubscribeEvent');
   }
 

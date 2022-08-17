@@ -19,14 +19,6 @@ export type RpcParams = {
   args: Array<any>;
 };
 
-const httpRegex = new RegExp('^http');
-const portRegex = new RegExp(':[0-9]{1,5}$');
-export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
-  let wsUrl = httpUrl.replace(httpRegex, 'ws');
-  wsUrl = wsUrl.replace(portRegex, '');
-  return `${wsUrl}:${port ?? 9001}`;    // 9001 is full node websocket
-};
-
 export class JsonRpcClient {
   private rpcClient: RpcClient;
 
@@ -188,7 +180,3 @@ export type ErrorResponse = {
     data?: any;
   };
 };
-
-export class JsonRpcWebsocketClient {
-
-}
