@@ -13,7 +13,7 @@ interface, *Sui CLI*.
 Follow the instructions to [install Sui binaries](install.md#binaries).
 
 ## Connect to Devnet
-We are hosting a public [Devnet](../build/devnet.md) for the community to
+We are hosting a public [Devnet](../explore/devnet.md) for the community to
 experiment with our  tech and help to shape the future of the Sui network. To
 connect the Sui  client to the Devnet, run the following command:
 ```shell
