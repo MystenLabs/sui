@@ -113,8 +113,8 @@
         "fileName": "build/install"
       },
       {
-        "label": "Use Sui CLI to Start Network",
-        "fileName": "contribute/cli-client"
+        "label": "Connect to Sui Devnet",
+        "fileName": "build/devnet"
       },
       {
         "label": "Create Smart Contracts with Move",
@@ -210,10 +210,6 @@
         "fileName": "explore/wallet-browser"
       },
       {
-        "label": "Devnet",
-        "fileName": "build/devnet"
-      },
-      {
         "label": "Tutorial",
         "fileName": "explore/tutorials"
       },
@@ -238,6 +234,10 @@
       {
         "label": "Frequently Asked Questions",
         "fileName": "contribute/faq"
+      },
+      {
+        "label": "Sui CLI and Local Network",
+        "fileName": "contribute/cli-client"
       },
       {
         "label": "Logging",
