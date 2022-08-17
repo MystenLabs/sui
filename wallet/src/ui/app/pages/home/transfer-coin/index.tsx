@@ -67,6 +67,7 @@ function TransferCoinPage() {
 
     const [sendError, setSendError] = useState<string | null>(null);
     const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
+    const [formData] = useState<FormValues>(initialValues);
 
     const intl = useIntl();
     const validationSchemaStepOne = useMemo(
@@ -93,6 +94,7 @@ function TransferCoinPage() {
         () => createValidationSchemaStepTwo(),
         []
     );
+
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const onHandleSubmit = useCallback(
@@ -132,9 +134,8 @@ function TransferCoinPage() {
             { amount }: FormValues,
             { setSubmitting, setFieldValue }: FormikHelpers<FormValues>
         ) => {
-            setSubmitting(false);
-            setFieldValue('amount', amount);
             setCurrentStep((prev) => prev + 1);
+            setSubmitting(false);
         },
         []
     );
@@ -154,9 +155,9 @@ function TransferCoinPage() {
         return <Navigate to="/" replace={true} />;
     }
 
-    const StepOneForm = coinType && (
+    const StepOneForm = (
         <Formik
-            initialValues={initialValues}
+            initialValues={formData}
             validateOnMount={true}
             validationSchema={validationSchemaStepOne}
             onSubmit={handleNextStep}
@@ -171,24 +172,22 @@ function TransferCoinPage() {
         </Formik>
     );
 
-    const StepTwoForm =
-        (coinType && (
-            <Formik
-                initialValues={initialValues}
-                validateOnMount={true}
-                validationSchema={validationSchemaStepTwo}
-                onSubmit={onHandleSubmit}
-            >
-                <StepTwo
-                    submitError={sendError}
-                    coinBalance={coinBalance.toString()}
-                    coinSymbol={coinSymbol}
-                    coinType={coinType}
-                    onClearSubmitError={handleOnClearSubmitError}
-                />
-            </Formik>
-        )) ||
-        null;
+    const StepTwoForm = (
+        <Formik
+            initialValues={formData}
+            validateOnMount={true}
+            validationSchema={validationSchemaStepTwo}
+            onSubmit={onHandleSubmit}
+        >
+            <StepTwo
+                submitError={sendError}
+                coinBalance={coinBalance.toString()}
+                coinSymbol={coinSymbol}
+                coinType={coinType}
+                onClearSubmitError={handleOnClearSubmitError}
+            />
+        </Formik>
+    );
 
     const steps = [StepOneForm, StepTwoForm];
 

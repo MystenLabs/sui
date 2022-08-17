@@ -104,10 +104,8 @@
 }
 
 .response-card {
-    background-color: colors.$gray-40;
-    border-radius: 10px;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
+    @include utils.receipt-details-bg;
+
     padding: 5px;
 
     .tx-info {
@@ -226,20 +224,6 @@
                 color: colors.$sui-steel-blue;
             }
         }
-    }
-
-    &::after {
-        content: '';
-        background-image: url('_assets/images/nft-detail-bg.png');
-        background-repeat: no-repeat;
-        background-position: center bottom;
-        background-size: 100%;
-        width: 104%;
-        height: 15px;
-        display: flex;
-        left: -5px;
-        top: 12px;
-        position: relative;
     }
 }
 

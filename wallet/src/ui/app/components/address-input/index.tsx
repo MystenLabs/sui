@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
+import { ErrorMessage } from 'formik';
 import { memo, useCallback, useMemo } from 'react';
 import TextareaAutosize from 'react-textarea-autosize';
 
@@ -25,7 +26,7 @@ function AddressInput<FormValues>({
     disabled: forcedDisabled,
     placeholder = '0x...',
     className,
-    form: { isSubmitting, dirty, setFieldValue, isValid },
+    form: { isSubmitting, dirty, setFieldValue, touched, isValid },
     field: { onBlur, name, value },
 }: AddressInputProps<FormValues>) {
     const disabled =
@@ -45,6 +46,7 @@ function AddressInput<FormValues>({
     const clearAddress = useCallback(() => {
         setFieldValue('to', '');
     }, [setFieldValue]);
+
     return (
         <>
             <div
@@ -78,6 +80,9 @@ function AddressInput<FormValues>({
                     )}
                 ></div>
             </div>
+            {touched && (
+                <ErrorMessage className={st.error} name="to" component="div" />
+            )}
             {isValid && formattedValue !== '' && dirty && (
                 <div className={st.validAddress}>
                     <Icon icon={SuiIcons.Checkmark} className={st.checkmark} />

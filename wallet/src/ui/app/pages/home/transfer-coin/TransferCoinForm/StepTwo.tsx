@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
+import { Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 import { useIntl } from 'react-intl';
 
@@ -45,11 +45,14 @@ function StepTwo({
 
     const onClearRef = useRef(onClearSubmitError);
     onClearRef.current = onClearSubmitError;
+
     useEffect(() => {
         onClearRef.current();
     }, [amount, to]);
 
     const totalAmount = parseFloat(amount) + DEFAULT_GAS_BUDGET_FOR_TRANSFER;
+
+    const validAddressBtn = !isValid || to === '' || isSubmitting;
 
     return (
         <Form className={st.container} autoComplete="off" noValidate={true}>
@@ -64,11 +67,6 @@ function StepTwo({
                             component={AddressInput}
                             name="to"
                             className={st.input}
-                        />
-                        <ErrorMessage
-                            className={st.error}
-                            name="to"
-                            component="div"
                         />
                     </div>
 
@@ -106,7 +104,7 @@ function StepTwo({
                     <div className={cl(st.group, st.cta)}>
                         <Button
                             type="submit"
-                            disabled={!isValid || isSubmitting}
+                            disabled={validAddressBtn}
                             mode="primary"
                             className={st.btn}
                         >

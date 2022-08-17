@@ -82,3 +82,7 @@
         margin-right: 10px;
     }
 }
+
+.error {
+    @include utils.error-message-box;
+}
