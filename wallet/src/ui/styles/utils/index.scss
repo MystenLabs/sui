@@ -103,5 +103,14 @@ $main-extra-space: sizing.$main-bottom-space;
         font-size: 16px;
         line-height: 19px;
         color: colors.$gray-100;
+    } @else if $type == 'empty' {
+        font-style: italic;
+        font-weight: 400;
+        font-size: 12px;
+        text-align: center;
+        color: colors.$gray-70;
+        padding: 0 16px;
+        line-height: 16px;
+        letter-spacing: 0;
     }
 }

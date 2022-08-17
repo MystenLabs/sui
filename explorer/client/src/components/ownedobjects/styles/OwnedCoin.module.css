@@ -1,0 +1,78 @@
+.groupview {
+    @apply text-left;
+}
+
+.firstrow {
+    @apply grid uppercase font-medium text-sui-grey-80 text-[12px] leading-[12px] py-[10px];
+
+    grid-template-columns: 35% 30% 35%;
+}
+
+.body {
+    @apply text-[13px] leading-[12px];
+}
+
+.summary {
+    @apply grid py-[10px] cursor-pointer break-words;
+
+    grid-template-columns: 5% 30% 30% 30% 5%;
+}
+
+.summary :nth-child(2) {
+    @apply text-sui-grey-90;
+}
+
+.summary :nth-child(3),
+.summary :nth-child(4) {
+    @apply text-sui-grey-80;
+}
+
+.openedgroup .summary div {
+    @apply pb-[12px];
+}
+
+.closedgroup {
+    @apply text-sui-grey-90 hover:bg-[#6fbcf014];
+}
+
+.openbody {
+    @apply max-h-[200px] overflow-auto;
+}
+
+.objectid,
+.balance {
+    @apply text-sui-grey-80 grid break-words;
+
+    grid-template-columns: 5% 30% 60% 5%;
+}
+
+.objectid {
+    @apply pb-[10px] pt-0;
+}
+
+.balance {
+    @apply pb-[16px];
+}
+
+.balance :nth-child(3) {
+    @apply text-sui-grey-85;
+}
+
+.closedgroup .summary:hover {
+    @apply rounded-md bg-[#6fbcf014];
+}
+
+.openicon,
+.closedicon {
+    @apply p-0 mx-auto sm:pr-[6px] sm:pl-[12px];
+}
+
+.openicon,
+.closedicon svg path {
+    @apply fill-sui-grey-60;
+}
+
+.openicon svg path {
+    transform: rotate(90deg);
+    transform-origin: 50% 50%;
+}

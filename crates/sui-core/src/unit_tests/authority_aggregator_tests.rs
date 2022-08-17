@@ -41,6 +41,7 @@ pub async fn init_local_authorities(
             public_key: authority_name,
             stake: 1,
             delegation: 0,
+            gas_price: 1,
             network_address: sui_config::utils::new_network_address(),
             narwhal_primary_to_primary: sui_config::utils::new_network_address(),
             narwhal_worker_to_primary: sui_config::utils::new_network_address(),
@@ -85,11 +86,14 @@ pub async fn init_local_authorities_with_genesis(
         serial_authority_request_timeout: Duration::from_secs(1),
         serial_authority_request_interval: Duration::from_secs(1),
     };
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
     (
         AuthorityAggregator::new_with_timeouts(
             committee,
+            epoch_store,
             clients,
             AuthAggMetrics::new_for_tests(),
+            SafeClientMetrics::new_for_tests(),
             timeouts,
         ),
         states,
@@ -273,7 +277,7 @@ where
                 signed.auth_sign_info.signature.clone(),
             ));
             if let Some(inner_transaction) = transaction {
-                assert!(inner_transaction.data == signed.data);
+                assert!(inner_transaction.signed_data.data == signed.signed_data.data);
             }
             transaction = Some(signed);
         }
@@ -381,9 +385,12 @@ async fn test_map_reducer() {
             0usize,
             |_name, _client| Box::pin(async move { Ok(()) }),
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(
-                    async move { Err(SuiError::TooManyIncorrectAuthorities { errors: vec![] }) },
-                )
+                Box::pin(async move {
+                    Err(SuiError::TooManyIncorrectAuthorities {
+                        errors: vec![],
+                        action: "",
+                    })
+                })
             },
             Duration::from_millis(1000),
         )
@@ -399,8 +406,10 @@ async fn test_map_reducer() {
             0usize,
             |_name, _client| {
                 Box::pin(async move {
-                    let res: Result<usize, SuiError> =
-                        Err(SuiError::TooManyIncorrectAuthorities { errors: vec![] });
+                    let res: Result<usize, SuiError> = Err(SuiError::TooManyIncorrectAuthorities {
+                        errors: vec![],
+                        action: "",
+                    });
                     res
                 })
             },
@@ -451,9 +460,12 @@ async fn test_map_reducer() {
                 })
             },
             |_accumulated_state, _authority_name, _authority_weight, _result| {
-                Box::pin(
-                    async move { Err(SuiError::TooManyIncorrectAuthorities { errors: vec![] }) },
-                )
+                Box::pin(async move {
+                    Err(SuiError::TooManyIncorrectAuthorities {
+                        errors: vec![],
+                        action: "",
+                    })
+                })
             },
             Duration::from_millis(10),
         )
@@ -974,11 +986,14 @@ async fn test_quorum_once_with_timeout() {
     }
 
     let committee = Committee::new(0, authorities).unwrap();
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
 
     let agg = AuthorityAggregator::new_with_timeouts(
         committee,
+        epoch_store,
         clients,
         AuthAggMetrics::new_for_tests(),
+        SafeClientMetrics::new_for_tests(),
         TimeoutConfig {
             serial_authority_request_interval: Duration::from_millis(50),
             ..Default::default()
@@ -1002,6 +1017,7 @@ async fn test_quorum_once_with_timeout() {
             },
             Duration::from_millis(authority_request_timeout),
             Some(Duration::from_millis(30 * 50)),
+            "test",
         )
         .await
         .unwrap();

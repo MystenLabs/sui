@@ -8,7 +8,7 @@ Welcome to the documentation for the Sui platform. Sui is built on the core [Mov
 
 For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](https://github.com/MystenLabs/sui/blob/main/doc/paper/sui.pdf) white paper. Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
 
-> **Important:** This site is built from the upstream `main` branch and therefore contains updates not yet available on `devnet`.
+> **Important:** This site is available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
 
 ## See what's new
 
@@ -36,7 +36,7 @@ The links in the section point to information to help you start working with Sui
 Go to the [Move Quick Start](../build/move/index.md) for information about installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
 
 ### Start the Sui network with Sui CLI client
-See the [Sui CLI client Quick Start](../build/cli-client.md) for information about installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
+See the [Sui CLI client Quick Start](../contribute/cli-client.md) for information about installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
 
 ### Take the end-to-end tutorial
 Proceed to the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.
@@ -55,12 +55,12 @@ Navigate and search this site however you see fit. If you're new to Sui, we reco
 **Build** - includes information about how to:
 * [Install Sui](../build/install.md)
 * [Create smart contracts with Move](../build/move/index.md)
-* [Set up and configure a local Sui network](../build/cli-client.md)
+* [Set up and configure a local Sui network](../contribute/cli-client.md)
 * [Start a local JSON-RPC Gateway server](../build/json-rpc.md#start-local-rpc-server)
 
 **Explore** - includes more in-depth information about:
 * [Sui Wallet](../explore/wallet-browser.md)
-* [Devnet](../explore/devnet.md)
+* [Devnet](../build/devnet.md)
 * [Sui tutorials](../explore/tutorials.md)
 * [Sui prototypes](../explore/prototypes.md)
 * [Sui examples](../explore/examples.md)  

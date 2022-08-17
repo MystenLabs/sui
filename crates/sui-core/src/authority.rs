@@ -52,7 +52,7 @@ use sui_types::{
     fp_ensure,
     messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
-    storage::{BackingPackageStore, DeleteKind, Storage},
+    storage::{BackingPackageStore, DeleteKind},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tap::TapFallible;
@@ -95,7 +95,7 @@ use sui_types::sui_system_state::SuiSystemState;
 
 pub mod authority_notifier;
 
-pub const MAX_ITEMS_LIMIT: u64 = 100_000;
+pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
 const MAX_TX_RECOVERY_RETRY: u32 = 3;
@@ -122,6 +122,8 @@ pub struct AuthorityMetrics {
     pub follower_connections: IntCounter,
     pub follower_connections_concurrent: IntGauge,
 
+    // TODO: consolidate these into GossipMetrics
+    // (issue: https://github.com/MystenLabs/sui/issues/3926)
     pub gossip_queued_count: IntCounter,
     pub gossip_sync_count: IntCounter,
     pub gossip_task_success_count: IntCounter,
@@ -297,14 +299,14 @@ pub struct AuthorityState {
 
     indexes: Option<Arc<IndexStore>>,
 
-    pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
+    pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     pub event_handler: Option<Arc<EventHandler>>,
 
     /// The checkpoint store
     pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
-    pub(crate) epoch_store: Arc<EpochStore>,
+    epoch_store: Arc<EpochStore>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -344,6 +346,10 @@ impl AuthorityState {
         self.committee.load().epoch
     }
 
+    pub fn epoch_store(&self) -> &Arc<EpochStore> {
+        &self.epoch_store
+    }
+
     async fn handle_transaction_impl(
         &self,
         transaction: Transaction,
@@ -358,11 +364,11 @@ impl AuthorityState {
 
         // Validators should never sign an external system transaction.
         fp_ensure!(
-            !transaction.data.kind.is_system_tx(),
+            !transaction.signed_data.data.kind.is_system_tx(),
             SuiError::InvalidSystemTransaction
         );
 
-        if self.halted.load(Ordering::SeqCst) {
+        if self.is_halted() {
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
         }
@@ -392,13 +398,14 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
+        let transaction_digest = *transaction.digest();
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.signed_data.data.kind);
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
             self.metrics.signature_errors.inc();
             e
         })?;
-        let transaction_digest = *transaction.digest();
 
         let response = self.handle_transaction_impl(transaction).await;
         match response {
@@ -461,7 +468,7 @@ impl AuthorityState {
                 ?observed_effects_digest,
                 ?signed_effects,
                 ?resp.signed_effects,
-                input_objects = ?certificate.data.input_objects(),
+                input_objects = ?certificate.signed_data.data.input_objects(),
                 "Locally executed effects do not match canonical effects!");
         }
         Ok(())
@@ -570,7 +577,7 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
             tx_guard.release();
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -627,7 +634,7 @@ impl AuthorityState {
             .observe(shared_object_count as f64);
         self.metrics
             .batch_size
-            .observe(certificate.data.kind.batch_size() as f64);
+            .observe(certificate.signed_data.data.kind.batch_size() as f64);
 
         Ok(TransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&digest)?,
@@ -657,7 +664,7 @@ impl AuthorityState {
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let shared_object_refs = input_objects.filter_shared_objects();
-        if !shared_object_refs.is_empty() && !certificate.data.kind.is_system_tx() {
+        if !shared_object_refs.is_empty() && !certificate.signed_data.data.kind.is_system_tx() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             // There is no need to go through consensus for system transactions that can
@@ -679,7 +686,7 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects(
                 shared_object_refs,
                 temporary_store,
-                certificate.data.clone(),
+                certificate.signed_data.data.clone(),
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,
@@ -717,9 +724,14 @@ impl AuthorityState {
     ) -> SuiResult {
         indexes.index_tx(
             cert.sender_address(),
-            cert.data.input_objects()?.iter().map(|o| o.object_id()),
+            cert.signed_data
+                .data
+                .input_objects()?
+                .iter()
+                .map(|o| o.object_id()),
             effects.effects.all_mutated(),
-            cert.data
+            cert.signed_data
+                .data
                 .move_calls()?
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
@@ -882,7 +894,9 @@ impl AuthorityState {
                                 .await?
                         };
                         let layout = match request_layout {
-                            Some(format) => object.get_layout(format, &self.module_cache)?,
+                            Some(format) => {
+                                object.get_layout(format, self.module_cache.as_ref())?
+                            }
                             None => None,
                         };
 
@@ -927,9 +941,7 @@ impl AuthorityState {
         };
 
         // Ensure we are not doing too much work per request
-        if request.length > MAX_ITEMS_LIMIT {
-            return Err(SuiError::TooManyItemsError(MAX_ITEMS_LIMIT));
-        }
+        let length = std::cmp::min(request.length, MAX_ITEMS_LIMIT);
 
         // If we do not have a start, pick next sequence number that has
         // not yet been put into a batch.
@@ -942,7 +954,7 @@ impl AuthorityState {
                     .next_sequence_number
             }
         };
-        let end = start + request.length;
+        let end = start + length;
 
         let (batches, transactions) = self.database.batches_and_transactions(start, end)?;
 
@@ -1016,7 +1028,6 @@ impl AuthorityState {
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
-        genesis_committee: Committee,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
@@ -1045,18 +1056,11 @@ impl AuthorityState {
                 .expect("Cannot bulk insert genesis objects");
         }
 
-        let committee = if epoch_store.database_is_empty() {
-            epoch_store
-                .init_genesis_epoch(genesis_committee.clone())
-                .expect("Init genesis epoch data must not fail");
-            genesis_committee
-        } else {
-            epoch_store
-                .get_latest_authenticated_epoch()
-                .epoch_info()
-                .committee()
-                .clone()
-        };
+        let committee = epoch_store
+            .get_latest_authenticated_epoch()
+            .epoch_info()
+            .committee()
+            .clone();
 
         let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
 
@@ -1071,7 +1075,7 @@ impl AuthorityState {
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
-            module_cache: SyncModuleCache::new(ResolverWrapper(store.clone())),
+            module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone()))),
             event_handler,
             checkpoints,
             epoch_store,
@@ -1133,6 +1137,7 @@ impl AuthorityState {
         state
     }
 
+    // TODO: Technically genesis_committee can be derived from genesis.
     pub async fn new_for_testing(
         genesis_committee: Committee,
         key: &AuthorityKeyPair,
@@ -1171,10 +1176,13 @@ impl AuthorityState {
                 .expect("No issues");
         }
 
-        let epochs = Arc::new(EpochStore::new(path.join("epochs")));
+        let epochs = Arc::new(EpochStore::new(
+            path.join("epochs"),
+            &genesis_committee,
+            None,
+        ));
 
         AuthorityState::new(
-            genesis_committee.clone(),
             secret.public().into(),
             secret.clone(),
             store,
@@ -1270,7 +1278,6 @@ impl AuthorityState {
         )?)
     }
 
-    #[cfg(test)]
     pub(crate) fn is_halted(&self) -> bool {
         self.halted.load(Ordering::Relaxed)
     }
@@ -1283,7 +1290,7 @@ impl AuthorityState {
         self.halted.store(false, Ordering::Relaxed);
     }
 
-    pub(crate) fn db(&self) -> Arc<AuthorityStore> {
+    pub fn db(&self) -> Arc<AuthorityStore> {
         self.database.clone()
     }
 
@@ -1320,8 +1327,10 @@ impl AuthorityState {
                             })
                         }
                         Some(object) => {
-                            let layout = object
-                                .get_layout(ObjectFormatOptions::default(), &self.module_cache)?;
+                            let layout = object.get_layout(
+                                ObjectFormatOptions::default(),
+                                self.module_cache.as_ref(),
+                            )?;
                             Ok(ObjectRead::Exists(obj_ref, object, layout))
                         }
                     }
@@ -1504,7 +1513,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        if self.halted.load(Ordering::SeqCst) && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -1609,7 +1618,7 @@ impl ExecutionState for AuthorityState {
         _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<narwhal_config::Committee>), Self::Error> {
+    ) -> Result<Self::Outcome, Self::Error> {
         self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
@@ -1632,7 +1641,7 @@ impl ExecutionState for AuthorityState {
 
                 // TODO: This return time is not ideal.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok((Vec::default(), None))
+                Ok(Vec::default())
             }
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
@@ -1661,7 +1670,7 @@ impl ExecutionState for AuthorityState {
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
                 // is not expecting any reply.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok((Vec::default(), None))
+                Ok(Vec::default())
             }
         }
     }
@@ -1688,13 +1697,6 @@ impl ExecutionStateError for FragmentInternalError {
             // Those are errors caused by the authority (eg. storage failure). It is not guaranteed
             // that other validators will also trigger it and they may not be deterministic.
             Self::Retry(..) => true,
-        }
-    }
-
-    fn to_string(&self) -> String {
-        match self {
-            Self::Error(sui_error) => format!("Failed to process checkpoint fragment {sui_error}"),
-            Self::Retry(fragment) => format!("Failed to sequence checkpoint fragment {fragment:?}"),
         }
     }
 }

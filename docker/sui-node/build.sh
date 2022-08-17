@@ -13,8 +13,8 @@ BUILD_DATE="$(date -u +'%Y-%m-%d')"
 
 # option to build using debug symbols
 if [ "$1" = "--debug-symbols" ]; then
-	PROFILE="bench-profiling"
-	echo "Building with debug symbols enabled"
+	PROFILE="bench"
+	echo "Building with full debug info enabled ... WARNING: binary size might significantly increase"
 	shift
 else
 	PROFILE="release"

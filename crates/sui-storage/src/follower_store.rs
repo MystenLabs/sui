@@ -44,7 +44,7 @@ mod test {
         let working_dir = tempfile::tempdir().unwrap();
 
         let follower_store =
-            FollowerStore::open_tables_read_write(working_dir.as_ref().to_path_buf(), None);
+            FollowerStore::open_tables_read_write(working_dir.as_ref().to_path_buf(), None, None);
 
         let (_, key_pair): (_, AuthorityKeyPair) = get_key_pair();
         let val_name = &key_pair.public().into();

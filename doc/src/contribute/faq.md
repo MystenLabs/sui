@@ -19,7 +19,7 @@ Use these online resources:
 * Sui Website: [https://sui.io/](https://sui.io/)
 * Sui Developer Portal: [https://docs.sui.io/](https://docs.sui.io/)
 * Sui Smart Contract White Paper: [https://sui.io/whitepaper](https://sui.io/whitepaper) 
-* SDK reference: [Sui JSON-RPC](https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false)  
+* Sui API Reference: [Sui JSON-RPC](https://docs.sui.io/sui-jsonrpc)  
 
 
 ### What does Sui offer over other blockchains?
@@ -63,7 +63,7 @@ Yes, the token name will be SUI.
 
 ### When is the Sui Devnet/Testnet/Mainnet launching?
 
-We have launched our [Sui Devnet](../explore/devnet.md) in May 2022. A Testnet is coming in a few months. 
+We have launched our [Sui Devnet](../build/devnet.md) in May 2022. A Testnet is coming in a few months. 
 
 See our roadmap: \
 [https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap) 
@@ -85,7 +85,7 @@ For developers:
 
 1. [Install Sui](https://docs.sui.io/build/install).
 2. Spin up a [Sui Fullnode](../build/fullnode.md).
-3. Experiment with the [Sui CLI client](../build/cli-client.md).
+3. Experiment with the [Sui CLI client](../contribute/cli-client.md).
 4. Join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://discord.gg/CVcnUzKYCB) developer channels in Discord.
 5. [Start building](https://docs.sui.io/build)!
 
@@ -136,9 +136,9 @@ See the instructions to [run a Sui Fullnode](../build/fullnode.md).
 
 ### Can I run a Sui validator node?
 
-We have a public [Sui Devnet](../explore/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
+We have a public [Sui Devnet](../build/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
 
-You may also run a local, non-networked Sui node for development using the [Sui CLI client](../build/cli-client.md). You can interact with the nodes with either the [Sui Wallet CLI](../build/cli-client.md#command-line-mode) or over the [Sui RPC API](../build/json-rpc.md).
+You may also run a local, non-networked Sui node for development using the [Sui CLI client](../contribute/cli-client.md). You can interact with the nodes with either the [Sui Wallet CLI](../contribute/cli-client.md#command-line-mode) or over the [Sui RPC API](../build/json-rpc.md).
 
 Soon we will have a Testnet that allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, 
 

@@ -24,9 +24,11 @@ module sui::transfer {
     /// use this function to transfer an object to the parent object identified by its id.
     /// Additionally, this API is useful for transfering to objects, outside of that object's
     /// module. The object's module can expose a function that returns a reference to the object's
-    /// UID, `&UID`. Which can then be used with this function.
+    /// UID, `&mut UID`, which can then be used with this function. The mutable `&mut UID` reference
+    /// prevents child objects from being added to immutable objects (immutable objects cannot have
+    /// child objects).
     /// The child object is specified in `obj`, and the parent object id is specified in `owner_id`.
-    public fun transfer_to_object_id<T: key>(obj: T, owner_id: &UID) {
+    public fun transfer_to_object_id<T: key>(obj: T, owner_id: &mut UID) {
         transfer_internal(obj, object::uid_to_address(owner_id), true);
     }
 

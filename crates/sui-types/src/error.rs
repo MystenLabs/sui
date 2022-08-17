@@ -333,9 +333,10 @@ pub enum SuiError {
     ConcurrentTransactionError,
     #[error("Transfer should be received by us.")]
     IncorrectRecipientError,
-    #[error("Too many authority errors were detected: {:?}", errors)]
+    #[error("Too many authority errors were detected for {}: {:?}", action, errors)]
     TooManyIncorrectAuthorities {
         errors: Vec<(AuthorityName, SuiError)>,
+        action: &'static str,
     },
     #[error("Inconsistent results observed in the Gateway. This should not happen and typically means there is a bug in the Sui implementation. Details: {error:?}")]
     InconsistentGatewayResult { error: String },
@@ -380,8 +381,8 @@ pub enum SuiError {
 
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
-    #[error("{0}")]
-    RpcError(String),
+    #[error("{1} - {0}")]
+    RpcError(String, &'static str),
 
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
@@ -438,7 +439,7 @@ impl std::convert::From<SubscriberError> for SuiError {
 
 impl From<tonic::Status> for SuiError {
     fn from(status: tonic::Status) -> Self {
-        Self::RpcError(status.message().to_owned())
+        Self::RpcError(status.message().to_owned(), status.code().description())
     }
 }
 
@@ -465,10 +466,6 @@ impl ExecutionStateError for SuiError {
                 | Self::StorageError(..)
                 | Self::GenericAuthorityError { .. }
         )
-    }
-
-    fn to_string(&self) -> String {
-        ToString::to_string(&self)
     }
 }
 

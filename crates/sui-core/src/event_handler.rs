@@ -27,7 +27,7 @@ mod event_handler_tests;
 pub const EVENT_DISPATCH_BUFFER_SIZE: usize = 1000;
 
 pub struct EventHandler {
-    module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>,
+    module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>,
     event_streamer: Streamer<EventEnvelope, EventFilter>,
     pub(crate) event_store: Arc<EventStoreType>,
 }
@@ -36,7 +36,7 @@ impl EventHandler {
     pub fn new(validator_store: Arc<AuthorityStore>, event_store: Arc<EventStoreType>) -> Self {
         let streamer = Streamer::spawn(EVENT_DISPATCH_BUFFER_SIZE);
         Self {
-            module_cache: SyncModuleCache::new(ResolverWrapper(validator_store)),
+            module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(validator_store))),
             event_streamer: streamer,
             event_store,
         }
@@ -89,7 +89,7 @@ impl EventHandler {
             } => {
                 debug!(event =? event, "Process MoveEvent.");
                 let move_struct =
-                    Event::move_event_to_move_struct(type_, contents, &self.module_cache)?;
+                    Event::move_event_to_move_struct(type_, contents, self.module_cache.as_ref())?;
                 // Convert into `SuiMoveStruct` which is a mirror of MoveStruct but with additional type supports, (e.g. ascii::String).
                 let sui_move_struct = SuiMoveStruct::from(move_struct);
                 Some(sui_move_struct.to_json_value().map_err(|e| {

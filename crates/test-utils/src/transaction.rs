@@ -151,7 +151,7 @@ pub async fn increment_counter(
     package_ref: ObjectRef,
     counter_id: ObjectID,
 ) -> SuiTransactionResponse {
-    let resp = submit_move_transaction(
+    submit_move_transaction(
         context,
         "counter",
         "increment",
@@ -160,8 +160,7 @@ pub async fn increment_counter(
         sender,
         gas_object,
     )
-    .await;
-    resp
+    .await
 }
 
 /// Submit a certificate containing only owned-objects to all authorities.

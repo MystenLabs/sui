@@ -21,7 +21,7 @@ use prometheus::{
     Registry,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
-use tracing::{debug, error, Instrument};
+use tracing::{debug, error, trace, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_config::gateway::GatewayConfig;
@@ -42,6 +42,7 @@ use sui_types::{
 use crate::authority::ResolverWrapper;
 use crate::authority_aggregator::AuthAggMetrics;
 use crate::authority_client::NetworkAuthorityClient;
+use crate::safe_client::SafeClientMetrics;
 use crate::transaction_input_checker;
 use crate::{
     authority::GatewayStore, authority_aggregator::AuthorityAggregator,
@@ -56,6 +57,7 @@ use sui_json_rpc_types::{
 };
 use sui_types::error::SuiError::ConflictingTransaction;
 
+use crate::epoch::epoch_store::EpochStore;
 use tap::TapFallible;
 
 #[cfg(test)]
@@ -175,33 +177,41 @@ pub struct GatewayState<A> {
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
     pub fn new(
-        path: &Path,
+        base_path: &Path,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         prometheus_registry: &Registry,
     ) -> SuiResult<Self> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
+        let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
+        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None));
+        let epoch_store = Arc::new(EpochStore::new(base_path.join("epochs"), &committee, None));
         Self::new_with_authorities(
-            path,
-            AuthorityAggregator::new(committee, authority_clients, auth_agg_metrics),
+            gateway_store,
+            AuthorityAggregator::new(
+                committee,
+                epoch_store,
+                authority_clients,
+                auth_agg_metrics,
+                safe_client_metrics,
+            ),
             gateway_metrics,
         )
     }
 
     pub fn new_with_authorities(
-        path: &Path,
+        gateway_store: Arc<GatewayStore>,
         authorities: AuthorityAggregator<A>,
         metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
-        let store = Arc::new(GatewayStore::open(path, None));
-        let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
+        let next_tx_seq_number = AtomicU64::new(gateway_store.next_sequence_number()?);
         Ok(Self {
-            store: store.clone(),
+            store: gateway_store.clone(),
             authorities,
             next_tx_seq_number,
             metrics,
-            module_cache: SyncModuleCache::new(ResolverWrapper(store)),
+            module_cache: SyncModuleCache::new(ResolverWrapper(gateway_store)),
         })
     }
 
@@ -564,7 +574,7 @@ where
     /// If any object does not exist in the store, give it a chance
     /// to download from authorities.
     async fn sync_input_objects_with_authorities(&self, transaction: &Transaction) -> SuiResult {
-        let input_objects = transaction.data.input_objects()?;
+        let input_objects = transaction.signed_data.data.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
             if object_opt.is_none() {
@@ -598,7 +608,7 @@ where
         let span = tracing::debug_span!(
             "execute_transaction",
             tx_digest = ?tx_digest,
-            tx_kind = transaction.data.kind_as_str()
+            tx_kind = transaction.signed_data.data.kind_as_str()
         );
         let exec_result = self
             .authorities
@@ -942,8 +952,8 @@ where
         effects: TransactionEffects,
     ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
         let call = Self::try_get_move_call(&certificate)?;
-        let signer = certificate.data.signer();
-        let (gas_payment, _, _) = certificate.data.gas();
+        let signer = certificate.signed_data.data.signer();
+        let (gas_payment, _, _) = certificate.signed_data.data.gas();
         let (coin_object_id, split_arg) = match call.arguments.as_slice() {
             [CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))), CallArg::Pure(arg)] => {
                 (id, arg)
@@ -1009,7 +1019,7 @@ where
                 .into())
             }
         };
-        let (gas_payment, _, _) = certificate.data.gas();
+        let (gas_payment, _, _) = certificate.signed_data.data.gas();
 
         if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
@@ -1041,7 +1051,7 @@ where
 
     fn try_get_move_call(certificate: &CertifiedTransaction) -> Result<&MoveCall, anyhow::Error> {
         if let TransactionKind::Single(SingleTransactionKind::Call(ref call)) =
-            certificate.data.kind
+            certificate.signed_data.data.kind
         {
             Ok(call)
         } else {
@@ -1204,7 +1214,7 @@ where
         &self,
         tx: Transaction,
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
-        let tx_kind = tx.data.kind.clone();
+        let tx_kind = tx.signed_data.data.kind.clone();
         let tx_digest = tx.digest();
 
         debug!(tx_digest = ?tx_digest, "Received execute_transaction request");
@@ -1216,7 +1226,7 @@ where
                 let span = tracing::debug_span!(
                     "gateway_execute_transaction",
                     ?tx_digest,
-                    tx_kind = tx.data.kind_as_str()
+                    tx_kind = tx.signed_data.data.kind_as_str()
                 );
 
                 // Use start_coarse_time() if the below turns out to have a perf impact
@@ -1368,7 +1378,8 @@ where
             .sync_all_owned_objects(account_addr, Duration::from_secs(60))
             .await?;
 
-        debug!(
+        // This is quite spammy when there are a number of huge objects
+        trace!(
             ?active_object_certs,
             deletec = ?_deleted_refs_certs,
             ?account_addr,

@@ -1,30 +1,130 @@
+@use '_utils';
+@use '_values/colors';
+
 .title {
     font-size: 15px;
     font-weight: 700;
     color: #404040;
 }
 
-.card {
-    box-shadow: 0 1px 2px 0 #0000000d;
-    background-color: #fff;
-    display: grid;
-    height: auto;
-    margin-bottom: 1rem;
-    margin-top: 1rem;
-    padding: 0.8rem;
-    text-align: left;
-    font-family: 'Space Mono', ui-monospace, monospace;
+.tx-card {
+    text-decoration: none;
+}
 
-    a {
-        color: #4caad8;
-        text-decoration: none;
+.card {
+    display: grid;
+    gap: 5px;
+    grid-template-columns: 30px 6fr 2fr;
+    align-content: center;
+    justify-content: space-between;
+    border-bottom: 1px solid colors.$gray-45;
+    height: 64px;
+    cursor: pointer;
+
+    .card-icon {
+        position: relative;
+        display: flex;
+        justify-content: center;
+        background-color: colors.$gray-40;
+        align-self: center;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+
+        .angled-arrow {
+            @include utils.angled-arrow;
+        }
+
+        .buy-icon,
+        .angled-arrow {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            position: relative;
+            align-items: center;
+            justify-content: center;
+            margin: auto;
+            color: #589aea;
+            font-size: 12px;
+        }
+    }
+
+    .txstatus {
+        margin-left: 5px;
+    }
+
+    .tx-transferred {
+        display: flex;
+        flex-flow: column;
+        text-align: end;
+
+        .tx-amount {
+            @include utils.typography('table/text-sm');
+
+            color: colors.$gray-100;
+            text-align: right;
+        }
+
+        .tx-image {
+            display: flex;
+            justify-content: flex-end;
+
+            img {
+                width: 50px;
+                height: 50px;
+                border-radius: 6px;
+                object-fit: cover;
+            }
+        }
+    }
+
+    .card-content {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        justify-content: center;
+
+        .tx-result {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+
+            .tx-type-date {
+                font-size: 11px;
+                line-height: 100%;
+
+                @include utils.typography('table/text-xs');
+            }
+
+            .tx-type-name {
+                @include utils.typography('table/text-sm');
+
+                color: colors.$gray-65;
+            }
+
+            .kind {
+                @include utils.typography('table/title-sm');
+            }
+        }
+    }
+
+    .tx-address {
+        @include utils.typography('table/text-sm');
+
+        font-family: 'Space Mono', ui-monospace, monospace;
+        color: colors.$gray-65;
     }
 }
 
 .failure {
-    color: #fca5a5;
+    i {
+        color: #fca5a5;
+    }
 }
 
 .success {
-    color: #4ade80;
+    i {
+        color: colors.$success;
+        font-size: 8px;
+    }
 }

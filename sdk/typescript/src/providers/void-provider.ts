@@ -11,6 +11,11 @@ import {
   GetObjectDataResponse,
   SuiTransactionResponse,
   SuiObjectRef,
+  SuiMoveFunctionArgTypes,
+  SuiMoveNormalizedFunction,
+  SuiMoveNormalizedStruct,
+  SuiMoveNormalizedModule,
+  SuiMoveNormalizedModules,
 } from '../types';
 import { Provider } from './provider';
 
@@ -64,6 +69,42 @@ export class VoidProvider extends Provider {
   async getRecentTransactions(_count: number): Promise<GetTxnDigestsResponse> {
     throw this.newError('getRecentTransactions');
   }
+
+  async getMoveFunctionArgTypes(
+    _objectId: string,
+    _moduleName: string,
+    _functionName: string
+  ): Promise<SuiMoveFunctionArgTypes> {
+    throw this.newError('getMoveFunctionArgTypes');
+  }
+
+  async getNormalizedMoveModulesByPackage(_objectId: string,): Promise<SuiMoveNormalizedModules> {
+    throw this.newError('getNormalizedMoveModulesByPackage');
+  }
+
+  async getNormalizedMoveModule(
+    _objectId: string,
+    _moduleName: string,
+  ): Promise<SuiMoveNormalizedModule> {
+    throw this.newError('getNormalizedMoveModule');
+  }
+
+  async getNormalizedMoveFunction(
+    _objectId: string,
+    _moduleName: string,
+    _functionName: string
+  ): Promise<SuiMoveNormalizedFunction> {
+    throw this.newError('getNormalizedMoveFunction');
+  }
+
+  async getNormalizedMoveStruct(
+    _objectId: string,
+    _oduleName: string,
+    _structName: string
+  ): Promise<SuiMoveNormalizedStruct> {
+    throw this.newError('getNormalizedMoveStruct');
+  }
+
 
   async syncAccountState(_address: string): Promise<any> {
     throw this.newError('syncAccountState');

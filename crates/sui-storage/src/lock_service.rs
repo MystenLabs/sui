@@ -31,6 +31,8 @@ use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
 
+use crate::default_db_options;
+
 /// Commands to send to the LockService (for mutating lock state)
 // TODO: use smallvec as an optimization
 #[derive(Debug)]
@@ -83,15 +85,23 @@ pub struct LockServiceImpl {
     /// to None. The safety of consistent broadcast depend on each honest authority never changing
     /// the lock once it is set. After a certificate for this object is processed it can be
     /// forgotten.
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "transaction_lock_table_default_config"]
     transaction_lock: DBMap<ObjectRef, Option<TransactionDigest>>,
 
     /// The semantics of transaction_lock ensure that certificates are always processed
     /// in causal order - that is, certificates naturally form a partial order. tx_sequence
     /// records a total ordering among all processed certificates (which is naturally local
     /// to this authority).
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "tx_sequence_table_default_config"]
     tx_sequence: DBMap<TransactionDigest, TxSequenceNumber>,
+}
+
+// These functions are used to initialize the DB tables
+fn transaction_lock_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn tx_sequence_table_default_config() -> Options {
+    default_db_options(None, None).1
 }
 
 // TODO: Create method needs to make sure only one instance or thread of this is running per authority
@@ -444,7 +454,7 @@ impl LockService {
     /// Create a new instance of LockService.  For now, the caller has to guarantee only one per data store -
     /// namely each SuiDataStore creates its own LockService.
     pub fn new(path: PathBuf, db_options: Option<Options>) -> Result<Self, SuiError> {
-        let inner_service = LockServiceImpl::open_tables_read_write(path, db_options);
+        let inner_service = LockServiceImpl::open_tables_read_write(path, db_options, None);
 
         // Now, create a sync channel and spawn a thread
         let (sender, receiver) = channel(LOCKSERVICE_QUEUE_LEN);
@@ -614,7 +624,7 @@ mod tests {
         let dir = std::env::temp_dir();
         let path = dir.join(format!("DB_{:?}", ObjectID::random()));
         std::fs::create_dir(&path).unwrap();
-        LockServiceImpl::open_tables_read_write(path, None)
+        LockServiceImpl::open_tables_read_write(path, None, None)
     }
 
     fn init_lockservice() -> LockService {

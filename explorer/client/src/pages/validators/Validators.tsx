@@ -146,6 +146,7 @@ export function processValidators(set: Validator[]) {
         return {
             name: name,
             address: av.fields.metadata.fields.sui_address,
+            pubkeyBytes: av.fields.metadata.fields.pubkey_bytes,
             position: i + 1,
         };
     });
@@ -169,6 +170,7 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
         data: validatorsData.map((validator) => {
             return {
                 name: validator.name,
+                position: validator.position,
                 address: (
                     <Longtext
                         text={validator.address}
@@ -177,7 +179,15 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                         isLink={true}
                     />
                 ),
-                position: validator.position,
+                pubkeyBytes: (
+                    <Longtext
+                        text={validator.pubkeyBytes}
+                        alttext={truncate(validator.pubkeyBytes, 14)}
+                        category={'addresses'}
+                        isLink={false}
+                        isCopyButton={false}
+                    />
+                ),
             };
         }),
         columns: [
@@ -192,6 +202,10 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
             {
                 headerLabel: 'Address',
                 accessorKey: 'address',
+            },
+            {
+                headerLabel: 'Pubkey Bytes',
+                accessorKey: 'pubkeyBytes',
             },
         ],
     };

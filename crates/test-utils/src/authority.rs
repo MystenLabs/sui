@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::{
     authority_active::{
         checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
@@ -13,6 +14,7 @@ use sui_core::{
     },
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
     authority_client::NetworkAuthorityClient,
+    safe_client::SafeClientMetrics,
 };
 use sui_node::SuiNode;
 use sui_types::{committee::Committee, object::Object};
@@ -75,8 +77,9 @@ pub async fn spawn_checkpoint_processes(
     for authority in handles {
         let state = authority.state().clone();
         let inner_agg = aggregator.clone();
-        let active_state =
-            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
+        let active_state = Arc::new(
+            ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_agg).unwrap(),
+        );
         let checkpoint_process_control = CheckpointProcessControl {
             long_pause_between_checkpoints: Duration::from_millis(10),
             ..CheckpointProcessControl::default()
@@ -94,6 +97,7 @@ pub async fn spawn_checkpoint_processes(
 /// Create a test authority aggregator.
 pub fn test_authority_aggregator(
     config: &NetworkConfig,
+    epoch_store: Arc<EpochStore>,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
@@ -106,8 +110,14 @@ pub fn test_authority_aggregator(
             )
         })
         .collect();
-    let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
-    AuthorityAggregator::new(committee, clients, metrics)
+    let registry = prometheus::Registry::new();
+    AuthorityAggregator::new(
+        committee,
+        epoch_store,
+        clients,
+        AuthAggMetrics::new(&registry),
+        SafeClientMetrics::new(&registry),
+    )
 }
 
 /// Get a network client to communicate with the consensus.

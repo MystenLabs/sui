@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
@@ -77,12 +78,15 @@ pub struct NetworkAuthorityClient {
 
 impl NetworkAuthorityClient {
     pub async fn connect(address: &Multiaddr) -> anyhow::Result<Self> {
-        let channel = mysten_network::client::connect(address).await?;
+        let channel = mysten_network::client::connect(address)
+            .await
+            .map_err(|err| anyhow!(err.to_string()))?;
         Ok(Self::new(channel))
     }
 
     pub fn connect_lazy(address: &Multiaddr) -> anyhow::Result<Self> {
-        let channel = mysten_network::client::connect_lazy(address)?;
+        let channel = mysten_network::client::connect_lazy(address)
+            .map_err(|err| anyhow!(err.to_string()))?;
         Ok(Self::new(channel))
     }
 
@@ -211,7 +215,9 @@ pub fn make_network_authority_client_sets_from_system_state(
     let mut authority_clients = BTreeMap::new();
     for validator in &sui_system_state.validators.active_validators {
         let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
-        let channel = network_config.connect_lazy(&address)?;
+        let channel = network_config
+            .connect_lazy(&address)
+            .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         let name: &[u8] = &validator.metadata.name;
         let public_key_bytes = AuthorityPublicKeyBytes::from_bytes(name)?;
@@ -226,7 +232,9 @@ pub fn make_network_authority_client_sets_from_genesis(
 ) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
     let mut authority_clients = BTreeMap::new();
     for validator in genesis.validator_set() {
-        let channel = network_config.connect_lazy(validator.network_address())?;
+        let channel = network_config
+            .connect_lazy(validator.network_address())
+            .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         authority_clients.insert(validator.public_key(), client);
     }

@@ -21,7 +21,8 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletCont
 use sui_config::utils::get_available_port;
 use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
-    SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue, SuiObjectRead,
+    SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveStruct,
+    SuiMoveValue, SuiObjectRead,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
@@ -592,4 +593,92 @@ async fn test_validator_node_has_no_quorum_driver() {
     let node = SuiNode::start(validator_config).await.unwrap();
     assert!(node.quorum_driver().is_none());
     assert!(node.subscribe_to_quorum_driver_effects().is_err());
+}
+
+#[tokio::test]
+async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
+    let (swarm, mut context, _address) = setup_network_and_wallet().await?;
+    let (_node, jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
+
+    let mut txns = make_transactions_with_wallet_context(&mut context, 3).await;
+    assert!(
+        txns.len() >= 3,
+        "Expect at least 3 txns but only got {}. Do we generate enough gas objects during genesis?",
+        txns.len(),
+    );
+    let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
+
+    // Test request with ExecuteTransactionRequestType::WaitForEffectsCert
+    let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
+    let params = rpc_params![
+        tx_bytes,
+        flag,
+        signature,
+        pub_key,
+        ExecuteTransactionRequestType::WaitForEffectsCert
+    ];
+    let response: SuiExecuteTransactionResponse = jsonrpc_client
+        .request("sui_executeTransaction", params)
+        .await
+        .unwrap();
+
+    if let SuiExecuteTransactionResponse::EffectsCert {
+        certificate,
+        effects: _,
+    } = response
+    {
+        assert_eq!(&certificate.transaction_digest, tx_digest);
+    } else {
+        panic!("Expect EffectsCert but got {:?}", response);
+    }
+
+    // Test request with ExecuteTransactionRequestType::WaitForTxCert
+    let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
+    let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
+    let params = rpc_params![
+        tx_bytes,
+        flag,
+        signature,
+        pub_key,
+        ExecuteTransactionRequestType::WaitForTxCert
+    ];
+    let response: SuiExecuteTransactionResponse = jsonrpc_client
+        .request("sui_executeTransaction", params)
+        .await
+        .unwrap();
+
+    if let SuiExecuteTransactionResponse::TxCert { certificate } = response {
+        assert_eq!(&certificate.transaction_digest, tx_digest);
+    } else {
+        panic!("Expect TxCert but got {:?}", response);
+    }
+
+    // Test request with ExecuteTransactionRequestType::ImmediateReturn
+    let txn = txns.swap_remove(0);
+    let tx_digest = txn.digest();
+    let (tx_bytes, flag, signature, pub_key) = txn.to_network_data_for_execution();
+    let params = rpc_params![
+        tx_bytes,
+        flag,
+        signature,
+        pub_key,
+        ExecuteTransactionRequestType::ImmediateReturn
+    ];
+    let response: SuiExecuteTransactionResponse = jsonrpc_client
+        .request("sui_executeTransaction", params)
+        .await
+        .unwrap();
+
+    if let SuiExecuteTransactionResponse::ImmediateReturn {
+        tx_digest: transaction_digest,
+    } = response
+    {
+        assert_eq!(&transaction_digest, tx_digest);
+    } else {
+        panic!("Expect ImmediateReturn but got {:?}", response);
+    }
+
+    Ok(())
 }

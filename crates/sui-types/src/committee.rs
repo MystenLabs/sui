@@ -6,11 +6,12 @@ use super::base_types::*;
 use crate::crypto::AuthorityPublicKey;
 use crate::error::{SuiError, SuiResult};
 use itertools::Itertools;
-use rand_latest::rngs::OsRng;
-use rand_latest::seq::SliceRandom;
+use rand::rngs::OsRng;
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt::{Display, Formatter};
 
 pub type EpochId = u64;
 
@@ -266,6 +267,16 @@ impl PartialEq for Committee {
         self.epoch == other.epoch
             && self.voting_rights == other.voting_rights
             && self.total_votes == other.total_votes
+    }
+}
+
+impl Display for Committee {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "Committee (epoch={:?}): {:?}",
+            self.epoch, self.voting_rights
+        )
     }
 }
 
