@@ -1,8 +1,0 @@
-.container {
-    @apply w-full pb-2 px-0 
-    border-0 border-b border-solid border-sui-grey-45;
-}
-
-.text {
-    @apply bg-transparent border-0 font-sans text-sm text-[#1F6493] font-[500] cursor-pointer hover:text-sui-grey-80 px-0 box-border;
-}
