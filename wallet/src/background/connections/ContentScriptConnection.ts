@@ -4,11 +4,13 @@
 import { Connection } from './Connection';
 import { createMessage } from '_messages';
 import { isGetAccount } from '_payloads/account/GetAccount';
+import { isExecuteSignMessageRequest } from '_payloads/messages/ExecuteSignMessageRequest';
 import {
     isAcquirePermissionsRequest,
     isHasPermissionRequest,
 } from '_payloads/permissions';
 import { isExecuteTransactionRequest } from '_payloads/transactions';
+import Messages from '_src/background/Messages';
 import Permissions from '_src/background/Permissions';
 import Transactions from '_src/background/Transactions';
 
@@ -17,6 +19,7 @@ import type { Message } from '_messages';
 import type { PortChannelName } from '_messaging/PortChannelName';
 import type { ErrorPayload } from '_payloads';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
+import type { ExecuteSignMessageResponse } from '_payloads/messages/ExecuteSignMessageResponse';
 import type {
     HasPermissionsResponse,
     AcquirePermissionsResponse,
@@ -107,6 +110,40 @@ export class ContentScriptConnection extends Connection {
                     this.send(
                         createMessage<ExecuteTransactionResponse>(
                             { type: 'execute-transaction-response', result },
+                            msg.id
+                        )
+                    );
+                } catch (e) {
+                    this.sendError(
+                        {
+                            error: true,
+                            code: -1,
+                            message: (e as Error).message,
+                        },
+                        msg.id
+                    );
+                }
+            } else {
+                this.sendNotAllowedError(msg.id);
+            }
+        } else if (isExecuteSignMessageRequest(payload)) {
+            const allowed = await Permissions.hasPermissions(this.origin, [
+                'viewAccount',
+                'suggestSignMessages',
+            ]);
+
+            if (allowed) {
+                try {
+                    const signature = await Messages.signMessage(
+                        payload.message,
+                        this
+                    );
+                    this.send(
+                        createMessage<ExecuteSignMessageResponse>(
+                            {
+                                type: 'execute-sign-message-response',
+                                signature,
+                            },
                             msg.id
                         )
                     );

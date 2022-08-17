@@ -1,0 +1,10 @@
+.title {
+    align-self: flex-start;
+}
+
+.message {
+    align-self: flex-start;
+    max-width: 320px;
+    overflow-wrap: break-word;
+    overflow-x: auto;
+}

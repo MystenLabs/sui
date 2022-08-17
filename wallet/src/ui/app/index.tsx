@@ -4,6 +4,7 @@
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
+import { DappSignMessageApprovalPage } from './pages/dapp-sign-message-approval';
 import { AppType } from './redux/slices/app/AppType';
 import { routes as stakeRoutes } from './staking';
 import { useAppDispatch, useAppSelector } from '_hooks';
@@ -78,6 +79,10 @@ const App = () => {
                 <Route
                     path="tx-approval/:txID"
                     element={<DappTxApprovalPage />}
+                />
+                <Route
+                    path="sign-message-approval/:signMessageRequestID"
+                    element={<DappSignMessageApprovalPage />}
                 />
             </Route>
 
