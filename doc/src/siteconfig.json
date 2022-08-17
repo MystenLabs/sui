@@ -25,8 +25,8 @@
             "link": "/build/move"
           },
           {
-            "title": "SDK Reference",
-            "link": "https://playground.open-rpc.org/?uiSchema%5BappBar%5D%5Bui:splitView%5D=false&schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json&uiSchema%5BappBar%5D%5Bui:input%5D=false",
+            "title": "API Reference",
+            "link": "https://docs.sui.io/sui-jsonrpc",
             "external": true
           },
           {

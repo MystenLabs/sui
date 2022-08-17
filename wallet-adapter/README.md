@@ -7,8 +7,8 @@ This project is an adapter for wallets on the Sui blockchain.
 To run the demo app,
 
 ```
-npm i
-npm run start
+pnpm install
+pnpm start
 ```
 
 ### Modules

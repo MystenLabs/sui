@@ -75,13 +75,16 @@ function PkgView({ data }: { data: DataType }) {
                     </table>
                 </Tabs>
                 <ModulesWrapper
+                    id={data.id}
                     data={{
                         title: 'Modules',
                         content: properties,
                     }}
                 />
-                <h2 className={styles.header}>Transactions </h2>
-                <TxForID id={viewedData.id} category="object" />
+                <div className={styles.txsection}>
+                    <h2 className={styles.header}>Transactions </h2>
+                    <TxForID id={viewedData.id} category="object" />
+                </div>
             </div>
         </div>
     );

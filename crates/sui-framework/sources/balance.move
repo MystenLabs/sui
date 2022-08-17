@@ -39,7 +39,7 @@ module sui::balance {
     }
 
     /// Create a new supply for type T.
-    public fun create_supply<T: drop>(_witness: T): Supply<T> {
+    public fun create_supply<T: drop>(_: T): Supply<T> {
         Supply { value: 0 }
     }
 

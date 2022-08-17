@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 pub type TxSequenceNumber = u64;
 
 /// Either a freshly sequenced transaction/effects tuple of hashes or a batch
+#[allow(clippy::large_enum_variant)]
 #[derive(Eq, PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub enum UpdateItem {
     Transaction((TxSequenceNumber, ExecutionDigests)),

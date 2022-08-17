@@ -278,12 +278,14 @@ fn make_authority_state(
     // manually.
     // opts.set_manual_wal_flush(true);
 
-    let store = Arc::new(AuthorityStore::open(&path.join("store"), Some(opts)));
-    let epoch_store = Arc::new(EpochStore::new(path.join("epochs")));
+    let store = Arc::new(AuthorityStore::open(
+        &path.join("store"),
+        Some(opts.clone()),
+    ));
+    let epoch_store = Arc::new(EpochStore::new(path.join("epochs"), committee, Some(opts)));
     (
         Runtime::new().unwrap().block_on(async {
             AuthorityState::new(
-                committee.clone(),
                 *pubx,
                 Arc::pin(secx),
                 store.clone(),

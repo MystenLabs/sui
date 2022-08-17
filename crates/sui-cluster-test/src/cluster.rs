@@ -15,6 +15,7 @@ use sui_swarm::memory::Node;
 use sui_swarm::memory::Swarm;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::{get_key_pair, AccountKeyPair};
 use test_utils::network::{start_rpc_test_network_with_fullnode, TestNetwork};
 use tracing::info;
@@ -246,7 +247,11 @@ pub async fn new_wallet_context_from_cluster(
     let keystore_path = temp_dir.path().join(SUI_KEYSTORE_FILENAME);
     let keystore = KeystoreType::File(keystore_path);
     let address: SuiAddress = key_pair.public().into();
-    keystore.init().unwrap().add_key(key_pair).unwrap();
+    keystore
+        .init()
+        .unwrap()
+        .add_key(SuiKeyPair::Ed25519SuiKeyPair(key_pair))
+        .unwrap();
     SuiClientConfig {
         keystore,
         gateway: ClientType::RPC(rpc_url.into()),

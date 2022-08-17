@@ -53,7 +53,7 @@ module examples::profile {
     }
 
     /// Read `name` field from `ProfileInfo`.
-    public fun name(id: &ProfileInfo): &String {
+    public fun name(info: &ProfileInfo): &String {
         &info.name
     }
 

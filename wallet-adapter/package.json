@@ -2,23 +2,13 @@
   "name": "sui-wallet-adapter",
   "version": "0.1.0",
   "private": true,
-  "workspaces": {
-    "packages": [
-      "packages/adapters/base-adapter",
-      "packages/adapters/integrations/sui-wallet",
-      "packages/adapters/integrations/mock-wallet",
-      "packages/adapters/integrations/all-wallets",
-      "packages/react-providers",
-      "packages/ui"
-    ]
-  },
   "dependencies": {
     "@emotion/react": "^11.9.3",
     "@emotion/styled": "^11.9.3",
     "@mui/icons-material": "^5.8.4",
     "@mui/material": "^5.9.0",
     "@mysten/sui.js": "^0.6.0",
-    "@sui-wallet-adapter/all-wallets": "file:packages/adapters/integrations/all-wallets",
+    "@sui-wallet-adapter/all-wallets": "workspace:*",
     "@testing-library/jest-dom": "^5.16.4",
     "@testing-library/react": "^13.3.0",
     "@testing-library/user-event": "^13.5.0",
@@ -29,15 +19,15 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-scripts": "5.0.1",
-    "sui-base-wallet-adapter": "file:packages/adapters/base-adapter",
-    "sui-wallet-adapter-react": "file:packages/react-providers",
-    "sui-wallet-adapter-ui": "file:packages/ui",
+    "sui-base-wallet-adapter": "workspace:*",
+    "sui-wallet-adapter-react": "workspace:*",
+    "sui-wallet-adapter-ui": "workspace:*",
     "typescript": "^4.7.4",
     "web-vitals": "^2.1.4"
   },
   "scripts": {
-    "start": "npm run build --workspaces && react-scripts start",
-    "build": "npm run build --workspaces && react-scripts build",
+    "start": "pnpm -r --filter './packages/**' run build && react-scripts start",
+    "build": "pnpm -r --filter './packages/**' run build && react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },

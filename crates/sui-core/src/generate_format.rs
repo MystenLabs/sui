@@ -23,11 +23,15 @@ use sui_types::{
         ObjectInfoRequestKind, SingleTransactionKind, TransactionKind,
     },
     object::{Data, Owner},
+    storage::DeleteKind,
 };
 use typed_store::rocks::TypedStoreError;
 
 fn get_registry() -> Result<Registry> {
-    let mut tracer = Tracer::new(TracerConfig::default());
+    let config = TracerConfig::default()
+        .record_samples_for_structs(true)
+        .record_samples_for_newtype_structs(true);
+    let mut tracer = Tracer::new(config);
     let mut samples = Samples::new();
     // 1. Record samples for types with custom deserializers.
     // We want to call
@@ -85,6 +89,7 @@ fn get_registry() -> Result<Registry> {
     tracer.trace_type::<MoveTypeLayout>(&samples)?;
     tracer.trace_type::<base_types::SuiAddress>(&samples)?;
     tracer.trace_type::<UpdateItem>(&samples)?;
+    tracer.trace_type::<DeleteKind>(&samples)?;
 
     tracer.registry()
 }

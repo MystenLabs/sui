@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use anyhow::Result;
 use futures::TryFutureExt;
 use parking_lot::Mutex;
@@ -11,9 +12,10 @@ use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
+use sui_core::safe_client::SafeClientMetrics;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
-    authority_active::ActiveAuthority,
+    authority_active::{gossip::GossipMetrics, ActiveAuthority},
     authority_client::{
         make_network_authority_client_sets_from_genesis,
         make_network_authority_client_sets_from_system_state, NetworkAuthorityClient,
@@ -36,6 +38,7 @@ use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::http_server::HttpServerHandle;
+use sui_json_rpc::quorum_driver_api::FullNodeQuorumDriverApi;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::ws_server::WsServerHandle;
@@ -62,6 +65,10 @@ pub struct SuiNode {
 
 impl SuiNode {
     pub async fn start(config: &NodeConfig) -> Result<SuiNode> {
+        // TODO: maybe have a config enum that takes care of this for us.
+        let is_validator = config.consensus_config().is_some();
+        let is_full_node = !is_validator;
+
         //
         // Start metrics server
         //
@@ -80,7 +87,11 @@ impl SuiNode {
         let secret = Arc::pin(config.key_pair().copy());
         let committee = genesis.committee()?;
         let store = Arc::new(AuthorityStore::open(&config.db_path().join("store"), None));
-        let epoch_store = Arc::new(EpochStore::new(config.db_path().join("epochs")));
+        let epoch_store = Arc::new(EpochStore::new(
+            config.db_path().join("epochs"),
+            &committee,
+            None,
+        ));
 
         let checkpoint_store = Arc::new(Mutex::new(CheckpointStore::open(
             &config.db_path().join("checkpoints"),
@@ -90,17 +101,19 @@ impl SuiNode {
             secret.clone(),
         )?));
 
-        let index_store = if config.consensus_config().is_some() {
+        let index_store = if is_validator {
             None
         } else {
             Some(Arc::new(IndexStore::open_tables_read_write(
                 config.db_path().join("indexes"),
+                None,
                 None,
             )))
         };
 
         let follower_store = Arc::new(FollowerStore::open_tables_read_write(
             config.db_path().join("follower_db"),
+            None,
             None,
         ));
 
@@ -115,11 +128,10 @@ impl SuiNode {
 
         let state = Arc::new(
             AuthorityState::new(
-                committee,
                 config.public_key(),
                 secret,
                 store,
-                epoch_store,
+                epoch_store.clone(),
                 index_store.clone(),
                 event_store,
                 Some(checkpoint_store),
@@ -143,13 +155,11 @@ impl SuiNode {
         }?;
         let net = AuthorityAggregator::new(
             state.clone_committee(),
+            epoch_store,
             authority_clients,
             AuthAggMetrics::new(&prometheus_registry),
+            SafeClientMetrics::new(&prometheus_registry),
         );
-
-        // TODO: maybe have a config enum that takes care of this for us.
-        let is_validator = config.consensus_config().is_some();
-        let is_full_node = !is_validator;
 
         let quorum_driver_handler = if is_full_node {
             Some(QuorumDriverHandler::new(net.clone()))
@@ -165,6 +175,7 @@ impl SuiNode {
                 let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
                     config.db_path().join("node_sync_db"),
                     None,
+                    None,
                 ));
 
                 let active_authority = Arc::new(ActiveAuthority::new(
@@ -172,6 +183,7 @@ impl SuiNode {
                     pending_store,
                     follower_store,
                     net,
+                    GossipMetrics::new(&prometheus_registry),
                 )?);
                 active = Some(Arc::clone(&active_authority));
 
@@ -242,14 +254,22 @@ impl SuiNode {
                     server_builder.add_service(ValidatorServer::new(validator_service));
             }
 
-            let server = server_builder.bind(config.network_address()).await?;
+            let server = server_builder
+                .bind(config.network_address())
+                .await
+                .map_err(|err| anyhow!(err.to_string()))?;
             let local_addr = server.local_addr();
             info!("Listening to traffic on {local_addr}");
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let (json_rpc_service, ws_subscription_service) =
-            build_node_server(state.clone(), config, &prometheus_registry).await?;
+        let (json_rpc_service, ws_subscription_service) = build_node_server(
+            state.clone(),
+            &quorum_driver_handler,
+            config,
+            &prometheus_registry,
+        )
+        .await?;
 
         let node = Self {
             grpc_server,
@@ -304,6 +324,7 @@ impl SuiNode {
 
 pub async fn build_node_server(
     state: Arc<AuthorityState>,
+    quorum_driver_handler: &Option<QuorumDriverHandler<NetworkAuthorityClient>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
 ) -> Result<(Option<HttpServerHandle>, Option<WsServerHandle>)> {
@@ -311,12 +332,18 @@ pub async fn build_node_server(
     if config.consensus_config().is_some() {
         return Ok((None, None));
     }
-
     let mut server = JsonRpcServerBuilder::new(false, prometheus_registry)?;
 
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
     server.register_module(BcsApiImpl::new(state.clone()))?;
+
+    if let Some(quorum_driver_handler_) = quorum_driver_handler {
+        server.register_module(FullNodeQuorumDriverApi::new(
+            quorum_driver_handler_.clone_quorum_driver(),
+            state.module_cache.clone(),
+        ))?;
+    }
 
     if let Some(event_handler) = state.event_handler.clone() {
         server.register_module(EventReadApiImpl::new(state.clone(), event_handler))?;

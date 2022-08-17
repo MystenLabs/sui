@@ -267,7 +267,7 @@ impl ValidatorService {
         let span = tracing::debug_span!(
             "process_tx",
             ?tx_digest,
-            tx_kind = transaction.data.kind_as_str()
+            tx_kind = transaction.signed_data.data.kind_as_str()
         );
 
         let info = state
@@ -323,7 +323,7 @@ impl ValidatorService {
         let span = tracing::debug_span!(
             "execute_transaction",
             ?tx_digest,
-            tx_kind = certificate.data.kind_as_str()
+            tx_kind = certificate.signed_data.data.kind_as_str()
         );
 
         let response = state

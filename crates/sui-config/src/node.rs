@@ -146,6 +146,7 @@ pub struct ValidatorInfo {
     pub public_key: AuthorityPublicKeyBytes,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
+    pub gas_price: u64,
     pub network_address: Multiaddr,
     pub narwhal_primary_to_primary: Multiaddr,
 
@@ -175,6 +176,10 @@ impl ValidatorInfo {
 
     pub fn delegation(&self) -> StakeUnit {
         self.delegation
+    }
+
+    pub fn gas_price(&self) -> u64 {
+        self.gas_price
     }
 
     pub fn network_address(&self) -> &Multiaddr {

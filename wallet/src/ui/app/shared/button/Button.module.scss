@@ -11,6 +11,14 @@
     border: none;
     cursor: pointer;
     text-transform: capitalize;
+    text-decoration: none;
+    color: inherit;
+
+    &[disabled],
+    &.disabled {
+        opacity: 0.5;
+        cursor: initial;
+    }
 
     &.neutral {
         background: colors.$gray-45;
@@ -21,11 +29,9 @@
         background: colors.$cta-blue;
         color: colors.$white;
 
-        &[disabled] {
-            cursor: initial;
-            color: colors.$white;
+        &[disabled],
+        &.disabled {
             background: colors.$sui-steel-blue;
-            opacity: 0.5;
 
             i {
                 color: colors.$white;

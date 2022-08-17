@@ -27,7 +27,7 @@ sui-json = { path = "../sui-json" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
-rand = "0.7.3"
+rand = "0.8.5"
 
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }

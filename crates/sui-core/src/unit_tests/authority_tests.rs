@@ -119,8 +119,8 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
     let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
-    bad_signature_transfer_transaction.tx_signature =
-        Signature::new(&transfer_transaction.data, &unknown_key);
+    bad_signature_transfer_transaction.signed_data.tx_signature =
+        Signature::new(&transfer_transaction.signed_data.data, &unknown_key);
     assert!(authority_state
         .handle_transaction(bad_signature_transfer_transaction)
         .await
@@ -401,8 +401,9 @@ async fn test_handle_transfer_transaction_ok() {
             .unwrap()
             .as_ref()
             .unwrap()
+            .signed_data
             .data,
-        transfer_transaction.data
+        transfer_transaction.signed_data.data
     );
 }
 

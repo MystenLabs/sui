@@ -6,7 +6,7 @@ import Browser from 'webextension-polyfill';
 
 import { AppType } from './AppType';
 import { DEFAULT_API_ENV } from '_app/ApiProvider';
-import { fetchAllOwnedObjects } from '_redux/slices/sui-objects';
+import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
 import { getTransactionsByAddress } from '_redux/slices/txresults';
 
 import type { PayloadAction } from '@reduxjs/toolkit';
@@ -34,7 +34,7 @@ export const changeRPCNetwork = createAsyncThunk<void, API_ENV, AppThunkConfig>(
         dispatch(setApiEnv(networkName));
         api.setNewJsonRpcProvider(networkName);
         dispatch(getTransactionsByAddress());
-        dispatch(fetchAllOwnedObjects());
+        dispatch(fetchAllOwnedAndRequiredObjects());
         // Set persistent network state
         Browser.storage.local.set({ sui_Env: networkName });
     }

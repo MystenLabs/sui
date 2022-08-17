@@ -6,6 +6,7 @@ use crate::authority::AuthorityState;
 use crate::authority_aggregator::authority_aggregator_tests::*;
 use crate::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
+use crate::epoch::epoch_store::EpochStore;
 use crate::safe_client::SafeClient;
 use async_trait::async_trait;
 use std::borrow::Borrow;
@@ -201,6 +202,8 @@ pub async fn init_configurable_authorities(
     use narwhal_crypto::traits::KeyPair;
     use sui_types::crypto::AccountKeyPair;
 
+    use crate::safe_client::SafeClientMetrics;
+
     let authority_count = 4;
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let mut gas_objects = Vec::new();
@@ -236,7 +239,13 @@ pub async fn init_configurable_authorities(
         }
         states.push(client.state.clone());
         names.push(authority_name);
-        clients.push(SafeClient::new(client, committee.clone(), authority_name));
+        let epoch_store = client.state.epoch_store().clone();
+        clients.push(SafeClient::new(
+            client,
+            epoch_store,
+            authority_name,
+            SafeClientMetrics::new_for_tests(),
+        ));
     }
 
     // Execute transactions for every EmitUpdateItem Action, use the digest of the transaction to
@@ -312,10 +321,13 @@ pub async fn init_configurable_authorities(
         .into_iter()
         .map(|(name, client)| (name, client.authority_client().clone()))
         .collect();
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
     let net = AuthorityAggregator::new(
         committee,
+        epoch_store,
         authority_clients,
         AuthAggMetrics::new_for_tests(),
+        SafeClientMetrics::new_for_tests(),
     );
     (net, states, executed_digests)
 }

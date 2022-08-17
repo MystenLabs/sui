@@ -175,7 +175,7 @@ Because the admin owns the gameboard, each individual player cannot place a mark
 Now let's begin the game!
 First of all, let's create a game with the command:
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function create_game --args $PLAYER_X $PLAYER_O --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function create_game --args $PLAYER_X $PLAYER_O --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 You will see output like:
@@ -241,7 +241,7 @@ public entry fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address,
 ```
 The `cap` argument will be PlayerX's capability object (XCAP), and `game_address` argument will be the admin's address (ADMIN):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 1 1 --gas $X_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $XCAP $ADMIN 1 1 --gas $X_GAS --gas-budget 1000
 ```
 And its output:
 ```shell
@@ -269,7 +269,7 @@ public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContex
 ```
 The first argument is the game board, and the second argument is the mark the admin just received from the player. We will call this function (replace the second argument with the Mark object ID above):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0xAE3CE9176F1A8C1F21D922722486DF667FA00394 --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0xAE3CE9176F1A8C1F21D922722486DF667FA00394 --gas $ADMIN_GAS --gas-budget 1000
 ```
 The gameboard now looks like this (this won't be printed out, so keep it in your imagination):
 ```
@@ -280,7 +280,7 @@ _|X|_
 
 PlayerO now tries to put a mark at (0, 0):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $OCAP $ADMIN 0 0 --gas $O_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $OCAP $ADMIN 0 0 --gas $O_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -296,7 +296,7 @@ Created Objects:
 
 Note, in this second call, the second argument comes from the created objects in the first call.
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0x7A16D266DAD41145F34649258BC1F744D147BF2F --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0x7A16D266DAD41145F34649258BC1F744D147BF2F --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -316,7 +316,7 @@ _|X|_
 
 PlayerX puts a mark at (0, 2):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 0 2 --gas $X_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $XCAP $ADMIN 0 2 --gas $X_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -332,7 +332,7 @@ Created Objects:
 
 Then run:
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0x2875D50BD9021ED2009A1278C7CB6D4C876FFF6A --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0x2875D50BD9021ED2009A1278C7CB6D4C876FFF6A --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 The gameboard now looks like this:
@@ -344,7 +344,7 @@ _|X|_
 
 PlayerO places a mark at (1, 0):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $OCAP $ADMIN 1 0 --gas $O_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $OCAP $ADMIN 1 0 --gas $O_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -360,7 +360,7 @@ Created Objects:
 
 Now run:
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0x4F7391F172063D87013DD9DC95B8BD45C35FD2D9 --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0x4F7391F172063D87013DD9DC95B8BD45C35FD2D9 --gas $ADMIN_GAS --gas-budget 1000
 ...
 ```
 The gameboard now looks like:
@@ -371,7 +371,7 @@ O|X|_
 ```
 This is a chance for PlayerX to win! X now mints the winning mark at (2, 0):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 2 0 --gas $X_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $XCAP $ADMIN 2 0 --gas $X_GAS --gas-budget 1000
 ```
 
 And its output:
@@ -387,7 +387,7 @@ AA7A6624E16E5E447801462FF6614013FC4AD156 SequenceNumber(1) o#e5e1b15f03531db118e
 
 And then finally the admin places the winning mark:
 ```shell
-   $ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0xAA7A6624E16E5E447801462FF6614013FC4AD156 --gas $ADMIN_GAS --gas-budget 1000
+   $ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0xAA7A6624E16E5E447801462FF6614013FC4AD156 --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 With output:

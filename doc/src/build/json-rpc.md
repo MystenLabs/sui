@@ -1,22 +1,29 @@
 ---
-title: Local RPC Server & JSON-RPC API Quick Start
+title: RPC Server & JSON-RPC API Quick Start
 ---
 
-Welcome to the Sui RPC server quick start.
+Welcome to the guide for making remote procedure calls (RPC) to the Sui network. This document walks you through connecting to Sui and using the Sui JSON-RPC API to interact with the Sui network. Use the RPC layer to test your dApps, sending their transactions onto the [Sui validators](../learn/architecture/validators.md) for verification.
 
-This document walks you through setting up your own local Sui RPC Server and using the Sui JSON-RPC API to interact with a local Sui network. This guide is useful for developers interested in Sui network interactions via API. For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
+This guide is useful for developers interested in Sui network interactions via API and should be used in conjunction with the [SuiJSON format](sui-json.md) for aligning JSON inputs with Move Call arguments.
 
+For a similar guide on Sui network interactions via CLI, refer to the [Sui CLI client](cli-client.md) documentation.
 
-## Local RPC server setup
+## Set up RPC server
 Follow the instructions to [install Sui binaries](install.md).
 
-### Start local Sui network
-Follow the instructions to [create](cli-client.md#genesis) and [start](cli-client.md#starting-the-network) the Sui network.
+### Connect to Sui network
+
+#### Remote Devnet
+Simply [connect to the Sui Devnet](../explore/devnet.md) to start making RPC calls to our remote server, build on top of Sui.
+
+#### Local Sui Network
+Alternatively, to [contribute](../contribute/index.md) to Sui itself, you may follow the instructions to [create](cli-client.md#genesis) and [start](cli-client.md#starting-the-network) a local Sui network.
+
 The genesis process will create a `gateway.yaml` configuration file that will be used by the RPC server.
 
-### Start local RPC server
+### Start RPC server
 
-Use the following command to start a local server:
+Use the following command to start an RPC server:
 ```shell
 $ rpc-server
 ```
@@ -38,22 +45,20 @@ Export a local user variable to store the hardcoded hostname + port that the loc
 export SUI_RPC_HOST=http://127.0.0.1:5001
 ```
 
-## Sui software development kits
+## Use Sui software development kits
 
-You may sign transactions and interact with the Sui network using:
+You can sign transactions and interact with the Sui network using any of the following:
 
-* the [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
-* the [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
+* [Sui Rust SDK](rust-sdk.md), a collection of Rust language JSON-RPC wrapper and crypto utilities.
+* [Sui TypeScript SDK](https://github.com/MystenLabs/sui/tree/main/sdk/typescript) and [reference files](https://www.npmjs.com/package/@mysten/sui.js).
+* [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for all available methods.
 
-## Sui JSON-RPC API
+## Follow Sui JSON-RPC examples
 
 In the following sections we will show how to use Sui's JSON-RPC API with
-the `curl` command.
+the `curl` command. See the [Sui API Reference](https://docs.sui.io/sui-jsonrpc) for the latest list of all available methods.
 
-## Sui JSON-RPC methods
-
-### rpc.discover
-
+### RPC discover
 Sui RPC server supports OpenRPC’s [service discovery method](https://spec.open-rpc.org/#service-discovery-method).
 A `rpc.discover` method is added to provide documentation describing our JSON-RPC APIs service.
 
@@ -63,75 +68,8 @@ curl --location --request POST $SUI_RPC_HOST \
 --data-raw '{ "jsonrpc":"2.0", "method":"rpc.discover","id":1}'
 ```
 
-You can see an example of the discovery service in the [OpenRPC Playground](https://playground.open-rpc.org/?schemaUrl=https://raw.githubusercontent.com/MystenLabs/sui/main/crates/sui-open-rpc/spec/openrpc.json).
-
-### sui_syncAccountState
-
-Synchronize client state with validators with the following command,
-replacing `{{address}}` with an actual address value, for example one obtained from `client.yaml`:
-
-```shell
-curl --location --request POST $SUI_RPC_HOST \
---header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", "method":"sui_syncAccountState", "params":["{{address}}"], "id":1}'
-```
-
-This will fetch the latest information on all objects owned by each
-address that is managed by this server. This command has no output.
-
-### sui_getOwnedObjects
-
-Return the list of objects owned by an address:
-```shell
-curl --location --request POST $SUI_RPC_HOST \
---header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", "method":"sui_getOwnedObjects", "params":["{{address}}"], "id":1}' | json_pp
-```
-
-You should replace `{{address}}` in the command above with an actual
-address value, you can retrieve the list of the addresses created during
-genesis from `client.yaml`. Ensure you have run [`sui_syncAccountState`](#sui_syncaccountstate)
-
-The output you see should resemble the following (abbreviated to show only two objects):
-
-```shell
-{
-   "id" : 1,
-   "jsonrpc" : "2.0",
-   "result" : {
-      "objects" : [
-         {
-            "digest" : "zpa45U9ANfA9A6iS01NvAoVH0RbYB6a5rjhgh2Hb/GE=",
-            "objectId" : "0x17b348903b0cfb75fc9ab5426bb69d83d1e756a5",
-            "version" : 1
-         },
-         {
-            "digest" : "8SPi0h6xVMVNBvGzzF4RfuOoaXISdtiB5aT7+BYDbxg=",
-            "objectId" : "0x7599d8ea1de4c9616d077f16ca0eb38cdecacc07",
-            "version" : 1
-         },
-         ...
-      ]
-   }
-}
-
-```
-
-### GET sui_getObjectInfoRaw
-
-Return the object information for a specified object, for example:
-
-```shell
-curl --location --request POST $SUI_RPC_HOST \
---header 'Content-Type: application/json' \
---data-raw '{ "jsonrpc":"2.0", "method":"sui_getObjectInfoRaw", "params":["{{object_id}}"], "id":1}' | json_pp
-```
-
-Replace `{{object_id}}` in the command above with an
-actual object ID, for example one obtained from [`sui_getOwnedObjects`](#sui_getownedobjects) (without quotes).
-
-### sui_transferObject
-#### 1, Create a transaction to transfer a Sui coin from one address to another:
+### Transfer object
+#### 1, Create an unsigned transaction to transfer a Sui coin from one address to another
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
@@ -155,7 +93,7 @@ A transaction data response will be returned from the gateway server.
 }
 
 ```
-#### 2, Sign the transaction using the Sui signtool
+#### 2, Sign the transaction using the Sui keytool
 ```shell
 sui keytool sign --address <owner_address> --data <tx_bytes>
 ```
@@ -168,7 +106,7 @@ You will see output resembling:
 2022-04-25T18:50:06.031925Z  INFO sui::sui_commands: Signature : 6vc+ku0RsMKdky8DRfoy/hw6eCQ3YsadH6rZ9WUCwGTAumuWER3TOJRw7u7F4QaHkqUsIPfJN9GRraSX+N8ADQ==
 ```
 
-#### 3, Execute the transaction using the transaction data, signature and public key.
+#### 3, Execute the transaction using the transaction data, signature and public key
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
 --header 'Content-Type: application/json' \
@@ -197,9 +135,10 @@ represented by both `{{coin_object_id}}` and `{{gas_object_id}}` must
 be owned by the address represented by `{{owner_address}}`.
 
 
-### sui_moveCall
+### Invoke Move functions
 
-#### 1, Execute a Move call transaction by calling the specified function in
+#### 1, Execute a Move call transaction
+Execute a Move call transaction by calling the specified function in
 the module of a given package (smart contracts in Sui are written in
 the [Move](move/index.md) language):
 
@@ -222,7 +161,7 @@ curl --location --request POST $SUI_RPC_HOST \
 ```
 
 #### 2, Sign the transaction
-Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-signtool).
+Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-keytool).
 
 #### 3, Execute the transaction
 Follow the instructions to [execute the transaction](#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
@@ -242,9 +181,7 @@ would for [`sui_transferObject`](#sui_TransferObject) - please note additional
 
 To learn more about what `args` are accepted in a Move call, refer to the [SuiJSON](sui-json.md) documentation.
 
-### sui_publish
-
-Publish Move module.
+### Publish a Move package
 
 ```shell
 curl --location --request POST $SUI_RPC_HOST \
@@ -268,7 +205,7 @@ You should replace `{{owner_address}}` in the
 command above with an actual address values, for example one obtained
 from `client.yaml`. You should also replace `{{gas_object_id}}` in the command above with
 an actual object ID, for example one obtained from `objectId` in the output
-of [`sui_getOwnedObjects`](#sui_getownedobjects). You can see that all gas objects generated
+of `sui_getObjectsOwnedByAddress`. You can see that all gas objects generated
 during genesis are of `Coin/SUI` type). For this call to work, the object
 represented by `{{gas_object_id}}` must be owned by the address represented by
 `{{owner_address}}`.
@@ -292,7 +229,7 @@ Copy the outputting base64 representation of the compiled Move module into the
 REST publish endpoint.
 
 #### 2, Sign the transaction
-Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-signtool).
+Follow the instructions to [sign the transaction](#2-sign-the-transaction-using-the-sui-keytool).
 
 #### 3, Execute the transaction
 Follow the instructions to [execute the transaction](#3-execute-the-transaction-using-the-transaction-data-signature-and-public-key).
@@ -306,7 +243,3 @@ Below you can see a truncated sample output of [sui_publish](#sui_publish). One 
     ...
 }
 ```
-
-## Connect to remote JSON-RPC server
-
-Employ alternative ways of working with Sui's JSON-RPC API. Connect to [Sui Devnet](../explore/devnet.md), [Join Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/) and soon Mainnet!

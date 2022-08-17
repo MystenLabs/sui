@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use narwhal_crypto::secp256k1::Secp256k1KeyPair;
+
 use crate::crypto::AccountKeyPair;
 use crate::crypto::SuiSignature;
 use crate::{crypto::bcs_signable_test::Foo, signature_seed::SignatureSeed};
@@ -131,4 +133,22 @@ fn seed_zeroize_on_drop() {
 
     let memory: &[u8] = unsafe { ::std::slice::from_raw_parts(secret_ptr, 32) };
     assert!(!memory.contains(&0x15));
+}
+
+#[test]
+fn test_sign_verify_with_secp256k1() {
+    let seed = SignatureSeed::default();
+    let id_0 = [0u8; 32];
+    let msg0 = Foo("test0".to_string());
+
+    let sui_address_0 = seed
+        .new_deterministic_address::<Secp256k1KeyPair>(&id_0, Some(&TEST_DOMAIN))
+        .unwrap();
+
+    let sig_0 = seed.sign::<_, Secp256k1KeyPair>(&id_0, Some(&TEST_DOMAIN), &msg0);
+    assert!(sig_0.is_ok());
+    let sig_0_ok = sig_0.unwrap();
+
+    let ver_0 = sig_0_ok.verify(&msg0, sui_address_0);
+    assert!(ver_0.is_ok());
 }

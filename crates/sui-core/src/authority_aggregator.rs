@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_client::AuthorityAPI;
-use crate::safe_client::SafeClient;
+use crate::safe_client::{SafeClient, SafeClientMetrics};
 use async_trait::async_trait;
 
 use futures::{future, future::BoxFuture, stream::FuturesUnordered, StreamExt};
@@ -27,11 +27,13 @@ use prometheus::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
+use crate::epoch::epoch_store::EpochStore;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::TapFallible;
 
@@ -86,6 +88,7 @@ pub struct AuthAggMetrics {
     pub num_signatures: Histogram,
     pub num_good_stake: Histogram,
     pub num_bad_stake: Histogram,
+    pub total_quorum_once_timeout: IntCounter,
 }
 
 // Override default Prom buckets for positive numbers in 0-50k range
@@ -125,6 +128,12 @@ impl AuthAggMetrics {
                 registry,
             )
             .unwrap(),
+            total_quorum_once_timeout: register_int_counter_with_registry!(
+                "total_quorum_once_timeout",
+                "Total number of timeout when calling quorum_once_with_timeout",
+                registry,
+            )
+            .unwrap(),
         }
     }
 
@@ -143,31 +152,55 @@ pub struct AuthorityAggregator<A> {
     // Metrics
     pub metrics: AuthAggMetrics,
     pub timeouts: TimeoutConfig,
+    // Store here for clone during re-config
+    pub safe_client_metrics: SafeClientMetrics,
 }
 
 impl<A> AuthorityAggregator<A> {
     pub fn new(
         committee: Committee,
+        epoch_store: Arc<EpochStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
+        safe_client_metrics: SafeClientMetrics,
     ) -> Self {
-        Self::new_with_timeouts(committee, authority_clients, metrics, Default::default())
+        Self::new_with_timeouts(
+            committee,
+            epoch_store,
+            authority_clients,
+            metrics,
+            safe_client_metrics,
+            Default::default(),
+        )
     }
 
     pub fn new_with_timeouts(
         committee: Committee,
+        epoch_store: Arc<EpochStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
+        safe_client_metrics: SafeClientMetrics,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
-            committee: committee.clone(),
+            committee,
             authority_clients: authority_clients
                 .into_iter()
-                .map(|(name, api)| (name, SafeClient::new(api, committee.clone(), name)))
+                .map(|(name, api)| {
+                    (
+                        name,
+                        SafeClient::new(
+                            api,
+                            epoch_store.clone(),
+                            name,
+                            safe_client_metrics.clone(),
+                        ),
+                    )
+                })
                 .collect(),
             metrics,
             timeouts,
+            safe_client_metrics,
         }
     }
 
@@ -197,7 +230,7 @@ pub enum ReduceOutput<S> {
 }
 
 #[async_trait]
-pub trait CertificateHandler {
+trait CertificateHandler {
     async fn handle(&self, certificate: CertifiedTransaction)
         -> SuiResult<TransactionInfoResponse>;
 
@@ -244,7 +277,7 @@ where
         level = "trace",
         skip_all
     )]
-    pub async fn sync_authority_source_to_destination<CertHandler: CertificateHandler>(
+    async fn sync_authority_source_to_destination<CertHandler: CertificateHandler>(
         &self,
         cert: CertifiedTransaction,
         source_authority: AuthorityName,
@@ -370,7 +403,7 @@ where
         Ok(())
     }
 
-    pub async fn sync_certificate_to_authority(
+    async fn sync_certificate_to_authority(
         &self,
         cert: CertifiedTransaction,
         destination_authority: AuthorityName,
@@ -385,7 +418,7 @@ where
         .await
     }
 
-    pub async fn sync_certificate_to_authority_with_timeout(
+    async fn sync_certificate_to_authority_with_timeout(
         &self,
         cert: CertifiedTransaction,
         destination_authority: AuthorityName,
@@ -416,9 +449,7 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    pub async fn sync_certificate_to_authority_with_timeout_inner<
-        CertHandler: CertificateHandler,
-    >(
+    async fn sync_certificate_to_authority_with_timeout_inner<CertHandler: CertificateHandler>(
         &self,
         cert: CertifiedTransaction,
         destination_authority: AuthorityName,
@@ -767,6 +798,8 @@ where
         timeout_each_authority: Duration,
         // When to give up on the attempt entirely.
         timeout_total: Option<Duration>,
+        // The behavior that authorities expect to perform, used for logging and error
+        description: &'static str,
     ) -> Result<S, SuiError>
     where
         FMap: Fn(AuthorityName, SafeClient<A>) -> AsyncResult<'a, S, SuiError> + Send + Clone + 'a,
@@ -785,6 +818,7 @@ where
         if let Some(t) = timeout_total {
             timeout(t, fut).await.map_err(|_timeout_error| {
                 if authority_errors.is_empty() {
+                    self.metrics.total_quorum_once_timeout.inc();
                     SuiError::TimeoutError
                 } else {
                     SuiError::TooManyIncorrectAuthorities {
@@ -792,6 +826,7 @@ where
                             .iter()
                             .map(|(a, b)| (*a, b.clone()))
                             .collect(),
+                        action: description,
                     }
                 }
             })?
@@ -871,6 +906,7 @@ where
                                             response.err().map(|err| (name, err))
                                         })
                                         .collect(),
+                                    action: "get_object_by_id",
                                 });
                             }
                         }
@@ -1027,6 +1063,7 @@ where
                                 if state.bad_weight > validity {
                                     return Err(SuiError::TooManyIncorrectAuthorities {
                                         errors: state.errors,
+                                        action: "get_all_owned_objects",
                                     });
                                 }
                             }
@@ -1197,7 +1234,7 @@ where
             validity_threshold = validity,
             "Broadcasting transaction request to authorities"
         );
-        trace!("Transaction data: {:?}", transaction.data);
+        trace!("Transaction data: {:?}", transaction.signed_data.data);
 
         struct ProcessTransactionState {
             // The list of signatures gathered at any point
@@ -1704,6 +1741,7 @@ where
             |_, client| Box::pin(async move { client.handle_checkpoint(request.clone()).await }),
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "handle_checkpoint_request",
         )
         .await
     }
@@ -1743,6 +1781,7 @@ where
             },
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "get_certified_checkpoint",
         )
         .await
     }
@@ -1777,6 +1816,7 @@ where
             },
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "handle_cert_info_request",
         )
         .await
     }
@@ -1821,6 +1861,7 @@ where
             },
             self.timeouts.serial_authority_request_timeout,
             timeout_total,
+            "handle_transaction_and_effects_info_request",
         )
         .await
     }
@@ -1930,6 +1971,7 @@ where
             .true_effects
             .ok_or(SuiError::TooManyIncorrectAuthorities {
                 errors: final_state.errors,
+                action: "execute_cert_to_true_effects",
             })
             .tap_err(|e| info!(?digest, "execute_cert_to_true_effects failed: {}", e))
     }

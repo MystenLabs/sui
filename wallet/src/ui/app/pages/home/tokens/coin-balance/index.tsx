@@ -19,12 +19,7 @@ export type CoinProps = {
     mode?: 'row-item' | 'standalone';
 };
 
-function CoinBalance({
-    type,
-    balance,
-    hideStake = false,
-    mode = 'row-item',
-}: CoinProps) {
+function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
     const symbol = useMemo(() => Coin.getCoinSymbol(type), [type]);
     const intl = useIntl();
     const balanceFormatted = useMemo(
@@ -35,13 +30,6 @@ function CoinBalance({
         () => `/send?${new URLSearchParams({ type }).toString()}`,
         [type]
     );
-    const stakeUrl = useMemo(
-        () => `/stake?${new URLSearchParams({ type }).toString()}`,
-        [type]
-    );
-    // TODO: turn stake feature back on when fix is ready on next release.
-    // const showStake = !hideStake && GAS_TYPE_ARG === type;
-    const showStake = false;
     const shortenType = useMiddleEllipsis(type, 30);
     return (
         <div className={cl(st.container, st[mode])}>
@@ -60,11 +48,6 @@ function CoinBalance({
                 <Link className={cl('btn', st.action)} to={sendUrl}>
                     Send
                 </Link>
-                {showStake ? (
-                    <Link className={cl('btn', st.action)} to={stakeUrl}>
-                        Stake
-                    </Link>
-                ) : null}
             </div>
         </div>
     );

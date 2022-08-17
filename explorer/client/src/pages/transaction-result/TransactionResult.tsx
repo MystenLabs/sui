@@ -28,6 +28,7 @@ import type {
     ExecutionStatusType,
     TransactionEffects,
     SuiObjectRef,
+    SuiEvent,
 } from '@mysten/sui.js';
 
 type TxnState = CertifiedTransaction & {
@@ -38,6 +39,7 @@ type TxnState = CertifiedTransaction & {
     txError: string;
     mutated: SuiObjectRef[];
     created: SuiObjectRef[];
+    events?: SuiEvent[];
     timestamp_ms: number | null;
 };
 // TODO: update state to include Call types
@@ -63,6 +65,7 @@ const initState: TxnState = {
     timestamp_ms: 0,
     mutated: [],
     created: [],
+    events: [],
 };
 
 function fetchTransactionData(
@@ -114,6 +117,7 @@ const transformTransactionResponse = (
         loadState: 'loaded',
         mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
         created: getCreatedOrMutatedData(txObj.effects, 'created'),
+        events: txObj.effects.events,
         timestamp_ms: txObj.timestamp_ms,
     };
 };
