@@ -21,6 +21,7 @@ import stUserApprove from '_components/user-approve-container/UserApproveContain
 const permissionTypeToTxt: Record<PermissionType, string> = {
     viewAccount: 'View Account',
     suggestTransactions: 'Propose transactions',
+    suggestSignMessages: 'Propose signing of messages',
 };
 
 function SiteConnectPage() {

@@ -17,7 +17,12 @@ export type PayloadType =
     | 'execute-transaction-response'
     | 'get-transaction-requests'
     | 'get-transaction-requests-response'
-    | 'transaction-request-response';
+    | 'transaction-request-response'
+    | 'execute-sign-message-request'
+    | 'execute-sign-message-response'
+    | 'sign-message-request-response'
+    | 'get-sign-message-requests'
+    | 'get-sign-message-requests-response';
 
 export interface BasePayload {
     type: PayloadType;

@@ -12,6 +12,8 @@ import type { SuiAddress, MoveCallTransaction } from '@mysten/sui.js';
 import type { Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
+import type { ExecuteSignMessageRequest } from '_payloads/messages/ExecuteSignMessageRequest';
+import type { ExecuteSignMessageResponse } from '_payloads/messages/ExecuteSignMessageResponse';
 import type {
     PermissionType,
     HasPermissionsRequest,
@@ -103,6 +105,16 @@ export class DAppInterface {
                 transactionBytes,
             }),
             (response) => response.result
+        );
+    }
+
+    public signMessage(message: Uint8Array) {
+        return mapToPromise(
+            this.send<ExecuteSignMessageRequest, ExecuteSignMessageResponse>({
+                type: 'execute-sign-message-request',
+                message,
+            }),
+            (response) => response.signature
         );
     }
 
