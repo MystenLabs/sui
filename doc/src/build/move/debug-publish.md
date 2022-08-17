@@ -22,7 +22,7 @@ debug::print_stack_trace();
 Alternatively, any call to `abort` or assertion failure will also print the stacktrace at the point of failure.
 
 > **Important:** All calls to functions in the `debug` module must be removed from no-test code
-> before the new module can be published.
+> before the new module can be published (test code is marked with the `#[test]` annotation).
 
 ## Publishing a package
 

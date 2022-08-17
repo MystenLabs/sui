@@ -999,7 +999,7 @@ description on how to [write a simple Move code package](move/write-package.md),
 which we can publish using Sui client's `publish` command.
 
 > **Important:** All calls to functions in the `debug` module must be removed from no-test code
-> before the new module can be published.
+> before the new module can be published (test code is marked with the `#[test]` annotation).
 
 The publish command
 requires us to specify a directory where the user-defined package lives.
