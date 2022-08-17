@@ -13,7 +13,7 @@ use sui_types::{
 use futures::{stream::FuturesUnordered, StreamExt};
 use std::sync::Arc;
 use tokio::sync::oneshot;
-use tokio::time::{sleep, Duration};
+use tokio::time::{sleep, Duration, Instant};
 
 use super::{NodeSyncHandle, NodeSyncState};
 
@@ -39,6 +39,10 @@ pub async fn node_sync_process<A>(
     .await;
 }
 
+// How long must a follower task run for for us to clear the exponential backoff for that peer?
+const CLEAR_BACKOFF_DURATION: Duration = Duration::from_secs(30);
+const MIN_RECONNECTION_DELAY: Duration = Duration::from_millis(500);
+
 async fn follower_process<A>(
     committee: Arc<Committee>,
     node_sync_handle: NodeSyncHandle,
@@ -48,17 +52,22 @@ async fn follower_process<A>(
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    debug!("starting follower process");
+
+    let mut backoff = HashMap::new();
+
     loop {
         let mut follower_tasks = FuturesUnordered::new();
         let mut reconnects = FuturesUnordered::new();
 
         let start_one_task = |name, handle, state| {
+            let start_time = Instant::now();
             let client = aggregator.clone_client(name);
             async move {
-                let _ = follow_one_peer(handle, state, name, client)
+                let result = follow_one_peer(handle, state, name, client)
                     .await
                     .tap_err(|e| warn!("follower task exited with error {}", e));
-                name
+                (result, start_time, name)
             }
         };
 
@@ -72,11 +81,33 @@ async fn follower_process<A>(
 
         loop {
             tokio::select! {
-                _ = &mut cancel_receiver => return,
+                _ = &mut cancel_receiver => {
+                    info!("follower_process cancelled");
+                    return,
+                }
 
-                Some(finished) = follower_tasks.next() => {
+                Some((result, start, finished)) = follower_tasks.next() => {
+                    let peer = finished;
+                    let now = Instant::now();
+                    let duration = now - start;
+                    info!(?peer, ?duration, "follower task completed");
+
+                    if result.is_ok() || duration > CLEAR_BACKOFF_DURATION {
+                        info!(?peer, "clearing backoff for peer");
+                        backoff.remove(name)
+                    }
+
+                    let mut delay = MIN_RECONNECTION_DELAY;
+                    if result.is_err() {
+                        let mut cur_backoff = backoff.entry(name).or_insert(MIN_RECONNECTION_DELAY);
+                        delay = std::cmp::max(delay, *cur_backoff);
+                        *cur_backoff *= 2;
+                    }
+
+                    info!(?peer, ?delay, "will restart task after delay");
+
                     reconnects.push(async move {
-                        sleep(Duration::from_secs(1)).await;
+                        sleep(delay).await;
                         finished
                     });
                 }
@@ -104,6 +135,7 @@ async fn follow_one_peer<A>(
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
+    debug!(?peer, "follow_one_peer");
     let node_sync_store = node_sync_state.node_sync_store.clone();
 
     // Global timeout, we do not exceed this time in this task.
@@ -115,6 +147,8 @@ where
         Ok::<TxSequenceNumber, SuiError>(seq)
     };
 
+    // Using a macro to avoid duplicating code - was much too difficult to satisfy the borrow
+    // checker with closures.
     macro_rules! process_digest {
         ($seq: expr, $digests: expr) => {{
             let seq = $seq;
@@ -130,16 +164,31 @@ where
         .map(|seq| seq + 1)
         .unwrap_or(0);
 
+    if let Some((earliest_seq, _)) = node_sync_store.batch_stream_iter(peer)? {
+        debug!(
+            ?peer,
+            ?earliest_seq,
+            ?start_seq,
+            "processing persisted batch stream items"
+        );
+    }
+
     // Process everything currently in the db.
     for (seq, digests) in node_sync_store.batch_stream_iter(peer)? {
         process_digest!(seq, digests);
     }
 
+    debug!(
+        ?peer,
+        "waiting for persisted batch stream items to complete"
+    );
     while let Some(result) = results.next().await {
         let seq = result?;
+        trace!(?peer, ?seq, "removing completed batch stream item");
         node_sync_store.remove_batch_stream_item(*peer, seq)?;
     }
 
+    debug!(?peer, ?start_seq, "requesting new batch stream items");
     client
         .metrics_seq_number_to_handle_batch_stream
         .set(start_seq as i64);
@@ -157,26 +206,36 @@ where
             Some(item) = &mut stream.next() => {
                 match item {
                     Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
+                        let batch_next_seq = signed_batch.data().next_sequence_number;
+                        debug!(?peer, ?batch_next_seq, "Received signed batch");
                         metrics.total_batch_received.inc();
-                        println!("batch: {:?}", signed_batch);
                     }
 
                     Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests)))) => {
+                        trace!(?peer, ?digests, ?seq, "received tx from peer");
                         metrics.total_tx_received.inc();
                         node_sync_store.enqueue_execution_digests(*peer, seq, &digests)?;
                         process_digest!(seq, digests);
                     }
 
-                    Err(err) => return Err(err),
+                    Err(err) => {
+                        debug!(?peer, "handle_batch_stream error: {}", err);
+                        return Err(err),
+                    }
                 }
             }
 
             Some(result) = &mut results.next() => {
                 let seq = result?;
+                trace!(?peer, ?seq, "removing completed batch stream item");
                 node_sync_store.remove_batch_stream_item(*peer, seq)?;
             }
 
-            else => break
+            else => {
+                debug_assert!(stream.is_empty());
+                debug_assert!(results.is_empty());
+                break
+            }
         }
     }
 
