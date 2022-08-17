@@ -323,6 +323,9 @@ pub enum SuiError {
     #[error("Failed to serialize Owner: {error:?}")]
     OwnerFailedToSerialize { error: String },
 
+    #[error("Failed to deserialize fields into JSON: {error:?}")]
+    ExtraFieldFailedToDeserialize { error: String },
+
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()
