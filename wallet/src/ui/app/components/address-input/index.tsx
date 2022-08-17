@@ -26,7 +26,7 @@ function AddressInput<FormValues>({
     disabled: forcedDisabled,
     placeholder = '0x...',
     className,
-    form: { isSubmitting, dirty, setFieldValue, touched, isValid },
+    form: { isSubmitting, dirty, setFieldValue, isValid },
     field: { onBlur, name, value },
 }: AddressInputProps<FormValues>) {
     const disabled =
@@ -80,9 +80,9 @@ function AddressInput<FormValues>({
                     )}
                 ></div>
             </div>
-            {touched && (
-                <ErrorMessage className={st.error} name="to" component="div" />
-            )}
+
+            <ErrorMessage className={st.error} name="to" component="div" />
+
             {isValid && formattedValue !== '' && dirty && (
                 <div className={st.validAddress}>
                     <Icon icon={SuiIcons.Checkmark} className={st.checkmark} />
