@@ -179,12 +179,18 @@ where
                 .process_transaction(advance_epoch_tx.clone().to_transaction())
                 .await
             {
-                Ok(certificate) => match self.state.handle_certificate(certificate).await {
-                    Ok(_) => {
-                        break;
+                Ok(certificate) => {
+                    // TODO what is the right committee to use?
+                    match certificate.verify(&old_committee) {
+                        Ok(certificate) => match self.state.handle_certificate(certificate).await {
+                            Ok(_) => {
+                                break;
+                            }
+                            Err(err) => err,
+                        },
+                        Err(err) => err,
                     }
-                    Err(err) => err,
-                },
+                }
                 Err(err) => err,
             };
             debug!(

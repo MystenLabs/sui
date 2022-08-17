@@ -86,7 +86,7 @@ pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::AuthorityKeyPair;
+use sui_types::crypto::{AuthorityKeyPair, EmptySignInfo, AuthorityStrongQuorumSignInfo};
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -352,7 +352,7 @@ impl AuthorityState {
 
     async fn handle_transaction_impl(
         &self,
-        transaction: Transaction,
+        transaction: VerifiedTransaction<EmptySignInfo>,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         // Ensure an idempotent answer.
@@ -380,7 +380,7 @@ impl AuthorityState {
         let owned_objects = input_objects.filter_owned_objects();
 
         let signed_transaction =
-            SignedTransaction::new(self.epoch(), transaction, self.name, &*self.secret);
+            SignedTransaction::new(self.epoch(), transaction.into_inner(), self.name, &*self.secret);
 
         // Check and write locks, to signed transaction, into the database
         // The call to self.set_transaction_lock checks the lock is not conflicting,
@@ -398,14 +398,25 @@ impl AuthorityState {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let transaction_digest = *transaction.digest();
-        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.signed_data.data.kind);
-        self.metrics.tx_orders.inc();
         // Check the sender's signature.
-        transaction.verify().map_err(|e| {
+        let transaction_digest = *transaction.digest();
+        let transaction = transaction.verify().map_err(|e| {
+            debug!(tx_digest=?transaction_digest, "handle_transaction with bad signature");
+            self.metrics.tx_orders.inc();
             self.metrics.signature_errors.inc();
             e
         })?;
+
+        self.handle_verified_transaction(transaction).await
+    }
+
+    pub async fn handle_verified_transaction(
+        &self,
+        transaction: VerifiedTransaction<EmptySignInfo>,
+    ) -> Result<TransactionInfoResponse, SuiError> {
+        let transaction_digest = *transaction.digest();
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.signed_data.data.kind);
+        self.metrics.tx_orders.inc();
 
         let response = self.handle_transaction_impl(transaction).await;
         match response {
@@ -477,7 +488,8 @@ impl AuthorityState {
     #[instrument(level = "trace", skip_all)]
     pub async fn handle_certificate(
         &self,
-        certificate: CertifiedTransaction,
+        // TODO: do we really want all callers of this to have to have verified the signature?
+        certificate: VerifiedTransaction<AuthorityStrongQuorumSignInfo>,
     ) -> SuiResult<TransactionInfoResponse> {
         self.metrics.total_cert_attempts.inc();
         if self.is_fullnode() {

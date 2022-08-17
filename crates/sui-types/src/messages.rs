@@ -33,6 +33,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
+use std::ops::Deref;
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
     hash::{Hash, Hasher},
@@ -509,11 +510,6 @@ pub struct TransactionEnvelope<S> {
     // DO NOT serialize or deserialize from the network or disk.
     #[serde(skip)]
     transaction_digest: OnceCell<TransactionDigest>,
-    // Deserialization sets this to "false"
-    // TODO: is_verified is only set to true in some callsites after verification.
-    // Hence it's not optimal.
-    #[serde(skip)]
-    pub is_verified: bool,
 
     // The packet of data that authorities will sign on. Stores the tx data and the sender signature.
     pub signed_data: SenderSignedData,
@@ -543,7 +539,7 @@ impl<S> TransactionEnvelope<S> {
         // and therefore we can skip the check. Note that the flag has
         // to be set to true manually, and is not set by calling this
         // "check" function.
-        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
+        if self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
 
@@ -553,7 +549,7 @@ impl<S> TransactionEnvelope<S> {
     }
 
     pub fn verify_sender_signature(&self) -> SuiResult<()> {
-        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
+        if self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
         self.signed_data
@@ -647,6 +643,27 @@ where
     }
 }
 
+pub struct VerifiedTransaction<T>(TransactionEnvelope<T>);
+
+impl<T> VerifiedTransaction<T> {
+    // Shadow verify method to make calls on a VerifiedTransaction a no-op.
+    // TODO: does this work like I hope?
+    pub fn verify(self) -> SuiResult<Self> {
+        Ok(self)
+    }
+
+    pub fn into_inner(self) -> TransactionEnvelope<T> {
+        self.0
+    }
+}
+
+impl<T> Deref for VerifiedTransaction<T> {
+    type Target = TransactionEnvelope<T>;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 // TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction.
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = TransactionEnvelope<EmptySignInfo>;
@@ -661,7 +678,6 @@ impl Transaction {
     pub fn new(data: TransactionData, signature: Signature) -> Self {
         Self {
             transaction_digest: OnceCell::new(),
-            is_verified: false,
             signed_data: SenderSignedData {
                 data,
                 tx_signature: signature,
@@ -670,8 +686,9 @@ impl Transaction {
         }
     }
 
-    pub fn verify(&self) -> Result<(), SuiError> {
-        self.verify_sender_signature()
+    pub fn verify(self) -> SuiResult<VerifiedTransaction<EmptySignInfo>> {
+        self.verify_sender_signature()?;
+        Ok(VerifiedTransaction(self))
     }
 
     pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
@@ -711,7 +728,6 @@ impl SignedTransaction {
         let signature = AuthoritySignature::new(&transaction.signed_data, secret);
         Self {
             transaction_digest: OnceCell::new(),
-            is_verified: transaction.is_verified,
             signed_data: transaction.signed_data,
             auth_sign_info: AuthoritySignInfo {
                 epoch,
@@ -750,7 +766,6 @@ impl SignedTransaction {
         let signature = AuthoritySignature::new(&signed_data, secret);
         Self {
             transaction_digest: OnceCell::new(),
-            is_verified: false,
             signed_data,
             auth_sign_info: AuthoritySignInfo {
                 epoch: next_epoch,
@@ -1673,8 +1688,8 @@ pub struct SignatureAggregator<'a> {
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
     pub fn try_new(transaction: Transaction, committee: &'a Committee) -> Result<Self, SuiError> {
-        transaction.verify()?;
-        Ok(Self::new_unsafe(transaction, committee))
+        let transaction = transaction.verify()?;
+        Ok(Self::new_unsafe(transaction.into_inner(), committee))
     }
 
     /// Same as try_new but we don't check the transaction.
@@ -1728,7 +1743,6 @@ impl CertifiedTransaction {
     pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
-            is_verified: false,
             signed_data: transaction.signed_data,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new(epoch),
         }
@@ -1741,7 +1755,6 @@ impl CertifiedTransaction {
     ) -> SuiResult<CertifiedTransaction> {
         Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
-            is_verified: false,
             signed_data: transaction.signed_data,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
                 signatures, committee,
@@ -1754,15 +1767,7 @@ impl CertifiedTransaction {
     }
 
     /// Verify the certificate.
-    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified {
-            return Ok(());
-        }
-
+    pub fn verify(self, committee: &Committee) -> SuiResult<VerifiedTransaction<AuthorityStrongQuorumSignInfo>> {
         // Add the obligation of the sender signature verification.
         self.verify_sender_signature()?;
 
@@ -1772,7 +1777,8 @@ impl CertifiedTransaction {
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
-        obligation.verify_all().map(|_| ())
+        obligation.verify_all().map(|_| ())?;
+        Ok(VerifiedTransaction(self))
     }
 }
 
@@ -1809,10 +1815,16 @@ pub enum ConsensusTransaction {
 }
 
 impl ConsensusTransaction {
-    pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
+    pub fn verify(self, committee: &Committee) -> SuiResult<ConsensusTransaction> {
         match self {
-            Self::UserTransaction(certificate) => certificate.verify(committee),
-            Self::Checkpoint(fragment) => fragment.verify(committee),
+            Self::UserTransaction(certificate) => {
+                let certificate = certificate.verify(committee)?;
+                Ok(ConsensusTransaction::UserTransaction(Box::new(certificate.into_inner())))
+            }
+            Self::Checkpoint(fragment) => {
+                fragment.verify(committee)?;
+                Ok(ConsensusTransaction::Checkpoint(Box::new(*fragment)))
+            }
         }
     }
 }

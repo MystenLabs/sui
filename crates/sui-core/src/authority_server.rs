@@ -255,11 +255,9 @@ impl ValidatorService {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut transaction = request.into_inner();
 
-        transaction
+        let transaction = transaction
             .verify()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
-        //TODO This is really really bad, we should have different types for signature-verified transactions
-        transaction.is_verified = true;
 
         let tx_digest = transaction.digest();
 
@@ -271,7 +269,7 @@ impl ValidatorService {
         );
 
         let info = state
-            .handle_transaction(transaction)
+            .handle_verified_transaction(transaction)
             .instrument(span)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
@@ -286,11 +284,9 @@ impl ValidatorService {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut certificate = request.into_inner();
         // 1) Verify certificate
-        certificate
+        let certificate = certificate
             .verify(&state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
-        //TODO This is really really bad, we should have different types for signature verified transactions
-        certificate.is_verified = true;
 
         // 2) Check idempotency
         let digest = certificate.digest();
