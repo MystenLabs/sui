@@ -4,7 +4,7 @@
     "items": [
       {
         "label": "Devnet",
-        "link": "explore/devnet"
+        "link": "build/devnet"
       },
       {
         "label": "examples.sui.io",
@@ -114,7 +114,7 @@
       },
       {
         "label": "Connect to Sui Devnet",
-        "fileName": "explore/devnet"
+        "fileName": "build/devnet"
       },
       {
         "label": "Create Smart Contracts with Move",
@@ -237,7 +237,7 @@
       },
       {
         "label": "Sui CLI and Local Network",
-        "fileName": "build/cli-client"
+        "fileName": "contribute/cli-client"
       },
       {
         "label": "Logging",

@@ -9,4 +9,4 @@ All code samples in this book are written with the assumption that you use *Sui 
 $ cargo install --locked --git https://github.com/MystenLabs/sui.git --branch "main" sui
 ```
 
-Keep in mind that the branch is set to `main`. If you're developing with our [devnet](https://docs.sui.io/explore/devnet), instead follow the instructions to [install Sui](https://docs.sui.io/build/install#binaries).
+Keep in mind that the branch is set to `main`. If you're developing with our [devnet](https://docs.sui.io/build/devnet), instead follow the instructions to [install Sui](https://docs.sui.io/build/install#binaries).
