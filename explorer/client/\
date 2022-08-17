@@ -31,6 +31,17 @@ button.nointeract,
     @apply basecontainer;
 }
 
+.rhs > select {
+  --webkit-appearance: none;
+  --moz-appearance: none;
+
+  appearance: none;
+}
+
+.rhs > select::after {
+  content: "a";
+}
+
 button.pagenumber {
     @apply select-none border-solid border-sui-dark text-sui-dark;
 
@@ -55,9 +66,7 @@ button.gone {
 }
 
 .rhs > select {
-    @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block border-0 border-r-[12px] border-transparent overflow-visible;
-
-    outline: 1px solid #e9eaeb !important;
+    @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block;
 }
 
 /* Less than 6 case */
