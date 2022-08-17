@@ -48,8 +48,8 @@ function NFTdetailsContent({
                 <div className={st.label}>Object ID</div>
                 <div className={st.value}>
                     <ExplorerLink
-                        type={ExplorerLinkType.address}
-                        address={nftObjectID}
+                        type={ExplorerLinkType.object}
+                        objectID={nftObjectID}
                         title="View on Sui Explorer"
                         className={st.explorerLink}
                         showIcon={false}
