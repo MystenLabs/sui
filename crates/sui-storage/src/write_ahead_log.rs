@@ -116,6 +116,16 @@ where
             dead: false,
         }
     }
+
+    fn commit_tx_impl(mut self, is_commit: bool) {
+        self.dead = true;
+        // Note: if commit_tx fails, the tx will still be in the log and will re-enter
+        // recoverable_txes when we restart. But the tx is fully processed at that point, so at
+        // worst we will do a needless retry.
+        if let Err(e) = self.wal.commit_tx(&self.tx, is_commit) {
+            warn!(digest = ?self.tx, "Couldn't write tx completion to WriteAheadLog: {}", e);
+        }
+    }
 }
 
 impl<'a, C> TxGuard<'a> for DBTxGuard<'a, C>
@@ -130,19 +140,13 @@ where
         self.retry_num
     }
 
-    fn commit_tx(mut self) {
-        self.dead = true;
-        // Note: if commit_tx fails, the tx will still be in the log and will re-enter
-        // recoverable_txes when we restart. But the tx is fully processed at that point, so at
-        // worst we will do a needless retry.
-        if let Err(e) = self.wal.commit_tx(&self.tx) {
-            warn!(digest = ?self.tx, "Couldn't write tx completion to WriteAheadLog: {}", e);
-        }
+    fn commit_tx(self) {
+        self.commit_tx_impl(true)
     }
 
     // Identical to commit_tx (for now), but we provide different names to make intent clearer.
     fn release(self) {
-        self.commit_tx()
+        self.commit_tx_impl(false)
     }
 }
 
@@ -205,8 +209,10 @@ where
         }
     }
 
-    fn commit_tx(&self, tx: &TransactionDigest) -> SuiResult {
-        debug!(digest = ?tx, "committing tx");
+    fn commit_tx(&self, tx: &TransactionDigest, is_commit: bool) -> SuiResult {
+        if is_commit {
+            debug!(digest = ?tx, "committing tx");
+        }
         let write_batch = self.tables.log.batch();
         let write_batch = write_batch.delete_batch(&self.tables.log, std::iter::once(tx))?;
         let write_batch =
