@@ -13,12 +13,15 @@ use sui_types::object::Object;
 use sui_types::sui_serde::KeyPairBase64;
 use tracing::info;
 
+use crate::node::DEFAULT_GRPC_CONCURRENCY_LIMIT;
 use crate::Config;
 
 #[derive(Serialize, Deserialize)]
 pub struct GenesisConfig {
     pub validator_genesis_info: Option<Vec<ValidatorGenesisInfo>>,
     pub committee_size: usize,
+    pub grpc_load_shed: Option<bool>,
+    pub grpc_concurrency_limit: Option<usize>,
     pub accounts: Vec<AccountConfig>,
 }
 
@@ -182,6 +185,8 @@ impl Default for GenesisConfig {
         Self {
             validator_genesis_info: None,
             committee_size: DEFAULT_NUMBER_OF_AUTHORITIES,
+            grpc_load_shed: None,
+            grpc_concurrency_limit: Some(DEFAULT_GRPC_CONCURRENCY_LIMIT),
             accounts: vec![],
         }
     }
