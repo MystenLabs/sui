@@ -365,11 +365,9 @@ async fn create_error_response(
         )
         .await?;
 
-    let signature = context
-        .keystore
-        .sign(&address, &response.tx_bytes.to_vec()?)?;
+    let signer = context.keystore.signer(address);
 
-    let tx = Transaction::new(response.to_data().unwrap(), signature);
+    let tx = Transaction::from_data(response.to_data().unwrap(), &signer);
 
     let (tx_data, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 

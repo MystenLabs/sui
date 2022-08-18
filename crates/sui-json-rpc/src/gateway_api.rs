@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use signature::Signature;
+use sui_types::messages::SenderSignedData;
 use tracing::debug;
 
 use crate::api::{
@@ -78,13 +79,13 @@ impl RpcGatewayApiServer for RpcGatewayImpl {
     ) -> RpcResult<SuiTransactionResponse> {
         let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
         let flag = vec![sig_scheme.flag()];
-        let signature = crypto::Signature::from_bytes(
+        let tx_signature = crypto::Signature::from_bytes(
             &[&*flag, &*signature.to_vec()?, &pub_key.to_vec()?].concat(),
         )
         .map_err(|e| anyhow!(e))?;
         let result = self
             .client
-            .execute_transaction(Transaction::new(data, signature))
+            .execute_transaction(Transaction::new(SenderSignedData { data, tx_signature }))
             .await;
         Ok(result?)
     }

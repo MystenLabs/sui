@@ -5,6 +5,7 @@ use crate::authority::SuiDataStore;
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
+use sui_types::crypto::AuthoritySignInfoTrait;
 use sui_types::messages::{CertifiedTransaction, TransactionEffects};
 use sui_types::{base_types::*, batch::TxSequenceNumber, error::SuiError, fp_ensure};
 use tracing::debug;
@@ -19,7 +20,9 @@ pub struct QueryHelpers<S> {
 // be duplicated between AuthorityState and GatewayState. The gateway read API will be removed
 // soon, since nodes will be handling that. At that point we should delete this struct and move the
 // code back to AuthorityState.
-impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> QueryHelpers<S> {
+impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de> + AuthoritySignInfoTrait>
+    QueryHelpers<S>
+{
     pub fn get_total_transaction_number(database: &SuiDataStore<S>) -> Result<u64, anyhow::Error> {
         Ok(database.next_sequence_number()?)
     }

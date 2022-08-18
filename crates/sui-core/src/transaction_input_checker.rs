@@ -5,6 +5,7 @@ use crate::authority::SuiDataStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Debug;
+use sui_types::crypto::AuthoritySignInfoTrait;
 use sui_types::messages::TransactionKind;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -19,23 +20,24 @@ use sui_types::{
 use tracing::instrument;
 
 #[instrument(level = "trace", skip_all)]
-pub async fn check_transaction_input<S, T>(
+pub async fn check_transaction_input<S: AuthoritySignInfoTrait, T: AuthoritySignInfoTrait>(
     store: &SuiDataStore<S>,
     transaction: &TransactionEnvelope<T>,
 ) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
+    T: AuthoritySignInfoTrait,
 {
     let mut gas_status = check_gas(
         store,
         transaction.gas_payment_object_ref().0,
-        transaction.signed_data.data.gas_budget,
-        transaction.signed_data.data.gas_price,
-        &transaction.signed_data.data.kind,
+        transaction.data().data.gas_budget,
+        transaction.data().data.gas_price,
+        &transaction.data().data.kind,
     )
     .await?;
 
-    let input_objects = check_objects(store, &transaction.signed_data.data).await?;
+    let input_objects = check_objects(store, &transaction.data().data).await?;
 
     if transaction.contains_shared_object() {
         // It's important that we do this here to make sure there is enough
@@ -51,7 +53,7 @@ where
 /// Returns the gas object (to be able to reuse it latter) and a gas status
 /// that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
-async fn check_gas<S>(
+async fn check_gas<S: AuthoritySignInfoTrait>(
     store: &SuiDataStore<S>,
     gas_payment_id: ObjectID,
     gas_budget: u64,
@@ -96,7 +98,7 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_objects<S>(
+async fn check_objects<S: AuthoritySignInfoTrait>(
     store: &SuiDataStore<S>,
     transaction: &TransactionData,
 ) -> Result<InputObjects, SuiError>

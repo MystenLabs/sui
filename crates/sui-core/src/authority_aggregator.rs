@@ -460,7 +460,7 @@ where
         // Extract the set of authorities that should have this certificate
         // and its full history. We should be able to use these are source authorities.
         let mut candidate_source_authorties: HashSet<AuthorityName> = cert
-            .auth_sign_info
+            .auth_sig()
             .authorities(&self.committee)
             .collect::<SuiResult<HashSet<_>>>()?
             .iter()
@@ -1234,7 +1234,7 @@ where
             validity_threshold = validity,
             "Broadcasting transaction request to authorities"
         );
-        trace!("Transaction data: {:?}", transaction.signed_data.data);
+        trace!("Transaction data: {:?}", transaction.data().data);
 
         struct ProcessTransactionState {
             // The list of signatures gathered at any point
@@ -1291,7 +1291,7 @@ where
                                 debug!(tx_digest = ?tx_digest, ?name, weight, "Received signed transaction from validator handle_transaction");
                                 state.signatures.push((
                                     name,
-                                    inner_signed_transaction.auth_sign_info.signature,
+                                    inner_signed_transaction.auth_sig().signature.clone(),
                                 ));
                                 state.good_stake += weight;
                                 if state.good_stake >= threshold {
@@ -1301,7 +1301,7 @@ where
                                     self.metrics.num_good_stake.observe(state.good_stake as f64);
                                     self.metrics.num_bad_stake.observe(state.bad_stake as f64);
                                     state.certificate =
-                                        Some(CertifiedTransaction::new_with_signatures(
+                                        Some(CertifiedTransaction::new(
                                             transaction_ref.clone(),
                                             state.signatures.clone(),
                                             &self.committee,
@@ -1889,7 +1889,7 @@ where
         }
 
         let signers: BTreeSet<_> = cert
-            .auth_sign_info
+            .auth_sig()
             .authorities(&self.committee)
             .filter_map(|r| r.ok())
             .cloned()

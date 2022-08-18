@@ -86,9 +86,13 @@ impl TestContext {
         txn_data: TransactionData,
         desc: &str,
     ) -> SuiTransactionResponse {
-        let signature = self.get_context().sign(&txn_data, desc);
+        let signer = self
+            .get_wallet()
+            .keystore
+            .signer(self.get_context().get_wallet_address());
+        let tx = Transaction::from_data(txn_data, &signer);
         self.get_gateway()
-            .execute_transaction(Transaction::new(txn_data, signature))
+            .execute_transaction(tx)
             .await
             .unwrap_or_else(|e| panic!("Failed to execute transaction for {}. {}", desc, e))
     }

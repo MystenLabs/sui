@@ -54,8 +54,10 @@ async fn test_public_transfer_object() -> Result<(), anyhow::Error> {
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = KeystoreType::File(keystore_path).init()?;
 
-    let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
-    let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
+    let tx = Transaction::from_data(
+        transaction_bytes.to_data().unwrap(),
+        &keystore.signer(*address),
+    );
 
     let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
@@ -92,9 +94,11 @@ async fn test_publish() -> Result<(), anyhow::Error> {
 
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = KeystoreType::File(keystore_path).init()?;
-    let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
 
-    let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
+    let tx = Transaction::from_data(
+        transaction_bytes.to_data().unwrap(),
+        &keystore.signer(*address),
+    );
 
     let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
@@ -139,9 +143,10 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
     let keystore = KeystoreType::File(keystore_path).init()?;
 
-    let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
-
-    let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
+    let tx = Transaction::from_data(
+        transaction_bytes.to_data().unwrap(),
+        &keystore.signer(*address),
+    );
 
     let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
@@ -192,9 +197,10 @@ async fn test_get_transaction() -> Result<(), anyhow::Error> {
         let keystore_path = test_network.network.dir().join(SUI_KEYSTORE_FILENAME);
         let keystore = KeystoreType::File(keystore_path).init()?;
 
-        let signature = keystore.sign(address, &transaction_bytes.tx_bytes.to_vec()?)?;
-
-        let tx = Transaction::new(transaction_bytes.to_data().unwrap(), signature);
+        let tx = Transaction::from_data(
+            transaction_bytes.to_data().unwrap(),
+            &keystore.signer(*address),
+        );
 
         let (tx_bytes, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 

@@ -9,7 +9,7 @@ use sui_types::{
     base_types::*,
     crypto::{
         get_key_pair, AccountKeyPair, AuthorityPublicKeyBytes, AuthoritySignature, KeypairTraits,
-        Signature, SuiAuthoritySignature,
+        SuiAuthoritySignature,
     },
     messages::*,
     object::Object,
@@ -70,7 +70,7 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
             .key_pair();
 
         let pubx: AuthorityPublicKeyBytes = secx.public().into();
-        let sig = AuthoritySignature::new(&tx.signed_data, secx);
+        let sig = AuthoritySignature::new(tx.data(), secx);
         let authority_weight = committee.weight(&pubx);
         sigs.push((pubx, sig));
         total_stake += authority_weight;
@@ -78,10 +78,7 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
             break;
         }
     }
-    let mut certificate =
-        CertifiedTransaction::new_with_signatures(tx.clone(), sigs, &committee).unwrap();
-    certificate.auth_sign_info.epoch = committee.epoch();
-    certificate
+    CertifiedTransaction::new(tx.clone(), sigs, &committee).unwrap()
 }
 
 fn make_transactions(
@@ -124,8 +121,7 @@ fn make_transactions(
                 )
             };
 
-            let signature = Signature::new(&data, &keypair);
-            let transaction = Transaction::new(data, signature);
+            let transaction = Transaction::from_data(data, &keypair);
             let cert = make_cert(network_config, &transaction);
 
             (transaction, cert)

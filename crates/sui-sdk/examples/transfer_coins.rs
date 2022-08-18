@@ -6,7 +6,6 @@ use sui_sdk::{
     crypto::KeystoreType,
     types::{
         base_types::{ObjectID, SuiAddress},
-        crypto::Signature,
         messages::Transaction,
     },
     SuiClient,
@@ -35,12 +34,10 @@ async fn main() -> Result<(), anyhow::Error> {
     let signer = keystore.signer(my_address);
 
     // Sign the transaction
-    let signature = Signature::new(&transfer_tx, &signer);
+    let transaction = Transaction::from_data(transfer_tx, &signer);
 
     // Execute the transaction
-    let transaction_response = sui
-        .execute_transaction(Transaction::new(transfer_tx, signature))
-        .await?;
+    let transaction_response = sui.execute_transaction(transaction).await?;
 
     println!("{:?}", transaction_response);
 

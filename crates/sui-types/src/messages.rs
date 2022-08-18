@@ -10,6 +10,8 @@ use crate::crypto::{
     VerificationObligation,
 };
 use crate::gas::GasCostSummary;
+use crate::message_envelope::Envelope;
+use crate::message_envelope::Message;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
 use crate::storage::DeleteKind;
@@ -28,14 +30,13 @@ use move_core_types::{
 use name_variant::NamedVariant;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
-use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use serde_with::serde_as;
 use serde_with::Bytes;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::{
     collections::{BTreeMap, BTreeSet, HashSet},
-    hash::{Hash, Hasher},
+    hash::Hash,
 };
 use tracing::debug;
 
@@ -496,35 +497,6 @@ impl TransactionData {
     }
 }
 
-/// A transaction signed by a client, optionally signed by an authority (depending on `S`).
-/// `S` indicates the authority signing state. It can be either empty or signed.
-/// We make the authority signature templated so that `TransactionEnvelope<S>` can be used
-/// universally in the transactions storage in `SuiDataStore`, shared by both authorities
-/// and non-authorities: authorities store signed transactions, while non-authorities
-/// store unsigned transactions.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(remote = "TransactionEnvelope")]
-pub struct TransactionEnvelope<S> {
-    // This is a cache of an otherwise expensive to compute value.
-    // DO NOT serialize or deserialize from the network or disk.
-    #[serde(skip)]
-    transaction_digest: OnceCell<TransactionDigest>,
-    // Deserialization sets this to "false"
-    // TODO: is_verified is only set to true in some callsites after verification.
-    // Hence it's not optimal.
-    #[serde(skip)]
-    pub is_verified: bool,
-
-    // The packet of data that authorities will sign on. Stores the tx data and the sender signature.
-    pub signed_data: SenderSignedData,
-
-    /// authority signature information, if available, is signed by an authority, applied on `tx_signature` || `data`.
-    pub auth_sign_info: S,
-    // Note: If any new field is added here, make sure the Hash and PartialEq
-    // implementation are adjusted to include that new field (unless the new field
-    // does not participate in the hash and comparison).
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct SenderSignedData {
     pub data: TransactionData,
@@ -532,41 +504,34 @@ pub struct SenderSignedData {
     pub tx_signature: Signature,
 }
 
-impl<S> TransactionEnvelope<S> {
-    #[allow(dead_code)]
-    fn add_sender_sig_to_verification_obligation(
-        &self,
-        obligation: &mut VerificationObligation,
-        idx: usize,
-    ) -> SuiResult<()> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
-            return Ok(());
-        }
+impl Message for SenderSignedData {
+    type DigestType = TransactionDigest;
 
-        self.signed_data
-            .tx_signature
-            .add_to_verification_obligation_or_verify(self.signed_data.data.sender, obligation, idx)
+    fn digest(&self) -> Self::DigestType {
+        TransactionDigest::new(sha3_hash(self))
     }
 
-    pub fn verify_sender_signature(&self) -> SuiResult<()> {
-        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
+    fn verify(&self) -> SuiResult {
+        if self.data.kind.is_system_tx() {
             return Ok(());
         }
-        self.signed_data
-            .tx_signature
-            .verify(&self.signed_data.data, self.signed_data.data.sender)
+        self.tx_signature.verify(&self.data, self.data.sender)
     }
 
+    fn add_to_verification_obligation(&self, _: &mut VerificationObligation) -> SuiResult<()> {
+        Ok(())
+    }
+}
+
+pub type TransactionEnvelope<S> = Envelope<SenderSignedData, S>;
+
+impl<S: AuthoritySignInfoTrait> TransactionEnvelope<S> {
     pub fn sender_address(&self) -> SuiAddress {
-        self.signed_data.data.sender
+        self.data().data.sender
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        self.signed_data.data.gas_payment_object_ref()
+        self.data().data.gas_payment_object_ref()
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -574,18 +539,12 @@ impl<S> TransactionEnvelope<S> {
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
-        match &self.signed_data.data.kind {
+        match &self.data().data.kind {
             TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
             TransactionKind::Batch(b) => {
                 Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
             }
         }
-    }
-
-    /// Get the transaction digest and write it to the cache
-    pub fn digest(&self) -> &TransactionDigest {
-        self.transaction_digest
-            .get_or_init(|| TransactionDigest::new(sha3_hash(&self.signed_data)))
     }
 
     pub fn input_objects_in_compiled_modules(
@@ -611,116 +570,30 @@ impl<S> TransactionEnvelope<S> {
     }
 }
 
-// In combination with #[serde(remote = "TransactionEnvelope")].
-// Generic types instantiated multiple times in the same tracing session requires a work around.
-// https://novifinancial.github.io/serde-reflection/serde_reflection/index.html#features-and-limitations
-impl<'de, T> Deserialize<'de> for TransactionEnvelope<T>
-where
-    T: Deserialize<'de>,
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::de::Deserializer<'de>,
-    {
-        TransactionEnvelope::deserialize(DeserializeNameAdapter::new(
-            deserializer,
-            // TODO: This generates a very long name that includes the namespace and modules.
-            // Ideally we just want TransactionEnvelope<T> with T substituted as the name.
-            // https://github.com/MystenLabs/sui/issues/1119
-            std::any::type_name::<TransactionEnvelope<T>>(),
-        ))
-    }
-}
-
-impl<T> Serialize for TransactionEnvelope<T>
-where
-    T: Serialize,
-{
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::ser::Serializer,
-    {
-        TransactionEnvelope::serialize(
-            self,
-            SerializeNameAdapter::new(serializer, std::any::type_name::<TransactionEnvelope<T>>()),
-        )
-    }
-}
-
 // TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction.
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = TransactionEnvelope<EmptySignInfo>;
 
 impl Transaction {
-    #[cfg(test)]
     pub fn from_data(data: TransactionData, signer: &dyn signature::Signer<Signature>) -> Self {
-        let signature = Signature::new(&data, signer);
-        Self::new(data, signature)
-    }
-
-    pub fn new(data: TransactionData, signature: Signature) -> Self {
-        Self {
-            transaction_digest: OnceCell::new(),
-            is_verified: false,
-            signed_data: SenderSignedData {
-                data,
-                tx_signature: signature,
-            },
-            auth_sign_info: EmptySignInfo {},
-        }
-    }
-
-    pub fn verify(&self) -> Result<(), SuiError> {
-        self.verify_sender_signature()
+        let tx_signature = Signature::new(&data, signer);
+        Self::new(SenderSignedData { data, tx_signature })
     }
 
     pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
         (
-            Base64::from_bytes(&self.signed_data.data.to_bytes()),
-            self.signed_data.tx_signature.scheme(),
-            Base64::from_bytes(self.signed_data.tx_signature.signature_bytes()),
-            Base64::from_bytes(self.signed_data.tx_signature.public_key_bytes()),
+            Base64::from_bytes(&self.data().data.to_bytes()),
+            self.data().tx_signature.scheme(),
+            Base64::from_bytes(self.data().tx_signature.signature_bytes()),
+            Base64::from_bytes(self.data().tx_signature.public_key_bytes()),
         )
     }
 }
-
-impl Hash for Transaction {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.signed_data.hash(state);
-    }
-}
-
-impl PartialEq for Transaction {
-    fn eq(&self, other: &Self) -> bool {
-        self.signed_data == other.signed_data
-    }
-}
-impl Eq for Transaction {}
 
 /// A transaction that is signed by a sender and also by an authority.
 pub type SignedTransaction = TransactionEnvelope<AuthoritySignInfo>;
 
 impl SignedTransaction {
-    /// Use signing key to create a signed object.
-    pub fn new(
-        epoch: EpochId,
-        transaction: Transaction,
-        authority: AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
-    ) -> Self {
-        let signature = AuthoritySignature::new(&transaction.signed_data, secret);
-        Self {
-            transaction_digest: OnceCell::new(),
-            is_verified: transaction.is_verified,
-            signed_data: transaction.signed_data,
-            auth_sign_info: AuthoritySignInfo {
-                epoch,
-                authority,
-                signature,
-            },
-        }
-    }
-
     pub fn new_change_epoch(
         next_epoch: EpochId,
         storage_charge: u64,
@@ -747,52 +620,7 @@ impl SignedTransaction {
                 .unwrap()
                 .into(),
         };
-        let signature = AuthoritySignature::new(&signed_data, secret);
-        Self {
-            transaction_digest: OnceCell::new(),
-            is_verified: false,
-            signed_data,
-            auth_sign_info: AuthoritySignInfo {
-                epoch: next_epoch,
-                authority,
-                signature,
-            },
-        }
-    }
-
-    /// Verify the signature and return the non-zero voting right of the authority.
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.verify_sender_signature()?;
-
-        let mut obligation = VerificationObligation::default();
-        let idx = obligation.add_message(&self.signed_data);
-        self.auth_sign_info
-            .add_to_verification_obligation(committee, &mut obligation, idx)?;
-
-        obligation.verify_all()?;
-        Ok(())
-    }
-
-    // Turn a SignedTransaction into a Transaction. This is needed when we are
-    // forming a CertifiedTransaction, where each transaction's authority signature
-    // is taking out to form an aggregated signature.
-    pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
-    }
-}
-
-impl Hash for SignedTransaction {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.signed_data.hash(state);
-        self.auth_sign_info.hash(state);
-    }
-}
-
-impl PartialEq for SignedTransaction {
-    fn eq(&self, other: &Self) -> bool {
-        // We do not compare the tx_signature, because there can be multiple
-        // valid signatures for the same data and signer.
-        self.signed_data == other.signed_data && self.auth_sign_info == other.auth_sign_info
+        Self::new(next_epoch, signed_data, secret, authority)
     }
 }
 
@@ -1673,7 +1501,7 @@ pub struct SignatureAggregator<'a> {
 impl<'a> SignatureAggregator<'a> {
     /// Start aggregating signatures for the given value into a certificate.
     pub fn try_new(transaction: Transaction, committee: &'a Committee) -> Result<Self, SuiError> {
-        transaction.verify()?;
+        transaction.verify(committee)?;
         Ok(Self::new_unsafe(transaction, committee))
     }
 
@@ -1683,7 +1511,7 @@ impl<'a> SignatureAggregator<'a> {
             committee,
             weight: 0,
             used_authorities: HashSet::new(),
-            partial: CertifiedTransaction::new(committee.epoch, transaction),
+            partial: CertifiedTransaction::new_empty(transaction, committee).unwrap(),
             signature_stash: Vec::new(),
         }
     }
@@ -1696,7 +1524,7 @@ impl<'a> SignatureAggregator<'a> {
         authority: AuthorityName,
         signature: AuthoritySignature,
     ) -> Result<Option<CertifiedTransaction>, SuiError> {
-        signature.verify(&self.partial.signed_data, authority)?;
+        signature.verify(self.partial.data(), authority)?;
 
         // Check that each authority only appears once.
         fp_ensure!(
@@ -1713,7 +1541,8 @@ impl<'a> SignatureAggregator<'a> {
         self.signature_stash.push((authority, signature));
 
         if self.weight >= self.committee.quorum_threshold() {
-            self.partial.auth_sign_info = AuthorityStrongQuorumSignInfo::new_with_signatures(
+            self.partial = CertifiedTransaction::new(
+                self.partial.clone(),
                 self.signature_stash.clone(),
                 self.committee,
             )?;
@@ -1724,58 +1553,6 @@ impl<'a> SignatureAggregator<'a> {
     }
 }
 
-impl CertifiedTransaction {
-    pub fn new(epoch: EpochId, transaction: Transaction) -> CertifiedTransaction {
-        CertifiedTransaction {
-            transaction_digest: transaction.transaction_digest,
-            is_verified: false,
-            signed_data: transaction.signed_data,
-            auth_sign_info: AuthorityStrongQuorumSignInfo::new(epoch),
-        }
-    }
-
-    pub fn new_with_signatures(
-        transaction: Transaction,
-        signatures: Vec<(AuthorityName, AuthoritySignature)>,
-        committee: &Committee,
-    ) -> SuiResult<CertifiedTransaction> {
-        Ok(CertifiedTransaction {
-            transaction_digest: transaction.transaction_digest,
-            is_verified: false,
-            signed_data: transaction.signed_data,
-            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                signatures, committee,
-            )?,
-        })
-    }
-
-    pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
-    }
-
-    /// Verify the certificate.
-    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
-        // We use this flag to see if someone has checked this before
-        // and therefore we can skip the check. Note that the flag has
-        // to be set to true manually, and is not set by calling this
-        // "check" function.
-        if self.is_verified {
-            return Ok(());
-        }
-
-        // Add the obligation of the sender signature verification.
-        self.verify_sender_signature()?;
-
-        let mut obligation = VerificationObligation::default();
-        // Add the obligation of the authority signature verifications.
-        let idx = obligation.add_message(&self.signed_data);
-        self.auth_sign_info
-            .add_to_verification_obligation(committee, &mut obligation, idx)?;
-
-        obligation.verify_all().map(|_| ())
-    }
-}
-
 impl Display for CertifiedTransaction {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
@@ -1783,9 +1560,9 @@ impl Display for CertifiedTransaction {
         writeln!(
             writer,
             "Signed Authorities Bitmap : {:?}",
-            self.auth_sign_info.signers_map
+            self.auth_sig().signers_map
         )?;
-        write!(writer, "{}", &self.signed_data.data.kind)?;
+        write!(writer, "{}", &self.data().data.kind)?;
         write!(f, "{}", writer)
     }
 }
@@ -1893,7 +1670,7 @@ pub type EpochInfoDigest = [u8; 32];
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EpochEnvelop<S> {
     pub epoch_info: EpochInfo,
-    pub auth_sign_info: S,
+    pub auth_signature: S,
 }
 
 pub type GenesisEpoch = EpochEnvelop<EmptySignInfo>;
@@ -1904,7 +1681,7 @@ impl GenesisEpoch {
     pub fn new(committee: Committee) -> Self {
         Self {
             epoch_info: EpochInfo::new(committee, 0, EpochInfoDigest::default()),
-            auth_sign_info: EmptySignInfo {},
+            auth_signature: EmptySignInfo {},
         }
     }
 
@@ -1940,7 +1717,7 @@ impl SignedEpoch {
         let signature = AuthoritySignature::new(&epoch_info, secret);
         Self {
             epoch_info,
-            auth_sign_info: AuthoritySignInfo {
+            auth_signature: AuthoritySignInfo {
                 // A epoch is always authenticated by validators from the previous epoch.
                 // This is critical: we won't be able to use the same committee to verify itself,
                 // hence we rely on the committee from the previous epoch to verify the current
@@ -1957,12 +1734,12 @@ impl SignedEpoch {
     pub fn verify(&self, prev_epoch_committee: &Committee) -> SuiResult {
         let epoch = self.epoch_info.epoch();
         fp_ensure!(
-            epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
+            epoch != 0 && epoch - 1 == self.auth_signature.epoch,
             SuiError::InvalidAuthenticatedEpoch(
                 "Epoch number in the committee inconsistent with signature".to_string()
             )
         );
-        self.auth_sign_info
+        self.auth_signature
             .verify(&self.epoch_info, prev_epoch_committee)?;
         Ok(())
     }
@@ -1976,7 +1753,7 @@ impl CertifiedEpoch {
     ) -> SuiResult<Self> {
         Ok(Self {
             epoch_info: epoch_info.clone(),
-            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
+            auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
                 signatures,
                 prev_epoch_committee,
             )?,
@@ -1988,12 +1765,12 @@ impl CertifiedEpoch {
     pub fn verify(&self, committee: &Committee) -> SuiResult {
         let epoch = self.epoch_info.epoch();
         fp_ensure!(
-            epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
+            epoch != 0 && epoch - 1 == self.auth_signature.epoch,
             SuiError::InvalidAuthenticatedEpoch(
                 "Epoch number in the committee inconsistent with signature".to_string()
             )
         );
-        self.auth_sign_info.verify(&self.epoch_info, committee)?;
+        self.auth_signature.verify(&self.epoch_info, committee)?;
         Ok(())
     }
 }

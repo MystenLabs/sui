@@ -856,6 +856,7 @@ impl<const STRONG_THRESHOLD: bool> AuthoritySignInfoTrait
         } else {
             committee.validity_threshold()
         };
+        println!("{:?}", self);
         fp_ensure!(weight >= threshold, SuiError::CertificateRequiresQuorum);
 
         Ok(())

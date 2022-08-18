@@ -17,7 +17,7 @@ use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
 use sui_types::error::{SuiError, SuiResult};
 use sui_types::messages::{
     AuthenticatedEpoch, CertifiedEpoch, EpochInfoDigest, EpochRequest, EpochResponse,
-    SignedTransaction,
+    SignedTransaction, Transaction,
 };
 use sui_types::sui_system_state::SuiSystemState;
 use tracing::{debug, error, info, warn};
@@ -176,7 +176,7 @@ where
             let err = match self
                 .net
                 .load()
-                .process_transaction(advance_epoch_tx.clone().to_transaction())
+                .process_transaction(Transaction::from_signed(advance_epoch_tx.clone()))
                 .await
             {
                 Ok(certificate) => match self.state.handle_certificate(certificate).await {
@@ -312,7 +312,7 @@ where
                                 AuthenticatedEpoch::Signed(s) => {
                                     let entry = state.signed.entry(s.epoch_info.digest()).or_default();
                                     entry.total_stake += weight;
-                                    entry.sigs.push((name, s.auth_sign_info.signature));
+                                    entry.sigs.push((name, s.auth_signature.signature));
                                     if entry.total_stake >= threshold {
                                         let maybe_cert = CertifiedEpoch::new(
                                             &s.epoch_info,

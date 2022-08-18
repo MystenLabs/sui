@@ -258,9 +258,7 @@ impl SimpleFaucet {
             .construct_transfer_sui_txn_with_retry(coin_id, signer, recipient, budget, amount, uuid)
             .await?;
 
-        let signature = context.keystore.sign(&signer, &data.to_bytes())?;
-
-        let tx = Transaction::new(data, signature);
+        let tx = Transaction::from_data(data, &context.keystore.signer(signer));
         info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");
         let response = context.gateway.execute_transaction(tx).await?;
         let effects = &response.effects;

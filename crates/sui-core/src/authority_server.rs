@@ -253,13 +253,14 @@ impl ValidatorService {
         state: Arc<AuthorityState>,
         request: tonic::Request<Transaction>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
-        let mut transaction = request.into_inner();
+        let transaction = request.into_inner();
 
         transaction
-            .verify()
+            .verify_user_sig()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+
         //TODO This is really really bad, we should have different types for signature-verified transactions
-        transaction.is_verified = true;
+        // transaction.is_verified = true;
 
         let tx_digest = transaction.digest();
 
@@ -267,7 +268,7 @@ impl ValidatorService {
         let span = tracing::debug_span!(
             "process_tx",
             ?tx_digest,
-            tx_kind = transaction.signed_data.data.kind_as_str()
+            tx_kind = transaction.data().data.kind_as_str()
         );
 
         let info = state
@@ -287,10 +288,10 @@ impl ValidatorService {
         let mut certificate = request.into_inner();
         // 1) Verify certificate
         certificate
-            .verify(&state.committee.load())
+            .verify_mut(&state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+
         //TODO This is really really bad, we should have different types for signature verified transactions
-        certificate.is_verified = true;
 
         // 2) Check idempotency
         let digest = certificate.digest();
@@ -323,7 +324,7 @@ impl ValidatorService {
         let span = tracing::debug_span!(
             "execute_transaction",
             ?tx_digest,
-            tx_kind = certificate.signed_data.data.kind_as_str()
+            tx_kind = certificate.data().data.kind_as_str()
         );
 
         let response = state

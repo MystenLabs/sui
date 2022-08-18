@@ -45,8 +45,8 @@ use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
     CallArg, CertifiedTransaction, CertifiedTransactionEffects, ExecuteTransactionResponse,
-    ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg, SingleTransactionKind,
-    TransactionData, TransactionEffects, TransactionKind,
+    ExecutionStatus, InputObjectKind, MoveModulePublish, ObjectArg, SenderSignedData,
+    SingleTransactionKind, TransactionData, TransactionEffects, TransactionKind,
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::disassemble_modules;
@@ -1331,11 +1331,14 @@ impl TryFrom<CertifiedTransaction> for SuiCertifiedTransaction {
     type Error = anyhow::Error;
 
     fn try_from(cert: CertifiedTransaction) -> Result<Self, Self::Error> {
+        let digest = *cert.digest();
+        let auth_sign_info = cert.auth_sig().clone();
+        let SenderSignedData { data, tx_signature } = cert.into_data();
         Ok(Self {
-            transaction_digest: *cert.digest(),
-            data: cert.signed_data.data.try_into()?,
-            tx_signature: cert.signed_data.tx_signature,
-            auth_sign_info: cert.auth_sign_info,
+            transaction_digest: digest,
+            tx_signature,
+            auth_sign_info,
+            data: data.try_into()?,
         })
     }
 }

@@ -240,8 +240,7 @@ pub fn set_object_move_transaction(
 }
 
 pub fn to_transaction(data: TransactionData, signer: &dyn Signer<Signature>) -> Transaction {
-    let signature = Signature::new(&data, signer);
-    Transaction::new(data, signature)
+    Transaction::from_data(data, signer)
 }
 
 pub async fn do_transaction<A>(authority: &SafeClient<A>, transaction: &Transaction)
@@ -273,11 +272,11 @@ where
             .await
         {
             votes.push((
-                signed.auth_sign_info.authority,
-                signed.auth_sign_info.signature.clone(),
+                signed.auth_signature.authority,
+                signed.auth_signature.signature.clone(),
             ));
             if let Some(inner_transaction) = transaction {
-                assert!(inner_transaction.signed_data.data == signed.signed_data.data);
+                assert!(inner_transaction.data().data == signed.data().data);
             }
             transaction = Some(signed);
         }
@@ -287,12 +286,7 @@ where
     let quorum_threshold = committee.quorum_threshold();
     assert!(stake >= quorum_threshold);
 
-    CertifiedTransaction::new_with_signatures(
-        transaction.unwrap().to_transaction(),
-        votes,
-        committee,
-    )
-    .unwrap()
+    CertifiedTransaction::new(transaction.unwrap(), votes, committee).unwrap()
 }
 
 pub async fn do_cert<A>(

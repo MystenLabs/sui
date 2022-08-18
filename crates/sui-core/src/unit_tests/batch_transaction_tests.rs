@@ -8,7 +8,7 @@ use authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use move_binary_format::file_format;
 use move_core_types::{account_address::AccountAddress, ident_str};
 use sui_types::{
-    crypto::{get_key_pair, AccountKeyPair, Signature},
+    crypto::{get_key_pair, AccountKeyPair},
     messages::Transaction,
     object::Owner,
 };
@@ -58,8 +58,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
             .compute_object_reference(),
         100000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::from_data(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
     let effects = response.signed_effects.unwrap().effects;
     assert!(effects.status.is_ok());
@@ -121,8 +120,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
             .compute_object_reference(),
         100000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::from_data(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await?;
     let effects = response.signed_effects.unwrap().effects;
     assert!(effects.status.is_err());
@@ -154,8 +152,7 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
             .compute_object_reference(),
         100000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::from_data(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
         response.unwrap_err(),
@@ -201,8 +198,7 @@ async fn test_batch_insufficient_gas_balance() -> anyhow::Result<()> {
         gas_object.compute_object_reference(),
         100000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::from_data(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, tx).await;
     assert!(matches!(
         response.unwrap_err(),
