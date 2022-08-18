@@ -434,16 +434,20 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                         <ItemView data={GasStorageFees} />
                     </div>
                 </section>
-                <section title="Events">
-                    <div className={styles.txevents}>
-                        <div className={styles.txeventsleft}>
-                            {eventTitlesDisplay}
+                {txEventData && txEventData?.length ? (
+                    <section title="Events">
+                        <div className={styles.txevents}>
+                            <div className={styles.txeventsleft}>
+                                {eventTitlesDisplay}
+                            </div>
+                            <div className={styles.txeventsright}>
+                                {txEventDisplay}
+                            </div>
                         </div>
-                        <div className={styles.txeventsright}>
-                            {txEventDisplay}
-                        </div>
-                    </div>
-                </section>
+                    </section>
+                ) : (
+                    <></>
+                )}
                 <section title="Signatures">
                     <div className={styles.txgridcomponent}>
                         <ItemView data={transactionSignatureData} />
