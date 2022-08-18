@@ -3,6 +3,7 @@
 
 use anyhow::Result;
 use futures::future::join_all;
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -12,9 +13,11 @@ use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolComm
 use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
 use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
 
+use anyhow::anyhow;
 use futures::stream::StreamExt;
 
 use clap::*;
+use sui_core::authority::MAX_ITEMS_LIMIT;
 
 #[derive(Parser)]
 #[clap(
@@ -128,7 +131,9 @@ fn make_clients(genesis: PathBuf) -> Result<BTreeMap<AuthorityName, NetworkAutho
     let mut authority_clients = BTreeMap::new();
 
     for validator in genesis.validator_set() {
-        let channel = net_config.connect_lazy(&validator.network_address)?;
+        let channel = net_config
+            .connect_lazy(&validator.network_address)
+            .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel);
         let public_key_bytes = validator.public_key();
         authority_clients.insert(public_key_bytes, client);
@@ -380,14 +385,26 @@ impl ToolCommand {
                     })
                     .collect();
 
-                let req = BatchInfoRequest {
-                    start: seq,
-                    length: len,
-                };
-
                 for (name, c) in clients.iter() {
                     println!("validator batch stream: {:?}", name);
-                    handle_batch(*c, &req).await;
+                    if let Some(seq) = seq {
+                        let requests =
+                            (seq..(seq + len))
+                                .step_by(MAX_ITEMS_LIMIT as usize)
+                                .map(|start| BatchInfoRequest {
+                                    start: Some(start),
+                                    length: min(MAX_ITEMS_LIMIT, seq + len - start),
+                                });
+                        for request in requests {
+                            handle_batch(*c, &request).await;
+                        }
+                    } else {
+                        let req = BatchInfoRequest {
+                            start: seq,
+                            length: len,
+                        };
+                        handle_batch(*c, &req).await;
+                    }
                 }
             }
             ToolCommand::FetchObject {

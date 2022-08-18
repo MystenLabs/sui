@@ -39,6 +39,8 @@ module sui::validator {
         next_epoch_stake: u64,
         /// Total amount of delegated stake that would be active in the next epoch.
         next_epoch_delegation: u64,
+        /// This validator's gas price quote for the next epoch.
+        next_epoch_gas_price: u64,
     }
 
     struct Validator has store {
@@ -65,6 +67,8 @@ module sui::validator {
         pending_delegator_count: u64,
         /// Number of delegators that will withdraw stake at the end of the epoch.
         pending_delegator_withdraw_count: u64,
+        /// Gas price quote, updated only at end of epoch.
+        gas_price: u64,
     }
 
     public(friend) fun new(
@@ -74,6 +78,7 @@ module sui::validator {
         net_address: vector<u8>,
         stake: Balance<SUI>,
         coin_locked_until_epoch: Option<EpochTimeLock>,
+        gas_price: u64,
         ctx: &mut TxContext
     ): Validator {
         assert!(
@@ -93,6 +98,7 @@ module sui::validator {
                 net_address,
                 next_epoch_stake: stake_amount,
                 next_epoch_delegation: 0,
+                next_epoch_gas_price: gas_price,
             },
             stake_amount,
             delegation: 0,
@@ -103,6 +109,7 @@ module sui::validator {
             delegator_count: 0,
             pending_delegator_count: 0,
             pending_delegator_withdraw_count: 0,
+            gas_price,
         }
     }
 
@@ -118,6 +125,7 @@ module sui::validator {
             delegator_count: _,
             pending_delegator_count: _,
             pending_delegator_withdraw_count: _,
+            gas_price: _,
         } = self;
     }
 
@@ -153,7 +161,7 @@ module sui::validator {
     }
 
     /// Process pending stake and pending withdraws.
-    public(friend) fun adjust_stake(self: &mut Validator) {
+    public(friend) fun adjust_stake_and_gas_price(self: &mut Validator) {
         self.stake_amount = self.stake_amount + self.pending_stake - self.pending_withdraw;
         self.pending_stake = 0;
         self.pending_withdraw = 0;
@@ -167,6 +175,8 @@ module sui::validator {
         self.pending_delegator_count = 0;
         self.pending_delegator_withdraw_count = 0;
         assert!(self.delegation == self.metadata.next_epoch_delegation, 0);
+
+        self.gas_price = self.metadata.next_epoch_gas_price;
     }
 
     public(friend) fun request_add_delegation(self: &mut Validator, delegate_amount: u64) {
@@ -180,6 +190,10 @@ module sui::validator {
         self.pending_delegation_withdraw = self.pending_delegation_withdraw + delegate_amount;
         self.pending_delegator_withdraw_count = self.pending_delegator_withdraw_count + 1;
         self.metadata.next_epoch_delegation = self.metadata.next_epoch_delegation - delegate_amount;
+    }
+
+    public(friend) fun request_set_gas_price(self: &mut Validator, new_price: u64) {
+        self.metadata.next_epoch_gas_price = new_price;
     }
 
     public fun metadata(self: &Validator): &ValidatorMetadata {
@@ -208,6 +222,10 @@ module sui::validator {
 
     public fun pending_withdraw(self: &Validator): u64 {
         self.pending_withdraw
+    }
+
+    public fun gas_price(self: &Validator): u64 {
+        self.gas_price
     }
 
     public fun is_duplicate(self: &Validator, other: &Validator): bool {

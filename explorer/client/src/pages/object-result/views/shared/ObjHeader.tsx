@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { ReactComponent as ObjIcon } from '../../../../assets/SVGIcons/Call.svg';
-import GoBack from '../../../../components/goback/GoBack';
 import Longtext from '../../../../components/longtext/Longtext';
 import resultheaderstyle from '../../../../styles/resultheader.module.css';
 
@@ -19,7 +18,6 @@ function ObjAddressHeader({ data }: { data: ObjHeaderData }) {
         <div
             className={`${resultheaderstyle.btmborder} ${styles.objcontainer}`}
         >
-            <GoBack />
             <div className={resultheaderstyle.category}>
                 <ObjIcon /> {data.objKind}
             </div>

@@ -32,11 +32,8 @@ export function CookiesConsent() {
                         transition: 'slide',
                     },
                 },
-                // @ts-expect-error no types
-                onAccept: function (cookie: {
-                    level: ('necessary' | 'analytics')[];
-                }) {
-                    if (cookie?.level?.includes('analytics')) {
+                onAccept(cookie) {
+                    if (cookie.categories.includes('analytics')) {
                         loadAndEnableAnalytics();
                     }
                 },

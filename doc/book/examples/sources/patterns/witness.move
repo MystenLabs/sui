@@ -23,7 +23,7 @@ module examples::guardian {
 }
 
 /// Custom module that makes use of the `guardian`.
-module examples::peace {
+module examples::peace_guardian {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 

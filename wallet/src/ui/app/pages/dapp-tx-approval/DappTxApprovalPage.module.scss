@@ -1,14 +1,90 @@
-.value {
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: -0.6px;
-    max-width: 320px;
-    overflow-x: auto;
-    overflow-wrap: break-word;
+@use '_values/colors';
+
+.card {
+    background: colors.$gray-40;
+    border-radius: 10px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
 }
 
-.list {
-    padding: 0;
-    margin: 0;
-    padding-left: 15px;
+.content {
+    padding: 15px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    line-height: 13px;
+
+    dt {
+        color: colors.$gray-80;
+    }
+
+    dd {
+        color: colors.$gray-90;
+    }
+}
+
+.card::after {
+    content: '';
+    background-image: url('_assets/images/CardEdge.svg');
+    background-size: 20px 5px;
+    width: 100%;
+    height: 5px;
+    position: relative;
+    display: block;
+    bottom: 0;
+    right: 0;
+    z-index: 2;
+}
+
+.tabs {
+    font-weight: 600;
+    font-size: 14px;
+    line-height: 17px;
+    display: flex;
+    gap: 30px;
+    border-bottom: 1px solid colors.$gray-45;
+
+    .tab {
+        cursor: pointer;
+        background: none;
+        border: none;
+        padding: 8px 0;
+        margin-bottom: -1px;
+        color: colors.$gray-75;
+        border-bottom: 1px solid colors.$gray-45;
+
+        &.active {
+            color: colors.$gray-100;
+            border-color: colors.$gray-65;
+        }
+    }
+}
+
+.objects {
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.object-name {
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 17px;
+    color: colors.$gray-85;
+    font-family: 'Space Mono', ui-monospace, monospace;
+}
+
+.object-id {
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 17px;
+    font-family: 'Space Mono', ui-monospace, monospace;
+    color: colors.$sui-dark-blue;
 }

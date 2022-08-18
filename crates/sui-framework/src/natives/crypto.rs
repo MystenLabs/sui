@@ -9,7 +9,7 @@ use move_vm_types::{
     pop_arg,
     values::Value,
 };
-use narwhal_crypto::traits::ToFromBytes;
+use narwhal_crypto::{traits::ToFromBytes, Verifier};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -61,4 +61,41 @@ pub fn keccak256(
                 .to_vec()
         )],
     ))
+}
+
+/// Native implemention of bls12381_verify in public Move API, see crypto.move for specifications.
+/// Note that this function only works for signatures in G1 and public keys in G2.
+pub fn bls12381_verify_g1_sig(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 3);
+
+    let msg = pop_arg!(args, Vec<u8>);
+    let public_key_bytes = pop_arg!(args, Vec<u8>);
+    let signature_bytes = pop_arg!(args, Vec<u8>);
+
+    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+
+    let signature = match <narwhal_crypto::bls12381::BLS12381Signature as ToFromBytes>::from_bytes(
+        &signature_bytes,
+    ) {
+        Ok(signature) => signature,
+        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    };
+
+    let public_key = match <narwhal_crypto::bls12381::BLS12381PublicKey as ToFromBytes>::from_bytes(
+        &public_key_bytes,
+    ) {
+        Ok(public_key) => public_key,
+        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    };
+
+    match public_key.verify(&msg, &signature) {
+        Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
+        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    }
 }

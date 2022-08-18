@@ -5,7 +5,7 @@ use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorGenesisInfo},
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
-    CONSENSUS_DB_NAME, DEFAULT_STAKE,
+    CONSENSUS_DB_NAME, DEFAULT_GAS_PRICE, DEFAULT_STAKE,
 };
 use rand::rngs::OsRng;
 use std::{
@@ -74,6 +74,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 key_pair,
                 network_address: utils::new_network_address(),
                 stake: DEFAULT_STAKE,
+                gas_price: DEFAULT_GAS_PRICE,
                 narwhal_primary_to_primary: utils::new_network_address(),
                 narwhal_worker_to_primary: utils::new_network_address(),
                 narwhal_primary_to_worker: utils::new_network_address(),
@@ -100,6 +101,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     public_key,
                     stake,
                     delegation: 0, // no delegation yet at genesis
+                    gas_price: validator.gas_price,
                     network_address,
                     narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
                     narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),

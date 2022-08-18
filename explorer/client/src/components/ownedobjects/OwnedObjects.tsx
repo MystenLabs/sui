@@ -12,8 +12,6 @@ import React, {
 } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import { ReactComponent as BackArrow } from '../../assets/SVGIcons/back-arrow-dark.svg';
-import tablestyle from '../../components/table/TableCard.module.css';
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
@@ -27,42 +25,19 @@ import {
     findDataFromID,
     findOwnedObjectsfromID,
 } from '../../utils/static/searchUtil';
-import {
-    handleCoinType,
-    transformURL,
-    trimStdLibPrefix,
-    truncate,
-} from '../../utils/stringUtils';
-import DisplayBox from '../displaybox/DisplayBox';
-import Longtext from '../longtext/Longtext';
-import PaginationLogic from '../pagination/PaginationLogic';
+import { transformURL } from '../../utils/stringUtils';
+import { type DataType } from './OwnedObjectConstants';
+import OwnedObjectView from './views/OwnedObjectView';
 
-import styles from './OwnedObjects.module.css';
+import styles from './styles/OwnedObjects.module.css';
 
-type resultType = {
-    id: string;
-    Type: string;
-    _isCoin: boolean;
-    Version?: string;
-    display?: string;
-    balance?: BN;
-    name?: string;
-}[];
-
-const DATATYPE_DEFAULT: resultType = [
+const DATATYPE_DEFAULT: DataType = [
     {
         id: '',
         Type: '',
         _isCoin: false,
     },
 ];
-
-const ITEMS_PER_PAGE: number = 6;
-const alttextgen = (value: number | string | boolean | BN): string =>
-    truncate(String(value), 19);
-
-const lastRowHas2Elements = (itemList: any[]): boolean =>
-    itemList.length % 3 === 2;
 
 const NoOwnedObjects = () => (
     <div className={styles.fail}>Failed to find Owned Objects</div>
@@ -106,7 +81,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
 
         return (
             <NavigateFunctionContext.Provider value={navigateFn}>
-                <OwnedObjectLayout results={results} />
+                <OwnedObjectView results={results} />
             </NavigateFunctionContext.Provider>
         );
     } else {
@@ -172,245 +147,11 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
     if (isLoaded)
         return (
             <NavigateFunctionContext.Provider value={navigateFn}>
-                <OwnedObjectLayout results={results} />
+                <OwnedObjectView results={results} />
             </NavigateFunctionContext.Provider>
         );
 
     return <div className={styles.gray}>loading...</div>;
-}
-
-const viewFn = (results: any) => <OwnedObjectView results={results} />;
-
-function OwnedObjectLayout({ results }: { results: resultType }) {
-    const coin_results = results.filter(({ _isCoin }) => _isCoin);
-    const other_results = results
-        .filter(({ _isCoin }) => !_isCoin)
-        .sort((a, b) => {
-            if (a.Type > b.Type) return 1;
-            if (a.Type < b.Type) return -1;
-            if (a.Type === b.Type) {
-                return a.id <= b.id ? -1 : 1;
-            }
-            return 0;
-        });
-
-    const nftFooter = {
-        stats: {
-            count: other_results.length,
-            stats_text: 'Total NFTs',
-        },
-    };
-
-    return (
-        <div className={styles.layout}>
-            {coin_results.length > 0 && (
-                <div>
-                    <div className={styles.ownedobjectheader}>
-                        <h2>Coins</h2>
-                    </div>
-                    <GroupView results={coin_results} />
-                </div>
-            )}
-            {other_results.length > 0 && (
-                <div id="NFTSection">
-                    <div className={styles.ownedobjectheader}>
-                        <h2>NFTs</h2>
-                    </div>
-                    <PaginationLogic
-                        results={other_results}
-                        viewComponentFn={viewFn}
-                        itemsPerPage={ITEMS_PER_PAGE}
-                        stats={nftFooter.stats}
-                    />
-                </div>
-            )}
-        </div>
-    );
-}
-
-function GroupView({ results }: { results: resultType }) {
-    const [subObjs, setSubObjs] = useState(DATATYPE_DEFAULT);
-
-    const [isGroup, setIsGroup] = useState(true);
-
-    const shrinkObjList = useCallback(
-        (subObjList) => () => {
-            setIsGroup(false);
-            setSubObjs(subObjList);
-        },
-        []
-    );
-
-    const goBack = useCallback(() => setIsGroup(true), []);
-
-    const uniqueTypes = Array.from(new Set(results.map(({ Type }) => Type)));
-
-    if (isGroup) {
-        return (
-            <table
-                id="groupCollection"
-                className={`${styles.groupview} ${tablestyle.table}`}
-            >
-                <thead>
-                    <tr>
-                        <th>Type</th>
-                        <th>Balance</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {uniqueTypes.map((typeV) => {
-                        const subObjList = results.filter(
-                            ({ Type }) => Type === typeV
-                        );
-                        return (
-                            <tr key={typeV} onClick={shrinkObjList(subObjList)}>
-                                <td className={styles.tablespacing}>
-                                    {handleCoinType(typeV)}
-                                </td>
-                                <td className={styles.tablespacing}>
-                                    {subObjList[0]._isCoin &&
-                                    subObjList.every(
-                                        (el) => el.balance !== undefined
-                                    )
-                                        ? `${subObjList.reduce(
-                                              (prev, current) =>
-                                                  prev.add(current.balance!),
-                                              Coin.getZero()
-                                          )}`
-                                        : ''}
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
-            </table>
-        );
-    } else {
-        return (
-            <div>
-                <div className={styles.coinheading}>
-                    <button onClick={goBack}>
-                        <BackArrow /> Go Back
-                    </button>
-                    <h2>{handleCoinType(subObjs[0].Type)}</h2>
-                </div>
-                <PaginationLogic
-                    results={subObjs}
-                    viewComponentFn={viewFn}
-                    itemsPerPage={ITEMS_PER_PAGE}
-                />
-            </div>
-        );
-    }
-}
-
-function OwnedObjectView({ results }: { results: resultType }) {
-    return (
-        <div id="ownedObjects" className={styles.ownedobjects}>
-            {results.map((entryObj, index1) => (
-                <div className={styles.objectbox} key={`object-${index1}`}>
-                    {entryObj.display !== undefined && (
-                        <div className={styles.previewimage}>
-                            <DisplayBox
-                                display={entryObj.display}
-                                caption={
-                                    entryObj.name ||
-                                    trimStdLibPrefix(entryObj.Type)
-                                }
-                            />
-                        </div>
-                    )}
-                    <div className={styles.textitem}>
-                        {Object.entries(entryObj).map(
-                            ([key, value], index2) => (
-                                <div key={`object-${index1}-${index2}`}>
-                                    {(() => {
-                                        switch (key) {
-                                            case 'Type':
-                                                if (entryObj._isCoin) {
-                                                    break;
-                                                } else {
-                                                    return (
-                                                        <span
-                                                            className={
-                                                                styles.typevalue
-                                                            }
-                                                        >
-                                                            {trimStdLibPrefix(
-                                                                value as string
-                                                            )}
-                                                        </span>
-                                                    );
-                                                }
-                                            case 'balance':
-                                                if (!entryObj._isCoin) {
-                                                    break;
-                                                } else {
-                                                    return (
-                                                        <div
-                                                            className={
-                                                                styles.coinfield
-                                                            }
-                                                        >
-                                                            <div>Balance</div>
-                                                            <div>
-                                                                {String(value)}
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                }
-                                            case 'id':
-                                                if (entryObj._isCoin) {
-                                                    return (
-                                                        <div
-                                                            className={
-                                                                styles.coinfield
-                                                            }
-                                                        >
-                                                            <div>Object ID</div>
-                                                            <div>
-                                                                <Longtext
-                                                                    text={String(
-                                                                        value
-                                                                    )}
-                                                                    category="objects"
-                                                                    isCopyButton={
-                                                                        false
-                                                                    }
-                                                                    alttext={alttextgen(
-                                                                        value
-                                                                    )}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                } else {
-                                                    return (
-                                                        <Longtext
-                                                            text={String(value)}
-                                                            category="objects"
-                                                            isCopyButton={false}
-                                                            alttext={alttextgen(
-                                                                value
-                                                            )}
-                                                        />
-                                                    );
-                                                }
-                                            default:
-                                                break;
-                                        }
-                                    })()}
-                                </div>
-                            )
-                        )}
-                    </div>
-                </div>
-            ))}
-            {lastRowHas2Elements(results) && (
-                <div className={`${styles.objectbox} ${styles.fillerbox}`} />
-            )}
-        </div>
-    );
 }
 
 export default OwnedObject;

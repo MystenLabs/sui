@@ -1,9 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { memo, useCallback, useState } from 'react';
+import cl from 'classnames';
+import { memo, useCallback, useMemo, useState } from 'react';
 
 import AccountAddress from '_components/account-address';
+import ExternalLink from '_components/external-link';
+import Icon from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 
 import type { MouseEventHandler, ReactNode } from 'react';
@@ -11,23 +14,23 @@ import type { MouseEventHandler, ReactNode } from 'react';
 import st from './UserApproveContainer.module.scss';
 
 type UserApproveContainerProps = {
-    title: string;
     children: ReactNode | ReactNode[];
     origin: string;
     originFavIcon?: string;
     rejectTitle: string;
     approveTitle: string;
     onSubmit: (approved: boolean) => void;
+    isConnect?: boolean;
 };
 
 function UserApproveContainer({
-    title,
     origin,
     originFavIcon,
     children,
     rejectTitle,
     approveTitle,
     onSubmit,
+    isConnect,
 }: UserApproveContainerProps) {
     const [submitting, setSubmitting] = useState(false);
     const handleOnResponse = useCallback<MouseEventHandler<HTMLButtonElement>>(
@@ -39,42 +42,60 @@ function UserApproveContainer({
         },
         [onSubmit]
     );
+
+    const parsedOrigin = useMemo(() => new URL(origin), [origin]);
+
     return (
         <div className={st.container}>
-            <h2 className={st.title}>{title}</h2>
-            <label className={st.label}>Site</label>
-            <div className={st.originContainer}>
-                {originFavIcon ? (
-                    <img
-                        className={st.favIcon}
-                        src={originFavIcon}
-                        alt="Site favicon"
-                    />
-                ) : null}
-                <span className={st.origin}>{origin}</span>
+            <div className={st.scrollBody}>
+                <div className={st.originContainer}>
+                    {originFavIcon ? (
+                        <img
+                            className={st.favIcon}
+                            src={originFavIcon}
+                            alt="Site favicon"
+                        />
+                    ) : null}
+                    <div className={st.host}>{parsedOrigin.host}</div>
+                    <AccountAddress showLink={false} />
+                    <ExternalLink href={origin} className={st.origin}>
+                        {origin}
+                    </ExternalLink>
+                </div>
+                <div className={st.children}>{children}</div>
             </div>
-            <label className={st.label}>Account</label>
-            <AccountAddress showLink={false} />
-            {children}
-            <div className={st.actions}>
-                <button
-                    type="button"
-                    data-allow="false"
-                    onClick={handleOnResponse}
-                    className="btn link"
-                    disabled={submitting}
-                >
-                    {rejectTitle}
-                </button>
-                <button
-                    type="button"
-                    className="btn"
-                    data-allow="true"
-                    onClick={handleOnResponse}
-                    disabled={submitting}
-                >
-                    {submitting ? <LoadingIndicator /> : approveTitle}
-                </button>
+            <div className={st.actionsContainer}>
+                <div className={st.actions}>
+                    <button
+                        type="button"
+                        data-allow="false"
+                        onClick={handleOnResponse}
+                        className={cl(
+                            st.button,
+                            isConnect ? st.cancel : st.reject
+                        )}
+                        disabled={submitting}
+                    >
+                        <Icon icon="x" />
+                        {rejectTitle}
+                    </button>
+                    <button
+                        type="button"
+                        className={cl(st.button, st.approve)}
+                        data-allow="true"
+                        onClick={handleOnResponse}
+                        disabled={submitting}
+                    >
+                        {isConnect ? (
+                            <Icon icon="plus" />
+                        ) : (
+                            <Icon icon="check" />
+                        )}
+                        <span>
+                            {submitting ? <LoadingIndicator /> : approveTitle}
+                        </span>
+                    </button>
+                </div>
             </div>
         </div>
     );

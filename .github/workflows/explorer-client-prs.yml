@@ -18,15 +18,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7
       - name: Install Nodejs
         uses: actions/setup-node@v3
         with:
           node-version: "16"
           cache: "yarn"
           cache-dependency-path: ./explorer/client/yarn.lock
-      - name: Build TS sdk
-        working-directory: ./sdk/typescript
-        run: yarn install; yarn build
+      - name: Install sdk dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build SDK
+        run: pnpm --filter @mysten/sui.js build
       - name: Install yarn dependencies
         working-directory: ./explorer/client
         run: yarn install --force

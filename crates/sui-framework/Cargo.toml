@@ -18,16 +18,20 @@ sha3 = "0.10.1"
 
 sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }
+sui-verifier = { path = "../../crates/sui-verifier" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-cli = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-stdlib = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-unit-test = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "24353f2f1c5df27a8f1b693d78285faf506e36a2", package = "crypto" }
+narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "e54611ee0387735b1963eecfc4fdc120ee8ac509", package = "crypto" }
 workspace-hack = { path = "../workspace-hack"}
 
 [build-dependencies]

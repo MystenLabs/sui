@@ -230,7 +230,7 @@ pub enum ReduceOutput<S> {
 }
 
 #[async_trait]
-pub trait CertificateHandler {
+trait CertificateHandler {
     async fn handle(&self, certificate: CertifiedTransaction)
         -> SuiResult<TransactionInfoResponse>;
 
@@ -277,7 +277,7 @@ where
         level = "trace",
         skip_all
     )]
-    pub async fn sync_authority_source_to_destination<CertHandler: CertificateHandler>(
+    async fn sync_authority_source_to_destination<CertHandler: CertificateHandler>(
         &self,
         cert: CertifiedTransaction,
         source_authority: AuthorityName,
@@ -403,7 +403,7 @@ where
         Ok(())
     }
 
-    pub async fn sync_certificate_to_authority(
+    async fn sync_certificate_to_authority(
         &self,
         cert: CertifiedTransaction,
         destination_authority: AuthorityName,
@@ -418,7 +418,7 @@ where
         .await
     }
 
-    pub async fn sync_certificate_to_authority_with_timeout(
+    async fn sync_certificate_to_authority_with_timeout(
         &self,
         cert: CertifiedTransaction,
         destination_authority: AuthorityName,
@@ -449,9 +449,7 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    pub async fn sync_certificate_to_authority_with_timeout_inner<
-        CertHandler: CertificateHandler,
-    >(
+    async fn sync_certificate_to_authority_with_timeout_inner<CertHandler: CertificateHandler>(
         &self,
         cert: CertifiedTransaction,
         destination_authority: AuthorityName,

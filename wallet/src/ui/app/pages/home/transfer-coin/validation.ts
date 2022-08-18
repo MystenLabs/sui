@@ -12,7 +12,13 @@ import {
 
 import type { FormatNumberOptions, IntlShape } from 'react-intl';
 
-export function createValidationSchema(
+export function createValidationSchemaStepTwo() {
+    return Yup.object({
+        to: SUI_ADDRESS_VALIDATION,
+    });
+}
+
+export function createValidationSchemaStepOne(
     coinType: string,
     coinBalance: bigint,
     coinSymbol: string,
@@ -22,7 +28,6 @@ export function createValidationSchema(
     formatOptions: FormatNumberOptions
 ) {
     return Yup.object({
-        to: SUI_ADDRESS_VALIDATION,
         amount: Yup.number()
             .integer()
             .required()
@@ -32,7 +37,7 @@ export function createValidationSchema(
             )
             .test(
                 'max',
-                `\${path} must be less than or equal to ${intl.formatNumber(
+                `\${path} must be less than ${intl.formatNumber(
                     coinBalance,
                     formatOptions
                 )} ${coinSymbol}`,
@@ -42,7 +47,7 @@ export function createValidationSchema(
             )
             .test(
                 'gas-balance-check',
-                `Insufficient ${GAS_SYMBOL} balance to cover gas fee`,
+                `Insufficient ${GAS_SYMBOL} balance to cover gas fee (${DEFAULT_GAS_BUDGET_FOR_TRANSFER} ${GAS_SYMBOL})`,
                 (amount) => {
                     try {
                         let availableGas = gasBalance;

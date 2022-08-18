@@ -23,7 +23,7 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
-use sui_types::crypto::{AuthorityKeyPair, KeypairTraits};
+use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, SuiKeyPair};
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_OBJECT_ID};
 
@@ -115,6 +115,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
                 public_key: get_key_pair::<AuthorityKeyPair>().1.public().into(),
                 stake: 1,
                 delegation: 1,
+                gas_price: 1,
                 network_address: sui_config::utils::new_network_address(),
                 narwhal_primary_to_primary: sui_config::utils::new_network_address(),
                 narwhal_worker_to_primary: sui_config::utils::new_network_address(),
@@ -133,7 +134,9 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
     // Add 3 accounts
     for _ in 0..3 {
-        context.keystore.add_key(get_key_pair().1)?;
+        context
+            .keystore
+            .add_key(SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1))?;
     }
 
     // Print all addresses

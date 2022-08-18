@@ -1,6 +1,6 @@
 {
-  "name": "@sui-wallet-adapter/sui-wallet",
-  "version": "1.0.0",
+  "name": "@mysten/wallet-adapter-sui-wallet",
+  "version": "0.0.0",
   "description": "Integration of Sui Wallet into the Sui Wallet Adapter",
   "main": "lib/index.js",
   "scripts": {
@@ -10,8 +10,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@mysten/sui.js": "^0.8.0",
-    "sui-base-wallet-adapter": "file:../../base-adapter"
+    "@mysten/sui.js": "workspace:*",
+    "@mysten/base-wallet-adapter": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^4.7.4"

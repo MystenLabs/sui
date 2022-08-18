@@ -11,10 +11,11 @@ const BASE_URL = 'http://localhost:8080';
 //Standardized CSS Selectors
 
 const coinGroup = (num: number) => {
-    const trunk = `#groupCollection > tbody > tr:nth-child(${num})`;
+    const trunk = `#groupCollection > div:nth-child(2) > div:nth-child(${num}) > div`;
     return {
         base: () => trunk,
-        field: (numField: number) => `${trunk} > td:nth-child(${numField})`,
+        field: (numField: number) =>
+            `${trunk} > div:nth-child(${numField + 1})`,
     };
 };
 
@@ -286,7 +287,7 @@ describe('End-to-end Tests', () => {
         it('to go to the next page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            await cssInteract(page).with('#nextBtn').click();
+            await cssInteract(page).with('#NFTSection #nextBtn').click();
             await cssInteract(page).with(nftObject(1)).click();
             const value = await cssInteract(page)
                 .with('#objectID')
@@ -296,7 +297,7 @@ describe('End-to-end Tests', () => {
         it('to go to the last page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            await cssInteract(page).with('#lastBtn').click();
+            await cssInteract(page).with('#NFTSection #lastBtn').click();
             await cssInteract(page).with(nftObject(1)).click();
             const value = await cssInteract(page)
                 .with('#objectID')
@@ -307,18 +308,22 @@ describe('End-to-end Tests', () => {
         it('where last and next disappear in final page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            await cssInteract(page).with('#lastBtn').click();
+            await cssInteract(page).with('#NFTSection #lastBtn').click();
 
             //Back and First buttons are not disabled:
             for (const cssValue of ['#backBtn', '#firstBtn']) {
                 expect(
-                    await cssInteract(page).with(cssValue).get.isDisabled()
+                    await cssInteract(page)
+                        .with(`#NFTSection ${cssValue}`)
+                        .get.isDisabled()
                 ).toBeFalsy();
             }
             //Next and Last buttons are disabled:
             for (const cssValue of ['#nextBtn', '#lastBtn']) {
                 expect(
-                    await cssInteract(page).with(cssValue).get.isDisabled()
+                    await cssInteract(page)
+                        .with(`#NFTSection ${cssValue}`)
+                        .get.isDisabled()
                 ).toBeTruthy();
             }
         });
@@ -327,8 +332,8 @@ describe('End-to-end Tests', () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
 
-            await cssInteract(page).with('#lastBtn').click();
-            await cssInteract(page).with('#backBtn').click();
+            await cssInteract(page).with('#NFTSection #lastBtn').click();
+            await cssInteract(page).with('#NFTSection #backBtn').click();
             await cssInteract(page).with(nftObject(1)).click();
             const value = await cssInteract(page)
                 .with('#objectID')
@@ -339,9 +344,9 @@ describe('End-to-end Tests', () => {
         it('to go to first page', async () => {
             const address = 'ownsAllAddress';
             await page.goto(`${BASE_URL}/addresses/${address}`);
-            await cssInteract(page).with('#lastBtn').click();
-            await cssInteract(page).with('#backBtn').click();
-            await cssInteract(page).with('#firstBtn').click();
+            await cssInteract(page).with('#NFTSection #lastBtn').click();
+            await cssInteract(page).with('#NFTSection #backBtn').click();
+            await cssInteract(page).with('#NFTSection #firstBtn').click();
             await cssInteract(page).with(nftObject(1)).click();
             const value = await cssInteract(page)
                 .with('#objectID')
@@ -355,13 +360,17 @@ describe('End-to-end Tests', () => {
             //Back and First buttons are disabled:
             for (const cssValue of ['#backBtn', '#firstBtn']) {
                 expect(
-                    await cssInteract(page).with(cssValue).get.isDisabled()
+                    await cssInteract(page)
+                        .with(`#NFTSection ${cssValue}`)
+                        .get.isDisabled()
                 ).toBeTruthy();
             }
             //Next and Last buttons are not disabled:
             for (const cssValue of ['#nextBtn', '#lastBtn']) {
                 expect(
-                    await cssInteract(page).with(cssValue).get.isDisabled()
+                    await cssInteract(page)
+                        .with(`#NFTSection ${cssValue}`)
+                        .get.isDisabled()
                 ).toBeFalsy();
             }
         });
@@ -376,10 +385,15 @@ describe('End-to-end Tests', () => {
                     .with(coinGroup(1).field(1))
                     .get.textContent()
             ).toBe('0x2::USD::USD');
-
             expect(
                 await cssInteract(page)
                     .with(coinGroup(1).field(2))
+                    .get.textContent()
+            ).toBe('2');
+
+            expect(
+                await cssInteract(page)
+                    .with(coinGroup(1).field(3))
                     .get.textContent()
             ).toBe('9007199254740993');
 
@@ -391,7 +405,13 @@ describe('End-to-end Tests', () => {
 
             expect(
                 await cssInteract(page)
-                    .with(coinGroup(2).field(2))
+                    .with(coinGroup(1).field(2))
+                    .get.textContent()
+            ).toBe('2');
+
+            expect(
+                await cssInteract(page)
+                    .with(coinGroup(2).field(3))
                     .get.textContent()
             ).toBe('200');
         });

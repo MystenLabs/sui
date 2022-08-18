@@ -8,6 +8,7 @@ import { Link } from 'react-router-dom';
 import Icon, { SuiIcons } from '_components/icon';
 import { formatDate } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
+import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
@@ -88,7 +89,9 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                 <div className={st.txTransferred}>
                     {txn.amount && (
                         <>
-                            <div className={st.txAmount}>{txn.amount} SUI</div>
+                            <div className={st.txAmount}>
+                                {txn.amount} {GAS_SYMBOL}
+                            </div>
                             <div className={st.txFiatValue}></div>
                         </>
                     )}

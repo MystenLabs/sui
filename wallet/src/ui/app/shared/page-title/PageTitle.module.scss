@@ -6,6 +6,19 @@
     flex-flow: row nowrap;
     position: relative;
     line-height: 18px;
+
+    .back-button {
+        background: transparent;
+        padding: 0;
+        margin-top: 1px;
+        font-weight: 500;
+        font-size: 14px;
+        color: colors.$gray-80;
+
+        i {
+            color: colors.$gray-60;
+        }
+    }
 }
 
 .back {

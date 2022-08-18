@@ -6,11 +6,14 @@ import {
   GetObjectDataResponse,
   SuiMoveObject,
   SuiObjectInfo,
+  SuiObject,
+  SuiData,
+  getMoveObjectType,
 } from './objects';
-
-import { getMoveObjectType } from './objects';
+import { SuiAddress } from './common';
 
 import BN from 'bn.js';
+import { getOption, Option } from './option';
 
 const COIN_TYPE = '0x2::coin::Coin';
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
@@ -61,3 +64,74 @@ export class Coin {
     return data.type;
   }
 }
+
+
+export type DelegationData = SuiMoveObject &
+    Pick<SuiData, 'dataType'> & {
+        type: '0x2::delegation::Delegation';
+        fields: {
+            active_delegation: Option<number>;
+            delegate_amount: number;
+            next_reward_unclaimed_epoch: number;
+            validator_address: SuiAddress;
+            info: {
+                id: string;
+                version: number;
+            };
+            coin_locked_until_epoch: Option<SuiMoveObject>;
+            ending_epoch: Option<number>;
+        };
+    };
+
+export type DelegationSuiObject = Omit<SuiObject, 'data'> & {
+    data: DelegationData;
+};
+
+// Class for delegation.move
+// see https://github.com/MystenLabs/fastnft/blob/161aa27fe7eb8ecf2866ec9eb192e768f25da768/crates/sui-framework/sources/governance/delegation.move
+export class Delegation {
+    public static readonly SUI_OBJECT_TYPE = '0x2::delegation::Delegation';
+    private suiObject: DelegationSuiObject;
+
+    public static isDelegationSuiObject(
+        obj: SuiObject
+    ): obj is DelegationSuiObject {
+        return (
+            'type' in obj.data &&
+            obj.data.type === Delegation.SUI_OBJECT_TYPE
+        );
+    }
+
+    constructor(obj: DelegationSuiObject) {
+        this.suiObject = obj;
+    }
+
+    public nextRewardUnclaimedEpoch() {
+        return this.suiObject.data.fields.next_reward_unclaimed_epoch;
+    }
+
+    public activeDelegation() {
+        return BigInt(getOption(this.suiObject.data.fields.active_delegation) || 0);
+    }
+
+    public delegateAmount() {
+        return this.suiObject.data.fields.delegate_amount;
+    }
+
+    public endingEpoch() {
+        return getOption(this.suiObject.data.fields.ending_epoch);
+    }
+
+    public validatorAddress() {
+        return this.suiObject.data.fields.validator_address;
+    }
+
+    public isActive() {
+        return this.activeDelegation() > 0 && !this.endingEpoch();
+    }
+
+    public hasUnclaimedRewards(epoch: number) {
+        return this.nextRewardUnclaimedEpoch() <= epoch && (this.isActive() || (this.endingEpoch() || 0) > epoch);
+    }
+}
+

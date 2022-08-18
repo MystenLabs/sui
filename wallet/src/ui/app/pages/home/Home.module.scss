@@ -37,10 +37,12 @@
 
 .main {
     overflow: auto;
-    padding: 25px sizing.$main-sides-space;
     flex-grow: 1;
     width: 100%;
+}
 
+.with-nav {
+    padding: 25px sizing.$main-sides-space;
     @include utils.main-extra-space-for-nav;
 }
 

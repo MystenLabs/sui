@@ -6,6 +6,7 @@ use crate::authority_active::gossip::configurable_batch_action_client::{
     init_configurable_authorities, BatchAction, ConfigurableBatchActionClient,
 };
 use crate::authority_active::MAX_RETRY_DELAY_MS;
+use crate::authority_aggregator::AuthorityAggregator;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
@@ -67,6 +68,8 @@ pub async fn test_gossip_error() {
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 pub async fn test_gossip_after_revert() {
+    telemetry_subscribers::init_for_testing();
+
     let action_sequence = vec![BatchAction::EmitUpdateItem(), BatchAction::EmitUpdateItem()];
     let (net, states, digests) = init_configurable_authorities(action_sequence).await;
 
@@ -162,7 +165,8 @@ async fn start_gossip_process(
             let active_state = Arc::new(
                 ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_net).unwrap(),
             );
-            active_state.spawn_gossip_process(3).await;
+            active_state.clone().spawn_gossip_process(3).await;
+            active_state.spawn_execute_process().await;
         });
         active_authorities.push(handle);
     }

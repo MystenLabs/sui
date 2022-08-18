@@ -3,7 +3,7 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: network_config
 ---
 validator_configs:
-  - key-pair: drjgraDxPZBAXWrlU4a9KL3SGbigje0aqDbvzIt3Dccg/brJsQt1h7untbwWO85p55bXHk7UTBD8tEiGifehRA==
+  - key-pair: m/SaagdV+VOBH84SXyaD1QQpw7tJ4HQUfgCJpS6uFV+5xu4WMO8+cRFEpkjbBruyKE9ydM++5T/87lA8waSSAA==
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -38,7 +38,7 @@ validator_configs:
     enable-reconfig: false
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: 2kFZfFFXSI13JOA/uNhKN2pDuPQVGKEcw4e2abLuZYZ15BdN1YgiVICG8XsDfOyw7oZRa30TQAqAyFa0va9/4Q==
+  - key-pair: BWT4edJ648As6Cg0rPqMeTpinyyg3mkZYQvoL0ETJr6u8/SkuOyh38NDNhv45Da9Qt6SWcBLgxTrjiBU3W6Cqw==
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -73,7 +73,7 @@ validator_configs:
     enable-reconfig: false
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: nwfnvlVROHqYupd8cy0IDcsPKaBI42VpEsZTPjLueu1jHBVB86S/RNTYlwYVZKqElddm9hkaP/YVYgA/GEuMZQ==
+  - key-pair: C9WIQSA+dP6G/HEzjOAXPcYo67cZvcvMFRWFIUzAibSKV2LiGsHNs4cEQsd7TDr1jHztuHedAnDm1PHi9zZ9dA==
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -108,7 +108,7 @@ validator_configs:
     enable-reconfig: false
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: KbchdpzmTkPVcTOwdNg51THtHyhRCvtFrOEKH0t5TW++raBhJseNmLShpp9u5hiWlPD0dRU42oJPGtyLFKG1Yg==
+  - key-pair: QiWNzaFM8RHGAriXG4zIQ+keRsqQUVHAJ0SmsBfmkxbMYjMuNLstXNafYO+7KjbLkWx+tFgwHqNmNsTbsBK9iA==
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -143,7 +143,7 @@ validator_configs:
     enable-reconfig: false
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: LQmg5mMmbOGuftEIGWigdY5xjpl702LGsMNGNKmgs10ccMiRpjRoGJDfb8SqO5TSEAuhWgfHiheQi24y3xkNSw==
+  - key-pair: sgzWfEvezFOOi+mQwbZCXWi/06b+l2k+SEY1FZbMqKsjjttu6akf3I5xvlDAo/s88pLZAk3brAKqpwkJawqp2g==
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -178,7 +178,7 @@ validator_configs:
     enable-reconfig: false
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: ASc3aB97XQ8oHjr95Fi8HnPS0xPJz5TAX/NxYkCiSPIfevXxsJEf9GgdcOIY8NqzmaqCNm1l12Xy+2rPYQEvSA==
+  - key-pair: 9Z/d0Lf1LcwMYKRIy/lRFhCwp0Lx5NI4p6RcrgVOwhydR2FqGN8gOTB/BkIiYCWItSpqrqp7b+jGtNnrqKeHsQ==
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -213,7 +213,7 @@ validator_configs:
     enable-reconfig: false
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: EyCgWNezVmvVINqqPtK/CsW4sSD7hSdzw2OXNLRckaRA9LsfqzzA5P2RKivmFTX5XcMFaP6QRsKuxgtVFJIytg==
+  - key-pair: 4BB+FmG6xjjQpGNs/bv21foY4nMY2jMCltCjhxgNbIzqP8527hCzpkX7MEBRHfq0yc1gWPQZKQFNFkZvXjssKg==
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -249,10 +249,10 @@ validator_configs:
     genesis:
       genesis: "[fake genesis]"
 account_keys:
-  - LdTLg/iEDS7tsVgTEGKsPx8s+P9tzRhW6GoebDFnFn7LLuH905q3rXBH/S7bfDf4/W6mpai4AJ0nEANmJMCTfw==
-  - 5aaIdCtHxa37WdTfdv0dseUe4Dscqfgqyhc+24tyk0fVp4FJTSvxoXTd/94eAsuIgc/22rcOYcve85PerAzmOQ==
-  - Tr6YD5BNEMkWRCtHg6DphIYMtslXs5w47Y9Rz/qmik0Jl3FIJlyVJyaFSf4VO4E9w7PbWOKcq7heaKRU9zRoYw==
-  - 4BAlo5xQRUa53BQGp+soFR5RUNeyBLqnGdTwkQISF9vjK71JOpv+Enog2V6Yq1WT0V9eFFLM68bFKafgXsR4xA==
-  - XPG1yExPpxqHlhChppWsUnxbVndKa4ohquiGhYaOCUykZAZuYXvNpGb8sJtOd9+Gho23M7jxFptmOxS+FsIulQ==
+  - 0gL1Yotsq+ENWrgyROSyMO/U3MzvxGNYktNenctyJd+vtJBelVDPRiqCAHgkoFXZda6TRHDEd9ndu20rJkw2+g==
+  - 9Lcs30s8QZpYQnBLH+55QCOl6uAiOVb7LEcBbhB7hE6X5+2EP6saQs6cISlDUh7CKgJWh0fMADuIH70n9wvf4A==
+  - kYP0d2s+pZoXgeVko+rpZ2k5e4q0NbJd2kGJ4QPQMc9cR/734xE9wBxW701He/5RV6/DOWmgFPi7VTfhjM7GTA==
+  - nZTXHAccZRpZcVXhUvvQe7WAB32Ak1vyNmNCX/Kl8amDOdmcMzuzonf+t4C41GysMM3NkFDb4jX7jMZ7kcGwag==
+  - pzzqy7X725Nhn+RxRHmPNmU97IGS14ftQFbEczxPAHaGQZf0zFyrbI7dS3nEhe+5pVVxi3W2A+LouY9V7A3iZw==
 genesis: "[fake genesis]"
 

@@ -12,6 +12,7 @@ module sui::validator_set {
     use sui::validator::{Self, Validator, ValidatorMetadata};
     use sui::stake::Stake;
     use sui::epoch_time_lock::EpochTimeLock;
+    use sui::priority_queue as pq;
 
     friend sui::sui_system;
 
@@ -168,6 +169,16 @@ module sui::validator_set {
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
+    public(friend) fun request_set_gas_price(
+        self: &mut ValidatorSet,
+        new_gas_price: u64,
+        ctx: &mut TxContext,
+    ) {
+        let validator_address = tx_context::sender(ctx);
+        let validator = get_validator_mut(&mut self.active_validators, validator_address);
+        validator::request_set_gas_price(validator, new_gas_price);
+    }
+
     public(friend) fun create_epoch_records(
         self: &ValidatorSet,
         epoch: u64,
@@ -210,9 +221,9 @@ module sui::validator_set {
             balance::value(computation_reward),
         );
 
-        // `adjust_stake` must be called before `distribute_reward`, because reward distribution goes to
+        // `adjust_stake_and_gas_price` must be called before `distribute_reward`, because reward distribution goes to
         // each validator's pending stake, and that shouldn't be available in the next epoch.
-        adjust_stake(&mut self.active_validators);
+        adjust_stake_and_gas_price(&mut self.active_validators);
 
         distribute_reward(&mut self.active_validators, &rewards, computation_reward, ctx);
 
@@ -226,6 +237,36 @@ module sui::validator_set {
         self.total_validator_stake = validator_stake;
         self.total_delegation_stake = delegation_stake;
         self.quorum_stake_threshold = quorum_stake_threshold;
+    }
+
+    /// Derive the reference gas price based on the gas price quote submitted by each validator.
+    /// The returned gas price should be greater than or equal to 2/3 of the validators submitted
+    /// gas price, weighted by stake.
+    public fun derive_reference_gas_price(self: &ValidatorSet): u64 {
+        let vs = &self.active_validators;
+        let num_validators = vector::length(vs);
+        let entries = vector::empty();
+        let i = 0;
+        while (i < num_validators) {
+            let v = vector::borrow(vs, i);
+            vector::push_back(
+                &mut entries, 
+                // Count both self and delegated stake
+                pq::new_entry(validator::gas_price(v), validator::stake_amount(v) + validator::delegate_amount(v))
+            );
+            i = i + 1;
+        };
+        // Build a priority queue that will pop entries with gas price from the highest to the lowest.
+        let pq = pq::new(entries);
+        let sum = 0;
+        let threshold = (total_validator_stake(self) + total_delegation_stake(self)) / 3;
+        let result = 0;
+        while (sum < threshold) {
+            let (gas_price, stake) = pq::pop_max(&mut pq);
+            result = gas_price;
+            sum = sum + stake;
+        };
+        result
     }
 
     public fun total_validator_stake(self: &ValidatorSet): u64 {
@@ -370,12 +411,12 @@ module sui::validator_set {
     }
 
     /// Process the pending stake changes for each validator.
-    fun adjust_stake(validators: &mut vector<Validator>) {
+    fun adjust_stake_and_gas_price(validators: &mut vector<Validator>) {
         let length = vector::length(validators);
         let i = 0;
         while (i < length) {
             let validator = vector::borrow_mut(validators, i);
-            validator::adjust_stake(validator);
+            validator::adjust_stake_and_gas_price(validator);
             i = i + 1;
         }
     }
