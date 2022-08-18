@@ -10,6 +10,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import { formatDate } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
 import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
+import { balanceFormatOptions } from '_shared/formatting';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
@@ -93,7 +94,10 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                     {txn.amount && (
                         <>
                             <div className={st.txAmount}>
-                                {intl.formatNumber(BigInt(txn.amount || 0))}{' '}
+                                {intl.formatNumber(
+                                    BigInt(txn.amount || 0),
+                                    balanceFormatOptions
+                                )}{' '}
                                 {GAS_SYMBOL}
                             </div>
                             <div className={st.txFiatValue}></div>

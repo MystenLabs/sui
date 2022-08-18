@@ -10,6 +10,7 @@ import Icon, { SuiIcons } from '_components/icon';
 import { formatDate } from '_helpers';
 import { useFileExtentionType } from '_hooks';
 import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
+import { balanceFormatOptions } from '_shared/formatting';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
@@ -99,7 +100,10 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                     {AssetCard}
                     {txDigest.amount && (
                         <div className={st.amount}>
-                            {intl.formatNumber(BigInt(txDigest.amount || 0))}{' '}
+                            {intl.formatNumber(
+                                BigInt(txDigest.amount || 0),
+                                balanceFormatOptions
+                            )}{' '}
                             <span>{GAS_SYMBOL}</span>
                         </div>
                     )}
@@ -135,7 +139,8 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                                 {intl.formatNumber(
                                     BigInt(
                                         txDigest.amount + txDigest.txGas || 0
-                                    )
+                                    ),
+                                    balanceFormatOptions
                                 )}{' '}
                                 {GAS_SYMBOL}
                             </div>
