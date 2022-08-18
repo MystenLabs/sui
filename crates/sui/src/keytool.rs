@@ -29,7 +29,7 @@ pub enum KeyToolCommand {
     Show {
         file: PathBuf,
     },
-    /// Extract components
+    /// Extract components of a keypair to reveal the Sui Address
     Unpack {
         keypair: SuiKeyPair,
     },

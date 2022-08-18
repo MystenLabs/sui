@@ -4,13 +4,11 @@ title: Validators
 
 The Sui network is operated by a set of independent *validators*, each running its own instance of the Sui software on a separate machine (or a sharded cluster of machines operated by the same entity). A validator participates in the network by handling read and write requests sent by clients. This section focuses on the latter.
 
-> **Important:** You can now [register to participate](https://airtable.com/shr3phh3FCZYhZUDF) in [Sui Incentivized Testnet as a validator](https://sui.io/resources-sui/validator-registration-open/)!
-
 Sui uses proof of stake (PoS) to determine which validators operate the network and their voting power. Validators are incentivized to participate in good faith via a share of transaction fees, staking rewards, and slashing to punish misbehavior.
 
 ## Epochs
 
-Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network is fixed. At an epoch boundary, reconfiguration may occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](../../build/cli-client.md#genesis) and the new set of validators as the operators.
+Operation of the Sui network is temporally partitioned into non-overlapping, approximate fixed-duration (e.g. 24-hour) *epochs*. During a particular epoch, the set of validators participating in the network is fixed. At an epoch boundary, reconfiguration may occur and can change the set of validators participating in the network and their voting power. Conceptually, reconfiguration starts a new instance of the Sui protocol with the previous epoch's final state as [genesis](../../contribute/cli-client.md#genesis) and the new set of validators as the operators.
 
 ## Quorums
 

@@ -221,7 +221,7 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 
 ## SUI tokens
 
-To [experiment with Devnet](../explore/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
+To [experiment with Devnet](../build/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
 
 To request SUI test tokens:
 

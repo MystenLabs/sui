@@ -53,7 +53,7 @@ impl EventStreamingApiServer for EventStreamingApiImpl {
         let state = self.state.clone();
         let stream = self.event_handler.subscribe(filter);
         let stream = stream.map(move |e| {
-            let event = SuiEvent::try_from(e.event, &state.module_cache);
+            let event = SuiEvent::try_from(e.event, state.module_cache.as_ref());
             event.map(|event| SuiEventEnvelope {
                 timestamp: e.timestamp,
                 tx_digest: e.tx_digest,

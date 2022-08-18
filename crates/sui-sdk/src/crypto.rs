@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+// TODO: Remove usage of rand::rngs::adapter::ReadRng.
+#![allow(deprecated)]
+
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use signature::Signer;

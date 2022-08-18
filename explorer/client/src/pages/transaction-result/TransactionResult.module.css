@@ -107,7 +107,7 @@
 }
 
 .singleitem {
-    @apply block !important;
+    @apply block sm:grid !important;
 }
 
 .mono {
@@ -124,4 +124,16 @@
     @apply mt-0;
 
     border-bottom: none;
+}
+
+.amountbox > :first-child {
+    @apply font-semibold text-sui-grey-100 text-[18px] h-[18px] leading-[100%] mb-[15px];
+}
+
+.amountbox > :nth-child(2) {
+    @apply font-bold text-sui-grey-90 text-[24px] h-[19px] leading-[80%] mt-0 mb-[40px];
+}
+
+.amountbox > :nth-child(2) sup {
+    @apply font-medium text-sui-grey-80 text-[13px] h-[13px] leading-[100%] ml-[4px];
 }

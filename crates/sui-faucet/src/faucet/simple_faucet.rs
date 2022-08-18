@@ -66,7 +66,6 @@ impl SimpleFaucet {
             // Ok to unwrap() since `get_gas_objects` guarantees gas
             .map(|q| GasCoin::try_from(&q.1).unwrap())
             .collect::<Vec<GasCoin>>();
-        info!("Coins held: {:?}", coins);
 
         let (producer, consumer) = mpsc::channel(coins.len());
         for coin in &coins {
@@ -75,7 +74,7 @@ impl SimpleFaucet {
             }
         }
 
-        info!("Using coins: {:?}", coins);
+        debug!("Using coins: {:?}", coins);
 
         let metrics = FaucetMetrics::new(prometheus_registry);
 

@@ -19,6 +19,9 @@ use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
 use sui_types::sui_serde::KeyPairBase64;
 
+// Default max number of concurrent requests served
+pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 500;
+
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -51,6 +54,12 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_reconfig: bool,
 
+    #[serde(default)]
+    pub grpc_load_shed: Option<bool>,
+
+    #[serde(default = "default_concurrency_limit")]
+    pub grpc_concurrency_limit: Option<usize>,
+
     pub genesis: Genesis,
 }
 
@@ -80,6 +89,10 @@ pub fn default_json_rpc_address() -> SocketAddr {
 pub fn default_websocket_address() -> Option<SocketAddr> {
     use std::net::{IpAddr, Ipv4Addr};
     Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9001))
+}
+
+pub fn default_concurrency_limit() -> Option<usize> {
+    Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
 }
 
 impl Config for NodeConfig {}
@@ -146,6 +159,7 @@ pub struct ValidatorInfo {
     pub public_key: AuthorityPublicKeyBytes,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
+    pub gas_price: u64,
     pub network_address: Multiaddr,
     pub narwhal_primary_to_primary: Multiaddr,
 
@@ -175,6 +189,10 @@ impl ValidatorInfo {
 
     pub fn delegation(&self) -> StakeUnit {
         self.delegation
+    }
+
+    pub fn gas_price(&self) -> u64 {
+        self.gas_price
     }
 
     pub fn network_address(&self) -> &Multiaddr {

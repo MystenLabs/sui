@@ -6,6 +6,7 @@ use anyhow::Result;
 use futures::future::try_join_all;
 use rand::rngs::OsRng;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::{
     mem, ops,
@@ -24,6 +25,7 @@ pub struct SwarmBuilder<R = OsRng> {
     committee_size: NonZeroUsize,
     initial_accounts_config: Option<GenesisConfig>,
     fullnode_count: usize,
+    fullnode_rpc_addr: Option<SocketAddr>,
 }
 
 impl SwarmBuilder {
@@ -35,6 +37,7 @@ impl SwarmBuilder {
             committee_size: NonZeroUsize::new(1).unwrap(),
             initial_accounts_config: None,
             fullnode_count: 0,
+            fullnode_rpc_addr: None,
         }
     }
 }
@@ -47,6 +50,7 @@ impl<R> SwarmBuilder<R> {
             committee_size: self.committee_size,
             initial_accounts_config: self.initial_accounts_config,
             fullnode_count: self.fullnode_count,
+            fullnode_rpc_addr: self.fullnode_rpc_addr,
         }
     }
 
@@ -75,6 +79,11 @@ impl<R> SwarmBuilder<R> {
 
     pub fn with_fullnode_count(mut self, fullnode_count: usize) -> Self {
         self.fullnode_count = fullnode_count;
+        self
+    }
+
+    pub fn with_fullnode_rpc_addr(mut self, fullnode_rpc_addr: SocketAddr) -> Self {
+        self.fullnode_rpc_addr = Some(fullnode_rpc_addr);
         self
     }
 }
@@ -109,7 +118,10 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
 
         if self.fullnode_count > 0 {
             (0..self.fullnode_count).for_each(|_| {
-                let config = network_config.generate_fullnode_config();
+                let mut config = network_config.generate_fullnode_config();
+                if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
+                    config.json_rpc_address = fullnode_rpc_addr;
+                }
                 fullnodes.insert(config.sui_address(), Node::new(config));
             });
         }

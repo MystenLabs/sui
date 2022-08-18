@@ -18,6 +18,39 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: "yarn"
+          cache-dependency-path: ./explorer/client/yarn.lock
+      - name: Install sdk dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build SDK
+        run: pnpm --filter @mysten/sui.js build
+      - name: Install yarn dependencies
+        working-directory: ./explorer/client
+        run: yarn install --force
+      - name: Lint
+        working-directory: ./explorer/client
+        run: yarn lint
+      - name: Unit Tests
+        working-directory: ./explorer/client
+        run: yarn test:unit
+      - name: Build
+        working-directory: ./explorer/client
+        run: yarn build
+  end_to_end:
+    name: End-to-end tests
+    needs: diff
+    if: needs.diff.outputs.isClient == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
       - name: Install Nodejs
         uses: actions/setup-node@v3
         with:
@@ -27,15 +60,9 @@ jobs:
       - name: Build TS sdk
         working-directory: ./sdk/typescript
         run: yarn install; yarn build
-      - name: Install yarn dependencies
-        working-directory: ./explorer/client
-        run: yarn install --force
-      - name: Lint
-        working-directory: ./explorer/client
-        run: yarn lint
-      - name: Test
-        working-directory: ./explorer/client
-        run: yarn test
-      - name: Build
-        working-directory: ./explorer/client
-        run: yarn build
+      - name: Run e2e tests
+        uses: cypress-io/github-action@v4
+        with:
+          install-command: yarn --frozen-lockfile
+          start: yarn start:static
+          working-directory: ./explorer/client

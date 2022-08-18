@@ -105,4 +105,4 @@ Currently the Explorer supports
 -   Address page with owned objects
 -   Search for transactions, addresses, and Objects by ID
 
-See [Experiment with Sui DevNet](https://docs.sui.io/explore/devnet) for use.
+See [Experiment with Sui DevNet](https://docs.sui.io/build/devnet) for use.

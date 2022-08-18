@@ -122,7 +122,7 @@ test_scenario::next_tx(scenario, &owner);
 The first part is the same as what we have seen in [Chapter 1](./ch1-object-basics.md#writing-unit-tests), which creates a new `ColorObject` and puts it in the owner's account. The second transaction is what we are testing: retrieve the object from the storage and then delete it. Since the object is deleted, there is no need (in fact, it is impossible) to return it to the storage. The last part of the test checks that the object is indeed no longer in the global storage and hence cannot be retrieved from there.
 
 #### Option 2. Transfer the object
-The owner of the object may want to transfer it to another account. To support this, the `ColorObject` module will need to define a `transfer` API:
+The owner of the object may want to transfer it to another address. To support this, the `ColorObject` module will need to define a `transfer` API:
 ```rust
 public entry fun transfer(object: ColorObject, recipient: address) {
     transfer::transfer(object, recipient)
@@ -164,7 +164,7 @@ test_scenario::next_tx(scenario, &recipient);
 
 ### On-chain interactions
 Now it's time to try this out on-chain. Assuming you have already followed the instructions in [Chapter 1](./ch1-object-basics.md#on-chain-interactions), you should already have the package published and a new object created.
-Now we can try to transfer it to another account address. First let's see what other account addresses you own:
+Now we can try to transfer it to another address. First let's see what other addresses you own:
 ```
 $ sui client addresses
 ```
@@ -186,7 +186,7 @@ Let's also try to delete this object:
 ```
 $ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "delete" --args \"0x$OBJECT\"
 ```
-Oops. It will error out and complain that the account address is unable to lock the object, which is a valid error because we have already transferred the object away from the original owner.
+Oops. It will error out and complain that the address is unable to lock the object, which is a valid error because we have already transferred the object away from the original owner.
 
 In order to operate on this object, we need to switch our client address to `$RECIPIENT`:
 ```

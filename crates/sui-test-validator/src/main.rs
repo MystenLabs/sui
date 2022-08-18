@@ -29,9 +29,13 @@ struct Args {
     #[clap(long, default_value = "5001")]
     gateway_rpc_port: u16,
 
-    // Port to start the Sui faucet on
-    #[clap(long)]
-    faucet_port: Option<u16>,
+    /// Port to start the Fullnode RPC server on
+    #[clap(long, default_value = "9000")]
+    fullnode_rpc_port: u16,
+
+    /// Port to start the Sui faucet on
+    #[clap(long, default_value = "9123")]
+    faucet_port: u16,
 }
 
 #[tokio::main]
@@ -41,26 +45,15 @@ async fn main() -> Result<()> {
     let cluster = LocalNewCluster::start(&ClusterTestOpt {
         env: Env::NewLocal,
         gateway_address: Some(format!("127.0.0.1:{}", args.gateway_rpc_port)),
-        fullnode_address: None,
+        fullnode_address: Some(format!("127.0.0.1:{}", args.fullnode_rpc_port)),
         faucet_address: None,
     })
     .await?;
 
+    println!("Fullnode RPC URL: {}", cluster.fullnode_url());
     println!("Gateway RPC URL: {}", cluster.rpc_url());
 
-    if let Some(faucet_port) = args.faucet_port {
-        start_faucet(&cluster, faucet_port).await?;
-    } else {
-        // Perform health checks to keep the service running:
-        let mut interval = tokio::time::interval(std::time::Duration::from_secs(5));
-        loop {
-            for node in cluster.swarm().validators() {
-                node.health_check().await.unwrap();
-            }
-
-            interval.tick().await;
-        }
-    }
+    start_faucet(&cluster, args.faucet_port).await?;
 
     Ok(())
 }
@@ -93,7 +86,7 @@ async fn start_faucet(cluster: &LocalNewCluster, port: u16) -> Result<()> {
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
-    println!("Faucet listening on http://{}", addr);
+    println!("Faucet URL: http://{}", addr);
 
     axum::Server::bind(&addr)
         .serve(app.into_make_service())

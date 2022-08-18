@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use anyhow::Result;
 use futures::TryFutureExt;
 use parking_lot::Mutex;
@@ -23,6 +24,7 @@ use sui_core::{
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_network::api::ValidatorServer;
+use sui_quorum_driver::QuorumDriverMetrics;
 use sui_quorum_driver::{QuorumDriver, QuorumDriverHandler};
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
@@ -33,10 +35,12 @@ use sui_storage::{
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tracing::info;
 
+use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
 use sui_json_rpc::event_api::EventStreamingApiImpl;
 use sui_json_rpc::http_server::HttpServerHandle;
+use sui_json_rpc::quorum_driver_api::FullNodeQuorumDriverApi;
 use sui_json_rpc::read_api::FullNodeApi;
 use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::ws_server::WsServerHandle;
@@ -63,6 +67,10 @@ pub struct SuiNode {
 
 impl SuiNode {
     pub async fn start(config: &NodeConfig) -> Result<SuiNode> {
+        // TODO: maybe have a config enum that takes care of this for us.
+        let is_validator = config.consensus_config().is_some();
+        let is_full_node = !is_validator;
+
         //
         // Start metrics server
         //
@@ -95,17 +103,19 @@ impl SuiNode {
             secret.clone(),
         )?));
 
-        let index_store = if config.consensus_config().is_some() {
+        let index_store = if is_validator {
             None
         } else {
             Some(Arc::new(IndexStore::open_tables_read_write(
                 config.db_path().join("indexes"),
+                None,
                 None,
             )))
         };
 
         let follower_store = Arc::new(FollowerStore::open_tables_read_write(
             config.db_path().join("follower_db"),
+            None,
             None,
         ));
 
@@ -140,10 +150,20 @@ impl SuiNode {
 
         let sui_system_state = state.get_sui_system_state_object().await?;
 
+        let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&prometheus_registry));
+
         let authority_clients = if config.enable_reconfig && sui_system_state.epoch > 0 {
-            make_network_authority_client_sets_from_system_state(&sui_system_state, &net_config)
+            make_network_authority_client_sets_from_system_state(
+                &sui_system_state,
+                &net_config,
+                network_metrics.clone(),
+            )
         } else {
-            make_network_authority_client_sets_from_genesis(genesis, &net_config)
+            make_network_authority_client_sets_from_genesis(
+                genesis,
+                &net_config,
+                network_metrics.clone(),
+            )
         }?;
         let net = AuthorityAggregator::new(
             state.clone_committee(),
@@ -153,12 +173,11 @@ impl SuiNode {
             SafeClientMetrics::new(&prometheus_registry),
         );
 
-        // TODO: maybe have a config enum that takes care of this for us.
-        let is_validator = config.consensus_config().is_some();
-        let is_full_node = !is_validator;
-
         let quorum_driver_handler = if is_full_node {
-            Some(QuorumDriverHandler::new(net.clone()))
+            Some(QuorumDriverHandler::new(
+                net.clone(),
+                QuorumDriverMetrics::new(&prometheus_registry),
+            ))
         } else {
             None
         };
@@ -171,6 +190,7 @@ impl SuiNode {
                 let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
                     config.db_path().join("node_sync_db"),
                     None,
+                    None,
                 ));
 
                 let active_authority = Arc::new(ActiveAuthority::new(
@@ -179,6 +199,7 @@ impl SuiNode {
                     follower_store,
                     net,
                     GossipMetrics::new(&prometheus_registry),
+                    network_metrics.clone(),
                 )?);
                 active = Some(Arc::clone(&active_authority));
 
@@ -242,21 +263,32 @@ impl SuiNode {
         };
 
         let grpc_server = {
-            let mut server_builder = mysten_network::config::Config::new().server_builder();
+            let mut server_conf = mysten_network::config::Config::new();
+            server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
+            server_conf.load_shed = config.grpc_load_shed;
+            let mut server_builder = server_conf.server_builder();
 
             if let Some(validator_service) = validator_service {
                 server_builder =
                     server_builder.add_service(ValidatorServer::new(validator_service));
             }
 
-            let server = server_builder.bind(config.network_address()).await?;
+            let server = server_builder
+                .bind(config.network_address())
+                .await
+                .map_err(|err| anyhow!(err.to_string()))?;
             let local_addr = server.local_addr();
             info!("Listening to traffic on {local_addr}");
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let (json_rpc_service, ws_subscription_service) =
-            build_node_server(state.clone(), config, &prometheus_registry).await?;
+        let (json_rpc_service, ws_subscription_service) = build_node_server(
+            state.clone(),
+            &quorum_driver_handler,
+            config,
+            &prometheus_registry,
+        )
+        .await?;
 
         let node = Self {
             grpc_server,
@@ -311,6 +343,7 @@ impl SuiNode {
 
 pub async fn build_node_server(
     state: Arc<AuthorityState>,
+    quorum_driver_handler: &Option<QuorumDriverHandler<NetworkAuthorityClient>>,
     config: &NodeConfig,
     prometheus_registry: &Registry,
 ) -> Result<(Option<HttpServerHandle>, Option<WsServerHandle>)> {
@@ -318,12 +351,18 @@ pub async fn build_node_server(
     if config.consensus_config().is_some() {
         return Ok((None, None));
     }
-
     let mut server = JsonRpcServerBuilder::new(false, prometheus_registry)?;
 
     server.register_module(ReadApi::new(state.clone()))?;
     server.register_module(FullNodeApi::new(state.clone()))?;
     server.register_module(BcsApiImpl::new(state.clone()))?;
+
+    if let Some(quorum_driver_handler_) = quorum_driver_handler {
+        server.register_module(FullNodeQuorumDriverApi::new(
+            quorum_driver_handler_.clone_quorum_driver(),
+            state.module_cache.clone(),
+        ))?;
+    }
 
     if let Some(event_handler) = state.event_handler.clone() {
         server.register_module(EventReadApiImpl::new(state.clone(), event_handler))?;

@@ -20,7 +20,7 @@ Yet it is inherently sequential: increments to the chain are added one at a time
 
 ## Sui's approach to validating new transactions
 
-A lot of transactions do not have complex interdependencies with other, arbitrary parts of the state of the blockchain. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's account. Hence Sui takes the approach of only taking a lock - or "stopping the world" - for the relevant piece of data rather than the whole chain -- in this case, the account of the sender, which can only send one transaction at a time.
+A lot of transactions do not have complex interdependencies with other, arbitrary parts of the state of the blockchain. Often financial users just want to send an asset to a recipient, and the only data required to gauge whether this simple transaction is admissible is a fresh view of the sender's address. Hence Sui takes the approach of only taking a lock - or "stopping the world" - for the relevant piece of data rather than the whole chain -- in this case, the address of the sender, which can only send one transaction at a time.
 
 Sui further expands this approach to more involved transactions that may explicitly depend on multiple elements under their sender's control, using an [object model](../build/objects.md) and leveraging [Move](../build/move/index.md)'s strong ownership model. By requiring that dependencies be explicit, Sui applies a "multi-lane" approach to transaction validation, making sure those independent transaction flows can progress without impediment from the others.
 
@@ -83,7 +83,7 @@ Contrary to many traditional blockchains, Sui does not make strong synchrony ass
 
 ### Efficient local read operations
 
-The reading process of Sui enormously differs from other blockchains. Users interested in only a handful of objects and their history perform authenticated reads  at a low granularity and low latency. Sui creates a narrow family tree of objects starting from the [genesis](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#genesis) allowing it to read only objects tied to the sender of the transaction. Users requiring a global view of the system (e.g., to audit the system) can take advantage of checkpoints to improve performance.
+The reading process of Sui enormously differs from other blockchains. Users interested in only a handful of objects and their history perform authenticated reads  at a low granularity and low latency. Sui creates a narrow family tree of objects starting from the [genesis](https://github.com/MystenLabs/sui/blob/main/doc/src/contribute/cli-client.md#genesis) allowing it to read only objects tied to the sender of the transaction. Users requiring a global view of the system (e.g., to audit the system) can take advantage of checkpoints to improve performance.
 
 In traditional blockchains, families are ordered with respect to each other to totally order transactions. This then requires querying a massive blob for the precise information needed. Disk I/O thus becomes a performance bottleneck, and some blockchains [now require SSD drives](https://www.usenix.org/system/files/conference/hotstorage18/hotstorage18-paper-raju.pdf) on their validators as a result.
 
@@ -111,7 +111,7 @@ Building an efficient synchronizer is harder in Sui than in traditional blockcha
 
 Traditional blockchains totally order all client transactions with respect to each other. This design requires reaching consensus across validators, which is effective but slow. 
 
-As mentioned in previous sections, Sui forgoes consensus for many transactions to reduce their latency. In this manner, Sui enables multi-lane processing and eliminates head-of-line blocking. All other transactions no longer need to wait for the completion of the first transaction’s increment in a single lane. Sui provides a lane of the appropriate breadth for each transaction. Simple transactions require viewing only the sender account, which greatly improves the system’s capacity.
+As mentioned in previous sections, Sui forgoes consensus for many transactions to reduce their latency. In this manner, Sui enables multi-lane processing and eliminates head-of-line blocking. All other transactions no longer need to wait for the completion of the first transaction’s increment in a single lane. Sui provides a lane of the appropriate breadth for each transaction. Simple transactions require viewing only the sender address, which greatly improves the system’s capacity.
 
 The downside of allowing head-of-line blocking on the sender for these simple transactions is that the sender can send only one transaction at a time. As a result, it is imperative the transactions finalize quickly. 
 

@@ -131,6 +131,21 @@
                 },
                 {
                     "objectId": "Item10"
+                },
+                {
+                    "objectId": "standaloneObjectABC"
+                },
+                {
+                    "objectId": "standaloneObjectDEF"
+                },
+                {
+                    "objectId": "standaloneObjectGHI"
+                },
+                {
+                    "objectId": "standaloneObjectJKL"
+                },
+                {
+                    "objectId": "standaloneObjectMNO"
                 }
             ]
         },
@@ -226,6 +241,21 @@
                 },
                 {
                     "objectId": "standaloneObjectSUI150"
+                },
+                {
+                    "objectId": "standaloneObjectABC"
+                },
+                {
+                    "objectId": "standaloneObjectDEF"
+                },
+                {
+                    "objectId": "standaloneObjectGHI"
+                },
+                {
+                    "objectId": "standaloneObjectJKL"
+                },
+                {
+                    "objectId": "standaloneObjectMNO"
                 }
             ]
         },

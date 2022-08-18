@@ -50,14 +50,14 @@ function TokensPage() {
                 />
                 <IconLink
                     icon={SuiIcons.HandCoins}
-                    to="/"
-                    disabled={true}
+                    to={`/send?${new URLSearchParams({
+                        type: GAS_TYPE_ARG,
+                    }).toString()}`}
                     text="Send & Receive"
                 />
                 <IconLink
                     icon={SuiIcons.PercentagePolygon}
-                    to="/stake-new"
-                    disabled={process.env.NODE_ENV !== 'development'}
+                    to="/stake"
                     text="Stake & Earn"
                 />
             </div>

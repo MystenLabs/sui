@@ -16,4 +16,9 @@
         width: val.$sizing-popup-width;
         height: val.$sizing-popup-height;
     }
+
+    &.dynamic-size {
+        width: 100vw;
+        height: 100vh;
+    }
 }

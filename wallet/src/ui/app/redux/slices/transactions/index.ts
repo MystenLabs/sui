@@ -9,7 +9,7 @@ import {
 } from '@reduxjs/toolkit';
 
 import {
-    fetchAllOwnedObjects,
+    fetchAllOwnedAndRequiredObjects,
     suiObjectsAdapterSelectors,
 } from '_redux/slices/sui-objects';
 import { Coin } from '_redux/slices/sui-objects/Coin';
@@ -64,7 +64,7 @@ export const sendTokens = createAsyncThunk<
                   );
 
         // TODO: better way to sync latest objects
-        dispatch(fetchAllOwnedObjects());
+        dispatch(fetchAllOwnedAndRequiredObjects());
         // TODO: is this correct? Find a better way to do it
         return response as TransactionResult;
     }
@@ -110,7 +110,7 @@ export const StakeTokens = createAsyncThunk<
             amount,
             validatorAddress
         );
-        dispatch(fetchAllOwnedObjects());
+        dispatch(fetchAllOwnedAndRequiredObjects());
         return response as TransactionResult;
     }
 );

@@ -4,10 +4,12 @@
 import {
     createContext,
     useEffect,
+    useLayoutEffect,
     useState,
     type Dispatch,
     type SetStateAction,
 } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { Network } from './utils/api/DefaultRpcClient';
 import { IS_LOCAL_ENV, IS_STAGING_ENV, CURRENT_ENV } from './utils/envUtil';
@@ -43,22 +45,23 @@ export function useNetwork(): [
     string,
     Dispatch<SetStateAction<Network | string>>
 ] {
-    let defaultNetwork: string | null;
-
-    // If running yarn start:local, ignore what is in storage and use Local network:
-    if (IS_LOCAL_ENV) {
-        defaultNetwork = Network.Local;
-    } else {
-        // Default network is that in storage, unless this is
-        // null or was set a long time ago, then instead use website's default value:
-        defaultNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
-        if (!defaultNetwork || wasNetworkSetLongTimeAgo()) {
-            defaultNetwork = IS_STAGING_ENV ? Network.Staging : Network.Devnet;
-            window.localStorage.setItem(LOCALSTORE_RPC_KEY, defaultNetwork);
+    const [searchParams] = useSearchParams();
+    const [network, setNetwork] = useState<Network | string>(() => {
+        // If running yarn start:local, ignore what is in storage and use Local network:
+        if (IS_LOCAL_ENV) return Network.Local;
+        const storedNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
+        if (!storedNetwork || wasNetworkSetLongTimeAgo()) {
+            return IS_STAGING_ENV ? Network.Staging : Network.Devnet;
         }
-    }
+        return storedNetwork;
+    });
 
-    const [network, setNetwork] = useState<Network | string>(defaultNetwork);
+    useLayoutEffect(() => {
+        const rpcUrl = searchParams.get('rpcUrl');
+        if (rpcUrl) {
+            setNetwork(rpcUrl);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         // If network in UI changes, change network in storage:
