@@ -28,4 +28,4 @@ sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 serde = { version = "1.0.141", features = ["derive"] }
 
 [dev-dependencies]
-insta = { version = "1.17.1", features = ["redactions"] }
+insta = { version = "1.18.2", features = ["redactions"] }
