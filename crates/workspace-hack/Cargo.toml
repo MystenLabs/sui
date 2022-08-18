@@ -86,7 +86,7 @@ cfg-if-dff4ba8e3ae991db = { package = "cfg-if", version = "1", default-features 
 chrono = { version = "0.4", features = ["clock", "iana-time-zone", "js-sys", "oldtime", "std", "time", "wasm-bindgen", "wasmbind", "winapi"] }
 chrono-tz = { version = "0.6", features = ["std"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2", features = ["ansi_term", "atty", "color", "strsim", "suggestions", "vec_map"] }
-clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
+clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
 clap_lex = { version = "0.2", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
 codespan = { version = "0.11", default-features = false, features = ["serde", "serialization"] }
@@ -673,7 +673,7 @@ chrono-tz = { version = "0.6", features = ["std"] }
 chrono-tz-build = { version = "0.0.3", default-features = false }
 clang-sys = { version = "1", default-features = false, features = ["clang_3_5", "clang_3_6", "clang_3_7", "clang_3_8", "clang_3_9", "clang_4_0", "clang_5_0", "clang_6_0", "libloading", "runtime"] }
 clap-f595c2ba2a3f28df = { package = "clap", version = "2", features = ["ansi_term", "atty", "color", "strsim", "suggestions", "vec_map"] }
-clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "lazy_static", "std", "strsim", "suggestions", "termcolor"] }
+clap-7b89eefb6aaa9bf3 = { package = "clap", version = "3", features = ["atty", "clap_derive", "color", "derive", "once_cell", "std", "strsim", "suggestions", "termcolor"] }
 clap_derive = { version = "3" }
 clap_lex = { version = "0.2", default-features = false }
 clear_on_drop = { version = "0.2", default-features = false }
