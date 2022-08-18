@@ -66,8 +66,8 @@ enum EventsTableColumns {
     ObjectId,
     /// fields TEXT
     Fields,
-    /// struct_tag TEXT
-    StructTag,
+    /// move_event_name TEXT
+    MoveEventName,
     /// contents BLOB
     Contents,
     /// sender BLOB
@@ -82,7 +82,7 @@ enum EventsTableColumns {
 
 const SQL_INSERT_TX: &str =
     "INSERT INTO events (timestamp, seq_num, checkpoint, tx_digest, event_type, \
-    package_id, module_name, object_id, fields, struct_tag, contents, sender,  \
+    package_id, module_name, object_id, fields, move_event_name, contents, sender,  \
     recipient) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 const INDEXED_COLUMNS: &[&str] = &[
@@ -365,7 +365,7 @@ impl From<SqliteRow> for StoredEvent {
             }
         };
         let move_event_contents: Option<Vec<u8>> = row.get(EventsTableColumns::Contents as usize);
-        let move_event_struct_tag: Option<String> = row.get(EventsTableColumns::StructTag as usize);
+        let move_event_name: Option<String> = row.get(EventsTableColumns::MoveEventName as usize);
         let sender = SqlEventStore::try_extract_sender_address(&row)
             .expect("Error converting stored sender address bytes to SuiAddress");
         let recipient = SqlEventStore::try_extract_recipient(&row)
@@ -392,7 +392,7 @@ impl From<SqliteRow> for StoredEvent {
             object_id,
             fields,
             move_event_contents,
-            move_event_struct_tag,
+            move_event_name,
             sender,
             recipient,
             object_version,
@@ -413,7 +413,7 @@ const QUERY_BY_MODULE: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
     timestamp < ? AND package_id = ? AND module_name = ? ORDER BY timestamp DESC LIMIT ?";
 
 const QUERY_BY_MOVE_EVENT_STRUCT_NAME: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
-    timestamp < ? AND struct_tag = ? ORDER BY timestamp DESC LIMIT ?";
+    timestamp < ? AND move_event_name = ? ORDER BY timestamp DESC LIMIT ?";
 
 const QUERY_BY_SENDER: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
     timestamp < ? AND sender = ? ORDER BY timestamp DESC LIMIT ?";
@@ -455,7 +455,7 @@ impl EventStore for SqlEventStore {
             let event_type = EventType::from(&event.event);
 
             let sender = event.event.sender().map(|sender| sender.to_vec());
-            let struct_tag = event.event.move_event_struct_tag().map(|st| st.to_string());
+            let move_event_name = event.event.move_event_name();
 
             // TODO: use batched API?
             let res = insert_tx_q
@@ -468,7 +468,7 @@ impl EventStore for SqlEventStore {
                 .bind(event.event.module_name())
                 .bind(event.event.object_id().map(|id| id.to_vec()))
                 .bind(Self::event_to_json(event))
-                .bind(struct_tag)
+                .bind(move_event_name)
                 .bind(event.event.move_event_contents())
                 .bind(sender)
                 .bind(event.event.recipient_serialized()?)
@@ -712,13 +712,12 @@ mod tests {
             queried.move_event_contents.as_deref(),
             orig.event.move_event_contents()
         );
-        let move_event_struct_tag = orig
+        let move_event_name = orig
             .event
-            .move_event_struct_tag()
-            .map(|tag| tag.to_string());
+            .move_event_name();
         assert_eq!(
-            queried.move_event_struct_tag.as_ref(),
-            move_event_struct_tag.as_ref()
+            queried.move_event_name.as_ref(),
+            move_event_name.as_ref()
         );
     }
 

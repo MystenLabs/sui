@@ -299,10 +299,11 @@ impl Event {
         }
     }
 
-    /// Extracts the move StructTag from a SuiEvent, if available
-    pub fn move_event_struct_tag(&self) -> Option<&StructTag> {
+    /// Extracts the move event name (StructTag) from a SuiEvent, if available
+    /// "0x2::devnet_nft::MintNFTEvent"
+    pub fn move_event_name(&self) -> Option<String> {
         if let Event::MoveEvent { type_, .. } = self {
-            Some(type_)
+            Some(type_.to_string())
         } else {
             None
         }

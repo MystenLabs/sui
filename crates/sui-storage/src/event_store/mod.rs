@@ -70,8 +70,8 @@ pub struct StoredEvent {
     fields: Vec<(SharedStr, EventValue)>, // Change this to something based on CBOR for binary values, or our own value types for efficiency
     /// Contents for MoveEvent
     move_event_contents: Option<Vec<u8>>,
-    /// StructTag for MoveEvent
-    move_event_struct_tag: Option<String>,
+    /// StructTag in string form for MoveEvent, e.g. "0x2::devnet_nft::MintNFTEvent"
+    move_event_name: Option<String>,
     /// Sender in the event
     sender: Option<SuiAddress>,
     /// Recipient in the event
@@ -87,9 +87,9 @@ impl StoredEvent {
         let package_id = self.package_id()?;
         let transaction_module = self.transaction_module()?;
         let sender = self.sender()?;
-        let type_ = self.move_event_struct_tag.as_ref().ok_or_else(|| {
+        let type_ = self.move_event_name.as_ref().ok_or_else(|| {
             anyhow::anyhow!(StorageMissingFieldError(format!(
-                "Missing move_event_struct_tag for event {:?}",
+                "Missing move_event_name for event {:?}",
                 self
             )))
         })?;
