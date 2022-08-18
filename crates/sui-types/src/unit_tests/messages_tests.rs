@@ -720,7 +720,7 @@ fn test_deterministic_sizing_for_gas() {
             Identifier::new("function").unwrap(),
             vec![],
             random_object_ref(),
-            vec![],
+            vec![CallArg::Pure(vec![0u8; 1000])],
             10000,
         ),
         &receiver_kp,
