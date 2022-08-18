@@ -195,6 +195,56 @@ module sui::test_scenario {
         }
     }
 
+    /// Same as `take_shared`, but returns the object of type `T` with object ID `id`.
+    /// Should only be used in cases where current tx sender has more than one shared object of
+    /// type `T` in their inventory.
+    /// Returns a wrapper that only supports a `borrow_mut` API to get the mutable reference.
+    public fun take_shared_by_id<T: key>(scenario: &mut Scenario, id: ID): SharedWrapper<T> {
+        let objects: vector<T> = get_unowned_inventory<T>(
+            false, /* immutable */
+            last_tx_start_index(scenario)
+        );
+        let object_opt = find_object_by_id_in_inventory(objects, &id);
+        let object = remove_unique_object_from_inventory(scenario, option::to_vec(object_opt));
+        SharedWrapper {
+            object,
+        }
+    }
+
+     /// Return `true` if a call to `take_shared<T>(scenario)` will succeed
+    public fun can_take_shared<T: key>(scenario: &Scenario): bool {
+        let objects: vector<T> = get_unowned_inventory<T>(
+            false, /* immutable */
+            last_tx_start_index(scenario)
+        );
+        // Check that there is one unique such object, and it has not
+        // yet been removed from the inventory.
+        let res = vector::length(&objects) == 1;
+        if (res) {
+            let id = object::borrow_id(vector::borrow(&objects, 0));
+            res = !vector::contains(&scenario.removed, id);
+        };
+        drop_object_for_testing(objects);
+        res
+    }
+
+    /// This function tells you whether calling `take_shared_by_id` would succeed.
+    /// It provides a way to check without triggering assertions.
+    public fun can_take_shared_by_id<T: key>(scenario: &Scenario, id: ID): bool {
+        // Check that the object has not been removed from the inventory.
+        if (vector::contains(&scenario.removed, &id)) {
+            return false
+        };
+        let objects: vector<T> = get_unowned_inventory<T>(
+            false, /* immutable */
+            last_tx_start_index(scenario)
+        );
+        let object_opt: Option<T> = find_object_by_id_in_inventory(objects, &id);
+        let res =  option::is_some(&object_opt);
+        drop_object_for_testing(object_opt);
+        res
+    }
+
     /// Remove the object of type `T` from the shared inventory that wast most recently created.
     /// Aborts if there is no object of type `T` in the inventory.
     public fun take_last_created_shared<T: key>(scenario: &mut Scenario): SharedWrapper<T> {
