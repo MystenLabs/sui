@@ -6,6 +6,8 @@ use prometheus::{default_registry, register_int_gauge_with_registry, IntGauge, R
 pub struct ExecutorMetrics {
     /// occupancy of the channel from the `Subscriber` to `Core`
     pub tx_executor: IntGauge,
+    /// Number of elements in the waiting (ready-to-deliver) list of subscriber
+    pub waiting_elements_subscriber: IntGauge,
 }
 
 impl ExecutorMetrics {
@@ -14,6 +16,12 @@ impl ExecutorMetrics {
             tx_executor: register_int_gauge_with_registry!(
                 "tx_executor",
                 "occupancy of the channel from the `Subscriber` to `Core`",
+                registry
+            )
+            .unwrap(),
+            waiting_elements_subscriber: register_int_gauge_with_registry!(
+                "waiting_elements_subscriber",
+                "Number of waiting elements in the subscriber",
                 registry
             )
             .unwrap(),

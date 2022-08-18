@@ -112,6 +112,9 @@ impl Executor {
             SubscriberError::OnlyOneConsensusClientPermitted
         );
 
+        // We expect this will ultimately be needed in the `Core` as well as the `Subscriber`.
+        let arc_metrics = Arc::new(metrics);
+
         // Spawn the subscriber.
         let subscriber_handle = Subscriber::spawn(
             store.clone(),
@@ -119,6 +122,7 @@ impl Executor {
             tx_reconfigure.subscribe(),
             rx_consensus,
             tx_executor,
+            arc_metrics,
         );
 
         // Spawn the executor's core.

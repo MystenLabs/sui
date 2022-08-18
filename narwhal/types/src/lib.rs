@@ -16,4 +16,5 @@ pub use proto::*;
 mod worker;
 pub use worker::*;
 
+pub mod bounded_future_queue;
 pub mod metered_channel;

@@ -296,8 +296,12 @@ pub struct PrimaryMetrics {
     pub pending_elements_header_waiter: IntGaugeVec,
     /// Number of parent requests list of header_waiter
     pub parent_requests_header_waiter: IntGaugeVec,
+    /// Number of elements in the waiting (ready-to-deliver) list of header_waiter
+    pub waiting_elements_header_waiter: IntGaugeVec,
     /// Number of elements in pending list of certificate_waiter
     pub pending_elements_certificate_waiter: IntGaugeVec,
+    /// Number of elements in the waiting (ready-to-deliver) list of certificate_waiter
+    pub waiting_elements_certificate_waiter: IntGaugeVec,
 }
 
 impl PrimaryMetrics {
@@ -394,9 +398,23 @@ impl PrimaryMetrics {
                 registry
             )
             .unwrap(),
+            waiting_elements_header_waiter: register_int_gauge_vec_with_registry!(
+                "waiting_elements_header_waiter",
+                "Number of waiting elements in header waiter",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
             pending_elements_certificate_waiter: register_int_gauge_vec_with_registry!(
                 "pending_elements_certificate_waiter",
                 "Number of pending elements in certificate waiter",
+                &["epoch"],
+                registry
+            )
+            .unwrap(),
+            waiting_elements_certificate_waiter: register_int_gauge_vec_with_registry!(
+                "waiting_elements_certificate_waiter",
+                "Number of waiting elements in certificate waiter",
                 &["epoch"],
                 registry
             )

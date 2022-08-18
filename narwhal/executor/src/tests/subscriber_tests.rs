@@ -3,6 +3,7 @@
 use super::*;
 use crate::fixtures::{test_store, test_u64_certificates};
 use primary::GetBlockResponse;
+use prometheus::Registry;
 use test_utils::{committee, test_channel};
 use types::{
     BatchMessage, BlockError, BlockErrorKind, BlockResult, CertificateDigest, SequenceNumber,
@@ -24,12 +25,14 @@ async fn spawn_subscriber(
 
     // Spawn a test subscriber.
     let store = test_store();
+    let executor_metrics = ExecutorMetrics::new(&Registry::new());
     let subscriber_handle = Subscriber::spawn(
         store.clone(),
         tx_get_block_commands,
         rx_reconfigure,
         rx_sequence,
         tx_executor,
+        Arc::new(executor_metrics),
     );
 
     (store, tx_reconfigure, subscriber_handle)

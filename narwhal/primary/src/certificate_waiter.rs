@@ -4,10 +4,7 @@
 use crate::metrics::PrimaryMetrics;
 use config::Committee;
 use dashmap::DashMap;
-use futures::{
-    future::try_join_all,
-    stream::{futures_unordered::FuturesUnordered, StreamExt as _},
-};
+use futures::future::try_join_all;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use store::Store;
@@ -16,11 +13,13 @@ use tokio::{
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
-use tracing::{error, info};
+use tracing::info;
 use types::{
+    bounded_future_queue::BoundedFuturesUnordered,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, CertificateDigest, HeaderDigest, ReconfigureNotification, Round,
+    try_fut_and_permit, Certificate, CertificateDigest, HeaderDigest, ReconfigureNotification,
+    Round,
 };
 
 #[cfg(test)]
@@ -58,6 +57,12 @@ pub struct CertificateWaiter {
 }
 
 impl CertificateWaiter {
+    /// Returns the max amount of pending certificates we should expect. In the worst case of causal completion,
+    /// this can be `self.gc_depth` x `self.committee.len()`
+    pub fn max_pending_certificates(&self) -> usize {
+        self.gc_depth as usize * self.committee.size() * 2
+    }
+
     #[must_use]
     pub fn spawn(
         committee: Committee,
@@ -106,7 +111,7 @@ impl CertificateWaiter {
     }
 
     async fn run(&mut self) {
-        let mut waiting = FuturesUnordered::new();
+        let mut waiting = BoundedFuturesUnordered::with_capacity(self.max_pending_certificates());
         let timer = sleep(Duration::from_millis(GC_RESOLUTION));
         tokio::pin!(timer);
         let mut attempt_garbage_collection;
@@ -117,7 +122,8 @@ impl CertificateWaiter {
             attempt_garbage_collection = false;
 
             tokio::select! {
-                Some(certificate) = self.rx_synchronizer.recv() => {
+                // We only accept new elements if we have "room" for them
+                Some(certificate) = self.rx_synchronizer.recv(), if waiting.available_permits() > 0 => {
                     if certificate.epoch() < self.committee.epoch() {
                         continue;
                     }
@@ -140,20 +146,14 @@ impl CertificateWaiter {
                     };
                     self.pending.insert(header_id, (certificate.round(), once_cancel));
                     let fut = Self::waiter(wait_for, &self.store, certificate, rx_cancel);
-                    waiting.push(fut);
+                    waiting.push(fut).await;
                 }
-                Some(result) = waiting.next() => match result {
-                    Ok(certificate) => {
+                // we poll the availability of a slot to send the result to the core simultaneously
+                (Some(certificate), permit) = try_fut_and_permit!(waiting.try_next(), self.tx_core) => {
                         // TODO [issue #115]: To ensure crash-recovery of consensus, it is not enough to send every
                         // certificate for which their ancestors are in the storage. After recovery, we may also
                         // need to send a all parents certificates with rounds greater then `last_committed`.
-
-                        self.tx_core.send(certificate).await.expect("Failed to send certificate");
-                    },
-                    Err(e) => {
-                        error!("{e}");
-                        panic!("Storage failure: killing node.");
-                    }
+                        permit.send(certificate);
                 },
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
@@ -211,14 +211,18 @@ impl CertificateWaiter {
                 }
             }
 
-            self.update_metrics();
+            self.update_metrics(waiting.len());
         }
     }
 
-    fn update_metrics(&self) {
+    fn update_metrics(&self, waiting_len: usize) {
         self.metrics
             .pending_elements_certificate_waiter
             .with_label_values(&[&self.committee.epoch.to_string()])
             .set(self.pending.len() as i64);
+        self.metrics
+            .waiting_elements_certificate_waiter
+            .with_label_values(&[&self.committee.epoch.to_string()])
+            .set(waiting_len as i64);
     }
 }

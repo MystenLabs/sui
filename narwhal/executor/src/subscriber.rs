@@ -1,19 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{errors::SubscriberResult, SubscriberError, SubscriberError::PayloadRetrieveError};
+use crate::{
+    errors::SubscriberResult, metrics::ExecutorMetrics, try_fut_and_permit, SubscriberError,
+    SubscriberError::PayloadRetrieveError,
+};
 use backoff::{Error, ExponentialBackoff};
 use consensus::ConsensusOutput;
 use crypto::Hash;
-use futures::stream::{FuturesOrdered, StreamExt};
 use primary::BlockCommand;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use store::Store;
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
 };
-use tracing::{debug, error};
-use types::{metered_channel, Batch, BatchDigest, ReconfigureNotification};
+use tracing::error;
+use types::{
+    bounded_future_queue::BoundedFuturesOrdered, metered_channel, Batch, BatchDigest,
+    ReconfigureNotification,
+};
 
 #[cfg(test)]
 #[path = "tests/subscriber_tests.rs"]
@@ -38,9 +43,14 @@ pub struct Subscriber {
     // When asking for a certificate's payload we want to retry until we succeed, unless
     // some irrecoverable error occurs. For that reason a backoff policy is defined
     get_block_retry_policy: ExponentialBackoff,
+    /// The metrics handler
+    metrics: Arc<ExecutorMetrics>,
 }
 
 impl Subscriber {
+    /// Returns the max amount of pending consensus messages we should expect.
+    const MAX_PENDING_CONSENSUS_MESSAGES: usize = 2000;
+
     /// Spawn a new subscriber in a new tokio task.
     #[must_use]
     pub fn spawn(
@@ -49,6 +59,7 @@ impl Subscriber {
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_consensus: metered_channel::Receiver<ConsensusOutput>,
         tx_executor: metered_channel::Sender<ConsensusOutput>,
+        metrics: Arc<ExecutorMetrics>,
     ) -> JoinHandle<()> {
         let get_block_retry_policy = ExponentialBackoff {
             initial_interval: Duration::from_millis(500),
@@ -67,6 +78,7 @@ impl Subscriber {
                 tx_executor,
                 tx_get_block_commands,
                 get_block_retry_policy,
+                metrics,
             }
             .run()
             .await
@@ -82,13 +94,14 @@ impl Subscriber {
         // mater if we somehow managed to fetch the batches from a later
         // certificate. Unless the earlier certificate's payload has been
         // fetched, no later certificate will be delivered.
-        let mut waiting = FuturesOrdered::new();
+        let mut waiting =
+            BoundedFuturesOrdered::with_capacity(Self::MAX_PENDING_CONSENSUS_MESSAGES);
 
         // Listen to sequenced consensus message and process them.
         loop {
             tokio::select! {
                 // Receive the ordered sequence of consensus messages from a consensus node.
-                Some(message) = self.rx_consensus.recv() => {
+                Some(message) = self.rx_consensus.recv(), if waiting.available_permits() > 0 => {
                     // Fetch the certificate's payload from the workers. This is done via the
                     // block_waiter component. If the batches are not available in the workers then
                     // block_waiter will do its best to sync from the other peers. Once all batches
@@ -98,15 +111,12 @@ impl Subscriber {
                         self.store.clone(),
                         self.tx_get_block_commands.clone(),
                         message);
-                    waiting.push_back(future);
+                    waiting.push(future).await;
                 },
 
                 // Receive here consensus messages for which we have downloaded all transactions data.
-                Some(message) = waiting.next() => {
-                    if self.tx_executor.send(message?).await.is_err() {
-                        debug!("Executor core is shutting down");
-                        return Ok(());
-                    }
+                (Some(message), permit) = try_fut_and_permit!(waiting.try_next(), self.tx_executor) => {
+                    permit.send(message)
                 },
 
                 // Check whether the committee changed.
@@ -118,6 +128,10 @@ impl Subscriber {
                     }
                 }
             }
+
+            self.metrics
+                .waiting_elements_subscriber
+                .set(waiting.len() as i64);
         }
     }
 
