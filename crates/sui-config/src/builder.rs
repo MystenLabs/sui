@@ -160,8 +160,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     enable_gossip: true,
                     enable_reconfig: false,
                     genesis: crate::node::Genesis::new(genesis.clone()),
-                    grpc_load_shed: None,
-                    grpc_concurrency_limit: None,
+                    grpc_load_shed: initial_accounts_config.grpc_load_shed,
+                    grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
                 }
             })
             .collect();

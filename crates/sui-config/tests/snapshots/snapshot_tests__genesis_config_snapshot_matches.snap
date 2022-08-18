@@ -4,6 +4,8 @@ expression: genesis_config
 ---
 validator_genesis_info: ~
 committee_size: 4
+grpc_load_shed: ~
+grpc_concurrency_limit: 500
 accounts:
   - address: 89dca66cd6a15bc3ebaa44ceecfb58c70a032485
     gas_objects:
