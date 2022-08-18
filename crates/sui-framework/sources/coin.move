@@ -224,6 +224,17 @@ module sui::coin {
         )
     }
 
+    /// Split coin `self` into `n` coins with equal balances, or as close as
+    /// possible, if the balance is not evenly divisible by `n`.
+    public entry fun split_n<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
+        let i = 0;
+        let split_amount = balance::value(&self.balance) / n;
+        while (i < n - 1) {
+            split(self, split_amount, ctx);
+            i = i + 1;
+        };
+    }
+
     /// Split coin `self` into multiple coins, each with balance specified
     /// in `split_amounts`. Remaining balance is left in `self`.
     public entry fun split_vec<T>(self: &mut Coin<T>, split_amounts: vector<u64>, ctx: &mut TxContext) {

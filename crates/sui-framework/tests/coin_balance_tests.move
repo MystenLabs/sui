@@ -87,4 +87,30 @@ module sui::test_coin {
         // The unlock should fail.
         locked_coin::unlock_coin(locked_coin, test_scenario::ctx(scenario));
     }
+
+    #[test]
+    public entry fun test_coin_split() {
+        let scenario = &mut test_scenario::begin(&TEST_SENDER_ADDR);
+        let ctx = test_scenario::ctx(scenario);
+        let coin = coin::mint_for_testing<SUI>(10, ctx);
+
+        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        coin::split_n(&mut coin, 3, test_scenario::ctx(scenario));
+
+        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        let coin1 = test_scenario::take_last_created_owned<Coin<SUI>>(scenario);
+        
+        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        let coin2 = test_scenario::take_last_created_owned<Coin<SUI>>(scenario);
+
+        test_scenario::next_tx(scenario, &TEST_SENDER_ADDR);
+        assert!(coin::value(&coin1) == 3, 0);
+        assert!(coin::value(&coin2) == 3, 0);
+        assert!(coin::value(&coin) == 4, 0);
+        assert!(test_scenario::can_take_owned<Coin<SUI>>(scenario) == false, 1);
+
+        coin::destroy_for_testing(coin);
+        coin::destroy_for_testing(coin1);
+        coin::destroy_for_testing(coin2);
+    }
 }
