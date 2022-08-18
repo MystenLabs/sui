@@ -14,7 +14,7 @@ type TxAddress = {
 //TODO: Add date format function
 function SendRecieveView({ data }: { data: TxAddress }) {
     return (
-        <div className={styles.txaddress}>
+        <div className={styles.txaddress} data-testid="transaction-sender">
             <div className={styles.txaddressheader}>
                 <h3 className={styles.label}>
                     Sender {data.recipient?.length ? '& Recipients' : ''}{' '}

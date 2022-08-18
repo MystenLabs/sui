@@ -48,6 +48,7 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
             </div>
             <div>
                 <div
+                    data-testid="transaction-id"
                     className={cl(resultheaderstyle.address, styles.txaddress)}
                 >
                     <Longtext

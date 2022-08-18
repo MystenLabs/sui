@@ -45,7 +45,7 @@ function AddressResult() {
                 <div>
                     <h1>Owned Objects</h1>
                     <div>
-                        {<OwnedObjects id={addressID} byAddress={true} />}
+                        <OwnedObjects id={addressID} byAddress={true} />
                     </div>
                 </div>
                 <div>

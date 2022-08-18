@@ -37,9 +37,32 @@ jobs:
       - name: Lint
         working-directory: ./explorer/client
         run: yarn lint
-      - name: Test
+      - name: Unit Tests
         working-directory: ./explorer/client
-        run: yarn test
+        run: yarn test:unit
       - name: Build
         working-directory: ./explorer/client
         run: yarn build
+  end_to_end:
+    name: End-to-end tests
+    needs: diff
+    if: needs.diff.outputs.isClient == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: "yarn"
+          cache-dependency-path: ./explorer/client/yarn.lock
+      - name: Build TS sdk
+        working-directory: ./sdk/typescript
+        run: yarn install; yarn build
+      - name: Run e2e tests
+        uses: cypress-io/github-action@v4
+        with:
+          install-command: yarn --frozen-lockfile
+          start: yarn start:static
+          working-directory: ./explorer/client

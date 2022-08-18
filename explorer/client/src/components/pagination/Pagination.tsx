@@ -87,7 +87,7 @@ function Pagination({
                     ? `${styles.nointeract} ${styles.gone}`
                     : styles.btncontainer
             }
-            id="backBtn"
+            data-testid="backBtn"
             onClick={handleBackClick}
             disabled={pageIndex === 0}
         >
@@ -97,7 +97,7 @@ function Pagination({
 
     const NextButton = (
         <button
-            id="nextBtn"
+            data-testid="nextBtn"
             className={
                 pageIndex === finalPageNo - 1
                     ? `${styles.nointeract} ${styles.gone}`
@@ -138,7 +138,7 @@ function Pagination({
             className={
                 pageIndex === 0 ? styles.pagenumber : styles.btncontainer
             }
-            id="firstBtn"
+            data-testid="firstBtn"
             onClick={handleBtnClick(0)}
             disabled={pageIndex === 0}
         >
@@ -151,7 +151,7 @@ function Pagination({
         label: string = String(finalPageNo)
     ) => (
         <button
-            id="lastBtn"
+            data-testid="lastBtn"
             disabled={pageIndex === finalPageNo - 1}
             onClick={handleBtnClick(finalPageNo - 1)}
             className={
@@ -212,7 +212,7 @@ function Pagination({
                 className={
                     pageIndex === 1 ? styles.pagenumber : styles.btncontainer
                 }
-                id="secondBtn"
+                data-testid="secondBtn"
                 onClick={handleBtnClick(1)}
                 disabled={pageIndex === 1}
             >
@@ -246,7 +246,7 @@ function Pagination({
                         ? styles.pagenumber
                         : styles.btncontainer
                 }
-                id="secondLastBtn"
+                data-testid="secondLastBtn"
                 onClick={handleBtnClick(finalPageNo - 2)}
                 disabled={pageIndex === finalPageNo - 2}
             >
