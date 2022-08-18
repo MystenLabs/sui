@@ -6,7 +6,7 @@ export function fromHEX(hexStr: string): Uint8Array {
   let intArr = hexStr
     .replace('0x', '')
     .match(/.{1,2}/g)
-    .map(byte => parseInt(byte, 16));
+    .map((byte) => parseInt(byte, 16));
 
   if (intArr === null) {
     throw new Error(`Unable to parse HEX: ${hexStr}`);

@@ -1,0 +1,12 @@
+node_modules/
+build/
+coverage/
+dist/
+dts/
+lib/
+*.d.ts
+*.d.cts
+*.d.mts
+*.min.js
+*.map
+*.snap

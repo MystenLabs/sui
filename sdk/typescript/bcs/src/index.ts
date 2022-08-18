@@ -244,7 +244,7 @@ export class BcsWriter {
   write64(value: bigint | BN): this {
     BcsWriter.toBN(value)
       .toArray('le', 8)
-      .forEach(el => this.write8(el));
+      .forEach((el) => this.write8(el));
 
     return this;
   }
@@ -258,7 +258,7 @@ export class BcsWriter {
   write128(value: bigint | BN): this {
     BcsWriter.toBN(value)
       .toArray('le', 16)
-      .forEach(el => this.write8(el));
+      .forEach((el) => this.write8(el));
 
     return this;
   }
@@ -269,7 +269,7 @@ export class BcsWriter {
    * @returns {this}
    */
   writeULEB(value: number): this {
-    ulebEncode(value).forEach(el => this.write8(el));
+    ulebEncode(value).forEach((el) => this.write8(el));
     return this;
   }
   /**
@@ -340,9 +340,7 @@ function ulebEncode(num: number): number[] {
 
 // Helper utility: decode ULEB as an array of numbers.
 // Original code is taken from: https://www.npmjs.com/package/uleb128 (no longer exists)
-function ulebDecode(
-  arr: number[] | Uint8Array
-): {
+function ulebDecode(arr: number[] | Uint8Array): {
   value: number;
   length: number;
 } {
@@ -528,14 +526,14 @@ export class bcs {
           name,
           (writer, data: string) =>
             fromB64(data).reduce((writer, el) => writer.write8(el), writer),
-          reader => toB64(reader.readBytes(length))
+          (reader) => toB64(reader.readBytes(length))
         );
       case 'hex':
         return this.registerType(
           name,
           (writer, data: string) =>
             fromHEX(data).reduce((writer, el) => writer.write8(el), writer),
-          reader => toHEX(reader.readBytes(length))
+          (reader) => toHEX(reader.readBytes(length))
         );
       default:
         throw new Error('Unsupported encoding! Use either hex or base64');
@@ -565,7 +563,7 @@ export class bcs {
           return bcs.getTypeInterface(elementType)._encodeRaw(writer, el);
         }),
       (reader: BcsReader) =>
-        reader.readVec(reader => {
+        reader.readVec((reader) => {
           return bcs.getTypeInterface(elementType)._decodeRaw(reader);
         })
     );
@@ -794,28 +792,28 @@ export function decodeStr(data: string, encoding: string): Uint8Array {
     bcs.U8,
     (writer: BcsWriter, data) => writer.write8(data),
     (reader: BcsReader) => reader.read8(),
-    u8 => u8 < 256
+    (u8) => u8 < 256
   );
 
   bcs.registerType(
     bcs.U32,
     (writer: BcsWriter, data) => writer.write32(data),
     (reader: BcsReader) => reader.read32(),
-    u32 => u32 < 4294967296
+    (u32) => u32 < 4294967296
   );
 
   bcs.registerType(
     bcs.U64,
     (writer: BcsWriter, data) => writer.write64(data),
     (reader: BcsReader) => reader.read64(),
-    _u64 => true
+    (_u64) => true
   );
 
   bcs.registerType(
     bcs.U128,
     (writer: BcsWriter, data: BN | bigint) => writer.write128(data),
     (reader: BcsReader) => reader.read128(),
-    _u128 => true
+    (_u128) => true
   );
 
   bcs.registerType(
@@ -833,8 +831,8 @@ export function decodeStr(data: string, encoding: string): Uint8Array {
       ),
     (reader: BcsReader) => {
       return reader
-        .readVec(reader => reader.read8())
-        .map(el => String.fromCharCode(el))
+        .readVec((reader) => reader.read8())
+        .map((el) => String.fromCharCode(el))
         .join('');
     },
     (_str: string) => true
