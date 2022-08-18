@@ -116,12 +116,15 @@ export class DAppInterface {
         let messageData;
         let messageString;
 
-        if (message) {
-            const buffer = new Base64DataBuffer(message);
-            messageData = buffer.toString();
-            if (typeof message === 'string') {
-                messageString = message;
-            }
+        // convert utf8 string to Uint8Array
+        if (typeof message === 'string') {
+            messageString = message;
+            message = new Uint8Array(Buffer.from(message, 'utf8'));
+        }
+
+        // convert Uint8Array to base64 string
+        if (message instanceof Uint8Array) {
+            messageData = new Base64DataBuffer(message).toString();
         }
 
         return mapToPromise(
