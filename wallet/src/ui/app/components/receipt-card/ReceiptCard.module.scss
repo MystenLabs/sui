@@ -84,21 +84,38 @@
     }
 }
 
+.tx-date,
+.tx-fees {
+    display: flex;
+    gap: 10px;
+    margin: 10px;
+    justify-content: space-between;
+    @include utils.typography('table/text-lg');
+
+    line-height: 17px;
+
+    .tx-info-label {
+        color: colors.$gray-80;
+    }
+
+    .tx-info-value {
+        color: colors.$gray-85;
+    }
+}
+
 .response-card {
-    background-color: colors.$gray-40;
-    border-radius: 10px;
-    border-bottom-left-radius: 0;
-    border-bottom-right-radius: 0;
+    @include utils.receipt-details-bg;
+
     padding: 5px;
 
     .tx-info {
         border-top: 1px solid colors.$gray-50;
         border-bottom: 1px solid colors.$gray-50;
-        padding: 10px 0;
+        padding: 20px 0;
         display: flex;
         flex-flow: column;
-        gap: 10px;
-        margin: 10px;
+        gap: 15px;
+        margin: 20px 10px;
         word-break: break-all;
         margin-bottom: 0;
 
@@ -125,7 +142,7 @@
                 position: absolute;
                 margin-left: 5px;
                 margin-top: 4px;
-                height: 20px;
+                height: 25px;
                 border: 1px dashed colors.$sui-steel-blue;
                 border-right: none;
                 border-bottom: none;
@@ -160,22 +177,30 @@
                 background-image: url('_assets/images/Done.svg');
             }
         }
-    }
 
-    .tx-date,
-    .tx-fees {
-        display: flex;
-        gap: 10px;
-        margin: 10px;
-        justify-content: space-between;
-        @include utils.typography('table/text-lg');
+        &.reciever {
+            flex-direction: column-reverse;
 
-        .tx-info-label {
-            color: colors.$gray-80;
-        }
+            .tx-info-label {
+                &::after {
+                    height: 40px;
+                    margin-top: -40px;
+                }
 
-        .tx-info-value {
-            color: colors.$gray-85;
+                &.failed::before {
+                    background-image: url('_assets/images/Fail.svg');
+                }
+
+                &.success::before {
+                    background-image: url('_assets/images/Done.svg');
+                }
+            }
+
+            .tx-info-value {
+                &::before {
+                    background-image: url('_assets/images/Start.svg');
+                }
+            }
         }
     }
 
@@ -199,20 +224,6 @@
                 color: colors.$sui-steel-blue;
             }
         }
-    }
-
-    &::after {
-        content: '';
-        background-image: url('_assets/images/nft-detail-bg.png');
-        background-repeat: no-repeat;
-        background-position: center bottom;
-        background-size: 100%;
-        width: 104%;
-        height: 15px;
-        display: flex;
-        left: -5px;
-        top: 12px;
-        position: relative;
     }
 }
 
@@ -250,12 +261,18 @@
         white-space: nowrap;
         text-overflow: ellipsis;
 
-        @include utils.typography('nft-title');
+        @include utils.typography('page-title');
     }
 
     .nft-type {
         color: colors.$gray-75;
 
         @include utils.typography('table/text-lg');
+    }
+
+    .wallet-info-value {
+        @include utils.typography('page-title');
+
+        color: colors.$gray-100;
     }
 }

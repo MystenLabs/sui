@@ -28,6 +28,51 @@ $main-extra-space: sizing.$main-bottom-space;
     @include main-extra-space-for-nav;
 }
 
+@mixin error-message-box() {
+    background-color: colors.$error-light;
+    color: colors.$error;
+    padding: 5px;
+    margin-top: 10px;
+    border-radius: 6px;
+    padding-left: 30px;
+    word-break: break-all;
+    padding-right: 20px;
+    max-height: 280px;
+    overflow-y: scroll;
+
+    &::before {
+        content: '';
+        background-image: url('_assets/images/Info.svg');
+        margin-right: 5px;
+        background-repeat: no-repeat;
+        background-position: center;
+        position: absolute;
+        height: 16px;
+        width: 16px;
+        margin-left: -20px;
+    }
+}
+
+@mixin receipt-details-bg() {
+    background-color: colors.$gray-40;
+    border-radius: 10px;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+
+    &::after {
+        content: '';
+        background-image: url('_assets/images/nft-detail-bg.png');
+        background-repeat: no-repeat;
+        background-position: center bottom;
+        background-size: 100%;
+        width: 100%;
+        height: 15px;
+        display: flex;
+        top: 12px;
+        position: relative;
+    }
+}
+
 @mixin overflow-ellipsis($max-width: 100%) {
     max-width: $max-width;
     overflow-x: hidden;
@@ -97,11 +142,11 @@ $main-extra-space: sizing.$main-bottom-space;
         font-size: 14px;
         line-height: 17px;
         color: colors.$gray-100;
-    } @else if $type == 'nft-title' {
+    } @else if $type == 'page-title' {
         font-style: normal;
         font-weight: 600;
         font-size: 16px;
-        line-height: 19px;
+        line-height: 18px;
         color: colors.$gray-100;
     } @else if $type == 'empty' {
         font-style: italic;

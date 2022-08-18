@@ -3,6 +3,8 @@
 
 import cl from 'classnames';
 
+import ExplorerLink from '_components/explorer-link';
+import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import Icon, { SuiIcons } from '_components/icon';
 import { formatDate } from '_helpers';
 import { useFileExtentionType } from '_hooks';
@@ -14,7 +16,7 @@ import st from './ReceiptCard.module.scss';
 
 type TxResponseProps = {
     txDigest: TxResultState;
-    tranferType?: string | null;
+    tranferType?: 'nft' | 'coin' | null;
 };
 
 function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
@@ -31,9 +33,18 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
         ? formatDate(txDigest.timestampMs, ['month', 'day', 'year'])
         : false;
 
+    const transfersTxt = {
+        nft: {
+            header: 'Successfully Sent!',
+        },
+        coin: {
+            header: 'SUI Transfer Completed!',
+            copy: 'Staking SUI provides SUI holders with rewards to market price gains.',
+        },
+    };
     // TODO add copy for other trafer type like transfer sui, swap, etc.
     const headerCopy = tranferType
-        ? `Successfully Sent!`
+        ? transfersTxt[tranferType].header
         : `${txDigest.isSender ? 'Sent' : 'Received'} ${date || ''}`;
     const SuccessCard = (
         <>
@@ -74,27 +85,30 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
         </div>
     );
 
+    const statusClassName =
+        txDigest.status === 'success' ? st.success : st.failed;
+
     return (
         <>
             <div className={st.txnResponse}>
                 {txDigest.status === 'success' ? SuccessCard : failedCard}
-                <div className={cl(st.responseCard)}>
+                <div className={st.responseCard}>
                     {AssetCard}
                     {txDigest.amount && (
                         <div className={st.amount}>
-                            {txDigest.amount} <span>SUI</span>
+                            {txDigest.amount} <span>{GAS_SYMBOL}</span>
                         </div>
                     )}
-                    <div className={st.txInfo}>
-                        <div className={st.txInfoLabel}>Your Wallet</div>
-                        <div
-                            className={cl(
-                                st.txInfoValue,
-                                txDigest.status === 'success'
-                                    ? st.success
-                                    : st.failed
-                            )}
-                        >
+                    <div
+                        className={cl(
+                            st.txInfo,
+                            !txDigest.isSender && st.reciever
+                        )}
+                    >
+                        <div className={cl(st.txInfoLabel, statusClassName)}>
+                            Your Wallet
+                        </div>
+                        <div className={cl(st.txInfoValue, statusClassName)}>
                             {txDigest.kind !== 'Call' && txDigest.isSender
                                 ? txDigest.to
                                 : txDigest.from}
@@ -109,10 +123,34 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                             </div>
                         </div>
                     )}
+
+                    {txDigest.amount && (
+                        <div className={st.txFees}>
+                            <div className={st.txInfoLabel}>Total Amount</div>
+                            <div className={st.walletInfoValue}>
+                                {txDigest.amount + txDigest.txGas} {GAS_SYMBOL}
+                            </div>
+                        </div>
+                    )}
+
                     {date && (
                         <div className={st.txDate}>
                             <div className={st.txInfoLabel}>Date</div>
                             <div className={st.walletInfoValue}>{date}</div>
+                        </div>
+                    )}
+
+                    {txDigest.txId && (
+                        <div className={st.explorerLink}>
+                            <ExplorerLink
+                                type={ExplorerLinkType.transaction}
+                                transactionID={txDigest.txId}
+                                title="View on Sui Explorer"
+                                className={st['explorer-link']}
+                                showIcon={true}
+                            >
+                                View in Explorer
+                            </ExplorerLink>
                         </div>
                     )}
                 </div>

@@ -94,7 +94,7 @@
             white-space: nowrap;
             text-overflow: ellipsis;
 
-            @include utils.typography('nft-title');
+            @include utils.typography('page-title');
         }
 
         .nft-type {
