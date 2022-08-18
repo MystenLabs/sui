@@ -6,6 +6,7 @@
     flex-direction: column;
     align-items: center;
     width: 100%;
+    margin: auto;
 
     img {
         width: 100%;
@@ -14,19 +15,28 @@
         height: 100%;
     }
 
-    .small {
-        height: 98px;
+    &.small {
         width: 98px;
+
+        img {
+            height: 98px;
+        }
     }
 
-    .medium {
-        height: 150px;
+    &.medium {
         width: 150px;
+
+        img {
+            height: 150px;
+        }
     }
 
-    .large {
-        height: 180px;
+    &.large {
         width: 180px;
+
+        img {
+            height: 180px;
+        }
     }
 
     .nftfields {
@@ -36,9 +46,9 @@
         font-size: 13px;
         padding-top: 10px;
         color: colors.$gray-100;
-        width: 140px;
         text-overflow: ellipsis;
         overflow: hidden;
+        width: 100%;
         white-space: nowrap;
     }
 

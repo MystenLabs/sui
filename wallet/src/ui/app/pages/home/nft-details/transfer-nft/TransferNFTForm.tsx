@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
-import { ErrorMessage, Form, Field, useFormikContext } from 'formik';
-import { useEffect, useRef, memo, useCallback } from 'react';
-import TextareaAutosize from 'react-textarea-autosize';
+import { Form, Field, useFormikContext } from 'formik';
+import { useEffect, useRef, memo } from 'react';
 
 import { Content } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
+import AddressInput from '_components/address-input';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { DEFAULT_NFT_TRANSFER_GAS_FEE } from '_redux/slices/sui-objects/Coin';
@@ -30,9 +30,7 @@ function TransferNFTForm({
     const {
         isSubmitting,
         isValid,
-        dirty,
         values: { to, amount },
-        setFieldValue,
     } = useFormikContext<FormValues>();
 
     const onClearRef = useRef(onClearSubmitError);
@@ -40,11 +38,6 @@ function TransferNFTForm({
     useEffect(() => {
         onClearRef.current();
     }, [to, amount]);
-
-    // TODO: add QR code scanner
-    const clearAddress = useCallback(() => {
-        setFieldValue('to', '');
-    }, [setFieldValue]);
 
     return (
         <div className={st.sendNft}>
@@ -58,48 +51,17 @@ function TransferNFTForm({
                         Enter the address of the recipient to start sending the
                         NFT
                     </label>
-                    <div
-                        className={cl(
-                            st.group,
-                            dirty && to !== '' && !isValid ? st.invalidAddr : ''
-                        )}
-                    >
-                        <div className={st.textarea}>
-                            <Field as="div" id="to" placeholder="Enter Address">
-                                <TextareaAutosize
-                                    maxRows={2}
-                                    minRows={1}
-                                    name="to"
-                                    value={to}
-                                    placeholder="Enter Address"
-                                    className={st.input}
-                                />
-                            </Field>
-                        </div>
-                        <div
-                            onClick={clearAddress}
-                            className={cl(
-                                st.inputGroupAppend,
-                                dirty && to !== ''
-                                    ? st.changeAddrIcon + ' sui-icons-close'
-                                    : st.qrCode
-                            )}
-                        ></div>
+                    <div className={st.group}>
+                        <Field
+                            component={AddressInput}
+                            name="to"
+                            as="div"
+                            id="to"
+                            placeholder="Enter Address"
+                            className={st.input}
+                        />
                     </div>
 
-                    <ErrorMessage
-                        className={st.error}
-                        name="to"
-                        component="div"
-                    />
-                    {isValid && (
-                        <div className={st.validAddress}>
-                            <Icon
-                                icon={SuiIcons.Checkmark}
-                                className={st.checkmark}
-                            />
-                        </div>
-                    )}
                     {BigInt(gasBalance) < DEFAULT_NFT_TRANSFER_GAS_FEE && (
                         <div className={st.error}>
                             * Insufficient balance to cover transfer cost
