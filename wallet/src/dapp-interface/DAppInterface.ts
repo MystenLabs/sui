@@ -1,6 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    type SuiAddress,
+    type MoveCallTransaction,
+    Base64DataBuffer,
+} from '@mysten/sui.js';
 import { filter, lastValueFrom, map, take } from 'rxjs';
 
 import { createMessage } from '_messages';
@@ -8,7 +13,6 @@ import { WindowMessageStream } from '_messaging/WindowMessageStream';
 import { isErrorPayload } from '_payloads';
 import { ALL_PERMISSION_TYPES } from '_payloads/permissions';
 
-import type { SuiAddress, MoveCallTransaction } from '@mysten/sui.js';
 import type { Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -108,11 +112,23 @@ export class DAppInterface {
         );
     }
 
-    public signMessage(message: Uint8Array) {
+    public signMessage(message: Uint8Array | string) {
+        let messageData;
+        let messageString;
+
+        if (message) {
+            const buffer = new Base64DataBuffer(message);
+            messageData = buffer.toString();
+            if (typeof message === 'string') {
+                messageString = message;
+            }
+        }
+
         return mapToPromise(
             this.send<ExecuteSignMessageRequest, ExecuteSignMessageResponse>({
                 type: 'execute-sign-message-request',
-                message,
+                messageData,
+                messageString,
             }),
             (response) => response.signature
         );

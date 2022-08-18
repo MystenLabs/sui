@@ -8,7 +8,8 @@ export type SignMessageRequest = {
     approved: boolean | null;
     origin: string;
     originFavIcon?: string;
-    message?: Uint8Array;
+    messageData?: string; // base 64 encoded string
+    messageString?: string;
     createdDate: string;
     signature?: SignaturePubkeyPair;
 };

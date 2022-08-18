@@ -135,7 +135,8 @@ export class ContentScriptConnection extends Connection {
             if (allowed) {
                 try {
                     const signature = await Messages.signMessage(
-                        payload.message,
+                        payload.messageData,
+                        payload.messageString,
                         this
                     );
                     this.send(

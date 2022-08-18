@@ -7,7 +7,8 @@ import type { BasePayload, Payload } from '_payloads';
 
 export interface ExecuteSignMessageRequest extends BasePayload {
     type: 'execute-sign-message-request';
-    message: Uint8Array;
+    messageData?: string; // base64 encoded string
+    messageString?: string;
 }
 
 export function isExecuteSignMessageRequest(

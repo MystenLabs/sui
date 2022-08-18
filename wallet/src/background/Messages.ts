@@ -27,11 +27,13 @@ class Messages {
         new Subject<SignMessageRequestResponse>();
 
     async signMessage(
-        message: Uint8Array,
+        messageData: string | undefined,
+        messageString: string | undefined,
         connection: ContentScriptConnection
     ) {
         const signMessageRequest = this.createSignMessageRequest(
-            message,
+            messageData,
+            messageString,
             connection.origin,
             connection.originFavIcon
         );
@@ -71,17 +73,19 @@ class Messages {
     }
 
     private createSignMessageRequest(
-        message: Uint8Array | undefined,
+        messageData: string | undefined,
+        messageString: string | undefined,
         origin: string,
         originFavIcon?: string
     ): SignMessageRequest {
-        if (message !== undefined) {
+        if (messageData !== undefined) {
             return {
                 id: uuidV4(),
                 approved: null,
                 origin,
                 originFavIcon,
-                message,
+                messageData,
+                messageString,
                 createdDate: new Date().toISOString(),
             };
         }
