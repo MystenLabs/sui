@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '@mysten/sui.js';
 import cl from 'classnames';
 import { useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
@@ -37,16 +36,6 @@ export function DappSignMessageApprovalPage() {
     const signMessageRequest = useAppSelector(signMessageRequestSelector);
     const loading = guardLoading || signMessageRequestLoading;
     const dispatch = useAppDispatch();
-    const messageContents = useMemo(() => {
-        if (signMessageRequest?.messageString) {
-            return signMessageRequest.messageString;
-        }
-
-        if (signMessageRequest?.messageData) {
-            const b64 = new Base64DataBuffer(signMessageRequest?.messageData);
-            return b64.toString();
-        }
-    }, [signMessageRequest]);
 
     const handleOnSubmit = useCallback(
         async (approved: boolean) => {
@@ -76,7 +65,7 @@ export function DappSignMessageApprovalPage() {
 
     return (
         <Loading loading={loading}>
-            {signMessageRequest && messageContents && (
+            {signMessageRequest && (
                 <UserApproveContainer
                     approveTitle="Sign"
                     rejectTitle="Reject"
@@ -95,7 +84,8 @@ export function DappSignMessageApprovalPage() {
                         </button>
                     </div>
                     <div className={st.message}>
-                        {messageContents}
+                        {signMessageRequest.messageString ||
+                            signMessageRequest.messageData}
                         {!signMessageRequest.messageString && (
                             <small>{' (base64)'}</small>
                         )}
