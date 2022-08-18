@@ -156,7 +156,7 @@ pub trait KeyPair:
     fn public(&'_ self) -> &'_ Self::PubKey;
     fn private(self) -> Self::PrivKey;
 
-    #[cfg(feature = "copy_key")]
+    #[cfg(any(test, feature = "copy_key"))]
     fn copy(&self) -> Self;
 
     fn generate<R: CryptoRng + RngCore>(rng: &mut R) -> Self;

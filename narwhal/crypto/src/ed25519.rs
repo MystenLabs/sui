@@ -491,7 +491,7 @@ impl KeyPair for Ed25519KeyPair {
         self.secret
     }
 
-    #[cfg(feature = "copy_key")]
+    #[cfg(any(test, feature = "copy_key"))]
     fn copy(&self) -> Self {
         Self {
             name: Ed25519PublicKey::from_bytes(self.name.as_ref()).unwrap(),

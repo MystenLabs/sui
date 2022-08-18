@@ -366,7 +366,7 @@ impl KeyPair for Secp256k1KeyPair {
         }
     }
 
-    #[cfg(feature = "copy_key")]
+    #[cfg(any(test, feature = "copy_key"))]
     fn copy(&self) -> Self {
         Secp256k1KeyPair {
             name: self.name.clone(),

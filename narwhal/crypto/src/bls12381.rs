@@ -401,7 +401,7 @@ impl KeyPair for BLS12381KeyPair {
     type PrivKey = BLS12381PrivateKey;
     type Sig = BLS12381Signature;
 
-    #[cfg(feature = "copy_key")]
+    #[cfg(any(test, feature = "copy_key"))]
     fn copy(&self) -> Self {
         BLS12381KeyPair {
             name: self.name.clone(),
