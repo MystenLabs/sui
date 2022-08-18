@@ -284,6 +284,7 @@ impl SuiCommand {
                     keystore: KeystoreType::File(keystore_path),
                     gateway: ClientType::Embedded(wallet_gateway_config),
                     active_address,
+                    fullnode: None,
                 };
 
                 wallet_config.save(&client_path)?;
@@ -406,6 +407,7 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
                 keystore,
                 gateway: client,
                 active_address: Some(new_address),
+                fullnode: None,
             }
             .persisted(wallet_conf_path)
             .save()?;

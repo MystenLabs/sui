@@ -20,17 +20,19 @@ use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
+    GetObjectDataResponse, SuiExecuteTransactionResponse, SuiObjectInfo, SuiParsedObject,
+    SuiTransactionResponse,
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::SuiKeystore;
 use sui_sdk::{ClientType, SuiClient};
-use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
+    messages::ExecuteTransactionRequestType,
     messages::Transaction,
+    object::Owner,
     SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::info;
@@ -56,6 +58,9 @@ pub enum SuiClientCommands {
         /// used for subsequent commands.
         #[clap(long, value_hint = ValueHint::Url)]
         gateway: Option<String>,
+        /// The fullnode URL
+        #[clap(long, value_hint = ValueHint::Url)]
+        fullnode: Option<String>,
     },
 
     /// Default address used for commands when none specified
@@ -291,8 +296,6 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.keystore.sign(&sender, &data.to_bytes())?;
                 let response = context
-                    .gateway
-                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
 
@@ -336,8 +339,6 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .gateway
-                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 let cert = response.certificate;
@@ -365,8 +366,6 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .gateway
-                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 let cert = response.certificate;
@@ -437,8 +436,6 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .gateway
-                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 SuiClientCommandResult::SplitCoin(response)
@@ -457,14 +454,16 @@ impl SuiClientCommands {
                     .await?;
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .gateway
-                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
 
                 SuiClientCommandResult::MergeCoin(response)
             }
-            SuiClientCommands::Switch { address, gateway } => {
+            SuiClientCommands::Switch {
+                address,
+                gateway,
+                fullnode,
+            } => {
                 if let Some(addr) = address {
                     if !context.keystore.addresses().contains(&addr) {
                         return Err(anyhow!("Address {} not managed by wallet", addr));
@@ -479,13 +478,25 @@ impl SuiClientCommands {
                     context.config.save()?;
                 }
 
-                if Option::is_none(&address) && Option::is_none(&gateway) {
+                if let Some(fullnode) = &fullnode {
+                    context.config.fullnode = Some(ClientType::RPC(fullnode.clone(), None));
+                    context.config.save()?;
+                }
+
+                if Option::is_none(&address)
+                    && Option::is_none(&gateway)
+                    && Option::is_none(&fullnode)
+                {
                     return Err(anyhow!(
                         "No address or gateway specified. Please Specify one."
                     ));
                 }
 
-                SuiClientCommandResult::Switch(SwitchResponse { address, gateway })
+                SuiClientCommandResult::Switch(SwitchResponse {
+                    address,
+                    gateway,
+                    fullnode,
+                })
             }
             SuiClientCommands::ActiveAddress => {
                 SuiClientCommandResult::ActiveAddress(context.active_address().ok())
@@ -535,6 +546,7 @@ pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     pub keystore: SuiKeystore,
     pub gateway: SuiClient,
+    pub fullnode: Option<SuiClient>,
 }
 
 impl WalletContext {
@@ -548,10 +560,15 @@ impl WalletContext {
         let config = config.persisted(config_path);
         let keystore = config.keystore.init()?;
         let client = config.gateway.init().await?;
+        let fullnode_client = match &config.fullnode {
+            Some(client) => Some(client.init().await?),
+            None => None,
+        };
         let context = Self {
             config,
             keystore,
             gateway: client,
+            fullnode: fullnode_client,
         };
         Ok(context)
     }
@@ -643,6 +660,40 @@ impl WalletContext {
         Err(anyhow!(
             "No non-argument gas objects found with value >= budget {budget}"
         ))
+    }
+
+    /// A backward-compatible migration of transaction execution from gateway to fullnode
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<SuiTransactionResponse> {
+        let tx_digest = *tx.digest();
+        match &self.fullnode {
+            None => self.gateway.quorum_driver().execute_transaction(tx).await,
+            Some(client) => {
+                let result = client
+                    .quorum_driver()
+                    .execute_transaction_by_fullnode(
+                        tx,
+                        ExecuteTransactionRequestType::WaitForEffectsCert,
+                    )
+                    .await;
+                match result {
+                    Ok(SuiExecuteTransactionResponse::EffectsCert {
+                        certificate,
+                        effects,
+                    }) => Ok(SuiTransactionResponse {
+                        certificate,
+                        effects: effects.effects,
+                        timestamp_ms: None,
+                        parsed_data: None,
+                    }),
+                    Err(err) => Err(anyhow!(
+                        "Failed to execute transaction {tx_digest:?} with error {err:?}"
+                    )),
+                    other => Err(anyhow!(
+                        "Expect SuiExecuteTransactionResponse::EffectsCert but got {other:?}"
+                    )),
+                }
+            }
+        }
     }
 }
 
@@ -796,11 +847,8 @@ pub async fn call_move(
         .await?;
     let signature = context.keystore.sign(&sender, &data.to_bytes())?;
     let transaction = Transaction::new(data, signature);
-    let response = context
-        .gateway
-        .quorum_driver()
-        .execute_transaction(transaction)
-        .await?;
+
+    let response = context.execute_transaction(transaction).await?;
     let cert = response.certificate;
     let effects = response.effects;
 
@@ -895,6 +943,7 @@ pub struct SwitchResponse {
     /// Active address
     pub address: Option<SuiAddress>,
     pub gateway: Option<String>,
+    pub fullnode: Option<String>,
 }
 
 impl Display for SwitchResponse {
@@ -905,6 +954,9 @@ impl Display for SwitchResponse {
         }
         if let Some(gateway) = &self.gateway {
             writeln!(writer, "Active gateway switched to {}", gateway)?;
+        }
+        if let Some(fullnode) = &self.fullnode {
+            writeln!(writer, "Active fullnode switched to {}", fullnode)?;
         }
         write!(f, "{}", writer)
     }

@@ -96,6 +96,7 @@ pub async fn start_test_network_with_fullnodes(
             ..Default::default()
         }),
         active_address,
+        fullnode: None,
     }
     .save(&wallet_path)?;
 
