@@ -4,6 +4,43 @@ use std::time::Duration;
 use telemetry_subscribers::TelemetryGuards;
 use test_utils::cluster::Cluster;
 
+use types::{PublicKeyProto, RoundsRequest};
+
+#[tokio::test]
+async fn test_shutdown_bug() {
+    // Enabled debug tracing so we can easily observe the
+    // nodes logs.
+    let _guard = setup_tracing();
+
+    let delay = Duration::from_secs(10); // 10 seconds
+
+    // A cluster of 4 nodes will be created
+    let cluster = Cluster::new(None, None, false);
+
+    // ==== Start first authority ====
+    let authority = cluster.authority(0);
+    authority.start(false, Some(1)).await;
+
+    tokio::time::sleep(delay).await;
+
+    authority.stop_all().await;
+
+    tokio::time::sleep(delay).await;
+
+    let mut client = authority.new_proposer_client().await;
+
+    // send a sample rounds request
+    let request = tonic::Request::new(RoundsRequest {
+        public_key: Some(PublicKeyProto::from(authority.name.clone())),
+    });
+    let response = client.rounds(request).await;
+
+    // Should get back an error response - however this test will fail
+    // as we keep getting an OK response back , which shouldn't happen , as we
+    // stopped the node.
+    assert!(response.is_err());
+}
+
 /// Nodes will be started in a staggered fashion. This is simulating
 /// a real world scenario where nodes across validators will not start
 /// in the same time.

@@ -321,7 +321,7 @@ async fn test_restart_with_new_committee_change() {
         let (tx_reconfigure, _rx_reconfigure) = watch::channel(initial_committee);
 
         let store = NodeStorage::reopen(temp_dir());
-        let registry = Registry::new();
+
         let primary_handles = Primary::spawn(
             name,
             signer,
@@ -338,9 +338,9 @@ async fn test_restart_with_new_committee_change() {
             NetworkModel::Asynchronous,
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
-            &registry,
+            &Registry::new(),
         );
-        handles.extend(primary_handles.into_iter().map(|(_n, j)| j));
+        handles.extend(primary_handles);
     }
 
     // Run for a while in epoch 0.
@@ -398,7 +398,7 @@ async fn test_restart_with_new_committee_change() {
                 test_utils::test_get_block_commands!(1);
 
             let store = NodeStorage::reopen(temp_dir());
-            let registry = Registry::new();
+
             let primary_handles = Primary::spawn(
                 name,
                 signer,
@@ -415,9 +415,9 @@ async fn test_restart_with_new_committee_change() {
                 NetworkModel::Asynchronous,
                 tx_reconfigure,
                 /* tx_committed_certificates */ tx_feedback,
-                &registry,
+                &Registry::new(),
             );
-            handles.extend(primary_handles.into_iter().map(|(_n, j)| j));
+            handles.extend(primary_handles);
         }
 
         // Run for a while.
