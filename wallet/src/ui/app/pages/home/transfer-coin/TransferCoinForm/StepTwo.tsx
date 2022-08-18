@@ -15,6 +15,7 @@ import AddressInput from '_components/address-input';
 import Icon, { SuiIcons } from '_components/icon';
 import LoadingIndicator from '_components/loading/LoadingIndicator';
 import { DEFAULT_GAS_BUDGET_FOR_TRANSFER } from '_redux/slices/sui-objects/Coin';
+import { balanceFormatOptions } from '_shared/formatting';
 
 import type { FormValues } from '../';
 
@@ -76,7 +77,10 @@ function StepTwo({
 
                     <div className={st.responseCard}>
                         <div className={st.amount}>
-                            {intl.formatNumber(BigInt(amount || 0))}{' '}
+                            {intl.formatNumber(
+                                BigInt(amount || 0),
+                                balanceFormatOptions
+                            )}{' '}
                             <span>{coinSymbol}</span>
                         </div>
 
@@ -94,7 +98,11 @@ function StepTwo({
                                     Total Amount
                                 </div>
                                 <div className={st.walletInfoValue}>
-                                    {totalAmount} {coinSymbol}
+                                    {intl.formatNumber(
+                                        BigInt(totalAmount || 0),
+                                        balanceFormatOptions
+                                    )}{' '}
+                                    {coinSymbol}
                                 </div>
                             </div>
                         </div>

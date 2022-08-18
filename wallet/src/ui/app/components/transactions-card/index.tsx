@@ -3,12 +3,14 @@
 
 import cl from 'classnames';
 import { memo } from 'react';
+import { useIntl } from 'react-intl';
 import { Link } from 'react-router-dom';
 
 import Icon, { SuiIcons } from '_components/icon';
 import { formatDate } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
 import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
+import { balanceFormatOptions } from '_shared/formatting';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
@@ -28,6 +30,8 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
+
+    const intl = useIntl();
 
     const transferStatus = txn.status === 'success' ? 'Checkmark' : 'Close';
 
@@ -90,7 +94,11 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                     {txn.amount && (
                         <>
                             <div className={st.txAmount}>
-                                {txn.amount} {GAS_SYMBOL}
+                                {intl.formatNumber(
+                                    BigInt(txn.amount || 0),
+                                    balanceFormatOptions
+                                )}{' '}
+                                {GAS_SYMBOL}
                             </div>
                             <div className={st.txFiatValue}></div>
                         </>

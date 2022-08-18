@@ -4,7 +4,6 @@
 import cl from 'classnames';
 import { memo, useMemo } from 'react';
 import { useIntl } from 'react-intl';
-import { Link } from 'react-router-dom';
 
 import { useMiddleEllipsis } from '_hooks';
 import { Coin } from '_redux/slices/sui-objects/Coin';
@@ -26,10 +25,7 @@ function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
         () => intl.formatNumber(balance, balanceFormatOptions),
         [intl, balance]
     );
-    const sendUrl = useMemo(
-        () => `/send?${new URLSearchParams({ type }).toString()}`,
-        [type]
-    );
+
     const shortenType = useMiddleEllipsis(type, 30);
     return (
         <div className={cl(st.container, st[mode])}>
@@ -45,9 +41,6 @@ function CoinBalance({ type, balance, mode = 'row-item' }: CoinProps) {
                         {shortenType}
                     </span>
                 ) : null}
-                <Link className={cl('btn', st.action)} to={sendUrl}>
-                    Send
-                </Link>
             </div>
         </div>
     );
