@@ -37,7 +37,7 @@ validator_configs:
     enable-gossip: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 500
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
   - key-pair: BWT4edJ648As6Cg0rPqMeTpinyyg3mkZYQvoL0ETJr6u8/SkuOyh38NDNhv45Da9Qt6SWcBLgxTrjiBU3W6Cqw==
@@ -74,7 +74,7 @@ validator_configs:
     enable-gossip: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 500
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
   - key-pair: C9WIQSA+dP6G/HEzjOAXPcYo67cZvcvMFRWFIUzAibSKV2LiGsHNs4cEQsd7TDr1jHztuHedAnDm1PHi9zZ9dA==
@@ -111,7 +111,7 @@ validator_configs:
     enable-gossip: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 500
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
   - key-pair: QiWNzaFM8RHGAriXG4zIQ+keRsqQUVHAJ0SmsBfmkxbMYjMuNLstXNafYO+7KjbLkWx+tFgwHqNmNsTbsBK9iA==
@@ -148,7 +148,7 @@ validator_configs:
     enable-gossip: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 500
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
   - key-pair: sgzWfEvezFOOi+mQwbZCXWi/06b+l2k+SEY1FZbMqKsjjttu6akf3I5xvlDAo/s88pLZAk3brAKqpwkJawqp2g==
@@ -185,7 +185,7 @@ validator_configs:
     enable-gossip: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 500
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
   - key-pair: 9Z/d0Lf1LcwMYKRIy/lRFhCwp0Lx5NI4p6RcrgVOwhydR2FqGN8gOTB/BkIiYCWItSpqrqp7b+jGtNnrqKeHsQ==
@@ -222,7 +222,7 @@ validator_configs:
     enable-gossip: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 500
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
   - key-pair: 4BB+FmG6xjjQpGNs/bv21foY4nMY2jMCltCjhxgNbIzqP8527hCzpkX7MEBRHfq0yc1gWPQZKQFNFkZvXjssKg==
@@ -259,7 +259,7 @@ validator_configs:
     enable-gossip: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 500
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
 account_keys:
