@@ -47,8 +47,6 @@ export function DappSignMessageApprovalPage() {
                     })
                 );
             }
-
-            return true;
         },
         [dispatch, signMessageRequest]
     );
