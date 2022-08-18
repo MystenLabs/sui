@@ -76,13 +76,13 @@ public entry fun transfer_object(object: Object, recipient: address) {
 }
 ```
 
-Now let's look at how we could enable a swap/trade between your object and others' objects. A straightforward idea is this: define a function that takes two objects from two accounts and swaps their ownership. But this doesn't work in Sui! Recall from [chapter 2](ch2-using-objects.md) that only object owners can send a transaction to mutate the object. So one person cannot send a transaction that would swap their own object with someone else's object.
+Now let's look at how we could enable a swap/trade between your object and others' objects. A straightforward idea is this: define a function that takes two objects from two addresses and swaps their ownership. But this doesn't work in Sui! Recall from [chapter 2](ch2-using-objects.md) that only object owners can send a transaction to mutate the object. So one person cannot send a transaction that would swap their own object with someone else's object.
 
 In the future, we will likely introduce multi-sig transactions so that two people can sign the same transaction for this type of use case. However, you may not always be able to find someone to swap with right away. A multi-sig transaction won't work in this scenario. Even if you can, you may not want to carry the burden of finding a swap target.
 
 Another common solution is to "send" your object to a pool (e.g. a marketplace in the case of NFT, or a liquidity pool in the case of tokens), and perform the swap in the pool (either right away, or later when there is demand). In future chapters, we will explore the concept of shared objects that can be mutated by anyone and show that how it enables anyone to operate in a shared object pool. In this chapter, we will focus on how to achieve the same effect using owned objects. Transactions using only owned objects are faster and cheaper (in terms of gas) than using shared objects, since they do not require consensus in Sui.
 
-To be able to perform a swap of objects, both objects must be owned by the same account. We can imagine that a third party builds infrastructure to provide swap services. Anyone who wants to swap their object can send their objects to the third party, and the third party will help perform the swap and send the objects back. But we don't fully trust the third party and don't want to give them full custody of our objects. To achieve this, we can use direct wrapping. We define a wrapper object type as following:
+To be able to perform a swap of objects, both objects must be owned by the same address. We can imagine that a third party builds infrastructure to provide swap services. Anyone who wants to swap their object can send their objects to the third party, and the third party will help perform the swap and send the objects back. But we don't fully trust the third party and don't want to give them full custody of our objects. To achieve this, we can use direct wrapping. We define a wrapper object type as following:
 
 ```rust
 struct ObjectWrapper has key {
@@ -113,7 +113,7 @@ The wrapper object is then sent to the service operator, whose address is also s
 
 Although the service operator (`service_address`) now owns the `ObjectWrapper`, which contains the object to be swapped, the service operator still cannot access or steal the underlying wrapped `Object`. This is because the `transfer_object` function we defined requires the caller to pass an `Object` into it; but the service operator cannot access the wrapped `Object`, and passing `ObjectWrapper` to the `transfer_object` function would be invalid. Recall that an object can be read or modified only by the module in which it is defined; because this module defines only a wrapping / packing function (`request_swap`), and not an unwrapping / unpacking function, the service operator has no way to unpack the `ObjectWrapper` to retrieve the wrapped `Object`. Furthermore, `ObjectWrapper` itself lacks any defined transfer method, so the service operator cannot transfer the wrapped object to someone else either.
 
-Finally, let's define the function that the service operator can call in order to perform a swap between two objects sent from two accounts. The function interface will resemble:
+Finally, let's define the function that the service operator can call in order to perform a swap between two objects sent from two addresses. The function interface will resemble:
 
 ```rust
 public entry fun execute_swap(wrapper1: ObjectWrapper, wrapper2: ObjectWrapper, ctx: &mut TxContext);

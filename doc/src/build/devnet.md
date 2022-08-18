@@ -102,7 +102,7 @@ Owner: Account Address ( 9E9A9D406961E478AA80F4A6B2B167673F3DF8BA )
 Type: 0x2::devnet_nft::DevNetNFT
 ```
 
-The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `Sui CLI client` to [view objects owned by the account](https://docs.sui.io/build/wallet#view-objects-owned-by-the-account).
+The above command created an object with ID `ED883F6812AF447B9B0CE220DA5EA9E0F58012FE`. Note you may use `Sui CLI client` to [view objects owned by the address](../contribute/cli-client.md#view-objects-owned-by-the-address).
 
 Now you can view the created object in the [Sui Explorer](https://explorer.devnet.sui.io) by appending the object ID to:
 https://explorer.devnet.sui.io/objects/

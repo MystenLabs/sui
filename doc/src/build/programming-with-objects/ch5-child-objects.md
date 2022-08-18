@@ -7,14 +7,14 @@ In the previous chapter, we walked through various ways of wrapping an object in
 2. An object can become very large if it wraps several other objects. Larger objects can lead to higher gas fees in transactions. In addition, there is an upper bound on object size.
 3. As we will see in future chapters, there will be use cases where we need to store a collection of objects of heterogeneous types. Since the Move `vector` type must be templated on one single type `T`, it is not suitable for this.
 
-Fortunately, Sui provides another way to represent object relationships: *an object can own other objects*. In the first chapter, we introduced libraries for transferring objects to an account address. In this chapter, we will introduce libraries that allow you transfer objects to other objects.
+Fortunately, Sui provides another way to represent object relationships: *an object can own other objects*. In the first chapter, we introduced libraries for transferring objects to an address. In this chapter, we will introduce libraries that allow you transfer objects to other objects.
 
 ### Create child objects
 
 There are two ways of creating child objects which we describe in the following sections.
 
 #### transfer_to_object
-Assume we own two objects in our account address. To make one object own the other object, we can use the following API in the [`transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) library:
+Assume we own two objects in our address. To make one object own the other object, we can use the following API in the [`transfer`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move) library:
 ```rust
 public fun transfer_to_object<T: key, R: key>(
     obj: T,
@@ -48,7 +48,7 @@ public entry fun create_child(ctx: &mut TxContext) {
     );
 }
 ```
-The above function creates a new object of `Child` type and transfers it to the sender account address of the transaction, i.e. after this call, the sender account owns the object.
+The above function creates a new object of `Child` type and transfers it to the sender address of the transaction, i.e. after this call, the sender address owns the object.
 Similarly, we can define an API to create an object of `Parent` type:
 ```rust
 public entry fun create_parent(ctx: &mut TxContext) {
@@ -69,7 +69,7 @@ public entry fun add_child(parent: &mut Parent, child: Child) {
 ```
 This function takes the `Child` object by value, fills the `child` field of `parent` with the `ID` of the `Child` object, and calls `transfer_to_object` to transfer the `Child` object to the `parent`.
 At the end of the `add_child` call, we have the following ownership relationship:
-1. Sender account address (still) owns a `Parent` object.
+1. Sender address (still) owns a `Parent` object.
 2. The `Parent` object owns a `Child` object.
 
 #### transfer_to_object_id
@@ -102,12 +102,12 @@ public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
     transfer::transfer(parent, tx_context::sender(ctx));
 }
 ```
-In the above function, we need to first create the ID of the new parent object. With the ID, we can then transfer the child object to it by calling `transfer_to_object_id`, thereby obtaining a reference `child_ref`. With both `id` and `child_ref`, we can create an object of `AnotherParent`, which we would eventually transfer to the sender's account.
+In the above function, we need to first create the ID of the new parent object. With the ID, we can then transfer the child object to it by calling `transfer_to_object_id`, thereby obtaining a reference `child_ref`. With both `id` and `child_ref`, we can create an object of `AnotherParent`, which we would eventually transfer to the sender's address.
 
 > :bulb: If we wanted to ensure that the `ID` in the `child` field of `Parent` or `AnotherParent` actually referred to an object of type `Child`, we could use `TypedID` which is defined in the [typed_id module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/typed_id.move)
 
 ### Use Child Objects
-We have explained in the first chapter that, in order to use an owned object, the object owner must be the transaction sender. What about objects owned by objects? We require that the object's owner object must also be passed as an argument in the Move call. For example, if object A owns object B, and object B owns object C, to be able to use C when calling a Move entry function, one must also pass B as an argument; and since B is an argument, A must also be an argument. This essentially means that to use an object, its entire ownership ancestor chain must be included, and the account owner of the root ancestor must match the sender of the transaction.
+We have explained in the first chapter that, in order to use an owned object, the object owner must be the transaction sender. What about objects owned by objects? We require that the object's owner object must also be passed as an argument in the Move call. For example, if object A owns object B, and object B owns object C, to be able to use C when calling a Move entry function, one must also pass B as an argument; and since B is an argument, A must also be an argument. This essentially means that to use an object, its entire ownership ancestor chain must be included, and the  owner address of the root ancestor must match the sender of the transaction.
 
 Let's look at how we could use the child object created earlier. Let's define two entry functions:
 ```rust
@@ -135,7 +135,7 @@ $ sui client call --package $PKG --module object_owner --function create_child  
 Created Objects:
   - ID: 0xb41d157fdeda968c5b5f0d8b87b6ebb84d7d1941 , Owner: Account Address ( 0x5f67488c28c46e56bcefb808ae499ef323c1236d )
 ```
-At this point we only created the child object, but it's still owned by an account address. We can verify that we should be able to call `mutate_child` function by only passing in the child object:
+At this point we only created the child object, but it's still owned by an address. We can verify that we should be able to call `mutate_child` function by only passing in the child object:
 ```
 $ export CHILD=0xb41d157fdeda968c5b5f0d8b87b6ebb84d7d1941
 $ sui client call --package $PKG --module object_owner  --function mutate_child --args $CHILD --gas-budget 1000
@@ -187,17 +187,17 @@ It will finish successfully.
 In this section, we will introduce a few more APIs that will allow us safely move around child objects.
 
 There are two ways to transfer a child object:
-1. Transfer it to an account address, thus it will no longer be a child object after the transfer.
+1. Transfer it to an address, thus it will no longer be a child object after the transfer.
 2. Transfer it to another object, thus it will still be a child object but with the parent object changed.
 
 #### transfer
-First of all, let's look at how to transfer a child object to an account address. Recall the `transfer` function as defined in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
+First of all, let's look at how to transfer a child object to an address. Recall the `transfer` function as defined in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
 ```rust
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
-`transfer` transfers an object, in this case a child object, to an account address.
-Using this API is no different than a normal transfer! All that is required is that the object's parent was present as an argument to the initial `entry` function. Let's implement a function that removes a child object from a parent object and transfer it back to the account owner:
+`transfer` transfers an object, in this case a child object, to an address.
+Using this API is no different than a normal transfer! All that is required is that the object's parent was present as an argument to the initial `entry` function. Let's implement a function that removes a child object from a parent object and transfer it back to the owner:
 ```rust
 public entry fun remove_child(parent: &mut Parent, child: Child, ctx: &mut TxContext) {
     option::extract(&mut parent.child); // this sets the option to none
@@ -227,10 +227,10 @@ Similar to `remove_child`, the `child` object must be passed explicitly by-value
 ### Delete Child Objects
 Deleting child objects is similarly straight forward, and no different from deleting normal objects, except that the parent object must be present as an argument to the initial `entry` function.
 With this in mind, we can either:
-1. First transfer this child object to an account address, which makes this object a regular account-owned object instead of a child object, and hence can be deleted normally.
+1. First transfer this child object to an account address, which makes this object a regular address-owned object instead of a child object, and hence can be deleted normally.
 2. Delete the child object directly
 
-The first case is an application of two concepts already covered, i.e. transferring a child object and deleting an account-owned object. So let's look at the second case, deleting the child directly:
+The first case is an application of two concepts already covered, i.e. transferring a child object and deleting an address-owned object. So let's look at the second case, deleting the child directly:
 ```rust
 public entry fun delete_parent_and_child(parent: Parent, child: Child) {
     let Parent { id: parent_id, child: _ } = parent;

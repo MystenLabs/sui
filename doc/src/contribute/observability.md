@@ -34,7 +34,7 @@ Here is a table/summary of context information that we will want:
 
 - TX Digest
 - Object reference/ID, when applicable
-- Address/account
+- Address
 - Certificate digest, if applicable
 - For Client HTTP endpoint: route, method, status
 - Epoch
