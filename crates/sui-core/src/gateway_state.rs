@@ -20,6 +20,7 @@ use prometheus::{
     register_histogram_with_registry, register_int_counter_with_registry, Histogram, IntCounter,
     Registry,
 };
+use sui_adapter::object_root_ancestor_map::ObjectRootAncestorMap;
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use tracing::{debug, error, trace, Instrument};
 
@@ -1144,19 +1145,35 @@ where
 
         // Fetch all the objects needed for this call
         let mut objects = BTreeMap::new();
-        let mut args = Vec::with_capacity(json_args.len());
+        let mut object_owners = BTreeMap::new();
+        for json_arg in &json_args {
+            if let SuiJsonCallArg::Object(id) = json_arg {
+                let obj = self.get_object_internal(id).await?;
+                object_owners.insert(*id, obj.owner);
+                objects.insert(*id, obj);
+            }
+        }
+        let root_ancestor_map = ObjectRootAncestorMap::new(&object_owners)
+            .expect("object owners should be well formed");
 
+        let mut args = Vec::with_capacity(json_args.len());
         for json_arg in json_args {
             args.push(match json_arg {
                 SuiJsonCallArg::Object(id) => {
-                    let obj = self.get_object_internal(&id).await?;
+                    let obj = &objects[&id];
                     let arg = if obj.is_shared() {
-                        CallArg::Object(ObjectArg::SharedObject(id))
+                        ObjectArg::SharedObject(id)
                     } else {
-                        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj.compute_object_reference()))
+                        let (_, ancestor_owner) = root_ancestor_map
+                            .get_root_ancestor(&id)
+                            .expect("object owners should be well formed");
+                        if ancestor_owner.is_shared() {
+                            ObjectArg::QuasiSharedObject(id)
+                        } else {
+                            ObjectArg::ImmOrOwnedObject(obj.compute_object_reference())
+                        }
                     };
-                    objects.insert(id, obj);
-                    arg
+                    CallArg::Object(arg)
                 }
                 SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
             })

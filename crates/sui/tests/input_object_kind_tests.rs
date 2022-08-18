@@ -109,8 +109,7 @@ async fn shared_valid() {
 #[tokio::test]
 async fn owned_valid() {
     let env = &mut setup_network_and_publish_test_package().await;
-    let (parent_id, child_id) =
-        create_parent_and_child(env, "create_shared_parent_and_child").await;
+    let (parent_id, child_id) = create_parent_and_child(env, "create_owned_parent_and_child").await;
     let child_id = child_id.unwrap();
     let parent_ref = get_latest_object(&env.configs.validator_set()[0], parent_id)
         .await
@@ -168,7 +167,7 @@ async fn imm_valid() {
     assert!(effects.status.is_ok());
 }
 
-async fn run_and_assert_error_starts_with(
+async fn run_and_assert_error_contains(
     env: &mut TestEnv,
     function: &'static str,
     parent: ObjectArg,
@@ -191,7 +190,7 @@ async fn run_and_assert_error_starts_with(
         Ok(_) => "Ok(_)".to_owned(),
         Err(e) => e.to_string(),
     };
-    if !msg.starts_with(&format!(
+    if !msg.contains(&format!(
         "Error checking transaction input objects: [{prefix}"
     )) {
         panic!(
@@ -201,13 +200,13 @@ async fn run_and_assert_error_starts_with(
     }
 }
 
-async fn run_increment_and_assert_error_starts_with(
+async fn run_increment_and_assert_error_contains(
     env: &mut TestEnv,
     parent: ObjectArg,
     child: ObjectArg,
     prefix: &str,
 ) {
-    run_and_assert_error_starts_with(env, "increment_counter", parent, Some(child), prefix).await
+    run_and_assert_error_contains(env, "increment_counter", parent, Some(child), prefix).await
 }
 
 #[tokio::test]
@@ -225,7 +224,7 @@ async fn object_shared_mismatch() {
     //
 
     // Use a quasi-shared object as shared object
-    run_increment_and_assert_error_starts_with(
+    run_increment_and_assert_error_contains(
         env,
         ObjectArg::SharedObject(parent_id),
         ObjectArg::SharedObject(child_id),
@@ -238,7 +237,7 @@ async fn object_shared_mismatch() {
         .await
         .unwrap()
         .compute_object_reference();
-    run_increment_and_assert_error_starts_with(
+    run_increment_and_assert_error_contains(
         env,
         ObjectArg::SharedObject(parent_id),
         ObjectArg::ImmOrOwnedObject(child_ref),
@@ -251,7 +250,7 @@ async fn object_shared_mismatch() {
     //
 
     // Use a shared object as quasi-shared object
-    run_increment_and_assert_error_starts_with(
+    run_increment_and_assert_error_contains(
         env,
         ObjectArg::QuasiSharedObject(parent_id),
         ObjectArg::QuasiSharedObject(child_id),
@@ -264,7 +263,7 @@ async fn object_shared_mismatch() {
         .await
         .unwrap()
         .compute_object_reference();
-    run_increment_and_assert_error_starts_with(
+    run_increment_and_assert_error_contains(
         env,
         ObjectArg::ImmOrOwnedObject(parent_ref),
         ObjectArg::QuasiSharedObject(child_id),
@@ -291,7 +290,7 @@ async fn object_owned_mismatch() {
         .await
         .unwrap()
         .compute_object_reference();
-    run_increment_and_assert_error_starts_with(
+    run_increment_and_assert_error_contains(
         env,
         ObjectArg::ImmOrOwnedObject(parent_ref),
         ObjectArg::SharedObject(child_id),
@@ -304,7 +303,7 @@ async fn object_owned_mismatch() {
         .await
         .unwrap()
         .compute_object_reference();
-    run_increment_and_assert_error_starts_with(
+    run_increment_and_assert_error_contains(
         env,
         ObjectArg::ImmOrOwnedObject(parent_ref),
         ObjectArg::QuasiSharedObject(child_id),
@@ -321,7 +320,7 @@ async fn object_owned_mismatch() {
         .await
         .unwrap()
         .compute_object_reference();
-    run_increment_and_assert_error_starts_with(
+    run_increment_and_assert_error_contains(
         env,
         ObjectArg::QuasiSharedObject(parent_id),
         ObjectArg::ImmOrOwnedObject(child_ref),
@@ -334,7 +333,7 @@ async fn object_owned_mismatch() {
         .await
         .unwrap()
         .compute_object_reference();
-    run_increment_and_assert_error_starts_with(
+    run_increment_and_assert_error_contains(
         env,
         ObjectArg::SharedObject(parent_id),
         ObjectArg::ImmOrOwnedObject(child_ref),
@@ -353,7 +352,7 @@ async fn object_imm_mismatch() {
     assert!(child_id.is_none());
 
     // Use an imm object as quasi-shared object
-    run_and_assert_error_starts_with(
+    run_and_assert_error_contains(
         env,
         "use_parent",
         ObjectArg::QuasiSharedObject(parent_id),
@@ -363,7 +362,7 @@ async fn object_imm_mismatch() {
     .await;
 
     // Use an imm object as shared object
-    run_and_assert_error_starts_with(
+    run_and_assert_error_contains(
         env,
         "use_parent",
         ObjectArg::SharedObject(parent_id),

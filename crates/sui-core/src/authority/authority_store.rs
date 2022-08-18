@@ -346,9 +346,9 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let mut result = Vec::new();
         for kind in objects {
             let obj = match kind {
-                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject(id) => {
-                    self.get_object(id)?
-                }
+                InputObjectKind::MovePackage(id)
+                | InputObjectKind::SharedMoveObject(id)
+                | InputObjectKind::QuasiSharedMoveObject(id) => self.get_object(id)?,
                 InputObjectKind::ImmOrOwnedMoveObject(objref) => {
                     self.get_object_by_key(&objref.0, objref.1)?
                 }

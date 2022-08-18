@@ -170,7 +170,7 @@ where
             &transaction.signer(),
             object_kind,
             &object,
-            &&root_ancestor_map,
+            &root_ancestor_map,
         ) {
             Ok(()) => all_objects.push((object_kind, object)),
             Err(e) => {
