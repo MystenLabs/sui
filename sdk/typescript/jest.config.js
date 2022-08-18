@@ -4,6 +4,7 @@
 /** @type {import('@jest/types').Config.InitialOptions} */
 const config = {
   testEnvironment: 'node',
+  testMatch: ['<rootDir>/test/**/*.(spec|test).{ts,tsx,js,jsx}'],
 };
 
 module.exports = config;
