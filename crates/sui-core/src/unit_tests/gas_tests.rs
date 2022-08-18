@@ -28,7 +28,7 @@ async fn test_tx_less_than_minimum_gas_budget() {
     let budget = *MIN_GAS_BUDGET - 1;
 
     let (tx, authority_state) = make_transfer_tx(*MAX_GAS_BUDGET, budget, 1).await;
-    let tx_size = tx.size_for_gas_metering();
+    let tx_size = tx.deterministic_size_for_gas_metering();
 
     let result = execute_transfer_transaction_inner(tx, authority_state, false).await;
 
@@ -90,7 +90,7 @@ async fn test_native_transfer_sufficient_gas() -> SuiResult {
     // This test does a native transfer with sufficient gas budget and balance.
     // It's expected to succeed. We check that gas was charged properly.
     let (tx, authority_state) = make_transfer_tx(*MAX_GAS_BUDGET, *MAX_GAS_BUDGET, 1).await;
-    let tx_size = tx.size_for_gas_metering();
+    let tx_size = tx.deterministic_size_for_gas_metering();
     let result = execute_transfer_transaction_inner(tx, authority_state, true).await;
     let min_gas_budget = *MIN_GAS_BUDGET + (*GAS_BUDGET_PER_TX_BYTE) * (tx_size as u64);
     let effects = result.response.unwrap().signed_effects.unwrap().effects;

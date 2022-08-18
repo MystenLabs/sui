@@ -19,7 +19,7 @@ use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::convert::TryFrom;
-use sui_cost::cost::{
+use sui_cost_constants::constants::{
     BASE_TX_COST_FIXED, BASE_TX_COST_PER_BYTE, CONSENSUS_COST, OBJ_ACCESS_COST_MUTATE,
     OBJ_ACCESS_COST_READ, OBJ_DATA_COST_REFUNDABLE, OBJ_METADATA_COST_REFUNDABLE,
     PACKAGE_PUBLISH_COST,

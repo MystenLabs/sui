@@ -5,6 +5,7 @@ use crate::authority::SuiDataStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Debug;
+use sui_types::messages::DeterministicSizeForGasMetering;
 use sui_types::messages::TransactionKind;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -61,7 +62,7 @@ async fn check_gas<S, T>(
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    let tx_size = transaction.size_for_gas_metering();
+    let tx_size = transaction.deterministic_size_for_gas_metering() as u64;
     let tx_kind = &transaction.signed_data.data.kind;
     if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered())

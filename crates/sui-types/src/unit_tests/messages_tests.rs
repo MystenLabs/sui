@@ -696,3 +696,38 @@ fn verify_sender_signature_correctly_with_flag() {
         .verify(&transaction.signed_data, &committee)
         .is_err());
 }
+
+#[test]
+fn test_deterministic_sizing_for_gas() {
+    let receiver_kp = SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1);
+    let receiver_address = (&receiver_kp.public()).into();
+    let transaction_1 = Transaction::from_data(
+        TransactionData::new_transfer(
+            receiver_address,
+            random_object_ref(),
+            (&receiver_kp.public()).into(),
+            random_object_ref(),
+            10000,
+        ),
+        &receiver_kp,
+    );
+
+    let transaction_2 = Transaction::from_data(
+        TransactionData::new_move_call(
+            receiver_address,
+            random_object_ref(),
+            Identifier::new("module").unwrap(),
+            Identifier::new("function").unwrap(),
+            vec![],
+            random_object_ref(),
+            vec![],
+            10000,
+        ),
+        &receiver_kp,
+    );
+
+    let s1 = transaction_1.deterministic_size_for_gas_metering();
+    let s2 = transaction_2.deterministic_size_for_gas_metering();
+
+    assert!(s1 < s2);
+}

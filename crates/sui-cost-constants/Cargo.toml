@@ -1,5 +1,5 @@
 [package]
-name = "sui-cost"
+name = "sui-cost-constants"
 version = "0.1.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
@@ -13,10 +13,6 @@ move-core-types = { git = "https://github.com/move-language/move", rev = "790715
 move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 workspace-hack = { path = "../workspace-hack"}
 
-test-utils = { path = "../test-utils" }
-sui = {path = "../sui"}
-sui-types = {path = "../sui-types"}
-sui-config = {path = "../sui-config"}
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 tokio = { version = "1.20.1", features = ["full"] }
 move-prover = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
@@ -24,7 +20,6 @@ move-prover-boogie-backend = { git = "https://github.com/move-language/move", re
 move-unit-test = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-cli = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 serde = { version = "1.0.141", features = ["derive"] }
 
 [dev-dependencies]

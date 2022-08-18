@@ -20,7 +20,7 @@ use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::LocalIndex;
 use move_binary_format::CompiledModule;
-use move_core_types::language_storage::ModuleId;
+use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::{
     account_address::AccountAddress, identifier::Identifier, language_storage::TypeTag,
     value::MoveStructLayout,
@@ -53,6 +53,15 @@ pub enum CallArg {
     // TODO support more than one object (object vector of some sort)
 }
 
+impl DeterministicSizeForGasMetering for CallArg {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        match self {
+            CallArg::Pure(p) => p.len() as u128,
+            CallArg::Object(o) => o.deterministic_size_for_gas_metering(),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub enum ObjectArg {
     // A Move object, either immutable, or owned mutable.
@@ -61,10 +70,58 @@ pub enum ObjectArg {
     SharedObject(ObjectID),
 }
 
+impl DeterministicSizeForGasMetering for ObjectArg {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        size_of::<Self>() as u128
+    }
+}
+
+// TODO: make this more maintainable by checking that all struct fields are impl
+pub trait DeterministicSizeForGasMetering {
+    fn deterministic_size_for_gas_metering(&self) -> u128;
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransferObject {
     pub recipient: SuiAddress,
     pub object_ref: ObjectRef,
+}
+
+impl DeterministicSizeForGasMetering for TransferObject {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        // All fields are constant size
+        size_of::<Self>() as u128
+    }
+}
+
+impl DeterministicSizeForGasMetering for TypeTag {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        match self {
+            TypeTag::Bool
+            | TypeTag::U8
+            | TypeTag::U64
+            | TypeTag::U128
+            | TypeTag::Address
+            | TypeTag::Signer => 1,
+            // Add 1 for the box?
+            TypeTag::Vector(t) => t.deterministic_size_for_gas_metering() + 1,
+            TypeTag::Struct(s) => s.deterministic_size_for_gas_metering(),
+        }
+    }
+}
+impl DeterministicSizeForGasMetering for StructTag {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        let address_size = size_of::<AccountAddress>() as u128;
+        let module_size = self.module.as_ident_str().len() as u128;
+        let name_size = self.name.as_ident_str().len() as u128;
+        let type_params_size = self
+            .type_params
+            .iter()
+            .map(|q| q.deterministic_size_for_gas_metering())
+            .sum::<u128>();
+
+        address_size + module_size + name_size + type_params_size
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -81,6 +138,22 @@ pub struct MoveCall {
     pub arguments: Vec<CallArg>,
 }
 
+impl DeterministicSizeForGasMetering for MoveCall {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        let package_size = size_of::<ObjectRef>() as u128;
+        let module_size = self.module.as_ident_str().len() as u128;
+        let function_size = self.function.as_ident_str().len() as u128;
+
+        let call_args_size = self
+            .arguments
+            .iter()
+            .map(|a| a.deterministic_size_for_gas_metering())
+            .sum::<u128>();
+
+        package_size + module_size + function_size + call_args_size
+    }
+}
+
 #[serde_as]
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct MoveModulePublish {
@@ -88,10 +161,23 @@ pub struct MoveModulePublish {
     pub modules: Vec<Vec<u8>>,
 }
 
+impl DeterministicSizeForGasMetering for MoveModulePublish {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        // Count as total # of bytes
+        self.modules.iter().map(|q| q.len()).sum::<usize>() as u128
+    }
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct TransferSui {
     pub recipient: SuiAddress,
     pub amount: Option<u64>,
+}
+
+impl DeterministicSizeForGasMetering for TransferSui {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        size_of::<Self>() as u128
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -102,6 +188,12 @@ pub struct ChangeEpoch {
     pub storage_charge: u64,
     /// The total amount of gas charged for computation during the epoch.
     pub computation_charge: u64,
+}
+
+impl DeterministicSizeForGasMetering for ChangeEpoch {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        size_of::<Self>() as u128
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -124,6 +216,18 @@ pub enum SingleTransactionKind {
     /// signs internally during epoch changes.
     ChangeEpoch(ChangeEpoch),
     // .. more transaction types go here
+}
+
+impl DeterministicSizeForGasMetering for SingleTransactionKind {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        match self {
+            SingleTransactionKind::TransferObject(o) => o.deterministic_size_for_gas_metering(),
+            SingleTransactionKind::Publish(o) => o.deterministic_size_for_gas_metering(),
+            SingleTransactionKind::Call(o) => o.deterministic_size_for_gas_metering(),
+            SingleTransactionKind::TransferSui(o) => o.deterministic_size_for_gas_metering(),
+            SingleTransactionKind::ChangeEpoch(o) => o.deterministic_size_for_gas_metering(),
+        }
+    }
 }
 
 impl SingleTransactionKind {
@@ -270,6 +374,18 @@ pub enum TransactionKind {
     // .. more transaction types go here
 }
 
+impl DeterministicSizeForGasMetering for TransactionKind {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        match self {
+            TransactionKind::Single(q) => q.deterministic_size_for_gas_metering(),
+            TransactionKind::Batch(q) => q
+                .iter()
+                .map(|s| s.deterministic_size_for_gas_metering())
+                .sum::<u128>(),
+        }
+    }
+}
+
 impl TransactionKind {
     pub fn single_transactions(&self) -> impl Iterator<Item = &SingleTransactionKind> {
         match self {
@@ -326,6 +442,15 @@ pub struct TransactionData {
     gas_payment: ObjectRef,
     pub gas_price: u64,
     pub gas_budget: u64,
+}
+
+impl DeterministicSizeForGasMetering for TransactionData {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        let consts_sum = size_of::<SuiAddress>() as u128
+            + size_of::<ObjectRef>() as u128
+            + 2 * (size_of::<u64>() as u128);
+        consts_sum + self.kind.deterministic_size_for_gas_metering()
+    }
 }
 
 impl TransactionData {
@@ -533,12 +658,27 @@ pub struct SenderSignedData {
     pub tx_signature: Signature,
 }
 
-impl<S> TransactionEnvelope<S> {
-    pub fn size_for_gas_metering(&self) -> u64 {
-        // u64 is fine for TX size.
-        size_of::<Self>() as u64
+impl DeterministicSizeForGasMetering for Signature {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        size_of::<Signature>() as u128
     }
+}
 
+impl DeterministicSizeForGasMetering for SenderSignedData {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        self.tx_signature.deterministic_size_for_gas_metering()
+            + self.data.deterministic_size_for_gas_metering()
+    }
+}
+
+impl<S> DeterministicSizeForGasMetering for TransactionEnvelope<S> {
+    fn deterministic_size_for_gas_metering(&self) -> u128 {
+        // Ignore other fields because they're not part of the TX
+        self.signed_data.deterministic_size_for_gas_metering()
+    }
+}
+
+impl<S> TransactionEnvelope<S> {
     #[allow(dead_code)]
     fn add_sender_sig_to_verification_obligation(
         &self,

@@ -52,7 +52,7 @@ narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "e5461
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "e54611ee0387735b1963eecfc4fdc120ee8ac509", package = "crypto" }
 
 workspace-hack = { path = "../workspace-hack"}
-sui-cost = { path = "../sui-cost"}
+sui-cost-constants = { path = "../sui-cost-constants"}
 
 [dev-dependencies]
 bincode = "1.3.3"

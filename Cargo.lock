@@ -7085,10 +7085,30 @@ dependencies = [
  "once_cell",
  "serde 1.0.143",
  "sui",
- "sui-adapter",
+ "sui-config",
  "sui-json-rpc-types",
  "sui-types",
  "test-utils",
+ "tokio",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
+name = "sui-cost-constants"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "insta",
+ "move-binary-format",
+ "move-cli",
+ "move-core-types",
+ "move-package",
+ "move-prover",
+ "move-prover-boogie-backend",
+ "move-unit-test",
+ "move-vm-types",
+ "once_cell",
+ "serde 1.0.143",
  "tokio",
  "workspace-hack 0.1.0",
 ]
@@ -7569,7 +7589,7 @@ dependencies = [
  "static_assertions",
  "strum",
  "strum_macros",
- "sui-cost",
+ "sui-cost-constants",
  "thiserror",
  "tonic",
  "tracing",
