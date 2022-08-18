@@ -55,7 +55,7 @@ async fn execute_transactions(
 
         // If this check fails the transactions will not be included in the checkpoint.
         assert!(matches!(
-            effects.effects.status,
+            effects.effects().status,
             ExecutionStatus::Success { .. }
         ));
 
@@ -272,10 +272,10 @@ async fn checkpoint_with_shared_objects() {
         .await
         .unwrap();
     assert!(matches!(
-        effects.effects.status,
+        effects.effects().status,
         ExecutionStatus::Success { .. }
     ));
-    let ((counter_id, _, _), _) = effects.effects.created[0];
+    let ((counter_id, _, _), _) = effects.effects().created[0];
 
     // We can finally make a valid shared-object transaction (incrementing the counter).
     tokio::task::yield_now().await;

@@ -397,7 +397,7 @@ where
                 debug!(?digest, "cert execution failed due to missing parents");
 
                 let effects = self.aggregator.execute_cert_to_true_effects(&cert).await?;
-                let parents = &effects.effects.dependencies;
+                let parents = &effects.effects().dependencies;
 
                 // Must release permit before enqueuing new work to prevent deadlock.
                 std::mem::drop(permit);
@@ -534,7 +534,7 @@ where
         // Must drop the permit before waiting to avoid deadlock.
         std::mem::drop(permit);
 
-        for parent in effects.effects.dependencies.iter() {
+        for parent in effects.effects().dependencies.iter() {
             let (_, mut rx) = self.pending_txes.wait(parent).await;
 
             if self.state.database.effects_exists(parent)? {
@@ -552,7 +552,7 @@ where
         }
 
         if cfg!(debug_assertions) {
-            for parent in effects.effects.dependencies.iter() {
+            for parent in effects.effects().dependencies.iter() {
                 debug_assert!(self.state.database.effects_exists(parent).unwrap());
             }
         }

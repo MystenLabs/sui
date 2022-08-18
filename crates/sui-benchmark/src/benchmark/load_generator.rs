@@ -30,8 +30,8 @@ pub fn check_transaction_response(reply_message: Result<TransactionInfoResponse,
     match reply_message {
         Ok(res) => {
             if let Some(e) = res.signed_effects {
-                if matches!(e.effects.status, ExecutionStatus::Failure { .. }) {
-                    info!("Execution Error {:?}", e.effects.status);
+                if matches!(e.effects().status, ExecutionStatus::Failure { .. }) {
+                    info!("Execution Error {:?}", e.effects().status);
                 }
             }
         }

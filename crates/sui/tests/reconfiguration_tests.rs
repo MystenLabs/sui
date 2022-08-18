@@ -12,6 +12,7 @@ use sui_node::SuiNode;
 use sui_types::base_types::{ExecutionDigests, ObjectID, ObjectRef};
 use sui_types::crypto::{get_key_pair, AuthorityKeyPair, KeypairTraits};
 use sui_types::error::SuiResult;
+use sui_types::message_envelope::Message;
 use sui_types::messages::ObjectInfoResponse;
 use sui_types::messages::{CallArg, ObjectArg, ObjectInfoRequest, TransactionEffects};
 use sui_types::messages_checkpoint::{

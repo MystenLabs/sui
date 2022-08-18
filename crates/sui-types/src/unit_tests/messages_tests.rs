@@ -424,14 +424,14 @@ fn test_digest_caching() {
         dependencies: Vec::new(),
     };
 
-    let mut signed_effects = effects.to_sign_effects(
+    let signed_effects = SignedTransactionEffects::new(
         committee.epoch(),
-        &AuthorityPublicKeyBytes::from(sec1.public()),
+        effects,
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
     let initial_effects_digest = *signed_effects.digest();
-    signed_effects.effects.gas_used.computation_cost += 1;
 
     // digest is cached
     assert_eq!(initial_effects_digest, *signed_effects.digest());

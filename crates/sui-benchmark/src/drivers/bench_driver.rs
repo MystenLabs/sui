@@ -219,12 +219,12 @@ impl Driver<()> for BenchDriver {
                                         match res {
                                             Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
                                                 let (_, effects) = *result;
-                                                let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
+                                                let new_version = effects.effects().mutated.iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
                                                 }).map(|x| x.0).unwrap();
                                                 NextOp::Response(Some((
                                                     Instant::now(),
-                                                    b.1.make_new_payload(new_version, effects.effects.gas_object.0),
+                                                    b.1.make_new_payload(new_version, effects.effects().gas_object.0),
                                                 ),
                                                 ))
                                             }
@@ -262,12 +262,12 @@ impl Driver<()> for BenchDriver {
                                     match res {
                                         Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
                                             let (_, effects) = *result;
-                                            let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
+                                            let new_version = effects.effects().mutated.iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()
                                             }).map(|x| x.0).unwrap();
                                             NextOp::Response(Some((
                                                 start,
-                                                payload.make_new_payload(new_version, effects.effects.gas_object.0),
+                                                payload.make_new_payload(new_version, effects.effects().gas_object.0),
                                             )))
                                         }
                                         Ok(resp) => {

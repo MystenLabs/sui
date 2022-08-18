@@ -1378,7 +1378,7 @@ impl SuiCertifiedTransactionEffects {
     ) -> Result<Self, anyhow::Error> {
         Ok(Self {
             transaction_effects_digest: *cert.digest(),
-            effects: SuiTransactionEffects::try_from(cert.effects, resolver)?,
+            effects: SuiTransactionEffects::try_from(cert.data().clone(), resolver)?,
             auth_sign_info: cert.auth_signature,
         })
     }

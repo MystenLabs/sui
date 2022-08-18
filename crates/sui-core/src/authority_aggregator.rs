@@ -379,8 +379,8 @@ where
                 .signed_effects
                 .ok_or(SuiError::AuthorityInformationUnavailable)?;
 
-            trace!(tx_digest = ?cert_digest, dependencies =? &signed_effects.effects.dependencies, "Got dependencies from source");
-            for returned_digest in &signed_effects.effects.dependencies {
+            trace!(tx_digest = ?cert_digest, dependencies =? &signed_effects.effects().dependencies, "Got dependencies from source");
+            for returned_digest in &signed_effects.effects().dependencies {
                 trace!(tx_digest =? returned_digest, "Found parent of missing cert");
 
                 let inner_transaction_info = source_client
@@ -1511,7 +1511,7 @@ where
                                     .entry(*inner_effects.digest())
                                     .or_insert(EffectsStakeInfo {
                                         stake: 0,
-                                        effects: inner_effects.effects,
+                                        effects: inner_effects.effects().clone(),
                                         signatures: vec![],
                                     });
                                 entry.stake += weight;
@@ -1572,7 +1572,11 @@ where
                     good_stake = stake,
                     "Found an effect with good stake over threshold"
                 );
-                return CertifiedTransactionEffects::new(effects, signatures, &self.committee);
+                return CertifiedTransactionEffects::new(
+                    UnsignedTransactionEffects::new(effects),
+                    signatures,
+                    &self.committee,
+                );
             }
         }
 
@@ -1628,7 +1632,7 @@ where
                 // If we have less stake telling us about the latest state of an object
                 // we re-run the certificate on all authorities to ensure it is correct.
                 if let Ok(effects) = self.process_certificate(cert_map[&tx_digest].clone()).await {
-                    if effects.effects.is_object_mutated_here(obj_ref) {
+                    if effects.effects().is_object_mutated_here(obj_ref) {
                         is_ok = true;
                     } else {
                         // TODO: Throw a byzantine fault here

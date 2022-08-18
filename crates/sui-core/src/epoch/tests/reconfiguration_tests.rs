@@ -16,7 +16,8 @@ use sui_types::{
     error::SuiError,
     gas::SuiGasStatus,
     messages::{
-        AuthenticatedEpoch, InputObjects, SignatureAggregator, Transaction, TransactionData,
+        AuthenticatedEpoch, InputObjects, SignatureAggregator, SignedTransactionEffects,
+        Transaction, TransactionData,
     },
     object::Object,
     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -155,7 +156,7 @@ async fn test_start_epoch_change() {
         SuiGasStatus::new_with_budget(1000, 1, 1),
         state.epoch(),
     );
-    let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);
+    let signed_effects = SignedTransactionEffects::new(0, effects, &*state.secret, state.name);
     assert_eq!(
         state
             .commit_certificate(inner_temporary_store, &certificate, &signed_effects)

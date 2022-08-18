@@ -63,7 +63,7 @@ async fn pending_exec_storage_notify() {
 
             // Check whether this is a success?
             assert!(matches!(
-                effects.effects.status,
+                effects.effects().status,
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());
@@ -150,7 +150,7 @@ async fn pending_exec_full() {
 
             // Check whether this is a success?
             assert!(matches!(
-                effects.effects.status,
+                effects.effects().status,
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());

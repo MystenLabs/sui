@@ -15,6 +15,7 @@ use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::error::SuiResult;
+use sui_types::message_envelope::Message;
 use sui_types::messages::{Transaction, TransactionEffects, TransactionInfoResponse};
 use sui_types::object::{Object, Owner};
 use tracing::debug;
@@ -222,7 +223,7 @@ pub async fn submit_shared_object_transaction(
 pub fn get_unique_effects(replies: Vec<TransactionInfoResponse>) -> TransactionEffects {
     let mut all_effects = HashMap::new();
     for reply in replies {
-        let effects = reply.signed_effects.unwrap().effects;
+        let effects = reply.signed_effects.unwrap().effects().clone();
         all_effects.insert(effects.digest(), effects);
     }
     assert_eq!(all_effects.len(), 1);

@@ -279,7 +279,7 @@ export function getExecutionStatusType(
 export function getExecutionStatus(
   data: SuiTransactionResponse
 ): ExecutionStatus {
-  return data.effects.status;
+  return data.effects().status;
 }
 
 export function getExecutionStatusError(
@@ -291,7 +291,7 @@ export function getExecutionStatusError(
 export function getExecutionStatusGasSummary(
   data: SuiTransactionResponse
 ): GasCostSummary {
-  return data.effects.gasUsed;
+  return data.effects().gasUsed;
 }
 
 export function getTotalGasUsed(data: SuiTransactionResponse): number {

@@ -62,9 +62,9 @@ pub async fn transfer_sui_for_testing(
     .map(move |res| match res {
         Ok(ExecuteTransactionResponse::EffectsCert(result)) => {
             let (_, effects) = *result;
-            let minted = effects.effects.created.get(0).unwrap().0;
+            let minted = effects.effects().created.get(0).unwrap().0;
             let updated = effects
-                .effects
+                .effects()
                 .mutated
                 .iter()
                 .find(|(k, _)| k.0 == gas.0 .0)
@@ -110,7 +110,7 @@ pub async fn submit_transaction(
         .unwrap()
     {
         let (_, effects) = *result;
-        Some(effects.effects)
+        Some(effects.effects().clone())
     } else {
         None
     }

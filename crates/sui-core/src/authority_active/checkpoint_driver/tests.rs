@@ -10,7 +10,7 @@ use crate::{
 
 use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
-use sui_types::messages::ExecutionStatus;
+use sui_types::{message_envelope::Message, messages::ExecutionStatus};
 
 use crate::checkpoints::checkpoint_tests::checkpoint_tests_setup;
 
@@ -53,11 +53,11 @@ async fn checkpoint_active_flow_happy_path() {
 
             // Check whether this is a success?
             assert!(matches!(
-                effects.effects.status,
+                effects.effects().status,
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());
-            println!("Effects: {:?}", effects.effects.digest());
+            println!("Effects: {:?}", effects.effects().digest());
 
             // Add some delay between transactions
             tokio::time::sleep(Duration::from_secs(27)).await;
@@ -151,7 +151,7 @@ async fn checkpoint_active_flow_crash_client_with_gossip() {
 
             // Check whether this is a success?
             assert!(matches!(
-                _response.signed_effects.unwrap().effects.status,
+                _response.signed_effects.unwrap().effects().status,
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());
@@ -248,7 +248,7 @@ async fn checkpoint_active_flow_crash_client_no_gossip() {
 
             // Check whether this is a success?
             assert!(matches!(
-                _response.signed_effects.unwrap().effects.status,
+                _response.signed_effects.unwrap().effects().status,
                 ExecutionStatus::Success { .. }
             ));
             println!("Execute at {:?}", tokio::time::Instant::now());

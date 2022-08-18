@@ -9,6 +9,7 @@ use std::{
 use sui_types::{
     base_types::{ExecutionDigests, TransactionDigest},
     error::{SuiError, SuiResult},
+    message_envelope::Message,
     messages::TransactionEffects,
 };
 use typed_store::Map;
@@ -187,7 +188,7 @@ impl EffectsStore for Arc<AuthorityStore> {
             .effects
             .multi_get(transactions.map(|d| d.transaction))?
             .into_iter()
-            .map(|item| item.map(|x| x.effects))
+            .map(|item| item.map(|x| x.effects().clone()))
             .collect())
     }
 }
@@ -238,6 +239,7 @@ mod tests {
     use sui_types::{
         base_types::{ExecutionDigests, ObjectDigest, ObjectID, SequenceNumber, TransactionDigest},
         gas::GasCostSummary,
+        message_envelope::Message,
         messages::{ExecutionStatus, TransactionEffects},
         object::Owner,
         utils::make_committee_key,

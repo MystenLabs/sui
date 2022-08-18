@@ -443,7 +443,7 @@ impl AuthorityState {
         let digest = *certificate.digest();
         debug!(?digest, "handle_node_sync_transaction");
         fp_ensure!(
-            signed_effects.effects.transaction_digest == digest,
+            signed_effects.effects().transaction_digest == digest,
             SuiError::ErrorWhileProcessingConfirmationTransaction {
                 err: "effects/tx digest mismatch".to_string()
             }
@@ -454,7 +454,7 @@ impl AuthorityState {
         if certificate.contains_shared_object() {
             self.database.acquire_shared_locks_from_effects(
                 &certificate,
-                &signed_effects.effects,
+                &signed_effects.effects().clone(),
                 &tx_guard,
             )?;
         }
@@ -611,7 +611,7 @@ impl AuthorityState {
             };
 
         let input_object_count = inner_temporary_store.objects.len();
-        let shared_object_count = signed_effects.effects.shared_objects.len();
+        let shared_object_count = signed_effects.effects().shared_objects.len();
 
         // If commit_certificate returns an error, tx_guard will be dropped and the certificate
         // will be persisted in the log for later recovery.
@@ -700,7 +700,8 @@ impl AuthorityState {
             );
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
-        let signed_effects = effects.to_sign_effects(self.epoch(), &self.name, &*self.secret);
+        let signed_effects =
+            SignedTransactionEffects::new(self.epoch(), effects, &*self.secret, self.name);
 
         Ok((inner_temp_store, signed_effects))
     }
@@ -733,7 +734,7 @@ impl AuthorityState {
                 .input_objects()?
                 .iter()
                 .map(|o| o.object_id()),
-            effects.effects.all_mutated(),
+            effects.effects().all_mutated(),
             cert.data()
                 .data
                 .move_calls()?
@@ -777,12 +778,17 @@ impl AuthorityState {
             let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);
 
             event_handler
-                .process_events(&effects.effects, timestamp_ms, seq, checkpoint_num)
+                .process_events(
+                    &effects.effects().clone(),
+                    timestamp_ms,
+                    seq,
+                    checkpoint_num,
+                )
                 .await?;
 
             self.metrics
                 .total_events
-                .inc_by(effects.effects.events.len() as u64);
+                .inc_by(effects.effects().events.len() as u64);
         }
 
         Ok(())

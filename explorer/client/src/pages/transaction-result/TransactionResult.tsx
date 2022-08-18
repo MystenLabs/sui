@@ -117,7 +117,7 @@ const transformTransactionResponse = (
         loadState: 'loaded',
         mutated: getCreatedOrMutatedData(txObj.effects, 'mutated'),
         created: getCreatedOrMutatedData(txObj.effects, 'created'),
-        events: txObj.effects.events,
+        events: txObj.effects().events,
         timestamp_ms: txObj.timestamp_ms,
     };
 };

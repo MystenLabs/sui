@@ -49,7 +49,7 @@ async fn test_execute_transaction_immediate() {
     let handle = tokio::task::spawn(async move {
         let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
         assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.effects.transaction_digest, digest);
+        assert_eq!(effects.effects().transaction_digest, digest);
     });
     assert!(matches!(
         quorum_driver
@@ -76,7 +76,7 @@ async fn test_execute_transaction_wait_for_cert() {
     let handle = tokio::task::spawn(async move {
         let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
         assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.effects.transaction_digest, digest);
+        assert_eq!(effects.effects().transaction_digest, digest);
     });
     if let ExecuteTransactionResponse::TxCert(cert) = quorum_driver
         .execute_transaction(ExecuteTransactionRequest {
@@ -105,7 +105,7 @@ async fn test_execute_transaction_wait_for_effects() {
     let handle = tokio::task::spawn(async move {
         let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
         assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.effects.transaction_digest, digest);
+        assert_eq!(effects.effects().transaction_digest, digest);
     });
     if let ExecuteTransactionResponse::EffectsCert(result) = quorum_driver
         .execute_transaction(ExecuteTransactionRequest {
@@ -117,7 +117,7 @@ async fn test_execute_transaction_wait_for_effects() {
     {
         let (cert, effects) = *result;
         assert_eq!(*cert.digest(), digest);
-        assert_eq!(effects.effects.transaction_digest, digest);
+        assert_eq!(effects.effects().transaction_digest, digest);
     } else {
         unreachable!();
     }

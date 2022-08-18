@@ -28,7 +28,6 @@ use move_core_types::{
     value::MoveStructLayout,
 };
 use name_variant::NamedVariant;
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
@@ -1249,30 +1248,6 @@ impl TransactionEffects {
         }
         false
     }
-
-    pub fn to_sign_effects(
-        self,
-        epoch: EpochId,
-        authority_name: &AuthorityName,
-        secret: &dyn signature::Signer<AuthoritySignature>,
-    ) -> SignedTransactionEffects {
-        let signature = AuthoritySignature::new(&self, secret);
-        let transaction_effects_digest = OnceCell::from(self.digest());
-
-        SignedTransactionEffects {
-            transaction_effects_digest,
-            effects: self,
-            auth_signature: AuthoritySignInfo {
-                epoch,
-                authority: *authority_name,
-                signature,
-            },
-        }
-    }
-
-    pub fn digest(&self) -> TransactionEffectsDigest {
-        TransactionEffectsDigest(sha3_hash(self))
-    }
 }
 
 impl Display for TransactionEffects {
@@ -1313,64 +1288,33 @@ impl Display for TransactionEffects {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct TransactionEffectsEnvelope<S> {
-    // This is a cache of an otherwise expensive to compute value.
-    // DO NOT serialize or deserialize from the network or disk.
-    #[serde(skip)]
-    transaction_effects_digest: OnceCell<TransactionEffectsDigest>,
+pub type TransactionEffectsEnvelope<S> = Envelope<TransactionEffects, S>;
 
-    pub effects: TransactionEffects,
-    pub auth_signature: S,
+impl Message for TransactionEffects {
+    type DigestType = TransactionEffectsDigest;
+
+    fn digest(&self) -> Self::DigestType {
+        TransactionEffectsDigest(sha3_hash(self))
+    }
+
+    fn verify(&self) -> SuiResult {
+        Ok(())
+    }
+
+    fn add_to_verification_obligation(&self, _: &mut VerificationObligation) -> SuiResult<()> {
+        Ok(())
+    }
 }
 
-impl<S> TransactionEffectsEnvelope<S> {
-    pub fn digest(&self) -> &TransactionEffectsDigest {
-        self.transaction_effects_digest
-            .get_or_init(|| self.effects.digest())
+impl<S: AuthoritySignInfoTrait> TransactionEffectsEnvelope<S> {
+    pub fn effects(&self) -> &TransactionEffects {
+        self.data()
     }
 }
 
 pub type UnsignedTransactionEffects = TransactionEffectsEnvelope<EmptySignInfo>;
 pub type SignedTransactionEffects = TransactionEffectsEnvelope<AuthoritySignInfo>;
-
-impl SignedTransactionEffects {
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.auth_signature.verify(&self.effects, committee)
-    }
-}
-
-impl PartialEq for SignedTransactionEffects {
-    fn eq(&self, other: &Self) -> bool {
-        self.effects == other.effects && self.auth_signature == other.auth_signature
-    }
-}
-
 pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStrongQuorumSignInfo>;
-
-impl CertifiedTransactionEffects {
-    pub fn new(
-        effects: TransactionEffects,
-        signatures: Vec<(AuthorityName, AuthoritySignature)>,
-        committee: &Committee,
-    ) -> SuiResult<Self> {
-        Ok(Self {
-            transaction_effects_digest: OnceCell::from(effects.digest()),
-            effects,
-            auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                signatures, committee,
-            )?,
-        })
-    }
-
-    pub fn to_unsigned_effects(self) -> UnsignedTransactionEffects {
-        UnsignedTransactionEffects {
-            transaction_effects_digest: self.transaction_effects_digest,
-            effects: self.effects,
-            auth_signature: EmptySignInfo {},
-        }
-    }
-}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum InputObjectKind {

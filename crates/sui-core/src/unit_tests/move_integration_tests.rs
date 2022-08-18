@@ -496,7 +496,8 @@ async fn build_and_publish_test_package(
     .await
     .signed_effects
     .unwrap()
-    .effects;
+    .effects()
+    .clone();
     assert!(
         matches!(effects.status, ExecutionStatus::Success { .. }),
         "{:?}",

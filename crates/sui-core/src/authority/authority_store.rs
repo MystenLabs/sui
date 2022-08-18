@@ -143,7 +143,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de> + AuthoritySignInfoTr
         self.tables
             .effects
             .get(transaction_digest)?
-            .map(|data| data.effects)
+            .map(|data| data.effects().clone())
             .ok_or(SuiError::TransactionNotFound {
                 digest: *transaction_digest,
             })
@@ -670,10 +670,10 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de> + AuthoritySignInfoTr
         for (_, object) in mutated_objects {
             temporary_store.write_object(object);
         }
-        for obj_ref in &effects.effects.deleted {
+        for obj_ref in &effects.effects().deleted {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
         }
-        for obj_ref in &effects.effects.wrapped {
+        for obj_ref in &effects.effects().wrapped {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
         }
 

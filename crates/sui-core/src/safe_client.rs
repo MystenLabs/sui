@@ -245,7 +245,7 @@ impl<C> SafeClient<C> {
             );
             // Checks it concerns the right tx
             fp_ensure!(
-                signed_effects.effects.transaction_digest == *digest,
+                signed_effects.effects().transaction_digest == *digest,
                 SuiError::ByzantineAuthoritySuspicion {
                     authority: self.address,
                     reason: "Unexpected tx digest in the signed effects".to_string()

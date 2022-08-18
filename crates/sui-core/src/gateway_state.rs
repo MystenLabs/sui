@@ -625,13 +625,13 @@ where
 
         debug!(
             tx_digest = ?tx_digest,
-            ?effects.effects,
+            effects = ?effects.effects().clone(),
             "Transaction completed successfully"
         );
 
         // Download the latest content of every mutated object from the authorities.
         let mutated_object_refs: BTreeSet<_> = effects
-            .effects
+            .effects()
             .all_mutated()
             .map(|(obj_ref, _)| *obj_ref)
             .collect();
@@ -647,7 +647,7 @@ where
                 mutated_objects,
                 new_certificate.clone(),
                 seq,
-                effects.clone().to_unsigned_effects(),
+                UnsignedTransactionEffects::from_signed(effects.clone()),
                 effects.digest(),
             )
             .await?;
@@ -727,7 +727,7 @@ where
             .execute_transaction_impl_inner(input_objects, transaction)
             .await
             .tap_ok(|(_, effects)| {
-                if effects.effects.shared_objects.len() > 1 {
+                if effects.effects().shared_objects.len() > 1 {
                     self.metrics.shared_obj_tx.inc();
                 }
             });
@@ -1267,7 +1267,7 @@ where
 
                 // Okay to unwrap() since we checked that this is Ok
                 let (certificate, effects) = res.unwrap();
-                let effects = effects.effects;
+                let effects = effects.effects().clone();
 
                 debug!(?tx_digest, "Transaction succeeded");
                 (certificate, effects)

@@ -200,7 +200,7 @@ pub async fn init_configurable_authorities(
     Vec<ExecutionDigests>,
 ) {
     use narwhal_crypto::traits::KeyPair;
-    use sui_types::crypto::AccountKeyPair;
+    use sui_types::{crypto::AccountKeyPair, message_envelope::Message};
 
     use crate::safe_client::SafeClientMetrics;
 
