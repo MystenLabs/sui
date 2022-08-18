@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 
 import { ReactComponent as PreviewMediaIcon } from '../../../assets/SVGIcons/preview-media.svg';
 import DisplayBox from '../../../components/displaybox/DisplayBox';
@@ -64,6 +65,8 @@ function TokenView({ data }: { data: DataType }) {
         setImageFullScreen(true);
     }, []);
 
+    const href = `/objects/${viewedData.package}?module=${viewedData.module}`;
+
     return (
         <div>
             <div className={styles.descimagecontainer}>
@@ -73,7 +76,19 @@ function TokenView({ data }: { data: DataType }) {
                         <tbody>
                             <tr>
                                 <td>Type</td>
-                                <td>{trimStdLibPrefix(viewedData.objType)}</td>
+                                {viewedData.package && viewedData.module ? (
+                                    <td>
+                                        <Link to={href}>
+                                            {trimStdLibPrefix(
+                                                viewedData.objType
+                                            )}
+                                        </Link>
+                                    </td>
+                                ) : (
+                                    <td>
+                                        {trimStdLibPrefix(viewedData.objType)}
+                                    </td>
+                                )}
                             </tr>
                             {viewedData.tx_digest && (
                                 <tr>
