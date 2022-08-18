@@ -611,7 +611,7 @@ impl CheckpointFragment {
 
 #[cfg(test)]
 mod tests {
-    use narwhal_crypto::traits::KeyPair;
+    use fastcrypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
     use std::collections::BTreeSet;

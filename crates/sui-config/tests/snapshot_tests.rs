@@ -19,9 +19,9 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 
+use fastcrypto::traits::KeyPair;
 use insta::assert_yaml_snapshot;
 use multiaddr::Multiaddr;
-use narwhal_crypto::traits::KeyPair;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};

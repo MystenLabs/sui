@@ -7,19 +7,19 @@ use std::str::FromStr;
 use anyhow::Error;
 use base64ct::Encoding;
 use digest::Digest;
-use narwhal_crypto::ed25519::{
+use fastcrypto::ed25519::{
     Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
     Ed25519Signature,
 };
-use narwhal_crypto::secp256k1::{
+use fastcrypto::secp256k1::{
     Secp256k1KeyPair, Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1Signature,
 };
-pub use narwhal_crypto::traits::KeyPair as KeypairTraits;
-pub use narwhal_crypto::traits::{
+pub use fastcrypto::traits::KeyPair as KeypairTraits;
+pub use fastcrypto::traits::{
     AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
     VerifyingKey,
 };
-use narwhal_crypto::Verifier;
+use fastcrypto::Verifier;
 use rand::rngs::OsRng;
 use roaring::RoaringBitmap;
 use schemars::JsonSchema;

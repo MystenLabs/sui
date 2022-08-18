@@ -1,5 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use fastcrypto::{
+    bls12381::{BLS12381PublicKey, BLS12381Signature},
+    secp256k1::Secp256k1Signature,
+    traits::ToFromBytes,
+    Verifier,
+};
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
@@ -9,7 +15,6 @@ use move_vm_types::{
     pop_arg,
     values::Value,
 };
-use narwhal_crypto::{traits::ToFromBytes, Verifier};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -29,7 +34,7 @@ pub fn ecrecover(
     let signature = pop_arg!(args, Vec<u8>);
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
-    match <narwhal_crypto::secp256k1::Secp256k1Signature as ToFromBytes>::from_bytes(&signature) {
+    match <Secp256k1Signature as ToFromBytes>::from_bytes(&signature) {
         Ok(signature) => match signature.recover(&hashed_msg) {
             Ok(pubkey) => Ok(NativeResult::ok(
                 cost,
@@ -80,16 +85,12 @@ pub fn bls12381_verify_g1_sig(
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
     let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
 
-    let signature = match <narwhal_crypto::bls12381::BLS12381Signature as ToFromBytes>::from_bytes(
-        &signature_bytes,
-    ) {
+    let signature = match <BLS12381Signature as ToFromBytes>::from_bytes(&signature_bytes) {
         Ok(signature) => signature,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    let public_key = match <narwhal_crypto::bls12381::BLS12381PublicKey as ToFromBytes>::from_bytes(
-        &public_key_bytes,
-    ) {
+    let public_key = match <BLS12381PublicKey as ToFromBytes>::from_bytes(&public_key_bytes) {
         Ok(public_key) => public_key,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };

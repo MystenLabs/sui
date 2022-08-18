@@ -284,7 +284,7 @@ impl Display for Committee {
 mod test {
     use super::*;
     use crate::crypto::{get_key_pair, AuthorityKeyPair};
-    use narwhal_crypto::traits::KeyPair;
+    use fastcrypto::traits::KeyPair;
 
     #[test]
     fn test_shuffle_by_weight() {
