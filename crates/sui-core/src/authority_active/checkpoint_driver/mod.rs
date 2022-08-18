@@ -828,7 +828,7 @@ where
 {
     let mut diff_certs: BTreeMap<ExecutionDigests, CertifiedTransaction> = BTreeMap::new();
 
-    // These are the trasnactions that we have that the other validator does not
+    // These are the transactions that we have that the other validator does not
     // have, so we can read them from our local database.
     for tx_digest in &fragment.diff.second.items {
         let cert = active_authority
