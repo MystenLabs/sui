@@ -399,7 +399,7 @@ impl AuthorityState {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.signed_data.data.kind);
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
