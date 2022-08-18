@@ -25,7 +25,7 @@ use sui_types::{coin, fp_ensure, SUI_FRAMEWORK_OBJECT_ID};
 
 use crate::ReadApi;
 
-pub struct TransactionBuilder(pub(crate) Arc<dyn ReadApi + Sync + Send>);
+pub struct TransactionBuilder(pub(crate) Arc<ReadApi>);
 
 impl TransactionBuilder {
     async fn select_gas(

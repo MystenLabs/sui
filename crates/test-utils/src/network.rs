@@ -165,7 +165,7 @@ pub async fn start_rpc_test_network_with_fullnode(
         .save()?;
 
     let http_client = HttpClientBuilder::default().build(rpc_url.clone())?;
-    let gateway_client = SuiClient::new_rpc_client(&rpc_url, None, true).await?;
+    let gateway_client = SuiClient::new_rpc_client(&rpc_url, None).await?;
     Ok(TestNetwork {
         network,
         _rpc_server: rpc_server_handle,

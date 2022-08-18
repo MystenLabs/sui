@@ -6,16 +6,13 @@ use std::fmt::{Display, Formatter};
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use async_trait::async_trait;
 use futures::StreamExt;
 use futures_core::Stream;
 use jsonrpsee::core::client::Subscription;
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
-use move_bytecode_utils::module_cache::SyncModuleCache;
 use serde::Deserialize;
 use serde::Serialize;
-use tokio::sync::RwLock;
 
 use rpc_types::SuiExecuteTransactionResponse;
 pub use sui_config::gateway;
@@ -39,22 +36,18 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::Transaction;
 use types::messages::ExecuteTransactionRequestType;
 
-// re-export essential sui crates
-use crate::cached_client::{CachedQuorumDriver, CachedReadApi};
-use crate::client_state::{ClientCache, ResolverWrapper};
 use crate::transaction_builder::TransactionBuilder;
 
-mod cached_client;
-mod client_state;
+// re-export essential sui crates
 pub mod crypto;
 mod transaction_builder;
 
 pub struct SuiClient {
     transaction_builder: TransactionBuilder,
-    read_api: Arc<dyn ReadApi + Send + Sync>,
+    read_api: Arc<ReadApi>,
     full_node_api: FullNodeApi,
     event_api: EventApi,
-    quorum_driver: Box<dyn QuorumDriver + Sync + Send>,
+    quorum_driver: QuorumDriver,
     wallet_sync_api: WalletSyncApi,
 }
 
@@ -68,7 +61,6 @@ impl SuiClient {
     pub async fn new_rpc_client(
         http_url: &str,
         ws_url: Option<&str>,
-        cached: bool,
     ) -> Result<SuiClient, anyhow::Error> {
         let client = HttpClientBuilder::default().build(http_url)?;
         let ws_client = if let Some(url) = ws_url {
@@ -76,11 +68,7 @@ impl SuiClient {
         } else {
             None
         };
-        Ok(if cached {
-            SuiClient::new_cached(SuiClientApi::Rpc(client, ws_client))
-        } else {
-            SuiClient::new(SuiClientApi::Rpc(client, ws_client))
-        })
+        Ok(SuiClient::new(SuiClientApi::Rpc(client, ws_client)))
     }
 
     pub fn new_embedded_client(config: &GatewayConfig) -> Result<SuiClient, anyhow::Error> {
@@ -90,37 +78,8 @@ impl SuiClient {
 
     fn new(api: SuiClientApi) -> Self {
         let api = Arc::new(api);
-        let read_api = Arc::new(ReadApiImpl { api: api.clone() });
-        let quorum_driver = Box::new(QuorumDriverImpl { api: api.clone() });
-
-        let full_node_api = FullNodeApi(api.clone());
-        let event_api = EventApi(api.clone());
-        let transaction_builder = TransactionBuilder(read_api.clone());
-        let wallet_sync_api = WalletSyncApi(api);
-
-        SuiClient {
-            transaction_builder,
-            read_api,
-            full_node_api,
-            event_api,
-            quorum_driver,
-            wallet_sync_api,
-        }
-    }
-
-    fn new_cached(api: SuiClientApi) -> Self {
-        let api = Arc::new(api);
-        let state = Arc::new(RwLock::new(ClientCache::default()));
-        let read_api = Arc::new(CachedReadApi {
-            read_api: ReadApiImpl { api: api.clone() },
-            state: state.clone(),
-            module_cache: SyncModuleCache::new(ResolverWrapper(state.clone())),
-        });
-
-        let quorum_driver = Box::new(CachedQuorumDriver {
-            quorum_driver: QuorumDriverImpl { api: api.clone() },
-            state,
-        });
+        let read_api = Arc::new(ReadApi { api: api.clone() });
+        let quorum_driver = QuorumDriver { api: api.clone() };
 
         let full_node_api = FullNodeApi(api.clone());
         let event_api = EventApi(api.clone());
@@ -138,48 +97,12 @@ impl SuiClient {
     }
 }
 
-#[async_trait]
-pub trait ReadApi {
-    async fn get_objects_owned_by_address(
-        &self,
-        address: SuiAddress,
-    ) -> anyhow::Result<Vec<SuiObjectInfo>>;
-
-    async fn get_objects_owned_by_object(
-        &self,
-        object_id: ObjectID,
-    ) -> anyhow::Result<Vec<SuiObjectInfo>>;
-
-    async fn get_parsed_object(&self, object_id: ObjectID)
-        -> anyhow::Result<GetObjectDataResponse>;
-
-    async fn get_object(&self, object_id: ObjectID) -> anyhow::Result<GetRawObjectDataResponse>;
-
-    async fn get_total_transaction_number(&self) -> anyhow::Result<u64>;
-    async fn get_transactions_in_range(
-        &self,
-        start: GatewayTxSeqNumber,
-        end: GatewayTxSeqNumber,
-    ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
-
-    async fn get_recent_transactions(
-        &self,
-        count: u64,
-    ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
-
-    async fn get_transaction(
-        &self,
-        digest: TransactionDigest,
-    ) -> anyhow::Result<SuiTransactionResponse>;
-}
-
-pub struct ReadApiImpl {
+pub struct ReadApi {
     api: Arc<SuiClientApi>,
 }
 
-#[async_trait]
-impl ReadApi for ReadApiImpl {
-    async fn get_objects_owned_by_address(
+impl ReadApi {
+    pub async fn get_objects_owned_by_address(
         &self,
         address: SuiAddress,
     ) -> anyhow::Result<Vec<SuiObjectInfo>> {
@@ -189,7 +112,7 @@ impl ReadApi for ReadApiImpl {
         })
     }
 
-    async fn get_objects_owned_by_object(
+    pub async fn get_objects_owned_by_object(
         &self,
         object_id: ObjectID,
     ) -> anyhow::Result<Vec<SuiObjectInfo>> {
@@ -199,7 +122,7 @@ impl ReadApi for ReadApiImpl {
         })
     }
 
-    async fn get_parsed_object(
+    pub async fn get_parsed_object(
         &self,
         object_id: ObjectID,
     ) -> anyhow::Result<GetObjectDataResponse> {
@@ -209,21 +132,24 @@ impl ReadApi for ReadApiImpl {
         })
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> anyhow::Result<GetRawObjectDataResponse> {
+    pub async fn get_object(
+        &self,
+        object_id: ObjectID,
+    ) -> anyhow::Result<GetRawObjectDataResponse> {
         Ok(match &*self.api {
             SuiClientApi::Rpc(c, _) => c.get_raw_object(object_id).await?,
             SuiClientApi::Embedded(c) => c.get_raw_object(object_id).await?,
         })
     }
 
-    async fn get_total_transaction_number(&self) -> anyhow::Result<u64> {
+    pub async fn get_total_transaction_number(&self) -> anyhow::Result<u64> {
         Ok(match &*self.api {
             SuiClientApi::Rpc(c, _) => c.get_total_transaction_number().await?,
             SuiClientApi::Embedded(c) => c.get_total_transaction_number()?,
         })
     }
 
-    async fn get_transactions_in_range(
+    pub async fn get_transactions_in_range(
         &self,
         start: GatewayTxSeqNumber,
         end: GatewayTxSeqNumber,
@@ -234,7 +160,7 @@ impl ReadApi for ReadApiImpl {
         })
     }
 
-    async fn get_recent_transactions(
+    pub async fn get_recent_transactions(
         &self,
         count: u64,
     ) -> anyhow::Result<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
@@ -244,7 +170,7 @@ impl ReadApi for ReadApiImpl {
         })
     }
 
-    async fn get_transaction(
+    pub async fn get_transaction(
         &self,
         digest: TransactionDigest,
     ) -> anyhow::Result<SuiTransactionResponse> {
@@ -343,23 +269,15 @@ impl EventApi {
         }
     }
 }
-#[async_trait]
-pub trait QuorumDriver {
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<SuiTransactionResponse>;
-    async fn execute_transaction_by_fullnode(
-        &self,
-        tx: Transaction,
-        request_type: ExecuteTransactionRequestType,
-    ) -> anyhow::Result<SuiExecuteTransactionResponse>;
-}
-
-pub struct QuorumDriverImpl {
+pub struct QuorumDriver {
     api: Arc<SuiClientApi>,
 }
 
-#[async_trait]
-impl QuorumDriver for QuorumDriverImpl {
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<SuiTransactionResponse> {
+impl QuorumDriver {
+    pub async fn execute_transaction(
+        &self,
+        tx: Transaction,
+    ) -> anyhow::Result<SuiTransactionResponse> {
         Ok(match &*self.api {
             SuiClientApi::Rpc(c, _) => {
                 let (tx_bytes, flag, signature, pub_key) = tx.to_network_data_for_execution();
@@ -370,7 +288,7 @@ impl QuorumDriver for QuorumDriverImpl {
         })
     }
 
-    async fn execute_transaction_by_fullnode(
+    pub async fn execute_transaction_by_fullnode(
         &self,
         tx: Transaction,
         request_type: ExecuteTransactionRequestType,
@@ -410,8 +328,8 @@ impl SuiClient {
     pub fn transaction_builder(&self) -> &TransactionBuilder {
         &self.transaction_builder
     }
-    pub fn read_api(&self) -> &(dyn ReadApi + Sync + Send) {
-        &*self.read_api
+    pub fn read_api(&self) -> &ReadApi {
+        &self.read_api
     }
     pub fn full_node_api(&self) -> &FullNodeApi {
         &self.full_node_api
@@ -419,8 +337,8 @@ impl SuiClient {
     pub fn event_api(&self) -> &EventApi {
         &self.event_api
     }
-    pub fn quorum_driver(&self) -> &(dyn QuorumDriver + Sync + Send) {
-        &*self.quorum_driver
+    pub fn quorum_driver(&self) -> &QuorumDriver {
+        &self.quorum_driver
     }
     pub fn wallet_sync_api(&self) -> &WalletSyncApi {
         &self.wallet_sync_api
@@ -471,7 +389,7 @@ impl ClientType {
         Ok(match self {
             ClientType::Embedded(config) => SuiClient::new_embedded_client(config)?,
             ClientType::RPC(url, ws_url) => {
-                SuiClient::new_rpc_client(url, ws_url.as_deref(), true).await?
+                SuiClient::new_rpc_client(url, ws_url.as_deref()).await?
             }
         })
     }
