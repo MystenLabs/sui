@@ -13,7 +13,7 @@ bcs = "0.1.3"
 linked-hash-map = "0.5.6"
 smallvec = "1.9.0"
 num_enum = "0.5.7"
-once_cell = "1.11.0"
+once_cell = "1.13.1"
 sha3 = "0.10.1"
 
 sui-types = { path = "../sui-types" }
@@ -31,7 +31,7 @@ move-stdlib = { git = "https://github.com/move-language/move", rev = "7907152852
 move-unit-test = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "e54611ee0387735b1963eecfc4fdc120ee8ac509", package = "crypto" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ded6f91c9c19594a3eaeaa9a487d42a39965569e" }
 workspace-hack = { path = "../workspace-hack"}
 
 [build-dependencies]

@@ -5,8 +5,8 @@
 use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 
-use narwhal_crypto::traits::AggregateAuthenticator;
-use narwhal_crypto::traits::KeyPair;
+use fastcrypto::traits::AggregateAuthenticator;
+use fastcrypto::traits::KeyPair;
 use roaring::RoaringBitmap;
 
 use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};

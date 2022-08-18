@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use narwhal_crypto::secp256k1::Secp256k1KeyPair;
+use fastcrypto::secp256k1::Secp256k1KeyPair;
 
 use crate::crypto::AccountKeyPair;
 use crate::crypto::SuiSignature;

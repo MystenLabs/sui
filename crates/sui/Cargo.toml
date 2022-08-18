@@ -39,7 +39,7 @@ rocksdb = "0.19.0"
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"}
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"} 
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "e54611ee0387735b1963eecfc4fdc120ee8ac509", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "ad05db4c5d6f851402efc7d2b285e9b59d513e64", package = "executor" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 move-prover = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
