@@ -72,39 +72,6 @@ At the end of the `add_child` call, we have the following ownership relationship
 1. Sender address (still) owns a `Parent` object.
 2. The `Parent` object owns a `Child` object.
 
-#### transfer_to_object_id
-In the above example, `Parent` has an optional child field. What if the field is not optional? We must construct `Parent` with a `ID`. However, in order to have a valid `ID`, we have to transfer the child object to the parent object first. This creates a somewhat paradoxical situation. We cannot create the parent unless we have a valid `ID`, and we cannot have a valid `ID` unless we already have the parent object. To solve this problem, we can use a different API that allows you to transfer an object to an object ID, instead of to the object itself:
-```rust
-public fun transfer_to_object_id<T: key>(
-    obj: T,
-    owner_id: &mut UID,
-);
-```
-To use this API, we don't need to create a parent object yet; we need only the `UID` of the parent object, which can be created in advance through `object::new(ctx)`. The function requires a mutable reference to the parent `UID` for two reasons. (1) it prevents children from being added to immutable objects (more on that later). (2) it gives the module that defines the parent object more control. Namely, it can expose a function to get an immutable reference to the `&UID` without worrying about external caller adding child objects.
-
-Let's see how this is used in action. First we define another object type that has a non-optional child field:
-```rust
-struct AnotherParent has key {
-    id: UID,
-    child: ID,
-}
-```
-And let's see how we define the API to create `AnotherParent` instance:
-```rust
-public entry fun create_another_parent(child: Child, ctx: &mut TxContext) {
-    let id = object::new(ctx);
-    let child_id = object::id(&child);
-    transfer::transfer_to_object_id(child, &mut id);
-    let parent = AnotherParent {
-        id,
-        child: child_id,
-    };
-    transfer::transfer(parent, tx_context::sender(ctx));
-}
-```
-In the above function, we need to first create the ID of the new parent object. With the ID, we can then transfer the child object to it by calling `transfer_to_object_id`, thereby obtaining a reference `child_ref`. With both `id` and `child_ref`, we can create an object of `AnotherParent`, which we would eventually transfer to the sender's address.
-
-> :bulb: If we wanted to ensure that the `ID` in the `child` field of `Parent` or `AnotherParent` actually referred to an object of type `Child`, we could use `TypedID` which is defined in the [typed_id module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/typed_id.move)
 
 ### Use Child Objects
 We have explained in the first chapter that, in order to use an owned object, the object owner must be the transaction sender. What about objects owned by objects? We require that the object's owner object must also be passed as an argument in the Move call. For example, if object A owns object B, and object B owns object C, to be able to use C when calling a Move entry function, one must also pass B as an argument; and since B is an argument, A must also be an argument. This essentially means that to use an object, its entire ownership ancestor chain must be included, and the  owner address of the root ancestor must match the sender of the transaction.
@@ -243,4 +210,6 @@ After we unpacked the `Parent` object we are able to extract the parent's `id` (
 
 ### Delete Parent Objects
 
-(This section is still in development)
+While any child object can be deleted by by unpacking the child and deleting the `UID`, a parent object can be deleted only if it no longer has any child objects. In other words, in order to delete a parent object, you must first delete all of its children. The reason for this is to prevent accidentally locking out the child objects. As described above, the parent object is necessary to auethenticate the child object and use it in an `entry` function. If the parent object was deleted while it still had children, those children would be unusable.
+
+To make this check possible, each parent object has a child object count that is managed by the Sui Move runtime. This count is updated when a child is added or removed. This means that the parent object will be modified (and have its version incremented) when a child is added or removed. Because of this modification, it would be impossible to add or remove children from immutable objects. As such, `transfer::freeze_object` requires that the object being made immutable does not have any children, i.e. it is not a parent object.
