@@ -94,7 +94,10 @@ function StepTwo({
                                     Total Amount
                                 </div>
                                 <div className={st.walletInfoValue}>
-                                    {totalAmount} {coinSymbol}
+                                    {intl.formatNumber(
+                                        BigInt(totalAmount || 0)
+                                    )}{' '}
+                                    {coinSymbol}
                                 </div>
                             </div>
                         </div>

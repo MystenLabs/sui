@@ -3,6 +3,7 @@
 
 import cl from 'classnames';
 import { memo } from 'react';
+import { useIntl } from 'react-intl';
 import { Link } from 'react-router-dom';
 
 import Icon, { SuiIcons } from '_components/icon';
@@ -28,6 +29,8 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         TRUNCATE_MAX_LENGTH,
         TRUNCATE_PREFIX_LENGTH
     );
+
+    const intl = useIntl();
 
     const transferStatus = txn.status === 'success' ? 'Checkmark' : 'Close';
 
@@ -90,7 +93,8 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
                     {txn.amount && (
                         <>
                             <div className={st.txAmount}>
-                                {txn.amount} {GAS_SYMBOL}
+                                {intl.formatNumber(BigInt(txn.amount || 0))}{' '}
+                                {GAS_SYMBOL}
                             </div>
                             <div className={st.txFiatValue}></div>
                         </>

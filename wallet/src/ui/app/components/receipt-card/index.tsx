@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
+import { useIntl } from 'react-intl';
 
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
@@ -24,6 +25,8 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
     const iconClassName = txDigest.isSender
         ? cl(st.arrowActionIcon, st.angledArrow)
         : cl(st.arrowActionIcon, st.buyIcon);
+
+    const intl = useIntl();
 
     const imgUrl = txDigest?.url
         ? txDigest?.url.replace(/^ipfs:\/\//, 'https://ipfs.io/ipfs/')
@@ -96,7 +99,8 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                     {AssetCard}
                     {txDigest.amount && (
                         <div className={st.amount}>
-                            {txDigest.amount} <span>{GAS_SYMBOL}</span>
+                            {intl.formatNumber(BigInt(txDigest.amount || 0))}{' '}
+                            <span>{GAS_SYMBOL}</span>
                         </div>
                     )}
                     <div
@@ -128,7 +132,12 @@ function ReceiptCard({ tranferType, txDigest }: TxResponseProps) {
                         <div className={st.txFees}>
                             <div className={st.txInfoLabel}>Total Amount</div>
                             <div className={st.walletInfoValue}>
-                                {txDigest.amount + txDigest.txGas} {GAS_SYMBOL}
+                                {intl.formatNumber(
+                                    BigInt(
+                                        txDigest.amount + txDigest.txGas || 0
+                                    )
+                                )}{' '}
+                                {GAS_SYMBOL}
                             </div>
                         </div>
                     )}
