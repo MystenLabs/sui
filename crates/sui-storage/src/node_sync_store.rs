@@ -1,9 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use sui_types::{
-    base_types::{AuthorityName, ExecutionDigests, TransactionDigest},
+    base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     batch::TxSequenceNumber,
+    committee::StakeUnit,
     error::SuiResult,
     messages::{CertifiedTransaction, SignedTransactionEffects},
 };
@@ -14,6 +17,9 @@ use typed_store::traits::Map;
 use typed_store_macros::DBMapUtils;
 
 use tracing::trace;
+
+#[cfg(test)]
+use std::sync::Arc;
 
 /// NodeSyncStore store is used by nodes to store downloaded objects (certs, etc) that have
 /// not yet been applied to the node's SuiDataStore.
@@ -27,9 +33,19 @@ pub struct NodeSyncStore {
 
     /// The latest received sequence from each authority.
     latest_seq: DBMap<AuthorityName, TxSequenceNumber>,
+
+    /// Which peers have claimed to have executed which effects?
+    effects_votes: DBMap<(TransactionEffectsDigest, AuthorityName), StakeUnit>,
 }
 
 impl NodeSyncStore {
+    #[cfg(test)]
+    pub fn new_for_test() -> Arc<Self> {
+        let working_dir = tempfile::tempdir().unwrap();
+        let db_path = working_dir.path().join("sync_store");
+        Arc::new(NodeSyncStore::open_tables_read_write(db_path, None, None))
+    }
+
     pub fn has_cert_and_effects(&self, tx: &TransactionDigest) -> SuiResult<bool> {
         Ok(self.certs_and_fx.contains_key(tx)?)
     }
@@ -103,5 +119,93 @@ impl NodeSyncStore {
         seq: TxSequenceNumber,
     ) -> SuiResult {
         Ok(self.batch_streams.remove(&(peer, seq))?)
+    }
+
+    pub fn record_effects_vote(
+        &self,
+        peer: AuthorityName,
+        effects_digest: TransactionEffectsDigest,
+        stake: StakeUnit,
+    ) -> SuiResult {
+        Ok(self.effects_votes.insert(&(effects_digest, peer), &stake)?)
+    }
+
+    fn iter_fx_digest(
+        &self,
+        digest: TransactionEffectsDigest,
+    ) -> SuiResult<impl Iterator<Item = ((TransactionEffectsDigest, AuthorityName), StakeUnit)> + '_>
+    {
+        Ok(self
+            .effects_votes
+            .iter()
+            .skip_to(&(digest, AuthorityName::ZERO))?
+            .take_while(move |((d, _), _)| *d == digest))
+    }
+
+    pub fn count_effects_votes(&self, digest: TransactionEffectsDigest) -> SuiResult<StakeUnit> {
+        Ok(self
+            .iter_fx_digest(digest)?
+            .map(|((_, _), stake)| stake)
+            .sum())
+    }
+
+    pub fn get_voters(
+        &self,
+        digest: TransactionEffectsDigest,
+    ) -> SuiResult<BTreeSet<AuthorityName>> {
+        Ok(self
+            .iter_fx_digest(digest)?
+            .map(|((_, peer), _)| peer)
+            .collect())
+    }
+
+    pub fn clear_effects_votes(&self, digest: TransactionEffectsDigest) -> SuiResult {
+        Ok(self
+            .effects_votes
+            .multi_remove(self.iter_fx_digest(digest)?.map(|(k, _)| k))?)
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use sui_types::crypto::{get_authority_key_pair, KeypairTraits};
+
+    #[test]
+    fn test_stake_votes() {
+        let db = NodeSyncStore::new_for_test();
+
+        let (_, kp1) = get_authority_key_pair();
+        let (_, kp2) = get_authority_key_pair();
+        let peer1: AuthorityName = kp1.public().into();
+        let peer2: AuthorityName = kp2.public().into();
+
+        let digest1 = TransactionEffectsDigest::random();
+        let digest2 = TransactionEffectsDigest::random();
+
+        db.record_effects_vote(peer1, digest1, 1).unwrap();
+        assert_eq!(db.count_effects_votes(digest1).unwrap(), 1);
+
+        db.record_effects_vote(peer2, digest1, 2).unwrap();
+        assert_eq!(db.count_effects_votes(digest1).unwrap(), 3);
+
+        assert_eq!(
+            db.get_voters(digest1).unwrap(),
+            [peer1, peer2].iter().cloned().collect()
+        );
+
+        // redundant votes do not increase total
+        db.record_effects_vote(peer2, digest1, 2).unwrap();
+        assert_eq!(db.count_effects_votes(digest1).unwrap(), 3);
+
+        db.record_effects_vote(peer1, digest2, 1).unwrap();
+        db.record_effects_vote(peer2, digest2, 2).unwrap();
+
+        db.clear_effects_votes(digest1).unwrap();
+        // digest1 is cleared
+        assert_eq!(db.count_effects_votes(digest1).unwrap(), 0);
+        // digest2 is not
+        assert_eq!(db.count_effects_votes(digest2).unwrap(), 3);
     }
 }

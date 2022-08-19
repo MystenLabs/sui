@@ -215,8 +215,10 @@ impl ToFromBytes for AuthorityPublicKeyBytes {
 }
 
 impl AuthorityPublicKeyBytes {
+    pub const ZERO: Self = Self::new([0u8; AccountPublicKey::LENGTH]);
+
     /// This ensures it's impossible to construct an instance with other than registered lengths
-    pub fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
+    pub const fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
 where {
         AuthorityPublicKeyBytes(bytes)
     }
@@ -314,6 +316,10 @@ where
 }
 
 pub fn get_account_key_pair() -> (SuiAddress, AccountKeyPair) {
+    get_key_pair()
+}
+
+pub fn get_authority_key_pair() -> (SuiAddress, AuthorityKeyPair) {
     get_key_pair()
 }
 
