@@ -199,7 +199,7 @@ pub async fn init_configurable_authorities(
     Vec<Arc<AuthorityState>>,
     Vec<ExecutionDigests>,
 ) {
-    use narwhal_crypto::traits::KeyPair;
+    use fastcrypto::traits::KeyPair;
     use sui_types::crypto::AccountKeyPair;
 
     use crate::safe_client::SafeClientMetrics;

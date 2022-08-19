@@ -537,7 +537,7 @@ const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
-    use narwhal_crypto::traits::KeyPair;
+    use fastcrypto::traits::KeyPair;
     use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
 
     #[test]

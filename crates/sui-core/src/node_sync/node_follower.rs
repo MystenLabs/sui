@@ -758,7 +758,7 @@ where
 mod tests {
     // Note: this code is tested end-to-end in full_node_tests.rs
 
-    use narwhal_crypto::traits::KeyPair;
+    use fastcrypto::traits::KeyPair;
     use sui_types::{
         base_types::{AuthorityName, TransactionEffectsDigest},
         crypto::{get_key_pair, AuthorityKeyPair},

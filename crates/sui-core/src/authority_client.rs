@@ -5,10 +5,10 @@
 use crate::authority::AuthorityState;
 use anyhow::anyhow;
 use async_trait::async_trait;
+use fastcrypto::traits::ToFromBytes;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use mysten_network::config::Config;
-use narwhal_crypto::traits::ToFromBytes;
 use prometheus::{register_histogram_with_registry, Histogram};
 use std::collections::BTreeMap;
 use std::sync::Arc;

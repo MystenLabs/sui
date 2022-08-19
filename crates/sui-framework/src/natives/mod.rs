@@ -41,6 +41,36 @@ pub fn all_natives(
         ("object", "delete_impl", make_native!(object::delete_impl)),
         ("object", "borrow_uid", make_native!(object::borrow_uid)),
         (
+            "crypto",
+            "native_verify_full_range_proof",
+            ake_native!(crypto::verify_range_proof),
+        ),
+        (
+            "elliptic_curve",
+            "native_add_ristretto_point",
+            ake_native!(crypto::add_ristretto_point),
+        ),
+        (
+            "elliptic_curve",
+            "native_subtract_ristretto_point",
+            ake_native!(crypto::subtract_ristretto_point),
+        ),
+        (
+            "elliptic_curve",
+            "native_create_pedersen_commitment",
+            ake_native!(crypto::pedersen_commit),
+        ),
+        (
+            "elliptic_curve",
+            "native_scalar_from_u64",
+            ake_native!(crypto::scalar_from_u64),
+        ),
+        (
+            "elliptic_curve",
+            "native_scalar_from_bytes",
+            ake_native!(crypto::scalar_from_bytes),
+        ),
+        (
             "test_scenario",
             "drop_object_for_testing",
             make_native!(test_scenario::drop_object_for_testing),

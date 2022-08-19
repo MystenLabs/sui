@@ -26,4 +26,16 @@ module sui::crypto {
     /// If the signature is a valid BLS12381 signature of the message and public key, return true.
     /// Otherwise, return false.
     public native fun bls12381_verify_g1_sig(signature: vector<u8>, public_key: vector<u8>, msg: vector<u8>): bool; 
+
+    use sui::elliptic_curve::{Self as ec, RistrettoPoint};
+
+    native fun native_verify_full_range_proof(proof: vector<u8>, commitment: vector<u8>);
+
+    /// @param proof: The bulletproof
+    /// @param commitment: The commitment which we are trying to verify the range proof for
+    /// 
+    /// If the range proof is valid, execution succeeds, else panics.
+    public fun verify_full_range_proof(proof: vector<u8>, commitment: RistrettoPoint) {
+        native_verify_full_range_proof(proof, ec::bytes(&commitment))
+    }
 }

@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 
-once_cell = "1.11.0"
+once_cell = "1.13.1"
 
 sui-types = { path = "../sui-types" }
 sui-verifier = { path = "../../crates/sui-verifier" }

@@ -12,9 +12,9 @@ use crate::{
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
+use fastcrypto::traits::KeyPair;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
-use narwhal_crypto::traits::KeyPair;
 use prometheus::Registry;
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
