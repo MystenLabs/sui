@@ -52,6 +52,7 @@ pub trait Cluster {
 
     fn rpc_url(&self) -> &str;
     fn fullnode_url(&self) -> &str;
+    fn websocket_url(&self) -> Option<&str>;
     fn user_key(&self) -> AccountKeyPair;
 
     /// Returns faucet url in a remote cluster.
@@ -118,6 +119,9 @@ impl Cluster for RemoteRunningCluster {
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
     }
+    fn websocket_url(&self) -> Option<&str> {
+        None
+    }
     fn user_key(&self) -> AccountKeyPair {
         get_key_pair().1
     }
@@ -134,6 +138,7 @@ pub struct LocalNewCluster {
     test_network: TestNetwork,
     fullnode_url: String,
     faucet_key: AccountKeyPair,
+    websocket_url: Option<String>,
 }
 
 impl LocalNewCluster {
@@ -161,11 +166,18 @@ impl Cluster for LocalNewCluster {
                 .port()
         });
 
+        let websocket_port = options.websocket_address.as_ref().map(|addr| {
+            addr.parse::<SocketAddr>()
+                .expect("Unable to parse fullnode address")
+                .port()
+        });
+
         let mut test_network = start_rpc_test_network_with_fullnode(
             Some(genesis_config),
             1,
             gateway_port,
             fullnode_port,
+            websocket_port,
         )
         .await
         .unwrap_or_else(|e| panic!("Failed to start a local network, e: {e}"));
@@ -194,6 +206,7 @@ impl Cluster for LocalNewCluster {
             test_network,
             fullnode_url,
             faucet_key,
+            websocket_url: options.websocket_address.clone(),
         })
     }
 
@@ -203,6 +216,10 @@ impl Cluster for LocalNewCluster {
 
     fn fullnode_url(&self) -> &str {
         &self.fullnode_url
+    }
+
+    fn websocket_url(&self) -> Option<&str> {
+        self.websocket_url.as_deref()
     }
 
     fn user_key(&self) -> AccountKeyPair {
@@ -232,6 +249,10 @@ impl Cluster for Box<dyn Cluster + Send + Sync> {
 
     fn fullnode_url(&self) -> &str {
         (**self).fullnode_url()
+    }
+
+    fn websocket_url(&self) -> Option<&str> {
+        (**self).websocket_url()
     }
 
     fn user_key(&self) -> AccountKeyPair {

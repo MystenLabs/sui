@@ -36,13 +36,14 @@ const NUM_VALIDAOTR: usize = 4;
 pub async fn start_test_network(
     genesis_config: Option<GenesisConfig>,
 ) -> Result<Swarm, anyhow::Error> {
-    start_test_network_with_fullnodes(genesis_config, 0, None).await
+    start_test_network_with_fullnodes(genesis_config, 0, None, None).await
 }
 
 pub async fn start_test_network_with_fullnodes(
     genesis_config: Option<GenesisConfig>,
     fullnode_count: usize,
     fullnode_port: Option<u16>,
+    websocket_port: Option<u16>,
 ) -> Result<Swarm, anyhow::Error> {
     let mut builder: SwarmBuilder = Swarm::builder()
         .committee_size(NonZeroUsize::new(NUM_VALIDAOTR).unwrap())
@@ -50,6 +51,10 @@ pub async fn start_test_network_with_fullnodes(
     if let Some(fullnode_port) = fullnode_port {
         builder =
             builder.with_fullnode_rpc_addr(format!("127.0.0.1:{}", fullnode_port).parse().unwrap());
+    }
+    if let Some(websocket_port) = websocket_port {
+        builder = builder
+            .with_websocket_rpc_addr(format!("127.0.0.1:{}", websocket_port).parse().unwrap())
     }
     if let Some(genesis_config) = genesis_config {
         builder = builder.initial_accounts_config(genesis_config);
@@ -141,7 +146,7 @@ async fn start_rpc_gateway(
 pub async fn start_rpc_test_network(
     genesis_config: Option<GenesisConfig>,
 ) -> Result<TestNetwork, anyhow::Error> {
-    start_rpc_test_network_with_fullnode(genesis_config, 0, None, None).await
+    start_rpc_test_network_with_fullnode(genesis_config, 0, None, None, None).await
 }
 
 pub async fn start_rpc_test_network_with_fullnode(
@@ -149,9 +154,15 @@ pub async fn start_rpc_test_network_with_fullnode(
     fullnode_count: usize,
     gateway_port: Option<u16>,
     fullnode_port: Option<u16>,
+    websocket_port: Option<u16>,
 ) -> Result<TestNetwork, anyhow::Error> {
-    let network =
-        start_test_network_with_fullnodes(genesis_config, fullnode_count, fullnode_port).await?;
+    let network = start_test_network_with_fullnodes(
+        genesis_config,
+        fullnode_count,
+        fullnode_port,
+        websocket_port,
+    )
+    .await?;
     let working_dir = network.dir();
     let (server_addr, rpc_server_handle) =
         start_rpc_gateway(&working_dir.join(SUI_GATEWAY_CONFIG), gateway_port).await?;

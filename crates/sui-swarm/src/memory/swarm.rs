@@ -26,6 +26,7 @@ pub struct SwarmBuilder<R = OsRng> {
     initial_accounts_config: Option<GenesisConfig>,
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
+    websocket_rpc_addr: Option<SocketAddr>,
 }
 
 impl SwarmBuilder {
@@ -38,6 +39,7 @@ impl SwarmBuilder {
             initial_accounts_config: None,
             fullnode_count: 0,
             fullnode_rpc_addr: None,
+            websocket_rpc_addr: None,
         }
     }
 }
@@ -51,6 +53,7 @@ impl<R> SwarmBuilder<R> {
             initial_accounts_config: self.initial_accounts_config,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
+            websocket_rpc_addr: self.websocket_rpc_addr,
         }
     }
 
@@ -84,6 +87,11 @@ impl<R> SwarmBuilder<R> {
 
     pub fn with_fullnode_rpc_addr(mut self, fullnode_rpc_addr: SocketAddr) -> Self {
         self.fullnode_rpc_addr = Some(fullnode_rpc_addr);
+        self
+    }
+
+    pub fn with_websocket_rpc_addr(mut self, websocket_rpc_addr: SocketAddr) -> Self {
+        self.websocket_rpc_addr = Some(websocket_rpc_addr);
         self
     }
 }
@@ -122,6 +130,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
                 if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
                     config.json_rpc_address = fullnode_rpc_addr;
                 }
+                config.websocket_address = self.websocket_rpc_addr;
                 fullnodes.insert(config.sui_address(), Node::new(config));
             });
         }
