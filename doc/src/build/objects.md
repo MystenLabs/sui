@@ -37,7 +37,13 @@ Now back to the topic of object owned by another object. When an object is owned
 This means an object is immutable and cannot be mutated by anyone. Because of this, such an object doesn't have an exclusive owner. Anyone can use it in their Move calls. All Move packages are immutable objects: once published, they cannot be changed. A Move object can be turned into an immutable object through the [*freeze_object*](move/sui-move-library.md) library API. An immutable object can only passed as a read-only reference (`&T`) in Move calls.
 
 ### Shared
-An object can be shared, meaning that anyone can use and mutate this object. For an example, see [Shared Object](https://examples.sui.io/basics/shared-object.html#shared-object) on https://examples.sui.io/. To see how use of shared objects affects your applications, see the two implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move) vs. [Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move).
+An object can be shared, meaning that anyone can read or write this object. In contrast to mutable owned objects (which are single-writer), shared objects require [consensus](../../learn/architecture/consensus.md) to sequence reads and writes. For an example of creating and accessing a shared object, see [Shared Object](https://examples.sui.io/basics/shared-object.html#shared-object) on https://examples.sui.io/.
+
+In other blockchains, every object is shared. However, Sui programmers often have the choice to implement a particular use-case using shared objects, owned objects, or a combination. This choice can have implications for performance, security, and implementation complexity The best way to understand these tradeoffs is to look at a few examples of use-cases implemented both ways:
+
+Escrow: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/shared_escrow.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/defi/sources/escrow.move)
+Auction: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/shared_auction.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/nfts/sources/auction.move)
+Tic Tac Toe: [Shared](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move), [Owned](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move)
 
 
 ## Referring to objects
