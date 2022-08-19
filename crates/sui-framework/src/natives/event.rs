@@ -25,7 +25,6 @@ pub fn emit(
     let event = args.pop_back().unwrap();
 
     // gas cost is proportional to size of event
-    let _event_size = event.size();
     let cost = legacy_emit_cost();
     match ty {
         Type::Struct(..) | Type::StructInstantiation(..) => (),
