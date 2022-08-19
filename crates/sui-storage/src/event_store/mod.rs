@@ -12,6 +12,7 @@
 //!
 
 use anyhow::anyhow;
+// use json::JsonValue;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use futures::prelude::stream::BoxStream;
@@ -19,12 +20,13 @@ use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveValue;
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use sui_json_rpc_types::{SuiEvent, SuiEventEnvelope};
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::error::SuiError;
 use sui_types::error::SuiError::{StorageCorruptedFieldError, StorageMissingFieldError};
-use sui_types::event::TransferType;
+use sui_types::event::{Event, TransferType};
 use sui_types::event::{EventEnvelope, EventType};
 use sui_types::object::Owner;
 use tokio_stream::StreamExt;
@@ -37,6 +39,9 @@ use flexstr::SharedStr;
 
 /// Maximum number of events one can ask for right now
 pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 100;
+
+pub const TRANSFER_TYPE_KEY: &str = "transfer_type";
+pub const OBJECT_VERSION_KEY: &str = "object_version";
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
@@ -67,7 +72,7 @@ pub struct StoredEvent {
     /// * `version` - used by TransferObject
     /// * `destination` - address, in hex bytes, used by TransferObject
     /// * `type` - used by TransferObject (TransferType - Coin, ToAddress, ToObject)
-    fields: Vec<(SharedStr, EventValue)>, // Change this to something based on CBOR for binary values, or our own value types for efficiency
+    fields: BTreeMap<SharedStr, EventValue>, // Change this to something based on CBOR for binary values, or our own value types for efficiency
     /// Contents for MoveEvent
     move_event_contents: Option<Vec<u8>>,
     /// StructTag in string form for MoveEvent, e.g. "0x2::devnet_nft::MintNFTEvent"
@@ -76,10 +81,6 @@ pub struct StoredEvent {
     sender: Option<SuiAddress>,
     /// Recipient in the event
     recipient: Option<Owner>,
-    /// Sequence number of the mentioned object in event
-    object_version: Option<SequenceNumber>,
-    /// Transfer type of the event
-    transfer_type: Option<TransferType>,
 }
 
 impl StoredEvent {
@@ -123,8 +124,12 @@ impl StoredEvent {
         let sender = self.sender()?;
         let recipient = self.recipient()?;
         let object_id = self.object_id()?;
-        let version = self.object_version()?;
-        let type_ = self.transfer_type()?;
+        let version = self.object_version()?.ok_or_else(|| {
+            anyhow::anyhow!("Can't extract object version from StoredEvent: {self:?}")
+        })?;
+        let type_ = self.transfer_type()?.ok_or_else(|| {
+            anyhow::anyhow!("Can't extract transfer type from StoredEvent: {self:?}")
+        })?;
         Ok(SuiEvent::TransferObject {
             package_id,
             transaction_module,
@@ -132,7 +137,7 @@ impl StoredEvent {
             recipient,
             object_id,
             version,
-            type_: *type_,
+            type_,
         })
     }
 
@@ -230,23 +235,49 @@ impl StoredEvent {
         })
     }
 
-    fn object_version(&self) -> Result<SequenceNumber, anyhow::Error> {
-        self.object_version.ok_or_else(|| {
-            anyhow::anyhow!(StorageMissingFieldError(format!(
-                "Missing object_version for event {:?}",
-                self
-            )))
-        })
+    fn object_version(&self) -> Result<Option<SequenceNumber>, anyhow::Error> {
+        let object_version = self.fields.get(OBJECT_VERSION_KEY);
+        match object_version {
+            Some(EventValue::Json(serde_json::Value::String(object_version))) => {
+                let object_version = object_version.parse::<u64>().map_err(|_e| {
+                    SuiError::ExtraFieldFailedToDeserialize {
+                        error: format!(
+                            "Error parsing object version from extra fields: {object_version}"
+                        ),
+                    }
+                })?;
+                Ok(Some(SequenceNumber::from_u64(object_version)))
+            }
+            None => Ok(None),
+            Some(other_value) => anyhow::bail!(SuiError::ExtraFieldFailedToDeserialize {
+                error: format!("Got unexpected stored value for object_version: {other_value:?}"),
+            }),
+        }
     }
 
-    fn transfer_type(&self) -> Result<&TransferType, anyhow::Error> {
-        self.transfer_type.as_ref().ok_or_else(|| {
-            anyhow::anyhow!(StorageMissingFieldError(format!(
-                "Missing transfer_type for event {:?}",
-                self
-            )))
-        })
+    fn transfer_type(&self) -> Result<Option<TransferType>, anyhow::Error> {
+        let transfer_type = self.fields.get(TRANSFER_TYPE_KEY);
+        match transfer_type {
+            Some(EventValue::Json(serde_json::Value::String(transfer_type_ordinal))) => {
+                let transfer_type_ordinal =
+                    transfer_type_ordinal.parse::<usize>().map_err(|_e| {
+                        SuiError::ExtraFieldFailedToDeserialize {
+                            error: format!(
+                                "Error parsing transfer type from extra fields: {transfer_type:?}"
+                            ),
+                        }
+                    })?;
+                Ok(Some(Event::transfer_type_from_ordinal(
+                    transfer_type_ordinal,
+                )?))
+            }
+            None => Ok(None),
+            Some(other_value) => anyhow::bail!(SuiError::ExtraFieldFailedToDeserialize {
+                error: format!("Got unexpected stored value for transfer_type: {other_value:?}"),
+            }),
+        }
     }
+
 }
 
 impl TryInto<SuiEventEnvelope> for StoredEvent {
