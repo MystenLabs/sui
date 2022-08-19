@@ -66,7 +66,6 @@ pub trait WriteAheadLog<'a, C> {
     ///   proceeding.
     ///
     ///   Err(e) => An error occurred.
-    #[must_use]
     async fn begin_tx<'b>(
         &'a self,
         tx: &'b TransactionDigest,
@@ -86,7 +85,6 @@ pub trait WriteAheadLog<'a, C> {
     /// The caller is responsible for running the tx to completion.
     ///
     /// Recoverable TXes will remain in the on-disk log until they are explicitly committed.
-    #[must_use]
     async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, Self::Guard)>>;
 }
 
@@ -136,12 +134,12 @@ where
         self.tx
     }
 
-    fn retry_num(&self) -> u32 {
-        self.retry_num
-    }
-
     fn commit_tx(self) {
         self.commit_tx_impl(true)
+    }
+
+    fn retry_num(&self) -> u32 {
+        self.retry_num
     }
 
     // Identical to commit_tx (for now), but we provide different names to make intent clearer.
@@ -251,12 +249,11 @@ where
 #[async_trait]
 impl<'a, C: 'a> WriteAheadLog<'a, C> for DBWriteAheadLog<C>
 where
-    C: Serialize + DeserializeOwned + std::marker::Send + std::marker::Sync + Debug,
+    C: Serialize + DeserializeOwned + Send + Sync + Debug,
 {
     type Guard = DBTxGuard<'a, C>;
     type LockGuard = LockGuard;
 
-    #[must_use]
     #[instrument(level = "debug", name = "begin_tx", skip_all)]
     async fn begin_tx<'b>(
         &'a self,
@@ -288,7 +285,6 @@ where
         res
     }
 
-    #[must_use]
     async fn read_one_recoverable_tx(&'a self) -> SuiResult<Option<(C, DBTxGuard<'a, C>)>> {
         let candidate = self.pop_one_tx();
 
