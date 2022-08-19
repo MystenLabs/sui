@@ -12,7 +12,7 @@ use std::collections::{hash_map, BTreeSet, HashMap};
 use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
-    committee::{Committee, StakeUnit},
+    committee::Committee,
     error::{SuiError, SuiResult},
     messages::{CertifiedTransaction, SignedTransactionEffects, TransactionInfoResponse},
     messages_checkpoint::CheckpointContents,
@@ -35,83 +35,6 @@ const NODE_SYNC_QUEUE_LEN: usize = 500;
 // Process up to 20 digests concurrently.
 const MAX_NODE_SYNC_CONCURRENCY: usize = 20;
 
-/// EffectsStakeMap tracks which effects digests have been attested by a quorum of validators and
-/// are thus final.
-struct EffectsStakeMap {
-    /// Keep track of how much stake has voted for a given effects digest
-    /// any entry in this map with >2f+1 stake can be sequenced locally and
-    /// removed from the map.
-    effects_stake_map: HashMap<TransactionEffectsDigest, StakeUnit>,
-    /// Keep track of stake votes per validator - needed to double check the total stored in
-    /// effects_stake_map, which can otherwise be corrupted by byzantine double-voting.
-    effects_vote_map: HashMap<TransactionEffectsDigest, HashMap<AuthorityName, StakeUnit>>,
-}
-
-impl EffectsStakeMap {
-    pub fn new() -> Self {
-        Self {
-            effects_stake_map: HashMap::new(),
-            effects_vote_map: HashMap::new(),
-        }
-    }
-
-    // Get the set of authorities who voted for a digest.
-    pub fn voters(&self, digest: &TransactionEffectsDigest) -> BTreeSet<AuthorityName> {
-        self.effects_vote_map
-            .get(digest)
-            .unwrap_or(&HashMap::new())
-            .keys()
-            .cloned()
-            .collect()
-    }
-
-    /// Note that a given effects digest has been attested by a validator, and return true if the
-    /// stake that has attested that effects digest has exceeded the quorum threshold.
-    pub fn note_effects_digest(
-        &mut self,
-        source: &AuthorityName,
-        stake: StakeUnit,
-        quorum_threshold: StakeUnit,
-        effects_digest: &TransactionEffectsDigest,
-    ) -> bool {
-        let validator_map = self
-            .effects_vote_map
-            .entry(*effects_digest)
-            .or_insert_with(HashMap::new);
-
-        let vote_entry = validator_map.entry(*source);
-
-        let cur_stake = if let hash_map::Entry::Occupied(_) = &vote_entry {
-            // TODO: report byzantine authority suspciion
-            warn!(peer = ?source, ?effects_digest,
-                "ByzantineAuthoritySuspicion: peer double-voted for effects digest");
-            self.effects_stake_map.entry(*effects_digest).or_insert(0)
-        } else {
-            vote_entry.or_insert(stake);
-
-            self.effects_stake_map
-                .entry(*effects_digest)
-                .and_modify(|cur| *cur += stake)
-                .or_insert(stake)
-        };
-
-        let is_final = *cur_stake >= quorum_threshold;
-        if !is_final {
-            trace!(
-                ?effects_digest,
-                "tx cert/effects not yet final: {} < {}",
-                *cur_stake,
-                quorum_threshold
-            );
-        }
-        is_final
-    }
-
-    pub fn forget_effects(&mut self, digests: &TransactionEffectsDigest) {
-        self.effects_stake_map.remove(digests);
-        self.effects_vote_map.remove(digests);
-    }
-}
 
 /// Waiter is used to single-shot concurrent requests and wait for dependencies to finish.
 struct Waiter<Key, ResultT> {
@@ -247,7 +170,6 @@ impl DownloadRequest {
 /// TXes locally.
 pub struct NodeSyncState<A> {
     committee: Arc<Committee>,
-    effects_stake: Mutex<EffectsStakeMap>,
     state: Arc<AuthorityState>,
     pub(super) node_sync_store: Arc<NodeSyncStore>,
     aggregator: Arc<AuthorityAggregator<A>>,
@@ -277,7 +199,6 @@ impl<A> NodeSyncState<A> {
         let committee = state.committee.load().deref().clone();
         Self {
             committee,
-            effects_stake: Mutex::new(EffectsStakeMap::new()),
             state,
             aggregator,
             node_sync_store,
@@ -437,13 +358,25 @@ where
         }
     }
 
+    pub fn cleanup_cert(
+        &self,
+        digest: &TransactionDigest,
+        effects: Option<&TransactionEffectsDigest>,
+    ) {
+        let _ = self
+            .node_sync_store
+            .cleanup_cert(digest, effects)
+            .tap_err(|e| warn!("cleanup_cert failed: {}", e));
+    }
+
     async fn process_digest(&self, arg: SyncArg, permit: OwnedSemaphorePermit) -> SyncResult {
         trace!(?arg, "process_digest");
 
-        let (digest, _effects_digest) = arg.digests();
+        let (digest, effects_digest) = arg.digests();
 
         // check if the tx is already locally final
         if self.state.database.effects_exists(digest)? {
+            self.cleanup_cert(digest, effects_digest);
             return Ok(SyncStatus::CertExecuted);
         }
 
@@ -468,12 +401,11 @@ where
                 let stake = self.committee.weight(&peer);
                 let quorum_threshold = self.committee.quorum_threshold();
 
-                let is_final = self.effects_stake.lock().unwrap().note_effects_digest(
-                    &peer,
-                    stake,
-                    quorum_threshold,
-                    &digests.effects,
-                );
+                self.node_sync_store
+                    .record_effects_vote(peer, digests.effects, stake)?;
+                let votes = self.node_sync_store.count_effects_votes(digests.effects)?;
+
+                let is_final = votes >= quorum_threshold;
 
                 if !is_final {
                     return Ok(SyncStatus::NotFinal);
@@ -483,7 +415,7 @@ where
 
                 (
                     digests,
-                    Some(self.effects_stake.lock().unwrap().voters(&digests.effects)),
+                    Some(self.node_sync_store.get_voters(digests.effects)?),
                 )
             }
             SyncArg::Checkpoint(digests) => {
@@ -730,48 +662,5 @@ impl NodeSyncHandle {
         let sender = self.sender.clone();
         Self::send_msg_with_tx(sender, DigestsMessage::new(&digests, peer, tx)).await?;
         Ok(Self::map_rx(rx))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    // Note: this code is tested end-to-end in full_node_tests.rs
-
-    use fastcrypto::traits::KeyPair;
-    use sui_types::{
-        base_types::{AuthorityName, TransactionEffectsDigest},
-        crypto::{get_key_pair, AuthorityKeyPair},
-    };
-
-    use super::EffectsStakeMap;
-
-    fn random_authority_name() -> AuthorityName {
-        let key: (_, AuthorityKeyPair) = get_key_pair();
-        key.1.public().into()
-    }
-
-    #[test]
-    fn test_effects_stake() {
-        let mut map = EffectsStakeMap::new();
-
-        let threshold = 3;
-
-        let byzantine = random_authority_name();
-        let validator2 = random_authority_name();
-        let validator3 = random_authority_name();
-
-        let digests = TransactionEffectsDigest::random();
-
-        assert!(!map.note_effects_digest(&byzantine, 1, threshold, &digests));
-        assert!(!map.note_effects_digest(&validator2, 1, threshold, &digests));
-
-        // double voting is rejected
-        assert!(!map.note_effects_digest(&byzantine, 1, threshold, &digests));
-
-        // final vote pushes us over.
-        assert!(map.note_effects_digest(&validator3, 1, threshold, &digests));
-
-        // double vote doesn't result in false if we already exceeded threshold.
-        assert!(map.note_effects_digest(&byzantine, 1, threshold, &digests));
     }
 }

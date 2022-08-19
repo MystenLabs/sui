@@ -65,8 +65,17 @@ impl NodeSyncStore {
         Ok(self.certs_and_fx.get(tx)?)
     }
 
-    pub fn delete_cert_and_effects(&self, tx: &TransactionDigest) -> SuiResult {
-        Ok(self.certs_and_fx.remove(tx)?)
+    pub fn cleanup_cert(
+        &self,
+        digest: &TransactionDigest,
+        effects: Option<&TransactionEffectsDigest>,
+    ) -> SuiResult {
+        self.certs_and_fx.remove(digest)?;
+        if let Some(effects) = effects {
+            self.clear_effects_votes(*effects)?;
+        }
+
+        Ok(())
     }
 
     pub fn enqueue_execution_digests(
