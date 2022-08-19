@@ -33,6 +33,12 @@ cd <your project directory>
 npm link @mysten/sui.js
 ```
 
+If you wish to rebuild all dependencies of the TypeScript SDK, or if you're encountering issues with the `@mysten/bcs` module not being found, you can re-build the SDK module and all of it's local dependencies using the following command:
+
+```bash
+pnpm --filter @mysten/sui.js... build
+```
+
 Refer to the [JSON RPC doc](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md) for instructions about how to start a local network and local RPC server
 
 ## Type Doc
