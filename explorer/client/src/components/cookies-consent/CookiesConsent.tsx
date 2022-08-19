@@ -52,7 +52,6 @@ export function CookiesConsent() {
                                 role: 'accept_necessary',
                             },
                         },
-                        // @ts-expect-error no types
                         settings_modal: {
                             title: 'Cookie preferences',
                             save_settings_btn: 'Save settings',

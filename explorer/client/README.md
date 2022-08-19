@@ -6,30 +6,19 @@
 
 **Requirements**: Node 14.0.0 or later.
 
+Dependencies are managed using [`pnpm`](https://pnpm.io/). You can start by installing dependencies in the root of the Sui repository:
+
+```
+$ pnpm install
+```
+
 Currently the Explorer depends on an unreleased version of `sui.js`, the TypeScript SDK for Sui. Therefore, you need to build the SDK first:
 
 ```bash
-$ cd <Your Sui Repository>/sdk/typescript
-$ yarn && yarn build
+$ pnpm --filter @mysten/sui.js... build
 ```
 
-Then, in the project directory, run:
-
-```bash
-$ yarn
-```
-
-> **Note:** If you are updating the SDK and Explorer at the same time, you need to run the following commands to make sure the Explorer depends on the updated SDK.
-
-```bash
-$ cd <Your Sui Repository>/sdk/typescript
-$ yarn build
-
-$ cd ../../explorer/client
-$ rm -rf node_modules/ && yarn
-```
-
-Before running any of the following scripts `yarn` must run in order to install the necessary dependencies.
+> **Note:** If you are updating the SDK and Explorer at the same time, you need to re-build the SDK whenever you makes changes for it to be reflected in the Explorer.
 
 # How to Switch Environment
 
@@ -38,7 +27,7 @@ Before running any of the following scripts `yarn` must run in order to install 
 The Sui Explorer frontend will use the DevNet Gateway server by default: https://gateway.devnet.sui.io:443
 
 ```bash
-yarn start
+pnpm dev
 
 ```
 
@@ -47,18 +36,18 @@ yarn start
 Refer to [Local RPC Server & JSON-RPC API Quick Start](../../doc/src/build/json-rpc.md) on setting up a Local RPC Server. If we wish to locally run the website using a Local RPC Server, then run the following:
 
 ```bash
-yarn start:local
+pnpm dev:local
 
 ```
 
-Alternatively, having run `yarn start`, click the green button at the top of the page and select the option 'Local'.
+Alternatively, having run `pnpm dev`, click the green button at the top of the page and select the option 'Local'.
 
 ## Connecting to a Custom RPC URL
 
 First run the following:
 
 ```bash
-yarn start
+pnpm dev
 
 ```
 
@@ -71,27 +60,27 @@ The Sui Explorer can also connect to a local, static JSON dataset that can be fo
 For example, suppose we wish to locally run the website using the static JSON dataset and not the API, then we could run the following:
 
 ```bash
-yarn start:static
+pnpm dev:static
 
 ```
 
-# Other Yarn commands
+# Other pnpm commands
 
-### `yarn test`
+### `pnpm test`
 
 This runs a series of end-to-end browser tests using the website as connected to the static JSON dataset. This command is run by the GitHub checks. The tests must pass before merging a branch into main.
 
-### `yarn build`
+### `pnpm build`
 
 Builds the app for production to the `build` folder.
 
 It bundles React in production mode and optimizes the build for the best performance.
 
-### `yarn lint`
+### `pnpm lint`
 
 Run linting check (prettier/eslint/stylelint).
 
-### `yarn lint:fix`
+### `pnpm lint:fix`
 
 Run linting check but also try to fix any issues.
 
