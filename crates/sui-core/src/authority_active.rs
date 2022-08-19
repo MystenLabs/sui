@@ -359,14 +359,12 @@ where
         let (cancel_sender, cancel_receiver) = oneshot::channel();
         let aggregator = self.net();
 
-        let committee = self.state.committee.load().deref().clone();
         let node_sync_handle = self.node_sync_handle();
         let node_sync_state = self.node_sync_state.clone();
 
         info!("spawning node sync task");
         let join_handle = tokio::task::spawn(async move {
             node_sync_process(
-                committee,
                 node_sync_handle,
                 node_sync_state,
                 aggregator,
