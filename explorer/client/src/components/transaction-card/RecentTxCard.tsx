@@ -1,6 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import {
+    type GetTxnDigestsResponse,
+    type ExecutionStatusType,
+    type TransactionKindName,
+} from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import cl from 'classnames';
 import { useEffect, useState, useContext, useCallback } from 'react';
@@ -20,16 +25,12 @@ import {
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { numberSuffix } from '../../utils/numberUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
-import { truncate } from '../../utils/stringUtils';
+import { truncate, presentBN } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
 import ErrorResult from '../error-result/ErrorResult';
 import Pagination from '../pagination/Pagination';
 
-import type {
-    GetTxnDigestsResponse,
-    ExecutionStatusType,
-    TransactionKindName,
-} from '@mysten/sui.js';
+import type BN from 'bn.js';
 
 import styles from './RecentTxCard.module.css';
 
@@ -61,6 +62,7 @@ type TxnData = {
     txId: string;
     status: ExecutionStatusType;
     txGas: number;
+    suiAmount: BN;
     kind: TransactionKindName | undefined;
     From: string;
     timestamp_ms?: number;
@@ -177,7 +179,7 @@ const recentTxTable = (results: TxnData[], truncateLength: number) => {
                 txTypeName: txn.kind,
                 status: txn.status,
             },
-
+            amounts: txn.suiAmount ? presentBN(txn.suiAmount) : '',
             gas: numberSuffix(txn.txGas),
         })),
         columns: [
@@ -196,6 +198,10 @@ const recentTxTable = (results: TxnData[], truncateLength: number) => {
             {
                 headerLabel: 'Addresses',
                 accessorKey: 'addresses',
+            },
+            {
+                headerLabel: 'Amount',
+                accessorKey: 'amounts',
             },
             {
                 headerLabel: 'Gas',
