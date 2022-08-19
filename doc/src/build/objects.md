@@ -39,7 +39,6 @@ This means an object is immutable and cannot be mutated by anyone. Because of th
 ### Shared
 An object can be shared, meaning that anyone can use and mutate this object. For an example, see [Shared Object](https://examples.sui.io/basics/shared-object.html#shared-object) on https://examples.sui.io/. To see how use of shared objects affects your applications, see the two implementations of TicTacToe: [No Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/tic_tac_toe.move) vs. [Shared Object](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/games/sources/shared_tic_tac_toe.move).
 
-Here is a brief primer: for any other mutable object that's not shared, no two transactions can be mutating the same object at the same time since a transaction is pinned on a specific (and must be the latest) version of each object. Hence, Sui doesn't need to worry about reaching a consensus or ordering (it's ordered by construction). However for shared objects, in order to allow multiple transactions to mutate the same object at the same time, we need a sequencer or [consensus engine](../../learn/architecture/consensus.md) to properly order these transactions. Because of this, using a shared object can be much more expensive in terms of latency, throughput and gas cost. On the other hand, a shared object is also a powerful primitive that allows for expressing richer behavior that doesn't require central trust.
 
 ## Referring to objects
 
