@@ -62,6 +62,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
 
         let data = context
             .gateway
+            .transaction_builder()
             .publish(sender, all_module_bytes, None, 50000)
             .await
             .unwrap();
@@ -72,6 +73,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
 
     let resp = context
         .gateway
+        .quorum_driver()
         .execute_transaction(transaction)
         .await
         .unwrap();
@@ -97,11 +99,12 @@ pub async fn submit_move_transaction(
 
     let data = context
         .gateway
+        .transaction_builder()
         .move_call(
             sender,
             package_ref.0,
-            module.into(),
-            function.into(),
+            module,
+            function,
             vec![], // type_args
             arguments,
             gas_object,
@@ -113,7 +116,12 @@ pub async fn submit_move_transaction(
     let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
     let tx = Transaction::new(data, signature);
 
-    context.gateway.execute_transaction(tx).await.unwrap()
+    context
+        .gateway
+        .quorum_driver()
+        .execute_transaction(tx)
+        .await
+        .unwrap()
 }
 
 /// A helper function to publish the basics package and make counter objects

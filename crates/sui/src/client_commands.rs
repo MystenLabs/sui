@@ -16,10 +16,9 @@ use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
-use tracing::info;
-
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
 };
@@ -34,6 +33,7 @@ use sui_types::{
     messages::Transaction,
     SUI_FRAMEWORK_ADDRESS,
 };
+use tracing::info;
 
 use crate::config::{Config, PersistedConfig, SuiClientConfig};
 
@@ -286,11 +286,13 @@ impl SuiClientCommands {
                 let compiled_modules = build_move_package_to_bytes(&package_path, build_config)?;
                 let data = context
                     .gateway
+                    .transaction_builder()
                     .publish(sender, compiled_modules, gas, gas_budget)
                     .await?;
                 let signature = context.keystore.sign(&sender, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
 
@@ -299,7 +301,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::Object { id } => {
                 // Fetch the object ref
-                let object_read = context.gateway.get_object(id).await?;
+                let object_read = context.gateway.read_api().get_parsed_object(id).await?;
                 SuiClientCommandResult::Object(object_read)
             }
             SuiClientCommands::Call {
@@ -329,11 +331,13 @@ impl SuiClientCommands {
 
                 let data = context
                     .gateway
+                    .transaction_builder()
                     .transfer_object(from, object_id, gas, gas_budget, to)
                     .await?;
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 let cert = response.certificate;
@@ -356,11 +360,13 @@ impl SuiClientCommands {
 
                 let data = context
                     .gateway
+                    .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 let cert = response.certificate;
@@ -380,10 +386,12 @@ impl SuiClientCommands {
                 let address = address.unwrap_or(context.active_address()?);
                 let mut address_object = context
                     .gateway
+                    .read_api()
                     .get_objects_owned_by_address(address)
                     .await?;
                 let object_objects = context
                     .gateway
+                    .read_api()
                     .get_objects_owned_by_object(address.into())
                     .await?;
                 address_object.extend(object_objects);
@@ -393,7 +401,11 @@ impl SuiClientCommands {
 
             SuiClientCommands::SyncClientState { address } => {
                 let address = address.unwrap_or(context.active_address()?);
-                context.gateway.sync_account_state(address).await?;
+                context
+                    .gateway
+                    .wallet_sync_api()
+                    .sync_account_state(address)
+                    .await?;
                 SuiClientCommandResult::SyncClientState
             }
             SuiClientCommands::NewAddress => {
@@ -420,11 +432,13 @@ impl SuiClientCommands {
                 let signer = context.get_object_owner(&coin_id).await?;
                 let data = context
                     .gateway
+                    .transaction_builder()
                     .split_coin(signer, coin_id, amounts, gas, gas_budget)
                     .await?;
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 SuiClientCommandResult::SplitCoin(response)
@@ -438,11 +452,13 @@ impl SuiClientCommands {
                 let signer = context.get_object_owner(&primary_coin).await?;
                 let data = context
                     .gateway
+                    .transaction_builder()
                     .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
                     .await?;
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .gateway
+                    .quorum_driver()
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
 
@@ -459,7 +475,7 @@ impl SuiClientCommands {
 
                 if let Some(gateway) = &gateway {
                     // TODO: handle embedded gateway
-                    context.config.gateway = ClientType::RPC(gateway.clone());
+                    context.config.gateway = ClientType::RPC(gateway.clone(), None);
                     context.config.save()?;
                 }
 
@@ -507,7 +523,7 @@ impl SuiClientCommands {
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
                     .reference
                     .object_id;
-                let object_read = context.gateway.get_object(nft_id).await?;
+                let object_read = context.gateway.read_api().get_parsed_object(nft_id).await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
         });
@@ -562,12 +578,21 @@ impl WalletContext {
         &self,
         address: SuiAddress,
     ) -> Result<Vec<(u64, SuiParsedObject, SuiObjectInfo)>, anyhow::Error> {
-        let object_refs = self.gateway.get_objects_owned_by_address(address).await?;
+        let object_refs = self
+            .gateway
+            .read_api()
+            .get_objects_owned_by_address(address)
+            .await?;
 
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();
         for oref in object_refs {
-            match self.gateway.get_object(oref.object_id).await? {
+            let response = self
+                .gateway
+                .read_api()
+                .get_parsed_object(oref.object_id)
+                .await?;
+            match response {
                 GetObjectDataResponse::Exists(o) => {
                     if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
                         // Okay to unwrap() since we already checked type
@@ -583,7 +608,12 @@ impl WalletContext {
     }
 
     pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
-        let object = self.gateway.get_object(*id).await?.into_object()?;
+        let object = self
+            .gateway
+            .read_api()
+            .get_object(*id)
+            .await?
+            .into_object()?;
         Ok(object.owner.get_owner_address()?)
     }
 
@@ -749,11 +779,12 @@ pub async fn call_move(
 
     let data = context
         .gateway
+        .transaction_builder()
         .move_call(
             sender,
             package,
-            module.to_string(),
-            function.to_string(),
+            module,
+            function,
             type_args
                 .into_iter()
                 .map(|arg| arg.try_into())
@@ -765,7 +796,11 @@ pub async fn call_move(
         .await?;
     let signature = context.keystore.sign(&sender, &data.to_bytes())?;
     let transaction = Transaction::new(data, signature);
-    let response = context.gateway.execute_transaction(transaction).await?;
+    let response = context
+        .gateway
+        .quorum_driver()
+        .execute_transaction(transaction)
+        .await?;
     let cert = response.certificate;
     let effects = response.effects;
 

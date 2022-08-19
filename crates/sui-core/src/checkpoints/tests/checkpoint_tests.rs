@@ -18,7 +18,10 @@ use std::{collections::HashSet, env, fs, path::PathBuf, sync::Arc, time::Duratio
 use sui_types::{
     base_types::{AuthorityName, ObjectID, TransactionDigest},
     batch::UpdateItem,
-    crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, KeypairTraits},
+    crypto::{
+        get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthoritySignature, KeypairTraits,
+        SuiAuthoritySignature,
+    },
     messages::{CertifiedTransaction, ExecutionStatus},
     messages_checkpoint::CheckpointRequest,
     object::Object,
@@ -1134,7 +1137,7 @@ async fn test_batch_to_checkpointing_init_crash() {
 
 #[test]
 fn set_fragment_external() {
-    let (committee, _keys, mut test_objects) = random_ckpoint_store();
+    let (committee, keys, mut test_objects) = random_ckpoint_store();
     let (test_tx, _rx) = TestConsensus::new();
 
     let (_, mut cps1) = test_objects.pop().unwrap();
@@ -1173,7 +1176,21 @@ fn set_fragment_external() {
     let p2 = cps2.set_proposal(committee.epoch).unwrap();
     let _p3 = cps3.set_proposal(committee.epoch).unwrap();
 
-    let fragment12 = p1.fragment_with(&p2);
+    let mut fragment12 = p1.fragment_with(&p2);
+    for digest in [t1, t2, t3, t4, t5].into_iter() {
+        let tx = crate::test_utils::create_fake_transaction();
+        let mut sigs: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
+        for key_pair in keys.iter() {
+            sigs.push((
+                key_pair.public().into(),
+                AuthoritySignature::new(&tx.signed_data, key_pair),
+            ));
+        }
+        let mut certificate =
+            CertifiedTransaction::new_with_signatures(tx, sigs, &committee).unwrap();
+        certificate.auth_sign_info.epoch = committee.epoch();
+        fragment12.certs.insert(digest, certificate);
+    }
     // let fragment13 = p1.diff_with(&p3);
 
     // When the fragment concern the authority it processes it

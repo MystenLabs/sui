@@ -36,6 +36,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
 
         info!("Test execution with ImmediateReturn");
         let response = fullnode
+            .quorum_driver()
             .execute_transaction_by_fullnode(
                 txn.clone(),
                 ExecuteTransactionRequestType::ImmediateReturn,
@@ -48,6 +49,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             ctx.let_fullnode_sync().await;
 
             fullnode
+                .read_api()
                 .get_transaction(tx_digest)
                 .await
                 .unwrap_or_else(|e| {
@@ -64,6 +66,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
         let txn = txns.swap_remove(0);
         let txn_digest = *txn.digest();
         let response = fullnode
+            .quorum_driver()
             .execute_transaction_by_fullnode(
                 txn.clone(),
                 ExecuteTransactionRequestType::WaitForTxCert,
@@ -76,6 +79,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             ctx.let_fullnode_sync().await;
 
             fullnode
+                .read_api()
                 .get_transaction(txn_digest)
                 .await
                 .unwrap_or_else(|e| {
@@ -93,6 +97,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
         let txn_digest = *txn.digest();
 
         let response = fullnode
+            .quorum_driver()
             .execute_transaction_by_fullnode(txn, ExecuteTransactionRequestType::WaitForEffectsCert)
             .await?;
         if let SuiExecuteTransactionResponse::EffectsCert {
@@ -111,6 +116,7 @@ impl TestCaseImpl for FullNodeExecuteTransactionTest {
             ctx.let_fullnode_sync().await;
 
             fullnode
+                .read_api()
                 .get_transaction(txn_digest)
                 .await
                 .unwrap_or_else(|e| {

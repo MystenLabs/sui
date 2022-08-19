@@ -22,7 +22,7 @@ use sui_config::{
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
 use sui_sdk::crypto::KeystoreType;
-use sui_sdk::{ClientType, SuiClient};
+use sui_sdk::ClientType;
 use sui_swarm::memory::Swarm;
 use sui_types::crypto::{KeypairTraits, SuiKeyPair};
 use tracing::info;
@@ -314,14 +314,14 @@ impl SuiCommand {
             }
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config)?;
+                prompt_if_no_config(&config).await?;
                 let mut context = WalletContext::new(&config).await?;
                 sync_accounts(&mut context).await?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client { config, cmd, json } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config)?;
+                prompt_if_no_config(&config).await?;
                 let mut context = WalletContext::new(&config).await?;
 
                 if let Some(cmd) = cmd {
@@ -365,7 +365,7 @@ async fn sync_accounts(context: &mut WalletContext) -> Result<(), anyhow::Error>
     Ok(())
 }
 
-fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
+async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
     // Prompt user for connect to gateway if config not exists.
     if !wallet_conf_path.exists() {
         let url = match std::env::var_os("SUI_CONFIG_WITH_RPC_URL") {
@@ -391,8 +391,9 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
         };
 
         if let Some(url) = url {
+            let client = ClientType::RPC(url, None);
             // Check url is valid
-            SuiClient::new_http_client(&url)?;
+            client.init().await?;
             let keystore_path = wallet_conf_path
                 .parent()
                 .unwrap_or(&sui_config_dir()?)
@@ -403,7 +404,7 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
             println!("Secret Recovery Phrase : [{phrase}]");
             SuiClientConfig {
                 keystore,
-                gateway: ClientType::RPC(url),
+                gateway: client,
                 active_address: Some(new_address),
             }
             .persisted(wallet_conf_path)

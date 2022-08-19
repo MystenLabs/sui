@@ -22,6 +22,8 @@ pub struct ClusterTestOpt {
     pub faucet_address: Option<String>,
     #[clap(long)]
     pub fullnode_address: Option<String>,
+    #[clap(long)]
+    pub websocket_address: Option<String>,
 }
 
 impl ClusterTestOpt {
@@ -31,6 +33,7 @@ impl ClusterTestOpt {
             gateway_address: None,
             faucet_address: None,
             fullnode_address: None,
+            websocket_address: None,
         }
     }
 }

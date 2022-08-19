@@ -29,6 +29,11 @@ pub fn all_natives(
         ("crypto", "keccak256", make_native!(crypto::keccak256)),
         (
             "crypto",
+            "secp256k1_verify",
+            make_native!(crypto::secp256k1_verify),
+        ),
+        (
+            "crypto",
             "bls12381_verify_g1_sig",
             make_native!(crypto::bls12381_verify_g1_sig),
         ),

@@ -37,13 +37,22 @@ const isAny = (_val: any): _val is any => true;
 
 export class JsonRpcProvider extends Provider {
   protected client: JsonRpcClient;
-
   /**
-   * Establish a connection to a Sui Gateway endpoint
+   * Establish a connection to a Sui RPC endpoint
    *
-   * @param endpoint URL to the Sui Gateway endpoint
+   * @param endpoint URL to the Sui RPC endpoint
+   * @param skipDataValidation default to `false`. If set to `true`, the rpc
+   * client will not check if the responses from the RPC server conform to the schema
+   * defined in the TypeScript SDK. The mismatches often happen when the SDK
+   * is in a different version than the RPC server. Skipping the validation
+   * can maximize the version compatibility of the SDK, as not all the schema
+   * changes in the RPC response will affect the caller, but the caller needs to
+   * understand that the data may not match the TypeSrcript definitions.
    */
-  constructor(public endpoint: string) {
+  constructor(
+    public endpoint: string,
+    public skipDataValidation: boolean = false
+  ) {
     super();
     this.client = new JsonRpcClient(endpoint);
   }
@@ -58,7 +67,8 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getMoveFunctionArgTypes',
         [objectId, moduleName, functionName],
-        isSuiMoveFunctionArgTypes
+        isSuiMoveFunctionArgTypes,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -67,12 +77,15 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getNormalizedMoveModulesByPackage(objectId: string,): Promise<SuiMoveNormalizedModules> {
+  async getNormalizedMoveModulesByPackage(
+    objectId: string
+  ): Promise<SuiMoveNormalizedModules> {
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModulesByPackage',
         [objectId],
         isSuiMoveNormalizedModules,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(`Error fetching package: ${err} for package ${objectId}`);
@@ -81,16 +94,19 @@ export class JsonRpcProvider extends Provider {
 
   async getNormalizedMoveModule(
     objectId: string,
-    moduleName: string,
+    moduleName: string
   ): Promise<SuiMoveNormalizedModule> {
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModule',
         [objectId, moduleName],
         isSuiMoveNormalizedModule,
+        this.skipDataValidation
       );
     } catch (err) {
-      throw new Error(`Error fetching module: ${err} for package ${objectId}, module ${moduleName}}`);
+      throw new Error(
+        `Error fetching module: ${err} for package ${objectId}, module ${moduleName}}`
+      );
     }
   }
 
@@ -104,9 +120,12 @@ export class JsonRpcProvider extends Provider {
         'sui_getNormalizedMoveFunction',
         [objectId, moduleName, functionName],
         isSuiMoveNormalizedFunction,
+        this.skipDataValidation
       );
     } catch (err) {
-      throw new Error(`Error fetching function: ${err} for package ${objectId}, module ${moduleName} and function ${functionName}}`);
+      throw new Error(
+        `Error fetching function: ${err} for package ${objectId}, module ${moduleName} and function ${functionName}}`
+      );
     }
   }
 
@@ -120,9 +139,12 @@ export class JsonRpcProvider extends Provider {
         'sui_getNormalizedMoveStruct',
         [objectId, moduleName, structName],
         isSuiMoveNormalizedStruct,
+        this.skipDataValidation
       );
     } catch (err) {
-      throw new Error(`Error fetching struct: ${err} for package ${objectId}, module ${moduleName} and struct ${structName}}`);
+      throw new Error(
+        `Error fetching struct: ${err} for package ${objectId}, module ${moduleName} and struct ${structName}}`
+      );
     }
   }
 
@@ -132,7 +154,8 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getObjectsOwnedByAddress',
         [address],
-        isGetOwnedObjectsResponse
+        isGetOwnedObjectsResponse,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -151,7 +174,8 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getObjectsOwnedByObject',
         [objectId],
-        isGetOwnedObjectsResponse
+        isGetOwnedObjectsResponse,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -165,7 +189,8 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getObject',
         [objectId],
-        isGetObjectDataResponse
+        isGetObjectDataResponse,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectId}`);
@@ -185,7 +210,8 @@ export class JsonRpcProvider extends Provider {
     try {
       return await this.client.batchRequestWithType(
         requests,
-        isGetObjectDataResponse
+        isGetObjectDataResponse,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
@@ -211,7 +237,8 @@ export class JsonRpcProvider extends Provider {
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isGetTxnDigestsResponse
+        isGetTxnDigestsResponse,
+        this.skipDataValidation
       );
       return [...results[0], ...results[1]];
     } catch (err) {
@@ -238,7 +265,8 @@ export class JsonRpcProvider extends Provider {
     try {
       const results = await this.client.batchRequestWithType(
         requests,
-        isGetTxnDigestsResponse
+        isGetTxnDigestsResponse,
+        this.skipDataValidation
       );
       return [...results[0], ...results[1]];
     } catch (err) {
@@ -255,7 +283,8 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'sui_getTransaction',
         [digest],
-        isSuiTransactionResponse
+        isSuiTransactionResponse,
+        this.skipDataValidation
       );
       return resp;
     } catch (err) {
@@ -275,7 +304,8 @@ export class JsonRpcProvider extends Provider {
     try {
       return await this.client.batchRequestWithType(
         requests,
-        isSuiTransactionResponse
+        isSuiTransactionResponse,
+        this.skipDataValidation
       );
     } catch (err) {
       const list = digests.join(', ').substring(0, -2);
@@ -295,7 +325,8 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'sui_executeTransaction',
         [txnBytes, signatureScheme, signature, pubkey],
-        isSuiTransactionResponse
+        isSuiTransactionResponse,
+        this.skipDataValidation
       );
       return resp;
     } catch (err) {
@@ -308,7 +339,8 @@ export class JsonRpcProvider extends Provider {
       const resp = await this.client.requestWithType(
         'sui_getTotalTransactionNumber',
         [],
-        isNumber
+        isNumber,
+        this.skipDataValidation
       );
       return resp;
     } catch (err) {
@@ -324,7 +356,8 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getTransactionsInRange',
         [start, end],
-        isGetTxnDigestsResponse
+        isGetTxnDigestsResponse,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -338,7 +371,8 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_getRecentTransactions',
         [count],
-        isGetTxnDigestsResponse
+        isGetTxnDigestsResponse,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
@@ -352,7 +386,8 @@ export class JsonRpcProvider extends Provider {
       return await this.client.requestWithType(
         'sui_syncAccountState',
         [address],
-        isAny
+        isAny,
+        this.skipDataValidation
       );
     } catch (err) {
       throw new Error(

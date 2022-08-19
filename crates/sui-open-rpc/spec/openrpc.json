@@ -762,7 +762,8 @@
                   "bcs_bytes": "f32/ypUFWtxeFHoe7i7dI3FEdEQQJwAAAAAAAA==",
                   "dataType": "moveObject",
                   "has_public_transfer": true,
-                  "type": "0x2::coin::Coin<0x2::sui::SUI>"
+                  "type": "0x2::coin::Coin<0x2::sui::SUI>",
+                  "version": 1
                 },
                 "owner": {
                   "AddressOwner": "0x4689c946f69a585924b91c4b8ae6d4cd6e1e02f6"
@@ -1980,23 +1981,39 @@
         "oneOf": [
           {
             "type": "object",
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/MoveObject"
-              },
-              {
-                "$ref": "#/components/schemas/RawMoveObject"
-              }
-            ],
             "required": [
-              "dataType"
+              "bcs_bytes",
+              "dataType",
+              "has_public_transfer",
+              "type",
+              "version"
             ],
             "properties": {
+              "bcs_bytes": {
+                "$ref": "#/components/schemas/Base64"
+              },
+              "child_count": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "format": "uint32",
+                "minimum": 0.0
+              },
               "dataType": {
                 "type": "string",
                 "enum": [
                   "moveObject"
                 ]
+              },
+              "has_public_transfer": {
+                "type": "boolean"
+              },
+              "type": {
+                "type": "string"
+              },
+              "version": {
+                "$ref": "#/components/schemas/SequenceNumber"
               }
             }
           },
@@ -2004,7 +2021,8 @@
             "type": "object",
             "required": [
               "dataType",
-              "disassembled"
+              "id",
+              "module_map"
             ],
             "properties": {
               "dataType": {
@@ -2013,9 +2031,14 @@
                   "package"
                 ]
               },
-              "disassembled": {
+              "id": {
+                "$ref": "#/components/schemas/ObjectID"
+              },
+              "module_map": {
                 "type": "object",
-                "additionalProperties": true
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/Base64"
+                }
               }
             }
           }
@@ -2655,25 +2678,6 @@
           }
         ]
       },
-      "MoveObject": {
-        "type": "object",
-        "required": [
-          "fields",
-          "has_public_transfer",
-          "type"
-        ],
-        "properties": {
-          "fields": {
-            "$ref": "#/components/schemas/MoveStruct"
-          },
-          "has_public_transfer": {
-            "type": "boolean"
-          },
-          "type": {
-            "type": "string"
-          }
-        }
-      },
       "MovePackage": {
         "type": "object",
         "required": [
@@ -3017,25 +3021,6 @@
             "additionalProperties": false
           }
         ]
-      },
-      "RawMoveObject": {
-        "type": "object",
-        "required": [
-          "bcs_bytes",
-          "has_public_transfer",
-          "type"
-        ],
-        "properties": {
-          "bcs_bytes": {
-            "$ref": "#/components/schemas/Base64"
-          },
-          "has_public_transfer": {
-            "type": "boolean"
-          },
-          "type": {
-            "type": "string"
-          }
-        }
       },
       "Secp256k1SuiSignature": {
         "$ref": "#/components/schemas/Base64"
