@@ -8,4 +8,8 @@ import svgr from 'vite-plugin-svgr';
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react(), svgr()],
+    build: {
+        // Set the output directory to match what CRA uses:
+        outDir: 'build',
+    },
 });
