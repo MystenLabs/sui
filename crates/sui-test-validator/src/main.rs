@@ -56,7 +56,10 @@ async fn main() -> Result<()> {
     .await?;
 
     println!("Fullnode RPC URL: {}", cluster.fullnode_url());
-    println!("Fullnode Websocket RPC URL: http://127.0.0.1:{}", args.websocket_rpc_port);
+    println!(
+        "Fullnode Websocket URL: {}",
+        cluster.websocket_url().unwrap()
+    );
     println!("Gateway RPC URL: {}", cluster.rpc_url());
 
     start_faucet(&cluster, args.faucet_port).await?;
