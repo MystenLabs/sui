@@ -37,7 +37,6 @@ pub(crate) struct Follower<A> {
     pub peer_name: AuthorityName,
     client: SafeClient<A>,
     state: Arc<AuthorityState>,
-    aggregator: Arc<AuthorityAggregator<A>>,
 }
 
 const REQUEST_FOLLOW_NUM_DIGESTS: u64 = 100_000;
@@ -379,7 +378,6 @@ where
             peer_name,
             client: active_authority.net.load().authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
-            aggregator: active_authority.net.load().clone(),
         }
     }
 
@@ -450,7 +448,7 @@ where
                         None => {
                             timer.stop_and_record();
                             timer = metrics.follower_stream_duration.start_timer();
-                            info!(peer = ?self.peer_name, ?latest_seq, "Gossip stream was closed. Restarting");
+                            info!(peer = ?self.peer_name, "Gossip stream was closed. Restarting");
                             self.client.metrics_total_times_reconnect_follower_stream.inc();
                             tokio::time::sleep(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS / 12)).await;
                             let req = BatchInfoRequest {
