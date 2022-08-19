@@ -159,18 +159,18 @@ where
 
 struct DigestsMessage {
     sync_arg: SyncArg,
-    tx: Option<oneshot::Sender<SuiResult>>,
+    tx: Option<oneshot::Sender<SyncResult>>,
 }
 
 impl DigestsMessage {
-    fn new_for_ckpt(digests: &ExecutionDigests, tx: oneshot::Sender<SuiResult>) -> Self {
+    fn new_for_ckpt(digests: &ExecutionDigests, tx: oneshot::Sender<SyncResult>) -> Self {
         Self {
             sync_arg: SyncArg::Checkpoint(*digests),
             tx: Some(tx),
         }
     }
 
-    fn new_for_exec_driver(digest: &TransactionDigest, tx: oneshot::Sender<SuiResult>) -> Self {
+    fn new_for_exec_driver(digest: &TransactionDigest, tx: oneshot::Sender<SyncResult>) -> Self {
         Self {
             sync_arg: SyncArg::ExecDriver(*digest),
             tx: Some(tx),
@@ -180,7 +180,7 @@ impl DigestsMessage {
     fn new(
         digests: &ExecutionDigests,
         peer: AuthorityName,
-        tx: oneshot::Sender<SuiResult>,
+        tx: oneshot::Sender<SyncResult>,
     ) -> Self {
         Self {
             sync_arg: SyncArg::Follow(peer, *digests),
@@ -290,6 +290,17 @@ impl<A> NodeSyncState<A> {
     }
 }
 
+pub enum SyncStatus {
+    /// The digest has been successfully processed, but there is not yet sufficient stake
+    /// voting for the digest to prove finality.
+    NotFinal,
+
+    /// The digest was executed locally.
+    CertExecuted,
+}
+
+pub type SyncResult = SuiResult<SyncStatus>;
+
 impl<A> NodeSyncState<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
@@ -375,7 +386,7 @@ where
         &self,
         permit: OwnedSemaphorePermit,
         digest: &TransactionDigest,
-    ) -> SuiResult {
+    ) -> SyncResult {
         trace!(?digest, "validator pending execution requested");
 
         let cert = match self.state.database.read_certificate(digest)? {
@@ -389,7 +400,7 @@ where
         };
 
         match self.state.handle_certificate(cert.clone()).await {
-            Ok(_) => Ok(()),
+            Ok(_) => Ok(SyncStatus::CertExecuted),
             Err(SuiError::ObjectErrors { .. }) => {
                 debug!(?digest, "cert execution failed due to missing parents");
 
@@ -413,7 +424,7 @@ where
                     // Parents have been executed, so this should now succeed.
                     debug!(?digest, "parents executed, re-attempting cert");
                     self.state.handle_certificate(cert.clone()).await?;
-                    Ok(())
+                    Ok(SyncStatus::CertExecuted)
                 } else {
                     Err(SuiError::ExecutionDriverError {
                         digest: *digest,
@@ -426,14 +437,14 @@ where
         }
     }
 
-    async fn process_digest(&self, arg: SyncArg, permit: OwnedSemaphorePermit) -> SuiResult {
+    async fn process_digest(&self, arg: SyncArg, permit: OwnedSemaphorePermit) -> SyncResult {
         trace!(?arg, "process_digest");
 
         let (digest, _effects_digest) = arg.digests();
 
         // check if the tx is already locally final
         if self.state.database.effects_exists(digest)? {
-            return Ok(());
+            return Ok(SyncStatus::CertExecuted);
         }
 
         // TODO: We could kick off the cert download now, as an optimization. For simplicity
@@ -465,20 +476,7 @@ where
                 );
 
                 if !is_final {
-                    // we won't be downloading anything, so release the permit
-                    std::mem::drop(permit);
-
-                    // wait until the tx becomes final before returning, so that the follower doesn't mark
-                    // this tx as finished prematurely.
-                    let _timer = self.metrics.wait_for_finality_latency_sec.start_timer();
-                    let (_, mut rx) = self.pending_txes.wait(&digests.transaction).await;
-                    let result = rx
-                        .recv()
-                        .await
-                        .map_err(|e| SuiError::GenericAuthorityError {
-                            error: format!("{:?}", e),
-                        });
-                    return result;
+                    return Ok(SyncStatus::NotFinal);
                 }
 
                 debug!(?digests, ?peer, "digests are now final");
@@ -519,7 +517,7 @@ where
             .forget_effects(effects.digest());
         self.node_sync_store.delete_cert_and_effects(digest)?;
 
-        Ok(())
+        Ok(SyncStatus::CertExecuted)
     }
 
     async fn wait_for_parents(
@@ -669,7 +667,7 @@ impl NodeSyncHandle {
         Self { sender, metrics }
     }
 
-    fn map_rx(rx: oneshot::Receiver<SuiResult>) -> BoxFuture<'static, SuiResult> {
+    fn map_rx(rx: oneshot::Receiver<SyncResult>) -> BoxFuture<'static, SyncResult> {
         Box::pin(rx.map(|res| {
             let res = res.map_err(|e| SuiError::GenericAuthorityError {
                 error: e.to_string(),
@@ -696,7 +694,7 @@ impl NodeSyncHandle {
     pub async fn sync_checkpoint(
         &self,
         checkpoint_contents: &CheckpointContents,
-    ) -> SuiResult<impl Stream<Item = SuiResult>> {
+    ) -> SuiResult<impl Stream<Item = SyncResult>> {
         let mut futures = FuturesOrdered::new();
         for digests in checkpoint_contents.iter() {
             let (tx, rx) = oneshot::channel();
@@ -711,7 +709,7 @@ impl NodeSyncHandle {
     pub async fn handle_execution_request(
         &self,
         digests: impl Iterator<Item = TransactionDigest>,
-    ) -> SuiResult<impl Stream<Item = SuiResult>> {
+    ) -> SuiResult<impl Stream<Item = SyncResult>> {
         let mut futures = FuturesOrdered::new();
         for digest in digests {
             let (tx, rx) = oneshot::channel();
@@ -727,7 +725,7 @@ impl NodeSyncHandle {
         &self,
         peer: AuthorityName,
         digests: ExecutionDigests,
-    ) -> SuiResult<BoxFuture<'static, SuiResult>> {
+    ) -> SuiResult<BoxFuture<'static, SyncResult>> {
         let (tx, rx) = oneshot::channel();
         let sender = self.sender.clone();
         Self::send_msg_with_tx(sender, DigestsMessage::new(&digests, peer, tx)).await?;
