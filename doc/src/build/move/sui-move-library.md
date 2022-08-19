@@ -75,7 +75,7 @@ To make an object `obj` shared and mutable, one can call:
 ```
 transfer::share_object(obj);
 ```
-After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be transferred or embedded in another object as a field. For more detail, see the [shared objects](../../learn/build/objects.md#shared) documentation.
+After this call, `obj` stays mutable, but becomes shared by everyone, i.e. anyone can send a transaction to mutate this object. However, such an object cannot be transferred or embedded in another object as a field. For more details, see the [shared objects](../../build/objects.md#shared) documentation.
 
 
 ## Transaction context
