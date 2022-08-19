@@ -28,7 +28,7 @@ tap = "1.0.1"
 sui-types = { path = "../sui-types" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"}
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"} 
-move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
 workspace-hack = { path = "../workspace-hack"}
 eyre = "0.6.8"
 

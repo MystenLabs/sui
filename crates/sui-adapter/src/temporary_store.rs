@@ -142,7 +142,7 @@ impl<S> TemporaryStore<S> {
         gas_object.storage_rebate = gas_status.charge_storage_mutation(
             gas_object_size,
             gas_object_size,
-            gas_object.storage_rebate,
+            gas_object.storage_rebate.into(),
         )?;
         objects_to_update.push(gas_object.clone());
 
@@ -159,7 +159,7 @@ impl<S> TemporaryStore<S> {
             let new_storage_rebate = gas_status.charge_storage_mutation(
                 old_object_size,
                 object.object_size_for_gas_metering(),
-                storage_rebate,
+                storage_rebate.into(),
             )?;
             if !object.is_immutable() {
                 // We don't need to set storage rebate for immutable objects, as they will
@@ -178,7 +178,7 @@ impl<S> TemporaryStore<S> {
                 gas_status.charge_storage_mutation(
                     old_object.object_size_for_gas_metering(),
                     0,
-                    old_object.storage_rebate,
+                    old_object.storage_rebate.into(),
                 )?;
             }
         }

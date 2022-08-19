@@ -4,6 +4,7 @@
 use move_binary_format::CompiledModule;
 use move_bytecode_utils::Modules;
 use move_cli::base::test::UnitTestResult;
+use move_core_types::gas_algebra::InternalGas;
 use move_package::{compilation::compiled_package::CompiledPackage, BuildConfig};
 use move_unit_test::UnitTestingConfig;
 use num_enum::TryFromPrimitive;
@@ -77,6 +78,23 @@ pub enum EventType {
     DeleteObjectID,
     /// User-defined event
     User,
+}
+
+// TODO: remove these in favor of new costs
+pub fn legacy_emit_cost() -> InternalGas {
+    InternalGas::new(52)
+}
+
+pub fn legacy_create_signer_cost() -> InternalGas {
+    InternalGas::new(24)
+}
+
+pub fn legacy_empty_cost() -> InternalGas {
+    InternalGas::new(84)
+}
+
+pub fn legacy_length_cost() -> InternalGas {
+    InternalGas::new(98)
 }
 
 /// Given a `path` and a `build_config`, build the package in that path and return the compiled modules as base64.

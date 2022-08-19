@@ -40,7 +40,7 @@ sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-node = { path = "../sui-node" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "ad05db4c5d6f851402efc7d2b285e9b59d513e64", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 test-utils = { path = "../test-utils" }
