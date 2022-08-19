@@ -36,6 +36,8 @@ interface TypeReference {
     type_arguments: SuiMoveNormalizedType[];
 }
 
+const TX_CONTEXT_TYPE = '0x2::tx_context::TxContext';
+
 /** Takes a normalized move type and returns the address information contained within it */
 function unwrapTypeReference(
     type: SuiMoveNormalizedType
@@ -141,6 +143,8 @@ export function DappTxApprovalPage() {
             if ('Struct' in param) {
                 transfer.children.push(groupedParam);
             } else if ('MutableReference' in param) {
+                // Skip TxContext:
+                if (groupedParam.module === TX_CONTEXT_TYPE) return;
                 modify.children.push(groupedParam);
             } else if ('Reference' in param) {
                 read.children.push(groupedParam);
