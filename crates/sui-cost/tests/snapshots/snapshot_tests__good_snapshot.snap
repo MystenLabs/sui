@@ -3,27 +3,27 @@ source: crates/sui-cost/tests/snapshot_tests.rs
 expression: common_costs
 ---
 Publish:
-  computationCost: 561
+  computationCost: 562
   storageCost: 84
   storageRebate: 16
 MergeCoin:
-  computationCost: 501
+  computationCost: 502
   storageCost: 32
   storageRebate: 0
 ? SplitCoin: 0
-: computationCost: 484
+: computationCost: 485
   storageCost: 32
   storageRebate: 0
 ? SplitCoin: 1
-: computationCost: 527
+: computationCost: 528
   storageCost: 48
   storageRebate: 0
 ? SplitCoin: 2
-: computationCost: 570
+: computationCost: 571
   storageCost: 64
   storageRebate: 0
 ? SplitCoin: 3
-: computationCost: 613
+: computationCost: 614
   storageCost: 80
   storageRebate: 0
 TransferWholeCoin:

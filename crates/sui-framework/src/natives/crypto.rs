@@ -4,7 +4,7 @@ use curve25519_dalek_ng::scalar::Scalar;
 use fastcrypto::{
     bls12381::{BLS12381PublicKey, BLS12381Signature},
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
-    secp256k1::Secp256k1Signature,
+    secp256k1::{Secp256k1PublicKey, Secp256k1Signature},
     traits::ToFromBytes,
     Verifier,
 };
@@ -74,6 +74,38 @@ pub fn keccak256(
                 .to_vec()
         )],
     ))
+}
+
+/// Native implemention of secp256k1_verify in public Move API, see crypto.move for specifications.
+pub fn secp256k1_verify(
+    context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 3);
+
+    let hashed_msg = pop_arg!(args, Vec<u8>);
+    let public_key_bytes = pop_arg!(args, Vec<u8>);
+    let signature_bytes = pop_arg!(args, Vec<u8>);
+
+    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/4086
+    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
+
+    let signature = match <Secp256k1Signature as ToFromBytes>::from_bytes(&signature_bytes) {
+        Ok(signature) => signature,
+        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    };
+
+    let public_key = match <Secp256k1PublicKey as ToFromBytes>::from_bytes(&public_key_bytes) {
+        Ok(public_key) => public_key,
+        Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    };
+
+    match public_key.verify_hashed(&hashed_msg, &signature) {
+        Ok(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(true)])),
+        Err(_) => Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
+    }
 }
 
 /// Native implemention of bls12381_verify in public Move API, see crypto.move for specifications.

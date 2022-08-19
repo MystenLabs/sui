@@ -199,7 +199,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn run_framework_move_unit_tests() {
+    fn cmework_move_unit_tests() {
         get_sui_framework();
         get_move_stdlib();
         build_move_package(
