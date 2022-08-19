@@ -20,7 +20,7 @@ use sui_config::{
     SUI_GATEWAY_CONFIG, SUI_GENESIS_FILENAME, SUI_KEYSTORE_FILENAME, SUI_NETWORK_CONFIG,
 };
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::{GetObjectDataResponse, SuiParsedObject, SuiTransactionEffects};
+use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiParsedObject, SuiTransactionEffects};
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
 use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, SuiKeyPair};
@@ -163,6 +163,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 
     let _object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -170,8 +171,8 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
 }
 
 #[tokio::test]
-async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
-    let (_network, mut context, address) = setup_network_and_wallet().await?;
+async fn test_create_example_nft_command() {
+    let (_network, mut context, address) = setup_network_and_wallet().await.unwrap();
 
     let result = SuiClientCommands::CreateExampleNFT {
         name: None,
@@ -181,7 +182,8 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
         gas_budget: None,
     }
     .execute(&mut context)
-    .await?;
+    .await
+    .unwrap();
 
     match result {
         SuiClientCommandResult::CreateExampleNFT(GetObjectDataResponse::Exists(obj)) => {
@@ -195,9 +197,8 @@ async fn test_create_example_nft_command() -> Result<(), anyhow::Error> {
         _ => Err(anyhow!(
             "WalletCommands::CreateExampleNFT returns wrong type"
         )),
-    }?;
-
-    Ok(())
+    }
+    .unwrap();
 }
 
 #[tokio::test]
@@ -249,6 +250,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -270,6 +272,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -331,6 +334,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address1)
         .await?;
 
@@ -458,6 +462,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -522,6 +527,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -612,6 +618,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -690,6 +697,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     // Check that we indeed fetched for addr1
     let mut actual_objs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(addr1)
         .await
         .unwrap();
@@ -810,7 +818,13 @@ fn get_gas_value(o: &SuiParsedObject) -> u64 {
 }
 
 async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiParsedObject> {
-    if let GetObjectDataResponse::Exists(o) = context.gateway.get_object(id).await.unwrap() {
+    let response = context
+        .gateway
+        .read_api()
+        .get_parsed_object(id)
+        .await
+        .unwrap();
+    if let GetObjectDataResponse::Exists(o) = response {
         Some(o)
     } else {
         None
@@ -824,6 +838,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -865,6 +880,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .await?;
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -905,6 +921,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -944,6 +961,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 

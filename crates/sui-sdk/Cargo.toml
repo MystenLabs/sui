@@ -15,7 +15,9 @@ serde_json = "1.0.83"
 futures-core = "0.3.21"
 futures = "0.3.23"
 signature = "1.6.0"
+tokio = "1.20.1"
 rand = "0.8.5"
+bcs = "0.1.3"
 
 bip39 = { git = "https://github.com/patrickkuo/rust-bip39.git" , rev = "a76fe8310416555e6383b42b8acc4eb93c7bcc89", features = ["rand"]}
 
@@ -25,6 +27,11 @@ sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
+sui-adapter =  { path = "../sui-adapter" }
+
+move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 
 workspace-hack = { path = "../workspace-hack"}
 
@@ -32,7 +39,6 @@ workspace-hack = { path = "../workspace-hack"}
 clap = { version = "3.1.17", features = ["derive"] }
 dirs = "4.0.0"
 tokio = "1.20.1"
-bcs = "0.1.3"
 async-recursion = "1.0.0"
 tempfile = "3.3.0"
 sha3 = "0.10.2"

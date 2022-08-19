@@ -56,6 +56,7 @@ async fn run_common_single_writer_tx_costs(
 
         let object_refs = context
             .gateway
+            .read_api()
             .get_objects_owned_by_address(address)
             .await?;
 
@@ -91,6 +92,7 @@ async fn run_common_single_writer_tx_costs(
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -147,6 +149,7 @@ async fn run_common_single_writer_tx_costs(
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
 
@@ -216,6 +219,7 @@ async fn run_common_single_writer_tx_costs(
 
     let object_refs = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
     let obj_id = object_refs.get(1).unwrap().object_id;

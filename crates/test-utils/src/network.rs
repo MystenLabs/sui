@@ -14,13 +14,16 @@ use sui_config::genesis_config::GenesisConfig;
 use sui_config::{Config, SUI_CLIENT_CONFIG, SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG};
 use sui_config::{PersistedConfig, SUI_KEYSTORE_FILENAME};
 use sui_core::gateway_state::GatewayState;
+use sui_json_rpc::api::RpcBcsApiServer;
 use sui_json_rpc::api::RpcGatewayApiServer;
 use sui_json_rpc::api::RpcReadApiServer;
 use sui_json_rpc::api::RpcTransactionBuilderServer;
 use sui_json_rpc::api::WalletSyncApiServer;
+use sui_json_rpc::bcs_api::BcsApiImpl;
 use sui_json_rpc::gateway_api::{
     GatewayReadApiImpl, GatewayWalletSyncApiImpl, RpcGatewayImpl, TransactionBuilderImpl,
 };
+
 use sui_json_rpc::http_server::{HttpServerBuilder, HttpServerHandle, RpcModule};
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::{ClientType, SuiClient};
@@ -129,6 +132,7 @@ async fn start_rpc_gateway(
     module.merge(GatewayReadApiImpl::new(client.clone()).into_rpc())?;
     module.merge(TransactionBuilderImpl::new(client.clone()).into_rpc())?;
     module.merge(GatewayWalletSyncApiImpl::new(client.clone()).into_rpc())?;
+    module.merge(BcsApiImpl::new_with_gateway(client.clone()).into_rpc())?;
 
     let handle = server.start(module)?;
     Ok((addr, handle))
@@ -155,13 +159,13 @@ pub async fn start_rpc_test_network_with_fullnode(
         PersistedConfig::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
     let rpc_url = format!("http://{}", server_addr);
     let accounts = wallet_conf.keystore.init()?.addresses();
-    wallet_conf.gateway = ClientType::RPC(rpc_url.clone());
+    wallet_conf.gateway = ClientType::RPC(rpc_url.clone(), None);
     wallet_conf
         .persisted(&working_dir.join(SUI_CLIENT_CONFIG))
         .save()?;
 
     let http_client = HttpClientBuilder::default().build(rpc_url.clone())?;
-    let gateway_client = SuiClient::new_http_client(&rpc_url)?;
+    let gateway_client = SuiClient::new_rpc_client(&rpc_url, None).await?;
     Ok(TestNetwork {
         network,
         _rpc_server: rpc_server_handle,

@@ -43,7 +43,11 @@ async fn transfer_coin(
     let sender = context.keystore.addresses().get(0).cloned().unwrap();
     let receiver = context.keystore.addresses().get(1).cloned().unwrap();
 
-    let object_refs = context.gateway.get_objects_owned_by_address(sender).await?;
+    let object_refs = context
+        .gateway
+        .read_api()
+        .get_objects_owned_by_address(sender)
+        .await?;
     let object_to_send = object_refs.get(1).unwrap().object_id;
 
     // Send an object
