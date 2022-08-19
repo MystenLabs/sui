@@ -25,8 +25,11 @@ use std::sync::Arc;
 /// not yet been applied to the node's SuiDataStore.
 #[derive(DBMapUtils)]
 pub struct NodeSyncStore {
-    /// Certificates/Effects that have been fetched from remote validators, but not sequenced.
-    certs_and_fx: DBMap<TransactionDigest, (CertifiedTransaction, SignedTransactionEffects)>,
+    /// Certificates that have been fetched from remote validators, but not sequenced.
+    certs: DBMap<TransactionDigest, CertifiedTransaction>,
+
+    /// Verified true effects.
+    effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
     /// The persisted batch streams (minus the signed batches) from each authority.
     batch_streams: DBMap<(AuthorityName, TxSequenceNumber), ExecutionDigests>,
@@ -46,23 +49,37 @@ impl NodeSyncStore {
         Arc::new(NodeSyncStore::open_tables_read_write(db_path, None, None))
     }
 
-    pub fn has_cert_and_effects(&self, tx: &TransactionDigest) -> SuiResult<bool> {
-        Ok(self.certs_and_fx.contains_key(tx)?)
+    pub fn store_cert(&self, cert: &CertifiedTransaction) -> SuiResult {
+        Ok(self.certs.insert(cert.digest(), cert)?)
     }
 
-    pub fn store_cert_and_effects(
+    pub fn store_effects(
         &self,
         tx: &TransactionDigest,
-        val: &(CertifiedTransaction, SignedTransactionEffects),
+        effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        Ok(self.certs_and_fx.insert(tx, val)?)
+        Ok(self.effects.insert(tx, effects)?)
     }
 
     pub fn get_cert_and_effects(
         &self,
         tx: &TransactionDigest,
-    ) -> SuiResult<Option<(CertifiedTransaction, SignedTransactionEffects)>> {
-        Ok(self.certs_and_fx.get(tx)?)
+    ) -> SuiResult<(
+        Option<CertifiedTransaction>,
+        Option<SignedTransactionEffects>,
+    )> {
+        Ok((self.certs.get(tx)?, self.effects.get(tx)?))
+    }
+
+    pub fn get_cert(&self, tx: &TransactionDigest) -> SuiResult<Option<CertifiedTransaction>> {
+        Ok(self.certs.get(tx)?)
+    }
+
+    pub fn get_effects(
+        &self,
+        tx: &TransactionDigest,
+    ) -> SuiResult<Option<SignedTransactionEffects>> {
+        Ok(self.effects.get(tx)?)
     }
 
     pub fn cleanup_cert(
@@ -70,7 +87,8 @@ impl NodeSyncStore {
         digest: &TransactionDigest,
         effects: Option<&TransactionEffectsDigest>,
     ) -> SuiResult {
-        self.certs_and_fx.remove(digest)?;
+        self.certs.remove(digest)?;
+        self.effects.remove(digest)?;
         if let Some(effects) = effects {
             self.clear_effects_votes(*effects)?;
         }
