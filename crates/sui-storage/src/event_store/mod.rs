@@ -40,8 +40,8 @@ use flexstr::SharedStr;
 /// Maximum number of events one can ask for right now
 pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 100;
 
-pub const TRANSFER_TYPE_KEY: &str = "transfer_type";
-pub const OBJECT_VERSION_KEY: &str = "object_version";
+pub const TRANSFER_TYPE_KEY: &str = "xfer_type";
+pub const OBJECT_VERSION_KEY: &str = "obj_ver";
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
@@ -277,7 +277,6 @@ impl StoredEvent {
             }),
         }
     }
-
 }
 
 impl TryInto<SuiEventEnvelope> for StoredEvent {
@@ -341,7 +340,7 @@ pub trait EventStore {
     ) -> Result<u64, SuiError>;
 
     /// Returns at most `limit` events emitted by a given
-    /// transaction, returned in order emitted.
+    /// transaction, sorted in order emitted.
     async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
@@ -349,8 +348,8 @@ pub trait EventStore {
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
     /// Returns at most `limit` events of a certain EventType
-    /// (e.g. `TransferObject`) within [start_time, end_time).
-    /// Sorted in in descending time.
+    /// (e.g. `TransferObject`) within [start_time, end_time),
+    /// sorted in in descending time.
     async fn events_by_type(
         &self,
         start_time: u64,
@@ -358,14 +357,6 @@ pub trait EventStore {
         event_type: EventType,
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
-
-    /// Generic event iterator to return events emitted in checkpoints
-    /// [start_checkpoint, end_checkpoint). Return in ingestion order.
-    fn events_by_checkpoint(
-        &self,
-        start_checkpoint: u64,
-        end_checkpoint: u64,
-    ) -> Result<StreamedResult, SuiError>;
 
     /// Returns at most `limit` events emitted in a certain Module ID during
     /// [start_time, end_time), sorted in descending time.
@@ -418,8 +409,16 @@ pub trait EventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
+    /// Generic event iterator to return events emitted in checkpoints
+    /// [start_checkpoint, end_checkpoint), order not guaranteed.
+    fn events_by_checkpoint(
+        &self,
+        start_checkpoint: u64,
+        end_checkpoint: u64,
+    ) -> Result<StreamedResult, SuiError>;
+
     /// Generic event iterator that returns events emitted between
-    /// [start_time, end_time). Return in ingestion order.
+    /// [start_time, end_time), sorted in descending time.
     async fn event_iterator(
         &self,
         start_time: u64,

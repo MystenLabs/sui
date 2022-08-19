@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use strum::{EnumMessage, IntoEnumIterator};
-use sui_types::base_types::{SequenceNumber, SuiAddress};
+use sui_types::base_types::SuiAddress;
 use sui_types::object::Owner;
 
 use sqlx::{
@@ -20,7 +20,7 @@ use sqlx::{
     Executor, Row, SqlitePool,
 };
 use sui_types::error::SuiError;
-use sui_types::event::{Event, TransferType, TransferTypeVariants};
+use sui_types::event::{Event, TransferTypeVariants};
 use tracing::{debug, info, log, warn};
 
 /// Sqlite-based Event Store
@@ -74,10 +74,6 @@ enum EventsTableColumns {
     Sender,
     /// recipient TEXT
     Recipient,
-    // /// object_version INTEGER
-    // ObjectVersion,
-    // /// transfer_type INTEGER
-    // TransferType,
 }
 
 const SQL_INSERT_TX: &str =
@@ -204,13 +200,6 @@ impl SqlEventStore {
         }
     }
 
-    // fn try_extract_extra_fields(row: &SqliteRow) -> Result<Value, SuiError> {
-    //     let fields: String = row.get(EventsTableColumns::Fields as usize);
-    //     serde_json::from_str(&fields).map_err(|_e| SuiError::ExtraFieldFailedToDeserialize {
-    //         error: format!("Error parsing event extra fields: {fields}"),
-    //     })
-    // }
-
     fn try_extract_sender_address(row: &SqliteRow) -> Result<Option<SuiAddress>, SuiError> {
         let raw_bytes: Option<Vec<u8>> = row.get(EventsTableColumns::Sender as usize);
         match raw_bytes {
@@ -323,16 +312,6 @@ impl From<SqliteRow> for StoredEvent {
         let recipient = SqlEventStore::try_extract_recipient(&row)
             .expect("Error converting stored recipient address to Owner");
 
-        // let fields_json_value = SqlEventStore::try_extract_extra_fields(&row)
-        //     .expect("Error parsed extra fields into JSON value");
-
-        // let object_version =
-        //     SqlEventStore::try_extract_object_version_from_json_value(&fields_json_value)
-        //         .expect("Error converting stored object version to SequenceNumber");
-        // let transfer_type =
-        //     SqlEventStore::try_extract_transfer_type_from_json_value(&fields_json_value)
-        //         .expect("Error converting stored transfer type to TransferType");
-
         StoredEvent {
             timestamp: timestamp as u64,
             checkpoint_num: checkpoint as u64,
@@ -347,13 +326,12 @@ impl From<SqliteRow> for StoredEvent {
             move_event_name,
             sender,
             recipient,
-            // object_version,
-            // transfer_type,
         }
     }
 }
 
-const TS_QUERY: &str = "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? LIMIT ?";
+const TS_QUERY: &str =
+    "SELECT * FROM events WHERE timestamp >= ? AND timestamp < ? ORDER BY timestamp DESC LIMIT ?";
 
 const TX_QUERY: &str = "SELECT * FROM events WHERE tx_digest = ? LIMIT ?";
 
@@ -723,7 +701,8 @@ mod tests {
         let queried_events = db.event_iterator(1_000_000, 1_002_000, 20).await?;
         assert_eq!(queried_events.len(), 2);
         for i in 0..2 {
-            test_queried_event_vs_test_envelope(&queried_events[i], &to_insert[i], 1);
+            // DESCENDING order
+            test_queried_event_vs_test_envelope(&queried_events[1 - i], &to_insert[i], 1);
         }
 
         Ok(())

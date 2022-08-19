@@ -370,9 +370,9 @@ pub trait EventReadApi {
         module: String,
         /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
-        /// the matching events' timestamp will be after the specified start time
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
@@ -384,9 +384,9 @@ pub trait EventReadApi {
         move_event_struct_name: String,
         /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
-        /// the matching events' timestamp will be after the specified start time
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
@@ -398,9 +398,9 @@ pub trait EventReadApi {
         sender: SuiAddress,
         /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
-        /// the matching events' timestamp will be after the specified start time
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
@@ -412,9 +412,9 @@ pub trait EventReadApi {
         recipient: Owner,
         /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
-        /// the matching events' timestamp will be after the specified start time
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
@@ -426,9 +426,21 @@ pub trait EventReadApi {
         object: ObjectID,
         /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
         count: usize,
-        /// the matching events' timestamp will be after the specified start time
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>>;
+
+    /// Return events emitted in [start_time, end_time) interval
+    #[method(name = "getEventsByTimeRange")]
+    async fn get_events_by_timerange(
+        &self,
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
+        count: usize,
+        /// left endpoint of time interval, inclusive
+        start_time: u64,
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 }
