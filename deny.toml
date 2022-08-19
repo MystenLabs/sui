@@ -54,7 +54,9 @@ ignore = [
     # potential segfault in localtime_r, brought by chrono et al.
     "RUSTSEC-2020-0159",
     # Integer overflow in hyper's parsing of the Transfer-Encoding header leads to data loss
-    "RUSTSEC-2021-0079"
+    "RUSTSEC-2021-0079",
+    # Lenient hyper header parsing of Content-Length could allow request smuggling
+    "RUSTSEC-2021-0078"
 ]
 # Threshold for security vulnerabilities, any vulnerability with a CVSS score
 # lower than the range specified will be ignored. Note that ignored advisories
