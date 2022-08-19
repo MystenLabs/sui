@@ -4,6 +4,7 @@
   "description": "BCS - Canonical Binary Serialization implementation for JavaScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "module": "dist/bcs.esm.js",
   "directories": {
     "example": "examples",
     "test": "tests"
