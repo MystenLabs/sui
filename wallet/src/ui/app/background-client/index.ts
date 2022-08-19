@@ -12,11 +12,7 @@ import { setPermissions } from '_redux/slices/permissions';
 import { setSignMessageRequests } from '_redux/slices/sign-message-requests';
 import { setTransactionRequests } from '_redux/slices/transaction-requests';
 
-import type {
-    SignaturePubkeyPair,
-    SuiAddress,
-    SuiTransactionResponse,
-} from '@mysten/sui.js';
+import type { SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import type { Message } from '_messages';
 import type { GetSignMessageRequests } from '_payloads/messages/ui/GetSignMessageRequests';
 import type { SignMessageRequestResponse } from '_payloads/messages/ui/SignMessageRequestResponse';
@@ -26,6 +22,7 @@ import type {
 } from '_payloads/permissions';
 import type { GetTransactionRequests } from '_payloads/transactions/ui/GetTransactionRequests';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
+import type { SerializedSignaturePubkeyPair } from '_shared/signature-serialization';
 import type { AppDispatch } from '_store';
 
 export class BackgroundClient {
@@ -94,7 +91,7 @@ export class BackgroundClient {
     public async sendSignMessageRequestResponse(
         signMessageRequestID: string,
         approved: boolean,
-        signature: SignaturePubkeyPair | undefined,
+        signature: SerializedSignaturePubkeyPair | undefined,
         error: string | undefined
     ) {
         this.sendMessage(

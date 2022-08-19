@@ -3,12 +3,12 @@
 
 import { isBasePayload } from '_payloads';
 
-import type { SignaturePubkeyPair } from '@mysten/sui.js';
 import type { BasePayload, Payload } from '_payloads';
+import type { SerializedSignaturePubkeyPair } from '_shared/signature-serialization';
 
 export interface ExecuteSignMessageResponse extends BasePayload {
     type: 'execute-sign-message-response';
-    signature?: SignaturePubkeyPair;
+    signature?: SerializedSignaturePubkeyPair;
 }
 
 export function isExecuteSignMessageResponse(

@@ -8,6 +8,7 @@ import {
 } from '@mysten/sui.js';
 import { filter, lastValueFrom, map, take } from 'rxjs';
 
+import { deserializeSignaturePubkeyPair } from '../shared/signature-serialization';
 import { createMessage } from '_messages';
 import { WindowMessageStream } from '_messaging/WindowMessageStream';
 import { isErrorPayload } from '_payloads';
@@ -133,7 +134,10 @@ export class DAppInterface {
                 messageData,
                 messageString,
             }),
-            (response) => response.signature
+            (response) =>
+                response.signature
+                    ? deserializeSignaturePubkeyPair(response.signature)
+                    : undefined
         );
     }
 

@@ -1,13 +1,18 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, type SignaturePubkeyPair } from '@mysten/sui.js';
+import { Base64DataBuffer } from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
     createSlice,
     type EntityState,
 } from '@reduxjs/toolkit';
+
+import {
+    type SerializedSignaturePubkeyPair,
+    serializeSignaturePubkeyPair,
+} from '_shared/signature-serialization';
 
 import type { PayloadAction } from '@reduxjs/toolkit';
 import type { SignMessageRequest } from '_payloads/messages/SignMessageRequest';
@@ -26,7 +31,7 @@ export const respondToSignMessageRequest = createAsyncThunk<
     {
         id: string;
         approved: boolean;
-        signature: SignaturePubkeyPair | null;
+        signature: SerializedSignaturePubkeyPair | null;
     },
     { id: string; approved: boolean },
     AppThunkConfig
@@ -44,14 +49,17 @@ export const respondToSignMessageRequest = createAsyncThunk<
         if (!signMessageRequest) {
             throw new Error(`SignMessageRequest ${id} not found`);
         }
-        let signMessageResult: SignaturePubkeyPair | undefined = undefined;
+        let signMessageResult: SerializedSignaturePubkeyPair | undefined =
+            undefined;
         let signMessageResultError: string | undefined;
         if (approved) {
             const signer = api.getSignerInstance(keypairVault.getKeyPair());
             try {
                 if (signMessageRequest.messageData) {
-                    signMessageResult = await signer.signData(
-                        new Base64DataBuffer(signMessageRequest.messageData)
+                    signMessageResult = serializeSignaturePubkeyPair(
+                        await signer.signData(
+                            new Base64DataBuffer(signMessageRequest.messageData)
+                        )
                     );
                 } else {
                     throw new Error('Message must be defined.');
