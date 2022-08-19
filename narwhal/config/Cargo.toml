@@ -13,7 +13,7 @@ thiserror = "1.0.32"
 tracing = "0.1.36"
 arc-swap = { version = "1.5.1", features = ["serde"] }
 
-crypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ded6f91c9c19594a3eaeaa9a487d42a39965569e", package = "fastcrypto" }
+crypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9e58305dc463c40b9d357730203406214909f04", package = "fastcrypto" }
 
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 rand = "0.8.5"

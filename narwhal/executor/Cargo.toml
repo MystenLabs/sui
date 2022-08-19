@@ -12,7 +12,7 @@ blake2 = "0.9"
 bytes = "1.2.1"
 config = { path = "../config" }
 consensus = { path = "../consensus" }
-crypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ded6f91c9c19594a3eaeaa9a487d42a39965569e", package = "fastcrypto" }
+crypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9e58305dc463c40b9d357730203406214909f04", package = "fastcrypto" }
 futures = "0.3.23"
 multiaddr = "0.14.0"
 primary = { path = "../primary" }

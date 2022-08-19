@@ -31,7 +31,7 @@ axum = "0.5.15"
 
 config = { path = "../config" }
 consensus = { path = "../consensus" }
-crypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ded6f91c9c19594a3eaeaa9a487d42a39965569e", package = "fastcrypto" }
+crypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9e58305dc463c40b9d357730203406214909f04", package = "fastcrypto" }
 executor = { path = "../executor" }
 network = { path = "../network" }
 primary = { path = "../primary" }
@@ -42,7 +42,6 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 eyre = "0.6.8"
 
 [dev-dependencies]
-ed25519-dalek = "1.0.1"
 hex = "0.4.3"
 pretty_assertions = "1.2.1"
 serde-reflection = "0.3.6"
