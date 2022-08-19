@@ -64,7 +64,6 @@ importers:
       vite: ^3.0.8
       vite-plugin-svgr: ^2.2.1
       vitest: ^0.22.1
-      web-vitals: ^2.1.4
     dependencies:
       '@mysten/sui.js': link:../../sdk/typescript
       '@sentry/react': 7.11.1_react@18.2.0
@@ -85,7 +84,6 @@ importers:
       react-router-dom: 6.3.0_biqbaboplfbrettd7655fr4n2y
       topojson-client: 3.1.0
       vanilla-cookieconsent: 2.8.5
-      web-vitals: 2.1.4
     devDependencies:
       '@testing-library/jest-dom': 5.16.5
       '@testing-library/react': 12.1.5_biqbaboplfbrettd7655fr4n2y
