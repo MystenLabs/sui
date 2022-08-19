@@ -96,9 +96,6 @@ const INDEXED_COLUMNS: &[&str] = &[
     "object_id",
 ];
 
-const TRANSFER_TYPE_KEY: &str = "transfer_type";
-const OBJECT_VERSION_KEY: &str = "object_version";
-
 impl SqlEventStore {
     /// Creates a new SQLite in-memory database, mostly for testing
     pub async fn new_memory_only_not_prod() -> Result<Self, SuiError> {
@@ -207,57 +204,12 @@ impl SqlEventStore {
         }
     }
 
-    fn try_extract_extra_fields(row: &SqliteRow) -> Result<Value, SuiError> {
-        let fields: String = row.get(EventsTableColumns::Fields as usize);
-        serde_json::from_str(&fields).map_err(|_e| SuiError::ExtraFieldFailedToDeserialize {
-            error: format!("Error parsing event extra fields: {fields}"),
-        })
-    }
-
-    fn try_extract_transfer_type_from_json_value(
-        json_value: &Value,
-    ) -> Result<Option<TransferType>, SuiError> {
-        match &json_value[TRANSFER_TYPE_KEY] {
-            serde_json::Value::Null => Ok(None),
-            serde_json::Value::String(transfer_type_ordinal) => {
-                let transfer_type_ordinal =
-                    transfer_type_ordinal.parse::<usize>().map_err(|_e| {
-                        SuiError::ExtraFieldFailedToDeserialize {
-                            error: format!(
-                                "Error parsing transfer type from extra fields: {json_value}"
-                            ),
-                        }
-                    })?;
-                Ok(Some(Event::transfer_type_from_ordinal(
-                    transfer_type_ordinal,
-                )?))
-            }
-            _ => Err(SuiError::ExtraFieldFailedToDeserialize {
-                error: format!("Error parsing transfer type from extra fields: {json_value}"),
-            }),
-        }
-    }
-
-    fn try_extract_object_version_from_json_value(
-        json_value: &Value,
-    ) -> Result<Option<SequenceNumber>, SuiError> {
-        match &json_value[OBJECT_VERSION_KEY] {
-            serde_json::Value::Null => Ok(None),
-            serde_json::Value::String(object_version) => {
-                let object_version = object_version.parse::<u64>().map_err(|_e| {
-                    SuiError::ExtraFieldFailedToDeserialize {
-                        error: format!(
-                            "Error parsing object version from extra fields: {json_value}"
-                        ),
-                    }
-                })?;
-                Ok(Some(SequenceNumber::from_u64(object_version)))
-            }
-            _ => Err(SuiError::ExtraFieldFailedToDeserialize {
-                error: format!("Error parsing object version from extra fields: {json_value}"),
-            }),
-        }
-    }
+    // fn try_extract_extra_fields(row: &SqliteRow) -> Result<Value, SuiError> {
+    //     let fields: String = row.get(EventsTableColumns::Fields as usize);
+    //     serde_json::from_str(&fields).map_err(|_e| SuiError::ExtraFieldFailedToDeserialize {
+    //         error: format!("Error parsing event extra fields: {fields}"),
+    //     })
+    // }
 
     fn try_extract_sender_address(row: &SqliteRow) -> Result<Option<SuiAddress>, SuiError> {
         let raw_bytes: Option<Vec<u8>> = row.get(EventsTableColumns::Sender as usize);
@@ -347,8 +299,8 @@ impl From<SqliteRow> for StoredEvent {
         let module_name: Option<String> = row.get(EventsTableColumns::ModuleName as usize);
         let function: Option<String> = row.get(EventsTableColumns::Function as usize);
         let fields_text: &str = row.get(EventsTableColumns::Fields as usize);
-        let fields: Vec<_> = if fields_text.is_empty() {
-            Vec::new()
+        let fields: BTreeMap<SharedStr, EventValue> = if fields_text.is_empty() {
+            BTreeMap::new()
         } else {
             let fields_json = serde_json::from_str(fields_text)
                 .unwrap_or_else(|e| panic!("Could not parse [{}] as JSON: {}", fields_text, e));
@@ -361,7 +313,7 @@ impl From<SqliteRow> for StoredEvent {
                     ?fields_json,
                     "Could not parse JSON as object, should not happen"
                 );
-                Vec::new()
+                BTreeMap::new()
             }
         };
         let move_event_contents: Option<Vec<u8>> = row.get(EventsTableColumns::Contents as usize);
@@ -371,15 +323,15 @@ impl From<SqliteRow> for StoredEvent {
         let recipient = SqlEventStore::try_extract_recipient(&row)
             .expect("Error converting stored recipient address to Owner");
 
-        let fields_json_value = SqlEventStore::try_extract_extra_fields(&row)
-            .expect("Error parsed extra fields into JSON value");
+        // let fields_json_value = SqlEventStore::try_extract_extra_fields(&row)
+        //     .expect("Error parsed extra fields into JSON value");
 
-        let object_version =
-            SqlEventStore::try_extract_object_version_from_json_value(&fields_json_value)
-                .expect("Error converting stored object version to SequenceNumber");
-        let transfer_type =
-            SqlEventStore::try_extract_transfer_type_from_json_value(&fields_json_value)
-                .expect("Error converting stored transfer type to TransferType");
+        // let object_version =
+        //     SqlEventStore::try_extract_object_version_from_json_value(&fields_json_value)
+        //         .expect("Error converting stored object version to SequenceNumber");
+        // let transfer_type =
+        //     SqlEventStore::try_extract_transfer_type_from_json_value(&fields_json_value)
+        //         .expect("Error converting stored transfer type to TransferType");
 
         StoredEvent {
             timestamp: timestamp as u64,
@@ -395,8 +347,8 @@ impl From<SqliteRow> for StoredEvent {
             move_event_name,
             sender,
             recipient,
-            object_version,
-            transfer_type,
+            // object_version,
+            // transfer_type,
         }
     }
 }
@@ -706,19 +658,20 @@ mod tests {
         assert_eq!(queried.object_id, orig.event.object_id());
         assert_eq!(queried.sender, orig.event.sender());
         assert_eq!(queried.recipient.as_ref(), orig.event.recipient());
-        assert_eq!(queried.transfer_type.as_ref(), orig.event.transfer_type());
-        assert_eq!(queried.object_version.as_ref(), orig.event.object_version());
+        assert_eq!(
+            queried.transfer_type().unwrap().as_ref(),
+            orig.event.transfer_type()
+        );
+        assert_eq!(
+            queried.object_version().unwrap().as_ref(),
+            orig.event.object_version()
+        );
         assert_eq!(
             queried.move_event_contents.as_deref(),
             orig.event.move_event_contents()
         );
-        let move_event_name = orig
-            .event
-            .move_event_name();
-        assert_eq!(
-            queried.move_event_name.as_ref(),
-            move_event_name.as_ref()
-        );
+        let move_event_name = orig.event.move_event_name();
+        assert_eq!(queried.move_event_name.as_ref(), move_event_name.as_ref());
     }
 
     #[tokio::test]
@@ -1279,7 +1232,10 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 1);
         info!("events[0]: {:?}", events[0]);
-        assert_eq!(events[0].object_version.unwrap().value(), u64::MAX);
+        assert_eq!(
+            events[0].object_version().unwrap().unwrap().value(),
+            u64::MAX
+        );
         Ok(())
     }
 
