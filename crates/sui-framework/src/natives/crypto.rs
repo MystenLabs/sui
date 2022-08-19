@@ -27,7 +27,7 @@ pub const INVALID_RISTRETTO_GROUP_ELEMENT: u64 = 3;
 pub const INVALID_RISTRETTO_SCALAR: u64 = 4;
 pub const BULLETPROOFS_VERIFICATION_FAILED: u64 = 5;
 
-pub const BP_DOMAIN: &[u8] = b"sui";
+pub const BP_DOMAIN: &[u8] = b"mizu";
 
 /// Native implemention of ecrecover in public Move API, see crypto.move for specifications.
 pub fn ecrecover(
@@ -116,7 +116,7 @@ pub fn verify_range_proof(
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
     debug_assert!(ty_args.is_empty());
-    debug_assert!(args.len() == 2);
+    debug_assert!(args.len() == 3);
 
     let bit_length = pop_arg!(args, u64);
     let commitment_bytes = pop_arg!(args, Vec<u8>);
