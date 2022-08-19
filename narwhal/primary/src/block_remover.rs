@@ -3,7 +3,8 @@
 use crate::{utils, PayloadToken};
 use config::{Committee, WorkerId};
 use consensus::dag::{Dag, ValidatorDagError};
-use crypto::{Digest, Hash, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::{Digest, Hash};
 use futures::{
     future::{join_all, try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -76,10 +77,10 @@ pub struct DeleteBatchMessage {
 /// # use network::PrimaryToWorkerNetwork;
 /// # use tokio::sync::{mpsc::{channel}, watch};
 /// # use arc_swap::ArcSwap;
-/// # use crypto::Hash;
+/// # use fastcrypto::Hash;
 /// # use std::env::temp_dir;
-/// # use crypto::Digest;
-/// # use crypto::ed25519::Ed25519PublicKey;
+/// # use fastcrypto::Digest;
+/// # use fastcrypto::ed25519::Ed25519PublicKey;
 /// # use config::Committee;
 /// # use consensus::dag::Dag;
 /// # use futures::future::join_all;

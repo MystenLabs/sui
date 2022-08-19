@@ -7,7 +7,7 @@ use crate::{
     PrimaryWorkerMessage,
 };
 
-use crypto::Hash;
+use fastcrypto::Hash;
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};

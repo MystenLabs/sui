@@ -4,7 +4,8 @@
 use crate::{header_waiter::WaiterMessage, primary::PayloadToken};
 use config::{Committee, WorkerId};
 use consensus::dag::Dag;
-use crypto::{Hash as _, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::Hash as _;
 use std::{collections::HashMap, sync::Arc};
 use store::Store;
 use types::{

@@ -3,7 +3,7 @@
 use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage, PayloadToken};
 use bincode::Options;
 use config::WorkerId;
-use crypto::Hash;
+use fastcrypto::Hash;
 use itertools::Itertools;
 use network::PrimaryNetwork;
 use std::{

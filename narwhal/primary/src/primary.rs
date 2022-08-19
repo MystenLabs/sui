@@ -21,9 +21,11 @@ use crate::{
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
-use crypto::{
+use crypto::PublicKey;
+use crypto::Signature;
+use fastcrypto::{
     traits::{EncodeDecodeBase64, Signer},
-    PublicKey, Signature, SignatureService,
+    SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
 use network::{metrics::Metrics, PrimaryNetwork, PrimaryToWorkerNetwork};

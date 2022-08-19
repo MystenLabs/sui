@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::Hash;
+use fastcrypto::Hash;
 use proptest::arbitrary::Arbitrary;
 use serde_test::{assert_tokens, Token};
 use types::{serialized_batch_digest, Batch, WorkerMessage};

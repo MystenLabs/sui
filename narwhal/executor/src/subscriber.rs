@@ -6,7 +6,7 @@ use crate::{
 };
 use backoff::{Error, ExponentialBackoff};
 use consensus::ConsensusOutput;
-use crypto::Hash;
+use fastcrypto::Hash;
 use primary::BlockCommand;
 use std::{sync::Arc, time::Duration};
 use store::Store;

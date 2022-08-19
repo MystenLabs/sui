@@ -6,7 +6,7 @@ use crate::{
     utils, ConsensusOutput, SequenceNumber,
 };
 use config::{Committee, Stake};
-use crypto::{traits::EncodeDecodeBase64, Hash};
+use fastcrypto::{traits::EncodeDecodeBase64, Hash};
 use std::{collections::HashMap, sync::Arc};
 use tracing::debug;
 use types::{Certificate, CertificateDigest, ConsensusStore, Round, StoreResult};
@@ -173,7 +173,7 @@ mod tests {
     use super::*;
     use crate::metrics::ConsensusMetrics;
     use arc_swap::ArcSwap;
-    use crypto::traits::KeyPair;
+    use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use rand::Rng;
     use std::collections::BTreeSet;

@@ -1,9 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Authority, Committee, Epoch, PrimaryAddresses, WorkerInfo};
-use crypto::{
+use crypto::KeyPair;
+use fastcrypto::{
     traits::{KeyPair as _, Signer},
-    Digest, Hash, KeyPair,
+    Digest, Hash,
 };
 use primary::PrimaryWorkerMessage;
 use rand::{prelude::StdRng, SeedableRng};

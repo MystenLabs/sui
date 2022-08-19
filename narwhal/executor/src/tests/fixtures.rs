@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::WorkerId;
-use crypto::Hash;
+use fastcrypto::Hash;
 use indexmap::IndexMap;
 use rand::{rngs::StdRng, RngCore, SeedableRng};
 use serde::Serialize;

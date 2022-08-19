@@ -11,7 +11,7 @@ use crate::{
 use bincode::deserialize;
 use config::{Committee, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::Hash;
+use fastcrypto::Hash;
 use futures::{
     future::{join_all, try_join_all},
     stream::FuturesUnordered,

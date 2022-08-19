@@ -1,13 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use super::*;
-use crate::{
-    bls12377::{
-        BLS12377AggregateSignature, BLS12377KeyPair, BLS12377PrivateKey, BLS12377PublicKey,
-        BLS12377PublicKeyBytes, BLS12377Signature,
-    },
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey},
+use crate::bls12377::{
+    BLS12377AggregateSignature, BLS12377KeyPair, BLS12377PrivateKey, BLS12377PublicKey,
+    BLS12377PublicKeyBytes, BLS12377Signature,
 };
+use fastcrypto::traits::{
+    AggregateAuthenticator, EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey,
+};
+use fastcrypto::{Hash, SignatureService};
+
 use rand::{rngs::StdRng, SeedableRng as _};
 use signature::{Signer, Verifier};
 
@@ -56,10 +57,10 @@ fn verify_valid_signature() {
     let message: &[u8] = b"Hello, world!";
     let digest = message.digest();
 
-    let signature = kp.sign(&digest.0);
+    let signature = kp.sign(digest.as_ref());
 
     // Verify the signature.
-    assert!(kp.public().verify(&digest.0, &signature).is_ok());
+    assert!(kp.public().verify(digest.as_ref(), &signature).is_ok());
 }
 
 #[test]
@@ -71,13 +72,13 @@ fn verify_invalid_signature() {
     let message: &[u8] = b"Hello, world!";
     let digest = message.digest();
 
-    let signature = kp.sign(&digest.0);
+    let signature = kp.sign(digest.as_ref());
 
     // Verify the signature.
     let bad_message: &[u8] = b"Bad message!";
     let digest = bad_message.digest();
 
-    assert!(kp.public().verify(&digest.0, &signature).is_err());
+    assert!(kp.public().verify(digest.as_ref(), &signature).is_err());
 }
 
 fn signature_test_inputs() -> (Vec<u8>, Vec<BLS12377PublicKey>, Vec<BLS12377Signature>) {
@@ -88,7 +89,7 @@ fn signature_test_inputs() -> (Vec<u8>, Vec<BLS12377PublicKey>, Vec<BLS12377Sign
         .into_iter()
         .take(3)
         .map(|kp| {
-            let sig = kp.sign(&digest.0);
+            let sig = kp.sign(digest.as_ref());
             (kp.public().clone(), sig)
         })
         .unzip();
@@ -183,7 +184,7 @@ fn verify_batch_aggregate_signature_inputs() -> (
         .into_iter()
         .take(3)
         .map(|kp| {
-            let sig = kp.sign(&digest1.0);
+            let sig = kp.sign(digest1.as_ref());
             (kp.public().clone(), sig)
         })
         .unzip();
@@ -196,7 +197,7 @@ fn verify_batch_aggregate_signature_inputs() -> (
         .into_iter()
         .take(2)
         .map(|kp| {
-            let sig = kp.sign(&digest2.0);
+            let sig = kp.sign(digest2.as_ref());
             (kp.public().clone(), sig)
         })
         .unzip();

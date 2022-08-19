@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use arc_swap::ArcSwap;
-use crypto::Digest;
 use dashmap::DashMap;
 use either::Either;
+use fastcrypto::Digest;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
 use thiserror::Error;
@@ -16,9 +16,9 @@ use super::{Node, NodeRef, WeakNodeRef};
 /// - `compressible`: a value-derived boolean indicating if that value is, initially, compressible
 ///
 /// The `crypto:Hash` trait bound offers the digest-ibility.
-pub trait Affiliated: crypto::Hash {
+pub trait Affiliated: fastcrypto::Hash {
     /// Hash pointers to the parents of the current value
-    fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest>;
+    fn parents(&self) -> Vec<<Self as fastcrypto::Hash>::TypedDigest>;
 
     /// Whether the current value should be marked as compressible when first inserted in a Node.
     /// Defaults to a blanket false for all values.
@@ -253,13 +253,13 @@ impl<T: Affiliated> Default for NodeDag<T> {
 mod tests {
     use std::{collections::HashSet, fmt};
 
-    use crypto::{Digest, Hash};
+    use fastcrypto::{Digest, Hash};
     use proptest::prelude::*;
 
     use super::*;
 
     #[derive(Clone, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Copy)]
-    pub struct TestDigest([u8; crypto::DIGEST_LEN]);
+    pub struct TestDigest([u8; fastcrypto::DIGEST_LEN]);
 
     impl From<TestDigest> for Digest {
         fn from(hd: TestDigest) -> Self {
@@ -286,7 +286,7 @@ mod tests {
         digest: TestDigest,
     }
 
-    impl crypto::Hash for TestNode {
+    impl fastcrypto::Hash for TestNode {
         type TypedDigest = TestDigest;
 
         fn digest(&self) -> Self::TypedDigest {
@@ -295,7 +295,7 @@ mod tests {
     }
 
     impl Affiliated for TestNode {
-        fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest> {
+        fn parents(&self) -> Vec<<Self as fastcrypto::Hash>::TypedDigest> {
             self.parents.clone()
         }
 
@@ -306,7 +306,7 @@ mod tests {
 
     prop_compose! {
         pub fn arb_test_digest()(
-            hash in prop::collection::vec(any::<u8>(), crypto::DIGEST_LEN..=crypto::DIGEST_LEN),
+            hash in prop::collection::vec(any::<u8>(), fastcrypto::DIGEST_LEN..=fastcrypto::DIGEST_LEN),
         ) -> TestDigest {
             TestDigest(hash.try_into().unwrap())
         }

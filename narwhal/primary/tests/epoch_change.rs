@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use arc_swap::ArcSwap;
 use config::{Committee, Epoch, Parameters};
-use crypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
 use network::{CancelOnDropHandler, ReliableNetwork, WorkerToPrimaryNetwork};
 use node::NodeStorage;

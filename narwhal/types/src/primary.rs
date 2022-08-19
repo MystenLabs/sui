@@ -8,12 +8,14 @@ use crate::{
 use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
 use config::{Committee, Epoch, WorkerId, WorkerInfo};
-use crypto::{
-    traits::{EncodeDecodeBase64, Signer, VerifyingKey},
-    Digest, Hash, PublicKey, Signature, SignatureService, Verifier, DIGEST_LEN,
-};
+use crypto::PublicKey;
+use crypto::Signature;
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
+use fastcrypto::{
+    traits::{EncodeDecodeBase64, Signer, VerifyingKey},
+    Digest, Hash, SignatureService, Verifier, DIGEST_LEN,
+};
 use indexmap::IndexMap;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
@@ -31,7 +33,7 @@ pub type Transaction = Vec<u8>;
 pub struct Batch(pub Vec<Transaction>);
 
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct BatchDigest(pub [u8; crypto::DIGEST_LEN]);
+pub struct BatchDigest(pub [u8; fastcrypto::DIGEST_LEN]);
 
 impl fmt::Debug for BatchDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
@@ -61,7 +63,7 @@ impl Hash for Batch {
     type TypedDigest = BatchDigest;
 
     fn digest(&self) -> Self::TypedDigest {
-        BatchDigest::new(crypto::blake2b_256(|hasher| {
+        BatchDigest::new(fastcrypto::blake2b_256(|hasher| {
             self.0.iter().for_each(|tx| hasher.update(tx))
         }))
     }
@@ -81,7 +83,7 @@ pub struct Header {
 }
 
 impl HeaderBuilder {
-    pub fn build<F>(self, signer: &F) -> Result<Header, crypto::traits::Error>
+    pub fn build<F>(self, signer: &F) -> Result<Header, fastcrypto::traits::Error>
     where
         F: Signer<Signature>,
     {
@@ -214,7 +216,7 @@ impl Hash for Header {
                 hasher.update(Digest::from(*x))
             }
         };
-        HeaderDigest(crypto::blake2b_256(hasher_update))
+        HeaderDigest(fastcrypto::blake2b_256(hasher_update))
     }
 }
 
@@ -332,7 +334,7 @@ impl Hash for Vote {
             hasher.update(&self.origin);
         };
 
-        VoteDigest(crypto::blake2b_256(hasher_update))
+        VoteDigest(fastcrypto::blake2b_256(hasher_update))
     }
 }
 
@@ -481,7 +483,7 @@ impl Hash for Certificate {
             hasher.update(&self.origin());
         };
 
-        CertificateDigest(crypto::blake2b_256(hasher_update))
+        CertificateDigest(fastcrypto::blake2b_256(hasher_update))
     }
 }
 
@@ -510,7 +512,7 @@ impl PartialEq for Certificate {
 }
 
 impl Affiliated for Certificate {
-    fn parents(&self) -> Vec<<Self as crypto::Hash>::TypedDigest> {
+    fn parents(&self) -> Vec<<Self as fastcrypto::Hash>::TypedDigest> {
         self.header.parents.iter().cloned().collect()
     }
 

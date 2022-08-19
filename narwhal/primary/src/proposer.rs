@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::PrimaryMetrics, NetworkModel};
 use config::{Committee, Epoch, WorkerId};
-use crypto::{Digest, Hash as _, PublicKey, Signature, SignatureService};
+use crypto::PublicKey;
+use crypto::Signature;
+use fastcrypto::{Digest, Hash as _, SignatureService};
 use std::{cmp::Ordering, sync::Arc};
 use tokio::{
     sync::watch,

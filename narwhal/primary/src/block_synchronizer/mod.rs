@@ -10,7 +10,8 @@ use crate::{
     utils, PayloadToken, CHANNEL_CAPACITY,
 };
 use config::{BlockSynchronizerParameters, Committee, WorkerId};
-use crypto::{Hash, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::Hash;
 use futures::{
     future::{join_all, BoxFuture},
     stream::FuturesUnordered,

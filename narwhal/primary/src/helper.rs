@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{primary::PrimaryMessage, PayloadToken};
 use config::{Committee, WorkerId};
-use crypto::{traits::EncodeDecodeBase64, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::traits::EncodeDecodeBase64;
 use network::{PrimaryNetwork, UnreliableNetwork};
 use store::{Store, StoreError};
 use thiserror::Error;

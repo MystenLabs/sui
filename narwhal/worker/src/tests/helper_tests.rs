@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair;
 use store::rocks;
 use test_utils::{
     batch, committee, digest_batch, keys, serialize_batch_message, temp_dir,

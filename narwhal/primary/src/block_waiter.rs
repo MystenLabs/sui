@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::handler::Handler;
 use config::Committee;
-use crypto::{Digest, Hash, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::{Digest, Hash};
 use futures::{
     future::{try_join_all, BoxFuture},
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
@@ -116,9 +117,9 @@ type RequestKey = Vec<u8>;
 /// ```rust
 /// # use tokio::sync::{mpsc::{channel}, watch, oneshot};
 /// # use arc_swap::ArcSwap;
-/// # use crypto::Hash;
+/// # use fastcrypto::Hash;
 /// # use std::env::temp_dir;
-/// # use crypto::ed25519::Ed25519PublicKey;
+/// # use fastcrypto::ed25519::Ed25519PublicKey;
 /// # use config::Committee;
 /// # use std::collections::BTreeMap;
 /// # use types::Certificate;
@@ -127,7 +128,7 @@ type RequestKey = Vec<u8>;
 /// # use mockall::*;
 /// # use test_utils::test_channel;
 /// # use types::ReconfigureNotification;
-/// # use crypto::traits::VerifyingKey;
+/// # use fastcrypto::traits::VerifyingKey;
 /// # use async_trait::async_trait;
 /// # use std::sync::Arc;
 /// # use network::PrimaryToWorkerNetwork;

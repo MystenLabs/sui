@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{metrics::ConsensusMetrics, ConsensusOutput, SequenceNumber};
 use config::Committee;
-use crypto::{Hash, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::Hash;
 use std::{
     cmp::{max, Ordering},
     collections::HashMap,

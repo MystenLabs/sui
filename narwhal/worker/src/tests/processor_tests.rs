@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::worker::WorkerMessage;
-use crypto::Hash;
+use fastcrypto::Hash;
 use store::rocks;
 use test_utils::{batch, committee, temp_dir};
 

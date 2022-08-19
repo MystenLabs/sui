@@ -9,7 +9,9 @@ use crate::{
 };
 use async_recursion::async_recursion;
 use config::{Committee, Epoch};
-use crypto::{Hash as _, PublicKey, Signature, SignatureService};
+use crypto::PublicKey;
+use crypto::Signature;
+use fastcrypto::{Hash as _, SignatureService};
 use network::{CancelOnDropHandler, MessageResult, PrimaryNetwork, ReliableNetwork};
 use std::{
     collections::{HashMap, HashSet},

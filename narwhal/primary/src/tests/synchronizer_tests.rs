@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{common::create_db_stores, synchronizer::Synchronizer};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::{traits::KeyPair, Hash};
+use fastcrypto::{traits::KeyPair, Hash};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
 use test_utils::{committee, keys, make_optimal_signed_certificates};

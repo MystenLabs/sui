@@ -11,7 +11,7 @@ use crate::{
 };
 use bincode::deserialize;
 use config::BlockSynchronizerParameters;
-use crypto::Hash;
+use fastcrypto::Hash;
 use futures::{future::try_join_all, stream::FuturesUnordered};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use serde::de::DeserializeOwned;
@@ -30,7 +30,7 @@ use tokio::{
 };
 use types::ReconfigureNotification;
 
-use crypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair;
 use tracing::debug;
 use types::{Certificate, CertificateDigest};
 

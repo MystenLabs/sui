@@ -3,8 +3,9 @@
 use crate::{Node, NodeStorage};
 use arc_swap::ArcSwap;
 use config::{Committee, Parameters};
-use crypto::{traits::KeyPair as _, KeyPair};
+use crypto::KeyPair;
 use executor::BatchExecutionState;
+use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
 use network::{PrimaryToWorkerNetwork, ReliableNetwork, UnreliableNetwork, WorkerToPrimaryNetwork};
 use prometheus::Registry;

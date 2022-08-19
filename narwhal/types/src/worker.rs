@@ -48,7 +48,7 @@ pub fn serialized_batch_digest<K: AsRef<[u8]>>(sbm: K) -> Result<BatchDigest, Di
         transactions.push(tx_ref);
         offset = new_offset;
     }
-    Ok(BatchDigest::new(crypto::blake2b_256(|hasher| {
+    Ok(BatchDigest::new(fastcrypto::blake2b_256(|hasher| {
         transactions.iter().for_each(|tx| hasher.update(tx))
     })))
 }

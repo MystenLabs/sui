@@ -6,11 +6,6 @@ use std::{
     str::FromStr,
 };
 
-use crate::{
-    pubkey_bytes::PublicKeyBytes,
-    serde_helpers::keypair_decode_base64,
-    traits::{AggregateAuthenticator, EncodeDecodeBase64, ToFromBytes},
-};
 use ::ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_bls12_377::{Fr, G1Affine, G1Projective, G2Affine, G2Projective};
 use ark_ec::{AffineCurve, ProjectiveCurve};
@@ -21,12 +16,17 @@ use ark_ff::{
 use base64ct::{Base64, Encoding};
 use celo_bls::{hash_to_curve::try_and_increment, PublicKey};
 use eyre::eyre;
+use fastcrypto::{
+    pubkey_bytes::PublicKeyBytes,
+    serde_helpers::keypair_decode_base64,
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, ToFromBytes},
+};
 use once_cell::sync::OnceCell;
 use serde::{de, Deserialize, Serialize};
 use serde_with::serde_as;
 use signature::{Signer, Verifier};
 
-use crate::traits::{Authenticator, KeyPair, SigningKey, VerifyingKey};
+use fastcrypto::traits::{Authenticator, KeyPair, SigningKey, VerifyingKey};
 
 mod ark_serialize;
 
@@ -40,7 +40,6 @@ pub const CELO_BLS_SIGNATURE_LENGTH: usize = 48;
 /// Define Structs
 ///
 
-#[readonly::make]
 #[derive(Debug, Clone)]
 pub struct BLS12377PublicKey {
     pub pubkey: celo_bls::PublicKey,
@@ -389,7 +388,6 @@ impl KeyPair for BLS12377KeyPair {
     type PrivKey = BLS12377PrivateKey;
     type Sig = BLS12377Signature;
 
-    #[cfg(any(test, feature = "copy_key"))]
     fn copy(&self) -> Self {
         BLS12377KeyPair {
             name: self.name.clone(),

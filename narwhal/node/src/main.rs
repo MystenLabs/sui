@@ -11,9 +11,10 @@
 use arc_swap::ArcSwap;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerId};
-use crypto::{generate_production_keypair, traits::KeyPair as _, KeyPair};
+use crypto::KeyPair;
 use executor::{SerializedTransaction, SingleExecutor, SubscriberResult};
 use eyre::Context;
+use fastcrypto::{generate_production_keypair, traits::KeyPair as _};
 use futures::future::join_all;
 use node::{
     execution_state::SimpleExecutionState,

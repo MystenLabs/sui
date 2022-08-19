@@ -9,7 +9,8 @@
 )]
 
 use arc_swap::ArcSwap;
-use crypto::{traits::EncodeDecodeBase64, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::traits::EncodeDecodeBase64;
 use multiaddr::Multiaddr;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};

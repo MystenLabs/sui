@@ -8,7 +8,7 @@ use crate::{
     BlockHeader,
 };
 use async_trait::async_trait;
-use crypto::Hash;
+use fastcrypto::Hash;
 use futures::future::join_all;
 #[cfg(test)]
 use mockall::*;

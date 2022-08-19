@@ -22,7 +22,8 @@ use config::{
     Committee, ConsensusAPIGrpcParameters, Epoch, Import, Parameters, PrimaryAddresses,
     PrometheusMetricsParameters, Stake,
 };
-use crypto::{traits::KeyPair as _, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::traits::KeyPair as _;
 use insta::assert_json_snapshot;
 use rand::seq::SliceRandom;
 use std::{fs::File, io::Write};

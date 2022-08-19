@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{PrimaryAddresses, SharedCommittee};
-use crypto::{traits::ToFromBytes, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
 use std::collections::BTreeMap;
 use tonic::{Request, Response, Status};

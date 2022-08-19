@@ -4,9 +4,9 @@
 use super::*;
 
 use crate::{metrics::ConsensusMetrics, Consensus};
-#[allow(unused_imports)]
-use crypto::traits::KeyPair;
 use crypto::PublicKey;
+#[allow(unused_imports)]
+use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use arc_swap::ArcSwap;
-use crypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{
     batch, batch_digest, batches, committee, keys, open_batch_store, serialize_batch_message,

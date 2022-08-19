@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use config::SharedCommittee;
 use consensus::dag::Dag;
-use crypto::{traits::ToFromBytes, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::traits::ToFromBytes;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
 use types::{

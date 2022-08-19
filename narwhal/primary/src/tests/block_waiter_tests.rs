@@ -8,7 +8,7 @@ use crate::{
     BlockCommand, BlockWaiter, PrimaryWorkerMessage,
 };
 use bincode::deserialize;
-use crypto::Hash;
+use fastcrypto::Hash;
 use mockall::*;
 use network::PrimaryToWorkerNetwork;
 use std::{collections::HashMap, sync::Arc};

@@ -4,9 +4,10 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Epoch, Parameters};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::{
+use crypto::PublicKey;
+use fastcrypto::{
     traits::{KeyPair as _, ToFromBytes},
-    Hash, PublicKey,
+    Hash,
 };
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};

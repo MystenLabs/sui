@@ -7,11 +7,10 @@ use consensus::{
     metrics::{ChannelMetrics, ConsensusMetrics},
     Consensus,
 };
-use crypto::{
-    traits::{KeyPair as _, VerifyingKey},
-    KeyPair, PublicKey,
-};
+use crypto::KeyPair;
+use crypto::PublicKey;
 use executor::{BatchExecutionState, Executor, SubscriberResult};
+use fastcrypto::traits::{KeyPair as _, VerifyingKey};
 use primary::{BlockCommand, NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
 use std::{fmt::Debug, sync::Arc};
@@ -199,7 +198,7 @@ impl Node {
         // Put name of primary in heap profile to distinguish diff primaries
         #[cfg(feature = "dhat-heap")]
         let profiler = {
-            use crypto::traits::EncodeDecodeBase64;
+            use fastcrypto::traits::EncodeDecodeBase64;
             use std::path::Path;
 
             let heap_file = format!("dhat-heap-{}.json", name.encode_base64());

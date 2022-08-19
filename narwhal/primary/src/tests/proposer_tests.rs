@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{committee, keys};
 
@@ -73,7 +73,9 @@ async fn propose_payload() {
     );
 
     // Send enough digests for the header payload.
-    let name_bytes: [u8; 32] = *name.0.as_bytes();
+    let mut name_bytes = [0u8; 32];
+    name_bytes.copy_from_slice(name.as_ref());
+
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;
     tx_our_digests.send((digest, worker_id)).await.unwrap();

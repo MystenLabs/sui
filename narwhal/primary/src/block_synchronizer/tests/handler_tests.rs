@@ -8,7 +8,7 @@ use crate::{
     common::create_db_stores,
     BlockHeader, MockBlockSynchronizer,
 };
-use crypto::Hash;
+use fastcrypto::Hash;
 use std::{collections::HashSet, time::Duration};
 use test_utils::{certificate, fixture_header_with_payload};
 use types::{Certificate, CertificateDigest, PrimaryMessage};

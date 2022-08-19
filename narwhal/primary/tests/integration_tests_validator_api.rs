@@ -3,7 +3,9 @@ use arc_swap::ArcSwap;
 // SPDX-License-Identifier: Apache-2.0
 use config::{Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::{traits::KeyPair as _, Hash, KeyPair, PublicKey};
+use crypto::KeyPair;
+use crypto::PublicKey;
+use fastcrypto::{traits::KeyPair as _, Hash};
 use indexmap::IndexMap;
 use network::metrics::WorkerNetworkMetrics;
 use node::NodeStorage;

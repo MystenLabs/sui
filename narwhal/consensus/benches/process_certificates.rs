@@ -8,7 +8,7 @@ use consensus::{
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
-use crypto::{traits::KeyPair, Hash};
+use fastcrypto::{traits::KeyPair, Hash};
 use pprof::criterion::{Output, PProfProfiler};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};

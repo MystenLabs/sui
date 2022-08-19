@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crypto::{Hash, PublicKey};
+use crypto::PublicKey;
+use fastcrypto::Hash;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng};
 use std::collections::HashMap;
 
@@ -18,7 +19,7 @@ pub struct Peer<Value: Hash + Clone> {
 
 impl<Value: Hash + Clone> Peer<Value> {
     pub fn new(name: PublicKey, values_able_to_serve: Vec<Value>) -> Self {
-        let certs: HashMap<<Value as crypto::Hash>::TypedDigest, Value> = values_able_to_serve
+        let certs: HashMap<<Value as fastcrypto::Hash>::TypedDigest, Value> = values_able_to_serve
             .into_iter()
             .map(|c| (c.digest(), c))
             .collect();
@@ -171,7 +172,8 @@ impl<Value: Hash + Clone> Peers<Value> {
 mod tests {
     use crate::block_synchronizer::peers::Peers;
     use blake2::{digest::Update, VarBlake2b};
-    use crypto::{traits::KeyPair as _, Digest, Hash, KeyPair, DIGEST_LEN};
+    use crypto::KeyPair;
+    use fastcrypto::{traits::KeyPair as _, Digest, Hash, DIGEST_LEN};
     use rand::{
         rngs::{SmallRng, StdRng},
         SeedableRng,
@@ -398,7 +400,7 @@ mod tests {
                 hasher.update([*v].as_ref());
             };
 
-            MockDigest(crypto::blake2b_256(hasher_update))
+            MockDigest(fastcrypto::blake2b_256(hasher_update))
         }
     }
 }

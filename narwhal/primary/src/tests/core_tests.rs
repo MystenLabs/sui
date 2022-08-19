@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::create_db_stores;
-use crypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{
     certificate, committee, fixture_batch_with_transactions, header, headers, keys, votes,

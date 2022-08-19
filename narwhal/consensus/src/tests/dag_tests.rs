@@ -5,8 +5,8 @@ use indexmap::IndexMap;
 use prometheus::Registry;
 use std::collections::BTreeSet;
 
-use crypto::{traits::KeyPair, Hash};
 use dag::node_dag::NodeDagError;
+use fastcrypto::{traits::KeyPair, Hash};
 use std::sync::Arc;
 use test_utils::make_optimal_certificates;
 use types::Certificate;

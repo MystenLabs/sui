@@ -4,10 +4,12 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters};
 use consensus::ConsensusOutput;
-use crypto::{traits::KeyPair as _, KeyPair, PublicKey};
+use crypto::KeyPair;
+use crypto::PublicKey;
 use executor::{
     ExecutionIndices, ExecutionState, ExecutionStateError, SingleExecutionState, SingleExecutor,
 };
+use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
 use network::{PrimaryToWorkerNetwork, ReliableNetwork, UnreliableNetwork, WorkerToPrimaryNetwork};
 use node::{restarter::NodeRestarter, Node, NodeStorage};

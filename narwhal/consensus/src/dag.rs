@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::Committee;
-use crypto::{Hash, PublicKey};
+use crypto::PublicKey;
 use dag::node_dag::{NodeDag, NodeDagError};
+use fastcrypto::Hash;
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, HashMap, HashSet, VecDeque},

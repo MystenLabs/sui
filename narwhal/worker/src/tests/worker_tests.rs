@@ -4,7 +4,7 @@
 use super::*;
 
 use arc_swap::ArcSwap;
-use crypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair;
 use futures::StreamExt;
 use prometheus::Registry;
 use std::time::Duration;
