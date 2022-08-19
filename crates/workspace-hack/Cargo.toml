@@ -291,8 +291,7 @@ move-bytecode-viewer = { git = "https://github.com/move-language/move", rev = "5
 move-cli = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", default-features = false }
 move-command-line-common = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", default-features = false }
 move-compiler = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", default-features = false }
-move-core-types-bf436d2c45bc7a49 = { package = "move-core-types", git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", features = ["address20"] }
-move-core-types-ee46fb4174af9b0a = { package = "move-core-types", git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", features = ["address20"] }
 move-coverage = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
 move-disassembler = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
 move-docgen = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", default-features = false }
@@ -909,8 +908,7 @@ move-bytecode-viewer = { git = "https://github.com/move-language/move", rev = "5
 move-cli = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", default-features = false }
 move-command-line-common = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", default-features = false }
 move-compiler = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", default-features = false }
-move-core-types-bf436d2c45bc7a49 = { package = "move-core-types", git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", features = ["address20"] }
-move-core-types-ee46fb4174af9b0a = { package = "move-core-types", git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", features = ["address20"] }
 move-coverage = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
 move-disassembler = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
 move-docgen = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", default-features = false }
