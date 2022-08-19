@@ -8,7 +8,8 @@ use std::time::Duration;
 use crate::{
     authority::AuthorityState,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
-    authority_client::NetworkAuthorityClient,
+    authority_client::{NetworkAuthorityClient, NetworkAuthorityClientMetrics},
+    epoch::epoch_store::EpochStore,
     safe_client::SafeClientMetrics,
 };
 
@@ -20,9 +21,31 @@ use sui_types::{
     messages::{BatchInfoRequest, BatchInfoResponseItem},
 };
 
+// Can't import SuiNode directly from sui_node - circular dependency
+use test_utils::authority::{start_node, SuiNode};
+
 use futures::StreamExt;
 use tokio::time::sleep;
 use tracing::info;
+
+/// Spawn all authorities in the test committee into a separate tokio task.
+pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNode>
+where
+    I: IntoIterator<Item = Object> + Clone,
+{
+    let mut handles = Vec::new();
+    for validator in config.validator_configs() {
+        let node = start_node(validator).await;
+        let state = node.state();
+
+        for o in objects.clone() {
+            state.insert_genesis_object(o).await
+        }
+
+        handles.push(node);
+    }
+    handles
+}
 
 /// Create a test authority aggregator.
 /// (duplicated from test-utils/src/authority.rs - that function can't be used
@@ -33,18 +56,24 @@ pub fn test_authority_aggregator(
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
     let clients: BTreeMap<_, _> = validators_info
         .iter()
         .map(|config| {
             (
                 config.public_key(),
-                NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap(),
+                NetworkAuthorityClient::connect_lazy(
+                    config.network_address(),
+                    Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+                )
+                .unwrap(),
             )
         })
         .collect();
     let registry = prometheus::Registry::new();
     AuthorityAggregator::new(
         committee,
+        epoch_store,
         clients,
         AuthAggMetrics::new(&registry),
         SafeClientMetrics::new(&registry),
