@@ -7,6 +7,7 @@ import {
     type TransactionKindName,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
+import BN from 'bn.js';
 import cl from 'classnames';
 import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -29,8 +30,6 @@ import { truncate, presentBN } from '../../utils/stringUtils';
 import { timeAgo } from '../../utils/timeUtils';
 import ErrorResult from '../error-result/ErrorResult';
 import Pagination from '../pagination/Pagination';
-
-import type BN from 'bn.js';
 
 import styles from './RecentTxCard.module.css';
 
@@ -141,6 +140,31 @@ type RecentTx = {
     truncateLength?: number;
 };
 
+function SuiAmount({ amount }: { amount: BN | string | undefined }) {
+    if (amount) {
+        const SuiSuffix = <span className={styles.suisuffix}>SUI</span>;
+
+        if (BN.isBN(amount)) {
+            return (
+                <span className={styles.suiamount}>
+                    {presentBN(amount)}
+                    {SuiSuffix}
+                </span>
+            );
+        }
+        if (typeof amount === 'string') {
+            return (
+                <span className={styles.suiamount}>
+                    {amount}
+                    {SuiSuffix}
+                </span>
+            );
+        }
+    }
+
+    return <span />;
+}
+
 // Generate table data from the transaction data
 const recentTxTable = (results: TxnData[], truncateLength: number) => {
     return {
@@ -179,8 +203,8 @@ const recentTxTable = (results: TxnData[], truncateLength: number) => {
                 txTypeName: txn.kind,
                 status: txn.status,
             },
-            amounts: txn.suiAmount ? presentBN(txn.suiAmount) : '',
-            gas: numberSuffix(txn.txGas),
+            amounts: <SuiAmount amount={txn.suiAmount} />,
+            gas: <SuiAmount amount={numberSuffix(txn.txGas)} />,
         })),
         columns: [
             {
