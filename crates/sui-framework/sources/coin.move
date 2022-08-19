@@ -233,7 +233,7 @@ module sui::coin {
     /// Split coin `self` into `n` coins with equal balances. If the balance is
     /// not evenly divisible by `n`, the remainder is left in `self`. Return
     /// newly created coins.
-    public fun split_n_return<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext): vector<Coin<T>> {
+    public fun split_n_to_vec<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext): vector<Coin<T>> {
         assert!(n > 0, EInvalidArg);
         assert!(n <= balance::value(&self.balance), ENotEnough);
         let vec = vector::empty<Coin<T>>();
@@ -249,7 +249,7 @@ module sui::coin {
     /// Split coin `self` into `n` coins with equal balances. If the balance is
     /// not evenly divisible by `n`, the remainder is left in `self`.
     public entry fun split_n<T>(self: &mut Coin<T>, n: u64, ctx: &mut TxContext) {
-        let vec: vector<Coin<T>> = split_n_return(self, n, ctx);
+        let vec: vector<Coin<T>> = split_n_to_vec(self, n, ctx);
         let i = 0;
         let len = vector::length(&vec);
         while (i < len) {
