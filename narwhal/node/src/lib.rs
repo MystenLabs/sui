@@ -11,7 +11,7 @@ use crypto::{
     traits::{KeyPair as _, VerifyingKey},
     KeyPair, PublicKey,
 };
-use executor::{ExecutionState, Executor, ExecutorOutput, SerializedTransaction, SubscriberResult};
+use executor::{BatchExecutionState, Executor, SubscriberResult};
 use primary::{BlockCommand, NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
 use std::{fmt::Debug, sync::Arc};
@@ -20,10 +20,7 @@ use store::{
     rocks::{open_cf, DBMap},
     Store,
 };
-use tokio::{
-    sync::{mpsc::Sender, watch},
-    task::JoinHandle,
-};
+use tokio::{sync::watch, task::JoinHandle};
 use tracing::debug;
 use types::{
     metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header,
@@ -133,14 +130,11 @@ impl Node {
         internal_consensus: bool,
         // The state used by the client to execute transactions.
         execution_state: Arc<State>,
-        // A channel to output transactions execution confirmations.
-        tx_confirmation: Sender<ExecutorOutput<State>>,
         // A prometheus exporter Registry to use for the metrics
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
-        State: ExecutionState + Send + Sync + 'static,
-        State::Outcome: Send + 'static,
+        State: BatchExecutionState + Send + Sync + 'static,
         State::Error: Debug,
     {
         let initial_committee = ReconfigureNotification::NewEpoch((**committee.load()).clone());
@@ -193,7 +187,6 @@ impl Node {
                 &tx_reconfigure,
                 rx_new_certificates,
                 tx_consensus.clone(),
-                tx_confirmation,
                 tx_get_block_commands.clone(),
                 registry,
             )
@@ -267,17 +260,12 @@ impl Node {
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_new_certificates: metered_channel::Receiver<Certificate>,
         tx_feedback: metered_channel::Sender<Certificate>,
-        tx_confirmation: Sender<(
-            SubscriberResult<<State as ExecutionState>::Outcome>,
-            SerializedTransaction,
-        )>,
         tx_get_block_commands: metered_channel::Sender<BlockCommand>,
         registry: &Registry,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         PublicKey: VerifyingKey,
-        State: ExecutionState + Send + Sync + 'static,
-        State::Outcome: Send + 'static,
+        State: BatchExecutionState + Send + Sync + 'static,
         State::Error: Debug,
     {
         let consensus_metrics = Arc::new(ConsensusMetrics::new(registry));
@@ -312,7 +300,6 @@ impl Node {
             execution_state,
             tx_reconfigure,
             /* rx_consensus */ rx_sequence,
-            /* tx_output */ tx_confirmation,
             tx_get_block_commands,
             registry,
         )

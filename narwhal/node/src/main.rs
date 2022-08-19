@@ -12,7 +12,7 @@ use arc_swap::ArcSwap;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerId};
 use crypto::{generate_production_keypair, traits::KeyPair as _, KeyPair};
-use executor::{SerializedTransaction, SubscriberResult};
+use executor::{SerializedTransaction, SingleExecutor, SubscriberResult};
 use eyre::Context;
 use futures::future::join_all;
 use node::{
@@ -167,8 +167,11 @@ async fn run(matches: &ArgMatches<'_>) -> Result<(), eyre::Report> {
                 &store,
                 parameters.clone(),
                 /* consensus */ !sub_matches.is_present("consensus-disabled"),
-                /* execution_state */ Arc::new(SimpleExecutionState::default()),
-                tx_transaction_confirmation,
+                /* execution_state */
+                SingleExecutor::new(
+                    Arc::new(SimpleExecutionState::default()),
+                    tx_transaction_confirmation,
+                ),
                 &registry,
             )
             .await?

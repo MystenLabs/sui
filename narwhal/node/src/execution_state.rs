@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
 use consensus::ConsensusOutput;
-use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
+use executor::{ExecutionIndices, ExecutionState, ExecutionStateError, SingleExecutionState};
 use thiserror::Error;
 
 /// A simple/dumb execution engine.
@@ -10,8 +10,18 @@ pub struct SimpleExecutionState;
 
 #[async_trait]
 impl ExecutionState for SimpleExecutionState {
-    type Transaction = String;
     type Error = SimpleExecutionError;
+
+    fn ask_consensus_write_lock(&self) -> bool {
+        true
+    }
+
+    fn release_consensus_write_lock(&self) {}
+}
+
+#[async_trait]
+impl SingleExecutionState for SimpleExecutionState {
+    type Transaction = String;
     type Outcome = Vec<u8>;
 
     async fn handle_consensus_transaction(
@@ -22,12 +32,6 @@ impl ExecutionState for SimpleExecutionState {
     ) -> Result<Self::Outcome, Self::Error> {
         Ok(Vec::default())
     }
-
-    fn ask_consensus_write_lock(&self) -> bool {
-        true
-    }
-
-    fn release_consensus_write_lock(&self) {}
 
     async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
         Ok(ExecutionIndices::default())
@@ -41,7 +45,7 @@ impl Default for SimpleExecutionState {
 }
 
 /// A simple/dumb execution error.
-#[derive(Debug, Error)]
+#[derive(Debug, Error, Clone)]
 pub enum SimpleExecutionError {
     #[error("Something went wrong in the authority")]
     ServerError,
