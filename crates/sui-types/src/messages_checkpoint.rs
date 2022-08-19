@@ -599,13 +599,17 @@ impl CheckpointFragment {
         );
 
         // Check that the fragment contains all missing certs indicated in diff.
-        for digests in [&self.diff.first.items, &self.diff.second.items].iter() {
-            for digest in digests.iter() {
-                let cert = self.certs.get(digest).ok_or_else(|| {
-                    SuiError::from(format!("Missing cert with digest {digest:?}").as_str())
-                })?;
-                cert.verify(committee)?;
-            }
+        let digests = self
+            .diff
+            .first
+            .items
+            .iter()
+            .chain(self.diff.second.items.iter());
+        for digest in digests {
+            let cert = self.certs.get(digest).ok_or_else(|| {
+                SuiError::from(format!("Missing cert with digest {digest:?}").as_str())
+            })?;
+            cert.verify(committee)?;
         }
 
         Ok(())
