@@ -7,6 +7,8 @@ import { SuiObjectRef } from './objects';
 
 bcs
   .registerVectorType('vector<u8>', 'u8')
+  .registerVectorType('vector<u64>', 'u64')
+  .registerVectorType('vector<u128>', 'u128')
   .registerVectorType('vector<vector<u8>>', 'vector<u8>')
   .registerAddressType('ObjectID', 20)
   .registerAddressType('SuiAddress', 20)
