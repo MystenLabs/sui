@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::legacy_length_cost;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::language_storage::TypeTag;
 use move_vm_runtime::native_functions::NativeContext;
@@ -9,7 +10,6 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-use crate::legacy_length_cost;
 
 pub fn is_one_time_witness(
     context: &mut NativeContext,

@@ -424,7 +424,11 @@ async fn test_move_call_gas() -> SuiResult {
         .get_object(&effects.created[0].0 .0)
         .await?
         .unwrap();
-    gas_status.charge_storage_mutation(0, created_object.object_size_for_gas_metering(), 0.into())?;
+    gas_status.charge_storage_mutation(
+        0,
+        created_object.object_size_for_gas_metering(),
+        0.into(),
+    )?;
     gas_status.charge_storage_mutation(
         gas_object.object_size_for_gas_metering(),
         gas_object.object_size_for_gas_metering(),
