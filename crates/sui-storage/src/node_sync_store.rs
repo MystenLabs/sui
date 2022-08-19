@@ -13,6 +13,8 @@ use typed_store::traits::DBMapTableUtil;
 use typed_store::traits::Map;
 use typed_store_macros::DBMapUtils;
 
+use tracing::trace;
+
 /// NodeSyncStore store is used by nodes to store downloaded objects (certs, etc) that have
 /// not yet been applied to the node's SuiDataStore.
 #[derive(DBMapUtils)]
@@ -22,6 +24,9 @@ pub struct NodeSyncStore {
 
     /// The persisted batch streams (minus the signed batches) from each authority.
     batch_streams: DBMap<(AuthorityName, TxSequenceNumber), ExecutionDigests>,
+
+    /// The latest received sequence from each authority.
+    latest_seq: DBMap<AuthorityName, TxSequenceNumber>,
 }
 
 impl NodeSyncStore {
@@ -54,7 +59,26 @@ impl NodeSyncStore {
         seq: TxSequenceNumber,
         digests: &ExecutionDigests,
     ) -> SuiResult {
-        Ok(self.batch_streams.insert(&(peer, seq), digests)?)
+        let mut write_batch = self.batch_streams.batch();
+        trace!(?peer, ?seq, ?digests, "persisting digests to db");
+        write_batch = write_batch
+            .insert_batch(&self.batch_streams, std::iter::once(((peer, seq), digests)))?;
+
+        match self.latest_seq.get(&peer)? {
+            // Note: this can actually happen, because when you request a starting sequence
+            // from the validator, it sends you any preceding txes that were in the same
+            // batch.
+            Some(prev_latest) if prev_latest > seq => (),
+
+            _ => {
+                trace!(?peer, ?seq, "recording latest sequence to db");
+                write_batch =
+                    write_batch.insert_batch(&self.latest_seq, std::iter::once((peer, seq)))?;
+            }
+        }
+
+        write_batch.write()?;
+        Ok(())
     }
 
     pub fn batch_stream_iter<'a>(
@@ -69,14 +93,8 @@ impl NodeSyncStore {
             .map(|((_, seq), digests)| (seq, digests)))
     }
 
-    pub fn latest_seq_for_peer(&self, peer: AuthorityName) -> SuiResult<Option<TxSequenceNumber>> {
-        Ok(self
-            .batch_streams
-            .iter()
-            .skip_prior_to(&(peer, TxSequenceNumber::MAX))?
-            .take_while(|((name, _), _)| *name == peer)
-            .map(|((_, seq), _)| seq)
-            .next())
+    pub fn latest_seq_for_peer(&self, peer: &AuthorityName) -> SuiResult<Option<TxSequenceNumber>> {
+        Ok(self.latest_seq.get(peer)?)
     }
 
     pub fn remove_batch_stream_item(
