@@ -56,6 +56,8 @@ jobs:
         run: pnpm install --frozen-lockfile
       - name: Build TS sdk
         run: pnpm --filter @mysten/sui.js build
+      - name: Install Cypress
+        run: pnpm --filter sui-explorer exec cypress install
       - name: Run e2e tests
         uses: cypress-io/github-action@v4
         with:
