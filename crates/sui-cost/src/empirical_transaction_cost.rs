@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// This file covers running actual transactions and reporting the costs end ot end
+// This file covers running actual transactions and reporting the costs end to end
 
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -31,6 +31,7 @@ pub enum CommonTransactionCosts {
     Publish,
     MergeCoin,
     SplitCoin(usize),
+    SplitCoinEqual,
     TransferWholeCoin,
     TransferPortionCoin,
     TransferWholeSuiCoin,
@@ -71,7 +72,8 @@ async fn run_common_single_writer_tx_costs(
             gas: Some(gas),
             gas_budget: 10000,
             coin_id: coin,
-            amounts: amt_vec,
+            amounts: Some(amt_vec),
+            count: 0,
         }
         .execute(&mut context)
         .await?;
@@ -96,8 +98,27 @@ async fn run_common_single_writer_tx_costs(
         .get_objects_owned_by_address(address)
         .await?;
 
-    // Pairwise Merge Coin
+    // Split Coin Equal
     let gas = object_refs.first().unwrap().object_id;
+    let primary_coin = object_refs.get(1).unwrap().object_id;
+    let resp = SuiClientCommands::SplitCoin {
+        gas: Some(gas),
+        gas_budget: 10000,
+        coin_id: primary_coin,
+        amounts: None,
+        count: 3,
+    }
+    .execute(&mut context)
+    .await?;
+
+    let gas_used = if let SuiClientCommandResult::SplitCoin(r) = resp {
+        r.effects.gas_used
+    } else {
+        panic!("Command failed");
+    };
+    ret.insert(CommonTransactionCosts::SplitCoinEqual, gas_used);
+
+    // Pairwise Merge Coin
     let primary_coin = object_refs.get(1).unwrap().object_id;
     let coin_to_merge = object_refs.get(2).unwrap().object_id;
 

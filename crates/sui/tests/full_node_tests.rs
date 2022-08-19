@@ -117,11 +117,11 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config).await?;
 
-    let (transfered_object, _, receiver, digest) = transfer_coin(&mut context).await?;
+    let (transferred_object, _, receiver, digest) = transfer_coin(&mut context).await?;
     wait_for_tx(digest, node.state().clone()).await;
 
     // verify that the node has seen the transfer
-    let object_read = node.state().get_object_read(&transfered_object).await?;
+    let object_read = node.state().get_object_read(&transferred_object).await?;
     let object = object_read.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
@@ -209,13 +209,13 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let config = swarm.config().generate_fullnode_config();
     let node = SuiNode::start(&config).await?;
 
-    let (transfered_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
+    let (transferred_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
     let txes = node
         .state()
-        .get_transactions_by_input_object(transfered_object)
+        .get_transactions_by_input_object(transferred_object)
         .await?;
 
     assert_eq!(txes.len(), 1);
@@ -223,7 +223,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 
     let txes = node
         .state()
-        .get_transactions_by_mutated_object(transfered_object)
+        .get_transactions_by_mutated_object(transferred_object)
         .await?;
     assert_eq!(txes.len(), 1);
     assert_eq!(txes[0].1, digest);
@@ -261,7 +261,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         transaction_module: "native".into(),
         sender,
         recipient: Owner::AddressOwner(receiver),
-        object_id: transfered_object,
+        object_id: transferred_object,
         version: SequenceNumber::from_u64(1),
         type_: TransferType::Coin,
     };
@@ -308,7 +308,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let events_by_object = node
         .state()
         .get_events_by_object(
-            &transfered_object,
+            &transferred_object,
             ts.unwrap() - HOUR_MS,
             ts.unwrap() + HOUR_MS,
             10,
@@ -345,7 +345,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     let (_, _, _, _) = transfer_coin(&mut context).await?;
     let (_, _, _, _) = transfer_coin(&mut context).await?;
     let (_, _, _, _) = transfer_coin(&mut context).await?;
-    let (_transfered_object, _sender, _receiver, digest) = transfer_coin(&mut context).await?;
+    let (_transferred_object, _sender, _receiver, digest) = transfer_coin(&mut context).await?;
 
     // Make sure the validators are quiescent before bringing up the node.
     sleep(Duration::from_millis(1000)).await;
@@ -411,7 +411,8 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
                 let res = {
                     let context = &mut context.lock().await;
                     SuiClientCommands::SplitCoin {
-                        amounts: vec![1],
+                        amounts: Some(vec![1]),
+                        count: 0,
                         coin_id: object_to_split.0,
                         gas: gas_object,
                         gas_budget: 50000,

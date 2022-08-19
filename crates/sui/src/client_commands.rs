@@ -209,18 +209,17 @@ pub enum SuiClientCommands {
     },
 
     /// Split a coin object into multiple coins.
+    #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
     SplitCoin {
         /// Coin to Split, in 20 bytes Hex string
         #[clap(long)]
         coin_id: ObjectID,
-        /// Amount to split out from the coin
-        #[clap(
-            long,
-            multiple_occurrences = false,
-            multiple_values = true,
-            required = true
-        )]
-        amounts: Vec<u64>,
+        /// Specific amounts to split out from the coin
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        amounts: Option<Vec<u64>>,
+        /// Count of equal-size coins to split into
+        #[clap(long)]
+        count: u64,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
@@ -425,15 +424,24 @@ impl SuiClientCommands {
             SuiClientCommands::SplitCoin {
                 coin_id,
                 amounts,
+                count,
                 gas,
                 gas_budget,
             } => {
                 let signer = context.get_object_owner(&coin_id).await?;
-                let data = context
-                    .gateway
-                    .transaction_builder()
-                    .split_coin(signer, coin_id, amounts, gas, gas_budget)
-                    .await?;
+                let data = if let Some(amounts) = amounts {
+                    context
+                        .gateway
+                        .transaction_builder()
+                        .split_coin(signer, coin_id, amounts, gas, gas_budget)
+                        .await?
+                } else {
+                    context
+                        .gateway
+                        .transaction_builder()
+                        .split_coin_equal(signer, coin_id, count, gas, gas_budget)
+                        .await?
+                };
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .execute_transaction(Transaction::new(data, signature))

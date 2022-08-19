@@ -979,7 +979,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         gas: Some(gas),
         gas_budget: 1000,
         coin_id: coin,
-        amounts: vec![1000, 10],
+        amounts: Some(vec![1000, 10]),
+        count: 0,
     }
     .execute(&mut context)
     .await?;
@@ -1016,12 +1017,59 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     }
     let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());
 
+    // Test split coin into equal parts
+    let resp = SuiClientCommands::SplitCoin {
+        gas: None,
+        gas_budget: 1000,
+        coin_id: coin,
+        amounts: None,
+        count: 3,
+    }
+    .execute(&mut context)
+    .await?;
+
+    let g = if let SuiClientCommandResult::SplitCoin(r) = resp {
+        r.parsed_data.unwrap().to_split_coin_response().unwrap()
+    } else {
+        panic!("Command failed")
+    };
+
+    // Check values expected
+    assert_eq!(
+        get_gas_value(&g.updated_coin),
+        orig_value / 3 + orig_value % 3
+    );
+    assert_eq!(get_gas_value(&g.new_coins[0]), orig_value / 3);
+    assert_eq!(get_gas_value(&g.new_coins[1]), orig_value / 3);
+
+    SuiClientCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await?
+    .print(true);
+
+    let object_refs = context
+        .gateway
+        .read_api()
+        .get_objects_owned_by_address(address)
+        .await?;
+
+    // Get another coin
+    for c in object_refs {
+        if get_gas_value(&get_object(c.object_id, &mut context).await.unwrap()) > 2000 {
+            coin = c.object_id;
+        }
+    }
+    let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());
+
     // Test with no gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
         gas_budget: 1000,
         coin_id: coin,
-        amounts: vec![1000, 10],
+        amounts: Some(vec![1000, 10]),
+        count: 0,
     }
     .execute(&mut context)
     .await?;
