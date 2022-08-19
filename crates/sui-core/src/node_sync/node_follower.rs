@@ -308,8 +308,9 @@ where
 mod test {
     use super::*;
     use crate::{
-        authority_active::gossip::GossipMetrics, authority_client::NetworkAuthorityClient,
-        test_utils::test_authority_aggregator,
+        authority_active::gossip::GossipMetrics,
+        authority_client::NetworkAuthorityClient,
+        test_utils::{spawn_test_authorities, test_authority_aggregator},
     };
     use std::sync::{Arc, Mutex};
     use sui_types::{
@@ -319,8 +320,7 @@ mod test {
         object::Object,
     };
     use test_utils::{
-        authority::{spawn_test_authorities, test_and_configure_authority_configs},
-        messages::make_transfer_sui_transaction,
+        authority::test_and_configure_authority_configs, messages::make_transfer_sui_transaction,
     };
     use tokio::{sync::broadcast, time::Instant};
     use typed_store::traits::DBMapTableUtil;
@@ -406,7 +406,7 @@ mod test {
     fn new_sync_store() -> Arc<NodeSyncStore> {
         let working_dir = tempfile::tempdir().unwrap();
         let db_path = working_dir.path().join("sync_store");
-        Arc::new(NodeSyncStore::open_tables_read_write(db_path, None))
+        Arc::new(NodeSyncStore::open_tables_read_write(db_path, None, None))
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
