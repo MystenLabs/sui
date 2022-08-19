@@ -208,6 +208,19 @@ impl EventReadApiServer for EventReadApiImpl {
             .await?;
         Ok(events)
     }
+
+    async fn get_events_by_timerange(
+        &self,
+        count: usize,
+        start_time: u64,
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>> {
+        let events = self
+            .state
+            .get_events_by_timerange(start_time, end_time, count)
+            .await?;
+        Ok(events)
+    }
 }
 
 impl SuiRpcModule for EventReadApiImpl {

@@ -1434,7 +1434,8 @@ impl AuthorityState {
             .map(|handler| handler.event_store.clone())
     }
 
-    /// Returns events emitted in the given transaction, in order of events emitted.
+    /// Returns at most `limit` events emitted in the given transaction,
+    /// emitted within [start_time, end_time) in order of events emitted.
     /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_transaction(
         &self,
@@ -1446,7 +1447,8 @@ impl AuthorityState {
         StoredEvent::into_event_envelopes(stored_events)
     }
 
-    /// Returns events emitted in the given module, in order of events emitted.
+    /// Returns at most `limit` events emitted in the given module,
+    /// emitted within [start_time, end_time), sorted in in descending time.
     /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_transaction_module(
         &self,
@@ -1462,10 +1464,10 @@ impl AuthorityState {
         StoredEvent::into_event_envelopes(stored_events)
     }
 
-    /// Returns events with the given move event struct name, e.g.
+    /// Returns at most `limit` events with the given move event struct name, e.g.
     /// `0x2::devnet_nft::MintNFTEvent` or
-    /// `0x2::SUI::test_foo<address, vector<u8>>` with type params
-    /// , in order of events emitted.
+    /// `0x2::SUI::test_foo<address, vector<u8>>` with type params,
+    /// emitted within [start_time, end_time), sorted in in descending time.
     /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_move_event_struct_name(
         &self,
@@ -1481,8 +1483,8 @@ impl AuthorityState {
         StoredEvent::into_event_envelopes(stored_events)
     }
 
-    /// Returns events associated with the given sender, in order
-    /// of events emitted.
+    /// Returns at most `limit` events associated with the given sender,
+    /// emitted within [start_time, end_time), sorted in in descending time.
     /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_sender(
         &self,
@@ -1498,8 +1500,8 @@ impl AuthorityState {
         StoredEvent::into_event_envelopes(stored_events)
     }
 
-    /// Returns events associated with the given recipient, in order
-    /// of events emitted.
+    /// Returns at most `limit` events associated with the given recipient,
+    /// emitted within [start_time, end_time), sorted in in descending time.
     /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_recipient(
         &self,
@@ -1515,8 +1517,8 @@ impl AuthorityState {
         StoredEvent::into_event_envelopes(stored_events)
     }
 
-    /// Returns events associated with the given object,
-    /// in order of events emitted.
+    /// Returns at most `limit` events associated with the given object,
+    /// emitted within [start_time, end_time), sorted in in descending time.
     /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
     pub async fn get_events_by_object(
         &self,
@@ -1529,6 +1531,20 @@ impl AuthorityState {
         let stored_events = es
             .events_by_object(start_time, end_time, object, limit)
             .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events emitted within [start_time, end_time),
+    /// sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_timerange(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es.event_iterator(start_time, end_time, limit).await?;
         StoredEvent::into_event_envelopes(stored_events)
     }
 

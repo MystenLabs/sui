@@ -266,6 +266,15 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
         type_: TransferType::Coin,
     };
 
+    // query all events
+    let all_events = node
+        .state()
+        .get_events_by_timerange(ts.unwrap() - HOUR_MS, ts.unwrap() + HOUR_MS, 10)
+        .await?;
+    assert_eq!(all_events.len(), 1);
+    assert_eq!(all_events[0].event, expected_event);
+    assert_eq!(all_events[0].tx_digest.unwrap(), digest);
+
     // query by sender
     let events_by_sender = node
         .state()
@@ -668,25 +677,41 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     assert_eq!(events_by_module[0].event, expected_event);
     assert_eq!(events_by_module[0].tx_digest.unwrap(), digest);
 
-    let (_sender, _object_id, digest) = emit_move_events(&mut context).await?;
-    wait_for_tx(digest, node.state().clone()).await;
+    let (_sender, _object_id, digest2) = emit_move_events(&mut context).await?;
+    wait_for_tx(digest2, node.state().clone()).await;
 
     let struct_tag_str = sui_framework_address_concat_string("::devnet_nft::MintNFTEvent");
-    let ts = node.state().get_timestamp_ms(&digest).await?;
+    let ts2 = node.state().get_timestamp_ms(&digest2).await?;
 
     // query by move event struct name
     let params = rpc_params![
         struct_tag_str,
         10,
-        ts.unwrap() - HOUR_MS,
-        ts.unwrap() + HOUR_MS
+        ts2.unwrap() - HOUR_MS,
+        ts2.unwrap() + HOUR_MS
     ];
     let events_by_sender: Vec<SuiEventEnvelope> = jsonrpc_client
         .request("sui_getEventsByMoveEventStructName", params)
         .await
         .unwrap();
     assert_eq!(events_by_sender.len(), 1);
-    assert_eq!(events_by_sender[0].tx_digest.unwrap(), digest);
+    assert_eq!(events_by_sender[0].tx_digest.unwrap(), digest2);
+
+    // query all transactions
+    let params = rpc_params![10, ts.unwrap() - HOUR_MS, ts2.unwrap() + HOUR_MS];
+    let all_events: Vec<SuiEventEnvelope> = jsonrpc_client
+        .request("sui_getEventsByTimeRange", params)
+        .await
+        .unwrap();
+    // The first txn emits TransferObject
+    // The second txn emits MoveEvent and NewObject
+    assert_eq!(all_events.len(), 3);
+    let tx_digests: Vec<TransactionDigest> = all_events
+        .iter()
+        .map(|envelope| envelope.tx_digest.unwrap())
+        .collect();
+    // Sorted in descending time
+    assert_eq!(tx_digests, vec![digest2, digest2, digest]);
 
     Ok(())
 }
