@@ -9891,6 +9891,7 @@ dependencies = [
  "regex-automata",
  "regex-syntax",
  "remove_dir_all",
+ "reqwest 0.10.10",
  "reqwest 0.11.11",
  "retain_mut",
  "rfc6979",
