@@ -12,9 +12,6 @@ use move_binary_format::{
     },
     file_format_common::instruction_key,
 };
-// use move_core_types::gas_schedule::CostTable;
-// use move_core_types::gas_schedule::GasCost;
-// use move_vm_types::gas_schedule::new_from_instructions;
 
 // NOTE: all values in this file are subject to change
 

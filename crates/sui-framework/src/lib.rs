@@ -80,7 +80,7 @@ pub enum EventType {
     User,
 }
 
-// TODO: remove thse in favor of new costs
+// TODO: remove these in favor of new costs
 pub fn legacy_emit_cost() -> InternalGas {
     InternalGas::new(52)
 }

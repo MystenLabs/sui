@@ -25,7 +25,6 @@ pub type GasUnits = GasQuantity<GasUnit>;
 pub enum GasPriceUnit {}
 pub enum SuiGasUnit {}
 
-// pub type StorageGasPricePerByte = GasQuantity<UnitDiv<GasPriceUnit, Byte>>;
 pub type ComputeGasPricePerUnit = GasQuantity<UnitDiv<GasUnit, GasUnit>>;
 
 pub type GasPrice = GasQuantity<GasPriceUnit>;
