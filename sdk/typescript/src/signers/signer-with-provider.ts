@@ -45,10 +45,13 @@ export abstract class SignerWithProvider implements Signer {
   constructor(provider?: Provider, serializer?: TxnDataSerializer) {
     this.provider = provider || new VoidProvider();
     let endpoint = '';
+    let skipDataValidation = false;
     if (this.provider instanceof JsonRpcProvider) {
       endpoint = this.provider.endpoint;
+      skipDataValidation = this.provider.skipDataValidation;
     }
-    this.serializer = serializer || new RpcTxnDataSerializer(endpoint);
+    this.serializer =
+      serializer || new RpcTxnDataSerializer(endpoint, skipDataValidation);
   }
 
   /**
