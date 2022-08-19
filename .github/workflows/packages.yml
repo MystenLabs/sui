@@ -3,9 +3,6 @@ name: Package
 on:
   push:
     branches: [ main, extensions, devnet ]
-  # TODO(bradh): remove pull request trigger before submit
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 env:
@@ -48,6 +45,7 @@ jobs:
 
       - name: build debian package
         run: |
+          cargo deb -p sui
           cargo deb -p sui-node
 
       - uses: actions/upload-artifact@v3
