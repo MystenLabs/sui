@@ -24,9 +24,16 @@ pub fn all_natives(
     move_stdlib_addr: AccountAddress,
     sui_framework_addr: AccountAddress,
 ) -> NativeFunctionTable {
+<<<<<<< HEAD
     let sui_natives: &[(&str, &str, NativeFunction)] = &[
         ("crypto", "ecrecover", make_native!(crypto::ecrecover)),
         ("crypto", "keccak256", make_native!(crypto::keccak256)),
+=======
+    const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
+        ("crypto", "ecrecover", crypto::ecrecover),
+        ("crypto", "keccak256", crypto::keccak256),
+        ("crypto", "secp256k1_verify", crypto::secp256k1_verify),
+>>>>>>> afeecdf97106dda1b071518a5f16d02aded563b4
         (
             "crypto",
             "bls12381_verify_g1_sig",

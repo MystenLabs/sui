@@ -26,11 +26,18 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
   private client: JsonRpcClient;
 
   /**
-   * Establish a connection to a Sui Gateway endpoint
+   * Establish a connection to a Sui RPC endpoint
    *
-   * @param endpoint URL to the Sui Gateway endpoint
+   * @param endpoint URL to the Sui RPC endpoint
+   * @param skipDataValidation default to `false`. If set to `true`, the rpc
+   * client will not check if the responses from the RPC server conform to the schema
+   * defined in the TypeScript SDK. The mismatches often happen when the SDK
+   * is in a different version than the RPC server. Skipping the validation
+   * can maximize the version compatibility of the SDK, as not all the schema
+   * changes in the RPC response will affect the caller, but the caller needs to
+   * understand that the data may not match the TypeSrcript definitions.
    */
-  constructor(endpoint: string) {
+  constructor(endpoint: string, private skipDataValidation: boolean = false) {
     this.client = new JsonRpcClient(endpoint);
   }
 
@@ -42,7 +49,8 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       const resp = await this.client.requestWithType(
         'sui_transferObject',
         [signerAddress, t.objectId, t.gasPayment, t.gasBudget, t.recipient],
-        isTransactionBytes
+        isTransactionBytes,
+        this.skipDataValidation
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
@@ -58,7 +66,8 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
       const resp = await this.client.requestWithType(
         'sui_transferSui',
         [signerAddress, t.suiObjectId, t.gasBudget, t.recipient, t.amount],
-        isTransactionBytes
+        isTransactionBytes,
+        this.skipDataValidation
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
@@ -83,7 +92,8 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
           t.gasPayment,
           t.gasBudget,
         ],
-        isTransactionBytes
+        isTransactionBytes,
+        this.skipDataValidation
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
@@ -105,7 +115,8 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
           t.gasPayment,
           t.gasBudget,
         ],
-        isTransactionBytes
+        isTransactionBytes,
+        this.skipDataValidation
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
@@ -127,7 +138,8 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
           t.gasPayment,
           t.gasBudget,
         ],
-        isTransactionBytes
+        isTransactionBytes,
+        this.skipDataValidation
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {
@@ -142,13 +154,9 @@ export class RpcTxnDataSerializer implements TxnDataSerializer {
     try {
       const resp = await this.client.requestWithType(
         'sui_publish',
-        [
-          signerAddress,
-          t.compiledModules,
-          t.gasPayment,
-          t.gasBudget,
-        ],
-        isTransactionBytes
+        [signerAddress, t.compiledModules, t.gasPayment, t.gasBudget],
+        isTransactionBytes,
+        this.skipDataValidation
       );
       return new Base64DataBuffer(resp.txBytes);
     } catch (err) {

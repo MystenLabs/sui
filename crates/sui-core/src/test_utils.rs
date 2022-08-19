@@ -7,9 +7,11 @@ use std::time::Duration;
 
 use crate::authority::AuthorityState;
 use sui_types::{
-    base_types::TransactionDigest,
+    base_types::{dbg_addr, ObjectID, TransactionDigest},
     batch::UpdateItem,
-    messages::{BatchInfoRequest, BatchInfoResponseItem},
+    crypto::{get_key_pair, AccountKeyPair, Signature},
+    messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData},
+    object::Object,
 };
 
 use futures::StreamExt;
@@ -78,4 +80,22 @@ pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<
             },
         }
     }
+}
+
+// Creates a fake sender-signed transaction for testing. This transaction will
+// not actually work.
+pub fn create_fake_transaction() -> Transaction {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let object = Object::immutable_with_id_for_testing(object_id);
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        None,
+        object.compute_object_reference(),
+        10000,
+    );
+    let signature = Signature::new(&data, &sender_key);
+    Transaction::new(data, signature)
 }
