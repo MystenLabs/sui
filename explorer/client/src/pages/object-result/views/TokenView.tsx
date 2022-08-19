@@ -78,7 +78,10 @@ function TokenView({ data }: { data: DataType }) {
                                 <td>Type</td>
                                 {viewedData.package && viewedData.module ? (
                                     <td>
-                                        <Link to={href}>
+                                        <Link
+                                            to={href}
+                                            className={styles.objecttypelink}
+                                        >
                                             {trimStdLibPrefix(
                                                 viewedData.objType
                                             )}
@@ -90,19 +93,6 @@ function TokenView({ data }: { data: DataType }) {
                                     </td>
                                 )}
                             </tr>
-                            {viewedData.tx_digest && (
-                                <tr>
-                                    <td>Module</td>
-                                    <td>{viewedData?.module}</td>
-                                </tr>
-                            )}
-                            {viewedData.tx_digest && (
-                                <tr>
-                                    <td>Package</td>
-                                    <td>{viewedData?.package}</td>
-                                </tr>
-                            )}
-
                             <tr>
                                 <td>Object ID</td>
                                 <td id="objectID" className={styles.objectid}>
