@@ -27,7 +27,8 @@ mod rpc_server_tests;
 #[clap(
     name = "Sui RPC Gateway",
     about = "A Byzantine fault tolerant chain with low-latency finality and high throughput",
-    rename_all = "kebab-case"
+    rename_all = "kebab-case",
+    version
 )]
 struct RpcGatewayOpt {
     #[clap(long)]

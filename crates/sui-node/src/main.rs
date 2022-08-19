@@ -13,7 +13,7 @@ use tokio::time::sleep;
 use tracing::warn;
 
 #[derive(Parser)]
-#[clap(rename_all = "kebab-case")]
+#[clap(rename_all = "kebab-case", version)]
 struct Args {
     #[clap(long)]
     pub config_path: PathBuf,
