@@ -21,6 +21,7 @@ pub fn all_natives(
     const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
         ("crypto", "ecrecover", crypto::ecrecover),
         ("crypto", "keccak256", crypto::keccak256),
+        ("crypto", "secp256k1_verify", crypto::secp256k1_verify),
         (
             "crypto",
             "bls12381_verify_g1_sig",
