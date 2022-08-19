@@ -18,7 +18,6 @@ use sui_types::{
     messages_checkpoint::CheckpointContents,
 };
 
-use std::future::Future;
 use std::ops::Deref;
 use std::sync::{Arc, Mutex};
 
@@ -749,7 +748,7 @@ impl NodeSyncHandle {
         &self,
         peer: AuthorityName,
         digests: ExecutionDigests,
-    ) -> SuiResult<impl Future<Output = SuiResult>> {
+    ) -> SuiResult<BoxFuture<'static, SuiResult>> {
         let (tx, rx) = oneshot::channel();
         let sender = self.sender.clone();
         Self::send_msg_with_tx(sender, DigestsMessage::new(&digests, peer, tx)).await?;
