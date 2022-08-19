@@ -35,6 +35,8 @@ const NODE_SYNC_QUEUE_LEN: usize = 500;
 // Process up to 20 digests concurrently.
 const MAX_NODE_SYNC_CONCURRENCY: usize = 20;
 
+// All tasks die after 60 seconds if they haven't finished.
+const MAX_NODE_TASK_LIFETIME: Duration = Duration::from_secs(60);
 
 /// Waiter is used to single-shot concurrent requests and wait for dependencies to finish.
 struct Waiter<Key, ResultT> {
@@ -271,10 +273,21 @@ where
             let permit = limit.acquire_owned().await.unwrap();
 
             tokio::spawn(async move {
-                let res = state.process_digest(sync_arg, permit).await;
-                if let Err(error) = &res {
-                    error!(?sync_arg, "process_digest failed: {}", error);
-                }
+                let res = timeout(
+                    MAX_NODE_TASK_LIFETIME,
+                    state.process_digest(sync_arg, permit),
+                )
+                .await
+                .map_err(|_| SuiError::TimeoutError);
+
+                let res = match res {
+                    Err(error) | Ok(Err(error)) => {
+                        error!(?sync_arg, "process_digest failed: {}", error);
+                        Err(error)
+                    }
+
+                    Ok(Ok(res)) => Ok(res),
+                };
 
                 // Notify waiters even if tx failed, to avoid leaking resources.
                 let digest = sync_arg.transaction_digest();
