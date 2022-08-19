@@ -1152,7 +1152,7 @@ impl SignatureScheme {
     pub fn flag(&self) -> u8 {
         match self {
             SignatureScheme::ED25519 => 0x00,
-            SignatureScheme::Secp256k1 => 0xed,
+            SignatureScheme::Secp256k1 => 0x01,
         }
     }
 }
