@@ -153,7 +153,7 @@ async fn test_start_epoch_change() {
         BTreeSet::new(),
         &state.move_vm,
         &state._native_functions,
-        SuiGasStatus::new_with_budget(1000, 1, 1),
+        SuiGasStatus::new_with_budget(1000, 1.into(), 1.into()),
         state.epoch(),
     );
     let signed_effects = effects.to_sign_effects(0, &state.name, &*state.secret);

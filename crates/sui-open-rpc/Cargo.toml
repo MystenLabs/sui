@@ -29,8 +29,8 @@ sui-config = { path = "../sui-config" }
 test-utils = { path = "../test-utils" }
 rand = "0.8.5"
 
-move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
+move-package = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", features = ["address20"] }
 
 [[example]]
 name = "generate-json-rpc-spec"

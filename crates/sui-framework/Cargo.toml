@@ -20,26 +20,27 @@ sui-types = { path = "../sui-types" }
 sui-framework-build = { path = "../sui-framework-build" }
 sui-verifier = { path = "../../crates/sui-verifier" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-cli = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-stdlib = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-unit-test = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-vm-runtime = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-cli = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", features = ["address20"] }
+move-package = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-stdlib = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-unit-test = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-vm-runtime = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "e54611ee0387735b1963eecfc4fdc120ee8ac509", package = "crypto" }
 workspace-hack = { path = "../workspace-hack"}
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
 
 [build-dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
 sui-framework-build = { path = "../sui-framework-build" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-package = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["move-cli", "move-unit-test"]

@@ -23,4 +23,4 @@ sui-faucet = { path = "../sui-faucet" }
 sui-cluster-test = { path = "../sui-cluster-test" }
 sui-types = { path = "../sui-types" }
 
-move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-package = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }

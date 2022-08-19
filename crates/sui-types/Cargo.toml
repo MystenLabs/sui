@@ -41,12 +41,13 @@ eyre = "0.6.8"
 name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-ir-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-vm-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", features = ["address20"] }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-ir-types = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-vm-types = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
 
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "e54611ee0387735b1963eecfc4fdc120ee8ac509", package = "executor" }
 narwhal-crypto = { git = "https://github.com/MystenLabs/narwhal", rev = "e54611ee0387735b1963eecfc4fdc120ee8ac509", package = "crypto" }

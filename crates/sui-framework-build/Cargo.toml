@@ -14,10 +14,10 @@ once_cell = "1.11.0"
 sui-types = { path = "../sui-types" }
 sui-verifier = { path = "../../crates/sui-verifier" }
 
-move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-compiler = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-bytecode-verifier = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-compiler = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec", features = ["address20"] }
+move-package = { git = "https://github.com/move-language/move", rev = "547c7f79d1c46dccfcb1024005d2a796be2480ec" }
 workspace-hack = { path = "../workspace-hack"}

@@ -3,22 +3,21 @@
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
-    gas_schedule::NativeCostIndex,
-    loaded_data::runtime_types::Type,
-    natives::function::{native_gas, NativeResult},
-    pop_arg,
-    values::Value,
+    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
 };
+
 use narwhal_crypto::{traits::ToFromBytes, Verifier};
 use smallvec::smallvec;
 use std::collections::VecDeque;
+
+use crate::{legacy_emit_cost, legacy_empty_cost};
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
 
 /// Native implemention of ecrecover in public Move API, see crypto.move for specifications.
 pub fn ecrecover(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -28,7 +27,7 @@ pub fn ecrecover(
     let hashed_msg = pop_arg!(args, Vec<u8>);
     let signature = pop_arg!(args, Vec<u8>);
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
+    let cost = legacy_empty_cost();
     match <narwhal_crypto::secp256k1::Secp256k1Signature as ToFromBytes>::from_bytes(&signature) {
         Ok(signature) => match signature.recover(&hashed_msg) {
             Ok(pubkey) => Ok(NativeResult::ok(
@@ -43,7 +42,7 @@ pub fn ecrecover(
 
 /// Native implemention of keccak256 in public Move API, see crypto.move for specifications.
 pub fn keccak256(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -51,7 +50,7 @@ pub fn keccak256(
     debug_assert!(args.len() == 1);
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
+    let cost = legacy_empty_cost();
     let msg = pop_arg!(args, Vec<u8>);
     Ok(NativeResult::ok(
         cost,
@@ -66,7 +65,7 @@ pub fn keccak256(
 /// Native implemention of bls12381_verify in public Move API, see crypto.move for specifications.
 /// Note that this function only works for signatures in G1 and public keys in G2.
 pub fn bls12381_verify_g1_sig(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -78,7 +77,7 @@ pub fn bls12381_verify_g1_sig(
     let signature_bytes = pop_arg!(args, Vec<u8>);
 
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_emit_cost();
 
     let signature = match <narwhal_crypto::bls12381::BLS12381Signature as ToFromBytes>::from_bytes(
         &signature_bytes,

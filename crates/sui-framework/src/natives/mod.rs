@@ -9,70 +9,104 @@ mod transfer;
 mod tx_context;
 mod types;
 
-use move_binary_format::errors::PartialVMError;
+use crate::make_native;
+use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
+use move_stdlib::natives::GasParameters;
 use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
-use move_vm_types::values::{Struct, Value};
+use move_vm_types::{
+    natives::function::NativeResult,
+    values::{Struct, Value},
+};
+use std::sync::Arc;
 
 pub fn all_natives(
     move_stdlib_addr: AccountAddress,
     sui_framework_addr: AccountAddress,
 ) -> NativeFunctionTable {
-    const SUI_NATIVES: &[(&str, &str, NativeFunction)] = &[
-        ("crypto", "ecrecover", crypto::ecrecover),
-        ("crypto", "keccak256", crypto::keccak256),
+    let sui_natives: &[(&str, &str, NativeFunction)] = &[
+        ("crypto", "ecrecover", make_native!(crypto::ecrecover)),
+        ("crypto", "keccak256", make_native!(crypto::keccak256)),
         (
             "crypto",
             "bls12381_verify_g1_sig",
-            crypto::bls12381_verify_g1_sig,
+            make_native!(crypto::bls12381_verify_g1_sig),
         ),
-        ("event", "emit", event::emit),
-        ("object", "bytes_to_address", object::bytes_to_address),
-        ("object", "delete_impl", object::delete_impl),
-        ("object", "borrow_uid", object::borrow_uid),
+        ("event", "emit", make_native!(event::emit)),
+        (
+            "object",
+            "bytes_to_address",
+            make_native!(object::bytes_to_address),
+        ),
+        ("object", "delete_impl", make_native!(object::delete_impl)),
+        ("object", "borrow_uid", make_native!(object::borrow_uid)),
         (
             "test_scenario",
             "drop_object_for_testing",
-            test_scenario::drop_object_for_testing,
+            make_native!(test_scenario::drop_object_for_testing),
         ),
         (
             "test_scenario",
             "emit_wrapped_object_events",
-            test_scenario::emit_wrapped_object_events,
+            make_native!(test_scenario::emit_wrapped_object_events),
         ),
         (
             "test_scenario",
             "get_account_owned_inventory",
-            test_scenario::get_account_owned_inventory,
+            make_native!(test_scenario::get_account_owned_inventory),
         ),
         (
             "test_scenario",
             "get_object_owned_inventory",
-            test_scenario::get_object_owned_inventory,
+            make_native!(test_scenario::get_object_owned_inventory),
         ),
         (
             "test_scenario",
             "get_unowned_inventory",
-            test_scenario::get_unowned_inventory,
+            make_native!(test_scenario::get_unowned_inventory),
         ),
-        ("test_scenario", "num_events", test_scenario::num_events),
+        (
+            "test_scenario",
+            "num_events",
+            make_native!(test_scenario::num_events),
+        ),
         (
             "test_scenario",
             "update_object",
-            test_scenario::update_object,
+            make_native!(test_scenario::update_object),
         ),
-        ("transfer", "transfer_internal", transfer::transfer_internal),
-        ("transfer", "freeze_object", transfer::freeze_object),
-        ("transfer", "share_object", transfer::share_object),
-        ("tx_context", "derive_id", tx_context::derive_id),
+        (
+            "transfer",
+            "transfer_internal",
+            make_native!(transfer::transfer_internal),
+        ),
+        (
+            "transfer",
+            "freeze_object",
+            make_native!(transfer::freeze_object),
+        ),
+        (
+            "transfer",
+            "share_object",
+            make_native!(transfer::share_object),
+        ),
+        (
+            "tx_context",
+            "derive_id",
+            make_native!(tx_context::derive_id),
+        ),
         (
             "tx_context",
             "new_signer_from_address",
-            tx_context::new_signer_from_address,
+            make_native!(tx_context::new_signer_from_address),
         ),
-        ("types", "is_one_time_witness", types::is_one_time_witness),
+        (
+            "types",
+            "is_one_time_witness",
+            make_native!(types::is_one_time_witness),
+        ),
     ];
-    SUI_NATIVES
+    sui_natives
         .iter()
         .cloned()
         .map(|(module_name, func_name, func)| {
@@ -83,7 +117,11 @@ pub fn all_natives(
                 func,
             )
         })
-        .chain(move_stdlib::natives::all_natives(move_stdlib_addr))
+        .chain(move_stdlib::natives::all_natives(
+            move_stdlib_addr,
+            // TODO: tune gas params
+            GasParameters::zeros(),
+        ))
         .collect()
 }
 
@@ -105,4 +143,15 @@ pub fn get_nested_struct_field(mut v: Value, offsets: &[usize]) -> Result<Value,
 pub fn get_nth_struct_field(v: Value, n: usize) -> Result<Value, PartialVMError> {
     let mut itr = v.value_as::<Struct>()?.unpack()?;
     Ok(itr.nth(n).unwrap())
+}
+
+#[macro_export]
+macro_rules! make_native {
+    ($native: expr) => {
+        Arc::new(
+            move |context, ty_args, args| -> PartialVMResult<NativeResult> {
+                $native(context, ty_args, args)
+            },
+        )
+    };
 }
