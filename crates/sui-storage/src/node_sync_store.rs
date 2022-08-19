@@ -154,6 +154,7 @@ impl NodeSyncStore {
         effects_digest: TransactionEffectsDigest,
         stake: StakeUnit,
     ) -> SuiResult {
+        trace!(?effects_digest, ?peer, ?stake, "recording vote");
         Ok(self.effects_votes.insert(&(effects_digest, peer), &stake)?)
     }
 
@@ -187,6 +188,7 @@ impl NodeSyncStore {
     }
 
     pub fn clear_effects_votes(&self, digest: TransactionEffectsDigest) -> SuiResult {
+        trace!(effects_digest = ?digest, "clearing votes");
         Ok(self
             .effects_votes
             .multi_remove(self.iter_fx_digest(digest)?.map(|(k, _)| k))?)

@@ -157,6 +157,7 @@ const HOUR_MS: u64 = 3_600_000;
 
 #[tokio::test]
 async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
