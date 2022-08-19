@@ -3,7 +3,7 @@ source: crates/sui-cost/tests/snapshot_tests.rs
 expression: common_costs
 ---
 Publish:
-  computationCost: 561
+  computationCost: 562
   storageCost: 84
   storageRebate: 16
 MergeCoin:
