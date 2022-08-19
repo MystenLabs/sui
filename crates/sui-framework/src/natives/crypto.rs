@@ -13,7 +13,6 @@ use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
     loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
 };
-use narwhal_crypto::{traits::ToFromBytes, Verifier};
 use smallvec::smallvec;
 use std::collections::VecDeque;
 
@@ -110,7 +109,7 @@ pub fn bls12381_verify_g1_sig(
 
 /// Native implemention of Bulletproofs range proof in public Move API, see crypto.move for specifications.
 pub fn verify_range_proof(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -120,7 +119,7 @@ pub fn verify_range_proof(
     let bit_length = pop_arg!(args, u64);
     let commitment_bytes = pop_arg!(args, Vec<u8>);
     let proof_bytes = pop_arg!(args, Vec<u8>);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
+    let cost = legacy_empty_cost();
 
     let proof = if let Ok(val) = BulletproofsRangeProof::from_bytes(&proof_bytes[..]) {
         val
@@ -141,7 +140,7 @@ pub fn verify_range_proof(
 }
 
 pub fn add_ristretto_point(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -150,7 +149,7 @@ pub fn add_ristretto_point(
 
     let point_a = pop_arg!(args, Vec<u8>);
     let point_b = pop_arg!(args, Vec<u8>);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
+    let cost = legacy_empty_cost();
 
     let rist_point_a = if let Ok(val) = PedersenCommitment::from_bytes(&point_a[..]) {
         val
@@ -172,7 +171,7 @@ pub fn add_ristretto_point(
 }
 
 pub fn subtract_ristretto_point(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -181,7 +180,7 @@ pub fn subtract_ristretto_point(
 
     let point_b = pop_arg!(args, Vec<u8>);
     let point_a = pop_arg!(args, Vec<u8>);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
+    let cost = legacy_empty_cost();
 
     let rist_point_a = if let Ok(val) = PedersenCommitment::from_bytes(&point_a[..]) {
         val
@@ -203,7 +202,7 @@ pub fn subtract_ristretto_point(
 }
 
 pub fn pedersen_commit(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -212,7 +211,7 @@ pub fn pedersen_commit(
 
     let blinding_factor_vec = pop_arg!(args, Vec<u8>);
     let value_vec = pop_arg!(args, Vec<u8>);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
+    let cost = legacy_empty_cost();
 
     let blinding_factor: [u8; 32] = if let Ok(val) = blinding_factor_vec.try_into() {
         val
@@ -235,7 +234,7 @@ pub fn pedersen_commit(
 }
 
 pub fn scalar_from_u64(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -243,8 +242,7 @@ pub fn scalar_from_u64(
     debug_assert!(args.len() == 1);
 
     let value = pop_arg!(args, u64);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
-
+    let cost = legacy_empty_cost();
     let scalar = Scalar::from(value);
 
     Ok(NativeResult::ok(
@@ -254,7 +252,7 @@ pub fn scalar_from_u64(
 }
 
 pub fn scalar_from_bytes(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -262,7 +260,7 @@ pub fn scalar_from_bytes(
     debug_assert!(args.len() == 1);
 
     let value = pop_arg!(args, Vec<u8>);
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMPTY, 0);
+    let cost = legacy_empty_cost();
 
     let value: [u8; 32] = if let Ok(val) = value.try_into() {
         val
