@@ -1,3 +1,4 @@
 packages:
   - 'wallet-adapter/**'
   - 'sdk/**'
+  - 'explorer/**'

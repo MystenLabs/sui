@@ -29,7 +29,7 @@
         "typescript": "^4.5.5"
     },
     "dependencies": {
-        "@mysten/sui.js": "file:../../sdk/typescript",
+        "@mysten/sui.js": "workspace:*",
         "@sentry/react": "^7.6.0",
         "@sentry/tracing": "^7.6.0",
         "@tanstack/react-query": "^4.0.10",
@@ -51,29 +51,23 @@
         "web-vitals": "^2.1.4"
     },
     "scripts": {
-        "start": "react-scripts start",
-        "start:static": "REACT_APP_DATA=static PORT=8080 react-scripts start",
-        "start:local": "REACT_APP_DATA=local react-scripts start",
-        "test": "yarn test:unit && yarn test:cypress",
+        "dev": "react-scripts start",
+        "dev:static": "REACT_APP_DATA=static PORT=8080 react-scripts start",
+        "dev:local": "REACT_APP_DATA=local react-scripts start",
+        "test": "pnpm test:unit && pnpm test:cypress",
         "test:unit": "react-scripts test --detectOpenHandles --watchAll=false",
-        "test:cypress": "start-server-and-test start:static 8080 'cypress run'",
+        "test:cypress": "start-server-and-test dev:static 8080 'cypress run'",
         "build": "react-scripts build",
         "build:staging": "REACT_APP_DATA=staging react-scripts build",
         "build:prod": "REACT_APP_DATA=prod react-scripts build",
         "eslint:check": "eslint --max-warnings=0 .eslintrc.js \"./src/**/*.{js,jsx,ts,tsx}\"",
-        "eslint:fix": "yarn eslint:check --fix",
+        "eslint:fix": "pnpm eslint:check --fix",
         "prettier:check": "prettier -c --ignore-unknown .",
         "prettier:fix": "prettier -w --ignore-unknown .",
         "stylelint:check": "stylelint \"**/*.{css,scss}\"",
-        "stylelint:fix": "yarn stylelint:check --fix",
-        "lint": "yarn eslint:check && yarn prettier:check && yarn stylelint:check",
-        "lint:fix": "yarn eslint:fix && yarn prettier:fix && yarn stylelint:fix"
-    },
-    "resolutions": {
-        "async": "3.2.2",
-        "nth-check": "2.0.1",
-        "@types/react": "17.x",
-        "@types/react-dom": "17.x"
+        "stylelint:fix": "pnpm stylelint:check --fix",
+        "lint": "pnpm eslint:check && pnpm prettier:check && pnpm stylelint:check",
+        "lint:fix": "pnpm eslint:fix && pnpm prettier:fix && pnpm stylelint:fix"
     },
     "browserslist": {
         "production": [

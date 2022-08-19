@@ -47,7 +47,7 @@ export function useNetwork(): [
 ] {
     const [searchParams] = useSearchParams();
     const [network, setNetwork] = useState<Network | string>(() => {
-        // If running yarn start:local, ignore what is in storage and use Local network:
+        // If running pnpm dev:local, ignore what is in storage and use Local network:
         if (IS_LOCAL_ENV) return Network.Local;
         const storedNetwork = window.localStorage.getItem(LOCALSTORE_RPC_KEY);
         if (!storedNetwork || wasNetworkSetLongTimeAgo()) {
