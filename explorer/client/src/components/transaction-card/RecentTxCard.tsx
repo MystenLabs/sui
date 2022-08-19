@@ -162,7 +162,7 @@ function SuiAmount({ amount }: { amount: BN | string | undefined }) {
         }
     }
 
-    return <span />;
+    return <span className={styles.suiamount}>--</span>;
 }
 
 // Generate table data from the transaction data
