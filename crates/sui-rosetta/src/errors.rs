@@ -1,21 +1,22 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use axum::http::StatusCode;
 use std::fmt::Display;
 use std::num::TryFromIntError;
 
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use itertools::Itertools;
-use serde::Deserialize;
 use serde::Serialize;
+use serde::{Deserialize, Serializer};
 use serde_json::{json, Value};
 use signature::Error as SignatureError;
-
+use strum_macros::EnumIter;
 use sui_types::base_types::ObjectIDParseError;
 use sui_types::error::SuiError;
 
-#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize)]
+#[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize, EnumIter)]
 #[serde(rename_all = "lowercase")]
 pub enum ErrorType {
     UnsupportedBlockchain = 1,
@@ -29,8 +30,9 @@ pub enum ErrorType {
     IncorrectSignerAddress,
     SignatureError,
     SerializationError,
+    UnimplementedTransactionType,
 }
-#[derive(Serialize)]
+
 pub struct Error {
     type_: ErrorType,
     detail: Option<Value>,
@@ -57,10 +59,14 @@ impl Error {
     }
 }
 
-impl IntoResponse for Error {
-    fn into_response(self) -> Response {
+impl Serialize for Error {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
         let retriable = false;
         let error_code = self.type_ as u32;
+        // Add space before upper case char, are there better ways?
         let message = format!("{:?}", &self.type_)
             .chars()
             .rev()
@@ -71,7 +77,7 @@ impl IntoResponse for Error {
             .rev()
             .collect::<String>();
 
-        let error = if let Some(details) = self.detail {
+        if let Some(details) = &self.detail {
             json![{
                 "code": error_code,
                 "message": message,
@@ -84,8 +90,14 @@ impl IntoResponse for Error {
                 "message": message,
                 "retriable":retriable,
             }]
-        };
-        Json(error).into_response()
+        }
+        .serialize(serializer)
+    }
+}
+
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(self)).into_response()
     }
 }
 

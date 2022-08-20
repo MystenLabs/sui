@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::str::FromStr;
 use std::sync::Arc;
 
 use axum::{Extension, Json};
@@ -22,6 +21,7 @@ pub async fn balance(
     Json(payload): Json<AccountBalanceRequest>,
     Extension(state): Extension<Arc<ApiState>>,
 ) -> Result<AccountBalanceResponse, Error> {
+    state.checks_network_identifier(&payload.network_identifier)?;
     let gas_coins = get_gas_coins(
         state.get_client(payload.network_identifier.network).await?,
         payload.account_identifier.address,
@@ -41,6 +41,7 @@ pub async fn coins(
     Json(payload): Json<AccountCoinsRequest>,
     Extension(state): Extension<Arc<ApiState>>,
 ) -> Result<AccountCoinsResponse, Error> {
+    state.checks_network_identifier(&payload.network_identifier)?;
     let coins = get_gas_coins(
         state.get_client(payload.network_identifier.network).await?,
         payload.account_identifier.address,
@@ -51,7 +52,7 @@ pub async fn coins(
         .map(|coin| {
             Ok(Coin {
                 coin_identifier: CoinIdentifier {
-                    identifier: coin.id().to_hex_literal(),
+                    identifier: *coin.id(),
                 },
                 amount: Amount::new(coin.value().try_into()?),
             })
@@ -67,13 +68,7 @@ pub async fn coins(
     })
 }
 
-async fn get_gas_coins(client: &SuiClient, address: String) -> Result<Vec<GasCoin>, Error> {
-    let address = SuiAddress::from_str(&address).map_err(|e| {
-        Error::new_with_detail(
-            ErrorType::InvalidInput,
-            json!({ "address": address, "cause": e.to_string() }),
-        )
-    })?;
+async fn get_gas_coins(client: &SuiClient, address: SuiAddress) -> Result<Vec<GasCoin>, Error> {
     let object_infos = client
         .read_api()
         .get_objects_owned_by_address(address)

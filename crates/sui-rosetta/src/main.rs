@@ -7,15 +7,16 @@ use std::sync::Arc;
 
 use axum::routing::post;
 use axum::{Extension, Router};
-use lazy_static::lazy_static;
+use itertools::Itertools;
+use once_cell::sync::Lazy;
 use serde_json::json;
-use tower::ServiceBuilder;
 use tracing::info;
 
 use sui_sdk::SuiClient;
 
 use crate::errors::{Error, ErrorType};
-use crate::types::{Currency, SuiEnv};
+use crate::types::{Currency, NetworkIdentifier, SuiEnv};
+use crate::ErrorType::{UnsupportedBlockchain, UnsupportedNetwork};
 
 mod account;
 mod actions;
@@ -24,16 +25,19 @@ mod errors;
 mod network;
 mod types;
 
-lazy_static! {
-    pub static ref SUI: Currency = Currency {
-        symbol: "SUI".to_string(),
-        decimals: 8,
-    };
-}
+pub static SUI: Lazy<Currency> = Lazy::new(|| Currency {
+    symbol: "SUI".to_string(),
+    decimals: 8,
+});
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let client = Arc::new(ApiState {
+    // initialize tracing
+    let _guard = telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
+        .with_env()
+        .init();
+
+    let state = Arc::new(ApiState {
         clients: BTreeMap::from_iter(vec![(
             SuiEnv::MainNet,
             SuiClient::new_rpc_client("http://127.0.0.1:9000", None).await?,
@@ -44,17 +48,17 @@ async fn main() -> Result<(), anyhow::Error> {
         .route("/account/balance", post(account::balance))
         .route("/account/coins", post(account::coins))
         .route("/network/list", post(network::list))
+        .route("/network/status", post(network::status))
+        .route("/network/options", post(network::options))
         .route("/construction/derive", post(construction::derive))
         .route("/construction/payload", post(construction::payload))
         .route("/construction/combine", post(construction::combine))
         .route("/construction/submit", post(construction::submit))
         .route("/construction/preprocess", post(construction::preprocess))
-        .layer(
-            ServiceBuilder::new()
-                //.layer(HandleErrorLayer::new(handle_error))
-                .layer(Extension(client))
-                .into_inner(),
-        );
+        .route("/construction/hash", post(construction::hash))
+        .route("/construction/metadata", post(construction::metadata))
+        .route("/construction/parse", post(construction::parse))
+        .layer(Extension(state));
 
     let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 9002);
     info!("listening on {}", addr);
@@ -77,5 +81,18 @@ impl ApiState {
 
     pub fn get_envs(&self) -> Vec<SuiEnv> {
         self.clients.keys().cloned().collect()
+    }
+
+    fn checks_network_identifier(
+        &self,
+        network_identifier: &NetworkIdentifier,
+    ) -> Result<(), Error> {
+        if &network_identifier.blockchain != "sui" {
+            return Err(Error::new(UnsupportedBlockchain));
+        }
+        if !self.clients.keys().contains(&network_identifier.network) {
+            return Err(Error::new(UnsupportedNetwork));
+        }
+        Ok(())
     }
 }

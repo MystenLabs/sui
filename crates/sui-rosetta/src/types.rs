@@ -3,13 +3,14 @@
 
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use serde::Deserialize;
 use serde::Serialize;
+use serde::{Deserialize, Serializer};
 use serde_json::{json, Value};
 use serde_with::serde_as;
 use serde_with::DisplayFromStr;
 
-use sui_types::base_types::{SuiAddress, TransactionDigest};
+use strum_macros::EnumIter;
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::Hex;
 
@@ -43,7 +44,7 @@ impl SuiEnv {
 
 #[derive(Serialize, Deserialize)]
 pub struct AccountIdentifier {
-    pub address: String,
+    pub address: SuiAddress,
 }
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Currency {
@@ -113,7 +114,7 @@ pub struct Coin {
 
 #[derive(Serialize, Deserialize)]
 pub struct CoinIdentifier {
-    pub identifier: String,
+    pub identifier: ObjectID,
 }
 
 #[derive(Deserialize)]
@@ -190,26 +191,26 @@ pub struct ConstructionPayloadsRequest {
     pub public_keys: Vec<PublicKey>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct Operation {
     pub operation_identifier: OperationIdentifier,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub related_operations: Vec<OperationIdentifier>,
     #[serde(rename = "type")]
     pub type_: OperationType,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account: Option<AccountIdentifier>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub amount: Option<Amount>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coin_change: Option<CoinChange>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
 }
 
-#[derive(Deserialize, Serialize, Copy, Clone)]
+#[derive(Deserialize, Serialize, Copy, Clone, EnumIter)]
 pub enum OperationType {
     Gas,
     TransferSUI,
@@ -218,20 +219,20 @@ pub enum OperationType {
     SplitCoin,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct OperationIdentifier {
     pub index: u64,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub network_index: Option<u64>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 pub struct CoinChange {
     pub coin_identifier: CoinIdentifier,
     pub coin_action: CoinAction,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CoinAction {
     CoinCreated,
@@ -334,4 +335,186 @@ impl IntoResponse for ConstructionPreprocessResponse {
     fn into_response(self) -> Response {
         Json(self).into_response()
     }
+}
+#[derive(Deserialize)]
+pub struct ConstructionHashRequest {
+    pub network_identifier: NetworkIdentifier,
+    pub signed_transaction: Hex,
+}
+
+#[derive(Deserialize)]
+pub struct ConstructionMetadataRequest {
+    pub network_identifier: NetworkIdentifier,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub options: Option<Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub public_keys: Vec<PublicKey>,
+}
+
+#[derive(Serialize)]
+pub struct ConstructionMetadataResponse {
+    pub metadata: Value,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub suggested_fee: Vec<Amount>,
+}
+
+impl IntoResponse for ConstructionMetadataResponse {
+    fn into_response(self) -> Response {
+        Json(self).into_response()
+    }
+}
+
+#[derive(Deserialize)]
+pub struct ConstructionParseRequest {
+    pub network_identifier: NetworkIdentifier,
+    pub signed: bool,
+    pub transaction: Hex,
+}
+
+#[derive(Serialize)]
+pub struct ConstructionParseResponse {
+    pub operations: Vec<Operation>,
+    pub account_identifier_signers: Vec<AccountIdentifier>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+}
+
+impl IntoResponse for ConstructionParseResponse {
+    fn into_response(self) -> Response {
+        Json(self).into_response()
+    }
+}
+
+#[derive(Deserialize)]
+pub struct NetworkRequest {
+    pub network_identifier: NetworkIdentifier,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+}
+
+#[derive(Serialize)]
+pub struct NetworkStatusResponse {
+    pub current_block_identifier: BlockIdentifier,
+    pub current_block_timestamp: u64,
+    pub genesis_block_identifier: BlockIdentifier,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub oldest_block_identifier: Option<BlockIdentifier>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sync_status: Option<SyncStatus>,
+    pub peers: Vec<Peer>,
+}
+
+impl IntoResponse for NetworkStatusResponse {
+    fn into_response(self) -> Response {
+        Json(self).into_response()
+    }
+}
+
+#[derive(Serialize)]
+pub struct SyncStatus {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub current_index: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub target_index: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stage: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub synced: Option<bool>,
+}
+#[derive(Serialize)]
+pub struct Peer {
+    pub peer_id: SuiAddress,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+}
+
+#[derive(Serialize)]
+pub struct NetworkOptionsResponse {
+    pub version: Version,
+    pub allow: Allow,
+}
+
+impl IntoResponse for NetworkOptionsResponse {
+    fn into_response(self) -> Response {
+        Json(self).into_response()
+    }
+}
+
+#[derive(Serialize)]
+pub struct Version {
+    pub rosetta_version: String,
+    pub node_version: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub middleware_version: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Value>,
+}
+
+#[derive(Serialize)]
+pub struct Allow {
+    pub operation_statuses: Vec<OperationStatus>,
+    pub operation_types: Vec<OperationType>,
+    pub errors: Vec<Error>,
+    pub historical_balance_lookup: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp_start_index: Option<u64>,
+    pub call_methods: Vec<String>,
+    pub balance_exemptions: Vec<BalanceExemption>,
+    pub mempool_coins: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub block_hash_case: Option<Case>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub transaction_hash_case: Option<Case>,
+}
+
+#[derive(Debug, EnumIter)]
+pub enum OperationStatus {
+    Success,
+}
+
+impl OperationStatus {
+    fn is_successful(&self) -> bool {
+        match self {
+            OperationStatus::Success => true,
+        }
+    }
+}
+
+impl Serialize for OperationStatus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        json!({ "status" : format!("{self:?}").to_uppercase(), "successful" : self.is_successful() })
+            .serialize(serializer)
+    }
+}
+
+#[derive(Serialize)]
+pub struct BalanceExemption {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sub_account_address: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<Currency>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exemption_type: Option<ExemptionType>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
+pub enum ExemptionType {
+    GreaterOrEqual,
+    LessOrEqual,
+    Dynamic,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+#[allow(clippy::enum_variant_names, dead_code)]
+pub enum Case {
+    UpperCase,
+    LowerCase,
+    CaseSensitive,
+    Null,
 }

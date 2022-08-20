@@ -1,15 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::ops::Neg;
+
 use serde_json::json;
-use std::str::FromStr;
+
 use sui_sdk::SuiClient;
-
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::messages::TransactionData;
+use sui_types::messages::{SingleTransactionKind, TransactionData, TransactionKind};
 
-use crate::types::{Operation, OperationType};
-use crate::{Error, ErrorType};
+use crate::types::{
+    AccountIdentifier, Amount, CoinAction, CoinChange, CoinIdentifier, Operation,
+    OperationIdentifier, OperationType,
+};
+use crate::{Error, ErrorType, SUI};
 
 pub enum SuiAction {
     TransferSui {
@@ -39,7 +43,7 @@ pub enum SuiAction {
 }
 
 impl SuiAction {
-    pub async fn into_transaction_data(self, client: &SuiClient) -> Result<TransactionData, Error> {
+    pub async fn into_data(self, client: &SuiClient) -> Result<TransactionData, Error> {
         Ok(match self {
             SuiAction::TransferSui {
                 budget,
@@ -54,6 +58,98 @@ impl SuiAction {
                     .await?
             }
             _ => todo!(),
+        })
+    }
+
+    pub fn from_data(data: &TransactionData) -> Result<Self, Error> {
+        if let TransactionKind::Single(SingleTransactionKind::TransferSui(tx)) = &data.kind {
+            Ok(SuiAction::TransferSui {
+                budget: data.gas_budget,
+                coin: data.gas().0,
+                sender: data.signer(),
+                recipient: tx.recipient,
+                amount: tx.amount,
+            })
+        } else {
+            Err(Error::new(ErrorType::UnimplementedTransactionType))
+        }
+    }
+}
+
+impl TryInto<Vec<Operation>> for SuiAction {
+    type Error = Error;
+
+    fn try_into(self) -> Result<Vec<Operation>, Error> {
+        Ok(match self {
+            SuiAction::TransferSui {
+                budget,
+                coin,
+                sender,
+                recipient,
+                amount,
+            } => {
+                let amount: Option<i64> = if let Some(amount) = amount {
+                    Some(amount.try_into()?)
+                } else {
+                    None
+                };
+
+                vec![
+                    Operation {
+                        operation_identifier: OperationIdentifier {
+                            index: 0,
+                            network_index: None,
+                        },
+                        related_operations: vec![],
+                        type_: OperationType::TransferSUI,
+                        status: None,
+                        account: Some(AccountIdentifier { address: sender }),
+                        amount: amount.map(|amount| Amount {
+                            value: amount.neg(),
+                            currency: SUI.clone(),
+                        }),
+                        coin_change: Some(CoinChange {
+                            coin_identifier: CoinIdentifier { identifier: coin },
+                            coin_action: CoinAction::CoinSpent,
+                        }),
+                        metadata: None,
+                    },
+                    Operation {
+                        operation_identifier: OperationIdentifier {
+                            index: 1,
+                            network_index: None,
+                        },
+                        related_operations: vec![],
+                        type_: OperationType::TransferSUI,
+                        status: None,
+                        account: Some(AccountIdentifier { address: recipient }),
+                        amount: amount.map(|amount| Amount {
+                            value: amount,
+                            currency: SUI.clone(),
+                        }),
+                        coin_change: None,
+                        metadata: None,
+                    },
+                    Operation {
+                        operation_identifier: OperationIdentifier {
+                            index: 2,
+                            network_index: None,
+                        },
+                        related_operations: vec![],
+                        type_: OperationType::Gas,
+                        status: None,
+                        account: None,
+                        amount: Some(Amount {
+                            value: budget.try_into()?,
+                            currency: SUI.clone(),
+                        }),
+                        coin_change: None,
+                        metadata: None,
+                    },
+                ]
+            }
+            SuiAction::TransferCoin { .. } => todo!(),
+            SuiAction::MergeCoin { .. } => todo!(),
         })
     }
 }
@@ -73,12 +169,7 @@ impl TryInto<SuiAction> for Vec<Operation> {
                             json!({"input": "operation.account"}),
                         )
                     })?;
-                    let address = SuiAddress::from_str(&account.address).map_err(|e| {
-                        Error::new_with_detail(
-                            ErrorType::InvalidInput,
-                            json! ({"cause": e.to_string()}),
-                        )
-                    })?;
+                    let address = account.address;
                     builder.set_operation_type(op.type_);
                     if let Some(amount) = op.amount.as_ref() {
                         if amount.value.is_negative() {
@@ -90,14 +181,14 @@ impl TryInto<SuiAction> for Vec<Operation> {
                             })?;
                             builder.set_sender(address);
                             builder.set_send_amount(amount.value.abs().try_into()?);
-                            builder.set_coin(ObjectID::from_str(&coin.coin_identifier.identifier)?);
+                            builder.set_coin(coin.coin_identifier.identifier);
                         } else {
                             builder.set_recipient(address);
                         }
                     } else if let Some(coin) = op.coin_change.as_ref() {
                         // no amount specified, sending the whole coin
                         builder.set_sender(address);
-                        builder.set_coin(ObjectID::from_str(&coin.coin_identifier.identifier)?);
+                        builder.set_coin(coin.coin_identifier.identifier);
                     } else {
                         builder.set_recipient(address);
                     }
@@ -105,7 +196,7 @@ impl TryInto<SuiAction> for Vec<Operation> {
                 OperationType::Gas => {
                     // Coin object id is optional
                     if let Some(coin) = op.coin_change.as_ref() {
-                        builder.set_gas(ObjectID::from_str(&coin.coin_identifier.identifier)?);
+                        builder.set_gas(coin.coin_identifier.identifier);
                     }
                     let amount = op.amount.as_ref().ok_or_else(|| {
                         Error::new_with_detail(
