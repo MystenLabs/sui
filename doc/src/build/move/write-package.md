@@ -75,7 +75,7 @@ definitions in the `m1.move` file:
 
 ``` rust
 module my_first_package::m1 {
-    use sui::object::UID;
+    use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
     struct Sword has key, store {
