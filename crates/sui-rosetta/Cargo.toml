@@ -31,3 +31,6 @@ telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", re
 sui-sdk = { path = "../sui-sdk" }
 sui-types = { path = "../sui-types" }
 
+workspace-hack = { path = "../workspace-hack"}
+
+
