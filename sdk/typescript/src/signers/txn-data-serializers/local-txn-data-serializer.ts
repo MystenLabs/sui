@@ -209,7 +209,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     try {
       const tx = {
         Publish: {
-          modules: t.compiledModules.map(m => Array.from(m)),
+          modules: t.compiledModules as Iterable<Iterable<number>>,
         },
       };
       return await this.constructTransactionData(

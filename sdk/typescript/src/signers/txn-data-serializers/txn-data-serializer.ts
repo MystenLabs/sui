@@ -70,19 +70,20 @@ export interface PublishTransaction {
    * In JS:
    *
    * ```
-   * // If you are using `RpcTxnDataSerializer`, change the following line to
-   * // `let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv', 'base64');`
-   * let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv');
+   * // If you are using `RpcTxnDataSerializer`,
+   * let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv', 'base64');
+   * let compiledModules = [file.toString()]
    *
-   * let bytes = Array.from(file);
-   * let modules = [ bytes ];
+   * // If you are using `LocalTxnDataSerializer`,
+   * let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv');
+   * let modules = [ Array.from(file) ];
    *
    * // ... publish logic ...
    * ```
    *
    * Each module should be represented as a sequence of bytes.
    */
-  compiledModules: Buffer[];
+  compiledModules: Iterable<string> | Iterable<Iterable<number>>;
   gasPayment?: ObjectId;
   gasBudget: number;
 }

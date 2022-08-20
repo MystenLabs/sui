@@ -151,10 +151,14 @@ export function isPublishTransaction(obj: any, _argumentName?: string): obj is P
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        Array.isArray(obj.compiledModules) &&
-        obj.compiledModules.every((e: any) =>
-            e instanceof Buffer
-        ) &&
+        ((obj.compiledModules !== null &&
+            typeof obj.compiledModules === "object" ||
+            typeof obj.compiledModules === "function") &&
+            typeof obj.compiledModules["__@iterator"] === "function" ||
+            (obj.compiledModules !== null &&
+                typeof obj.compiledModules === "object" ||
+                typeof obj.compiledModules === "function") &&
+            typeof obj.compiledModules["__@iterator"] === "function") &&
         (typeof obj.gasPayment === "undefined" ||
             isTransactionDigest(obj.gasPayment) as boolean) &&
         isSuiMoveTypeParameterIndex(obj.gasBudget) as boolean
