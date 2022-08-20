@@ -396,7 +396,7 @@ impl CheckpointStore {
         let checkpoint = AuthenticatedCheckpoint::Signed(
             SignedCheckpointSummary::new_from_summary(summary, self.name, &*self.secret),
         );
-        self.handle_internal_set_checkpoint(&checkpoint, &ordered_contents, effects_store)
+        self.handle_internal_set_checkpoint(&checkpoint, &ordered_contents)
     }
 
     /// Call this function internally to update the latest checkpoint.
@@ -407,7 +407,6 @@ impl CheckpointStore {
         &mut self,
         checkpoint: &AuthenticatedCheckpoint,
         contents: &CheckpointContents,
-        effects_store: impl CausalOrder + PendCertificateForExecution,
     ) -> SuiResult {
         let summary = checkpoint.summary();
         let checkpoint_sequence_number = *summary.sequence_number();
@@ -419,7 +418,6 @@ impl CheckpointStore {
             .is_none());
         debug_assert!(self.next_checkpoint() == checkpoint_sequence_number);
 
-        self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
         debug!(
             "Number of transactions in checkpoint {:?}: {:?}",
             checkpoint_sequence_number,
@@ -776,6 +774,19 @@ impl CheckpointStore {
         effects_store: impl CausalOrder + PendCertificateForExecution,
         metrics: &CheckpointMetrics,
     ) -> SuiResult {
+        self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
+        self.process_synced_checkpoint_certificate(checkpoint, contents, committee, metrics)
+    }
+
+    /// Unlike process_new_checkpoint_certificate this does not verify that transactions are executed
+    /// Checkpoint sync process executes it because it verifies transactions when downloading checkpoint
+    pub fn process_synced_checkpoint_certificate(
+        &mut self,
+        checkpoint: &CertifiedCheckpointSummary,
+        contents: &CheckpointContents,
+        committee: &Committee,
+        metrics: &CheckpointMetrics,
+    ) -> SuiResult {
         let seq = checkpoint.summary.sequence_number();
         debug_assert!(self.tables.checkpoints.get(seq)?.is_none());
         // Check and process contents
@@ -784,7 +795,6 @@ impl CheckpointStore {
         self.handle_internal_set_checkpoint(
             &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
             contents,
-            effects_store,
         )?;
         metrics.checkpoint_sequence_number.set(*seq as i64);
         self.clear_proposal(*seq + 1)?;
@@ -1015,24 +1025,6 @@ impl CheckpointStore {
         &mut self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<(), SuiError> {
-        let in_checkpoint = self
-            .tables
-            .transactions_to_checkpoint
-            .multi_get(transactions.iter().map(|(_, tx)| tx))?;
-        let already_in_checkpoint_tx: Vec<_> = transactions
-            .iter()
-            .zip(&in_checkpoint)
-            .filter_map(|((_seq, tx), in_chk)| in_chk.map(|_| tx))
-            .collect();
-        if !already_in_checkpoint_tx.is_empty() {
-            // This should never happen, but if it happens, we should not let it block checkpoint
-            // progress either. Log the error so that we can keep track.
-            error!(
-                "Transactions are processed and updated from batch more than once: {:?}",
-                already_in_checkpoint_tx
-            );
-        }
-
         let batch = self.tables.extra_transactions.batch();
         let batch = batch.insert_batch(
             &self.tables.extra_transactions,
