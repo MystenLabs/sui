@@ -243,12 +243,12 @@ impl SqlEventStore {
             if let Some(transfer_type_u16) = event
                 .event
                 .transfer_type()
-                .map(|tt| TransferTypeVariants::from(tt) as u16)
+                .map(|tt| TransferTypeVariants::from(tt) as u64)
             {
-                fields.insert(TRANSFER_TYPE_KEY, transfer_type_u16.to_string());
+                fields.insert(TRANSFER_TYPE_KEY, transfer_type_u16);
             };
             if let Some(object_version) = event.event.object_version().map(|ov| ov.value()) {
-                fields.insert(OBJECT_VERSION_KEY, object_version.to_string());
+                fields.insert(OBJECT_VERSION_KEY, object_version as u64);
             }
             json!(fields).to_string()
         }

@@ -237,15 +237,15 @@ impl StoredEvent {
     fn object_version(&self) -> Result<Option<SequenceNumber>, anyhow::Error> {
         let object_version = self.fields.get(OBJECT_VERSION_KEY);
         match object_version {
-            Some(EventValue::Json(serde_json::Value::String(object_version))) => {
-                let object_version = object_version.parse::<u64>().map_err(|_e| {
+            Some(EventValue::Json(serde_json::Value::Number(object_version_ordinal))) => {
+                let object_version_ordinal = object_version_ordinal.as_u64().ok_or_else(|| {
                     SuiError::ExtraFieldFailedToDeserialize {
                         error: format!(
-                            "Error parsing object version from extra fields: {object_version}"
+                            "Error parsing object version from extra fields: {object_version:?}"
                         ),
                     }
                 })?;
-                Ok(Some(SequenceNumber::from_u64(object_version)))
+                Ok(Some(SequenceNumber::from_u64(object_version_ordinal)))
             }
             None => Ok(None),
             Some(other_value) => anyhow::bail!(SuiError::ExtraFieldFailedToDeserialize {
@@ -257,17 +257,16 @@ impl StoredEvent {
     fn transfer_type(&self) -> Result<Option<TransferType>, anyhow::Error> {
         let transfer_type = self.fields.get(TRANSFER_TYPE_KEY);
         match transfer_type {
-            Some(EventValue::Json(serde_json::Value::String(transfer_type_ordinal))) => {
-                let transfer_type_ordinal =
-                    transfer_type_ordinal.parse::<usize>().map_err(|_e| {
-                        SuiError::ExtraFieldFailedToDeserialize {
-                            error: format!(
-                                "Error parsing transfer type from extra fields: {transfer_type:?}"
-                            ),
-                        }
-                    })?;
+            Some(EventValue::Json(serde_json::Value::Number(transfer_type_ordinal))) => {
+                let transfer_type_ordinal = transfer_type_ordinal.as_u64().ok_or_else(|| {
+                    SuiError::ExtraFieldFailedToDeserialize {
+                        error: format!(
+                            "Error parsing transfer type from extra fields: {transfer_type:?}"
+                        ),
+                    }
+                })?;
                 Ok(Some(Event::transfer_type_from_ordinal(
-                    transfer_type_ordinal,
+                    transfer_type_ordinal as usize,
                 )?))
             }
             None => Ok(None),
