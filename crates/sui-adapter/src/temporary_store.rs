@@ -4,7 +4,7 @@
 use move_core_types::account_address::AccountAddress;
 use move_core_types::language_storage::{ModuleId, StructTag};
 use move_core_types::resolver::{ModuleResolver, ResourceResolver};
-use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::collections::{BTreeMap, BTreeSet};
 use sui_types::base_types::{
     ObjectDigest, ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
 };
@@ -267,6 +267,7 @@ impl<S> TemporaryStore<S> {
     /// An internal check of the invariants (will only fire in debug)
     #[cfg(debug_assertions)]
     fn check_invariants(&self) {
+        use std::collections::HashSet;
         // Check not both deleted and written
         debug_assert!(
             {
