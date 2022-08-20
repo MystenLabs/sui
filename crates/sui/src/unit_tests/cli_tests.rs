@@ -126,6 +126,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             ..Default::default()
         }),
         active_address: None,
+        fullnode: None,
     };
     let wallet_conf_path = working_dir.join(SUI_CLIENT_CONFIG);
     let wallet_config = wallet_config.persisted(&wallet_conf_path);
@@ -710,6 +711,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Switch {
         address: Some(addr2),
         gateway: None,
+        fullnode: None,
     }
     .execute(&mut context)
     .await?;
@@ -721,7 +723,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
                 address: Some(addr2),
-                gateway: None
+                gateway: None,
+                fullnode: None,
             })
         )
     );
@@ -744,6 +747,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Switch {
         address: Some(new_addr),
         gateway: None,
+        fullnode: None,
     }
     .execute(&mut context)
     .await?;
@@ -754,7 +758,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
                 address: Some(new_addr),
-                gateway: None
+                gateway: None,
+                fullnode: None,
             })
         )
     );
@@ -797,6 +802,7 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Switch {
         address: Some(addr2),
         gateway: None,
+        fullnode: None,
     }
     .execute(&mut context)
     .await?;
@@ -806,7 +812,8 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
                 address: Some(addr2),
-                gateway: None
+                gateway: None,
+                fullnode: None
             })
         )
     );
