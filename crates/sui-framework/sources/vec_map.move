@@ -149,4 +149,12 @@ module sui::vec_map {
         let entry = vector::borrow_mut(&mut self.contents, idx);
         (&entry.key, &mut entry.value)
     }
+
+    /// Remove the entry at index `idx` from self.
+    /// Aborts if `idx` is greater than or equal to `size(self)`
+    public fun remove_entry_by_idx<K: copy, V>(self: &mut VecMap<K, V>, idx: u64): (K, V) {
+        assert!(idx < size(self), EIndexOutOfBounds);
+        let Entry { key, value } = vector::remove(&mut self.contents, idx);
+        (key, value)
+    }
 }
