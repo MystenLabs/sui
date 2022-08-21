@@ -42,6 +42,31 @@ module sui::vec_map_tests {
     }
 
     #[test]
+    #[expected_failure(abort_code = 3)]
+    fun out_of_bounds_remove_entry_by_idx() {
+        let m = vec_map::empty();
+        vec_map::insert(&mut m, 10, true);
+        let idx = 1;
+        let (_key, _val) = vec_map::remove_entry_by_idx(&mut m, idx);
+    }
+
+    #[test]
+    fun remove_entry_by_idx() {
+        let m = vec_map::empty();
+        vec_map::insert(&mut m, 5, 50);
+        vec_map::insert(&mut m, 6, 60);
+        vec_map::insert(&mut m, 7, 70);
+
+        let (key, val) = vec_map::remove_entry_by_idx(&mut m, 0);
+        assert!(key == 5 && val == 50, 0);
+        assert!(vec_map::size(&m) == 2, 0);
+
+        let (key, val) = vec_map::remove_entry_by_idx(&mut m, 1);
+        assert!(key == 7 && val == 70, 0);
+        assert!(vec_map::size(&m) == 1, 0);
+    }
+
+    #[test]
     #[expected_failure(abort_code = 2)]
     fun destroy_non_empty() {
         let m = vec_map::empty();
