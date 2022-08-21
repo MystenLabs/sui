@@ -33,12 +33,12 @@ module sui::vec_map_tests {
     }
 
     #[test]
-    #[expected_failure(abort_code = 1)]
-    fun nonexistent_key_get_entry_by_idx() {
+    #[expected_failure(abort_code = 3)]
+    fun out_of_bounds_get_entry_by_idx() {
         let m = vec_map::empty();
         vec_map::insert(&mut m, 1, true);
-        let k = 2;
-        let _idx = vec_map::get_idx(&m, &k);
+        let idx = 1;
+        let (_key, _val) = vec_map::get_entry_by_idx(&m, idx);
     }
 
     #[test]
