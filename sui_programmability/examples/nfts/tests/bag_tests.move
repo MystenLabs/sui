@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::bag_tests {
-    use sui::bag::{Self, Bag};
+module nfts::bag_tests {
+    use nfts::bag::{Self, Bag};
     use sui::object::{Self, UID};
     use sui::test_scenario;
     use sui::typed_id;

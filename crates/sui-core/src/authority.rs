@@ -1181,7 +1181,7 @@ impl AuthorityState {
             None,
         ));
 
-        AuthorityState::new(
+        let state = AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
@@ -1192,7 +1192,10 @@ impl AuthorityState {
             genesis,
             &prometheus::Registry::new(),
         )
-        .await
+        .await;
+
+        // add the object_basics module
+        state
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.

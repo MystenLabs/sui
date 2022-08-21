@@ -1,13 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// Exercise test functions that create, transfer, read, update, and delete objects
-
-//# init --addresses test=0x0 --accounts A B
-
-//# publish
-
-module test::object_basics {
+/// Test CTURD object basics (create, transfer, update, read, delete)
+module examples::object_basics {
     use sui::event;
     use sui::object::{Self, UID};
     use sui::tx_context::{Self, TxContext};
@@ -68,17 +63,3 @@ module test::object_basics {
         transfer::transfer(o, tx_context::sender(ctx))
     }
 }
-
-//# run test::object_basics::create --sender A --args 10 @A
-
-//# view-object 107
-
-//# run test::object_basics::transfer --sender A --args object(107) @B
-
-//# view-object 107
-
-//# run test::object_basics::create --sender B --args 20 @B
-
-//# run test::object_basics::update --sender B --args object(107) object(110) --view-events
-
-//# run test::object_basics::delete --sender B --args object(107)

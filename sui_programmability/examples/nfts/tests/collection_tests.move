@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test_only]
-module sui::collection_tests {
-    use sui::bag::{Self, Bag};
-    use sui::collection::{Self, Collection};
+module nfts::collection_tests {
+    use nfts::bag::{Self, Bag};
+    use nfts::collection::{Self, Collection};
     use sui::object::{Self, UID};
     use sui::test_scenario;
+    use sui::transfer;
     use sui::typed_id;
     use sui::tx_context;
 
@@ -111,7 +112,7 @@ module sui::collection_tests {
         // Sui::collection::DEFAULT_MAX_CAPACITY is not readable outside the module
         let max_capacity = 65536;
         let collection = collection::new_with_max_capacity<Object>(&mut ctx, max_capacity + 1);
-        collection::transfer(collection, tx_context::sender(&ctx));
+        transfer::transfer(collection, tx_context::sender(&ctx));
     }
 
     #[test]
@@ -119,7 +120,7 @@ module sui::collection_tests {
     fun test_init_with_zero() {
         let ctx = tx_context::dummy();
         let collection = collection::new_with_max_capacity<Object>(&mut ctx, 0);
-        collection::transfer(collection, tx_context::sender(&ctx));
+        transfer::transfer(collection, tx_context::sender(&ctx));
     }
 
     #[test]
@@ -132,6 +133,6 @@ module sui::collection_tests {
         collection::add(&mut collection, obj1, &mut ctx);
         let obj2 = Object { id: object::new(&mut ctx) };
         collection::add(&mut collection, obj2, &mut ctx);
-        collection::transfer(collection, tx_context::sender(&ctx));
+        transfer::transfer(collection, tx_context::sender(&ctx));
     }
 }

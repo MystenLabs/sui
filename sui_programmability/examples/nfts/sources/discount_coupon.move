@@ -4,7 +4,7 @@
 module nfts::discount_coupon {
     use sui::coin;
     use sui::object::{Self, UID};
-    use sui::sui::{Self, SUI};
+    use sui::sui::SUI;
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
@@ -15,7 +15,7 @@ module nfts::discount_coupon {
     const EOutOfRangeDiscount: u64 = 1;
 
     /// Discount coupon NFT.
-    struct DiscountCoupon has key, store {
+    struct DiscountCoupon has key {
         id: UID,
         // coupon issuer
         issuer: address,
@@ -46,7 +46,7 @@ module nfts::discount_coupon {
             expiration,
         };
         transfer::transfer(coupon, recipient);
-        sui::transfer(coin, recipient);
+        transfer::transfer(coin, recipient);
     }
 
     /// Burn DiscountCoupon.
