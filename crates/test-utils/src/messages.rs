@@ -164,23 +164,6 @@ pub fn make_transactions_with_pre_genesis_objects(
 
 /// Make a few different test transaction containing the same shared object.
 pub fn test_shared_object_transactions() -> Vec<Transaction> {
-    // Helper function to load genesis packages.
-    fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
-        genesis_objects
-            .iter()
-            .find_map(|o| match o.data.try_as_package() {
-                Some(p) => {
-                    if p.serialized_module_map().keys().any(|name| name == module) {
-                        Some(o.compute_object_reference())
-                    } else {
-                        None
-                    }
-                }
-                None => None,
-            })
-            .unwrap()
-    }
-
     // The key pair of the sender of the transaction.
     let (sender, keypair) = test_account_keys().pop().unwrap();
 
@@ -190,8 +173,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     for gas_object in test_gas_objects() {
         let module = "object_basics";
         let function = "create";
-        let genesis_package_objects = genesis::clone_genesis_packages();
-        let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+        let package_object_ref = genesis::get_framework_object_ref();
 
         let data = TransactionData::new_move_call(
             sender,

@@ -3,8 +3,17 @@
 
 // These functions do not exist
 
-// Instead of calling on the Sui package, we are calling a non-existant package
-//# run 0x242::object_basics::create
+//# init --addresses Test=0x0
 
-// Calling a non-existant function.
-//# run sui::object_basics::foo
+//# publish
+
+module Test::M {
+    public entry fun create(_value: u64, _recipient: address) {}
+
+}
+
+// Instead of calling on the Test package, we are calling a non-existant package
+//# run 0x242::M::create
+
+// Calling a non-existent function.
+//# run Test::M::foo

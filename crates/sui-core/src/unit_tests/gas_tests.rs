@@ -5,7 +5,7 @@ use super::*;
 
 use super::authority_tests::{init_state_with_ids, send_and_confirm_transaction};
 use super::move_integration_tests::build_and_try_publish_test_package;
-use crate::authority::authority_tests::init_state;
+use crate::authority::authority_tests::{init_state, init_state_with_ids_and_object_basics};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use sui_adapter::genesis;
@@ -371,8 +371,8 @@ async fn test_publish_gas() -> anyhow::Result<()> {
 async fn test_move_call_gas() -> SuiResult {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
-    let package_object_ref = authority_state.get_framework_object_ref().await?;
+    let (authority_state, package_object_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
     let gas_object = authority_state.get_object(&gas_object_id).await?.unwrap();
 
     let module = ident_str!("object_basics").to_owned();

@@ -101,14 +101,9 @@ module sui::coin {
 
     // === Functionality for Coin<T> holders ===
 
-    /// Send `c` to `recipient`
-    public entry fun transfer<T>(c: Coin<T>, recipient: address) {
-        transfer::transfer(c, recipient)
-    }
-
     /// Transfer `c` to the sender of the current transaction
     public fun keep<T>(c: Coin<T>, ctx: &TxContext) {
-        transfer(c, tx_context::sender(ctx))
+        transfer::transfer(c, tx_context::sender(ctx))
     }
 
     /// Consume the coin `c` and add its value to `self`.
@@ -192,11 +187,6 @@ module sui::coin {
         let Coin { id, balance } = c;
         object::delete(id);
         balance::decrease_supply(&mut cap.total_supply, balance)
-    }
-
-    /// Give away the treasury cap to `recipient`
-    public fun transfer_cap<T>(c: TreasuryCap<T>, recipient: address) {
-        transfer::transfer(c, recipient)
     }
 
     // === Entrypoints ===

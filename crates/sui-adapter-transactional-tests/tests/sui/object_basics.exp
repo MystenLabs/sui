@@ -1,35 +1,39 @@
-processed 8 tasks
+processed 9 tasks
 
 init:
 A: object(100), B: object(101)
 
-task 1 'run'. lines 8-8:
+task 1 'publish'. lines 8-70:
 created: object(105)
 written: object(104)
 
-task 2 'view-object'. lines 10-10:
+task 2 'run'. lines 72-72:
+created: object(107)
+written: object(106)
+
+task 3 'view-object'. lines 74-74:
 Owner: Account Address ( A )
 Version: 1
 Child Count: None
-Contents: sui::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(105)}}, value: 10u64}
+Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}, value: 10u64}
 
-task 3 'run'. lines 12-12:
-written: object(105), object(106)
+task 4 'run'. lines 76-76:
+written: object(107), object(108)
 
-task 4 'view-object'. lines 14-14:
+task 5 'view-object'. lines 78-78:
 Owner: Account Address ( B )
 Version: 2
 Child Count: None
-Contents: sui::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(105)}}, value: 10u64}
+Contents: test::object_basics::Object {id: sui::object::UID {id: sui::object::ID {bytes: fake(107)}}, value: 10u64}
 
-task 5 'run'. lines 16-16:
-created: object(108)
-written: object(107)
+task 6 'run'. lines 80-80:
+created: object(110)
+written: object(109)
 
-task 6 'run'. lines 18-18:
-events: MoveEvent { package_id: sui, transaction_module: Identifier("object_basics"), sender: B, type_: StructTag { address: sui, module: Identifier("object_basics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
-written: object(105), object(108), object(109)
+task 7 'run'. lines 82-82:
+events: MoveEvent { package_id: test, transaction_module: Identifier("object_basics"), sender: B, type_: StructTag { address: test, module: Identifier("object_basics"), name: Identifier("NewValueEvent"), type_params: [] }, contents: [20, 0, 0, 0, 0, 0, 0, 0] }
+written: object(107), object(110), object(111)
 
-task 7 'run'. lines 20-20:
-written: object(110)
-deleted: object(105)
+task 8 'run'. lines 84-84:
+written: object(112)
+deleted: object(107)

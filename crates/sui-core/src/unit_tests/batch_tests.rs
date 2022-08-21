@@ -32,7 +32,6 @@ use sui_types::messages::{
     CertifiedTransaction, EpochRequest, EpochResponse, ObjectInfoRequest, ObjectInfoResponse,
     Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
-use sui_types::object::Object;
 
 pub(crate) fn init_state_parameters_from_rng<R>(
     rng: &mut R,
@@ -354,9 +353,9 @@ async fn test_batch_manager_drop_out_of_order() {
 async fn test_handle_move_order_with_batch() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let authority_state = Arc::new(init_state_with_objects(vec![gas_payment_object]).await);
-
+    let (authority_state_, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_payment_object_id)]).await;
+    let authority_state = Arc::new(authority_state_);
     let inner_state = authority_state.clone();
     let _join = tokio::task::spawn(async move {
         inner_state
@@ -369,6 +368,7 @@ async fn test_handle_move_order_with_batch() {
     tokio::task::yield_now().await;
 
     let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_payment_object_id,
         &sender,
