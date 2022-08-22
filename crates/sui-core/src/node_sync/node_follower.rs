@@ -527,7 +527,12 @@ mod test {
             monitor_task.abort();
 
             let ivs = intervals.lock().unwrap();
+            // The follow should restart at least this many times because it is configured to fail
+            // after every 2 items.
             assert_eq!(ivs.len(), 7);
+
+            // The exact delay times due to backoff are non-deterministic, so we can't test them
+            // exactly, but we should verify that the final interval is at least 30 seconds long.
             assert!(*ivs.last().unwrap() > Duration::from_secs(30));
         }
     }
