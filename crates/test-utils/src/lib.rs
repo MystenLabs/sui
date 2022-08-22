@@ -11,7 +11,7 @@ use sui_types::{
     committee::Committee,
     crypto::{
         get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-        KeypairTraits,
+        KeypairTraits, SuiKeyPair,
     },
     signature_seed::SignatureSeed,
 };
@@ -20,10 +20,20 @@ use sui_types::{
 pub const TEST_COMMITTEE_SIZE: usize = 4;
 
 /// Generate `COMMITTEE_SIZE` test cryptographic key pairs.
-pub fn test_keys() -> Vec<(SuiAddress, AuthorityKeyPair)> {
+pub fn test_validator_keys() -> Vec<(AuthorityKeyPair, SuiKeyPair, SuiKeyPair)> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..TEST_COMMITTEE_SIZE)
-        .map(|_| get_key_pair_from_rng(&mut rng))
+        .map(|_| {
+            (
+                get_key_pair_from_rng(&mut rng).1,
+                get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
+                    .1
+                    .into(),
+                get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
+                    .1
+                    .into(),
+            )
+        })
         .collect()
 }
 
@@ -42,11 +52,11 @@ pub fn test_account_keys() -> Vec<(SuiAddress, AccountKeyPair)> {
 pub fn test_committee() -> Committee {
     Committee::new(
         0,
-        test_keys()
+        test_validator_keys()
             .into_iter()
-            .map(|(_, x)| {
+            .map(|(key, _, _)| {
                 (
-                    AuthorityPublicKeyBytes::from(x.public()),
+                    AuthorityPublicKeyBytes::from(key.public()),
                     /* voting right */ 1,
                 )
             })

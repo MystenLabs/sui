@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::objects::{test_gas_objects, test_gas_objects_with_owners, test_shared_object};
-use crate::{test_account_keys, test_committee, test_keys};
+use crate::{test_account_keys, test_committee, test_validator_keys};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_package::BuildConfig;
@@ -335,7 +335,7 @@ pub fn make_certificates(transactions: Vec<Transaction>) -> Vec<CertifiedTransac
     let mut certificates = Vec::new();
     for tx in transactions {
         let mut aggregator = SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
-        for (_, key) in test_keys() {
+        for (key, _, _) in test_validator_keys() {
             let vote =
                 SignedTransaction::new(/* epoch */ 0, tx.clone(), key.public().into(), &key);
             if let Some(certificate) = aggregator

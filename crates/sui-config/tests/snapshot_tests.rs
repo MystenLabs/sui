@@ -27,7 +27,9 @@ use rand::SeedableRng;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, AuthorityPublicKeyBytes};
+use sui_types::crypto::{
+    get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
+};
 
 #[test]
 fn genesis_config_snapshot_matches() {
@@ -64,9 +66,11 @@ fn populated_genesis_snapshot_matches() {
         .generate_accounts(&mut StdRng::from_seed([0; 32]))
         .unwrap();
     let key: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let network_key: AccountKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
     let validator = ValidatorInfo {
         name: "0".into(),
         public_key: key.public().into(),
+        network_key: network_key.public().clone().into(),
         stake: 1,
         delegation: 0,
         gas_price: 1,

@@ -23,7 +23,7 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiParsedObject, SuiTransactionEffects};
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
-use sui_types::crypto::{AuthorityKeyPair, KeypairTraits, SuiKeyPair};
+use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits, SuiKeyPair};
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
 
@@ -113,6 +113,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             validator_set: vec![ValidatorInfo {
                 name: "0".into(),
                 public_key: get_key_pair::<AuthorityKeyPair>().1.public().into(),
+                network_key: get_key_pair::<AccountKeyPair>().1.public().clone().into(),
                 stake: 1,
                 delegation: 1,
                 gas_price: 1,

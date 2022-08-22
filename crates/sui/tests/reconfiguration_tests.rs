@@ -10,7 +10,7 @@ use sui_core::checkpoints::CHECKPOINT_COUNT_PER_EPOCH;
 use sui_core::safe_client::SafeClient;
 use sui_node::SuiNode;
 use sui_types::base_types::{ExecutionDigests, ObjectID, ObjectRef};
-use sui_types::crypto::{get_key_pair, AuthorityKeyPair, KeypairTraits};
+use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, KeypairTraits};
 use sui_types::error::SuiResult;
 use sui_types::messages::ObjectInfoResponse;
 use sui_types::messages::{CallArg, ObjectArg, ObjectInfoRequest, TransactionEffects};
@@ -107,6 +107,7 @@ async fn reconfig_end_to_end_tests() {
             )),
         ));
     }
+
     update_checkpoint_cert_for_all(&states, last_signed_checkpoints.clone());
     let results: Vec<_> = nodes
         .iter()
@@ -190,6 +191,7 @@ pub async fn create_and_register_new_validator(
         vec![
             CallArg::Object(ObjectArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID)),
             CallArg::Pure(bcs::to_bytes(&new_validator.public_key()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(new_validator.network_key()).unwrap()),
             CallArg::Pure(
                 bcs::to_bytes(format!("Validator{}", new_validator.sui_address()).as_bytes())
                     .unwrap(),
@@ -204,9 +206,11 @@ pub async fn create_and_register_new_validator(
 
 pub fn get_new_validator() -> ValidatorInfo {
     let keypair: AuthorityKeyPair = get_key_pair().1;
+    let network_keypair: AccountKeyPair = get_key_pair().1;
     ValidatorInfo {
         name: "".to_string(),
         public_key: keypair.public().into(),
+        network_key: network_keypair.public().clone().into(),
         stake: 1,
         delegation: 0,
         gas_price: 1,
