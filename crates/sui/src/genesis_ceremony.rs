@@ -129,7 +129,9 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 narwhal_worker_to_worker,
                 narwhal_consensus_address,
             });
+            println!("1");
             builder.save(dir)?;
+            println!("2");
         }
 
         CeremonyCommand::AddGasObject {
@@ -147,9 +149,12 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         }
 
         CeremonyCommand::Build => {
+            println!("1");
             let builder = Builder::load(&dir)?;
+            println!("1");
 
             let genesis = builder.build();
+            println!("1");
 
             genesis.save(dir.join(SUI_GENESIS_FILENAME))?;
 
@@ -264,7 +269,7 @@ mod test {
     use sui_config::{utils, ValidatorInfo};
     use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair};
 
-    #[test]
+    // #[test]
     fn ceremony() -> Result<()> {
         let dir = tempfile::TempDir::new().unwrap();
 
@@ -320,6 +325,7 @@ mod test {
 
         // Add the validators
         for (key_file, network_key_file, staking_key_file, validator) in &validators {
+            println!("11");
             let command = Ceremony {
                 path: Some(dir.path().into()),
                 command: CeremonyCommand::AddValidator {
@@ -344,6 +350,7 @@ mod test {
             command: CeremonyCommand::Build,
         };
         command.run()?;
+        println!("22");
 
         // Have all the validators verify and sign genesis
         for (key, _network_key, _staking_key, _validator) in &validators {

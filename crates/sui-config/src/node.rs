@@ -39,6 +39,7 @@ pub struct NodeConfig {
     pub account_key_pair: Arc<SuiKeyPair>,
     #[serde(default = "default_sui_key_pair")]
     pub network_key_pair: Arc<SuiKeyPair>,
+    // pub proof_of_possession: Arc<>,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
@@ -203,8 +204,8 @@ impl ValidatorInfo {
         &self.network_key
     }
 
-    pub fn proof_of_possession(&self) -> AuthoritySignature {
-        self.proof_of_possession.clone()
+    pub fn proof_of_possession(&self) -> &AuthoritySignature {
+        &self.proof_of_possession
     }
 
     pub fn stake(&self) -> StakeUnit {

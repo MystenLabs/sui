@@ -8,7 +8,7 @@ use serde_with::serde_as;
 use std::collections::{BTreeMap, BTreeSet};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::committee::StakeUnit;
-use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair};
+use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair, AuthoritySignature};
 use sui_types::object::Object;
 use sui_types::sui_serde::KeyPairBase64;
 use tracing::info;
@@ -91,6 +91,7 @@ pub struct ValidatorGenesisInfo {
     pub key_pair: AuthorityKeyPair,
     pub account_key_pair: SuiKeyPair,
     pub network_key_pair: SuiKeyPair,
+    pub proof_of_possession: AuthoritySignature,
     pub network_address: Multiaddr,
     pub stake: StakeUnit,
     pub gas_price: u64,

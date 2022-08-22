@@ -6,7 +6,7 @@ use fastcrypto::{
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
     secp256k1::{Secp256k1PublicKey, Secp256k1Signature},
     traits::ToFromBytes,
-    Verifier,
+    Verifier, ed25519::{Ed25519PublicKey, Ed25519Signature},
 };
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
@@ -314,7 +314,7 @@ pub fn scalar_from_bytes(
 
 /// Native implemention of ed25519_verify in public Move API, see crypto.move for specifications.
 pub fn ed25519_verify(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -325,17 +325,16 @@ pub fn ed25519_verify(
     let public_key_bytes = pop_arg!(args, Vec<u8>);
     let signature_bytes = pop_arg!(args, Vec<u8>);
 
-    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3868
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_empty_cost();
 
-    let signature = match <narwhal_crypto::ed25519::Ed25519Signature as ToFromBytes>::from_bytes(
+    let signature = match <Ed25519Signature as ToFromBytes>::from_bytes(
         &signature_bytes,
     ) {
         Ok(signature) => signature,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    let public_key = match <narwhal_crypto::ed25519::Ed25519PublicKey as ToFromBytes>::from_bytes(
+    let public_key = match <Ed25519PublicKey as ToFromBytes>::from_bytes(
         &public_key_bytes,
     ) {
         Ok(public_key) => public_key,

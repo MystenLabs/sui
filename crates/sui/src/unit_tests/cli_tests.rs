@@ -115,8 +115,8 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             db_folder_path: working_dir.join("client_db"),
             validator_set: vec![ValidatorInfo {
                 name: "0".into(),
-                network_key: get_key_pair::<AccountKeyPair>().1.public().clone().into(),
                 public_key: keypair.public().into(),
+                network_key: get_key_pair::<AccountKeyPair>().1.public().clone().into(),
                 proof_of_possession: generate_proof_of_possession(&keypair),
                 stake: 1,
                 delegation: 1,

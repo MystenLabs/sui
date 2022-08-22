@@ -57,6 +57,7 @@ pub fn generate_proof_of_possession<K: KeypairTraits>(keypair: &K) -> <K as Keyp
     keypair.sign(&domain_with_pk[..])
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum SuiKeyPair {
     Ed25519SuiKeyPair(Ed25519KeyPair),

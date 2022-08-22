@@ -544,7 +544,7 @@ mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
     use fastcrypto::traits::KeyPair;
-    use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair};
+    use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, generate_proof_of_possession};
 
     #[test]
     fn roundtrip() {
