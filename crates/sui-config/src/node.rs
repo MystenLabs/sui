@@ -61,6 +61,9 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_gossip: bool,
 
+    #[serde(default = "bool_true")]
+    pub enable_checkpoint: bool,
+
     #[serde(default)]
     pub enable_reconfig: bool,
 
@@ -107,6 +110,10 @@ pub fn default_websocket_address() -> Option<SocketAddr> {
 
 pub fn default_concurrency_limit() -> Option<usize> {
     Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
+}
+
+pub fn bool_true() -> bool {
+    true
 }
 
 impl Config for NodeConfig {}
