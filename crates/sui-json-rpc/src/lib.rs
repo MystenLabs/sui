@@ -24,6 +24,7 @@ pub use jsonrpsee::ws_server;
 
 pub mod api;
 pub mod bcs_api;
+pub mod estimator_api;
 pub mod event_api;
 pub mod gateway_api;
 pub mod quorum_driver_api;
