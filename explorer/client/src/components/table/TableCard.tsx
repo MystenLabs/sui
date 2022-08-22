@@ -137,47 +137,42 @@ function TableCard({
     });
 
     return (
-        <div className={styles.content}>
-            <table className={styles.table}>
-                <thead>
-                    {table.getHeaderGroups().map((headerGroup: any) => (
-                        <tr key={headerGroup.id}>
-                            {headerGroup.headers.map((header: any) => (
-                                <th
-                                    key={header.id}
-                                    colSpan={header.colSpan}
-                                    scope="col"
-                                >
-                                    {header.isPlaceholder
-                                        ? null
-                                        : flexRender(
-                                              header.column.columnDef.header,
-                                              header.getContext()
-                                          )}
-                                </th>
-                            ))}
-                        </tr>
-                    ))}
-                </thead>
-                <tbody>
-                    {table.getRowModel().rows.map((row: any) => (
-                        <tr key={row.id}>
-                            {row.getVisibleCells().map((cell: any) => (
-                                <td
-                                    key={cell.id}
-                                    className={styles.tablespacing}
-                                >
-                                    {flexRender(
-                                        cell.column.columnDef.cell,
-                                        cell.getContext()
-                                    )}
-                                </td>
-                            ))}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
+        <table className={styles.table}>
+            <thead>
+                {table.getHeaderGroups().map((headerGroup: any) => (
+                    <tr key={headerGroup.id}>
+                        {headerGroup.headers.map((header: any) => (
+                            <th
+                                key={header.id}
+                                colSpan={header.colSpan}
+                                scope="col"
+                            >
+                                {header.isPlaceholder
+                                    ? null
+                                    : flexRender(
+                                          header.column.columnDef.header,
+                                          header.getContext()
+                                      )}
+                            </th>
+                        ))}
+                    </tr>
+                ))}
+            </thead>
+            <tbody>
+                {table.getRowModel().rows.map((row: any) => (
+                    <tr key={row.id}>
+                        {row.getVisibleCells().map((cell: any) => (
+                            <td key={cell.id} className={styles.tablespacing}>
+                                {flexRender(
+                                    cell.column.columnDef.cell,
+                                    cell.getContext()
+                                )}
+                            </td>
+                        ))}
+                    </tr>
+                ))}
+            </tbody>
+        </table>
     );
 }
 
