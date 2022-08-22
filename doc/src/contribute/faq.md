@@ -32,7 +32,7 @@ See these resources on the [Sui Developer Portal](https://docs.sui.io/) for the 
 * [How Sui Move differs from Core Move](../learn/sui-move-diffs.md)
 * [How Sui Works](../learn/how-sui-works.md)
 * [Sui Compared to Other Blockchains](../learn/sui-compared.md)
-* [Narwhal and Tusk, Sui's Consensus Engine](../learn/architecture/consensus.md)
+* [Narwhal and Bullshark, Sui's Consensus Engine](../learn/architecture/consensus.md)
 
 
 ### Is Sui based on Diem?
