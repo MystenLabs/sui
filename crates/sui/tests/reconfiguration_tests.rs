@@ -99,7 +99,7 @@ async fn reconfig_end_to_end_tests() {
 
     let mut last_signed_checkpoints = Vec::new();
     for node in &nodes {
-        node.active().unwrap().start_epoch_change().await.unwrap();
+        node.active().start_epoch_change().await.unwrap();
         last_signed_checkpoints.push(sign_checkpoint(
             &node.state(),
             CHECKPOINT_COUNT_PER_EPOCH,
@@ -115,7 +115,7 @@ async fn reconfig_end_to_end_tests() {
     let results: Vec<_> = nodes
         .iter()
         .map(|node| async {
-            node.active().unwrap().finish_epoch_change().await.unwrap();
+            node.active().finish_epoch_change().await.unwrap();
         })
         .collect();
 
