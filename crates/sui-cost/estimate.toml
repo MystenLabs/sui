@@ -1,0 +1,49 @@
+[MergeCoin]
+computationCost = 502
+storageCost = 32
+storageRebate = 0
+
+[Publish]
+computationCost = 562
+storageCost = 84
+storageRebate = 16
+
+[SharedCounterAssertValue]
+computationCost = 188
+storageCost = 31
+storageRebate = 15
+
+[SharedCounterCreate]
+computationCost = 99
+storageCost = 31
+storageRebate = 0
+
+[SharedCounterIncrement]
+computationCost = 188
+storageCost = 31
+storageRebate = 15
+
+[SplitCoin]
+computationCost = 614
+storageCost = 80
+storageRebate = 0
+
+[TransferPortionCoin]
+computationCost = 41
+storageCost = 32
+storageRebate = 0
+
+[TransferPortionSuiCoin]
+computationCost = 45
+storageCost = 48
+storageRebate = 0
+
+[TransferWholeCoin]
+computationCost = 41
+storageCost = 32
+storageRebate = 0
+
+[TransferWholeSuiCoin]
+computationCost = 38
+storageCost = 32
+storageRebate = 0

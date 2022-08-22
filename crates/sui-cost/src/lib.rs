@@ -3,3 +3,4 @@
 
 pub mod cost;
 pub mod empirical_transaction_cost;
+pub mod estimator;

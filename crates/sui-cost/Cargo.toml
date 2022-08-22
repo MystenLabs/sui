@@ -26,6 +26,9 @@ move-cli = { git = "https://github.com/move-language/move", rev = "79071528524f0
 move-package = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 serde = { version = "1.0.141", features = ["derive"] }
+strum = { version = "0.24", features = ["derive"] }
+strum_macros = "0.24"
+toml = "0.5.9"
 
 [dev-dependencies]
 insta = { version = "1.17.1", features = ["redactions"] }

@@ -7,7 +7,7 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 // Execute every entry function in Move framework and examples and ensure costs don't change
 use move_package::BuildConfig;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_json_rpc_types::SuiGasCostSummary;
 use sui_types::{
@@ -23,10 +23,12 @@ use test_utils::{
         publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
     },
 };
+use strum_macros::Display;
+use strum_macros::EnumString;
 
 const TEST_DATA_DIR: &str = "tests/data/";
 
-#[derive(Debug, Eq, PartialEq, Hash, Serialize, Ord, PartialOrd, Clone)]
+#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString)]
 pub enum CommonTransactionCosts {
     Publish,
     MergeCoin,
