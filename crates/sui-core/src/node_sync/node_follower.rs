@@ -99,7 +99,7 @@ async fn follower_process<A, Handler>(
                 }
 
                 Some((result, start, finished)) = follower_tasks.next() => {
-                    let peer = finished;
+                    let peer = finished_peer;
                     let duration = Instant::now() - start;
                     info!(?peer, ?duration, "follower task completed");
 
@@ -121,7 +121,7 @@ async fn follower_process<A, Handler>(
 
                     reconnects.push(async move {
                         sleep(delay).await;
-                        finished
+                        finished_peer
                     });
                 }
 
@@ -201,7 +201,7 @@ where
         }};
     }
 
-    let process_result = |seq| {
+    let remove_from_seq_store = |seq| {
         trace!(?peer, ?seq, "removing completed batch stream item");
         node_sync_store.remove_batch_stream_item(peer, seq)
     };
@@ -251,7 +251,7 @@ where
             biased;
 
             Some(result) = &mut results.next() => {
-                process_result(result?)?;
+                remove_from_seq_store(result?)?;
             }
 
             next = &mut stream.next() => {
@@ -290,7 +290,7 @@ where
     let drain_results = async move {
         debug!(?peer, "draining results");
         while let Some(result) = results.next().await {
-            process_result(result?)?;
+            remove_from_seq_store(result?)?;
         }
         debug!(?peer, "finished draining results");
         Ok::<(), SuiError>(())
@@ -299,7 +299,7 @@ where
     match timeout(DRAIN_RESULTS_TIMEOUT, drain_results).await {
         // a timeout is not an error for our purposes.
         Err(_) => debug!(?peer, "timed out draining results"),
-        // errors from drain_results should .
+        // errors from drain_results should be propagated however.
         Ok(res) => res?,
     }
 
@@ -397,7 +397,6 @@ mod test {
                 .await
                 .unwrap();
 
-            // If this check fails the transactions will not be included in the checkpoint.
             assert!(matches!(
                 effects.effects.status,
                 ExecutionStatus::Success { .. }
