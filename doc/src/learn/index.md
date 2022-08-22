@@ -16,6 +16,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 The following list includes the recent updates to Sui and the documentation:
 
+* [Sui version 0.7.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.7.0) is now live in Devnet with numerous fixes and enhancements, including new designs for the [Sui Wallet Browser Extension](../explore/wallet-browser.md) and [Sui Explorer](https://explorer.devnet.sui.io/).
 * Interact with the Sui network using our new [Rust SDK](../build/rust-sdk.md), a collection of Rust language [JSON-RPC wrapper and crypto utilities](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk).
 * Sui now supports development using [Microsoft Windows 11, macOS, and Linux](../build/install.md#supported-oses). See [install Sui](../build/install.md#prerequisites) for the prerequisites of each operating system.
 * This site is now available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for  [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
