@@ -71,31 +71,12 @@ export class JsonRpcProvider extends Provider {
    */
   constructor(public endpoint: string) {
     super();
+
+    console.log('JsonProvider constructor()')
     this.client = new JsonRpcClient(endpoint);
     this.wsEndpoint = getWebsocketUrl(endpoint);
-    this.init();
-  }
+    this.wsClient = new WsRpcClient(this.wsEndpoint, { reconnect_interval: 3000 })
 
-  private onMessage(msg: any): void {
-    console.log('socket message received', msg);
-
-    if(isSubscriptionEvent(msg)) {
-      // call any registered handler for the message's subscription
-      const onMessage = this.activeSubscriptions.get(msg.subscription);
-      if (onMessage) {
-        onMessage(msg.result);
-        console.log(`call onMessage(), subscription ${msg.subscription}`);
-      }
-    }
-  }
-
-  private init(): WsRpcClient {
-    console.log('init() websocket connection...');
-    if(this.wsClient)
-      return this.wsClient;
-
-    if(!this.wsClient)
-      this.wsClient = new WsRpcClient(this.wsEndpoint, { reconnect_interval: 3000 })
     this.wsClient.connect();
     this.wsConnectionState = ConnectionState.Connecting;
 
@@ -108,33 +89,19 @@ export class JsonRpcProvider extends Provider {
       console.log('ws connection opened');
     });
     this.wsClient.on('message', this.onMessage);
-
-    return this.wsClient;
+    this.wsClient.on('message', console.log);
   }
 
-  private getWsConnection(): WsRpcClient | null {
-    console.log('trying websocket connection...');
+  private onMessage(msg: any): void {
+    console.log('socket message received', msg);
 
-    switch(this.wsConnectionState) {
-      case ConnectionState.NotConnected:
-        this.wsClient = new WsRpcClient(this.wsEndpoint, { reconnect_interval: 3000 })
-        this.wsClient.connect();
-        this.wsConnectionState = ConnectionState.Connecting;
-
-        this.wsClient.on('close', () => {
-          console.log('connection closed');
-          this.wsConnectionState = ConnectionState.NotConnected;
-        });
-        this.wsClient.on('open', () => {
-          this.wsConnectionState = ConnectionState.Connected;
-          console.log('ws connection opened');
-        });
-        this.wsClient.on('message', this.onMessage);
-        return null;
-      case ConnectionState.Connecting:
-        return null;
-      case ConnectionState.Connected:
-        return this.wsClient;
+    if(isSubscriptionEvent(msg)) {
+      // call any registered handler for the message's subscription
+      const onMessage = this.activeSubscriptions.get(msg.subscription);
+      if (onMessage) {
+        onMessage(msg.result);
+        console.log(`call onMessage(), subscription ${msg.subscription}`);
+      }
     }
   }
 
@@ -456,6 +423,9 @@ export class JsonRpcProvider extends Provider {
     onMessage: (event: SuiEventEnvelope) => void
   ): Promise<SubscriptionId> {
     try {
+      if (this.wsConnectionState != ConnectionState.Connected)
+        throw new Error('websocket not connected');
+
       let subId = await this.wsClient.call(
         'sui_subscribeEvent',
         [filter],
@@ -463,7 +433,7 @@ export class JsonRpcProvider extends Provider {
       ) as SubscriptionId;
 
       this.activeSubscriptions.set(subId, onMessage);
-      console.log('subscription id, onMessage', subId, onMessage);
+      console.log('sub id', subId, onMessage, this.activeSubscriptions, this.wsClient.eventNames());
       return subId;
     } catch (err) {
       throw new Error(
