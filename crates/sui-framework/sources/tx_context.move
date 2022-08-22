@@ -77,7 +77,7 @@ module sui::tx_context {
 
     #[test_only]
     /// Create a `TxContext` for testing, with a potentially non-zero epoch number.
-    public fun new_from_hint(addr: address, hint: u8, epoch: u64, ids_created: u64): TxContext {
+    public fun new_from_hint(addr: address, hint: u64, epoch: u64, ids_created: u64): TxContext {
         new(addr, dummy_tx_hash_with_hint(hint), epoch, ids_created)
     }
 
@@ -90,14 +90,25 @@ module sui::tx_context {
 
     #[test_only]
     /// Utility for creating 256 unique input hashes
-    fun dummy_tx_hash_with_hint(hint: u8): vector<u8> {
+    fun dummy_tx_hash_with_hint(hint: u64): vector<u8> {
         let tx_hash = vector::empty<u8>();
+
         let i = 0;
-        while (i < TX_HASH_LENGTH - 1) {
+        while (i < TX_HASH_LENGTH - 8) {
             vector::push_back(&mut tx_hash, 0u8);
             i = i + 1;
         };
-        vector::push_back(&mut tx_hash, hint);
+
+        // Push the hint
+        vector::push_back(&mut tx_hash, (((hint & 0xff00000000000000u64) >> 56) as u8));
+        vector::push_back(&mut tx_hash, (((hint & 0x00ff000000000000u64) >> 48) as u8));
+        vector::push_back(&mut tx_hash, (((hint & 0x0000ff0000000000u64) >> 40) as u8));
+        vector::push_back(&mut tx_hash, (((hint & 0x000000ff00000000u64) >> 32) as u8));
+        vector::push_back(&mut tx_hash, (((hint & 0x00000000ff000000u64) >> 24) as u8));
+        vector::push_back(&mut tx_hash, (((hint & 0x0000000000ff0000u64) >> 16) as u8));
+        vector::push_back(&mut tx_hash, (((hint & 0x000000000000ff00u64) >> 8) as u8));
+        vector::push_back(&mut tx_hash, (((hint & 0x00000000000000ffu64)) as u8));
+
         tx_hash
     }
 
