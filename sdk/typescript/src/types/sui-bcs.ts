@@ -7,6 +7,8 @@ import { SuiObjectRef } from './objects';
 
 bcs
   .registerVectorType('vector<u8>', 'u8')
+  .registerVectorType('vector<u64>', 'u64')
+  .registerVectorType('vector<u128>', 'u128')
   .registerVectorType('vector<vector<u8>>', 'vector<u8>')
   .registerAddressType('ObjectID', 20)
   .registerAddressType('SuiAddress', 20)
@@ -54,6 +56,26 @@ export type TransferObjectTx = {
 bcs.registerStructType('TransferObjectTx', {
   recipient: 'SuiAddress',
   object_ref: 'SuiObjectRef',
+});
+
+/**
+ * Transaction type used for transferring Sui.
+ */
+export type TransferSuiTx = {
+  TransferSui: {
+    recipient: string;
+    amount: { Some: number } | { None: null };
+  };
+};
+
+bcs.registerEnumType('Option<u64>', {
+  None: null,
+  Some: 'u64',
+});
+
+bcs.registerStructType('TransferSuiTx', {
+  recipient: 'SuiAddress',
+  amount: 'Option<u64>',
 });
 
 /**
@@ -191,12 +213,17 @@ bcs
 
 // ========== TransactionData ===========
 
-export type Transaction = MoveCallTx | PublishTx | TransferObjectTx;
+export type Transaction =
+  | MoveCallTx
+  | PublishTx
+  | TransferObjectTx
+  | TransferSuiTx;
 
 bcs.registerEnumType('Transaction', {
   TransferObject: 'TransferObjectTx',
   Publish: 'PublishTx',
   Call: 'MoveCallTx',
+  TransferSui: 'TransferSuiTx',
 });
 /**
  * Transaction kind - either Batch or Single.
