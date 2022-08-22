@@ -17,7 +17,7 @@
 }
 
 .table tbody tr {
-    @apply space-y-10 mt-10 hover:bg-[#6fbcf014];
+    @apply space-y-10 mt-10 hover:bg-sui-grey-45;
 }
 
 td:nth-child(1) {
