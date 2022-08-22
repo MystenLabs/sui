@@ -14,9 +14,6 @@ const MOVE_STDLIB_PACKAGE_NAME: &str = "MoveStdlib";
 
 pub fn move_stdlib_module_denylist() -> Vec<String> {
     vec![
-        "capability".to_string(),
-        "event".to_string(),
-        "guid".to_string(),
         #[cfg(not(test))]
         "debug".to_string(),
     ]
