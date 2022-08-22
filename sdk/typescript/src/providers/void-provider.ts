@@ -16,6 +16,8 @@ import {
   SuiMoveNormalizedStruct,
   SuiMoveNormalizedModule,
   SuiMoveNormalizedModules,
+  ExecuteTransactionRequestType,
+  SuiExecuteTransactionResponse,
 } from '../types';
 import { Provider } from './provider';
 
@@ -55,6 +57,16 @@ export class VoidProvider extends Provider {
     throw this.newError('executeTransaction');
   }
 
+  async executeTransactionWithRequestType(
+    _txnBytes: string,
+    _signatureScheme: SignatureScheme,
+    _signature: string,
+    _pubkey: string,
+    _requestType: ExecuteTransactionRequestType
+  ): Promise<SuiExecuteTransactionResponse> {
+    throw this.newError('executeTransaction with request Type');
+  }
+
   async getTotalTransactionNumber(): Promise<number> {
     throw this.newError('getTotalTransactionNumber');
   }
@@ -78,13 +90,15 @@ export class VoidProvider extends Provider {
     throw this.newError('getMoveFunctionArgTypes');
   }
 
-  async getNormalizedMoveModulesByPackage(_objectId: string,): Promise<SuiMoveNormalizedModules> {
+  async getNormalizedMoveModulesByPackage(
+    _objectId: string
+  ): Promise<SuiMoveNormalizedModules> {
     throw this.newError('getNormalizedMoveModulesByPackage');
   }
 
   async getNormalizedMoveModule(
     _objectId: string,
-    _moduleName: string,
+    _moduleName: string
   ): Promise<SuiMoveNormalizedModule> {
     throw this.newError('getNormalizedMoveModule');
   }
@@ -104,7 +118,6 @@ export class VoidProvider extends Provider {
   ): Promise<SuiMoveNormalizedStruct> {
     throw this.newError('getNormalizedMoveStruct');
   }
-
 
   async syncAccountState(_address: string): Promise<any> {
     throw this.newError('syncAccountState');

@@ -12,6 +12,7 @@ bcs
   .registerVectorType('vector<vector<u8>>', 'vector<u8>')
   .registerAddressType('ObjectID', 20)
   .registerAddressType('SuiAddress', 20)
+  .registerAddressType('address', 20)
   .registerType(
     'utf8string',
     (writer, str) => {

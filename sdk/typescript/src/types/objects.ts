@@ -97,18 +97,24 @@ export type SuiMoveAbilitySet = {
 
 export type SuiMoveNormalizedType =
   | string
-  | { TypeParameter: SuiMoveTypeParameterIndex }
-  | { Reference: SuiMoveNormalizedType }
-  | { MutableReference: SuiMoveNormalizedType }
+  | SuiMoveNormalizedTypeParameterType
+  | { Reference: SuiMoveNormalizedStructType }
+  | { MutableReference: SuiMoveNormalizedStructType }
   | { Vector: SuiMoveNormalizedType }
-  | {
-      Struct: {
-        address: string;
-        module: string;
-        name: string;
-        type_arguments: SuiMoveNormalizedType[];
-      };
-    };
+  | SuiMoveNormalizedStructType;
+
+export type SuiMoveNormalizedTypeParameterType = {
+  TypeParameter: SuiMoveTypeParameterIndex;
+};
+
+export type SuiMoveNormalizedStructType = {
+  Struct: {
+    address: string;
+    module: string;
+    name: string;
+    type_arguments: SuiMoveNormalizedTypeParameterType[];
+  };
+};
 
 export type SuiObject = {
   /** The meat of the object */
@@ -214,6 +220,16 @@ export function getObjectOwner(
   return getObjectExistsResponse(resp)?.owner;
 }
 
+export function isSharedObject(resp: GetObjectDataResponse): boolean {
+  const owner = getObjectOwner(resp);
+  return owner === 'Shared';
+}
+
+export function isImmutableObject(resp: GetObjectDataResponse): boolean {
+  const owner = getObjectOwner(resp);
+  return owner === 'Immutable';
+}
+
 export function getMoveObjectType(
   resp: GetObjectDataResponse
 ): string | undefined {
@@ -256,4 +272,35 @@ export function getMovePackageContent(
     return undefined;
   }
   return (suiObject.data as SuiMovePackage).disassembled;
+}
+
+export function extractMutableReference(
+  normalizedType: SuiMoveNormalizedType
+): SuiMoveNormalizedStructType | undefined {
+  return typeof normalizedType === 'object' &&
+    'MutableReference' in normalizedType
+    ? normalizedType.MutableReference
+    : undefined;
+}
+
+export function extractReference(
+  normalizedType: SuiMoveNormalizedType
+): SuiMoveNormalizedStructType | undefined {
+  return typeof normalizedType === 'object' && 'Reference' in normalizedType
+    ? normalizedType.Reference
+    : undefined;
+}
+
+export function extractStructTag(
+  normalizedType: SuiMoveNormalizedType
+): SuiMoveNormalizedStructType | undefined {
+  if (typeof normalizedType === 'object' && 'Struct' in normalizedType) {
+    return normalizedType;
+  }
+
+  return (
+    (extractReference(normalizedType) ||
+      extractMutableReference(normalizedType)) ??
+    undefined
+  );
 }
