@@ -31,7 +31,7 @@ pub enum CommonTransactionCosts {
     Publish,
     MergeCoin,
     SplitCoin(usize),
-    SplitCoinEqual,
+    SplitCoinEqual(usize),
     TransferWholeCoin,
     TransferPortionCoin,
     TransferWholeSuiCoin,
@@ -52,7 +52,7 @@ async fn run_common_single_writer_tx_costs(
 ) -> Result<BTreeMap<CommonTransactionCosts, SuiGasCostSummary>, anyhow::Error> {
     let mut ret = BTreeMap::new();
 
-    async fn split_n(n: u64) -> Result<SuiGasCostSummary, anyhow::Error> {
+    async fn split_n(n: u64, equal_parts: bool) -> Result<SuiGasCostSummary, anyhow::Error> {
         let (_network, mut context, address) = setup_network_and_wallet().await?;
 
         let object_refs = context
@@ -65,15 +65,20 @@ async fn run_common_single_writer_tx_costs(
         let gas = object_refs.first().unwrap().object_id;
         let coin = object_refs.get(1).unwrap().object_id;
 
-        let amt_vec = vec![1000; n as usize];
+        let amt_vec = if equal_parts {
+            None
+        } else {
+            Some(vec![1000; n as usize])
+        };
+        let count = if equal_parts { n } else { 0 };
 
         // Test with gas specified
         let resp = SuiClientCommands::SplitCoin {
             gas: Some(gas),
             gas_budget: 10000,
             coin_id: coin,
-            amounts: Some(amt_vec),
-            count: 0,
+            amounts: amt_vec,
+            count,
         }
         .execute(&mut context)
         .await?;
@@ -86,8 +91,13 @@ async fn run_common_single_writer_tx_costs(
     }
 
     for i in 0..4 {
-        let gas_used = split_n(i).await?;
+        let gas_used = split_n(i, false).await?;
         ret.insert(CommonTransactionCosts::SplitCoin(i as usize), gas_used);
+    }
+
+    for i in 1..4 {
+        let gas_used = split_n(i, true).await?;
+        ret.insert(CommonTransactionCosts::SplitCoinEqual(i as usize), gas_used);
     }
 
     let (_network, mut context, address) = setup_network_and_wallet().await?;
@@ -98,27 +108,8 @@ async fn run_common_single_writer_tx_costs(
         .get_objects_owned_by_address(address)
         .await?;
 
-    // Split Coin Equal
-    let gas = object_refs.first().unwrap().object_id;
-    let primary_coin = object_refs.get(1).unwrap().object_id;
-    let resp = SuiClientCommands::SplitCoin {
-        gas: Some(gas),
-        gas_budget: 10000,
-        coin_id: primary_coin,
-        amounts: None,
-        count: 3,
-    }
-    .execute(&mut context)
-    .await?;
-
-    let gas_used = if let SuiClientCommandResult::SplitCoin(r) = resp {
-        r.effects.gas_used
-    } else {
-        panic!("Command failed");
-    };
-    ret.insert(CommonTransactionCosts::SplitCoinEqual, gas_used);
-
     // Pairwise Merge Coin
+    let gas = object_refs.first().unwrap().object_id;
     let primary_coin = object_refs.get(1).unwrap().object_id;
     let coin_to_merge = object_refs.get(2).unwrap().object_id;
 

@@ -9,7 +9,7 @@ Publish:
 MergeCoin:
   computationCost: 468
   storageCost: 32
-  storageRebate: 32
+  storageRebate: 0
 ? SplitCoin: 0
 : computationCost: 451
   storageCost: 32
@@ -26,8 +26,16 @@ MergeCoin:
 : computationCost: 579
   storageCost: 80
   storageRebate: 0
-SplitCoinEqual:
-  computationCost: 534
+? SplitCoinEqual: 1
+: computationCost: 453
+  storageCost: 32
+  storageRebate: 0
+? SplitCoinEqual: 2
+: computationCost: 493
+  storageCost: 48
+  storageRebate: 0
+? SplitCoinEqual: 3
+: computationCost: 534
   storageCost: 64
   storageRebate: 0
 TransferWholeCoin:

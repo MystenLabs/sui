@@ -980,7 +980,7 @@ where
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
         equal_parts: bool,
-    ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
+    ) -> anyhow::Result<SuiParsedTransactionResponse> {
         let call = Self::try_get_move_call(&certificate)?;
         let signer = certificate.signed_data.data.signer();
         let (gas_payment, _, _) = certificate.signed_data.data.gas();
