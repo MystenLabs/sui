@@ -7,7 +7,7 @@ use crate::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
 use async_trait::async_trait;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_network::tonic;
@@ -45,17 +45,16 @@ where
     /// all transactions from the second to the least checkpoint of the epoch. It's called by a
     /// validator that belongs to the committee of the current epoch.
     pub async fn start_epoch_change(&self) -> SuiResult {
-        let epoch = self.state.committee.load().epoch;
-        info!(?epoch, "Starting epoch change");
         let checkpoints = self.state.checkpoints.as_ref().unwrap();
         assert!(
             checkpoints.lock().is_ready_to_start_epoch_change(),
             "start_epoch_change called at the wrong checkpoint",
         );
-
+        let epoch = self.state.committee.load().epoch;
+        info!(?epoch, "Starting epoch change");
         self.state.halt_validator();
         info!(?epoch, "Validator halted for epoch change");
-        self.wait_for_validator_batch().await;
+        self.wait_for_validator_batch().await?;
         info!(?epoch, "Epoch change started");
         Ok(())
     }
@@ -389,16 +388,28 @@ where
     /// into a batch. This ensures that they will all made to the next checkpoint proposal.
     /// TODO: We need to ensure that this does not halt forever and is more efficient.
     /// https://github.com/MystenLabs/sui/issues/3915
-    async fn wait_for_validator_batch(&self) {
-        while !self.state.batch_notifier.ticket_drained_til(
-            self.state
-                .checkpoints
-                .as_ref()
-                .unwrap()
-                .lock()
-                .next_transaction_sequence_expected(),
-        ) {
-            tokio::time::sleep(Duration::from_millis(100)).await;
-        }
+    async fn wait_for_validator_batch(&self) -> SuiResult {
+        let last_ticket = loop {
+            match self.state.batch_notifier.ticket_drained() {
+                Some(ticket) => break ticket,
+                None => {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        };
+        let mut checkpoint_store = self.state.checkpoints.as_ref().unwrap().lock();
+        let mut unbatched = self.state.database.transactions_in_seq_range(
+            checkpoint_store.next_transaction_sequence_expected(),
+            last_ticket,
+        )?;
+        let extra_tx_seqs: BTreeSet<_> = checkpoint_store
+            .tables
+            .extra_transactions
+            .iter()
+            .map(|(_, seq)| seq)
+            .collect();
+        unbatched.retain(|(seq, _)| !extra_tx_seqs.contains(seq));
+        checkpoint_store.handle_internal_batch(last_ticket, &unbatched[..])?;
+        Ok(())
     }
 }

@@ -73,21 +73,20 @@ async fn test_start_epoch_change() {
         epoch_change_started_copy.store(true, Ordering::SeqCst);
     });
     tokio::time::sleep(Duration::from_secs(3)).await;
-    // Validator should now be halted, but epoch change hasn't finished.
+    // Validator should now be halted, but epoch change hasn't finished because it's waiting for
+    // tickets to be drained.
     assert!(state.is_halted());
     assert!(!epoch_change_started.load(Ordering::SeqCst));
+    assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 0);
 
     // Drain ticket.
     drop(ticket);
     tokio::time::sleep(Duration::from_secs(3)).await;
-    // After we drained ticket, epoch change still hasn't started as the latest ticket
-    // hasn't made into batch yet.
-    assert!(!epoch_change_started.load(Ordering::SeqCst));
-
-    checkpoints.lock().handle_internal_batch(1, &[]).unwrap();
-    tokio::time::sleep(Duration::from_secs(3)).await;
-    // Now epoch change should have started.
+    // After we drained ticket, epoch change should have started, as it will actively update
+    // the newly processed transactions regardless whether batch service has picked up.
     assert!(epoch_change_started.load(Ordering::SeqCst));
+    assert_eq!(checkpoints.lock().next_transaction_sequence_expected(), 1);
+
     handle.await.unwrap();
 
     // Test that when validator is halted, we cannot send any transaction.
