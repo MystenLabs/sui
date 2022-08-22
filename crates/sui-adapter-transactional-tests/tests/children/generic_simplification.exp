@@ -1,0 +1,21 @@
+processed 6 tasks
+
+task 1 'publish'. lines 6-36:
+created: object(103)
+written: object(102)
+
+task 2 'publish'. lines 38-56:
+created: object(105)
+written: object(104)
+
+task 3 'run'. lines 59-59:
+created: object(107)
+written: object(106)
+
+task 4 'run'. lines 61-61:
+created: object(109)
+written: object(107), object(108)
+
+task 5 'run'. lines 63-72:
+Error: Transaction Effects Status: INVARIANT VIOLATION.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvariantViolation, source: Some("Unable to unwrap object _. Was unable to retrieve last known version in the parent sync") } }
