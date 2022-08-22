@@ -812,7 +812,7 @@ Showing 5 results.
 
 Here is an example of splitting coins using specific amounts. We are splitting out three new coins
 from the original coin (first one on the list above), with values of 1000, 5000 and 3000,
-respectively; note the `--amounts` argument accepts list of values. We use the second coin on the
+respectively; note the `--amounts` argument accepts a list of values. We use the second coin on the
 list to pay for this transaction.
 
 ```shell
@@ -857,7 +857,7 @@ Showing 8 results.
 
 From the result, we can see three new coins were created in the transaction.
 
-Here is an example of splitting coins into equal parts, without needing to specify individual
+Here is an example of splitting coins into equal parts without needing to specify the individual
 amount for every new coin.
 
 ```shell
@@ -883,6 +883,7 @@ New Coins : Coin { id: 0x1da8193ac29f94f8207b0222bd5941b7814c1668, value: 33333 
             Coin { id: 0x3653bae7851c36e0e5e827b7c1a2978ef78efd7e, value: 33333 }
 Updated Gas : Coin { id: 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4, value: 99385 }
 ```
+From the result, we can see three coins with values of roughly one-third of 100000.
 
 ## Calling Move code
 
