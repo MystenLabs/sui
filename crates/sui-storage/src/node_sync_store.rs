@@ -21,15 +21,17 @@ use tracing::trace;
 #[cfg(test)]
 use std::sync::Arc;
 
-/// NodeSyncStore store is used by nodes to store downloaded objects (certs, etc) that have
+/// NodeSyncStore store is used by nodes to store downloaded objects (pending_certs, etc) that have
 /// not yet been applied to the node's SuiDataStore.
 #[derive(DBMapUtils)]
 pub struct NodeSyncStore {
     /// Certificates that have been fetched from remote validators, but not sequenced.
-    certs: DBMap<TransactionDigest, CertifiedTransaction>,
+    /// Entries are cleared after execution.
+    pending_certs: DBMap<TransactionDigest, CertifiedTransaction>,
 
     /// Verified true effects.
-    effects: DBMap<TransactionDigest, SignedTransactionEffects>,
+    /// Entries are cleared after execution.
+    pending_effects: DBMap<TransactionDigest, SignedTransactionEffects>,
 
     /// The persisted batch streams (minus the signed batches) from each authority.
     batch_streams: DBMap<(AuthorityName, TxSequenceNumber), ExecutionDigests>,
@@ -38,7 +40,7 @@ pub struct NodeSyncStore {
     latest_seq: DBMap<AuthorityName, TxSequenceNumber>,
 
     /// Which peers have claimed to have executed which effects?
-    effects_votes: DBMap<(TransactionEffectsDigest, AuthorityName), StakeUnit>,
+    effects_votes: DBMap<(TransactionDigest, TransactionEffectsDigest, AuthorityName), StakeUnit>,
 }
 
 impl NodeSyncStore {
@@ -50,7 +52,7 @@ impl NodeSyncStore {
     }
 
     pub fn store_cert(&self, cert: &CertifiedTransaction) -> SuiResult {
-        Ok(self.certs.insert(cert.digest(), cert)?)
+        Ok(self.pending_certs.insert(cert.digest(), cert)?)
     }
 
     pub fn store_effects(
@@ -58,7 +60,7 @@ impl NodeSyncStore {
         tx: &TransactionDigest,
         effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        Ok(self.effects.insert(tx, effects)?)
+        Ok(self.pending_effects.insert(tx, effects)?)
     }
 
     pub fn get_cert_and_effects(
@@ -68,30 +70,24 @@ impl NodeSyncStore {
         Option<CertifiedTransaction>,
         Option<SignedTransactionEffects>,
     )> {
-        Ok((self.certs.get(tx)?, self.effects.get(tx)?))
+        Ok((self.pending_certs.get(tx)?, self.pending_effects.get(tx)?))
     }
 
     pub fn get_cert(&self, tx: &TransactionDigest) -> SuiResult<Option<CertifiedTransaction>> {
-        Ok(self.certs.get(tx)?)
+        Ok(self.pending_certs.get(tx)?)
     }
 
     pub fn get_effects(
         &self,
         tx: &TransactionDigest,
     ) -> SuiResult<Option<SignedTransactionEffects>> {
-        Ok(self.effects.get(tx)?)
+        Ok(self.pending_effects.get(tx)?)
     }
 
-    pub fn cleanup_cert(
-        &self,
-        digest: &TransactionDigest,
-        effects: Option<&TransactionEffectsDigest>,
-    ) -> SuiResult {
-        self.certs.remove(digest)?;
-        self.effects.remove(digest)?;
-        if let Some(effects) = effects {
-            self.clear_effects_votes(*effects)?;
-        }
+    pub fn cleanup_cert(&self, digest: &TransactionDigest) -> SuiResult {
+        self.pending_certs.remove(digest)?;
+        self.pending_effects.remove(digest)?;
+        self.clear_effects_votes(*digest)?;
 
         Ok(())
     }
@@ -151,47 +147,63 @@ impl NodeSyncStore {
     pub fn record_effects_vote(
         &self,
         peer: AuthorityName,
+        digest: TransactionDigest,
         effects_digest: TransactionEffectsDigest,
         stake: StakeUnit,
     ) -> SuiResult {
         trace!(?effects_digest, ?peer, ?stake, "recording vote");
-        Ok(self.effects_votes.insert(&(effects_digest, peer), &stake)?)
+        Ok(self
+            .effects_votes
+            .insert(&(digest, effects_digest, peer), &stake)?)
     }
 
     fn iter_fx_digest(
         &self,
-        digest: TransactionEffectsDigest,
-    ) -> SuiResult<impl Iterator<Item = ((TransactionEffectsDigest, AuthorityName), StakeUnit)> + '_>
-    {
+        digest: TransactionDigest,
+        effects_digest: TransactionEffectsDigest,
+    ) -> SuiResult<
+        impl Iterator<
+                Item = (
+                    (TransactionDigest, TransactionEffectsDigest, AuthorityName),
+                    StakeUnit,
+                ),
+            > + '_,
+    > {
         Ok(self
             .effects_votes
             .iter()
-            .skip_to(&(digest, AuthorityName::ZERO))?
-            .take_while(move |((d, _), _)| *d == digest))
+            .skip_to(&(digest, effects_digest, AuthorityName::ZERO))?
+            .take_while(move |((d, e, _), _)| *d == digest && *e == effects_digest))
     }
 
-    pub fn count_effects_votes(&self, digest: TransactionEffectsDigest) -> SuiResult<StakeUnit> {
+    pub fn count_effects_votes(
+        &self,
+        digest: TransactionDigest,
+        effects_digest: TransactionEffectsDigest,
+    ) -> SuiResult<StakeUnit> {
         Ok(self
-            .iter_fx_digest(digest)?
-            .map(|((_, _), stake)| stake)
+            .iter_fx_digest(digest, effects_digest)?
+            .map(|((_, _, _), stake)| stake)
             .sum())
     }
 
     pub fn get_voters(
         &self,
-        digest: TransactionEffectsDigest,
+        digest: TransactionDigest,
+        effects_digest: TransactionEffectsDigest,
     ) -> SuiResult<BTreeSet<AuthorityName>> {
         Ok(self
-            .iter_fx_digest(digest)?
-            .map(|((_, peer), _)| peer)
+            .iter_fx_digest(digest, effects_digest)?
+            .map(|((_, _, peer), _)| peer)
             .collect())
     }
 
-    pub fn clear_effects_votes(&self, digest: TransactionEffectsDigest) -> SuiResult {
+    pub fn clear_effects_votes(&self, digest: TransactionDigest) -> SuiResult {
         trace!(effects_digest = ?digest, "clearing votes");
-        Ok(self
-            .effects_votes
-            .multi_remove(self.iter_fx_digest(digest)?.map(|(k, _)| k))?)
+        Ok(self.effects_votes.multi_remove(
+            self.iter_fx_digest(digest, TransactionEffectsDigest::ZERO)?
+                .map(|(k, _)| k),
+        )?)
     }
 }
 
@@ -210,31 +222,33 @@ mod test {
         let peer1: AuthorityName = kp1.public().into();
         let peer2: AuthorityName = kp2.public().into();
 
+        let tx1 = TransactionDigest::random();
+        let tx2 = TransactionDigest::random();
         let digest1 = TransactionEffectsDigest::random();
         let digest2 = TransactionEffectsDigest::random();
 
-        db.record_effects_vote(peer1, digest1, 1).unwrap();
-        assert_eq!(db.count_effects_votes(digest1).unwrap(), 1);
+        db.record_effects_vote(peer1, tx1, digest1, 1).unwrap();
+        assert_eq!(db.count_effects_votes(tx1, digest1).unwrap(), 1);
 
-        db.record_effects_vote(peer2, digest1, 2).unwrap();
-        assert_eq!(db.count_effects_votes(digest1).unwrap(), 3);
+        db.record_effects_vote(peer2, tx1, digest1, 2).unwrap();
+        assert_eq!(db.count_effects_votes(tx1, digest1).unwrap(), 3);
 
         assert_eq!(
-            db.get_voters(digest1).unwrap(),
+            db.get_voters(tx1, digest1).unwrap(),
             [peer1, peer2].iter().cloned().collect()
         );
 
         // redundant votes do not increase total
-        db.record_effects_vote(peer2, digest1, 2).unwrap();
-        assert_eq!(db.count_effects_votes(digest1).unwrap(), 3);
+        db.record_effects_vote(peer2, tx1, digest1, 2).unwrap();
+        assert_eq!(db.count_effects_votes(tx1, digest1).unwrap(), 3);
 
-        db.record_effects_vote(peer1, digest2, 1).unwrap();
-        db.record_effects_vote(peer2, digest2, 2).unwrap();
+        db.record_effects_vote(peer1, tx2, digest2, 1).unwrap();
+        db.record_effects_vote(peer2, tx2, digest2, 2).unwrap();
 
         db.clear_effects_votes(digest1).unwrap();
         // digest1 is cleared
-        assert_eq!(db.count_effects_votes(digest1).unwrap(), 0);
+        assert_eq!(db.count_effects_votes(tx1, digest1).unwrap(), 0);
         // digest2 is not
-        assert_eq!(db.count_effects_votes(digest2).unwrap(), 3);
+        assert_eq!(db.count_effects_votes(tx2, digest2).unwrap(), 3);
     }
 }

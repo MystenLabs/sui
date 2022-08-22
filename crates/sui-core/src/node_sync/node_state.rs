@@ -227,6 +227,10 @@ impl<A> NodeSyncState<A> {
             metrics,
         }
     }
+
+    pub fn store(&self) -> Arc<NodeSyncStore> {
+        self.node_sync_store.clone()
+    }
 }
 
 pub enum SyncStatus {
@@ -307,8 +311,7 @@ where
                     Ok(Ok(res)) => {
                         // Garbage collect data for this tx.
                         if let SyncStatus::CertExecuted = res {
-                            let (tx, effects) = sync_arg.digests();
-                            state.cleanup_cert(tx, effects);
+                            state.cleanup_cert(digest);
                         }
                         Ok(res)
                     }
@@ -432,14 +435,10 @@ where
         }
     }
 
-    pub fn cleanup_cert(
-        &self,
-        digest: &TransactionDigest,
-        effects: Option<&TransactionEffectsDigest>,
-    ) {
+    pub fn cleanup_cert(&self, digest: &TransactionDigest) {
         let _ = self
             .node_sync_store
-            .cleanup_cert(digest, effects)
+            .cleanup_cert(digest)
             .tap_err(|e| warn!("cleanup_cert failed: {}", e));
     }
 
@@ -479,9 +478,15 @@ where
                 let stake = self.committee.weight(&peer);
                 let quorum_threshold = self.committee.quorum_threshold();
 
-                self.node_sync_store
-                    .record_effects_vote(peer, digests.effects, stake)?;
-                let votes = self.node_sync_store.count_effects_votes(digests.effects)?;
+                self.node_sync_store.record_effects_vote(
+                    peer,
+                    digests.transaction,
+                    digests.effects,
+                    stake,
+                )?;
+                let votes = self
+                    .node_sync_store
+                    .count_effects_votes(digests.transaction, digests.effects)?;
 
                 let is_final = votes >= quorum_threshold;
 
@@ -493,7 +498,10 @@ where
 
                 (
                     digests,
-                    Some(self.node_sync_store.get_voters(digests.effects)?),
+                    Some(
+                        self.node_sync_store
+                            .get_voters(digests.transaction, digests.effects)?,
+                    ),
                 )
             }
             SyncArg::Checkpoint(digests) => {
