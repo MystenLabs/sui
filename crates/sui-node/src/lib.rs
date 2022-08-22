@@ -195,6 +195,13 @@ impl SuiNode {
                 )?);
                 active = Some(Arc::clone(&active_authority));
 
+                if is_fullnode {
+                    // TODO: enable checkpoint sync on fullnode
+                    // let metrics = CheckpointMetrics::new(&prometheus_registry);
+                    // active_authority.sync_to_latest_checkpoint(&metrics).await?;
+                    active_authority.respawn_node_sync_process().await;
+                }
+
                 if is_validator {
                     // TODO: get degree from config file.
                     let degree = 4;
@@ -211,10 +218,6 @@ impl SuiNode {
                         ),
                     )
                 } else {
-                    // TODO: enable checkpoint sync on fullnode
-                    // let metrics = CheckpointMetrics::new(&prometheus_registry);
-                    // active_authority.sync_to_latest_checkpoint(&metrics).await?;
-                    active_authority.respawn_node_sync_process().await;
                     (None, None, None)
                 }
             } else {
