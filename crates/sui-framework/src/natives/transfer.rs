@@ -1,16 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::EventType;
+use crate::{legacy_emit_cost, EventType};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
-    gas_schedule::NativeCostIndex,
-    loaded_data::runtime_types::Type,
-    natives::function::{native_gas, NativeResult},
-    pop_arg,
-    values::Value,
+    loaded_data::runtime_types::Type, natives::function::NativeResult, pop_arg, values::Value,
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -43,7 +39,7 @@ pub fn transfer_internal(
     // we will charge it properly when processing
     // all the events in adapter.
     // TODO: adjust native_gas cost size base.
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+    let cost = legacy_emit_cost();
     if context.save_event(recipient.to_vec(), event_type as u64, ty, transferred_obj)? {
         Ok(NativeResult::ok(cost, smallvec![]))
     } else {
@@ -64,7 +60,7 @@ pub fn freeze_object(
     let ty = ty_args.pop().unwrap();
     let obj = args.pop_back().unwrap();
     let event_type = EventType::FreezeObject;
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+    let cost = legacy_emit_cost();
     if context.save_event(vec![], event_type as u64, ty, obj)? {
         Ok(NativeResult::ok(cost, smallvec![]))
     } else {
@@ -85,7 +81,7 @@ pub fn share_object(
     let ty = ty_args.pop().unwrap();
     let obj = args.pop_back().unwrap();
     let event_type = EventType::ShareObject;
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1);
+    let cost = legacy_emit_cost();
     if context.save_event(vec![], event_type as u64, ty, obj)? {
         Ok(NativeResult::ok(cost, smallvec![]))
     } else {

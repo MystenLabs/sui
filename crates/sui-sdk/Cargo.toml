@@ -29,14 +29,14 @@ sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-adapter =  { path = "../sui-adapter" }
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
-clap = { version = "3.1.17", features = ["derive"] }
+clap = { version = "3.2.17", features = ["derive"] }
 dirs = "4.0.0"
 tokio = "1.20.1"
 async-recursion = "1.0.0"

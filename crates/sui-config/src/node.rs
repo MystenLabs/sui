@@ -20,7 +20,7 @@ use sui_types::crypto::KeypairTraits;
 use sui_types::sui_serde::KeyPairBase64;
 
 // Default max number of concurrent requests served
-pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 500;
+pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000;
 
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]

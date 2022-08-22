@@ -618,11 +618,10 @@ where
             return Err(SuiError::CheckpointingError { error });
         }
 
-        checkpoint_db.lock().process_new_checkpoint_certificate(
+        checkpoint_db.lock().process_synced_checkpoint_certificate(
             &past,
             &contents,
             &net.committee,
-            active_authority.state.database.clone(),
             metrics,
         )?;
     }

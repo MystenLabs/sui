@@ -43,7 +43,7 @@ button.gone {
 
 /* RHS stats styling */
 .rhs > div {
-    @apply capitalize text-sui-grey-75 text-sm mx-auto mt-2 sm:mt-0;
+    @apply capitalize text-sui-grey-75 text-sm mx-auto sm:mr-[12px] mt-2 sm:mt-0;
 }
 
 .rhs {
@@ -55,7 +55,9 @@ button.gone {
 }
 
 .rhs > select {
-    @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block;
+    @apply ml-[1vw] cursor-pointer rounded-[6px] hidden sm:block border-0 border-r-[12px] border-transparent overflow-visible;
+
+    outline: 1px solid #e9eaeb !important;
 }
 
 /* Less than 6 case */

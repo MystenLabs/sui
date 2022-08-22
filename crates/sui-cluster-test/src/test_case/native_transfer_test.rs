@@ -83,6 +83,7 @@ impl TestCaseImpl for NativeTransferTest {
             .owner(Owner::AddressOwner(recipient_addr))
             .check(ctx.get_fullnode())
             .await;
+
         Ok(())
     }
 }

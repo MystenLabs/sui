@@ -1,14 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::EventType;
+use crate::{legacy_create_signer_cost, legacy_emit_cost, EventType};
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::account_address::AccountAddress;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
-    gas_schedule::NativeCostIndex,
     loaded_data::runtime_types::Type,
-    natives::function::{native_gas, NativeResult},
+    natives::function::NativeResult,
     pop_arg,
     values::{StructRef, Value},
 };
@@ -16,7 +15,7 @@ use smallvec::smallvec;
 use std::collections::VecDeque;
 
 pub fn bytes_to_address(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -29,13 +28,13 @@ pub fn bytes_to_address(
     let addr = AccountAddress::from_bytes(addr_bytes).unwrap();
 
     // TODO: what should the cost of this be?
-    let cost = native_gas(context.cost_table(), NativeCostIndex::CREATE_SIGNER, 0);
+    let cost = legacy_create_signer_cost();
 
     Ok(NativeResult::ok(cost, smallvec![Value::address(addr)]))
 }
 
 pub fn borrow_uid(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     mut args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -46,7 +45,7 @@ pub fn borrow_uid(
     let id_field = obj.borrow_field(0)?;
 
     // TODO: what should the cost of this be?
-    let cost = native_gas(context.cost_table(), NativeCostIndex::SIGNER_BORROW, 0);
+    let cost = legacy_emit_cost();
 
     Ok(NativeResult::ok(cost, smallvec![id_field]))
 }
@@ -64,7 +63,7 @@ pub fn delete_impl(
     let info = args.pop_back().unwrap();
 
     // TODO: what should the cost of this be?
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_emit_cost();
 
     if !context.save_event(vec![], EventType::DeleteObjectID as u64, ty, info)? {
         return Ok(NativeResult::err(cost, 0));

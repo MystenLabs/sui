@@ -1,14 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::legacy_length_cost;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::language_storage::TypeTag;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
-    gas_schedule::NativeCostIndex,
-    loaded_data::runtime_types::Type,
-    natives::function::{native_gas, NativeResult},
-    values::Value,
+    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -25,7 +23,7 @@ pub fn is_one_time_witness(
     let type_tag = context.type_to_type_tag(&ty_args.pop().unwrap())?;
 
     // TODO: what should the cost of this be?
-    let cost = native_gas(context.cost_table(), NativeCostIndex::LENGTH, 1);
+    let cost = legacy_length_cost();
 
     // If a struct type has the same name as the module that defines it but capitalized, it means
     // that it's a characteristic type (which is one way of implementing a one-time witness

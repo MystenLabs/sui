@@ -288,6 +288,7 @@ pub async fn new_wallet_context_from_cluster(
         keystore,
         gateway: ClientType::RPC(rpc_url.into(), None),
         active_address: Some(address),
+        fullnode: None,
     }
     .persisted(&wallet_config_path)
     .save()
