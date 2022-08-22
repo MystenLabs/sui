@@ -73,7 +73,7 @@ const ImportPage = () => {
     );
     return (
         <>
-            <h1>Import existing wallet</h1>
+            <h1 className={st.headerTitle}>Import existing wallet</h1>
             <form onSubmit={handleSubmit} noValidate autoComplete="off">
                 <textarea
                     rows={5}

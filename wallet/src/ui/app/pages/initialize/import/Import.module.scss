@@ -1,8 +1,14 @@
+@use '_values/colors';
+@use '_utils';
+
 .mnemonic {
     resize: none;
-    width: 300px;
+    width: 360px;
     padding: 5px;
     margin-bottom: 3px;
+    background: colors.$white;
+    border: 1px solid #e9eaeb;
+    border-radius: 10px;
 }
 
 .error {
@@ -12,4 +18,13 @@
     font-weight: 400;
     min-height: 1em;
     line-height: 1;
+}
+
+.header-title {
+    text-align: left;
+    margin-bottom: 20px;
+    color: colors.$gray-100;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 36px;
 }

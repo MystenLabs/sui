@@ -1,4 +1,5 @@
 @use '_values/colors';
+@use '_utils';
 
 .card {
     display: flex;
@@ -7,7 +8,7 @@
     justify-content: center;
     border: 1px solid #e9eaeb;
     border-radius: 10px;
-    padding: 50px;
+    padding: 38px;
     margin-bottom: 8px;
     width: 340px;
     height: 248px;
@@ -30,20 +31,45 @@
     }
 
     .desc {
-        color: #3b3f43;
-        font-size: 14px;
+        color: colors.$gray-80;
+        font-size: 16px;
+        line-height: 21px;
         font-weight: 500;
         margin-bottom: 16px;
+        text-align: center;
     }
 
     .action {
+        @include utils.typography('page-title');
+
         align-self: flex-start;
+        background: colors.$cta-blue;
+        color: colors.$white;
+        width: 100%;
+        text-align: center;
+        border-radius: 10px;
+        font-weight: 600;
+
+        &:visited,
+        &:active {
+            color: colors.$white;
+        }
+
+        &:hover {
+            background: colors.$cta-blue-hover;
+        }
     }
 }
 
 .selector {
     display: flex;
     gap: 8px;
+
+    .icon {
+        margin-left: 10px;
+        color: colors.$cta-light-blue;
+        font-size: 14px;
+    }
 }
 
 .header-title {

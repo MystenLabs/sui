@@ -3,7 +3,8 @@
 
 import cl from 'classnames';
 import { Link } from 'react-router-dom';
-// import { SuiIcons } from '_font-icons/output/sui-icons';
+
+import Icon, { SuiIcons } from '_components/icon';
 
 import st from './Select.module.scss';
 
@@ -13,12 +14,14 @@ const selections = [
         desc: 'This will create a new wallet and a seed phrase.',
         url: '../create',
         action: 'Create new wallet',
+        icon: SuiIcons.Plus,
     },
     {
         title: 'No, I already have one',
         desc: 'Import your existing wallet by entering the 12-word seed phrase',
         url: '../import',
         action: 'Import a wallet',
+        icon: SuiIcons.Download,
     },
 ];
 
@@ -36,6 +39,8 @@ const SelectPage = () => {
                             className={cl('btn', st.action)}
                         >
                             {aSelection.action}
+
+                            <Icon icon={aSelection.icon} className={st.icon} />
                         </Link>
                     </div>
                 ))}
