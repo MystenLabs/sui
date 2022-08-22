@@ -120,7 +120,13 @@ pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
     pub node_sync_state: Arc<NodeSyncState<A>>,
+
+    // Handle that holds a channel connected to NodeSyncState, used to send sync requests
+    // into NodeSyncState.
     node_sync_handle: OnceCell<NodeSyncHandle>,
+
+    // JoinHandle for the tokio task that is running the NodeSyncState::start(), as well as a
+    // cancel sender which can be used to terminate that task gracefully.
     node_sync_process: Arc<Mutex<Option<NodeSyncProcessHandle>>>,
 
     // The network interfaces to other authorities
