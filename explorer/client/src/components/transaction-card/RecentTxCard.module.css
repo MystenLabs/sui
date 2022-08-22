@@ -80,10 +80,6 @@ div.txadd {
     text-decoration: none;
 }
 
-.txlatestresults td a {
-    @apply font-mono text-[#4E555D];
-}
-
 .txlatestresults td:nth-child(1) {
     @apply text-xs;
 }
