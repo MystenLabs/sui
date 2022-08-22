@@ -977,10 +977,6 @@ impl CheckpointStore {
             .extra_transactions
             .multi_get(transactions.iter())?;
 
-        // Debug check that we only make a checkpoint if we have processed all the checkpointed
-        // transactions and their history.
-        debug_assert!(transactions_with_seq.iter().all(|item| item.is_some()));
-
         // Delete the extra transactions now used
         let batch = batch.delete_batch(
             &self.tables.extra_transactions,
@@ -995,11 +991,9 @@ impl CheckpointStore {
         let transactions_to_checkpoint: Vec<_> = transactions
             .iter()
             .zip(transactions_with_seq.iter())
-            .map(|(tx, opt)| {
-                // Unwrap safe since we have checked all transactions are processed
-                // to get to this point.
-                let iseq = opt.as_ref().unwrap();
-                (*tx, (seq, *iseq))
+            .filter_map(|(tx, opt)| {
+                // If iseq is missing here then batch service will update this index in update_processed_transactions
+                opt.as_ref().map(|iseq| (*tx, (seq, *iseq)))
             })
             .collect();
 
