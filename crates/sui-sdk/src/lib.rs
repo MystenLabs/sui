@@ -349,7 +349,10 @@ impl SuiClient {
 #[serde(rename_all = "lowercase")]
 pub enum ClientType {
     Embedded(GatewayConfig),
-    RPC(String, Option<String>),
+    RPC(
+        String,
+        #[serde(default, skip_serializing_if = "Option::is_none")] Option<String>,
+    ),
 }
 
 impl Display for ClientType {
