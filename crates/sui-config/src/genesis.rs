@@ -67,6 +67,9 @@ impl Genesis {
             .validator_set
             .iter()
             .map(|validator| {
+                // Strong requirement here for narwhal and sui to be on the same version of fastcrypto
+                // for AuthorityPublicBytes to cast to type alias PublicKey defined in narwhal to
+                // construct narwhal Committee struct.
                 let name = validator
                     .protocol_key()
                     .try_into()

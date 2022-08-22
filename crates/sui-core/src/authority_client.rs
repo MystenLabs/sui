@@ -443,6 +443,7 @@ impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
         let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+        let (tx_consensus_to_sui, _rx_consensus_to_sui) = tokio::sync::mpsc::channel(1_000);
         let state = AuthorityState::new_for_testing(
             committee,
             &secret,
@@ -450,6 +451,7 @@ impl LocalAuthorityClient {
             Some(genesis),
             None,
             tx_reconfigure_consensus,
+            tx_consensus_to_sui,
         )
         .await;
         Self {

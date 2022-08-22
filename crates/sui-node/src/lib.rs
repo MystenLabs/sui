@@ -125,6 +125,7 @@ impl SuiNode {
         };
 
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
+        let (tx_consensus_to_sui, _rx_consensus_to_sui) = channel(1_000);
         let state = Arc::new(
             AuthorityState::new(
                 config.protocol_public_key(),
@@ -137,6 +138,7 @@ impl SuiNode {
                 genesis,
                 &prometheus_registry,
                 tx_reconfigure_consensus,
+                tx_consensus_to_sui,
             )
             .await,
         );

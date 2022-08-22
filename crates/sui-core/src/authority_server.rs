@@ -173,7 +173,7 @@ impl ValidatorService {
         prometheus_registry: Registry,
         rx_reconfigure_consensus: Receiver<(ConsensusKeyPair, ConsensusCommittee)>,
     ) -> Result<Self> {
-        let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
+        let (_tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
         let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
 
         // Spawn the consensus node of this authority.
@@ -195,7 +195,6 @@ impl ValidatorService {
                 consensus_execution_state,
                 consensus_parameters,
                 rx_reconfigure_consensus,
-                /* tx_output */ tx_consensus_to_sui,
                 &registry,
             )
             .await
