@@ -83,9 +83,9 @@ function TxStatusType({ content }: { content: TxStatus }) {
     const TxResultStatus =
         content.status === 'success' ? TxStatus.success : TxStatus.fail;
     return (
-        <>
+        <section>
             <TxResultStatus /> {content.txTypeName}
-        </>
+        </section>
     );
 }
 
@@ -111,7 +111,7 @@ function columnsContent(columns: TableColumn[]) {
                 return <TxStatusType content={content} />;
             }
             // handle most common types
-            return content;
+            return <section>{content}</section>;
         },
     }));
 }
@@ -162,7 +162,7 @@ function TableCard({
                 {table.getRowModel().rows.map((row: any) => (
                     <tr key={row.id}>
                         {row.getVisibleCells().map((cell: any) => (
-                            <td key={cell.id} className={styles.tablespacing}>
+                            <td key={cell.id}>
                                 {flexRender(
                                     cell.column.columnDef.cell,
                                     cell.getContext()

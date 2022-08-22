@@ -12,6 +12,10 @@
     @apply pr-5 text-sui-grey-75 text-sm;
 }
 
+.table td section {
+    @apply py-2;
+}
+
 .table tbody tr {
     @apply space-y-10 mt-10 hover:bg-sui-grey-40;
 }
@@ -28,16 +32,16 @@ td:nth-child(1) {
     @apply flex flex-wrap;
 }
 
+.table tbody tr td:hover .addresses {
+    @apply bg-[#6fbcf014];
+}
+
 .addresses svg {
     @apply mr-2;
 }
 
 .addresses a {
     @apply font-mono;
-}
-
-.tablespacing {
-    @apply pb-2 pt-2;
 }
 
 .longtextwrapper {
