@@ -31,6 +31,9 @@ module sui::validator {
         /// The public key bytes corresponding to the private key that the validator
         /// holds to sign transactions. For now, this is the same as AuthorityName.
         pubkey_bytes: vector<u8>,
+        /// The public key bytes corresponding to the private key that the validator
+        /// uses to establish TLS connections
+        network_pubkey_bytes: vector<u8>, 
         /// A unique human-readable name of this validator.
         name: vector<u8>,
         /// The network address of the validator (could also contain extra info such as port, DNS and etc.).
@@ -74,6 +77,7 @@ module sui::validator {
     public(friend) fun new(
         sui_address: address,
         pubkey_bytes: vector<u8>,
+        network_pubkey_bytes: vector<u8>,
         name: vector<u8>,
         net_address: vector<u8>,
         stake: Balance<SUI>,
@@ -94,6 +98,7 @@ module sui::validator {
             metadata: ValidatorMetadata {
                 sui_address,
                 pubkey_bytes,
+                network_pubkey_bytes,
                 name,
                 net_address,
                 next_epoch_stake: stake_amount,

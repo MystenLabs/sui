@@ -15,12 +15,12 @@ use sui_types::{
     base_types::{decode_bytes_hex, encode_bytes_hex, ObjectID, SuiAddress},
     crypto::{
         AuthorityKeyPair, AuthorityPublicKey, AuthorityPublicKeyBytes, AuthoritySignature,
-        KeypairTraits, ToFromBytes,
+        KeypairTraits, SuiKeyPair, ToFromBytes,
     },
     object::Object,
 };
 
-use crate::keytool::read_authority_keypair_from_file;
+use crate::keytool::{read_authority_keypair_from_file, read_keypair_from_file};
 
 const GENESIS_BUILDER_SIGNATURE_DIR: &str = "signatures";
 
@@ -47,7 +47,11 @@ pub enum CeremonyCommand {
         #[clap(long)]
         name: String,
         #[clap(long)]
-        key_file: PathBuf,
+        validator_key_file: PathBuf,
+        #[clap(long)]
+        staking_key_file: PathBuf,
+        #[clap(long)]
+        network_key_file: PathBuf,
         #[clap(long)]
         network_address: Multiaddr,
         #[clap(long)]
@@ -97,7 +101,9 @@ pub fn run(cmd: Ceremony) -> Result<()> {
 
         CeremonyCommand::AddValidator {
             name,
-            key_file,
+            validator_key_file,
+            staking_key_file: _,
+            network_key_file,
             network_address,
             narwhal_primary_to_primary,
             narwhal_worker_to_primary,
@@ -106,10 +112,12 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             narwhal_consensus_address,
         } => {
             let mut builder = Builder::load(&dir)?;
-            let keypair: AuthorityKeyPair = read_authority_keypair_from_file(key_file)?;
+            let keypair: AuthorityKeyPair = read_authority_keypair_from_file(validator_key_file)?;
+            let network_keypair: SuiKeyPair = read_keypair_from_file(network_key_file)?;
             builder = builder.add_validator(sui_config::ValidatorInfo {
                 name,
                 public_key: keypair.public().into(),
+                network_key: network_keypair.public(),
                 stake: 1,
                 delegation: 0,
                 gas_price: 1,
@@ -253,7 +261,7 @@ mod test {
     use crate::keytool::write_keypair_to_file;
     use anyhow::Result;
     use sui_config::{utils, ValidatorInfo};
-    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair, SuiKeyPair};
+    use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, SuiKeyPair};
 
     #[test]
     fn ceremony() -> Result<()> {
@@ -262,9 +270,14 @@ mod test {
         let validators = (0..10)
             .map(|i| {
                 let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+                let network_keypair: AccountKeyPair =
+                    get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+                let staking_keypair: AccountKeyPair =
+                    get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
                 let info = ValidatorInfo {
                     name: format!("validator-{i}"),
-                    public_key: AuthorityPublicKeyBytes::from(keypair.public()),
+                    public_key: keypair.public().into(),
+                    network_key: keypair.public().clone().into(),
                     stake: 1,
                     delegation: 0,
                     gas_price: 1,
@@ -278,7 +291,21 @@ mod test {
                 let key_file = dir.path().join(format!("{}.key", info.name));
                 write_keypair_to_file(&SuiKeyPair::Ed25519SuiKeyPair(keypair), &key_file).unwrap();
 
-                (key_file, info)
+                let network_key_file = dir.path().join(format!("{}.key", info.name));
+                write_keypair_to_file(
+                    &SuiKeyPair::Ed25519SuiKeyPair(network_keypair),
+                    &network_key_file,
+                )
+                .unwrap();
+
+                let staking_key_file = dir.path().join(format!("{}.key", info.name));
+                write_keypair_to_file(
+                    &SuiKeyPair::Ed25519SuiKeyPair(staking_keypair),
+                    &staking_key_file,
+                )
+                .unwrap();
+
+                (key_file, network_key_file, staking_key_file, info)
             })
             .collect::<Vec<_>>();
 
@@ -290,12 +317,14 @@ mod test {
         command.run()?;
 
         // Add the validators
-        for (key_file, validator) in &validators {
+        for (key_file, network_key_file, staking_key_file, validator) in &validators {
             let command = Ceremony {
                 path: Some(dir.path().into()),
                 command: CeremonyCommand::AddValidator {
                     name: validator.name().to_owned(),
-                    key_file: key_file.into(),
+                    validator_key_file: key_file.into(),
+                    network_key_file: network_key_file.into(),
+                    staking_key_file: staking_key_file.into(),
                     network_address: validator.network_address().to_owned(),
                     narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
                     narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
@@ -315,7 +344,7 @@ mod test {
         command.run()?;
 
         // Have all the validators verify and sign genesis
-        for (key, _validator) in &validators {
+        for (key, _network_key, _staking_key, _validator) in &validators {
             let command = Ceremony {
                 path: Some(dir.path().into()),
                 command: CeremonyCommand::VerifyAndSign {
