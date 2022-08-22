@@ -15,7 +15,7 @@ hex = "0.4.3"
 hkdf = { version = "0.12.3", features = ["std"] }
 rand = { version = "0.8.5", features = ["std"] }
 rust_secp256k1 = { version = "0.24.0", package = "secp256k1", features = ["recovery", "rand-std", "bitcoin_hashes", "global-context"] }
-serde = { version = "1.0.143", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 serde_bytes = "0.11.7"
 serde_with = "2.0.0"
 signature = "1.6.0"

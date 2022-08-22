@@ -16,7 +16,7 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "574fb8fa
 futures = "0.3.23"
 multiaddr = "0.14.0"
 primary = { path = "../primary" }
-serde = { version = "1.0.143", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["sync"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
