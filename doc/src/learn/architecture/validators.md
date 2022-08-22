@@ -37,12 +37,12 @@ As with transactions, we note that the process of sharing a certificate with val
 
 ## The role of Narwhal and Bullshark
 
-Sui takes advantage of [Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus](consensus.md) and the Tusk successor [Bullshark](https://arxiv.org/abs/2201.05677). Narwhal/Bullshark (B/T) are also being implemented by [Mysten Labs](https://mystenlabs.com/) so that when Byzantine agreement is required we use a high-throughput DAG-based consensus to manage shared locks while execution on different shared objects is parallelized.
+Sui takes advantage of [Narwhal and Tusk: A DAG-based Mempool and Efficient BFT Consensus](consensus.md) and the Tusk successor [Bullshark](https://arxiv.org/abs/2201.05677). Narwhal/Bullshark (N/B) are also being implemented by [Mysten Labs](https://mystenlabs.com/) so that when Byzantine agreement is required we use a high-throughput DAG-based consensus to manage shared locks while execution on different shared objects is parallelized.
 
-Narwhal enables the parallel ordering of transactions into batches that are collected into concurrently proposed blocks, and Bullshark defines an algorithm for executing the DAG that these blocks form. N/T combined builds a DAG of blocks, concurrently proposed, and creates an order between those blocks as a byproduct of the building of the DAG. But that order is overlaid on top of the causal order of Sui transactions (the "payload" of Narwhal/Bullshark here), and does not substitute for it:
+Narwhal enables the parallel ordering of transactions into batches that are collected into concurrently proposed blocks, and Bullshark defines an algorithm for executing the DAG that these blocks form. N/B combined builds a DAG of blocks, concurrently proposed, and creates an order between those blocks as a byproduct of the building of the DAG. But that order is overlaid on top of the causal order of Sui transactions (the "payload" of Narwhal/Bullshark here), and does not substitute for it:
 
 * Narwhal/Bullshark operates in OX, rather than XO mode (O = order, X = execute); the execution occurs after the Narwhal/Bullshark ordering.
-* The output of N/T is therefore a sequence of transactions, with interdependencies stored in the transaction data itself.
+* The output of N/B is therefore a sequence of transactions, with interdependencies stored in the transaction data itself.
 
 Consensus sequences certificates of transactions. These represent transactions that have already been presented to 2/3 of validators that checked that all their owned objects are available to be operated on and signed the transaction. Upon a certificate being sequenced, what we do is set the *lock* of the shared objects at the next available version to map to the execution of that certificate. So for example if we have a shared object X at version 2, and we sequence certificate T, we store T -> [(X, 2)]. That is all we do when we reach consensus, and as a result we are able to ingest a lot of sequenced transactions.
 
