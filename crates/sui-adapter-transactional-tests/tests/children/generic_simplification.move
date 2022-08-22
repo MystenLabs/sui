@@ -62,11 +62,3 @@ module t2::items {
 
 //# run t1::marketplace::delist --args object(107) object(109) --type-args t2::items::Item
 
-
-
-// //# run t1::o2::create_shared --args object(109)
-
-// // This run should error as Obj2/Obj3 were not defined in o1
-// //# run t1::o1::use_o2_o3 --args object(111) object(109)
-
-// //# run t2::o2::use_o2_o3 --args object(111) object(109)
