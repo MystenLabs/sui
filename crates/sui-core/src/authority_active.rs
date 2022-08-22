@@ -334,7 +334,7 @@ where
     }
 
     pub async fn respawn_node_sync_process(&self) {
-        info!(epoch = ?self.committee.load().epoch, "respawn_node_sync_process");
+        info!(epoch = ?self.state.committee.load().epoch, "respawn_node_sync_process");
         let mut lock_guard = self.node_sync_process.lock().await;
 
         if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {

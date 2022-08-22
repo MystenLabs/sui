@@ -98,8 +98,7 @@ async fn follower_process<A, Handler>(
                     return;
                 }
 
-                Some((result, start, finished)) = follower_tasks.next() => {
-                    let peer = finished_peer;
+                Some((result, start, peer)) = follower_tasks.next() => {
                     let duration = Instant::now() - start;
                     info!(?peer, ?duration, "follower task completed");
 
@@ -121,7 +120,7 @@ async fn follower_process<A, Handler>(
 
                     reconnects.push(async move {
                         sleep(delay).await;
-                        finished_peer
+                        peer
                     });
                 }
 
