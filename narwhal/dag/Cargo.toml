@@ -10,7 +10,7 @@ edition = "2021"
 arc-swap = "1.5.1"
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "574fb8fa17926666131b21c03cfbeb16ff9fd894" }
 dashmap = "5.3.4"
-either = "1.7.0"
+either = "1.8.0"
 itertools = "0.10.3"
 once_cell = "1.13.1"
 rayon = "1.5.3"
