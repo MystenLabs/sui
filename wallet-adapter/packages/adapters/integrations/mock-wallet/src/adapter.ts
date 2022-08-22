@@ -1,8 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { MoveCallTransaction, SuiAddress, TransactionResponse } from "@mysten/sui.js";
-import { WalletCapabilities } from "sui-base-wallet-adapter";
+import { MoveCallTransaction, SuiAddress, SuiTransactionResponse } from "@mysten/sui.js";
+import { WalletCapabilities } from "@mysten/wallet-adapter-base";
 
 const ALL_PERMISSION_TYPES = [
     'viewAccount',
@@ -15,8 +15,8 @@ interface SuiWallet {
     hasPermissions(permissions: readonly PermissionType[]): Promise<boolean>;
     requestPermissions(): Promise<boolean>;
     getAccounts(): Promise<SuiAddress[]>;
-    executeMoveCall: (transaction: MoveCallTransaction) => Promise<TransactionResponse>;
-    executeSerializedMoveCall: (transactionBytes: Uint8Array) => Promise<TransactionResponse>;
+    executeMoveCall: (transaction: MoveCallTransaction) => Promise<SuiTransactionResponse>;
+    executeSerializedMoveCall: (transactionBytes: Uint8Array) => Promise<SuiTransactionResponse>;
 }
 interface SuiWalletWindow {
     suiWallet: SuiWallet
@@ -32,14 +32,14 @@ export class MockWalletAdapter implements WalletCapabilities{
     getAccounts(): Promise<string[]> {
         return window.suiWallet.getAccounts();
     }
-    executeMoveCall(transaction: MoveCallTransaction): Promise<TransactionResponse> {
+    executeMoveCall(transaction: MoveCallTransaction): Promise<SuiTransactionResponse> {
         return window.suiWallet.executeMoveCall(transaction);
     }
-    executeSerializedMoveCall(transactionBytes: Uint8Array): Promise<TransactionResponse> {
+    executeSerializedMoveCall(transactionBytes: Uint8Array): Promise<SuiTransactionResponse> {
         return window.suiWallet.executeSerializedMoveCall(transactionBytes);
     }
 
-    name: string; 
+    name: string;
 
     async connect(): Promise<void> {
         this.connecting = true;

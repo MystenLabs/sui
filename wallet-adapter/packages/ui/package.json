@@ -1,5 +1,5 @@
 {
-  "name": "@mysten/wallet-adapter-ui",
+  "name": "@mysten/wallet-adapter-react-ui",
   "version": "0.0.0",
   "description": "UI for the Sui Wallet Adapter",
   "main": "lib/index.js",

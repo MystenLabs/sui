@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { MoveCallTransaction, SuiAddress, TransactionResponse } from '@mysten/sui.js';
+import { MoveCallTransaction, SuiAddress, SuiTransactionResponse } from '@mysten/sui.js';
 import { createContext, useContext } from 'react';
-import { WalletAdapter } from 'sui-base-wallet-adapter';
+import { WalletAdapter } from '@mysten/wallet-adapter-base';
 
 export interface Wallet {
     adapter: WalletAdapter;
@@ -23,9 +23,9 @@ export interface WalletContextState {
     connect(): Promise<void>;
     disconnect(): Promise<void>;
 
-    getAccounts: () => Promise<SuiAddress[]>; 
-    executeMoveCall: (transaction: MoveCallTransaction) => Promise<TransactionResponse>;
-    executeSerializedMoveCall: (transactionBytes: Uint8Array) => Promise<TransactionResponse>;
+    getAccounts: () => Promise<SuiAddress[]>;
+    executeMoveCall: (transaction: MoveCallTransaction) => Promise<SuiTransactionResponse>;
+    executeSerializedMoveCall: (transactionBytes: Uint8Array) => Promise<SuiTransactionResponse>;
 }
 
 const EMPTY_ARRAY: ReadonlyArray<never> = [];
@@ -47,10 +47,10 @@ const DEFAULT_CONTEXT = {
     getAccounts() {
         return Promise.reject(console.error(constructMissingProviderErrorMessage('get', 'getAccounts')));
     },
-    executeMoveCall(transaction: MoveCallTransaction): Promise<TransactionResponse> {
+    executeMoveCall(transaction: MoveCallTransaction): Promise<SuiTransactionResponse> {
         return Promise.reject(console.error(constructMissingProviderErrorMessage('get', 'executeMoveCall')));
     },
-    executeSerializedMoveCall(transactionBytes: Uint8Array): Promise<TransactionResponse> {
+    executeSerializedMoveCall(transactionBytes: Uint8Array): Promise<SuiTransactionResponse> {
         return Promise.reject(console.error(constructMissingProviderErrorMessage('get', 'executeSerializedMoveCall')));
     }
 } as WalletContextState;
