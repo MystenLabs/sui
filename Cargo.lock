@@ -6805,6 +6805,9 @@ name = "strum"
 version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "063e6045c0e62079840579a7e47a355ae92f60eb74daaf156fb1e84ba164e63f"
+dependencies = [
+ "strum_macros",
+]
 
 [[package]]
 name = "strum_macros"
@@ -7106,12 +7109,15 @@ dependencies = [
  "move-vm-types",
  "once_cell",
  "serde 1.0.143",
+ "strum",
+ "strum_macros",
  "sui",
  "sui-adapter",
  "sui-json-rpc-types",
  "sui-types",
  "test-utils",
  "tokio",
+ "toml",
  "workspace-hack 0.1.0",
 ]
 
