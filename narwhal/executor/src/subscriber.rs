@@ -105,7 +105,7 @@ impl Subscriber {
                     // Fetch the certificate's payload from the workers. This is done via the
                     // block_waiter component. If the batches are not available in the workers then
                     // block_waiter will do its best to sync from the other peers. Once all batches
-                    // are available, we forward the certificate o the Executor Core.
+                    // are available, we forward the certificate to the Executor Core.
                     let future = Self::wait_on_payload(
                         self.get_block_retry_policy.clone(),
                         self.store.clone(),

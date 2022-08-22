@@ -262,22 +262,18 @@ impl HeaderWaiter {
                         }
                     }
                 },
+
                 // we poll the availability of a slot to send the result to the core simultaneously
-                (Some(result), permit) = try_fut_and_permit!(waiting.try_next(), self.tx_core) => match result {
-                    Some(header) => {
-                        let _ = self.pending.remove(&header.id);
-                        for x in header.payload.keys() {
-                            let _ = self.batch_requests.remove(x);
-                        }
-                        for x in &header.parents {
-                            let _ = self.parent_requests.remove(x);
-                        }
-                        permit.send(header);
-                    },
-                    None => {
-                        // This request has been canceled.
-                    },
-                },
+                (Some(result), permit) = try_fut_and_permit!(waiting.try_next(), self.tx_core) => if let Some(header) = result {
+                    let _ = self.pending.remove(&header.id);
+                    for x in header.payload.keys() {
+                        let _ = self.batch_requests.remove(x);
+                    }
+                    for x in &header.parents {
+                        let _ = self.parent_requests.remove(x);
+                    }
+                    permit.send(header);
+                },  // This request has been canceled when result is None.
 
                 () = &mut timer => {
                     // We optimistically sent sync requests to a single node. If this timer triggers,
