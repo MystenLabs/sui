@@ -4,7 +4,6 @@
 import { Outlet } from 'react-router-dom';
 
 import Loading from '_components/loading';
-import Logo from '_components/logo';
 import { useInitializedGuard } from '_hooks';
 import PageLayout from '_pages/layout';
 
@@ -16,9 +15,6 @@ const InitializePage = () => {
         <PageLayout forceFullscreen={true}>
             <Loading loading={checkingInitialized}>
                 <div className={st.container}>
-                    <div className={st.header}>
-                        <Logo size="normal" />
-                    </div>
                     <div className={st.content}>
                         <Outlet />
                     </div>

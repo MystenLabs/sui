@@ -19,28 +19,53 @@ const WelcomePage = () => {
         <PageLayout forceFullscreen={false}>
             <Loading loading={checkingInitialized}>
                 <div className={st.container}>
-                    <BottomMenuLayout>
-                        <Content className={st.welcome}>
-                            <Logo
-                                size="bigger"
-                                className={st.suiBlue}
-                                txt={true}
-                            />
-                            <h1 className={st.title}>Welcome to Sui Wallet</h1>
-                        </Content>
-                        <div className={st.getStarted}>
-                            <Link
-                                to="/initialize/select"
-                                className={cl(st.cta, 'btn', 'primary')}
-                            >
-                                Get Started
-                                <Icon
-                                    icon={SuiIcons.ArrowLeft}
-                                    className={cl(st.arrowLeft)}
+                    <div className={st.content}>
+                        <BottomMenuLayout>
+                            <Content className={st.welcome}>
+                                <Logo
+                                    size="bigger"
+                                    className={st.suiBlue}
+                                    txt={true}
                                 />
-                            </Link>
-                        </div>
-                    </BottomMenuLayout>
+
+                                <div className={st.description}>
+                                    <h1 className={st.title}>
+                                        Welcome to Sui Wallet
+                                    </h1>
+                                    <p>
+                                        Connecting you to the decentralized web
+                                        and SUI network.
+                                    </p>
+                                    <ul className={st.features}>
+                                        <li>
+                                            <Icon icon={SuiIcons.Checkmark} />
+                                            Buy, store, send and swap tokens
+                                        </li>
+                                        <li>
+                                            <Icon icon={SuiIcons.Checkmark} />
+                                            Explore blockchain apps
+                                        </li>
+                                        <li>
+                                            <Icon icon={SuiIcons.Checkmark} />
+                                            Find the best price every time
+                                        </li>
+                                    </ul>
+                                </div>
+                            </Content>
+                            <div className={st.getStarted}>
+                                <Link
+                                    to="/initialize/select"
+                                    className={cl(st.cta, 'btn', 'primary')}
+                                >
+                                    Get Started
+                                    <Icon
+                                        icon={SuiIcons.ArrowLeft}
+                                        className={cl(st.arrowLeft)}
+                                    />
+                                </Link>
+                            </div>
+                        </BottomMenuLayout>
+                    </div>
                 </div>
             </Loading>
         </PageLayout>

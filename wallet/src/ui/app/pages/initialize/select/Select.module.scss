@@ -1,18 +1,32 @@
+@use '_values/colors';
+
 .card {
     display: flex;
     flex-flow: column nowrap;
-    border: 1px solid #90c2d866;
-    padding: 12px;
-    border-radius: 6px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e9eaeb;
+    border-radius: 10px;
+    padding: 50px;
     margin-bottom: 8px;
+    width: 340px;
+    height: 248px;
+    cursor: pointer;
 
     &:last-child() {
         margin-bottom: 0;
     }
 
+    &:hover {
+        background: #f7f8f8;
+    }
+
     .title {
         margin: 0 0 8px;
-        font-size: 16px;
+        font-size: 20px;
+        color: colors.$gray-100;
+        font-weight: 600;
+        line-height: 24px;
     }
 
     .desc {
@@ -25,4 +39,18 @@
     .action {
         align-self: flex-start;
     }
+}
+
+.selector {
+    display: flex;
+    gap: 8px;
+}
+
+.header-title {
+    text-align: center;
+    margin-bottom: 40px;
+    color: colors.$gray-100;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 36px;
 }

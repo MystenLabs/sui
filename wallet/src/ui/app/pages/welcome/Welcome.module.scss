@@ -1,4 +1,5 @@
 @use '_values/colors';
+@use '_utils';
 
 .container {
     display: flex;
@@ -6,31 +7,69 @@
     align-items: center;
     justify-content: center;
     margin: 0 auto;
+    width: 100vw;
+    height: 100%;
+}
+
+.content {
     padding-top: 25px;
     background: linear-gradient(180deg, colors.$gray-40 53%, #6fbcf098 100%);
-    width: 100vw;
-    height: 100vh;
     box-shadow: 0 0 44px #00000026;
     border-radius: 15px;
-    max-width: 360px;
-    max-height: 595px;
+    width: 360px;
+    height: 595px;
+    display: flex;
+    flex-flow: column nowrap;
+    align-items: center;
+    justify-content: center;
 }
 
 .welcome {
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
+    padding: 60px 30px 0;
 }
 
 .title {
-    margin: 35px 0;
+    margin: 30px 0;
     font-weight: 700;
     font-size: 24px;
     line-height: 80%;
+    color: colors.$gray-90;
 }
 
 .sui-blue {
     color: colors.$cta-blue;
+}
+
+.description {
+    margin: 0 auto;
+    text-align: center;
+    width: 90%;
+
+    @include utils.typography('table/text-lg');
+
+    color: colors.$gray-75;
+    line-height: 130%;
+}
+
+.features {
+    list-style: none;
+    text-align: left;
+    padding: 0;
+    padding-left: 10px;
+    margin-top: 30px;
+
+    li {
+        margin: 10px 0;
+
+        i {
+            color: colors.$success;
+            margin-right: 5px;
+            font-size: 10px;
+        }
+    }
 }
 
 .get-started {
@@ -42,6 +81,7 @@
     padding: 15px 0 25px;
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
+    margin: auto;
     margin-top: 12px;
     align-items: center;
     justify-content: stretch;
