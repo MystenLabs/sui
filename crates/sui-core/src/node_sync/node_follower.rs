@@ -298,7 +298,7 @@ where
 
     match timeout(DRAIN_RESULTS_TIMEOUT, drain_results).await {
         // a timeout is not an error for our purposes.
-        Err(_) => debug!(?peer, "timed out draining esults"),
+        Err(_) => debug!(?peer, "timed out draining results"),
         // errors from drain_results should .
         Ok(res) => res?,
     }
