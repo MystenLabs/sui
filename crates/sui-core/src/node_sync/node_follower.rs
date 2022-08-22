@@ -100,8 +100,7 @@ async fn follower_process<A, Handler>(
 
                 Some((result, start, finished)) = follower_tasks.next() => {
                     let peer = finished;
-                    let now = Instant::now();
-                    let duration = now - start;
+                    let duration = Instant::now() - start;
                     info!(?peer, ?duration, "follower task completed");
 
                     if result.is_ok() || duration > CLEAR_BACKOFF_DURATION {
