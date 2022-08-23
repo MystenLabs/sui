@@ -15,6 +15,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
+use crate::transaction_builder::TransactionBuilder;
 use rpc_types::{GetPastObjectDataResponse, SuiExecuteTransactionResponse};
 pub use sui_config::gateway;
 use sui_config::gateway::GatewayConfig;
@@ -37,8 +38,6 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::Transaction;
 use types::base_types::SequenceNumber;
 use types::messages::ExecuteTransactionRequestType;
-
-use crate::transaction_builder::TransactionBuilder;
 
 // re-export essential sui crates
 pub mod crypto;

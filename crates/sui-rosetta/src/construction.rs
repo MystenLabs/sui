@@ -4,7 +4,6 @@
 use std::sync::Arc;
 
 use axum::{Extension, Json};
-use serde_json::json;
 
 use sui_sdk::rpc_types::SuiExecuteTransactionResponse;
 use sui_types::base_types::SuiAddress;
@@ -21,10 +20,10 @@ use crate::types::{
     ConstructionMetadataRequest, ConstructionMetadataResponse, ConstructionParseRequest,
     ConstructionParseResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
     ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
-    SignatureType, SigningPayload, TransactionIdentifier, TransactionIdentifierResponse,
+    Operation, SignatureType, SigningPayload, TransactionIdentifier, TransactionIdentifierResponse,
 };
-use crate::ErrorType::InternalError;
-use crate::{ApiState, ErrorType};
+use crate::ApiState;
+use crate::ErrorType::{InternalError, MissingInput};
 
 pub async fn derive(
     Json(payload): Json<ConstructionDeriveRequest>,
@@ -44,21 +43,28 @@ pub async fn payload(
     state.checks_network_identifier(&payload.network_identifier)?;
     let action: SuiAction = payload.operations.try_into()?;
     let data = action
-        .into_data(state.get_client(payload.network_identifier.network).await?)
+        .try_into_data(state.get_client(payload.network_identifier.network).await?)
         .await?;
 
     let signer = data.signer();
     let hex_bytes = payload
-        .public_keys.into_iter().find_map(|pub_key| {
-        let key_hex = pub_key.hex_bytes.clone();
-        let address: SuiAddress = pub_key.try_into().ok()?;
-        if address == signer {
-            Some(key_hex)
-        } else {
-            None
-        }
-    })
-        .ok_or_else(|| Error::new_with_detail(ErrorType::MissingInput, json!({"input": "public keys", "cause":format!("Public key for address [{signer}] not found.")})))?;
+        .public_keys
+        .into_iter()
+        .find_map(|pub_key| {
+            let key_hex = pub_key.hex_bytes.clone();
+            let address: SuiAddress = pub_key.try_into().ok()?;
+            if address == signer {
+                Some(key_hex)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            Error::new_with_msg(
+                MissingInput,
+                format!("Public key for address [{signer}] not found.").as_str(),
+            )
+        })?;
 
     Ok(ConstructionPayloadsResponse {
         unsigned_transaction: Hex::from_bytes(&data.to_bytes()),
@@ -123,7 +129,7 @@ pub async fn preprocess(
     state.checks_network_identifier(&payload.network_identifier)?;
     let action: SuiAction = payload.operations.try_into()?;
     let data = action
-        .into_data(state.get_client(payload.network_identifier.network).await?)
+        .try_into_data(state.get_client(payload.network_identifier.network).await?)
         .await?;
 
     let signer = data.signer();
@@ -170,14 +176,14 @@ pub async fn parse(
     } else {
         TransactionData::from_signable_bytes(&payload.transaction.to_vec()?)?
     };
+    let address = data.signer();
+    let actions = SuiAction::try_from_data(&data.try_into()?)?;
 
-    let action = SuiAction::from_data(&data)?;
+    let operations = Operation::from_actions(actions);
 
     Ok(ConstructionParseResponse {
-        operations: action.try_into()?,
-        account_identifier_signers: vec![AccountIdentifier {
-            address: data.signer(),
-        }],
+        operations,
+        account_identifier_signers: vec![AccountIdentifier { address }],
         metadata: None,
     })
 }

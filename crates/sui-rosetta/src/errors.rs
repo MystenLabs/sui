@@ -1,10 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use axum::http::StatusCode;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 use std::num::TryFromIntError;
 
+use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use itertools::Itertools;
@@ -13,8 +13,11 @@ use serde::{Deserialize, Serializer};
 use serde_json::{json, Value};
 use signature::Error as SignatureError;
 use strum_macros::EnumIter;
+
 use sui_types::base_types::ObjectIDParseError;
 use sui_types::error::SuiError;
+
+use crate::types::OperationType;
 
 #[derive(Eq, PartialEq, Copy, Clone, Debug, Serialize, Deserialize, EnumIter)]
 #[serde(rename_all = "lowercase")]
@@ -31,31 +34,40 @@ pub enum ErrorType {
     SignatureError,
     SerializationError,
     UnimplementedTransactionType,
+    BlockNotFound,
+    MalformedOperationError,
 }
 
+#[derive(Debug)]
 pub struct Error {
     type_: ErrorType,
     detail: Option<Value>,
 }
 
 impl Error {
+    fn new_with_detail(type_: ErrorType, detail: Option<Value>) -> Self {
+        Self { type_, detail }
+    }
     pub fn new(type_: ErrorType) -> Self {
-        Self {
-            type_,
-            detail: None,
-        }
+        Error::new_with_detail(type_, None)
     }
-    pub fn new_with_detail(type_: ErrorType, detail: Value) -> Self {
-        Self {
-            type_,
-            detail: Some(detail),
-        }
+    pub fn missing_input(input: &str) -> Self {
+        Error::new_with_detail(ErrorType::MissingInput, Some(json!({ "input": input })))
     }
+
+    pub fn unsupported_operation(type_: OperationType) -> Self {
+        Error::new_with_detail(
+            ErrorType::UnsupportedOperation,
+            Some(json!({ "operation type": type_ })),
+        )
+    }
+
+    pub fn new_with_msg(type_: ErrorType, msg: &str) -> Self {
+        Error::new_with_detail(type_, Some(json!({ "message": msg })))
+    }
+
     pub fn new_with_cause<E: Display>(type_: ErrorType, error: E) -> Self {
-        Self {
-            type_,
-            detail: Some(json!({"cause": error.to_string()})),
-        }
+        Error::new_with_detail(type_, Some(json!({"cause": error.to_string()})))
     }
 }
 

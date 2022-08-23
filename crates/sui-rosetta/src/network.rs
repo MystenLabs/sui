@@ -8,8 +8,8 @@ use serde_json::json;
 
 use crate::errors::Error;
 use crate::types::{
-    Allow, BlockIdentifier, Case, NetworkIdentifier, NetworkListResponse, NetworkOptionsResponse,
-    NetworkRequest, NetworkStatusResponse, OperationStatus, OperationType, Peer, Version,
+    Allow, Case, NetworkIdentifier, NetworkListResponse, NetworkOptionsResponse, NetworkRequest,
+    NetworkStatusResponse, OperationStatus, OperationType, Peer, Version,
 };
 use crate::ErrorType::InternalError;
 use crate::{ApiState, ErrorType};
@@ -65,18 +65,14 @@ pub async fn status(
             })),
         })
         .collect();
+    let blocks = state.blocks(payload.network_identifier.network)?;
+    let current_block = blocks.current_block().await?;
 
     Ok(NetworkStatusResponse {
-        current_block_identifier: BlockIdentifier {
-            index: 0,
-            hash: "".to_string(),
-        },
-        current_block_timestamp: 0,
-        genesis_block_identifier: BlockIdentifier {
-            index: 0,
-            hash: "".to_string(),
-        },
-        oldest_block_identifier: None,
+        current_block_identifier: current_block.block.block_identifier,
+        current_block_timestamp: current_block.block.timestamp,
+        genesis_block_identifier: blocks.genesis_block_identifier().await?,
+        oldest_block_identifier: Some(blocks.oldest_block_identifier().await?),
         sync_status: None,
         peers,
     })
@@ -99,7 +95,12 @@ pub async fn options(
         },
         allow: Allow {
             operation_statuses: OperationStatus::iter().collect(),
-            operation_types: OperationType::iter().collect(),
+            operation_types: vec![
+                OperationType::GasBudget,
+                OperationType::TransferSUI,
+                OperationType::MergeCoins,
+                OperationType::SplitCoin,
+            ],
             errors,
             historical_balance_lookup: false,
             timestamp_start_index: None,

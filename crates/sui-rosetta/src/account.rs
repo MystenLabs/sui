@@ -4,12 +4,11 @@
 use std::sync::Arc;
 
 use axum::{Extension, Json};
-use serde_json::json;
 
 use crate::errors::Error;
 use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
-    Amount, BlockIdentifier, Coin, CoinIdentifier,
+    Amount, Coin, CoinIdentifier,
 };
 use crate::{ApiState, ErrorType};
 use sui_sdk::rpc_types::SuiData;
@@ -28,12 +27,13 @@ pub async fn balance(
     )
     .await?;
     let amount: u64 = gas_coins.iter().map(|coin| coin.value()).sum();
+
     Ok(AccountBalanceResponse {
-        block_identifier: BlockIdentifier {
-            index: 0,
-            hash: "".to_string(),
-        },
-        balances: vec![Amount::new(amount.try_into()?)],
+        block_identifier: state
+            .blocks(payload.network_identifier.network)?
+            .current_block_identifier()
+            .await?,
+        balances: vec![Amount::new(amount.into())],
     })
 }
 
@@ -54,16 +54,16 @@ pub async fn coins(
                 coin_identifier: CoinIdentifier {
                     identifier: *coin.id(),
                 },
-                amount: Amount::new(coin.value().try_into()?),
+                amount: Amount::new(coin.value().into()),
             })
         })
         .collect::<Result<_, anyhow::Error>>()?;
 
     Ok(AccountCoinsResponse {
-        block_identifier: BlockIdentifier {
-            index: 0,
-            hash: "".to_string(),
-        },
+        block_identifier: state
+            .blocks(payload.network_identifier.network)?
+            .current_block_identifier()
+            .await?,
         coins,
     })
 }
@@ -86,11 +86,9 @@ async fn get_gas_coins(client: &SuiClient, address: SuiAddress) -> Result<Vec<Ga
             .data
             .try_as_move()
             .ok_or_else(|| {
-                Error::new_with_detail(
+                Error::new_with_msg(
                     ErrorType::DataError,
-                    json!({
-                        "cause": format!("Object [{}] is not a Move object.", coin.object_id)
-                    }),
+                    format!("Object [{}] is not a Move object.", coin.object_id).as_str(),
                 )
             })?
             .deserialize()?;
