@@ -883,7 +883,7 @@ impl CheckpointStore {
         let size = transactions.transactions.len();
         info!(cp_seq=?checkpoint_sequence, ?size, "A new checkpoint proposal is created");
         debug!(
-            "Transactions included in the checkpoint: {:?}",
+            "Transactions included in the checkpoint proposal: {:?}",
             transactions.transactions
         );
 

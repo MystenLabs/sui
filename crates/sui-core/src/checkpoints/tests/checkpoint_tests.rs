@@ -809,6 +809,8 @@ fn set_get_checkpoint() {
 
 #[test]
 fn checkpoint_integration() {
+    telemetry_subscribers::init_for_testing();
+
     let mut rng = StdRng::from_seed(RNG_SEED);
     let (keys, committee) = make_committee_key(&mut rng);
     let k = keys[0].copy();
@@ -833,35 +835,39 @@ fn checkpoint_integration() {
 
     let mut next_tx_num: TxSequenceNumber = 0;
     let mut unprocessed = Vec::new();
-    let mut checkpoint_opt: Option<(CheckpointSummary, CheckpointContents)> = None;
+    let mut checkpoint_contents_opt: Option<CheckpointContents> = None;
+    const N: u64 = 7;
     while cps.get_locals().next_checkpoint < 10 {
         let old_checkpoint = cps.get_locals().next_checkpoint;
 
-        let some_fresh_transactions: Vec<_> = (0..7)
-            .map(|_| ExecutionDigests::random())
+        // Generate some fresh new transactions.
+        let some_fresh_transactions: Vec<_> = (0..N).map(|_| ExecutionDigests::random()).collect();
+
+        // Execute the newly generated transactions together with previously unprocessed ones.
+        // Assign them unique sequence numbers.
+        let to_be_batched: Vec<_> = some_fresh_transactions
+            .clone()
+            .into_iter()
             .chain(unprocessed.clone().into_iter())
             .enumerate()
             .map(|(i, d)| (i as u64 + next_tx_num, d))
             .collect();
-        next_tx_num = some_fresh_transactions
-            .iter()
-            .map(|(s, _)| s)
-            .max()
-            .unwrap()
-            + 1;
+        next_tx_num += N + unprocessed.len() as u64;
 
-        // Step 0. Add transactions to checkpoint
-        cps.handle_internal_batch(next_tx_num, &some_fresh_transactions[..])
+        // Step 0. Add transactions to batch, and hence add them to `extra_transactions` for
+        // proposal making.
+        cps.handle_internal_batch(next_tx_num, &to_be_batched[..])
             .unwrap();
 
         // If we have a previous checkpoint, now lets try to process again?
-        if let Some((summary, transactions)) = checkpoint_opt.take() {
+        if let Some(transactions) = checkpoint_contents_opt.take() {
+            let prev_digest = cps.get_prev_checkpoint_digest(old_checkpoint).unwrap();
             assert!(cps
                 .sign_new_checkpoint(
-                    summary.epoch,
-                    summary.sequence_number,
+                    committee.epoch,
+                    old_checkpoint,
                     &transactions,
-                    summary.previous_digest,
+                    prev_digest,
                     TestCausalOrderPendCertNoop,
                 )
                 .is_ok());
@@ -892,47 +898,33 @@ fn checkpoint_integration() {
         // Step 1. Make a proposal
         let initial_proposal = cps.set_proposal(committee.epoch).unwrap();
 
-        // Step 2. Continue to process transactions while a proposal is out.
-        let some_fresh_transactions: Vec<_> = (0..7)
-            .map(|_| ExecutionDigests::random())
-            .enumerate()
-            .map(|(i, d)| (i as u64 + next_tx_num, d))
-            .collect();
-        next_tx_num = some_fresh_transactions
-            .iter()
-            .map(|(s, _)| s)
-            .max()
-            .unwrap()
-            + 1;
-
-        // Step 3. Receive a Checkpoint
+        // Step 2. Receive a Checkpoint that contains unknown transactions.
         unprocessed = (0..5)
             .map(|_| ExecutionDigests::random())
             .into_iter()
-            .chain(some_fresh_transactions.iter().cloned().map(|(_, d)| d))
             .collect();
-        let transactions = CheckpointContents::new(unprocessed.clone().into_iter());
-        let next_checkpoint = cps.get_locals().next_checkpoint;
-        let summary = CheckpointSummary::new(
-            committee.epoch,
-            next_checkpoint,
-            &transactions,
-            cps.get_prev_checkpoint_digest(next_checkpoint)
-                .expect("previous checkpoint should exist"),
-        );
 
-        // Cannot register the checkpoint while there are no-executed transactions.
+        // Checkpoint contains both locally executed transactions as well as unprocessed ones.
+        let transactions = CheckpointContents::new(
+            some_fresh_transactions
+                .into_iter()
+                .chain(unprocessed.clone().into_iter()),
+        );
+        let next_checkpoint = cps.get_locals().next_checkpoint;
+
+        // Cannot register the checkpoint while there are unprocessed transactions.
+        let prev_digest = cps.get_prev_checkpoint_digest(next_checkpoint).unwrap();
         assert!(cps
             .sign_new_checkpoint(
                 committee.epoch,
-                summary.sequence_number,
+                next_checkpoint,
                 &transactions,
-                summary.previous_digest,
+                prev_digest,
                 TestCausalOrderPendCertNoop
             )
             .is_err());
 
-        checkpoint_opt = Some((summary, transactions));
+        checkpoint_contents_opt = Some(transactions);
 
         // Cannot make a checkpoint proposal before adding the unprocessed transactions
         // This returns the old proposal.
