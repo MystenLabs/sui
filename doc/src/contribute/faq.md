@@ -63,7 +63,7 @@ Yes, the token name will be SUI.
 
 ### When is the Sui Devnet/Testnet/Mainnet launching?
 
-We have launched our [Sui Devnet](../build/devnet.md) in May 2022. A Testnet is coming in a few months. 
+We have launched our [Sui Devnet](../build/devnet.md) in May 2022. A Testnet is coming soon.
 
 See our roadmap: \
 [https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap) 
@@ -71,7 +71,7 @@ See our roadmap: \
 
 ### Is there some kind of waitlist for the Testnet?
 
-No. More information is forthcoming.
+We had sign ups for Wave 1 validator registration applications and are now evaluating them.
 
 
 ## Getting involved
@@ -136,11 +136,13 @@ See the instructions to [run a Sui Fullnode](../build/fullnode.md).
 
 ### Can I run a Sui validator node?
 
+We had sign ups for Wave 1 validator registration applications and are now evaluating them.
+
 We have a public [Sui Devnet](../build/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
 
 You may also run a local, non-networked Sui node for development using the [Sui CLI client](../contribute/cli-client.md). You can interact with the nodes with either the [Sui Wallet CLI](../contribute/cli-client.md#command-line-mode) or over the [Sui RPC API](../build/json-rpc.md).
 
-Soon we will have a Testnet that allow others to operate Sui nodes, but both are on our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap). Right now, 
+Soon we will have a Testnet that allow others to operate Sui nodes; see our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap).
 
 ### What does a local node do and what are the hardware requirements to run it? How is it different from a Testnet node?
 
