@@ -67,7 +67,6 @@ export class JsonRpcProvider extends Provider {
   private wsClient: WsRpcClient;
   private wsConnectionState: ConnectionState = ConnectionState.NotConnected;
   private wsEndpoint: string;
-  private wsHeartbeat: any;
 
   private activeSubscriptions: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
 
@@ -113,16 +112,29 @@ export class JsonRpcProvider extends Provider {
           this.onSocketMessage.bind(this));
 
         console.log('websocket connection opened');
-
-        // keep socket connection alive by pinging every 15s
-        setInterval(() => {
-          this.wsClient.notify('ping').catch(() => {});
-        }, 15000);
-
         resolve();
       });
 
       this.wsClient.on('error', console.error);
+    });
+  }
+
+  private async connect(): Promise<any> {
+    if (this.wsConnectionState === ConnectionState.Connected)
+      return Promise.resolve();
+
+    this.wsClient.connect();
+    this.wsConnectionState = ConnectionState.Connecting;
+
+    return new Promise<void>((resolve, reject) => {
+      this.wsClient.once('open', () => {
+        this.wsConnectionState = ConnectionState.Connected;
+        resolve();
+      });
+      this.wsClient.once('close', () => {
+        this.wsConnectionState = ConnectionState.NotConnected;
+        reject('connection closed');
+      });
     });
   }
 
@@ -459,7 +471,7 @@ export class JsonRpcProvider extends Provider {
   ): Promise<SubscriptionId> {
     try {
       if (this.wsConnectionState != ConnectionState.Connected)
-        throw new Error('websocket not connected');
+        await this.connect();
 
       let subId = await this.wsClient.call(
         'sui_subscribeEvent',
@@ -480,7 +492,7 @@ export class JsonRpcProvider extends Provider {
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
     try {
       if (this.wsConnectionState != ConnectionState.Connected)
-        throw new Error('websocket not connected');
+        await this.connect();
 
       let response = await this.wsClient.call(
         'sui_unsubscribeEvent',
