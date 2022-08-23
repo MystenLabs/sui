@@ -97,7 +97,7 @@ export class JsonRpcProvider extends Provider {
       // WsRpcClient.socket is private, but we need it
       // to be able to access the underlying 'message' event
       (this.wsClient as any).socket.on('message',
-        this.onMessage.bind(this));
+        this.onSocketMessage.bind(this));
 
       console.log('ws connection opened');
     });
@@ -105,8 +105,8 @@ export class JsonRpcProvider extends Provider {
     this.wsClient.on('error', console.error);
   }
 
-  private onMessage(msg: JsonRpcMethodMessage<object>): void {
-    console.log('socket message received', msg);
+  private onSocketMessage(rawMessage: string): void {
+    const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
 
     const params = msg.params;
     if(isSubscriptionEvent(params)) {
