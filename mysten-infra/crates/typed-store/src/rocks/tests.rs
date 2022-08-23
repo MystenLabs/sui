@@ -234,6 +234,26 @@ fn test_iter() {
 }
 
 #[test]
+fn test_iter_reverse() {
+    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+
+    db.insert(&1, &"1".to_string()).expect("Failed to insert");
+    db.insert(&2, &"2".to_string()).expect("Failed to insert");
+    db.insert(&3, &"3".to_string()).expect("Failed to insert");
+
+    let mut iter = db.iter().skip_to_last().reverse();
+    assert_eq!(Some((3, "3".to_string())), iter.next());
+    assert_eq!(Some((2, "2".to_string())), iter.next());
+    assert_eq!(Some((1, "1".to_string())), iter.next());
+    assert_eq!(None, iter.next());
+
+    let mut iter = db.iter().skip_to(&2).unwrap().reverse();
+    assert_eq!(Some((2, "2".to_string())), iter.next());
+    assert_eq!(Some((1, "1".to_string())), iter.next());
+    assert_eq!(None, iter.next());
+}
+
+#[test]
 fn test_keys() {
     let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
 
