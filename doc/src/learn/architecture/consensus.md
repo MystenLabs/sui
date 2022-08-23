@@ -12,7 +12,7 @@ The dual name highlights that the systems split the responsibilities of:
 
 This is done in two layered modules, so Narwhal can also be used coupled with an external consensus algorithm, such as HotStuff, Istanbul BFT, or Tendermint. Narwhal is undergoing integration in the [Celo](https://www.youtube.com/watch?v=Lwheo3jhAZM) and [Sommelier](https://www.prnewswire.com/news-releases/sommelier-partners-with-mysten-labs-to-make-the-cosmos-blockchain-the-fastest-on-the-planet-301381122.html) blockchain.
 
-Narwhal and Bullshark represent the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reaches throughputs more than 130,000 transactions per second on a WAN, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
+Narwhal and Bullshark represent the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reaches throughputs more than 125,000 transactions per second with a two-second latency for a deployment of 50 parties, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
 
 The Narwhal/Bullshark approach can offer dramatic scalability benefits in the following cases:
 - a blockchain that has experimented with larger and larger blocks and has measured runaway latencies before the execution phase,
