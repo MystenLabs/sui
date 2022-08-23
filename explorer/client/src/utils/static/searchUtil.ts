@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SEARCH_CATEGORIES } from '../searchUtil';
 import latestTxData from './latest_transactions.json';
 import mockData from './mock_data.json';
 import mockOwnedObjectData from './owned_object.json';
@@ -25,6 +26,41 @@ const navigateWithUnknown = async (
     }
 };
 
+const navigateWithCategory = async (
+    input: string,
+    category: typeof SEARCH_CATEGORIES[number],
+    network: string
+): Promise<{
+    input: string;
+    category: typeof SEARCH_CATEGORIES[number];
+    result: object;
+} | null> => {
+    if ([SEARCH_CATEGORIES[0], SEARCH_CATEGORIES[1]].includes(category)) {
+        const data = await findDataFromID(input, false);
+
+        if (data?.category === category) {
+            return {
+                input: input,
+                category: category,
+                result: data,
+            };
+        }
+    } else {
+        const data = await findDataFromID(input, false);
+        const ownedObjects = await findOwnedObjectsfromID(input);
+
+        if (ownedObjects && ownedObjects.length > 0) {
+            return {
+                input: input,
+                category: category,
+                result: data,
+            };
+        }
+    }
+
+    return null;
+};
+
 const findDataFromID = (targetID: string | undefined, state: any) =>
     state?.category !== undefined
         ? state
@@ -44,6 +80,7 @@ const findTxDatafromID = (targetID: string | undefined) =>
 export {
     findDataFromID,
     navigateWithUnknown,
+    navigateWithCategory,
     findOwnedObjectsfromID,
     findTxfromID,
     findTxDatafromID,

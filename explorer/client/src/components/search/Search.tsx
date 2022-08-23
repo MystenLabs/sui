@@ -6,7 +6,11 @@ import { useNavigate } from 'react-router-dom';
 
 import { ReactComponent as SearchIcon } from '../../assets/search.svg';
 import { NetworkContext } from '../../context';
-import { navigateWithUnknown } from '../../utils/searchUtil';
+import {
+    navigateWithUnknown,
+    navigateWithCategory,
+    SEARCH_CATEGORIES,
+} from '../../utils/searchUtil';
 
 import styles from './Search.module.css';
 
@@ -16,6 +20,15 @@ function Search() {
     const navigate = useNavigate();
 
     const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
+
+    const [result, setResult] = useState<
+        | {
+              input: string;
+              category: typeof SEARCH_CATEGORIES[number];
+              result: object | null;
+          }[]
+        | null
+    >(null);
 
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
@@ -36,50 +49,75 @@ function Search() {
     );
 
     const handleTextChange = useCallback(
-        (e: React.ChangeEvent<HTMLInputElement>) =>
-            setInput(e.currentTarget.value),
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            setInput(e.currentTarget.value);
+
+            if (!e.currentTarget.value) {
+                setResult(null);
+            } else {
+                Promise.all(
+                    SEARCH_CATEGORIES.map((category) =>
+                        navigateWithCategory(e.currentTarget.value, category)
+                    )
+                ).then((res) => setResult(res));
+            }
+        },
         [setInput]
     );
 
     return (
-        <form
-            className={styles.form}
-            onSubmit={handleSubmit}
-            aria-label="search form"
-        >
-            <input
-                className={styles.searchtextdesktop}
-                id="searchText"
-                placeholder="Search by Addresses / Objects / Transactions"
-                value={input}
-                onChange={handleTextChange}
-                autoFocus
-                type="text"
-            />
-            <input
-                className={styles.searchtextmobile}
-                id="searchText"
-                placeholder="Search Anything"
-                value={input}
-                onChange={handleTextChange}
-                autoFocus
-                type="text"
-            />
-            <button
-                id="searchBtn"
-                type="submit"
-                disabled={pleaseWaitMode}
-                className={`${styles.searchbtn} ${
-                    pleaseWaitMode && styles.disabled
-                }`}
+        <>
+            <form
+                className={styles.form}
+                onSubmit={handleSubmit}
+                aria-label="search form"
             >
-                {pleaseWaitMode ? (
-                    'Please Wait'
-                ) : (
-                    <SearchIcon className={styles.searchicon} />
-                )}
-            </button>
-        </form>
+                <input
+                    className={styles.searchtextdesktop}
+                    id="searchText"
+                    placeholder="Search by Addresses / Objects / Transactions"
+                    value={input}
+                    onChange={handleTextChange}
+                    autoFocus
+                    type="text"
+                />
+                <input
+                    className={styles.searchtextmobile}
+                    id="searchText"
+                    placeholder="Search Anything"
+                    value={input}
+                    onChange={handleTextChange}
+                    autoFocus
+                    type="text"
+                />
+                <button
+                    id="searchBtn"
+                    type="submit"
+                    disabled={pleaseWaitMode}
+                    className={`${styles.searchbtn} ${
+                        pleaseWaitMode && styles.disabled
+                    }`}
+                >
+                    {pleaseWaitMode ? (
+                        'Please Wait'
+                    ) : (
+                        <SearchIcon className={styles.searchicon} />
+                    )}
+                </button>
+            </form>
+            {result && (
+                <div>
+                    {result
+                        .filter((el) => el)
+                        .map((el, index) => (
+                            <div key={index}>
+                                <h3>{el.category}</h3>
+                                <p>{el.input}</p>
+                            </div>
+                        ))}
+                </div>
+            )}
+        </>
     );
 }
 
