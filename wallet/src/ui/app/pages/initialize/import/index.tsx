@@ -3,7 +3,6 @@
 
 import { useFormik } from 'formik';
 import { useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import * as Yup from 'yup';
 
 import Button from '_app/shared/button';
@@ -76,11 +75,6 @@ const ImportPage = () => {
     );
     return (
         <>
-            <Link to="/initialize/select" className={st.back}>
-                <Icon icon={SuiIcons.ArrowLeft} className={st.backIcon} />{' '}
-                <span className={st.backText}>Back</span>
-            </Link>
-
             <h1 className={st.headerTitle}>Import wallet</h1>
             <form onSubmit={handleSubmit} noValidate autoComplete="off">
                 <textarea

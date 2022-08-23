@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useCallback, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import Button from '_app/shared/button';
 import ExternalLink from '_components/external-link';
@@ -34,11 +34,6 @@ const CreatePage = () => {
     const creatingMnemonic = useAppSelector(({ account }) => account.creating);
     return (
         <>
-            <Link to="/initialize/select" className={st.back}>
-                <Icon icon={SuiIcons.ArrowLeft} className={st.backIcon} />{' '}
-                <span className={st.backText}>Back</span>
-            </Link>
-
             <section className={st.content}>
                 <div>
                     <h1 className={st.headerTitle}>Create new wallet</h1>
