@@ -187,7 +187,6 @@ jobs:
             ${{ steps.package.outputs.BIN_SUI_FAUCET }}
             ${{ steps.package.outputs.BIN_RPC_SERVER }}
 
-
       - name: Publish binaries
         uses: softprops/action-gh-release@v1
         if: steps.is-release.outputs.IS_RELEASE
