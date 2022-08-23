@@ -38,6 +38,7 @@ const CreatePage = () => {
                 <Icon icon={SuiIcons.ArrowLeft} className={st.backIcon} />{' '}
                 <span className={st.backText}>Back</span>
             </Link>
+
             <section className={st.content}>
                 <div>
                     <h1 className={st.headerTitle}>Create new wallet</h1>

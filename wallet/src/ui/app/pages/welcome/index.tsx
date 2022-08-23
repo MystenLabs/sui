@@ -16,7 +16,7 @@ import st from './Welcome.module.scss';
 const WelcomePage = () => {
     const checkingInitialized = useInitializedGuard(false);
     return (
-        <PageLayout forceFullscreen={false}>
+        <PageLayout forceFullscreen={true}>
             <Loading loading={checkingInitialized}>
                 <div className={st.container}>
                     <div className={st.content}>

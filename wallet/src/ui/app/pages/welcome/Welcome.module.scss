@@ -1,3 +1,4 @@
+@use '_values' as val;
 @use '_values/colors';
 @use '_utils';
 
@@ -17,8 +18,8 @@
     background: linear-gradient(180deg, colors.$gray-40 53%, #6fbcf098 100%);
     box-shadow: 0 0 44px #00000026;
     border-radius: 15px;
-    width: 360px;
-    height: 595px;
+    width: val.$sizing-popup-width;
+    height: val.$sizing-popup-height;
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
