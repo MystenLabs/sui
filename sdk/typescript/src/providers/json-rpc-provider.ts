@@ -64,10 +64,9 @@ export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEvent
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
-
   private wsClient: WsRpcClient;
-  private wsEndpoint: string;
   private wsConnectionState: ConnectionState = ConnectionState.NotConnected;
+  private wsEndpoint: string;
   private wsHeartbeat: any;
 
   private activeSubscriptions: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
@@ -115,6 +114,10 @@ export class JsonRpcProvider extends Provider {
 
         console.log('websocket connection opened');
 
+        // keep socket connection alive by pinging every 15s
+        setInterval(() => {
+          this.wsClient.notify('ping').catch(() => {});
+        }, 15000);
 
         resolve();
       });
@@ -458,7 +461,7 @@ export class JsonRpcProvider extends Provider {
       if (this.wsConnectionState != ConnectionState.Connected)
         throw new Error('websocket not connected');
 
-      const subId = await this.wsClient.call(
+      let subId = await this.wsClient.call(
         'sui_subscribeEvent',
         [filter],
         30000
