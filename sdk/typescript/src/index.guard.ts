@@ -752,7 +752,8 @@ export function isSuiEventEnvelope(obj: any, _argumentName?: string): obj is Sui
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        typeof obj.timestamp === "bigint" &&
+        (isSuiMoveTypeParameterIndex(obj.timestamp) as boolean ||
+            typeof obj.timestamp === "bigint") &&
         isTransactionDigest(obj.txDigest) as boolean &&
         isSuiEvent(obj.event) as boolean
     )
