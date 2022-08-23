@@ -544,18 +544,25 @@ impl AggregateAuthenticator for BLS12377AggregateSignature {
         Ok(())
     }
 
-    fn batch_verify(
-        signatures: &[Self],
-        pks: &[&[Self::PubKey]],
+    fn batch_verify<'a>(
+        signatures: &[&Self],
+        pks: Vec<impl Iterator<Item = &'a Self::PubKey>>,
         messages: &[&[u8]],
     ) -> Result<(), signature::Error> {
         if pks.len() != messages.len() || messages.len() != signatures.len() {
             return Err(signature::Error::new());
         }
+        let mut pk_iter = pks.into_iter();
         for i in 0..signatures.len() {
             let sig = signatures[i].sig.clone();
             let mut cache = celo_bls::PublicKeyCache::new();
-            let apk = cache.aggregate(pks[i].iter().map(|pk| pk.pubkey.clone()).collect());
+            let apk = cache.aggregate(
+                pk_iter
+                    .next()
+                    .unwrap()
+                    .map(|pk| pk.pubkey.clone())
+                    .collect(),
+            );
             apk.verify(
                 messages[i],
                 &[],

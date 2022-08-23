@@ -219,8 +219,8 @@ fn verify_batch_aggregate_signature() {
         verify_batch_aggregate_signature_inputs();
 
     assert!(BLS12377AggregateSignature::batch_verify(
-        &[aggregated_signature1, aggregated_signature2],
-        &[&pubkeys1[..], &pubkeys2[..]],
+        &[&aggregated_signature1, &aggregated_signature2],
+        vec![pubkeys1.iter(), pubkeys2.iter()],
         &[&digest1[..], &digest2[..]]
     )
     .is_ok());
@@ -233,28 +233,28 @@ fn verify_batch_missing_parameters_length_mismatch() {
 
     // Fewer pubkeys than signatures
     assert!(BLS12377AggregateSignature::batch_verify(
-        &[aggregated_signature1.clone(), aggregated_signature2.clone()],
-        &[&pubkeys1[..]],
+        &[&aggregated_signature1, &aggregated_signature2],
+        vec![pubkeys1.iter()],
         &[&digest1[..], &digest2[..]]
     )
     .is_err());
     assert!(BLS12377AggregateSignature::batch_verify(
-        &[aggregated_signature1.clone(), aggregated_signature2.clone()],
-        &[&pubkeys1[..]],
+        &[&aggregated_signature1, &aggregated_signature2],
+        vec![pubkeys1.iter()],
         &[&digest1[..]]
     )
     .is_err());
 
     // Fewer messages than signatures
     assert!(BLS12377AggregateSignature::batch_verify(
-        &[aggregated_signature1.clone(), aggregated_signature2.clone()],
-        &[&pubkeys1[..], &pubkeys2[..]],
+        &[&aggregated_signature1, &aggregated_signature2],
+        vec![pubkeys1.iter(), pubkeys2.iter()],
         &[&digest1[..]]
     )
     .is_err());
     assert!(BLS12377AggregateSignature::batch_verify(
-        &[aggregated_signature1, aggregated_signature2],
-        &[&pubkeys1[..]],
+        &[&aggregated_signature1, &aggregated_signature2],
+        vec![pubkeys1.iter()],
         &[&digest1[..]]
     )
     .is_err());
@@ -267,16 +267,36 @@ fn verify_batch_missing_keys_in_batch() {
 
     // Pubkeys missing at the end
     assert!(BLS12377AggregateSignature::batch_verify(
-        &[aggregated_signature1.clone(), aggregated_signature2.clone()],
-        &[&pubkeys1[..], &pubkeys2[1..]],
+        &[&aggregated_signature1, &aggregated_signature2],
+        vec![pubkeys1.iter(), pubkeys2[1..].iter()],
         &[&digest1[..], &digest2[..]]
     )
     .is_err());
 
     // Pubkeys missing at the start
     assert!(BLS12377AggregateSignature::batch_verify(
-        &[aggregated_signature1, aggregated_signature2],
-        &[&pubkeys1[..], &pubkeys2[..pubkeys2.len() - 1]],
+        &[&aggregated_signature1, &aggregated_signature2],
+        vec![pubkeys1.iter(), pubkeys2[..pubkeys2.len() - 1].iter()],
+        &[&digest1[..], &digest2[..]]
+    )
+    .is_err());
+
+    // add an extra signature to both aggregated_signature that batch_verify takes in
+    let mut signatures1_with_extra = aggregated_signature1;
+    let kp = &keys()[0];
+    let sig = kp.sign(&digest1);
+    let res = signatures1_with_extra.add_signature(sig);
+    assert!(res.is_ok());
+
+    let mut signatures2_with_extra = aggregated_signature2;
+    let kp = &keys()[0];
+    let sig2 = kp.sign(&digest1);
+    let res = signatures2_with_extra.add_signature(sig2);
+    assert!(res.is_ok());
+
+    assert!(BLS12377AggregateSignature::batch_verify(
+        &[&signatures1_with_extra, &signatures2_with_extra],
+        vec![pubkeys1.iter()],
         &[&digest1[..], &digest2[..]]
     )
     .is_err());

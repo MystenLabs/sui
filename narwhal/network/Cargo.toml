@@ -10,7 +10,7 @@ publish = false
 async-trait = "0.1.57"
 backoff = { version = "0.4.0", features = ["tokio"] }
 bytes = "1.2.1"
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "574fb8fa17926666131b21c03cfbeb16ff9fd894" }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b" }
 futures = "0.3.23"
 multiaddr = "0.14.0"
 prometheus = "0.13.1"
