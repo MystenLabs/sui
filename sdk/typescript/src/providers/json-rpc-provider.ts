@@ -78,10 +78,15 @@ export class JsonRpcProvider extends Provider {
   constructor(public endpoint: string) {
     super();
 
-    console.log('JsonProvider constructor()')
     this.client = new JsonRpcClient(endpoint);
     this.wsEndpoint = getWebsocketUrl(endpoint);
     this.wsClient = new WsRpcClient(this.wsEndpoint, { reconnect_interval: 3000 })
+    this.setupSocket();
+  }
+
+  private setupSocket() {
+    if (this.wsConnectionState === ConnectionState.Connected)
+      return;
 
     this.wsClient.connect();
     this.wsConnectionState = ConnectionState.Connecting;
@@ -99,7 +104,7 @@ export class JsonRpcProvider extends Provider {
       (this.wsClient as any).socket.on('message',
         this.onSocketMessage.bind(this));
 
-      console.log('ws connection opened');
+      console.log('websocket connection opened');
     });
 
     this.wsClient.on('error', console.error);
@@ -107,16 +112,13 @@ export class JsonRpcProvider extends Provider {
 
   private onSocketMessage(rawMessage: string): void {
     const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
-
     const params = msg.params;
     if(isSubscriptionEvent(params)) {
-      console.log(`Sui event subscription message received`);
-
       // call any registered handler for the message's subscription
       const onMessage = this.activeSubscriptions.get(params.subscription);
       if (onMessage) {
         onMessage(params.result);
-        console.log(`call onMessage(), subscription ${params.subscription}`);
+        console.log(`called onMessage() for subscription ${params.subscription}`);
       }
     }
   }
