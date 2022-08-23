@@ -269,6 +269,37 @@ impl TransactionBuilder {
         ))
     }
 
+    pub async fn split_coin_equal(
+        &self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_count: u64,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> anyhow::Result<TransactionData> {
+        let coin = self.0.get_object(coin_object_id).await?.into_object()?;
+        let coin_object_ref = coin.reference.to_object_ref();
+        let coin: Object = coin.try_into()?;
+        let type_args = vec![coin.get_move_template_type()?];
+        let gas = self
+            .select_gas(signer, gas, gas_budget, vec![coin_object_id])
+            .await?;
+
+        Ok(TransactionData::new_move_call(
+            signer,
+            self.get_object_ref(SUI_FRAMEWORK_OBJECT_ID).await?,
+            coin::COIN_MODULE_NAME.to_owned(),
+            coin::COIN_SPLIT_N_FUNC_NAME.to_owned(),
+            type_args,
+            gas,
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_object_ref)),
+                CallArg::Pure(bcs::to_bytes(&split_count)?),
+            ],
+            gas_budget,
+        ))
+    }
+
     pub async fn merge_coins(
         &self,
         signer: SuiAddress,

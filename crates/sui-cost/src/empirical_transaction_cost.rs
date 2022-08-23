@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// This file covers running actual transactions and reporting the costs end ot end
+// This file covers running actual transactions and reporting the costs end to end
 
 use std::{collections::BTreeMap, path::PathBuf};
 
@@ -31,6 +31,7 @@ pub enum CommonTransactionCosts {
     Publish,
     MergeCoin,
     SplitCoin(usize),
+    SplitCoinEqual(usize),
     TransferWholeCoin,
     TransferPortionCoin,
     TransferWholeSuiCoin,
@@ -51,7 +52,7 @@ async fn run_common_single_writer_tx_costs(
 ) -> Result<BTreeMap<CommonTransactionCosts, SuiGasCostSummary>, anyhow::Error> {
     let mut ret = BTreeMap::new();
 
-    async fn split_n(n: u64) -> Result<SuiGasCostSummary, anyhow::Error> {
+    async fn split_n(n: u64, equal_parts: bool) -> Result<SuiGasCostSummary, anyhow::Error> {
         let (_network, mut context, address) = setup_network_and_wallet().await?;
 
         let object_refs = context
@@ -64,7 +65,12 @@ async fn run_common_single_writer_tx_costs(
         let gas = object_refs.first().unwrap().object_id;
         let coin = object_refs.get(1).unwrap().object_id;
 
-        let amt_vec = vec![1000; n as usize];
+        let amt_vec = if equal_parts {
+            None
+        } else {
+            Some(vec![1000; n as usize])
+        };
+        let count = if equal_parts { n } else { 0 };
 
         // Test with gas specified
         let resp = SuiClientCommands::SplitCoin {
@@ -72,6 +78,7 @@ async fn run_common_single_writer_tx_costs(
             gas_budget: 10000,
             coin_id: coin,
             amounts: amt_vec,
+            count,
         }
         .execute(&mut context)
         .await?;
@@ -84,8 +91,13 @@ async fn run_common_single_writer_tx_costs(
     }
 
     for i in 0..4 {
-        let gas_used = split_n(i).await?;
+        let gas_used = split_n(i, false).await?;
         ret.insert(CommonTransactionCosts::SplitCoin(i as usize), gas_used);
+    }
+
+    for i in 1..4 {
+        let gas_used = split_n(i, true).await?;
+        ret.insert(CommonTransactionCosts::SplitCoinEqual(i as usize), gas_used);
     }
 
     let (_network, mut context, address) = setup_network_and_wallet().await?;

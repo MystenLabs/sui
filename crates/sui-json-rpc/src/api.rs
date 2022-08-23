@@ -292,6 +292,22 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
+    /// Create an unsigned transaction to split a coin object into multiple equal-size coins.
+    #[method(name = "splitCoinEqual")]
+    async fn split_coin_equal(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// the coin object to be spilt
+        coin_object_id: ObjectID,
+        /// the number of coins to split into
+        split_count: u64,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
     /// Create an unsigned transaction to merge multiple coins into one coin.
     #[method(name = "mergeCoins")]
     async fn merge_coin(

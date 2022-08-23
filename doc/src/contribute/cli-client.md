@@ -774,11 +774,12 @@ sui-client-split-coin
 Split a coin object into multiple coins
 
 USAGE:
-    sui client split-coin [OPTIONS] --coin-id <COIN_ID> --amounts <AMOUNTS>... --gas-budget <GAS_BUDGET>
+    sui client split-coin [OPTIONS] --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> <--amounts <AMOUNTS>...|--count <COUNT>>
 
 OPTIONS:
-        --amounts <AMOUNTS>...       Amount to split out from the coin
+        --amounts <AMOUNTS>...       Specific amounts to split out from the coin
         --coin-id <COIN_ID>          Coin to Split, in 20 bytes Hex string
+        --count <COUNT>              Count of equal-size coins to split into
         --gas <GAS>                  ID of the gas object for gas payment, in 20 bytes Hex string If
                                      not provided, a gas object with at least gas_budget value will
                                      be selected
@@ -787,7 +788,7 @@ OPTIONS:
         --json                       Return command outputs in json format
 ```
 
-For splitting coins, you will need at lease two coins to execute the `split-coin` command,
+For splitting coins, you will need at least two coins to execute the `split-coin` command,
 one coin to split, one for the gas payment.
 
 Let us examine objects owned by address `0x08da15bee6a3f5b01edbbd402654a75421d81397`:
@@ -809,9 +810,10 @@ With output resembling:
 Showing 5 results.
 ```
 
-Here is an example of splitting coins. We are splitting out three new coins from the original coin (first one on the list above),
-with values of 1000, 5000 and 3000, respectively; note the `--amounts` argument accepts list of values.
-We use the second coin on the list to pay for this transaction.
+Here is an example of splitting coins using specific amounts. We are splitting out three new coins
+from the original coin (first one on the list above), with values of 1000, 5000 and 3000,
+respectively; note the `--amounts` argument accepts a list of values. We use the second coin on the
+list to pay for this transaction.
 
 ```shell
 $ sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --amounts 1000 5000 3000 --gas-budget 1000
@@ -854,6 +856,34 @@ Showing 8 results.
 ```
 
 From the result, we can see three new coins were created in the transaction.
+
+Here is an example of splitting coins into equal parts without needing to specify the individual
+amount for every new coin.
+
+```shell
+$ sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --count 3 --gas-budget 1000
+```
+
+You will see output resembling:
+
+```
+----- Certificate ----
+Transaction Hash: qpxpv+EySl6tkz7OZ+/h/cpOlC/q1kBepr/qrDHsg7k=
+Transaction Signature: BsuWPuG9iBnvc/cQBbpBvDsBnzLXrhxPpoblpZ7ZcTQ78X9AtPO7knOaPjEbLxEJMGpOCPTIWa0eMPpoqT/SDQ==@ZXB4tfniuC6Oir8aVtIR5C00Md/tG3WSZRNN7nDDZLs=
+Signed Authorities : [k#3adde8bfae7d338b65e7d13d4ead6b523e5271ca17b2d5eb321412257ee914a4, k#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56, k#f2e5749a5fc33d45c6f546eb9e53fabf4f17681ba6f697080de9514f4e0d6a75]
+Transaction Kind : Call
+Package ID : 0x2
+Module : coin
+Function : split_n
+Arguments : ["0x4a2853304fd2c243dae7d1ba58260bb7c40724e1", 3]
+Type Arguments : ["0x2::sui::SUI"]
+----- Split Coin Results ----
+Updated Coin : Coin { id: 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1, value: 33334 }
+New Coins : Coin { id: 0x1da8193ac29f94f8207b0222bd5941b7814c1668, value: 33333 },
+            Coin { id: 0x3653bae7851c36e0e5e827b7c1a2978ef78efd7e, value: 33333 }
+Updated Gas : Coin { id: 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4, value: 99385 }
+```
+From the result, we can see three coins with values of roughly one-third of 100000.
 
 ## Calling Move code
 
