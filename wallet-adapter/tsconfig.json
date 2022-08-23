@@ -17,14 +17,18 @@
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
-      "@mysten/wallet-adapter-react": ["packages/react-providers/src"],
-      "@mysten/wallet-adapter-ui": ["./packages/ui/src"],
+      "@mysten/wallet-adapter-react": ["./packages/react-providers/src"],
+      "@mysten/wallet-adapter-react-ui": ["./packages/ui/src"],
       "@mysten/wallet-adapter-all-wallets": [
         "./packages/adapters/integrations/all-wallets/src"
       ],
-      "@mysten/base-wallet-adapter": ["./packages/adapters/base-adapter/src"],
-      "@mysten/wallet-adapter-sui-wallet": ["./packages/adapters/integrations/sui-wallet/src"],
-      "@mysten/wallet-adapter-mock-wallet": ["./packages/adapters/integrations/mock-wallet/src"]
+      "@mysten/wallet-adapter-base": ["./packages/adapters/base-adapter/src"],
+      "@mysten/wallet-adapter-sui-wallet": [
+        "./packages/adapters/integrations/sui-wallet/src"
+      ],
+      "@mysten/wallet-adapter-mock-wallet": [
+        "./packages/adapters/integrations/mock-wallet/src"
+      ]
     }
   },
   "include": ["packages", "src"]
