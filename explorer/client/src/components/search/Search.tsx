@@ -16,6 +16,7 @@ import styles from './Search.module.css';
 function Search() {
     const navigate = useNavigate();
     const [network] = useContext(NetworkContext);
+    const [input, setInput] = useState('');
 
     const [result, setResult] = useState<
         | {
@@ -36,6 +37,7 @@ function Search() {
                 });
 
                 setResult(null);
+                setInput('');
             }
         },
         [navigate, result]
@@ -47,6 +49,7 @@ function Search() {
                 state: entry.result,
             });
             setResult(null);
+            setInput('');
         },
         [navigate]
     );
@@ -56,6 +59,7 @@ function Search() {
             if (!e.currentTarget.value) {
                 setResult(null);
             } else {
+                setInput(e.currentTarget.value);
                 Promise.all(
                     SEARCH_CATEGORIES.map((category) =>
                         navigateWithCategory(
@@ -83,6 +87,7 @@ function Search() {
                     className={styles.searchtextdesktop}
                     id="searchText"
                     placeholder="Search by Addresses / Objects / Transactions"
+                    value={input}
                     onChange={handleTextChange}
                     autoFocus
                     type="text"
@@ -91,6 +96,7 @@ function Search() {
                     className={styles.searchtextmobile}
                     id="searchText"
                     placeholder="Search Anything"
+                    value={input}
                     onChange={handleTextChange}
                     autoFocus
                     type="text"
