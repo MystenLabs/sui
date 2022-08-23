@@ -37,7 +37,7 @@ use sui_types::{
     error::{SuiError, SuiResult},
 };
 use tokio::{
-    sync::{oneshot, Mutex},
+    sync::{oneshot, Mutex, MutexGuard},
     task::JoinHandle,
     time::timeout,
 };
@@ -339,9 +339,27 @@ where
         })
     }
 
+    /// Restart the node sync process only if one currently exists.
     pub async fn respawn_node_sync_process(&self) {
+        let lock_guard = self.node_sync_process.lock().await;
+        if lock_guard.is_some() {
+            self.respawn_node_sync_process_impl(lock_guard).await
+        } else {
+            debug!("no active node sync process - not respawning");
+        }
+    }
+
+    /// Start the node sync process.
+    pub async fn spawn_node_sync_process(&self) {
+        let lock_guard = self.node_sync_process.lock().await;
+        self.respawn_node_sync_process_impl(lock_guard).await
+    }
+
+    async fn respawn_node_sync_process_impl(
+        &self,
+        mut lock_guard: MutexGuard<'_, Option<NodeSyncProcessHandle>>,
+    ) {
         info!(epoch = ?self.state.committee.load().epoch, "respawn_node_sync_process");
-        let mut lock_guard = self.node_sync_process.lock().await;
 
         if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {
             info!("sending cancel request to node sync task");
