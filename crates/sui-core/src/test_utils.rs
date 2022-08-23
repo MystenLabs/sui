@@ -8,7 +8,7 @@ use std::time::Duration;
 use crate::{
     authority::AuthorityState,
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
-    authority_client::{NetworkAuthorityClient, NetworkAuthorityClientMetrics},
+    authority_client::NetworkAuthorityClient,
     epoch::epoch_store::EpochStore,
     safe_client::SafeClientMetrics,
 };
@@ -19,6 +19,7 @@ use sui_types::{
     batch::UpdateItem,
     committee::Committee,
     messages::{BatchInfoRequest, BatchInfoResponseItem},
+    object::Object,
 };
 
 // Can't import SuiNode directly from sui_node - circular dependency
@@ -62,11 +63,7 @@ pub fn test_authority_aggregator(
         .map(|config| {
             (
                 config.public_key(),
-                NetworkAuthorityClient::connect_lazy(
-                    config.network_address(),
-                    Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
-                )
-                .unwrap(),
+                NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap(),
             )
         })
         .collect();

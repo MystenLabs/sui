@@ -48,7 +48,7 @@ impl NodeSyncStore {
     pub fn new_for_test() -> Arc<Self> {
         let working_dir = tempfile::tempdir().unwrap();
         let db_path = working_dir.path().join("sync_store");
-        Arc::new(NodeSyncStore::open_tables_read_write(db_path, None, None))
+        Arc::new(NodeSyncStore::open_tables_read_write(db_path, None))
     }
 
     pub fn store_cert(&self, cert: &CertifiedTransaction) -> SuiResult {
@@ -245,7 +245,7 @@ mod test {
         db.record_effects_vote(peer1, tx2, digest2, 1).unwrap();
         db.record_effects_vote(peer2, tx2, digest2, 2).unwrap();
 
-        db.clear_effects_votes(digest1).unwrap();
+        db.clear_effects_votes(tx1).unwrap();
         // digest1 is cleared
         assert_eq!(db.count_effects_votes(tx1, digest1).unwrap(), 0);
         // digest2 is not

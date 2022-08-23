@@ -409,7 +409,7 @@ mod test {
     fn new_sync_store() -> Arc<NodeSyncStore> {
         let working_dir = tempfile::tempdir().unwrap();
         let db_path = working_dir.path().join("sync_store");
-        Arc::new(NodeSyncStore::open_tables_read_write(db_path, None, None))
+        Arc::new(NodeSyncStore::open_tables_read_write(db_path, None))
     }
 
     #[tokio::test(flavor = "current_thread", start_paused = true)]
