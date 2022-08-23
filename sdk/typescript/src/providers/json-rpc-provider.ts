@@ -67,6 +67,7 @@ export class JsonRpcProvider extends Provider {
 
   private wsClient: WsRpcClient;
   private wsEndpoint: string;
+  private wsConnectionState: ConnectionState = ConnectionState.NotConnected;
   private wsHeartbeat: any;
 
   private activeSubscriptions: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
@@ -81,34 +82,45 @@ export class JsonRpcProvider extends Provider {
 
     this.client = new JsonRpcClient(endpoint);
     this.wsEndpoint = getWebsocketUrl(endpoint);
-    this.wsClient = new WsRpcClient(this.wsEndpoint, { reconnect_interval: 3000 })
+    this.wsClient = new WsRpcClient(this.wsEndpoint, { reconnect_interval: 3000, autoconnect: false })
     this.setupSocket();
   }
 
   private setupSocket() {
-    if (this.wsConnectionState === ConnectionState.Connected)
-      return;
+    return new Promise<void>((resolve, reject): void => {
+      if (this.wsConnectionState === ConnectionState.Connected)
+        return;
 
-    this.wsClient.connect();
-    this.wsConnectionState = ConnectionState.Connecting;
+      const timeoutId = setTimeout(() => {
+        reject('timeout');
+      }, 15000)
 
-    this.wsClient.on('open', () => {
-      this.wsConnectionState = ConnectionState.Connected;
+      this.wsClient.connect();
+      this.wsConnectionState = ConnectionState.Connecting;
 
-      this.wsClient.on('close', () => {
-        console.log('connection closed');
-        this.wsConnectionState = ConnectionState.NotConnected;
+      this.wsClient.on('open', () => {
+        clearTimeout(timeoutId);
+        this.wsConnectionState = ConnectionState.Connected;
+
+        this.wsClient.on('close', () => {
+          console.log('connection closed');
+          this.wsConnectionState = ConnectionState.NotConnected;
+          reject('connection closed');
+        });
+
+        // WsRpcClient.socket is private, but we need it
+        // to be able to access the underlying 'message' event
+        (this.wsClient as any).socket.on('message',
+          this.onSocketMessage.bind(this));
+
+        console.log('websocket connection opened');
+
+
+        resolve();
       });
 
-      // WsRpcClient.socket is private, but we need it
-      // to be able to access the underlying 'message' event
-      (this.wsClient as any).socket.on('message',
-        this.onSocketMessage.bind(this));
-
-      console.log('websocket connection opened');
+      this.wsClient.on('error', console.error);
     });
-
-    this.wsClient.on('error', console.error);
   }
 
   private onSocketMessage(rawMessage: string): void {
