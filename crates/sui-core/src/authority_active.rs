@@ -31,27 +31,33 @@
 
 use arc_swap::ArcSwap;
 use std::{collections::HashMap, ops::Deref, sync::Arc, time::Duration};
-use sui_storage::{follower_store::FollowerStore, node_sync_store::NodeSyncStore};
+use sui_storage::node_sync_store::NodeSyncStore;
 use sui_types::{
     base_types::AuthorityName,
     error::{SuiError, SuiResult},
 };
-use tokio::sync::Mutex;
-use tokio::task::JoinHandle;
-use tracing::{debug, info};
+use tokio::{
+    sync::{oneshot, Mutex},
+    task::JoinHandle,
+    time::timeout,
+};
+use tracing::{debug, info, warn};
 use typed_store::traits::DBMapTableUtil;
 
 use crate::{
     authority::AuthorityState,
     authority_aggregator::AuthorityAggregator,
     authority_client::AuthorityAPI,
-    node_sync::{NodeSyncHandle, NodeSyncState},
+    node_sync::{node_sync_process, NodeSyncHandle, NodeSyncState},
 };
+use futures::pin_mut;
 use once_cell::sync::OnceCell;
+
+use tap::TapFallible;
 
 use tokio::time::Instant;
 pub mod gossip;
-use gossip::{gossip_process, node_sync_process, GossipMetrics};
+use gossip::{gossip_process, GossipMetrics};
 
 pub mod checkpoint_driver;
 use crate::authority_active::checkpoint_driver::CheckpointMetrics;
@@ -107,13 +113,21 @@ impl AuthorityHealth {
     }
 }
 
+struct NodeSyncProcessHandle(tokio::task::JoinHandle<()>, oneshot::Sender<()>);
+
 pub struct ActiveAuthority<A> {
     // The local authority state
     pub state: Arc<AuthorityState>,
     pub node_sync_state: Arc<NodeSyncState<A>>,
+
+    // Handle that holds a channel connected to NodeSyncState, used to send sync requests
+    // into NodeSyncState.
     node_sync_handle: OnceCell<NodeSyncHandle>,
 
-    pub follower_store: Arc<FollowerStore>,
+    // JoinHandle for the tokio task that is running the NodeSyncState::start(), as well as a
+    // cancel sender which can be used to terminate that task gracefully.
+    node_sync_process: Arc<Mutex<Option<NodeSyncProcessHandle>>>,
+
     // The network interfaces to other authorities
     pub net: ArcSwap<AuthorityAggregator<A>>,
     // Network health
@@ -127,7 +141,6 @@ impl<A> ActiveAuthority<A> {
     pub fn new(
         authority: Arc<AuthorityState>,
         node_sync_store: Arc<NodeSyncStore>,
-        follower_store: Arc<FollowerStore>,
         net: AuthorityAggregator<A>,
         gossip_metrics: GossipMetrics,
     ) -> SuiResult<Self> {
@@ -152,7 +165,7 @@ impl<A> ActiveAuthority<A> {
             state: authority,
             node_sync_state,
             node_sync_handle: OnceCell::new(),
-            follower_store,
+            node_sync_process: Default::default(),
             net: ArcSwap::from(net),
             gossip_metrics,
         })
@@ -167,18 +180,12 @@ impl<A> ActiveAuthority<A> {
         net: AuthorityAggregator<A>,
     ) -> SuiResult<Self> {
         let working_dir = tempfile::tempdir().unwrap();
-        let follower_db_path = working_dir.path().join("follower_db");
         let sync_db_path = working_dir.path().join("node_sync_db");
 
-        let follower_store = Arc::new(FollowerStore::open_tables_read_write(
-            follower_db_path,
-            None,
-        ));
         let node_sync_store = Arc::new(NodeSyncStore::open_tables_read_write(sync_db_path, None));
         Self::new(
             authority,
             node_sync_store,
-            follower_store,
             net,
             GossipMetrics::new_for_tests(),
         )
@@ -249,7 +256,7 @@ impl<A> Clone for ActiveAuthority<A> {
             state: self.state.clone(),
             node_sync_state: self.node_sync_state.clone(),
             node_sync_handle: self.node_sync_handle.clone(),
-            follower_store: self.follower_store.clone(),
+            node_sync_process: self.node_sync_process.clone(),
             net: ArcSwap::from(self.net.load().clone()),
             health: self.health.clone(),
             gossip_metrics: self.gossip_metrics.clone(),
@@ -261,7 +268,7 @@ impl<A> ActiveAuthority<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    fn node_sync_handle(&self) -> NodeSyncHandle {
+    pub fn node_sync_handle(&self) -> NodeSyncHandle {
         let node_sync_state = self.node_sync_state.clone();
         self.node_sync_handle
             .get_or_init(|| NodeSyncHandle::new(node_sync_state, self.gossip_metrics.clone()))
@@ -319,16 +326,47 @@ where
         })
     }
 
-    pub async fn spawn_node_sync_process(self: Arc<Self>) -> JoinHandle<()> {
-        let committee = self.state.committee.load().deref().clone();
-        // nodes follow all validators to ensure they can eventually determine
-        // finality of certs. We need to follow 2f+1 _honest_ validators to
-        // eventually find finality, therefore we must follow all validators.
-        let target_num_tasks = committee.num_members();
+    pub async fn respawn_node_sync_process(&self) {
+        info!(epoch = ?self.state.committee.load().epoch, "respawn_node_sync_process");
+        let mut lock_guard = self.node_sync_process.lock().await;
 
-        tokio::task::spawn(async move {
-            node_sync_process(&self, target_num_tasks).await;
-        })
+        if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {
+            info!("sending cancel request to node sync task");
+            let _ = cancel_sender
+                .send(())
+                .tap_err(|_| warn!("failed to request cancellation of node sync task"));
+
+            pin_mut!(join_handle);
+
+            // try to join the task, then kill it if it doesn't cancel on its own.
+            info!("waiting node sync task to exit");
+            if timeout(Duration::from_secs(1), &mut join_handle)
+                .await
+                .is_err()
+            {
+                info!("aborting node sync task");
+                join_handle.abort();
+            }
+        }
+
+        let (cancel_sender, cancel_receiver) = oneshot::channel();
+        let aggregator = self.net();
+
+        let node_sync_handle = self.node_sync_handle();
+        let node_sync_state = self.node_sync_state.clone();
+
+        info!("spawning node sync task");
+        let join_handle = tokio::task::spawn(async move {
+            node_sync_process(
+                node_sync_handle,
+                node_sync_state,
+                aggregator,
+                cancel_receiver,
+            )
+            .await;
+        });
+
+        *lock_guard = Some(NodeSyncProcessHandle(join_handle, cancel_sender));
     }
 
     /// Spawn pending certificate execution process

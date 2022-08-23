@@ -19,7 +19,6 @@ use tracing::info;
 
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_config::utils::get_available_port;
-use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
     SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiMoveStruct, SuiMoveValue, SuiObjectRead,
 };
@@ -35,6 +34,7 @@ use sui_types::{
 use test_utils::messages::get_account_and_gas_coins;
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::setup_network_and_wallet;
+use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 
 async fn transfer_coin(
     context: &mut WalletContext,
@@ -108,6 +108,11 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let (transfered_object, _, receiver, digest) = transfer_coin(&mut context).await?;
     wait_for_tx(digest, node.state().clone()).await;
 
+    // verify that the intermediate sync data is cleared.
+    let sync_store = node.active().unwrap().node_sync_state.store();
+    assert!(sync_store.get_cert(&digest).unwrap().is_none());
+    assert!(sync_store.get_effects(&digest).unwrap().is_none());
+
     // verify that the node has seen the transfer
     let object_read = node.state().get_object_read(&transfered_object).await?;
     let object = object_read.into_object()?;
@@ -145,6 +150,7 @@ const HOUR_MS: u64 = 3_600_000;
 
 #[tokio::test]
 async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
+    telemetry_subscribers::init_for_testing();
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
