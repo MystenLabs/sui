@@ -3,14 +3,7 @@
 
 import { Coin, getObjectFields, getObjectId } from '@mysten/sui.js';
 import BN from 'bn.js';
-import React, {
-    useCallback,
-    useEffect,
-    useState,
-    useContext,
-    createContext,
-} from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useContext } from 'react';
 
 import { NetworkContext } from '../../context';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
@@ -20,7 +13,6 @@ import {
     parseObjectType,
     extractName,
 } from '../../utils/objectUtils';
-import { navigateWithUnknown } from '../../utils/searchUtil';
 import {
     findDataFromID,
     findOwnedObjectsfromID,
@@ -50,18 +42,7 @@ const OwnedObject = ({ id, byAddress }: { id: string; byAddress: boolean }) =>
         <OwnedObjectAPI id={id} byAddress={byAddress} />
     );
 
-const NavigateFunctionContext = createContext<(id: string) => () => void>(
-    (id: string) => () => {}
-);
-
 function OwnedObjectStatic({ id }: { id: string }) {
-    const navigate = useNavigate();
-
-    const navigateFn = useCallback(
-        (id: string) => () => navigateWithUnknown(id, navigate),
-        [navigate]
-    );
-
     const objects = findOwnedObjectsfromID(id);
 
     if (objects) {
@@ -79,11 +60,7 @@ function OwnedObjectStatic({ id }: { id: string }) {
             };
         });
 
-        return (
-            <NavigateFunctionContext.Provider value={navigateFn}>
-                <OwnedObjectView results={results} />
-            </NavigateFunctionContext.Provider>
-        );
+        return <OwnedObjectView results={results} />;
     } else {
         return <NoOwnedObjects />;
     }
@@ -94,11 +71,6 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
     const [isLoaded, setIsLoaded] = useState(false);
     const [isFail, setIsFail] = useState(false);
     const [network] = useContext(NetworkContext);
-    const navigate = useNavigate();
-    const navigateFn = useCallback(
-        (id: string) => () => navigateWithUnknown(id, navigate, network),
-        [navigate, network]
-    );
 
     useEffect(() => {
         setIsFail(false);
@@ -144,12 +116,7 @@ function OwnedObjectAPI({ id, byAddress }: { id: string; byAddress: boolean }) {
 
     if (isFail) return <NoOwnedObjects />;
 
-    if (isLoaded)
-        return (
-            <NavigateFunctionContext.Provider value={navigateFn}>
-                <OwnedObjectView results={results} />
-            </NavigateFunctionContext.Provider>
-        );
+    if (isLoaded) return <OwnedObjectView results={results} />;
 
     return <div className={styles.gray}>loading...</div>;
 }

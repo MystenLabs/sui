@@ -7,32 +7,13 @@ import mockData from './mock_data.json';
 import mockOwnedObjectData from './owned_object.json';
 import mockTxData from './tx_for_id.json';
 
-const navigateWithUnknown = async (
-    input: string,
-    navigate: Function,
-    network: string
-) => {
-    const data = findDataFromID(input, false);
-    const ownedObjects = findOwnedObjectsfromID(input);
-
-    if (data?.category === 'transaction') {
-        navigate(`../transactions/${input}`, { state: data });
-    } else if (data?.category === 'object') {
-        navigate(`../objects/${input}`, { state: data });
-    } else if (ownedObjects && ownedObjects.length > 0) {
-        navigate(`../addresses/${input}`, { state: data });
-    } else {
-        navigate(`../error/missing/${input}`);
-    }
-};
-
 const navigateWithCategory = async (
     input: string,
-    category: typeof SEARCH_CATEGORIES[number],
+    category: string,
     network: string
 ): Promise<{
     input: string;
-    category: typeof SEARCH_CATEGORIES[number];
+    category: string;
     result: object;
 } | null> => {
     if ([SEARCH_CATEGORIES[0], SEARCH_CATEGORIES[1]].includes(category)) {
@@ -41,7 +22,8 @@ const navigateWithCategory = async (
         if (data?.category === category) {
             return {
                 input: input,
-                category: category,
+                category:
+                    data?.category === 'object' ? 'objects' : 'transactions',
                 result: data,
             };
         }
@@ -52,7 +34,7 @@ const navigateWithCategory = async (
         if (ownedObjects && ownedObjects.length > 0) {
             return {
                 input: input,
-                category: category,
+                category: 'addresses',
                 result: data,
             };
         }
@@ -79,7 +61,6 @@ const findTxDatafromID = (targetID: string | undefined) =>
 
 export {
     findDataFromID,
-    navigateWithUnknown,
     navigateWithCategory,
     findOwnedObjectsfromID,
     findTxfromID,

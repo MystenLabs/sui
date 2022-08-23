@@ -12,25 +12,21 @@ const deduplicate = (results: [number, string][] | undefined) =>
               .filter((value, index, self) => self.indexOf(value) === index)
         : [];
 
-let navigateWithUnknown: Function;
 let navigateWithCategory: Function;
 let overrideTypeChecks = false;
 
 if (IS_STATIC_ENV) {
     import('./static/searchUtil').then((uf) => {
-        navigateWithUnknown = uf.navigateWithUnknown;
         navigateWithCategory = uf.navigateWithCategory;
         overrideTypeChecks = true;
     });
 } else {
     import('./api/searchUtil').then((uf) => {
-        navigateWithUnknown = uf.navigateWithUnknown;
-        navigateWithCategory = () => {};
+        navigateWithCategory = uf.navigateWithCategory;
     });
 }
 
 export {
-    navigateWithUnknown,
     overrideTypeChecks,
     deduplicate,
     navigateWithCategory,

@@ -7,7 +7,6 @@ import { useNavigate } from 'react-router-dom';
 import { ReactComponent as SearchIcon } from '../../assets/search.svg';
 import { NetworkContext } from '../../context';
 import {
-    navigateWithUnknown,
     navigateWithCategory,
     SEARCH_CATEGORIES,
 } from '../../utils/searchUtil';
@@ -15,11 +14,8 @@ import {
 import styles from './Search.module.css';
 
 function Search() {
-    const [input, setInput] = useState('');
-    const [network] = useContext(NetworkContext);
     const navigate = useNavigate();
-
-    const [pleaseWaitMode, setPleaseWaitMode] = useState(false);
+    const [network] = useContext(NetworkContext);
 
     const [result, setResult] = useState<
         | {
@@ -33,36 +29,47 @@ function Search() {
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
             e.preventDefault();
-            // Prevent empty search
-            if (!input.length) return;
-            setPleaseWaitMode(true);
 
-            // remove empty char from input
-            let query = input.trim();
+            if (result?.length === 1) {
+                navigate(`../${result[0].category}/${result[0].input}`, {
+                    state: result[0].result,
+                });
 
-            navigateWithUnknown(query, navigate, network).then(() => {
-                setInput('');
-                setPleaseWaitMode(false);
-            });
+                setResult(null);
+            }
         },
-        [input, navigate, setInput, network]
+        [navigate, result]
+    );
+
+    const handleOptionClick = useCallback(
+        (entry) => () => {
+            navigate(`../${entry.category}/${entry.input}`, {
+                state: entry.result,
+            });
+            setResult(null);
+        },
+        [navigate]
     );
 
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
-            setInput(e.currentTarget.value);
-
             if (!e.currentTarget.value) {
                 setResult(null);
             } else {
                 Promise.all(
                     SEARCH_CATEGORIES.map((category) =>
-                        navigateWithCategory(e.currentTarget.value, category)
+                        navigateWithCategory(
+                            e.currentTarget.value.trim(),
+                            category,
+                            network
+                        )
                     )
-                ).then((res) => setResult(res));
+                ).then((res) => {
+                    setResult(res.filter((el) => el));
+                });
             }
         },
-        [setInput]
+        [network]
     );
 
     return (
@@ -76,7 +83,6 @@ function Search() {
                     className={styles.searchtextdesktop}
                     id="searchText"
                     placeholder="Search by Addresses / Objects / Transactions"
-                    value={input}
                     onChange={handleTextChange}
                     autoFocus
                     type="text"
@@ -85,7 +91,6 @@ function Search() {
                     className={styles.searchtextmobile}
                     id="searchText"
                     placeholder="Search Anything"
-                    value={input}
                     onChange={handleTextChange}
                     autoFocus
                     type="text"
@@ -93,28 +98,19 @@ function Search() {
                 <button
                     id="searchBtn"
                     type="submit"
-                    disabled={pleaseWaitMode}
-                    className={`${styles.searchbtn} ${
-                        pleaseWaitMode && styles.disabled
-                    }`}
+                    className={styles.searchbtn}
                 >
-                    {pleaseWaitMode ? (
-                        'Please Wait'
-                    ) : (
-                        <SearchIcon className={styles.searchicon} />
-                    )}
+                    <SearchIcon className={styles.searchicon} />
                 </button>
             </form>
             {result && (
                 <div>
-                    {result
-                        .filter((el) => el)
-                        .map((el, index) => (
-                            <div key={index}>
-                                <h3>{el.category}</h3>
-                                <p>{el.input}</p>
-                            </div>
-                        ))}
+                    {result.map((el, index) => (
+                        <div key={index} onClick={handleOptionClick(el)}>
+                            <h3>{el.category}</h3>
+                            <p>{el.input}</p>
+                        </div>
+                    ))}
                 </div>
             )}
         </>

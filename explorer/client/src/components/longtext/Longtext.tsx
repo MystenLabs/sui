@@ -1,13 +1,11 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useCallback, useState, useContext } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useCallback, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { ReactComponent as ContentCopyIcon } from '../../assets/SVGIcons/Copy.svg';
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
-import { NetworkContext } from '../../context';
-import { navigateWithUnknown } from '../../utils/searchUtil';
 import ExternalLink from '../external-link/ExternalLink';
 
 import styles from './Longtext.module.css';
@@ -35,10 +33,6 @@ function Longtext({
 }) {
     const [isCopyIcon, setCopyIcon] = useState(true);
 
-    const [pleaseWait, setPleaseWait] = useState(false);
-    const [network] = useContext(NetworkContext);
-    const navigate = useNavigate();
-
     const handleCopyEvent = useCallback(() => {
         navigator.clipboard.writeText(text);
         setCopyIcon(false);
@@ -49,9 +43,7 @@ function Longtext({
     let iconButton = <></>;
 
     if (isCopyButton) {
-        if (pleaseWait) {
-            icon = <span className={styles.copied}>&#8987; Please Wait</span>;
-        } else if (isCopyIcon) {
+        if (isCopyIcon) {
             icon = (
                 <span className={styles.copy} onClick={handleCopyEvent}>
                     <ContentCopyIcon />
@@ -68,13 +60,6 @@ function Longtext({
         iconButton = <ContentForwardArrowDark />;
     }
 
-    const navigateUnknown = useCallback(() => {
-        setPleaseWait(true);
-        navigateWithUnknown(text, navigate, network).then(() =>
-            setPleaseWait(false)
-        );
-    }, [text, navigate, network]);
-
     // temporary hack to make display of the genesis transaction clearer
     if (
         category === 'transactions' &&
@@ -86,13 +71,7 @@ function Longtext({
 
     let textComponent;
     if (isLink) {
-        if (category === 'unknown') {
-            textComponent = (
-                <span className={styles.longtext} onClick={navigateUnknown}>
-                    {alttext ? alttext : text}
-                </span>
-            );
-        } else if (category === 'ethAddress') {
+        if (category === 'ethAddress') {
             textComponent = (
                 <ExternalLink
                     href={`https://etherscan.io/address/${text}`}
