@@ -496,7 +496,7 @@ pub fn generate_genesis_system_object(
     for validator in committee {
         pubkeys.push(validator.public_key());
         network_pubkeys.push(validator.network_key());
-        proof_of_possessions.push(validator.proof_of_possession());
+        proof_of_possessions.push(validator.proof_of_possession().as_ref().to_vec());
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
         names.push(validator.name().to_owned().into_bytes());
@@ -544,7 +544,9 @@ mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
     use fastcrypto::traits::KeyPair;
-    use sui_types::crypto::{get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, generate_proof_of_possession};
+    use sui_types::crypto::{
+        generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+    };
 
     #[test]
     fn roundtrip() {

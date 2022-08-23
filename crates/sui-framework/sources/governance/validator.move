@@ -77,7 +77,7 @@ module sui::validator {
         gas_price: u64,
     }
 
-    const PROOF_OF_POSSESSION_DOMAIN: vector<u8> = vector[109, 105, 122, 117];
+    const PROOF_OF_POSSESSION_DOMAIN: vector<u8> = vector[107, 111, 115, 107];
 
     public(friend) fun new(
         sui_address: address,

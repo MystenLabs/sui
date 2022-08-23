@@ -21,7 +21,7 @@ use sui_types::crypto::AuthoritySignature;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
-use sui_types::sui_serde::KeyPairBase64;
+use sui_types::sui_serde::{AuthSignature, KeyPairBase64};
 
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000;
@@ -167,12 +167,14 @@ impl ConsensusConfig {
 
 /// Publicly known information about a validator
 /// TODO read most of this from on-chain
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub name: String,
     pub public_key: AuthorityPublicKeyBytes,
     pub network_key: AccountsPublicKey,
+    #[serde_as(as = "AuthSignature")]
     pub proof_of_possession: AuthoritySignature,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,

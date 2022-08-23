@@ -11,7 +11,8 @@ use signature::Signer;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, SuiKeyPair,
+    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair,
+    AuthorityPublicKeyBytes, SuiKeyPair,
 };
 use sui_types::crypto::{KeypairTraits, Signature};
 

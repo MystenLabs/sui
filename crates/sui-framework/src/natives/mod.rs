@@ -78,7 +78,7 @@ pub fn all_natives(
         (
             "crypto",
             "ed25519_verify",
-            make_native!(crypto::ed25519_verify)
+            make_native!(crypto::ed25519_verify),
         ),
         (
             "test_scenario",

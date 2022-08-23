@@ -194,7 +194,7 @@ pub async fn create_and_register_new_validator(
             CallArg::Object(ObjectArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID)),
             CallArg::Pure(bcs::to_bytes(&new_validator.public_key()).unwrap()),
             CallArg::Pure(bcs::to_bytes(new_validator.network_key()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&new_validator.proof_of_possession()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&new_validator.proof_of_possession().as_ref()).unwrap()),
             CallArg::Pure(
                 bcs::to_bytes(format!("Validator{}", new_validator.sui_address()).as_bytes())
                     .unwrap(),

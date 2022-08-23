@@ -34,7 +34,6 @@ module sui::crypto {
     /// https://github.com/MystenLabs/narwhal/blob/5d6f6df8ccee94446ff88786c0dbbc98be7cfc09/crypto/src/secp256k1.rs
     /// 
     /// @param public_key: The public key to verify the signature against
-    ///
     /// @param hashed_msg: The hashed 32-bytes message, same as what the signature is signed against.
     /// 
     /// If the signature is valid to the pubkey and hashed message, return true. Else false.
@@ -62,7 +61,6 @@ module sui::crypto {
     /// Otherwise, return false.
     public(friend) native fun ed25519_verify(signature: vector<u8>, public_key: vector<u8>, msg: vector<u8>): bool;
 
-    
     /// @param signature: 32-byte signature that is a point on the Ed25519 elliptic curve.
     /// @param public_key: 32-byte signature that is a point on the Ed25519 elliptic curve.
     /// @param msg: The message that we test the signature against.

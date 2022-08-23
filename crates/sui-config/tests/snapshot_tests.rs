@@ -28,7 +28,8 @@ use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
 use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
+    generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+    AuthorityPublicKeyBytes,
 };
 
 #[test]

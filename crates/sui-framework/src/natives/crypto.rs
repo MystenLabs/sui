@@ -4,9 +4,10 @@ use curve25519_dalek_ng::scalar::Scalar;
 use fastcrypto::{
     bls12381::{BLS12381PublicKey, BLS12381Signature},
     bulletproofs::{BulletproofsRangeProof, PedersenCommitment},
+    ed25519::{Ed25519PublicKey, Ed25519Signature},
     secp256k1::{Secp256k1PublicKey, Secp256k1Signature},
     traits::ToFromBytes,
-    Verifier, ed25519::{Ed25519PublicKey, Ed25519Signature},
+    Verifier,
 };
 use move_binary_format::errors::PartialVMResult;
 use move_vm_runtime::native_functions::NativeContext;
@@ -327,16 +328,12 @@ pub fn ed25519_verify(
 
     let cost = legacy_empty_cost();
 
-    let signature = match <Ed25519Signature as ToFromBytes>::from_bytes(
-        &signature_bytes,
-    ) {
+    let signature = match <Ed25519Signature as ToFromBytes>::from_bytes(&signature_bytes) {
         Ok(signature) => signature,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
 
-    let public_key = match <Ed25519PublicKey as ToFromBytes>::from_bytes(
-        &public_key_bytes,
-    ) {
+    let public_key = match <Ed25519PublicKey as ToFromBytes>::from_bytes(&public_key_bytes) {
         Ok(public_key) => public_key,
         Err(_) => return Ok(NativeResult::ok(cost, smallvec![Value::bool(false)])),
     };
