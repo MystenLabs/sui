@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::block_synchronizer::handler::Handler;
-use config::Committee;
+use config::{Committee, SharedWorkerCache};
 use crypto::PublicKey;
 use fastcrypto::{Digest, Hash};
 use futures::{
@@ -120,7 +120,7 @@ type RequestKey = Vec<u8>;
 /// # use fastcrypto::Hash;
 /// # use std::env::temp_dir;
 /// # use fastcrypto::ed25519::Ed25519PublicKey;
-/// # use config::Committee;
+/// # use config::{Committee, WorkerCache, SharedWorkerCache};
 /// # use std::collections::BTreeMap;
 /// # use types::Certificate;
 /// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}};
@@ -161,6 +161,7 @@ type RequestKey = Vec<u8>;
 ///
 ///     let name = Ed25519PublicKey::default();
 ///     let committee = Committee{ epoch: 0, authorities: BTreeMap::new() };
+///     let worker_cache: SharedWorkerCache = WorkerCache{ epoch: 0, workers: BTreeMap::new() }.into();
 ///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 ///
 ///     // A dummy certificate
@@ -171,6 +172,7 @@ type RequestKey = Vec<u8>;
 ///     BlockWaiter::spawn(
 ///         name,
 ///         committee,
+///         worker_cache,
 ///         rx_reconfigure,
 ///         rx_commands,
 ///         rx_batches,
@@ -207,6 +209,9 @@ pub struct BlockWaiter<SynchronizerHandler: Handler + Send + Sync + 'static> {
 
     /// The committee information.
     committee: Committee,
+
+    /// The worker information cache.
+    worker_cache: SharedWorkerCache,
 
     /// Receive all the requests to get a block
     rx_commands: Receiver<BlockCommand>,
@@ -259,6 +264,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
+        worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_commands: Receiver<BlockCommand>,
         batch_receiver: Receiver<BatchResult>,
@@ -269,6 +275,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
             Self {
                 name,
                 committee,
+                worker_cache,
                 rx_commands,
                 pending_get_block: HashMap::new(),
                 worker_network,
@@ -746,7 +753,8 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
                 );
 
                 let worker_address = self
-                    .committee
+                    .worker_cache
+                    .load()
                     .worker(&self.name, &worker_id)
                     .expect("Worker id not found")
                     .primary_to_worker;

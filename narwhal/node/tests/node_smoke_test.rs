@@ -3,7 +3,7 @@
 
 use config::Export;
 use std::time::{Duration, Instant};
-use test_utils::{committee, keys, temp_dir};
+use test_utils::{keys, pure_committee_from_keys, shared_worker_cache_from_keys, temp_dir};
 
 const TEST_DURATION: Duration = Duration::from_secs(3);
 
@@ -18,9 +18,13 @@ fn test_primary_no_consensus() {
     let keys_file_path = format!("{config_path}/smoke_test_keys.json");
     keys[0].export(&keys_file_path).unwrap();
 
-    let committee = committee(None);
+    let committee = pure_committee_from_keys(&keys);
     let committee_file_path = format!("{config_path}/smoke_test_committee.json");
     committee.export(&committee_file_path).unwrap();
+
+    let worker_cache = shared_worker_cache_from_keys(&keys);
+    let workers_file_path = format!("{config_path}/smoke_test_workers.json");
+    worker_cache.export(&workers_file_path).unwrap();
 
     let mut child = std::process::Command::new("cargo")
         .current_dir("..")
@@ -29,6 +33,8 @@ fn test_primary_no_consensus() {
             "run",
             "--committee",
             &committee_file_path,
+            "--workers",
+            &workers_file_path,
             "--keys",
             &keys_file_path,
             "--store",
@@ -68,9 +74,13 @@ fn test_primary_with_consensus() {
     let keys_file_path = format!("{config_path}/smoke_test_keys.json");
     keys[0].export(&keys_file_path).unwrap();
 
-    let committee = committee(None);
+    let committee = pure_committee_from_keys(&keys);
     let committee_file_path = format!("{config_path}/smoke_test_committee.json");
     committee.export(&committee_file_path).unwrap();
+
+    let worker_cache = shared_worker_cache_from_keys(&keys);
+    let workers_file_path = format!("{config_path}/smoke_test_workers.json");
+    worker_cache.export(&workers_file_path).unwrap();
 
     let mut child = std::process::Command::new("cargo")
         .current_dir("..")
@@ -79,6 +89,8 @@ fn test_primary_with_consensus() {
             "run",
             "--committee",
             &committee_file_path,
+            "--workers",
+            &workers_file_path,
             "--keys",
             &keys_file_path,
             "--store",

@@ -10,7 +10,7 @@
 
 use arc_swap::ArcSwap;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
-use config::{Committee, Import, Parameters, WorkerId};
+use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
 use crypto::KeyPair;
 use executor::{SerializedTransaction, SingleExecutor, SubscriberResult};
 use eyre::Context;
@@ -49,6 +49,7 @@ async fn main() -> Result<(), eyre::Report> {
                 .about("Run a node")
                 .args_from_usage("--keys=<FILE> 'The file containing the node keys'")
                 .args_from_usage("--committee=<FILE> 'The file containing committee information'")
+                .args_from_usage("--workers=<FILE> 'The file containing worker information'")
                 .args_from_usage("--parameters=[FILE] 'The file containing the node parameters'")
                 .args_from_usage("--store=<PATH> 'The path where to create the data store'")
                 .subcommand(SubCommand::with_name("primary")
@@ -130,13 +131,17 @@ async fn main() -> Result<(), eyre::Report> {
 async fn run(matches: &ArgMatches<'_>) -> Result<(), eyre::Report> {
     let key_file = matches.value_of("keys").unwrap();
     let committee_file = matches.value_of("committee").unwrap();
+    let workers_file = matches.value_of("workers").unwrap();
     let parameters_file = matches.value_of("parameters");
     let store_path = matches.value_of("store").unwrap();
 
-    // Read the committee and node's keypair from file.
+    // Read the committee, workers and node's keypair from file.
     let keypair = KeyPair::import(key_file).context("Failed to load the node's keypair")?;
     let committee = Arc::new(ArcSwap::from_pointee(
         Committee::import(committee_file).context("Failed to load the committee information")?,
+    ));
+    let worker_cache = Arc::new(ArcSwap::from_pointee(
+        WorkerCache::import(workers_file).context("Failed to load the worker information")?,
     ));
 
     // Load default parameters if none are specified.
@@ -165,6 +170,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<(), eyre::Report> {
             Node::spawn_primary(
                 keypair,
                 committee,
+                worker_cache,
                 &store,
                 parameters.clone(),
                 /* consensus */ !sub_matches.is_present("consensus-disabled"),
@@ -193,6 +199,7 @@ async fn run(matches: &ArgMatches<'_>) -> Result<(), eyre::Report> {
                 keypair.public().clone(),
                 vec![id],
                 committee,
+                worker_cache,
                 &store,
                 parameters.clone(),
                 &registry,

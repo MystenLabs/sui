@@ -8,7 +8,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use bytes::Bytes;
-use config::{Parameters, SharedCommittee, WorkerId};
+use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use futures::{Stream, StreamExt};
 use multiaddr::{Multiaddr, Protocol};
@@ -48,6 +48,8 @@ pub struct Worker {
     id: WorkerId,
     /// The committee information.
     committee: SharedCommittee,
+    /// The worker information cache.
+    worker_cache: SharedWorkerCache,
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
@@ -61,6 +63,7 @@ impl Worker {
         name: PublicKey,
         id: WorkerId,
         committee: SharedCommittee,
+        worker_cache: SharedWorkerCache,
         parameters: Parameters,
         store: Store<BatchDigest, SerializedBatchMessage>,
         metrics: Metrics,
@@ -70,6 +73,7 @@ impl Worker {
             name: name.clone(),
             id,
             committee: committee.clone(),
+            worker_cache,
             parameters,
             store,
         };
@@ -116,10 +120,10 @@ impl Worker {
             "Worker {} successfully booted on {}",
             id,
             worker
-                .committee
+                .worker_cache
                 .load()
                 .worker(&worker.name, &worker.id)
-                .expect("Our public key or worker id is not in the committee")
+                .expect("Our public key or worker id is not in the worker cache")
                 .transactions
         );
 
@@ -144,10 +148,10 @@ impl Worker {
 
         // Receive incoming messages from our primary.
         let address = self
-            .committee
+            .worker_cache
             .load()
             .worker(&self.name, &self.id)
-            .expect("Our public key or worker id is not in the committee")
+            .expect("Our public key or worker id is not in the worker cache")
             .primary_to_worker;
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
@@ -165,6 +169,7 @@ impl Worker {
             self.name.clone(),
             self.id,
             self.committee.clone(),
+            self.worker_cache.clone(),
             self.store.clone(),
             self.parameters.gc_depth,
             self.parameters.sync_retry_delay,
@@ -203,10 +208,10 @@ impl Worker {
 
         // We first receive clients' transactions from the network.
         let address = self
-            .committee
+            .worker_cache
             .load()
             .worker(&self.name, &self.id)
-            .expect("Our public key or worker id is not in the committee")
+            .expect("Our public key or worker id is not in the worker cache")
             .transactions;
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
@@ -240,6 +245,7 @@ impl Worker {
             self.name.clone(),
             self.id,
             (*(*(*self.committee).load()).clone()).clone(),
+            self.worker_cache.clone(),
             tx_reconfigure.subscribe(),
             /* rx_message */ rx_quorum_waiter,
             /* tx_batch */ tx_client_processor,
@@ -287,10 +293,10 @@ impl Worker {
 
         // Receive incoming messages from other workers.
         let address = self
-            .committee
+            .worker_cache
             .load()
             .worker(&self.name, &self.id)
-            .expect("Our public key or worker id is not in the committee")
+            .expect("Our public key or worker id is not in the worker cache")
             .worker_to_worker;
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
@@ -314,6 +320,7 @@ impl Worker {
         let helper_handle = Helper::spawn(
             self.id,
             (*(*(*self.committee).load()).clone()).clone(),
+            self.worker_cache.clone(),
             self.store.clone(),
             tx_reconfigure.subscribe(),
             /* rx_worker_request */ rx_worker_helper,

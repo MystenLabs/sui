@@ -5,7 +5,7 @@ use crate::{
     metrics::PrimaryMetrics,
     primary::{PayloadToken, PrimaryMessage, PrimaryWorkerMessage},
 };
-use config::{Committee, WorkerId};
+use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use futures::future::{try_join_all, BoxFuture};
 use network::{LuckyNetwork, PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNetwork};
@@ -51,6 +51,8 @@ pub struct HeaderWaiter {
     name: PublicKey,
     /// The committee information.
     committee: Committee,
+    /// The worker information cache.
+    worker_cache: SharedWorkerCache,
     /// The persistent storage for parent Certificates.
     certificate_store: Store<CertificateDigest, Certificate>,
     /// The persistent storage for payload markers from workers.
@@ -98,6 +100,7 @@ impl HeaderWaiter {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
+        worker_cache: SharedWorkerCache,
         certificate_store: Store<CertificateDigest, Certificate>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_consensus_round_updates: watch::Receiver<u64>,
@@ -115,6 +118,7 @@ impl HeaderWaiter {
             Self {
                 name,
                 committee,
+                worker_cache,
                 certificate_store,
                 payload_store,
                 rx_consensus_round_updates,
@@ -206,9 +210,10 @@ impl HeaderWaiter {
                                 });
                             }
                             for (worker_id, digests) in requires_sync {
-                                let address = self.committee
+                                let address = self.worker_cache
+                                    .load()
                                     .worker(&self.name, &worker_id)
-                                    .expect("Author of valid header is not in the committee")
+                                    .expect("Author of valid header is not in the worker cache")
                                     .primary_to_worker;
 
                                 // TODO [issue #423]: This network transmission needs to be reliable: the worker may crash-recover.

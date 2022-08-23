@@ -15,6 +15,7 @@ fi
 NODE_BIN="./bin/node"
 KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/key.json"}
 COMMITTEE_PATH=${COMMITTEE_PATH:="/validators/committee.json"}
+WORKERS_PATH=${WORKERS_PATH:="/validators/workers.json"}
 PARAMETERS_PATH=${PARAMETERS_PATH:="/validators/parameters.json"}
 DATA_PATH=${DATA_PATH:="/validators"}
 
@@ -37,6 +38,7 @@ if [[ "$NODE_TYPE" = "primary" ]]; then
   $NODE_BIN $LOG_LEVEL run \
   --keys $KEYS_PATH \
   --committee $COMMITTEE_PATH \
+  --workers $WORKERS_PATH \
   --store "${DATA_PATH}/validator-$VALIDATOR_ID/db-primary" \
   --parameters $PARAMETERS_PATH \
   primary $CONSENSUS_DISABLED
@@ -46,6 +48,7 @@ elif [[ "$NODE_TYPE" = "worker" ]]; then
   $NODE_BIN $LOG_LEVEL run \
   --keys $KEYS_PATH \
   --committee $COMMITTEE_PATH \
+  --workers $WORKERS_PATH \
   --store "${DATA_PATH}/validator-$VALIDATOR_ID/db-worker-$WORKER_ID" \
   --parameters $PARAMETERS_PATH \
   worker --id $WORKER_ID

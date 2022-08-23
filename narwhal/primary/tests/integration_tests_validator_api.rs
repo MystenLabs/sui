@@ -18,9 +18,9 @@ use std::{
 };
 use store::Store;
 use test_utils::{
-    certificate, committee, committee_from_keys, fixture_batch_with_transactions,
-    fixture_header_builder, keys, make_optimal_certificates, make_optimal_signed_certificates,
-    temp_dir,
+    certificate, committee, fixture_batch_with_transactions, fixture_header_builder, keys,
+    make_optimal_certificates, make_optimal_signed_certificates, pure_committee_from_keys,
+    shared_worker_cache_from_keys, temp_dir,
 };
 use tokio::sync::watch;
 use tonic::transport::Channel;
@@ -41,10 +41,12 @@ async fn test_get_collections() {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let keypair = keys(None).pop().unwrap();
+    let mut k = keys(None);
+    let committee = pure_committee_from_keys(&k);
+    let worker_cache = shared_worker_cache_from_keys(&k);
+    let keypair = k.pop().unwrap();
     let name = keypair.public().clone();
     let signer = keypair;
-    let committee = committee(None);
 
     // Make the data store.
     let store = NodeStorage::reopen(temp_dir());
@@ -115,6 +117,7 @@ async fn test_get_collections() {
         name.clone(),
         signer,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
@@ -146,6 +149,7 @@ async fn test_get_collections() {
         name.clone(),
         worker_id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters.clone(),
         store.batch_store.clone(),
         metrics,
@@ -230,10 +234,12 @@ async fn test_remove_collections() {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let keypair = keys(None).pop().unwrap();
+    let mut k = keys(None);
+    let committee = pure_committee_from_keys(&k);
+    let worker_cache = shared_worker_cache_from_keys(&k);
+    let keypair = k.pop().unwrap();
     let name = keypair.public().clone();
     let signer = keypair;
-    let committee = committee(None);
 
     // Make the data store.
     let store = NodeStorage::reopen(temp_dir());
@@ -306,6 +312,7 @@ async fn test_remove_collections() {
         name.clone(),
         signer,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters.clone(),
         store.header_store.clone(),
         store.certificate_store.clone(),
@@ -362,6 +369,7 @@ async fn test_remove_collections() {
         name.clone(),
         worker_id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters.clone(),
         store.batch_store.clone(),
         metrics,
@@ -435,7 +443,8 @@ async fn test_remove_collections() {
 async fn test_read_causal_signed_certificates() {
     let mut k = keys(None);
 
-    let committee = committee_from_keys(&k);
+    let committee = pure_committee_from_keys(&k);
+    let worker_cache = shared_worker_cache_from_keys(&k);
 
     // Make the data store.
     let primary_store_1 = NodeStorage::reopen(temp_dir());
@@ -525,6 +534,7 @@ async fn test_read_causal_signed_certificates() {
         name_1.clone(),
         keypair_1,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
         primary_store_1.certificate_store.clone(),
@@ -563,6 +573,7 @@ async fn test_read_causal_signed_certificates() {
         name_2.clone(),
         keypair_2,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         primary_2_parameters.clone(),
         primary_store_2.header_store,
         primary_store_2.certificate_store,
@@ -632,7 +643,8 @@ async fn test_read_causal_signed_certificates() {
 #[tokio::test]
 async fn test_read_causal_unsigned_certificates() {
     let mut k = keys(None);
-    let committee = committee(None);
+    let committee = pure_committee_from_keys(&k);
+    let worker_cache = shared_worker_cache_from_keys(&k);
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -736,6 +748,7 @@ async fn test_read_causal_unsigned_certificates() {
         name_1.clone(),
         keypair_1,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         primary_1_parameters.clone(),
         primary_store_1.header_store.clone(),
         primary_store_1.certificate_store.clone(),
@@ -767,6 +780,7 @@ async fn test_read_causal_unsigned_certificates() {
         name_2.clone(),
         keypair_2,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         primary_2_parameters.clone(),
         primary_store_2.header_store,
         primary_store_2.certificate_store,
@@ -852,11 +866,12 @@ async fn test_read_causal_unsigned_certificates() {
 async fn test_get_collections_with_missing_certificates() {
     // GIVEN keys for two primary nodes
     let mut k = keys(None);
+    let committee = pure_committee_from_keys(&k);
+    let worker_cache = shared_worker_cache_from_keys(&k);
 
     let keypair_1 = k.pop().unwrap();
     let keypair_2 = k.pop().unwrap();
 
-    let committee = committee(None);
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
@@ -913,6 +928,7 @@ async fn test_get_collections_with_missing_certificates() {
         name_1.clone(),
         keypair_1,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters.clone(),
         store_primary_1.header_store,
         store_primary_1.certificate_store,
@@ -944,6 +960,7 @@ async fn test_get_collections_with_missing_certificates() {
         name_1,
         worker_id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters.clone(),
         store_primary_1.batch_store,
         metrics_1,
@@ -963,6 +980,7 @@ async fn test_get_collections_with_missing_certificates() {
         name_2.clone(),
         keypair_2,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters.clone(),
         store_primary_2.header_store,
         store_primary_2.certificate_store,
@@ -992,6 +1010,7 @@ async fn test_get_collections_with_missing_certificates() {
         name_2,
         worker_id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters.clone(),
         store_primary_2.batch_store,
         metrics_2,

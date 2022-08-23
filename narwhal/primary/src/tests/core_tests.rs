@@ -6,20 +6,20 @@ use crate::common::create_db_stores;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{
-    certificate, committee, fixture_batch_with_transactions, header, headers, keys, votes,
-    PrimaryToPrimaryMockServer,
+    certificate, fixture_batch_with_transactions, header, headers, keys, pure_committee_from_keys,
+    shared_worker_cache_from_keys, votes, PrimaryToPrimaryMockServer,
 };
 use types::{Header, Vote};
 
 #[tokio::test]
 async fn process_header() {
     let mut keys = keys(None);
+    let committee = pure_committee_from_keys(&keys);
+    let worker_cache = shared_worker_cache_from_keys(&keys);
     let _ = keys.pop().unwrap(); // Skip the header' author.
     let kp = keys.pop().unwrap();
     let name = kp.public().clone();
     let mut signature_service = SignatureService::new(kp);
-
-    let committee = committee(None);
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -63,6 +63,7 @@ async fn process_header() {
     let _core_handle = Core::spawn(
         name,
         committee.clone(),
+        worker_cache,
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -108,11 +109,14 @@ async fn process_header() {
 
 #[tokio::test]
 async fn process_header_missing_parent() {
-    let kp = keys(None).pop().unwrap();
+    let mut k = keys(None);
+    let committee = pure_committee_from_keys(&k);
+    let worker_cache = shared_worker_cache_from_keys(&k);
+    let kp = k.pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
-    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
+    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
     let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
@@ -129,7 +133,7 @@ async fn process_header_missing_parent() {
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name.clone(),
-        &committee(None),
+        &committee,
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
@@ -142,7 +146,8 @@ async fn process_header_missing_parent() {
     // Spawn the core.
     let _core_handle = Core::spawn(
         name.clone(),
-        committee(None),
+        committee.clone(),
+        worker_cache,
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -184,11 +189,14 @@ async fn process_header_missing_parent() {
 
 #[tokio::test]
 async fn process_header_missing_payload() {
-    let kp = keys(None).pop().unwrap();
+    let mut k = keys(None);
+    let committee = pure_committee_from_keys(&k);
+    let worker_cache = shared_worker_cache_from_keys(&k);
+    let kp = k.pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
-    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
+    let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
     let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(1);
@@ -205,7 +213,7 @@ async fn process_header_missing_payload() {
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name.clone(),
-        &committee(None),
+        &committee,
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
@@ -218,7 +226,8 @@ async fn process_header_missing_payload() {
     // Spawn the core.
     let _core_handle = Core::spawn(
         name.clone(),
-        committee(None),
+        committee.clone(),
+        worker_cache,
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -249,7 +258,7 @@ async fn process_header_missing_payload() {
         .round(1)
         .epoch(0)
         .parents(
-            Certificate::genesis(&committee(None))
+            Certificate::genesis(&committee)
                 .iter()
                 .map(|x| x.digest())
                 .collect(),
@@ -270,11 +279,12 @@ async fn process_header_missing_payload() {
 
 #[tokio::test]
 async fn process_votes() {
-    let kp = keys(None).pop().unwrap();
+    let mut k = keys(None);
+    let committee = pure_committee_from_keys(&k);
+    let worker_cache = shared_worker_cache_from_keys(&k);
+    let kp = k.pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
-
-    let committee = committee(None);
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -308,6 +318,7 @@ async fn process_votes() {
     let _core_handle = Core::spawn(
         name.clone(),
         committee.clone(),
+        worker_cache,
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -366,12 +377,15 @@ async fn process_votes() {
 
 #[tokio::test]
 async fn process_certificates() {
-    let kp = keys(None).pop().unwrap();
+    let mut k = keys(None);
+    let committee = pure_committee_from_keys(&k);
+    let worker_cache = shared_worker_cache_from_keys(&k);
+    let kp = k.pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
     let (_tx_reconfigure, rx_reconfigure) =
-        watch::channel(ReconfigureNotification::NewEpoch(committee(None)));
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
     let (tx_sync_certificates, _rx_sync_certificates) = test_utils::test_channel!(1);
     let (tx_primary_messages, rx_primary_messages) = test_utils::test_channel!(3);
@@ -388,7 +402,7 @@ async fn process_certificates() {
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
         name.clone(),
-        &committee(None),
+        &committee,
         certificates_store.clone(),
         payload_store.clone(),
         /* tx_header_waiter */ tx_sync_headers,
@@ -401,7 +415,8 @@ async fn process_certificates() {
     // Spawn the core.
     let _core_handle = Core::spawn(
         name,
-        committee(None),
+        committee.clone(),
+        worker_cache,
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,
@@ -468,12 +483,12 @@ async fn process_certificates() {
 #[tokio::test]
 async fn shutdown_core() {
     let mut keys = keys(None);
+    let committee = pure_committee_from_keys(&keys);
+    let worker_cache = shared_worker_cache_from_keys(&keys);
     let _ = keys.pop().unwrap(); // Skip the header' author.
     let kp = keys.pop().unwrap();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
-
-    let committee = committee(None);
 
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -505,6 +520,7 @@ async fn shutdown_core() {
     let handle = Core::spawn(
         name,
         committee.clone(),
+        worker_cache,
         header_store,
         certificates_store,
         synchronizer,
@@ -530,15 +546,17 @@ async fn shutdown_core() {
 
 #[tokio::test]
 async fn reconfigure_core() {
-    let mut keys = keys(None);
-    let _ = keys.pop().unwrap(); // Skip the header' author.
-    let kp = keys.pop().unwrap();
+    let mut keys_0 = keys(None);
+    let committee = pure_committee_from_keys(&keys_0);
+    let worker_cache = shared_worker_cache_from_keys(&keys_0);
+    let _ = keys_0.pop().unwrap(); // Skip the header' author.
+    let kp = keys_0.pop().unwrap();
     let name = kp.public().clone();
     let mut signature_service = SignatureService::new(kp);
 
-    // Make the current and new committee.
-    let committee = committee(None);
-    let mut new_committee = test_utils::committee(None);
+    // Make the new committee & worker cache
+    let keys_1 = keys(None);
+    let mut new_committee = pure_committee_from_keys(&keys_1);
     new_committee.epoch = 1;
 
     // All the channels to interface with the core.
@@ -583,6 +601,7 @@ async fn reconfigure_core() {
     let _core_handle = Core::spawn(
         name,
         committee.clone(),
+        worker_cache,
         header_store.clone(),
         certificates_store.clone(),
         synchronizer,

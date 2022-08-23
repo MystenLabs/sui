@@ -16,7 +16,7 @@ async fn test_restore_from_disk() {
     // nodes logs.
     let _guard = setup_tracing();
 
-    let mut cluster = Cluster::new(None, None, true);
+    let mut cluster = Cluster::new(None, None, None, true);
 
     // start the cluster
     cluster.start(Some(4), Some(1), None).await;
@@ -24,8 +24,8 @@ async fn test_restore_from_disk() {
     let id = 0;
     let name = cluster.authority(0).name;
 
-    let committee = &cluster.committee_shared;
-    let address = committee.load().worker(&name, &id).unwrap().transactions;
+    let worker_cache = &cluster.worker_cache_shared;
+    let address = worker_cache.load().worker(&name, &id).unwrap().transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let mut client = TransactionsClient::new(channel);
@@ -106,7 +106,7 @@ async fn test_read_causal_signed_certificates() {
     // nodes logs.
     let _guard = setup_tracing();
 
-    let mut cluster = Cluster::new(None, None, true);
+    let mut cluster = Cluster::new(None, None, None, true);
 
     // start the cluster
     cluster.start(Some(4), Some(1), None).await;

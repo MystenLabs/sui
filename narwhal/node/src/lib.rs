@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Parameters, SharedCommittee, WorkerId};
+use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use consensus::{
     bullshark::Bullshark,
     dag::Dag,
@@ -117,6 +117,8 @@ impl Node {
         keypair: KeyPair,
         // The committee information.
         committee: SharedCommittee,
+        // The worker information cache.
+        worker_cache: SharedWorkerCache,
         // The node's storage.
         store: &NodeStorage,
         // The configuration parameters.
@@ -214,6 +216,7 @@ impl Node {
             name.clone(),
             keypair,
             committee.clone(),
+            worker_cache.clone(),
             parameters.clone(),
             store.header_store.clone(),
             store.certificate_store.clone(),
@@ -318,6 +321,8 @@ impl Node {
         ids: Vec<WorkerId>,
         // The committee information.
         committee: SharedCommittee,
+        // The worker information cache.
+        worker_cache: SharedWorkerCache,
         // The node's storage,
         store: &NodeStorage,
         // The configuration parameters.
@@ -334,6 +339,7 @@ impl Node {
                 name.clone(),
                 id,
                 committee.clone(),
+                worker_cache.clone(),
                 parameters.clone(),
                 store.batch_store.clone(),
                 metrics.clone(),

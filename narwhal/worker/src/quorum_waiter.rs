@@ -1,7 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, Stake, WorkerId};
+use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::{CancelOnDropHandler, MessageResult, ReliableNetwork, WorkerNetwork};
@@ -24,6 +24,8 @@ pub struct QuorumWaiter {
     id: WorkerId,
     /// The committee information.
     committee: Committee,
+    /// The worker information cache.
+    worker_cache: SharedWorkerCache,
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input Channel to receive commands.
@@ -41,6 +43,7 @@ impl QuorumWaiter {
         name: PublicKey,
         id: WorkerId,
         committee: Committee,
+        worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_message: Receiver<Batch>,
         tx_batch: Sender<Vec<u8>>,
@@ -51,6 +54,7 @@ impl QuorumWaiter {
                 name,
                 id,
                 committee,
+                worker_cache,
                 rx_reconfigure,
                 rx_message,
                 tx_batch,
@@ -74,7 +78,8 @@ impl QuorumWaiter {
                 Some(batch) = self.rx_message.recv() => {
                     // Broadcast the batch to the other workers.
                     let workers_addresses: Vec<_> = self
-                        .committee
+                        .worker_cache
+                        .load()
                         .others_workers(&self.name, &self.id)
                         .into_iter()
                         .map(|(name, addresses)| (name, addresses.worker_to_worker))

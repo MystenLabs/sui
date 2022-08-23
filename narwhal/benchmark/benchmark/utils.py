@@ -34,6 +34,10 @@ class PathMaker:
         return '.committee.json'
 
     @staticmethod
+    def workers_file():
+        return '.workers.json'
+
+    @staticmethod
     def parameters_file():
         return '.parameters.json'
 

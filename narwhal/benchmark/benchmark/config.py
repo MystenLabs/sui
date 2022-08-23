@@ -21,6 +21,118 @@ class Key:
         return cls(data['name'], data['secret'])
 
 
+class WorkerCache:
+    ''' The worker cache looks as follows:
+        "workers: {
+            "name": {
+                "0": {
+                    "primary_to_worker": x.x.x.x:x,
+                    "worker_to_worker": x.x.x.x:x,
+                    "transactions": x.x.x.x:x
+                },
+                ...
+            }
+            ...
+        },
+    '''
+
+    def __init__(self, addresses, base_port):
+        ''' The `addresses` field looks as follows:
+            {
+                "name": ["host", "host", ...],
+                ...
+            }
+        '''
+        assert isinstance(addresses, OrderedDict)
+        assert all(isinstance(x, str) for x in addresses.keys())
+        assert all(
+            isinstance(x, list) and len(x) >= 1 for x in addresses.values()
+        )
+        assert all(
+            isinstance(x, str) for y in addresses.values() for x in y
+        )
+        assert len({len(x) for x in addresses.values()}) == 1
+        assert isinstance(base_port, int) and base_port > 1024
+
+        port = base_port
+        self.json = {'workers': OrderedDict(), 'epoch': 0}
+        for name, hosts in addresses.items():
+            workers_addr = OrderedDict()
+            for j, host in enumerate(hosts):
+                hosts.pop(0)
+                workers_addr[j] = {
+                    'primary_to_worker': f'/ip4/{host}/tcp/{port}/http',
+                    'transactions': f'/ip4/{host}/tcp/{port + 1}/http',
+                    'worker_to_worker': f'/ip4/{host}/tcp/{port + 2}/http',
+                }
+                port += 3
+
+            self.json['workers'][name] = workers_addr
+
+    def workers_addresses(self, faults=0):
+        ''' Returns an ordered list of list of workers' addresses. '''
+        assert faults < self.size()
+        addresses = []
+        good_nodes = self.size() - faults
+        for worker_index in list(self.json['workers'].values())[:good_nodes]:
+            worker_addresses = []
+            for id, worker in worker_index.items():
+                worker_addresses += [(id,
+                                      multiaddr_to_url_data(worker['transactions']))]
+            addresses.append(worker_addresses)
+        return addresses
+
+    def workers(self):
+        ''' Returns the total number of workers (all authorities altogether). '''
+        return sum(len(x.keys()) for x in self.json['workers'].values())
+
+    def size(self):
+        ''' Returns the number of workers. '''
+        return len(self.json['workers'])
+
+    def remove_nodes(self, nodes):
+        ''' remove the `nodes` last nodes from the worker cache. '''
+        assert nodes < self.size()
+        for _ in range(nodes):
+            self.json['workers'].popitem()
+
+    def ips(self, name=None):
+        ''' Returns all the ips associated with an workers (in any order). '''
+        if name is None:
+            names = list(self.json['workers'].keys())
+        else:
+            names = [name]
+
+        ips = set()
+        for name in names:
+            for worker in self.json['workers'][name].values():
+                ips.add(self.ip(worker['primary_to_worker']))
+                ips.add(self.ip(worker['worker_to_worker']))
+                ips.add(self.ip(worker['transactions']))
+        return ips
+
+    def print(self, filename):
+        assert isinstance(filename, str)
+        with open(filename, 'w') as f:
+            dump(self.json, f, indent=4, sort_keys=True)
+
+    @staticmethod
+    def ip(multi_address):
+        address = multiaddr_to_url_data(multi_address)
+        assert isinstance(address, str)
+        return address.split(':')[1].strip("/")
+
+
+class LocalWorkerCache(WorkerCache):
+    def __init__(self, names, port, workers):
+        assert isinstance(names, list)
+        assert all(isinstance(x, str) for x in names)
+        assert isinstance(port, int)
+        assert isinstance(workers, int) and workers > 0
+        addresses = OrderedDict((x, ['127.0.0.1']*(1+workers)) for x in names)
+        super().__init__(addresses, port)
+
+
 class Committee:
     ''' The committee looks as follows:
         "authorities: {
@@ -30,14 +142,6 @@ class Committee:
                     "primary_to_primary": x.x.x.x:x,
                     "worker_to_primary": x.x.x.x:x,
                 },
-                "workers": {
-                    "0": {
-                        "primary_to_worker": x.x.x.x:x,
-                        "worker_to_worker": x.x.x.x:x,
-                        "transactions": x.x.x.x:x
-                    },
-                    ...
-                }
             },
             ...
         }
@@ -53,7 +157,7 @@ class Committee:
         assert isinstance(addresses, OrderedDict)
         assert all(isinstance(x, str) for x in addresses.keys())
         assert all(
-            isinstance(x, list) and len(x) > 1 for x in addresses.values()
+            isinstance(x, list) and len(x) >= 1 for x in addresses.values()
         )
         assert all(
             isinstance(x, str) for y in addresses.values() for x in y
@@ -71,19 +175,9 @@ class Committee:
             }
             port += 2
 
-            workers_addr = OrderedDict()
-            for j, host in enumerate(hosts):
-                workers_addr[j] = {
-                    'primary_to_worker': f'/ip4/{host}/tcp/{port}/http',
-                    'transactions': f'/ip4/{host}/tcp/{port + 1}/http',
-                    'worker_to_worker': f'/ip4/{host}/tcp/{port + 2}/http',
-                }
-                port += 3
-
             self.json['authorities'][name] = {
                 'stake': 1,
-                'primary': primary_addr,
-                'workers': workers_addr
+                'primary': primary_addr
             }
 
     def primary_addresses(self, faults=0):
@@ -94,19 +188,6 @@ class Committee:
         for authority in list(self.json['authorities'].values())[:good_nodes]:
             addresses += [multiaddr_to_url_data(
                 authority['primary']['primary_to_primary'])]
-        return addresses
-
-    def workers_addresses(self, faults=0):
-        ''' Returns an ordered list of list of workers' addresses. '''
-        assert faults < self.size()
-        addresses = []
-        good_nodes = self.size() - faults
-        for authority in list(self.json['authorities'].values())[:good_nodes]:
-            authority_addresses = []
-            for id, worker in authority['workers'].items():
-                authority_addresses += [(id,
-                                         multiaddr_to_url_data(worker['transactions']))]
-            addresses.append(authority_addresses)
         return addresses
 
     def ips(self, name=None):
@@ -122,12 +203,7 @@ class Committee:
             ips.add(self.ip(addresses['primary_to_primary']))
             ips.add(self.ip(addresses['worker_to_primary']))
 
-            for worker in self.json['authorities'][name]['workers'].values():
-                ips.add(self.ip(worker['primary_to_worker']))
-                ips.add(self.ip(worker['worker_to_worker']))
-                ips.add(self.ip(worker['transactions']))
-
-        return list(ips)
+        return ips
 
     def remove_nodes(self, nodes):
         ''' remove the `nodes` last nodes from the committee. '''
@@ -139,10 +215,6 @@ class Committee:
         ''' Returns the number of authorities. '''
         return len(self.json['authorities'])
 
-    def workers(self):
-        ''' Returns the total number of workers (all authorities altogether). '''
-        return sum(len(x['workers']) for x in self.json['authorities'].values())
-
     def print(self, filename):
         assert isinstance(filename, str)
         with open(filename, 'w') as f:
@@ -152,16 +224,15 @@ class Committee:
     def ip(multi_address):
         address = multiaddr_to_url_data(multi_address)
         assert isinstance(address, str)
-        return address.split(':')[0]
+        return address.split(':')[1].strip("/")
 
 
 class LocalCommittee(Committee):
-    def __init__(self, names, port, workers):
+    def __init__(self, names, port):
         assert isinstance(names, list)
         assert all(isinstance(x, str) for x in names)
         assert isinstance(port, int)
-        assert isinstance(workers, int) and workers > 0
-        addresses = OrderedDict((x, ['127.0.0.1']*(1+workers)) for x in names)
+        addresses = OrderedDict((x, ['127.0.0.1']) for x in names)
         super().__init__(addresses, port)
 
 

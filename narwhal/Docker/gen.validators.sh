@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -e
 
-# number of primary+worker instances to start.
-num=$1
+# number of primary instances to start.
+num_primary=$1
 
-if [ -z "${num}" ]; then
+# number of worker instances per primary to start.
+num_worker=$2
+
+if [ -z "${num_primary}" ]; then
     echo usage: $0 number_of_instances
     exit 1
 fi
@@ -16,10 +19,10 @@ fi
 
 node=../target/release/node
 
-target=validators-${num}
+target=validators-${num_primary}
 mkdir -p $target
 
-./scripts/gen.compose.py -n ${num} -t templates/node.template > ${target}/docker-compose.yaml
+./scripts/gen.compose.py -np ${num_primary} -t templates/node.template > ${target}/docker-compose.yaml
 
 # loki config
 cat > ${target}/loki-config.yaml <<EOF
@@ -90,7 +93,7 @@ scrape_configs:
           __path__: /validators/validator-*/logs/log-*.txt
 EOF
 
-t=$(($num - 1))
+t=$(($num_primary - 1))
 for i in $(seq -f %02g 0 ${t})
 do
     val=${target}/validator-${i}
@@ -100,12 +103,13 @@ done
 
 cp validators/parameters.json ${target}/parameters.json
 
-./scripts/gen.committee.py -n ${num} -d ${target} > ${target}/committee.json
+./scripts/gen.committee.py -n ${num_primary} -d ${target} > ${target}/committee.json
+./scripts/gen.workers.py -np ${num_primary} -nw ${num_worker} -d ${target} > ${target}/workers.json
 
 cp -r templates/{grafana,prometheus} ${target}/
 
 # add the primary and worker nodes to the prometheus.yaml scrape configs.
-t=$(($num - 1))
+t=$(($num_primary - 1))
 for i in $(seq -f %02g 0 ${t})
 do
     scrape_primary="primary_${i}:8010"

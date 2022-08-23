@@ -2,12 +2,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::primary::PrimaryWorkerMessage;
-use config::SharedCommittee;
+use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
 use crypto::PublicKey;
 use network::{PrimaryToWorkerNetwork, UnreliableNetwork};
+use std::collections::BTreeMap;
 use std::sync::Arc;
+use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::info;
+use tracing::{info, warn};
 use types::{metered_channel::Receiver, Certificate, ReconfigureNotification, Round};
 
 /// Receives the highest round reached by consensus and update it for all tasks.
@@ -16,6 +18,8 @@ pub struct StateHandler {
     name: PublicKey,
     /// The committee information.
     committee: SharedCommittee,
+    /// The worker information cache.
+    worker_cache: SharedWorkerCache,
     /// Receives the ordered certificates from consensus.
     rx_consensus: Receiver<Certificate>,
     /// Signals a new consensus round
@@ -35,6 +39,7 @@ impl StateHandler {
     pub fn spawn(
         name: PublicKey,
         committee: SharedCommittee,
+        worker_cache: SharedWorkerCache,
         rx_consensus: Receiver<Certificate>,
         tx_consensus_round_updates: watch::Sender<u64>,
         rx_reconfigure: Receiver<ReconfigureNotification>,
@@ -44,6 +49,7 @@ impl StateHandler {
             Self {
                 name,
                 committee,
+                worker_cache,
                 rx_consensus,
                 tx_consensus_round_updates,
                 rx_reconfigure,
@@ -68,10 +74,10 @@ impl StateHandler {
 
             // Trigger cleanup on the workers..
             let addresses = self
-                .committee
+                .worker_cache
                 .load()
                 .our_workers(&self.name)
-                .expect("Our public key or worker id is not in the committee")
+                .expect("Our public key or worker id is not in the worker cache")
                 .into_iter()
                 .map(|x| x.primary_to_worker)
                 .collect();
@@ -97,7 +103,24 @@ impl StateHandler {
                     let shutdown = match &message {
                         ReconfigureNotification::NewEpoch(committee) => {
                             // Cleanup the network.
-                            self.worker_network.cleanup(self.committee.load().network_diff(committee));
+                            self.worker_network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
+
+                            // Update the worker cache.
+                            self.worker_cache.swap(Arc::new(WorkerCache {
+                                epoch: committee.epoch,
+                                workers: committee.keys().iter().map(|key|
+                                    (
+                                        (*key).clone(),
+                                        self.worker_cache
+                                            .load()
+                                            .workers
+                                            .get(key)
+                                            .tap_none(||
+                                                warn!("Worker cache does not have a key for the new committee member"))
+                                            .unwrap_or(&WorkerIndex(BTreeMap::new()))
+                                            .clone()
+                                    )).collect(),
+                            }));
 
                             // Update the committee.
                             self.committee.swap(Arc::new(committee.clone()));
@@ -110,7 +133,24 @@ impl StateHandler {
                         },
                         ReconfigureNotification::UpdateCommittee(committee) => {
                             // Cleanup the network.
-                            self.worker_network.cleanup(self.committee.load().network_diff(committee));
+                            self.worker_network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
+
+                            // Update the worker cache.
+                            self.worker_cache.swap(Arc::new(WorkerCache {
+                                epoch: committee.epoch,
+                                workers: committee.keys().iter().map(|key|
+                                    (
+                                        (*key).clone(),
+                                        self.worker_cache
+                                            .load()
+                                            .workers
+                                            .get(key)
+                                            .tap_none(||
+                                                warn!("Worker cache does not have a key for the new committee member"))
+                                            .unwrap_or(&WorkerIndex(BTreeMap::new()))
+                                            .clone()
+                                    )).collect(),
+                            }));
 
                             // Update the committee.
                             self.committee.swap(Arc::new(committee.clone()));

@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use blake2::digest::Update;
-use config::Committee;
+use config::{Committee, SharedWorkerCache};
 use crypto::PublicKey;
 use fastcrypto::{Digest, Hash};
 use std::fmt::{Display, Formatter};
@@ -91,6 +91,7 @@ impl CertificatesResponse {
     pub fn validate_certificates(
         &self,
         committee: &Committee,
+        worker_cache: SharedWorkerCache,
     ) -> Result<Vec<Certificate>, CertificatesResponseError> {
         let peer_found_certs: Vec<Certificate> = self
             .certificates
@@ -111,7 +112,7 @@ impl CertificatesResponse {
             .clone()
             .into_iter()
             .filter(|c| {
-                if let Err(err) = c.verify(committee) {
+                if let Err(err) = c.verify(committee, worker_cache.clone()) {
                     error!(
                         "Certificate verification failed for id {} with error {:?}",
                         c.digest(),

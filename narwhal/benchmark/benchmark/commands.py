@@ -19,7 +19,8 @@ class CommandMaker:
     @staticmethod
     def compile(mem_profiling):
         if mem_profiling:
-            params = ["--profile", "bench-profiling", "--features", "benchmark dhat-heap"]
+            params = ["--profile", "bench-profiling",
+                      "--features", "benchmark dhat-heap"]
         else:
             params = ["--release", "--features", "benchmark"]
         return ["cargo", "build", "--quiet"] + params
@@ -30,34 +31,40 @@ class CommandMaker:
         return f'./node generate_keys --filename {filename}'
 
     @staticmethod
-    def run_primary(keys, committee, store, parameters, debug=False):
+    def run_primary(keys, committee, workers, store, parameters, debug=False):
         assert isinstance(keys, str)
         assert isinstance(committee, str)
+        assert isinstance(workers, str)
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
         return (f'./node {v} run --keys {keys} --committee {committee} '
-                f'--store {store} --parameters {parameters} primary')
+                f'--workers {workers} --store {store} --parameters {parameters} '
+                f'primary')
 
     @staticmethod
-    def run_no_consensus_primary(keys, committee, store, parameters, debug=False):
+    def run_no_consensus_primary(keys, committee, workers, store, parameters, debug=False):
         assert isinstance(keys, str)
         assert isinstance(committee, str)
+        assert isinstance(workers, str)
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
         return (f'./node {v} run --keys {keys} --committee {committee} '
-                f'--store {store} --parameters {parameters} primary --consensus-disabled')
+                f'--workers {workers} --store {store} --parameters {parameters} '
+                f'primary --consensus-disabled')
 
     @staticmethod
-    def run_worker(keys, committee, store, parameters, id, debug=False):
+    def run_worker(keys, committee, workers, store, parameters, id, debug=False):
         assert isinstance(keys, str)
         assert isinstance(committee, str)
+        assert isinstance(workers, str)
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
         return (f'./node {v} run --keys {keys} --committee {committee} '
-                f'--store {store} --parameters {parameters} worker --id {id}')
+                f'--workers {workers} --store {store} --parameters {parameters} '
+                f'worker --id {id}')
 
     @staticmethod
     def run_client(address, size, rate, nodes):

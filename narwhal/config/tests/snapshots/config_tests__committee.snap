@@ -9,28 +9,6 @@ expression: committee
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/1/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/2/http"
-      },
-      "workers": {
-        "0": {
-          "transactions": "/ip4/127.0.0.1/tcp/4/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/5/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/3/http"
-        },
-        "1": {
-          "transactions": "/ip4/127.0.0.1/tcp/7/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/8/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/6/http"
-        },
-        "2": {
-          "transactions": "/ip4/127.0.0.1/tcp/10/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/11/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/9/http"
-        },
-        "3": {
-          "transactions": "/ip4/127.0.0.1/tcp/13/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/14/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/12/http"
-        }
       }
     },
     "rvP0pLjsod/DQzYb+OQ2vULeklnAS4MU644gVN1ugqs=": {
@@ -38,28 +16,6 @@ expression: committee
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/1/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/2/http"
-      },
-      "workers": {
-        "0": {
-          "transactions": "/ip4/127.0.0.1/tcp/4/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/5/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/3/http"
-        },
-        "1": {
-          "transactions": "/ip4/127.0.0.1/tcp/7/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/8/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/6/http"
-        },
-        "2": {
-          "transactions": "/ip4/127.0.0.1/tcp/10/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/11/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/9/http"
-        },
-        "3": {
-          "transactions": "/ip4/127.0.0.1/tcp/13/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/14/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/12/http"
-        }
       }
     },
     "ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=": {
@@ -67,28 +23,6 @@ expression: committee
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/1/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/2/http"
-      },
-      "workers": {
-        "0": {
-          "transactions": "/ip4/127.0.0.1/tcp/4/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/5/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/3/http"
-        },
-        "1": {
-          "transactions": "/ip4/127.0.0.1/tcp/7/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/8/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/6/http"
-        },
-        "2": {
-          "transactions": "/ip4/127.0.0.1/tcp/10/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/11/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/9/http"
-        },
-        "3": {
-          "transactions": "/ip4/127.0.0.1/tcp/13/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/14/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/12/http"
-        }
       }
     },
     "zGIzLjS7LVzWn2Dvuyo2y5FsfrRYMB6jZjbE27ASvYg=": {
@@ -96,28 +30,6 @@ expression: committee
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/1/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/2/http"
-      },
-      "workers": {
-        "0": {
-          "transactions": "/ip4/127.0.0.1/tcp/4/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/5/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/3/http"
-        },
-        "1": {
-          "transactions": "/ip4/127.0.0.1/tcp/7/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/8/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/6/http"
-        },
-        "2": {
-          "transactions": "/ip4/127.0.0.1/tcp/10/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/11/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/9/http"
-        },
-        "3": {
-          "transactions": "/ip4/127.0.0.1/tcp/13/http",
-          "worker_to_worker": "/ip4/127.0.0.1/tcp/14/http",
-          "primary_to_worker": "/ip4/127.0.0.1/tcp/12/http"
-        }
       }
     }
   },

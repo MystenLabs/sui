@@ -2,11 +2,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use fastcrypto::traits::KeyPair;
 use store::rocks;
 use test_utils::{
-    batch, committee, digest_batch, keys, serialize_batch_message, temp_dir,
-    WorkerToWorkerMockServer,
+    batch, digest_batch, resolve_name_committee_and_worker_cache, serialize_batch_message,
+    temp_dir, WorkerToWorkerMockServer,
 };
 use tokio::sync::mpsc::channel;
 use types::BatchDigest;
@@ -15,9 +14,8 @@ use types::BatchDigest;
 async fn worker_batch_reply() {
     let (tx_worker_request, rx_worker_request) = test_utils::test_channel!(1);
     let (_tx_client_request, rx_client_request) = test_utils::test_channel!(1);
-    let requestor = keys(None).pop().unwrap().public().clone();
+    let (requestor, committee, worker_cache) = resolve_name_committee_and_worker_cache();
     let id = 0;
-    let committee = committee(None).clone();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
@@ -40,6 +38,7 @@ async fn worker_batch_reply() {
     let _helper_handle = Helper::spawn(
         id,
         committee.clone(),
+        worker_cache.clone(),
         store,
         rx_reconfiguration,
         rx_worker_request,
@@ -48,7 +47,11 @@ async fn worker_batch_reply() {
     );
 
     // Spawn a listener to receive the batch reply.
-    let address = committee.worker(&requestor, &id).unwrap().worker_to_worker;
+    let address = worker_cache
+        .load()
+        .worker(&requestor, &id)
+        .unwrap()
+        .worker_to_worker;
     let expected = Bytes::from(serialized_batch.clone());
     let mut handle = WorkerToWorkerMockServer::spawn(address);
 
@@ -65,7 +68,7 @@ async fn client_batch_reply() {
     let (_tx_worker_request, rx_worker_request) = test_utils::test_channel!(1);
     let (tx_client_request, rx_client_request) = test_utils::test_channel!(1);
     let id = 0;
-    let committee = committee(None).clone();
+    let (_, committee, worker_cache) = resolve_name_committee_and_worker_cache();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
@@ -88,6 +91,7 @@ async fn client_batch_reply() {
     let _helper_handler = Helper::spawn(
         id,
         committee.clone(),
+        worker_cache.clone(),
         store,
         rx_reconfiguration,
         rx_worker_request,

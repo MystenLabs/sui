@@ -8,7 +8,7 @@ from time import sleep
 
 from benchmark.commands import CommandMaker
 from benchmark.logs import ParseError, LogGrpcParser
-from benchmark.config import Key, LocalCommittee, NodeParameters, BenchParameters, ConfigError
+from benchmark.config import Key, LocalCommittee, LocalWorkerCache, NodeParameters, BenchParameters, ConfigError
 from benchmark.utils import Print, BenchError, PathMaker
 
 
@@ -59,10 +59,10 @@ class Demo:
             sleep(0.5)  # Removing the store may take time.
 
             # Recompile the latest code.
-            cmd = CommandMaker.compile(False)
+            cmd = CommandMaker.compile(mem_profiling=self.mem_profile)
             subprocess.run(cmd, check=True, cwd=PathMaker.node_crate_path())
             # Recompile the latest code.
-            cmd = CommandMaker.compile(False)
+            cmd = CommandMaker.compile(mem_profiling=self.mem_profile)
             subprocess.run(cmd, check=True,
                            cwd=PathMaker.examples_crate_path())
 
@@ -82,14 +82,19 @@ class Demo:
                 keys += [Key.from_file(filename)]
 
             names = [x.name for x in keys]
-            committee = LocalCommittee(names, self.BASE_PORT, self.workers)
+            committee = LocalCommittee(names, self.BASE_PORT)
             committee.print(PathMaker.committee_file())
+
+            # 2 ports used per authority so add 2 * num authorities to base port
+            worker_cache = LocalWorkerCache(
+                names, self.BASE_PORT + (2 * len(names)), self.workers)
+            worker_cache.print(PathMaker.workers_file())
 
             self.node_parameters.print(PathMaker.parameters_file())
 
             # Run the clients (they will wait for the nodes to be ready).
-            workers_addresses = committee.workers_addresses(self.faults)
-            rate_share = ceil(rate / committee.workers())
+            workers_addresses = worker_cache.workers_addresses(self.faults)
+            rate_share = ceil(rate / worker_cache.workers())
             for i, addresses in enumerate(workers_addresses):
                 for (id, address) in addresses:
                     cmd = CommandMaker.run_client(
@@ -106,6 +111,7 @@ class Demo:
                 cmd = CommandMaker.run_no_consensus_primary(
                     PathMaker.key_file(i),
                     PathMaker.committee_file(),
+                    PathMaker.workers_file(),
                     PathMaker.db_path(i),
                     PathMaker.parameters_file(),
                     debug=debug
@@ -119,6 +125,7 @@ class Demo:
                     cmd = CommandMaker.run_worker(
                         PathMaker.key_file(i),
                         PathMaker.committee_file(),
+                        PathMaker.workers_file(),
                         PathMaker.db_path(i, id),
                         PathMaker.parameters_file(),
                         id,  # The worker's id.

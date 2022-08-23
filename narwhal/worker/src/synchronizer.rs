@@ -2,23 +2,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::WorkerMetrics;
-use config::{SharedCommittee, WorkerId};
+use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
 use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::{LuckyNetwork, UnreliableNetwork, WorkerNetwork};
 use primary::PrimaryWorkerMessage;
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use store::{Store, StoreError};
+use tap::TapOptional;
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
-use tracing::{debug, error};
+use tracing::{debug, error, warn};
 use types::{
     metered_channel::{Receiver, Sender},
     BatchDigest, ReconfigureNotification, Round, SerializedBatchMessage, WorkerMessage,
@@ -40,6 +41,8 @@ pub struct Synchronizer {
     id: WorkerId,
     /// The committee information.
     committee: SharedCommittee,
+    /// The worker information cache.
+    worker_cache: SharedWorkerCache,
     // The persistent storage.
     store: Store<BatchDigest, SerializedBatchMessage>,
     /// The depth of the garbage collection.
@@ -73,6 +76,7 @@ impl Synchronizer {
         name: PublicKey,
         id: WorkerId,
         committee: SharedCommittee,
+        worker_cache: SharedWorkerCache,
         store: Store<BatchDigest, SerializedBatchMessage>,
         gc_depth: Round,
         sync_retry_delay: Duration,
@@ -88,6 +92,7 @@ impl Synchronizer {
                 name,
                 id,
                 committee,
+                worker_cache,
                 store,
                 gc_depth,
                 sync_retry_delay,
@@ -170,7 +175,7 @@ impl Synchronizer {
 
                         // Send sync request to a single node. If this fails, we will send it
                         // to other nodes when a timer times out.
-                        let address = match self.committee.load().worker(&target, &self.id) {
+                        let address = match self.worker_cache.load().worker(&target, &self.id) {
                             Ok(address) => address.worker_to_worker,
                             Err(e) => {
                                 error!("The primary asked us to sync with an unknown node: {e}");
@@ -204,8 +209,25 @@ impl Synchronizer {
                         // Reconfigure this task and update the shared committee.
                         let shutdown = match &message {
                             ReconfigureNotification::NewEpoch(new_committee) => {
-                                self.network.cleanup(self.committee.load().network_diff(new_committee));
+                                self.network.cleanup(self.worker_cache.load().network_diff(new_committee.keys()));
                                 self.committee.swap(Arc::new(new_committee.clone()));
+
+                                // Update the worker cache.
+                                self.worker_cache.swap(Arc::new(WorkerCache {
+                                    epoch: new_committee.epoch,
+                                    workers: new_committee.keys().iter().map(|key|
+                                        (
+                                            (*key).clone(),
+                                            self.worker_cache
+                                                .load()
+                                                .workers
+                                                .get(key)
+                                                .tap_none(||
+                                                    warn!("Worker cache does not have a key for the new committee member"))
+                                                .unwrap_or(&WorkerIndex(BTreeMap::new()))
+                                                .clone()
+                                        )).collect(),
+                                }));
 
                                 self.pending.clear();
                                 self.round = 0;
@@ -215,8 +237,25 @@ impl Synchronizer {
                                 false
                             }
                             ReconfigureNotification::UpdateCommittee(new_committee) => {
-                                self.network.cleanup(self.committee.load().network_diff(new_committee));
+                                self.network.cleanup(self.worker_cache.load().network_diff(new_committee.keys()));
                                 self.committee.swap(Arc::new(new_committee.clone()));
+
+                                // Update the worker cache.
+                                self.worker_cache.swap(Arc::new(WorkerCache {
+                                    epoch: new_committee.epoch,
+                                    workers: new_committee.keys().iter().map(|key|
+                                        (
+                                            (*key).clone(),
+                                            self.worker_cache
+                                                .load()
+                                                .workers
+                                                .get(key)
+                                                .tap_none(||
+                                                    warn!("Worker cache does not have a key for the new committee member"))
+                                                .unwrap_or(&WorkerIndex(BTreeMap::new()))
+                                                .clone()
+                                        )).collect(),
+                                }));
 
                                 tracing::debug!("Committee updated to {}", self.committee);
                                 false
@@ -274,7 +313,7 @@ impl Synchronizer {
                         }
                     }
                     if !retry.is_empty() {
-                        let addresses = self.committee.load()
+                        let addresses = self.worker_cache.load()
                             .others_workers(&self.name, &self.id)
                             .into_iter()
                             .map(|(_, address)| address.worker_to_worker)

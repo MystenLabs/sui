@@ -4,11 +4,6 @@ Authority:
     - stake: U32
     - primary:
         TYPENAME: PrimaryAddresses
-    - workers:
-        MAP:
-          KEY: U32
-          VALUE:
-            TYPENAME: WorkerInfo
 Batch:
   NEWTYPESTRUCT:
     SEQ:
@@ -109,6 +104,12 @@ ReconfigureNotification:
           TYPENAME: Committee
     2:
       Shutdown: UNIT
+WorkerIndex:
+  NEWTYPESTRUCT:
+    MAP:
+      KEY: U32
+      VALUE:
+        TYPENAME: WorkerInfo
 WorkerInfo:
   STRUCT:
     - transactions: BYTES

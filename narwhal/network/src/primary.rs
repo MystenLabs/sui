@@ -193,6 +193,7 @@ impl PrimaryToWorkerNetwork {
     where
         I: IntoIterator<Item = &'a Multiaddr>,
     {
+        // TODO: Add protection for primary owned worker addresses (issue#840).
         for address in to_remove {
             self.clients.remove(address);
         }

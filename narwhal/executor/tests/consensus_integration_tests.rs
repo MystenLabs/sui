@@ -11,7 +11,7 @@ async fn test_internal_consensus_output() {
     // nodes logs.
     let _guard = setup_tracing();
 
-    let mut cluster = Cluster::new(None, None, true);
+    let mut cluster = Cluster::new(None, None, None, true);
 
     // start the cluster
     cluster.start(Some(4), Some(1), None).await;

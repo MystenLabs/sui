@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{Node, NodeStorage};
 use arc_swap::ArcSwap;
-use config::{Committee, Parameters};
+use config::{Committee, Parameters, SharedWorkerCache};
 use crypto::KeyPair;
 use executor::BatchExecutionState;
 use fastcrypto::traits::KeyPair as _;
@@ -21,6 +21,7 @@ impl NodeRestarter {
     pub async fn watch<State>(
         keypair: KeyPair,
         committee: &Committee,
+        worker_cache: SharedWorkerCache,
         storage_base_path: PathBuf,
         execution_state: Arc<State>,
         parameters: Parameters,
@@ -51,6 +52,7 @@ impl NodeRestarter {
             let primary_handles = Node::spawn_primary(
                 keypair,
                 Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+                worker_cache.clone(),
                 &store,
                 parameters.clone(),
                 /* consensus */ true,
@@ -64,6 +66,7 @@ impl NodeRestarter {
                 name.clone(),
                 /* worker_ids */ vec![0],
                 Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
+                worker_cache.clone(),
                 &store,
                 parameters.clone(),
                 registry,
@@ -87,9 +90,10 @@ impl NodeRestarter {
             let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::Shutdown);
             let primary_cancel_handle = primary_network.send(address, &message).await;
 
-            let addresses = committee
+            let addresses = worker_cache
+                .load()
                 .our_workers(&name)
-                .expect("Our key is not in the committee")
+                .expect("Our key is not in the worker cache")
                 .into_iter()
                 .map(|x| x.primary_to_worker)
                 .collect();

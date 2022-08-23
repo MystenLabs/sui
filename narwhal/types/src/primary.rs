@@ -7,7 +7,7 @@ use crate::{
 };
 use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
-use config::{Committee, Epoch, WorkerId, WorkerInfo};
+use config::{Committee, Epoch, SharedWorkerCache, WorkerId, WorkerInfo};
 use crypto::PublicKey;
 use crypto::Signature;
 use dag::node_dag::Affiliated;
@@ -20,7 +20,7 @@ use indexmap::IndexMap;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashSet},
     fmt,
     fmt::Formatter,
 };
@@ -144,7 +144,7 @@ impl Header {
         }
     }
 
-    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch == committee.epoch(),
@@ -166,7 +166,8 @@ impl Header {
 
         // Ensure all worker ids are correct.
         for worker_id in self.payload.values() {
-            committee
+            worker_cache
+                .load()
                 .worker(&self.author, worker_id)
                 .map_err(|_| DagError::MalformedHeader(self.id))?;
         }
@@ -380,7 +381,7 @@ impl Certificate {
             .collect()
     }
 
-    pub fn verify(&self, committee: &Committee) -> DagResult<()> {
+    pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
             self.epoch() == committee.epoch(),
@@ -396,7 +397,7 @@ impl Certificate {
         }
 
         // Check the embedded header.
-        self.header.verify(committee)?;
+        self.header.verify(committee, worker_cache)?;
 
         // Ensure the certificate has a quorum.
         let mut weight = 0;
@@ -663,5 +664,5 @@ pub enum WorkerPrimaryError {
 #[derive(Clone, Serialize, Deserialize, Eq, PartialEq, Debug)]
 pub struct WorkerInfoResponse {
     /// Map of workers' id and their network addresses.
-    pub workers: HashMap<WorkerId, WorkerInfo>,
+    pub workers: BTreeMap<WorkerId, WorkerInfo>,
 }

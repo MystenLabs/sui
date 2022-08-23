@@ -16,13 +16,13 @@ First, you must install:
 * [Docker](https://docs.docker.com/get-docker/)
 * [Docker-compose](https://docs.docker.com/compose/install/)
 
-Afterward, you will start the Narwhal cluster. 
+Afterward, you will start the Narwhal cluster.
 
 First, **make sure that you are on the `Docker folder`** . In the rest of the
 document, we'll assume that we are under this folder:
 ```
 $ cd Docker     # Change to Docker directory
-$ pwd           # Print the current directory 
+$ pwd           # Print the current directory
 narwhal/Docker
 ```
 
@@ -32,7 +32,7 @@ $ docker-compose -f docker-compose.yml up
 ```
 
 The first time this runs, `docker-compose` will build the Narwhal docker image. (This can take a few minutes
-since the narwhal node binary needs to be built from the source code.) And then it will spin up 
+since the narwhal node binary needs to be built from the source code.) And then it will spin up
 a cluster for *four nodes* by doing the necessary setup for `primary` and `worker` nodes. Each
 `primary` node will be connected to *one worker* node.
 
@@ -80,7 +80,7 @@ for the primary nodes, and that allows interaction with the node (ex. the consen
 The gRPC server for a primary node is running on port `8000`. However, by default, a container's port
 is not accessible to hit by the host (local) machine unless it's exported a mapping between a host's
 machine port and the corresponding container's port (ex. for someone to use a gRPC client on their
-computer to hit a primary's node container gRPC server). The [docker-compose.yml](docker-compose.yml) file 
+computer to hit a primary's node container gRPC server). The [docker-compose.yml](docker-compose.yml) file
 exports the gRPC port for each primary node so they can be accessible from the host machine.
 
 For the default setup of *four primary* nodes, the gRPC servers are listening to the following
@@ -128,7 +128,7 @@ Here is the Docker folder structure:
 ```
 
 Under the `validators` folder find the independent configuration
-folder for each validator node. (Remember, each `validator` is 
+folder for each validator node. (Remember, each `validator` is
 constituted from one `primary` node and several `worker` nodes.)
 
 The `key.json` file contains the private `key` for the corresponding node that
@@ -154,7 +154,7 @@ The following environment variables are available to be used for each service in
 ID of the validator that the node/service corresponds to. This defines which
 configuration to use under the `validators` folder.
 * `LOG_LEVEL` is the level of logging for the node defined as number of `v` parameters (ex `-vvv`). The following
-levels are defined according to the number of "v"s provided: `0 | 1 => "error", 2 => "warn", 3 => "info", 
+levels are defined according to the number of "v"s provided: `0 | 1 => "error", 2 => "warn", 3 => "info",
 4 => "debug", 5 => "trace"`.
 * `CONSENSUS_DISABLED`. This value disables consensus (`Tusk`) for a primary node and enables the
 `gRPC` server. The corresponding argument is: `--consensus-disabled`
@@ -168,14 +168,16 @@ from the database and log data. This is useful to preserve the state between mul
  - You must build the narwhal `node` binary at top level:
 
    ```cargo build --release --features "benchmark"```
-   
+
    That binary is necessary for generating the keys for the validators and the committee.json seed file.
-   
+
 ### Running the `gen.validators.sh #` script to generate a larger cluster.
 
 
 ```
-./gen.validators.sh 6
+# arguments for script are {num_primary} & {num_worker_per_primary} in that order
+
+./gen.validators.sh 6 1
 
 # That will create a docker-compose.yaml file in ./validators-6/docker-compose.yaml
 
@@ -224,12 +226,12 @@ browse the logs via the "Explorer", selecting the Loki datasource.
 If you encounter errors while the Docker image is being built, for example errors like:
 ```
 error: could not compile `tonic`
-#9 373.3 
+#9 373.3
 #9 373.3 Caused by:
 #9 373.4   process didn't exit successfully: `rustc --crate-name tonic --edition=2018
 ....
 #9 398.4 The following warnings were emitted during compilation:
-#9 398.4 
+#9 398.4
 #9 398.4 warning: c++: fatal error: Killed signal terminated program cc1plus
 #9 398.4 warning: compilation terminated.
 ```
@@ -240,11 +242,11 @@ compile the code. In this case please, increase the available RAM to at least 2G
 ### 2. Mounts denied or cannot start service errors
 
 If you try to spin up the nodes via `docker-compose` and you come across errors such as `mounts denied`
-or `cannot start service`, make sure that you allow Docker to share your host's [Docker/validators](validators) folder 
+or `cannot start service`, make sure that you allow Docker to share your host's [Docker/validators](validators) folder
 with the containers. If you are using Docker Desktop, you can find more information on how to do
 that here: [mac](https://docs.docker.com/desktop/mac/#file-sharing), [linux](https://docs.docker.com/desktop/linux/#file-sharing),
 [windows](https://docs.docker.com/desktop/windows/#file-sharing) .
 
 Also, check that you are not using the deprecated `devicemapper storage driver`, which might also
-cause you issues. See how to [migrate to an overlayfs driver](https://docs.docker.com/storage/storagedriver/overlayfs-driver/) . 
-More information about the deprecation can be found [here](https://docs.docker.com/engine/deprecated/#device-mapper-storage-driver) 
+cause you issues. See how to [migrate to an overlayfs driver](https://docs.docker.com/storage/storagedriver/overlayfs-driver/) .
+More information about the deprecation can be found [here](https://docs.docker.com/engine/deprecated/#device-mapper-storage-driver)

@@ -64,6 +64,7 @@ def demo(ctx, debug=True):
         'rate': 50_000,
         'tx_size': 512,
         'duration': 10,
+        'mem_profiling': False
     }
     node_params = {
         "batch_size": 500000,
@@ -181,6 +182,7 @@ def remote(ctx, debug=False):
         'tx_size': 512,
         'duration': 300,
         'runs': 2,
+        'mem_profiling': False
     }
     node_params = {
         'header_size': 1_000,  # bytes
@@ -189,6 +191,7 @@ def remote(ctx, debug=False):
         'sync_retry_delay': '10_000ms',  # ms
         'sync_retry_nodes': 3,  # number of nodes
         'batch_size': 500_000,  # bytes
+        'max_batch_delay': '200ms',  # ms,
         'block_synchronizer': {
             'certificates_synchronize_timeout': '2_000ms',
             'payload_synchronize_timeout': '2_000ms',

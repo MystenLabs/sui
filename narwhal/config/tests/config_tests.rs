@@ -20,7 +20,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use config::{
     Committee, ConsensusAPIGrpcParameters, Epoch, Import, Parameters, PrimaryAddresses,
-    PrometheusMetricsParameters, Stake,
+    PrometheusMetricsParameters, Stake, WorkerCache,
 };
 use crypto::PublicKey;
 use fastcrypto::traits::KeyPair as _;
@@ -28,7 +28,7 @@ use insta::assert_json_snapshot;
 use rand::seq::SliceRandom;
 use std::{fs::File, io::Write};
 use tempfile::tempdir;
-use test_utils::make_authority_with_port_getter;
+use test_utils::{initialize_worker_index_with_port_getter, make_authority_with_port_getter};
 
 #[test]
 fn leader_election_rotates_through_all() {
@@ -228,4 +228,34 @@ fn commmittee_snapshot_matches() {
     let mut settings = insta::Settings::clone_current();
     settings.set_sort_maps(true);
     settings.bind(|| assert_json_snapshot!("committee", committee));
+}
+
+#[test]
+fn workers_snapshot_matches() {
+    // The shape of this configuration is load-bearing in the NW benchmarks,
+    // and in Sui (prod)
+    let keys = test_utils::keys(None);
+
+    let worker_cache = WorkerCache {
+        epoch: Epoch::default(),
+        workers: keys
+            .iter()
+            .map(|kp| {
+                let mut port = 0;
+                let increment_port_getter = || {
+                    port += 1;
+                    port
+                };
+                (
+                    kp.public().clone(),
+                    initialize_worker_index_with_port_getter(increment_port_getter),
+                )
+            })
+            .collect(),
+    };
+
+    // we need authorities to be serialized in order
+    let mut settings = insta::Settings::clone_current();
+    settings.set_sort_maps(true);
+    settings.bind(|| assert_json_snapshot!("worker_cache", worker_cache));
 }

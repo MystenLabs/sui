@@ -14,7 +14,8 @@ use std::{
 use store::{reopen, rocks, rocks::DBMap, Store};
 use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
-    resolve_name_and_committee, temp_dir, PrimaryToPrimaryMockServer, CERTIFICATES_CF, PAYLOAD_CF,
+    resolve_name_committee_and_worker_cache, temp_dir, PrimaryToPrimaryMockServer, CERTIFICATES_CF,
+    PAYLOAD_CF,
 };
 use tokio::{sync::watch, time::timeout};
 use tracing_test::traced_test;
@@ -25,7 +26,7 @@ async fn test_process_certificates_stream_mode() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys(None).pop().unwrap();
-    let (name, committee) = resolve_name_and_committee();
+    let (name, committee, _) = resolve_name_committee_and_worker_cache();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
@@ -101,7 +102,7 @@ async fn test_process_certificates_batch_mode() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys(None).pop().unwrap();
-    let (name, committee) = resolve_name_and_committee();
+    let (name, committee, _) = resolve_name_committee_and_worker_cache();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
@@ -198,7 +199,7 @@ async fn test_process_payload_availability_success() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
     let key = keys(None).pop().unwrap();
-    let (name, committee) = resolve_name_and_committee();
+    let (name, committee, _) = resolve_name_committee_and_worker_cache();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
@@ -314,7 +315,7 @@ async fn test_process_payload_availability_when_failures() {
         Store::new(payload_map);
 
     let key = keys(None).pop().unwrap();
-    let (name, committee) = resolve_name_and_committee();
+    let (name, committee, _) = resolve_name_committee_and_worker_cache();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));

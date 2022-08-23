@@ -4,14 +4,13 @@
 use super::*;
 
 use arc_swap::ArcSwap;
-use fastcrypto::traits::KeyPair;
 use futures::StreamExt;
 use prometheus::Registry;
 use std::time::Duration;
 use store::rocks;
 use test_utils::{
-    batch, committee, digest_batch, keys, serialize_batch_message, temp_dir,
-    WorkerToPrimaryMockServer, WorkerToWorkerMockServer,
+    batch, digest_batch, resolve_name_committee_and_worker_cache, serialize_batch_message,
+    temp_dir, WorkerToPrimaryMockServer, WorkerToWorkerMockServer,
 };
 use types::{
     serialized_batch_digest, TransactionsClient, WorkerPrimaryMessage, WorkerToWorkerClient,
@@ -19,9 +18,8 @@ use types::{
 
 #[tokio::test]
 async fn handle_clients_transactions() {
-    let name = keys(None).pop().unwrap().public().clone();
+    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
     let id = 0;
-    let committee = committee(None);
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
@@ -49,6 +47,7 @@ async fn handle_clients_transactions() {
         name.clone(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters,
         store,
         metrics,
@@ -65,7 +64,7 @@ async fn handle_clients_transactions() {
 
     // Spawn enough workers' listeners to acknowledge our batches.
     let mut other_workers = Vec::new();
-    for (_, addresses) in committee.others_workers(&name, &id) {
+    for (_, addresses) in worker_cache.load().others_workers(&name, &id) {
         let address = addresses.worker_to_worker;
         other_workers.push(WorkerToWorkerMockServer::spawn(address));
     }
@@ -73,7 +72,7 @@ async fn handle_clients_transactions() {
     // Wait till other services have been able to start up
     tokio::task::yield_now().await;
     // Send enough transactions to create a batch.
-    let address = committee.worker(&name, &id).unwrap().transactions;
+    let address = worker_cache.load().worker(&name, &id).unwrap().transactions;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let mut client = TransactionsClient::new(channel);
@@ -90,9 +89,8 @@ async fn handle_clients_transactions() {
 
 #[tokio::test]
 async fn handle_client_batch_request() {
-    let name = keys(None).pop().unwrap().public().clone();
     let id = 0;
-    let committee = committee(None);
+    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
     let parameters = Parameters {
         max_header_delay: Duration::from_millis(100_000), // Ensure no batches are created.
         ..Parameters::default()
@@ -129,6 +127,7 @@ async fn handle_client_batch_request() {
         name.clone(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
+        worker_cache.clone(),
         parameters,
         store,
         metrics,
@@ -136,7 +135,11 @@ async fn handle_client_batch_request() {
 
     // Spawn a client to ask for batches and receive the reply.
     tokio::task::yield_now().await;
-    let address = committee.worker(&name, &id).unwrap().worker_to_worker;
+    let address = worker_cache
+        .load()
+        .worker(&name, &id)
+        .unwrap()
+        .worker_to_worker;
     let config = mysten_network::config::Config::new();
     let channel = config.connect_lazy(&address).unwrap();
     let mut client = WorkerToWorkerClient::new(channel);
