@@ -41,7 +41,7 @@ use tokio::{
     task::JoinHandle,
     time::timeout,
 };
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use typed_store::traits::DBMapTableUtil;
 
 use crate::{
@@ -357,8 +357,9 @@ where
                 .await
                 .is_err()
             {
-                info!("aborting node sync task");
+                error!("node sync task did not terminate on its own. aborting.");
                 join_handle.abort();
+                let _ = join_handle.await;
             }
         }
 
