@@ -7,12 +7,12 @@ use futures::future::try_join_all;
 use futures::future::BoxFuture;
 use futures::FutureExt;
 use futures::{stream::FuturesUnordered, StreamExt};
-use prometheus::register_gauge_with_registry;
-use prometheus::register_histogram_with_registry;
-use prometheus::register_int_counter_with_registry;
-use prometheus::Gauge;
-use prometheus::Histogram;
-use prometheus::IntCounter;
+use prometheus::IntCounterVec;
+use prometheus::register_gauge_vec_with_registry;
+use prometheus::register_histogram_vec_with_registry;
+use prometheus::register_int_counter_vec_with_registry;
+use prometheus::GaugeVec;
+use prometheus::HistogramVec;
 use prometheus::Registry;
 use sui_benchmark::benchmark::follow;
 use sui_benchmark::workloads::workload::get_latest;
@@ -152,43 +152,48 @@ pub enum OptWorkloadSpec {
 }
 
 pub struct BenchMetrics {
-    pub num_success: IntCounter,
-    pub num_error: IntCounter,
-    pub num_submitted: IntCounter,
-    pub num_in_flight: Gauge,
-    pub latency_s: Histogram,
+    pub num_success: IntCounterVec,
+    pub num_error: IntCounterVec,
+    pub num_submitted: IntCounterVec,
+    pub num_in_flight: GaugeVec,
+    pub latency_s: HistogramVec,
 }
 
 impl BenchMetrics {
     fn new(registry: &Registry) -> Self {
         BenchMetrics {
-            num_success: register_int_counter_with_registry!(
+            num_success: register_int_counter_vec_with_registry!(
                 "num_success",
                 "Total number of transaction success",
+                &["workload_type"],
                 registry,
             )
             .unwrap(),
-            num_error: register_int_counter_with_registry!(
+            num_error: register_int_counter_vec_with_registry!(
                 "num_error",
                 "Total number of transaction errors",
+                &["workload_type"],
                 registry,
             )
             .unwrap(),
-            num_submitted: register_int_counter_with_registry!(
+            num_submitted: register_int_counter_vec_with_registry!(
                 "num_submitted",
                 "Total number of transaction submitted to sui",
+                &["workload_type"],
                 registry,
             )
             .unwrap(),
-            num_in_flight: register_gauge_with_registry!(
+            num_in_flight: register_gauge_vec_with_registry!(
                 "num_in_flight",
                 "Total number of transaction in flight",
+                &["workload_type"],
                 registry,
             )
             .unwrap(),
-            latency_s: register_histogram_with_registry!(
+            latency_s: register_histogram_vec_with_registry!(
                 "latency_s",
                 "Total time in seconds to return a response",
+                &["workload_type"],
                 registry,
             )
             .unwrap(),
@@ -298,8 +303,8 @@ async fn run(
                         if let Some(b) = retry_queue.pop_front() {
                             num_submitted += 1;
                             num_error += 1;
-                            metrics_cloned.num_submitted.inc();
-                            metrics_cloned.num_error.inc();
+                            metrics_cloned.num_submitted.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
+                            metrics_cloned.num_error.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                             let res = qd
                                 .execute_transaction(ExecuteTransactionRequest {
                                     transaction: b.0.clone(),
@@ -338,9 +343,9 @@ async fn run(
                         } else {
                             num_in_flight += 1;
                             num_submitted += 1;
-                            metrics_cloned.num_in_flight.inc();
-                            metrics_cloned.num_submitted.inc();
                             let payload = free_pool.pop().unwrap();
+                            metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
+                            metrics_cloned.num_submitted.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
                             let tx = payload.make_transaction();
                             let start = Instant::now();
                             let res = qd
@@ -379,13 +384,13 @@ async fn run(
                                 retry_queue.push_back(b);
                             }
                             NextOp::Response(Some((start, payload))) => {
-                                free_pool.push(payload);
                                 let latency = start.elapsed();
-                                metrics_cloned.latency_s.observe(latency.as_secs_f64());
+                                metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
+                                metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
+                                metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
+                                free_pool.push(payload);
                                 num_success += 1;
-                                num_in_flight -= 1;
-                                metrics_cloned.num_success.inc();
-                                metrics_cloned.num_in_flight.dec();
+                                num_in_flight -= 1; 
                                 if latency > max_latency {
                                     max_latency = latency;
                                 }
