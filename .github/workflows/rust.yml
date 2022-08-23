@@ -162,7 +162,7 @@ jobs:
 
   release-build:
     needs: release
-    if: needs.diff.outputs.isRelease == 'true'
+    if: needs.release.outputs.isRelease == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
     strategy:
