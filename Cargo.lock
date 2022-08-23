@@ -689,7 +689,7 @@ dependencies = [
  "clear_on_drop",
  "curve25519-dalek-ng",
  "digest 0.9.0",
- "merlin 3.0.0",
+ "merlin",
  "rand 0.8.5",
  "rand_core 0.6.3",
  "serde 1.0.143",
@@ -1041,7 +1041,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "arc-swap",
  "fastcrypto",
@@ -1051,7 +1051,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tracing",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
 ]
 
 [[package]]
@@ -1073,7 +1073,7 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "arc-swap",
  "bincode",
@@ -1092,7 +1092,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
 ]
 
 [[package]]
@@ -1465,7 +1465,7 @@ dependencies = [
 [[package]]
 name = "dag"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "arc-swap",
  "dashmap",
@@ -1476,7 +1476,7 @@ dependencies = [
  "rayon",
  "serde 1.0.143",
  "thiserror",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
 ]
 
 [[package]]
@@ -1856,22 +1856,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ed25519-dalek"
-version = "1.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c762bae6dcaf24c4c84667b8579785430908723d5c889f469d76a41d59cc7a9d"
-dependencies = [
- "curve25519-dalek",
- "ed25519",
- "merlin 2.0.1",
- "rand 0.7.3",
- "serde 1.0.143",
- "serde_bytes",
- "sha2 0.9.9",
- "zeroize",
-]
-
-[[package]]
 name = "ed25519-dalek-fiat"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2004,7 +1988,7 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "async-trait",
  "backoff",
@@ -2028,7 +2012,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
 ]
 
 [[package]]
@@ -2055,7 +2039,7 @@ dependencies = [
 [[package]]
 name = "fastcrypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/fastcrypto?rev=ded6f91c9c19594a3eaeaa9a487d42a39965569e#ded6f91c9c19594a3eaeaa9a487d42a39965569e"
+source = "git+https://github.com/MystenLabs/fastcrypto?rev=a9e58305dc463c40b9d357730203406214909f04#a9e58305dc463c40b9d357730203406214909f04"
 dependencies = [
  "base64ct",
  "blake2",
@@ -2067,7 +2051,7 @@ dependencies = [
  "eyre",
  "hex",
  "hkdf",
- "merlin 3.0.0",
+ "merlin",
  "once_cell",
  "rand 0.8.5",
  "readonly",
@@ -3426,18 +3410,6 @@ dependencies = [
 
 [[package]]
 name = "merlin"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e261cf0f8b3c42ded9f7d2bb59dea03aa52bc8a1cbc7482f9fc3fd1229d3b42"
-dependencies = [
- "byteorder",
- "keccak",
- "rand_core 0.5.1",
- "zeroize",
-]
-
-[[package]]
-name = "merlin"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "58c38e2799fc0978b65dfff8023ec7843e2330bb462f19198840b34b6582397d"
@@ -4334,7 +4306,7 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "async-trait",
  "backoff",
@@ -4353,7 +4325,7 @@ dependencies = [
  "tonic",
  "tracing",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
 ]
 
 [[package]]
@@ -4412,7 +4384,7 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -4445,7 +4417,7 @@ dependencies = [
  "types",
  "url",
  "worker",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
 ]
 
 [[package]]
@@ -5183,7 +5155,7 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "async-recursion",
  "async-trait",
@@ -5215,7 +5187,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
 ]
 
 [[package]]
@@ -8532,7 +8504,7 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "base64",
  "bincode",
@@ -8559,7 +8531,7 @@ dependencies = [
  "tonic",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "typed-store",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
 ]
 
 [[package]]
@@ -9109,7 +9081,7 @@ dependencies = [
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "async-trait",
  "bincode",
@@ -9132,7 +9104,7 @@ dependencies = [
  "tracing",
  "typed-store",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
 ]
 
 [[package]]
@@ -9305,7 +9277,6 @@ dependencies = [
  "ecdsa",
  "ed25519",
  "ed25519-consensus",
- "ed25519-dalek",
  "ed25519-dalek-fiat",
  "either",
  "elliptic-curve",
@@ -9436,8 +9407,7 @@ dependencies = [
  "matchit",
  "memchr",
  "memoffset",
- "merlin 2.0.1",
- "merlin 3.0.0",
+ "merlin",
  "mime",
  "minimal-lexical",
  "miniz_oxide",
@@ -9819,7 +9789,7 @@ dependencies = [
  "which",
  "whoami",
  "worker",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f)",
  "yaml-rust",
  "zeroize",
  "zeroize_derive",
@@ -9829,7 +9799,7 @@ dependencies = [
 [[package]]
 name = "workspace-hack"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=ad05db4c5d6f851402efc7d2b285e9b59d513e64#ad05db4c5d6f851402efc7d2b285e9b59d513e64"
+source = "git+https://github.com/MystenLabs/narwhal?rev=f4cab79d77cf70b0d564fa640fb748584a3ba36f#f4cab79d77cf70b0d564fa640fb748584a3ba36f"
 dependencies = [
  "addr2line",
  "adler",
@@ -9914,7 +9884,6 @@ dependencies = [
  "crypto-mac",
  "csv",
  "csv-core",
- "curve25519-dalek",
  "curve25519-dalek-ng",
  "darling 0.14.1",
  "darling_core 0.14.1",
@@ -9933,9 +9902,7 @@ dependencies = [
  "digest 0.9.0",
  "downcast",
  "ecdsa",
- "ed25519",
  "ed25519-consensus",
- "ed25519-dalek",
  "either",
  "elliptic-curve",
  "env_logger",
@@ -10013,8 +9980,7 @@ dependencies = [
  "matchit",
  "memchr",
  "memoffset",
- "merlin 2.0.1",
- "merlin 3.0.0",
+ "merlin",
  "mime",
  "minimal-lexical",
  "miniz_oxide",
