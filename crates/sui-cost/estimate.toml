@@ -1,12 +1,12 @@
 [MergeCoin]
-computationCost = 502
-storageCost = 32
+computationCost = 503
+storageCost = 0
 storageRebate = 0
 
 [Publish]
-computationCost = 562
+computationCost = 566
 storageCost = 84
-storageRebate = 16
+storageRebate = 0
 
 [SharedCounterAssertValue]
 computationCost = 188
@@ -24,13 +24,8 @@ storageCost = 31
 storageRebate = 15
 
 [SplitCoin]
-computationCost = 614
-storageCost = 80
-storageRebate = 0
-
-[TransferPortionCoin]
-computationCost = 41
-storageCost = 32
+computationCost = 488
+storageCost = 0
 storageRebate = 0
 
 [TransferPortionSuiCoin]

@@ -7112,6 +7112,7 @@ name = "sui-cost"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "bcs",
  "insta",
  "move-binary-format",
  "move-cli",
@@ -7128,6 +7129,7 @@ dependencies = [
  "strum_macros",
  "sui",
  "sui-adapter",
+ "sui-config",
  "sui-json-rpc-types",
  "sui-types",
  "test-utils",

@@ -7,34 +7,45 @@ use std::{collections::BTreeMap, path::PathBuf};
 
 // Execute every entry function in Move framework and examples and ensure costs don't change
 use move_package::BuildConfig;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use strum_macros::Display;
+use strum_macros::EnumString;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
+use sui_config::ValidatorInfo;
 use sui_json_rpc_types::SuiGasCostSummary;
+use sui_types::base_types::SuiAddress;
+use sui_types::coin::COIN_JOIN_FUNC_NAME;
+use sui_types::coin::COIN_MODULE_NAME;
+use sui_types::coin::COIN_SPLIT_VEC_FUNC_NAME;
+use sui_types::object::Object;
 use sui_types::{
     gas::GasCostSummary,
     messages::{CallArg, ExecutionStatus, ObjectArg},
 };
+use test_utils::messages::make_transfer_object_transaction;
+use test_utils::messages::make_transfer_sui_transaction;
+use test_utils::test_account_keys;
+use test_utils::transaction::get_framework_object;
 use test_utils::{
     authority::{spawn_test_authorities, test_authority_configs},
     messages::move_transaction,
     network::setup_network_and_wallet,
     objects::test_gas_objects,
     transaction::{
-        publish_counter_package, submit_shared_object_transaction, submit_single_owner_transaction,
+        publish_counter_package, publish_package_for_effects, submit_shared_object_transaction,
+        submit_single_owner_transaction,
     },
 };
-use strum_macros::Display;
-use strum_macros::EnumString;
-
 const TEST_DATA_DIR: &str = "tests/data/";
 
-#[derive(Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString)]
+#[derive(
+    Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString,
+)]
 pub enum CommonTransactionCosts {
     Publish,
     MergeCoin,
     SplitCoin(usize),
     TransferWholeCoin,
-    TransferPortionCoin,
     TransferWholeSuiCoin,
     TransferPortionSuiCoin,
     SharedCounterCreate,
@@ -175,27 +186,6 @@ async fn run_common_single_writer_tx_costs(
     };
     ret.insert(CommonTransactionCosts::TransferWholeCoin, gas_used);
 
-    // Transfer a portion of the coin
-    let gas = object_refs.get(2).unwrap().object_id;
-    let obj_id = object_refs.get(3).unwrap().object_id;
-    let recipient = context.keystore.addresses().get(1).cloned().unwrap();
-
-    let resp = SuiClientCommands::Transfer {
-        gas: Some(gas),
-        to: recipient,
-        coin_object_id: obj_id,
-        gas_budget: 10000,
-    }
-    .execute(&mut context)
-    .await?;
-
-    let gas_used = if let SuiClientCommandResult::Transfer(_, _, r) = resp {
-        r.gas_used
-    } else {
-        panic!("Command failed")
-    };
-    ret.insert(CommonTransactionCosts::TransferPortionCoin, gas_used);
-
     // Transfer the whole Sui object
 
     let obj_id = object_refs.get(4).unwrap().object_id;
@@ -245,7 +235,7 @@ async fn run_common_single_writer_tx_costs(
     Ok(ret)
 }
 
-async fn run_counter_costs() -> BTreeMap<CommonTransactionCosts, SuiGasCostSummary> {
+pub async fn run_counter_costs() -> BTreeMap<CommonTransactionCosts, SuiGasCostSummary> {
     run_counter_costs_impl()
         .await
         .into_iter()
@@ -253,10 +243,11 @@ async fn run_counter_costs() -> BTreeMap<CommonTransactionCosts, SuiGasCostSumma
         .collect()
 }
 
+//#[cfg(test)]
 async fn run_counter_costs_impl() -> BTreeMap<CommonTransactionCosts, GasCostSummary> {
     let mut ret = BTreeMap::new();
-
     let mut gas_objects = test_gas_objects();
+    let (sender, keypair) = test_account_keys().pop().unwrap();
 
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
@@ -265,6 +256,132 @@ async fn run_counter_costs_impl() -> BTreeMap<CommonTransactionCosts, GasCostSum
     // Publish the move package to all authorities and get the new package ref.
     tokio::task::yield_now().await;
     tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    //
+    // Publish
+    //
+    let mut package_path = PathBuf::from(TEST_DATA_DIR);
+    package_path.push("dummy_modules_publish");
+    let gas_used = publish_package_for_effects(
+        gas_objects.pop().unwrap(),
+        package_path,
+        configs.validator_set(),
+    )
+    .await
+    .gas_cost_summary()
+    .clone();
+    ret.insert(CommonTransactionCosts::Publish, gas_used);
+
+    //
+    // Transfer Whole Sui Coin and Transfer Portion of Sui Coin
+    //
+    let whole_sui_coin_tx = make_transfer_sui_transaction(
+        gas_objects.pop().unwrap().compute_object_reference(),
+        SuiAddress::default(),
+        None,
+        sender,
+        &keypair,
+    );
+    let partial_sui_coin_tx = make_transfer_sui_transaction(
+        gas_objects.pop().unwrap().compute_object_reference(),
+        SuiAddress::default(),
+        Some(100),
+        sender,
+        &keypair,
+    );
+
+    let whole_sui_coin_tx_gas_used =
+        submit_single_owner_transaction(whole_sui_coin_tx, configs.validator_set())
+            .await
+            .gas_cost_summary()
+            .clone();
+    let partial_sui_coin_tx_gas_used =
+        submit_single_owner_transaction(partial_sui_coin_tx, configs.validator_set())
+            .await
+            .gas_cost_summary()
+            .clone();
+
+    ret.insert(
+        CommonTransactionCosts::TransferWholeSuiCoin,
+        whole_sui_coin_tx_gas_used,
+    );
+    ret.insert(
+        CommonTransactionCosts::TransferPortionSuiCoin,
+        partial_sui_coin_tx_gas_used,
+    );
+
+    //
+    // Transfer Whole Coin Object
+    //
+    let whole_coin_tx = make_transfer_object_transaction(
+        gas_objects.pop().unwrap().compute_object_reference(),
+        gas_objects.pop().unwrap().compute_object_reference(),
+        sender,
+        &keypair,
+        SuiAddress::default(),
+    );
+
+    let whole_coin_tx_gas_used =
+        submit_single_owner_transaction(whole_coin_tx, configs.validator_set())
+            .await
+            .gas_cost_summary()
+            .clone();
+
+    ret.insert(
+        CommonTransactionCosts::TransferWholeCoin,
+        whole_coin_tx_gas_used,
+    );
+
+    //
+    // Merge Two Coins
+    //
+
+    let merge_tx = move_transaction(
+        gas_objects.pop().unwrap(),
+        COIN_MODULE_NAME.as_str(),
+        COIN_JOIN_FUNC_NAME.as_str(),
+        get_framework_object(configs.validator_set())
+            .await
+            .compute_object_reference(),
+        vec![
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                gas_objects.pop().unwrap().compute_object_reference(),
+            )),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(
+                gas_objects.pop().unwrap().compute_object_reference(),
+            )),
+        ],
+    );
+
+    let merge_tx_gas_used = submit_single_owner_transaction(merge_tx, configs.validator_set())
+        .await
+        .gas_cost_summary()
+        .clone();
+
+    ret.insert(CommonTransactionCosts::MergeCoin, merge_tx_gas_used);
+
+    //
+    // Splt A Coin Into N Specific Amounts
+    // Note spltting complexity does not depend on the amounts but only on the number of amounts
+    //
+
+    for n in 0..4 {
+        let gas = gas_objects.pop().unwrap();
+        let coin = gas_objects.pop().unwrap();
+        let split_gas_used = split_n(n, &gas, &coin, configs.validator_set())
+            .await
+            .clone();
+        ret.insert(
+            CommonTransactionCosts::SplitCoin(n as usize),
+            split_gas_used,
+        );
+    }
+
+    //
+    // Shared Object Section
+    // Using the `counter` example
+    //
+
     let package_ref =
         publish_counter_package(gas_objects.pop().unwrap(), configs.validator_set()).await;
 
@@ -322,4 +439,33 @@ async fn run_counter_costs_impl() -> BTreeMap<CommonTransactionCosts, GasCostSum
     ret.insert(CommonTransactionCosts::SharedCounterIncrement, gas_used);
 
     ret
+}
+
+// Helper function to split
+//#[cfg(test)]
+async fn split_n(
+    n: u64,
+    coin: &Object,
+    gas: &Object,
+    validator_info: &[ValidatorInfo],
+) -> GasCostSummary {
+    let split_amounts = vec![100u64; n as usize];
+
+    let split_tx = move_transaction(
+        gas.clone(),
+        COIN_MODULE_NAME.as_str(),
+        COIN_SPLIT_VEC_FUNC_NAME.as_str(),
+        get_framework_object(validator_info)
+            .await
+            .compute_object_reference(),
+        vec![
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(coin.compute_object_reference())),
+            CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
+        ],
+    );
+
+    submit_single_owner_transaction(split_tx, validator_info)
+        .await
+        .gas_cost_summary()
+        .clone()
 }

@@ -7,7 +7,7 @@
 // 1. Run `cargo insta test --review` under `./sui-cost`.
 // 2. Review, accept or reject changes.
 
-use sui_cost::empirical_transaction_cost::run_common_tx_costs;
+use sui_cost::empirical_transaction_cost::{run_common_tx_costs, run_counter_costs};
 
 use insta::assert_yaml_snapshot;
 
@@ -15,6 +15,9 @@ use insta::assert_yaml_snapshot;
 async fn test_good_snapshot() -> Result<(), anyhow::Error> {
     let common_costs = run_common_tx_costs().await?;
     assert_yaml_snapshot!(common_costs);
+
+    let counter_costs = run_counter_costs().await;
+    assert_yaml_snapshot!(counter_costs);
 
     Ok(())
 }
