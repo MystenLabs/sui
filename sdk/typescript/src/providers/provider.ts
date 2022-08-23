@@ -131,6 +131,10 @@ export abstract class Provider {
     onMessage: (event: SuiEventEnvelope) => void
   ): Promise<any>;
 
-  abstract unsubscribeEvent(id: SubscriptionId): boolean;
+  /**
+   *
+   * @param id the subscription
+   */
+  abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
   // TODO: add more interface methods
 }

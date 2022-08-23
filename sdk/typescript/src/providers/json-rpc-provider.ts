@@ -458,7 +458,24 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  unsubscribeEvent(id: SubscriptionId): boolean {
-    return this.activeSubscriptions.delete(id);
+  async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
+    try {
+      if (this.wsConnectionState != ConnectionState.Connected)
+        throw new Error('websocket not connected');
+
+      let response = await this.wsClient.call(
+        'sui_unsubscribeEvent',
+        [id],
+        30000
+      ) as any;
+
+      console.log(response);
+
+      return this.activeSubscriptions.delete(id);
+    } catch (err) {
+      throw new Error(
+        `Error unsubscribing from event: ${err}, subscription: ${id}}`
+      );
+    }
   }
 }
