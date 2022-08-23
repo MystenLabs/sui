@@ -1,27 +1,22 @@
-use futures::future::join_all;
-use std::sync::Arc;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use futures::future::join_all;
 use multiaddr::Multiaddr;
 use sui_config::ValidatorInfo;
-use sui_core::authority::AuthorityState;
 use sui_core::authority_active::checkpoint_driver::{
     checkpoint_process_step, CheckpointProcessControl,
 };
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::safe_client::SafeClient;
 use sui_node::SuiNode;
-use sui_types::base_types::{ExecutionDigests, ObjectID, ObjectRef};
+use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair, KeypairTraits,
 };
 use sui_types::error::SuiResult;
 use sui_types::messages::ObjectInfoResponse;
 use sui_types::messages::{CallArg, ObjectArg, ObjectInfoRequest, TransactionEffects};
-use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointSequenceNumber,
-    SignedCheckpointSummary,
-};
 use sui_types::object::Object;
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use test_utils::authority::test_authority_configs;

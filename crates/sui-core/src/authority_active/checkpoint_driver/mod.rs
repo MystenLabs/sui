@@ -246,7 +246,10 @@ pub async fn checkpoint_process<A>(
                         tokio::time::sleep(timing.consensus_delay_estimate).await;
                     }
                     CheckpointStepError::CheckpointSignBlocked(err) => {
-                        error!(?next_cp_seq, "Failed to sync and sign new checkpoint: {:?}", err);
+                        error!(
+                            ?next_cp_seq,
+                            "Failed to sync and sign new checkpoint: {:?}", err
+                        );
                     }
                     CheckpointStepError::ProposalFailed(err) => {
                         warn!(
@@ -353,7 +356,7 @@ where
         &my_proposal,
         committee,
     )
-        .await
+    .await
     {
         Some(contents) => contents,
         None => {
@@ -367,7 +370,9 @@ where
         my_proposal.signed_summary.auth_signature.epoch,
         *my_proposal.sequence_number(),
         transactions,
-    ).await.map_err(|err| Err(CheckpointStepError::CheckpointSignBlocked(Box::new(err))))?;
+    )
+    .await
+    .map_err(|err| CheckpointStepError::CheckpointSignBlocked(Box::new(err)))?;
 
     Ok(CheckpointStepResult::CheckpointSigned)
 }
@@ -790,7 +795,7 @@ where
 
     let result = checkpoint_db
         .lock()
-        .attempt_to_construct_checkpoint(active_authority.state.database.clone(), committee);
+        .attempt_to_construct_checkpoint(committee);
 
     match result {
         Err(err) => {
