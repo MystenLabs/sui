@@ -696,7 +696,9 @@ impl NodeSyncHandle {
             })
     }
 
-    pub async fn sync_checkpoint(
+    /// Sync transactions in certified checkpoint. Since the checkpoint is certified,
+    /// we can fully trust the effect digests in the checkpoint content.
+    pub async fn sync_checkpoint_cert_transactions(
         &self,
         checkpoint_contents: &CheckpointContents,
     ) -> SuiResult<impl Stream<Item = SuiResult>> {
@@ -704,6 +706,25 @@ impl NodeSyncHandle {
         for digests in checkpoint_contents.iter() {
             let (tx, rx) = oneshot::channel();
             let msg = DigestsMessage::new_for_ckpt(digests, tx);
+            Self::send_msg_with_tx(self.sender.clone(), msg).await?;
+            futures.push_back(Self::map_rx(rx));
+        }
+
+        Ok(futures)
+    }
+
+    /// Sync a to-be-signed checkpoint transactions. Since we don't have a cert
+    /// yet, the effects digests cannot be trusted. We rely on the transaction
+    /// digest only for the sync.
+    /// TODO: This shall eventually be able to bypass the validator halt.
+    pub async fn sync_pending_checkpoint_transactions(
+        &self,
+        transactions: impl Iterator<Item = &ExecutionDigests>,
+    ) -> SuiResult<impl Stream<Item = SuiResult>> {
+        let mut futures = FuturesOrdered::new();
+        for digests in transactions {
+            let (tx, rx) = oneshot::channel();
+            let msg = DigestsMessage::new_for_exec_driver(&digests.transaction, tx);
             Self::send_msg_with_tx(self.sender.clone(), msg).await?;
             futures.push_back(Self::map_rx(rx));
         }

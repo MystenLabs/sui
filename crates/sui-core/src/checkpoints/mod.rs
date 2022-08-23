@@ -355,39 +355,21 @@ impl CheckpointStore {
         })
     }
 
-    pub fn sign_new_checkpoint(
+    pub fn sign_new_checkpoint<'a>(
         &mut self,
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
-        candidate_contents: &CheckpointContents,
-        previous_digest: Option<CheckpointDigest>,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         effects_store: impl CausalOrder + PendCertificateForExecution,
     ) -> SuiResult {
-        // The checkpoint content is constructed using all fragments received.
-        // When receiving the fragments, we have verified that all certs are valid.
-        // However, we did not verify that all transactions have not been checkpointed.
-        // Here we filter out any transaction that has already been checkpointed.
-        let new_transactions = self
-            .tables
-            .transactions_to_checkpoint
-            .multi_get(candidate_contents.transactions.iter())?
-            .into_iter()
-            .zip(candidate_contents.transactions.iter())
-            .filter_map(
-                |(opt_seq, tx)| {
-                    if opt_seq.is_none() {
-                        Some(tx)
-                    } else {
-                        None
-                    }
-                },
-            );
-
         // Make sure that all transactions in the checkpoint have been executed locally.
-        self.check_checkpoint_transactions(new_transactions.clone(), &effects_store)?;
+        self.check_checkpoint_transactions(transactions.clone(), &effects_store)?;
+
+        let previous_digest = self.get_prev_checkpoint_digest(sequence_number)?;
+
         // Create a causal order of all transactions in the checkpoint.
         let ordered_contents = CheckpointContents {
-            transactions: effects_store.get_complete_causal_order(new_transactions, self)?,
+            transactions: effects_store.get_complete_causal_order(transactions, self)?,
         };
 
         let summary =
@@ -621,25 +603,37 @@ impl CheckpointStore {
     /// Returns OK if a checkpoint is successfully constructed.
     pub fn attempt_to_construct_checkpoint(
         &mut self,
-        effects_store: impl CausalOrder + PendCertificateForExecution,
         committee: &Committee,
-    ) -> SuiResult {
+    ) -> SuiResult<BTreeSet<ExecutionDigests>> {
         // We have a proposal so lets try to re-construct the checkpoint.
-        let next_sequence_number = self.next_checkpoint();
         let locals = self.get_locals();
 
         // Ok to unwrap because we won't enter the checkpoint process unless we have a proposal.
         let our_proposal = locals.current_proposal.as_ref().unwrap();
 
-        let candidate_contents = self.reconstruct_contents(committee, our_proposal)?;
-        let previous_digest = self.get_prev_checkpoint_digest(next_sequence_number)?;
-        self.sign_new_checkpoint(
-            committee.epoch,
-            next_sequence_number,
-            &candidate_contents,
-            previous_digest,
-            effects_store,
-        )
+        let candidate_transactions = self.reconstruct_contents(committee, our_proposal)?;
+
+        // The checkpoint content is constructed using all fragments received.
+        // When receiving the fragments, we have verified that all certs are valid.
+        // However, we did not verify that all transactions have not been checkpointed.
+        // Here we filter out any transaction that has already been checkpointed.
+        let new_transactions: BTreeSet<_> = self
+            .tables
+            .transactions_to_checkpoint
+            .multi_get(candidate_transactions.iter())?
+            .into_iter()
+            .zip(candidate_transactions.iter())
+            .filter_map(
+                |(opt_seq, tx)| {
+                    if opt_seq.is_none() {
+                        Some(*tx)
+                    } else {
+                        None
+                    }
+                },
+            )
+            .collect();
+        Ok(new_transactions)
     }
 
     /// Attempts to reconstruct a checkpoint contents using a local proposals and
@@ -648,7 +642,7 @@ impl CheckpointStore {
         &mut self,
         committee: &Committee,
         our_proposal: &CheckpointProposal,
-    ) -> SuiResult<CheckpointContents> {
+    ) -> SuiResult<BTreeSet<ExecutionDigests>> {
         let next_sequence_number = self.next_checkpoint();
         let fragments: Vec<_> = self
             .tables
@@ -693,7 +687,7 @@ impl CheckpointStore {
                     .clone(),
             );
 
-            return Ok(contents);
+            return Ok(contents.transactions.into_iter().collect());
         }
 
         // Strategy 2 to reconstruct checkpoint -- There is a link between us and the checkpoint set
@@ -725,7 +719,6 @@ impl CheckpointStore {
                     .cloned()
                     .collect(),
             ) {
-                let contents = CheckpointContents::new(contents.into_iter());
                 return Ok(contents);
             }
         }
