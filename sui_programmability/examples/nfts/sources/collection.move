@@ -11,7 +11,7 @@
 /// Collection allows us to own a list of same-typed objects, but still able to
 /// access and operate on each individual object.
 /// In contrast to `Bag`, `Collection` requires all objects have the same type.
-module sui::collection {
+module nfts::collection {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::typed_id::{Self, TypedID};
@@ -111,11 +111,6 @@ module sui::collection {
     ) {
         let object = remove(c, item);
         transfer::transfer(object, tx_context::sender(ctx));
-    }
-
-    /// Transfer the entire collection to `recipient`.
-    public entry fun transfer<T: key + store>(c: Collection<T>, recipient: address) {
-        transfer::transfer(c, recipient)
     }
 
     public fun transfer_to_object_id<T: key + store>(

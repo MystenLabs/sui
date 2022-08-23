@@ -148,7 +148,7 @@ module sui::delegation {
         ctx: &mut TxContext,
     ) {
         let sender = tx_context::sender(ctx);
-        coin::transfer(coin::from_balance(reward, ctx), sender);
+        transfer::transfer(coin::from_balance(reward, ctx), sender);
         self.next_reward_unclaimed_epoch = self.next_reward_unclaimed_epoch + 1;
     }
 
@@ -172,10 +172,6 @@ module sui::delegation {
         option::destroy_none(coin_locked_until_epoch);
         let ending_epoch = *option::borrow(&ending_epoch);
         assert!(next_reward_unclaimed_epoch == ending_epoch, 0);
-    }
-
-    public entry fun transfer(self: Delegation, recipient: address) {
-        transfer::transfer(self, recipient)
     }
 
     /// Checks whether the delegation object is eligible to claim the reward

@@ -22,11 +22,11 @@ module examples::trusted_coin {
 
     public entry fun mint(treasury_cap: &mut TreasuryCap<TRUSTED_COIN>, amount: u64, ctx: &mut TxContext) {
         let coin = coin::mint<TRUSTED_COIN>(treasury_cap, amount, ctx);
-        coin::transfer(coin, tx_context::sender(ctx));
+        transfer::transfer(coin, tx_context::sender(ctx));
     }
 
     public entry fun transfer(treasury_cap: TreasuryCap<TRUSTED_COIN>, recipient: address) {
-        coin::transfer_cap<TRUSTED_COIN>(treasury_cap, recipient);
+        transfer::transfer(treasury_cap, recipient);
     }
 
     #[test_only]

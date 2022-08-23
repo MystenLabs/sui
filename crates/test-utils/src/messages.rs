@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::objects::{test_gas_objects, test_gas_objects_with_owners, test_shared_object};
-use crate::{test_account_keys, test_committee, test_keys};
+use crate::{test_account_keys, test_committee, test_validator_keys};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_package::BuildConfig;
@@ -164,23 +164,6 @@ pub fn make_transactions_with_pre_genesis_objects(
 
 /// Make a few different test transaction containing the same shared object.
 pub fn test_shared_object_transactions() -> Vec<Transaction> {
-    // Helper function to load genesis packages.
-    fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
-        genesis_objects
-            .iter()
-            .find_map(|o| match o.data.try_as_package() {
-                Some(p) => {
-                    if p.serialized_module_map().keys().any(|name| name == module) {
-                        Some(o.compute_object_reference())
-                    } else {
-                        None
-                    }
-                }
-                None => None,
-            })
-            .unwrap()
-    }
-
     // The key pair of the sender of the transaction.
     let (sender, keypair) = test_account_keys().pop().unwrap();
 
@@ -190,8 +173,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     for gas_object in test_gas_objects() {
         let module = "object_basics";
         let function = "create";
-        let genesis_package_objects = genesis::clone_genesis_packages();
-        let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+        let package_object_ref = genesis::get_framework_object_ref();
 
         let data = TransactionData::new_move_call(
             sender,
@@ -353,7 +335,7 @@ pub fn make_certificates(transactions: Vec<Transaction>) -> Vec<CertifiedTransac
     let mut certificates = Vec::new();
     for tx in transactions {
         let mut aggregator = SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
-        for (_, key) in test_keys() {
+        for (key, _, _) in test_validator_keys() {
             let vote =
                 SignedTransaction::new(/* epoch */ 0, tx.clone(), key.public().into(), &key);
             if let Some(certificate) = aggregator

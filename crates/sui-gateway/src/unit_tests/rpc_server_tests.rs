@@ -12,12 +12,12 @@ use sui_json_rpc::api::{
 };
 use sui_json_rpc_types::{GetObjectDataResponse, SuiTransactionResponse, TransactionBytes};
 use sui_sdk::crypto::KeystoreType;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::TransactionDigest;
+use sui_types::gas_coin::GAS;
 use sui_types::messages::Transaction;
 use sui_types::sui_serde::Base64;
-use sui_types::{
-    base_types::{ObjectID, TransactionDigest},
-    SUI_FRAMEWORK_ADDRESS,
-};
+use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use test_utils::network::start_rpc_test_network;
 
@@ -113,14 +113,16 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
     http_client.sync_account_state(*address).await?;
     let objects = http_client.get_objects_owned_by_address(*address).await?;
     let gas = objects.first().unwrap();
+    let coin = &objects[1];
 
+    // now do the call
     let package_id = ObjectID::new(SUI_FRAMEWORK_ADDRESS.into_bytes());
-    let module = "object_basics".to_string();
-    let function = "create".to_string();
+    let module = "coin".to_string();
+    let function = "split".to_string();
 
     let json_args = vec![
-        SuiJsonValue::from_str("10000")?,
-        SuiJsonValue::from_str(&format!("{:#x}", address))?,
+        SuiJsonValue::from_object_id(coin.object_id),
+        SuiJsonValue::from_str("10")?,
     ];
 
     let transaction_bytes: TransactionBytes = http_client
@@ -129,7 +131,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             package_id,
             module,
             function,
-            vec![],
+            vec![GAS::type_tag().into()],
             json_args,
             Some(gas.object_id),
             1000,

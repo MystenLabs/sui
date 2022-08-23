@@ -10,12 +10,17 @@ import {
   SuiData,
   getMoveObjectType,
 } from './objects';
-import { SuiAddress } from './common';
+import { normalizeSuiObjectId, SuiAddress } from './common';
 
 import BN from 'bn.js';
 import { getOption, Option } from './option';
+import { StructTag } from './sui-bcs';
 
-const COIN_TYPE = '0x2::coin::Coin';
+export const COIN_PACKAGE_ID = '0x2';
+export const COIN_MODULE_NAME = 'coin';
+export const COIN_TYPE = `${COIN_PACKAGE_ID}::${COIN_MODULE_NAME}::Coin`;
+export const COIN_SPLIT_VEC_FUNC_NAME = 'split_vec';
+export const COIN_JOIN_FUNC_NAME = 'join';
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 
 type ObjectData = GetObjectDataResponse | SuiMoveObject | SuiObjectInfo;
@@ -43,6 +48,15 @@ export class Coin {
     return coinTypeArg.substring(coinTypeArg.lastIndexOf(':') + 1);
   }
 
+  static getCoinStructTag(coinTypeArg: string): StructTag {
+    return {
+      address: normalizeSuiObjectId(coinTypeArg.split('::')[0]),
+      module: coinTypeArg.split('::')[1],
+      name: coinTypeArg.split('::')[2],
+      typeParams: [],
+    };
+  }
+
   static getBalance(
     data: GetObjectDataResponse | SuiMoveObject
   ): BN | undefined {
@@ -65,73 +79,71 @@ export class Coin {
   }
 }
 
-
 export type DelegationData = SuiMoveObject &
-    Pick<SuiData, 'dataType'> & {
-        type: '0x2::delegation::Delegation';
-        fields: {
-            active_delegation: Option<number>;
-            delegate_amount: number;
-            next_reward_unclaimed_epoch: number;
-            validator_address: SuiAddress;
-            info: {
-                id: string;
-                version: number;
-            };
-            coin_locked_until_epoch: Option<SuiMoveObject>;
-            ending_epoch: Option<number>;
-        };
+  Pick<SuiData, 'dataType'> & {
+    type: '0x2::delegation::Delegation';
+    fields: {
+      active_delegation: Option<number>;
+      delegate_amount: number;
+      next_reward_unclaimed_epoch: number;
+      validator_address: SuiAddress;
+      info: {
+        id: string;
+        version: number;
+      };
+      coin_locked_until_epoch: Option<SuiMoveObject>;
+      ending_epoch: Option<number>;
     };
+  };
 
 export type DelegationSuiObject = Omit<SuiObject, 'data'> & {
-    data: DelegationData;
+  data: DelegationData;
 };
 
 // Class for delegation.move
 // see https://github.com/MystenLabs/fastnft/blob/161aa27fe7eb8ecf2866ec9eb192e768f25da768/crates/sui-framework/sources/governance/delegation.move
 export class Delegation {
-    public static readonly SUI_OBJECT_TYPE = '0x2::delegation::Delegation';
-    private suiObject: DelegationSuiObject;
+  public static readonly SUI_OBJECT_TYPE = '0x2::delegation::Delegation';
+  private suiObject: DelegationSuiObject;
 
-    public static isDelegationSuiObject(
-        obj: SuiObject
-    ): obj is DelegationSuiObject {
-        return (
-            'type' in obj.data &&
-            obj.data.type === Delegation.SUI_OBJECT_TYPE
-        );
-    }
+  public static isDelegationSuiObject(
+    obj: SuiObject
+  ): obj is DelegationSuiObject {
+    return 'type' in obj.data && obj.data.type === Delegation.SUI_OBJECT_TYPE;
+  }
 
-    constructor(obj: DelegationSuiObject) {
-        this.suiObject = obj;
-    }
+  constructor(obj: DelegationSuiObject) {
+    this.suiObject = obj;
+  }
 
-    public nextRewardUnclaimedEpoch() {
-        return this.suiObject.data.fields.next_reward_unclaimed_epoch;
-    }
+  public nextRewardUnclaimedEpoch() {
+    return this.suiObject.data.fields.next_reward_unclaimed_epoch;
+  }
 
-    public activeDelegation() {
-        return BigInt(getOption(this.suiObject.data.fields.active_delegation) || 0);
-    }
+  public activeDelegation() {
+    return BigInt(getOption(this.suiObject.data.fields.active_delegation) || 0);
+  }
 
-    public delegateAmount() {
-        return this.suiObject.data.fields.delegate_amount;
-    }
+  public delegateAmount() {
+    return this.suiObject.data.fields.delegate_amount;
+  }
 
-    public endingEpoch() {
-        return getOption(this.suiObject.data.fields.ending_epoch);
-    }
+  public endingEpoch() {
+    return getOption(this.suiObject.data.fields.ending_epoch);
+  }
 
-    public validatorAddress() {
-        return this.suiObject.data.fields.validator_address;
-    }
+  public validatorAddress() {
+    return this.suiObject.data.fields.validator_address;
+  }
 
-    public isActive() {
-        return this.activeDelegation() > 0 && !this.endingEpoch();
-    }
+  public isActive() {
+    return this.activeDelegation() > 0 && !this.endingEpoch();
+  }
 
-    public hasUnclaimedRewards(epoch: number) {
-        return this.nextRewardUnclaimedEpoch() <= epoch && (this.isActive() || (this.endingEpoch() || 0) > epoch);
-    }
+  public hasUnclaimedRewards(epoch: number) {
+    return (
+      this.nextRewardUnclaimedEpoch() <= epoch &&
+      (this.isActive() || (this.endingEpoch() || 0) > epoch)
+    );
+  }
 }
-

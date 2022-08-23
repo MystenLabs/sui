@@ -62,6 +62,18 @@ pub enum PublicKey {
     Secp256k1KeyPair(Secp256k1PublicKey),
 }
 
+impl PartialEq for PublicKey {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (PublicKey::Ed25519KeyPair(a), PublicKey::Ed25519KeyPair(b)) => a == b,
+            (PublicKey::Secp256k1KeyPair(a), PublicKey::Secp256k1KeyPair(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for PublicKey {}
+
 impl SuiKeyPair {
     pub fn public(&self) -> PublicKey {
         match self {
@@ -136,12 +148,108 @@ impl EncodeDecodeBase64 for SuiKeyPair {
     }
 }
 
+impl Serialize for SuiKeyPair {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = self.encode_base64();
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> Deserialize<'de> for SuiKeyPair {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let s = String::deserialize(deserializer)?;
+        <SuiKeyPair as EncodeDecodeBase64>::decode_base64(&s)
+            .map_err(|e| Error::custom(e.to_string()))
+    }
+}
+
+impl From<Ed25519KeyPair> for SuiKeyPair {
+    fn from(key: Ed25519KeyPair) -> Self {
+        SuiKeyPair::Ed25519SuiKeyPair(key)
+    }
+}
+
+impl From<Secp256k1KeyPair> for SuiKeyPair {
+    fn from(key: Secp256k1KeyPair) -> Self {
+        SuiKeyPair::Secp256k1SuiKeyPair(key)
+    }
+}
+
 impl AsRef<[u8]> for PublicKey {
     fn as_ref(&self) -> &[u8] {
         match self {
             PublicKey::Ed25519KeyPair(pk) => pk.as_ref(),
             PublicKey::Secp256k1KeyPair(pk) => pk.as_ref(),
         }
+    }
+}
+
+impl From<Ed25519PublicKey> for PublicKey {
+    fn from(key: Ed25519PublicKey) -> Self {
+        PublicKey::Ed25519KeyPair(key)
+    }
+}
+
+impl From<Secp256k1PublicKey> for PublicKey {
+    fn from(key: Secp256k1PublicKey) -> Self {
+        PublicKey::Secp256k1KeyPair(key)
+    }
+}
+
+impl EncodeDecodeBase64 for PublicKey {
+    fn encode_base64(&self) -> String {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(&[self.flag()]);
+        bytes.extend_from_slice(self.as_ref());
+        base64ct::Base64::encode_string(&bytes[..])
+    }
+
+    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
+        let bytes =
+            base64ct::Base64::decode_vec(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
+        match bytes.first() {
+            Some(x) => {
+                if x == &<Ed25519PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
+                    let pk = Ed25519PublicKey::from_bytes(&bytes[1..])?;
+                    Ok(PublicKey::Ed25519KeyPair(pk))
+                } else if x == &<Secp256k1PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
+                    let pk = Secp256k1PublicKey::from_bytes(&bytes[1..])?;
+                    Ok(PublicKey::Secp256k1KeyPair(pk))
+                } else {
+                    Err(eyre::eyre!("Invalid flag byte"))
+                }
+            }
+            _ => Err(eyre::eyre!("Invalid bytes")),
+        }
+    }
+}
+
+impl Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = self.encode_base64();
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let s = String::deserialize(deserializer)?;
+        <PublicKey as EncodeDecodeBase64>::decode_base64(&s)
+            .map_err(|e| Error::custom(e.to_string()))
     }
 }
 
@@ -153,6 +261,7 @@ impl PublicKey {
         }
     }
 }
+
 //
 // Define Bytes representation of the Authority's PublicKey
 //
@@ -160,7 +269,7 @@ impl PublicKey {
 #[serde_as]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct AuthorityPublicKeyBytes(
-    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; AuthorityPublicKey::LENGTH],
+    #[serde_as(as = "Readable<Base64, Bytes>")] [u8; AuthorityPublicKey::LENGTH + 1],
 );
 
 impl AuthorityPublicKeyBytes {
@@ -178,13 +287,18 @@ impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
     type Error = signature::Error;
 
     fn try_from(bytes: AuthorityPublicKeyBytes) -> Result<AuthorityPublicKey, Self::Error> {
-        AuthorityPublicKey::from_bytes(bytes.as_ref()).map_err(|_| Self::Error::new())
+        if AuthorityPublicKey::SIGNATURE_SCHEME.flag() != bytes.as_ref()[0] {
+            return Err(signature::Error::new());
+        }
+        AuthorityPublicKey::from_bytes(&bytes.as_ref()[1..]).map_err(|_| signature::Error::new())
     }
 }
 
 impl From<&AuthorityPublicKey> for AuthorityPublicKeyBytes {
     fn from(pk: &AuthorityPublicKey) -> AuthorityPublicKeyBytes {
-        AuthorityPublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
+        let mut bytes_with_flag = vec![AuthorityPublicKey::SIGNATURE_SCHEME.flag()];
+        bytes_with_flag.extend_from_slice(pk.as_ref());
+        AuthorityPublicKeyBytes::from_bytes(bytes_with_flag.as_ref()).unwrap()
     }
 }
 
@@ -208,7 +322,7 @@ impl Display for AuthorityPublicKeyBytes {
 
 impl ToFromBytes for AuthorityPublicKeyBytes {
     fn from_bytes(bytes: &[u8]) -> Result<Self, signature::Error> {
-        let bytes: [u8; AuthorityPublicKey::LENGTH] =
+        let bytes: [u8; AuthorityPublicKey::LENGTH + 1] =
             bytes.try_into().map_err(signature::Error::from_source)?;
         Ok(AuthorityPublicKeyBytes(bytes))
     }
@@ -216,7 +330,7 @@ impl ToFromBytes for AuthorityPublicKeyBytes {
 
 impl AuthorityPublicKeyBytes {
     /// This ensures it's impossible to construct an instance with other than registered lengths
-    pub fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
+    pub fn new(bytes: [u8; AuthorityPublicKey::LENGTH + 1]) -> AuthorityPublicKeyBytes
 where {
         AuthorityPublicKeyBytes(bytes)
     }
@@ -225,7 +339,7 @@ where {
     // see [#34](https://github.com/MystenLabs/narwhal/issues/34)
     #[allow(dead_code)]
     fn default() -> Self {
-        Self([0u8; AuthorityPublicKey::LENGTH])
+        Self([0u8; AuthorityPublicKey::LENGTH + 1])
     }
 }
 
@@ -268,7 +382,7 @@ impl SuiAuthoritySignature for AuthoritySignature {
         T: Signable<Vec<u8>>,
     {
         // is this a cryptographically valid public Key?
-        let public_key = AuthorityPublicKey::from_bytes(author.as_ref()).map_err(|_| {
+        let public_key = AuthorityPublicKey::try_from(author).map_err(|_| {
             SuiError::KeyConversionError(
                 "Failed to serialize public key bytes to valid public key".to_string(),
             )

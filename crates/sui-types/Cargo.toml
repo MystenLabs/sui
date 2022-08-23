@@ -13,7 +13,7 @@ itertools = "0.10.3"
 once_cell = "1.13.1"
 rand = "0.8.5"
 serde = { version = "1.0.141", features = ["derive"] }
-curve25519-dalek = { version = "3", default-features = false, features = ["serde"] }
+curve25519-dalek = { version = "3", default-features = false, features = ["serde", "u64_backend"] }
 serde-name = "0.2.1"
 sha2 = "0.9.9"
 sha3 = "0.10.2"
@@ -49,9 +49,9 @@ move-ir-types = { git = "https://github.com/move-language/move", rev = "70b34a66
 move-vm-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "ad05db4c5d6f851402efc7d2b285e9b59d513e64", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "f4cab79d77cf70b0d564fa640fb748584a3ba36f", package = "executor" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "ded6f91c9c19594a3eaeaa9a487d42a39965569e", features = ["copy_key"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9e58305dc463c40b9d357730203406214909f04", features = ["copy_key"] }
 
 workspace-hack = { path = "../workspace-hack"}
 

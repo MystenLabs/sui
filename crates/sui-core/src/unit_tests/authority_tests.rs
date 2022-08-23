@@ -677,10 +677,11 @@ async fn test_publish_non_existing_dependent_module() {
 async fn test_handle_move_transaction() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
+    let (authority_state, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_payment_object_id)]).await;
 
     let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_payment_object_id,
         &sender,
@@ -1191,27 +1192,41 @@ async fn test_handle_confirmation_transaction_idempotent() {
 async fn test_move_call_mutable_object_not_mutated() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let (authority_state, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
-    let (new_object_id1, seq1, _) = effects.created[0].0;
-
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
-    let (new_object_id2, seq2, _) = effects.created[0].0;
-
-    let effects = call_framework_code(
+    let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
+    let (new_object_id1, seq1, _) = effects.created[0].0;
+
+    let effects = create_move_object(
+        &pkg_ref,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
+    let (new_object_id2, seq2, _) = effects.created[0].0;
+
+    let effects = call_move(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &pkg_ref,
         "object_basics",
         "update",
         vec![],
@@ -1335,27 +1350,41 @@ async fn test_move_call_insufficient_gas() {
 async fn test_move_call_delete() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let (authority_state, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
-    let (new_object_id1, _seq1, _) = effects.created[0].0;
-
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
-    let (new_object_id2, _seq2, _) = effects.created[0].0;
-
-    let effects = call_framework_code(
+    let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
+    let (new_object_id1, _seq1, _) = effects.created[0].0;
+
+    let effects = create_move_object(
+        &pkg_ref,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
+    let (new_object_id2, _seq2, _) = effects.created[0].0;
+
+    let effects = call_move(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &pkg_ref,
         "object_basics",
         "update",
         vec![],
@@ -1371,11 +1400,12 @@ async fn test_move_call_delete() {
     // obj1, obj2 and gas are all mutated here.
     assert_eq!((effects.created.len(), effects.mutated.len()), (0, 3));
 
-    let effects = call_framework_code(
+    let effects = call_move(
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+        &pkg_ref,
         "object_basics",
         "delete",
         vec![],
@@ -1388,26 +1418,51 @@ async fn test_move_call_delete() {
 }
 
 #[tokio::test]
+async fn test_get_latest_parent_entry_genesis() {
+    let authority_state = init_state().await;
+    // There should not be any object with ID zero
+    assert!(authority_state
+        .get_latest_parent_entry(ObjectID::ZERO)
+        .await
+        .unwrap()
+        .is_none());
+}
+
+#[tokio::test]
 async fn test_get_latest_parent_entry() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let (authority_state, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    let (new_object_id1, _seq1, _) = effects.created[0].0;
-
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    let (new_object_id2, _seq2, _) = effects.created[0].0;
-
-    let effects = call_framework_code(
+    let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+    )
+    .await
+    .unwrap();
+    let (new_object_id1, _seq1, _) = effects.created[0].0;
+
+    let effects = create_move_object(
+        &pkg_ref,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+    let (new_object_id2, _seq2, _) = effects.created[0].0;
+
+    let effects = call_move(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &pkg_ref,
         "object_basics",
         "update",
         vec![],
@@ -1429,11 +1484,12 @@ async fn test_get_latest_parent_entry() {
     assert_eq!(obj_ref.1, SequenceNumber::from(2));
     assert_eq!(effects.transaction_digest, tx);
 
-    let effects = call_framework_code(
+    let effects = call_move(
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+        &pkg_ref,
         "object_basics",
         "delete",
         vec![],
@@ -1443,13 +1499,6 @@ async fn test_get_latest_parent_entry() {
     .unwrap();
 
     // Test get_latest_parent_entry function
-
-    // The very first object returns None
-    assert!(authority_state
-        .get_latest_parent_entry(ObjectID::ZERO)
-        .await
-        .unwrap()
-        .is_none());
 
     // The objects just after the gas object also returns None
     let mut x = gas_object_id.to_vec();
@@ -1858,6 +1907,31 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
 }
 
 #[cfg(test)]
+pub async fn init_state_with_ids_and_object_basics<
+    I: IntoIterator<Item = (SuiAddress, ObjectID)>,
+>(
+    objects: I,
+) -> (AuthorityState, ObjectRef) {
+    use move_package::BuildConfig;
+
+    let state = init_state().await;
+    for (address, object_id) in objects {
+        let obj = Object::with_id_owner_for_testing(object_id, address);
+        state.insert_genesis_object(obj).await;
+    }
+
+    // add object_basics package object to genesis, since lots of test use it
+    let build_config = BuildConfig::default();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/object_basics");
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let pkg = Object::new_package(modules, TransactionDigest::genesis());
+    let pkg_ref = pkg.compute_object_reference();
+    state.insert_genesis_object(pkg).await;
+    (state, pkg_ref)
+}
+
+#[cfg(test)]
 pub async fn init_state_with_ids_and_versions<
     I: IntoIterator<Item = (SuiAddress, ObjectID, SequenceNumber)>,
 >(
@@ -1984,43 +2058,19 @@ pub async fn call_move(
     Ok(response.signed_effects.unwrap().effects)
 }
 
-async fn call_framework_code(
+pub async fn create_move_object(
+    package_ref: &ObjectRef,
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
     sender_key: &AccountKeyPair,
-    module: &'_ str,
-    function: &'_ str,
-    type_args: Vec<TypeTag>,
-    args: Vec<TestCallArg>,
 ) -> SuiResult<TransactionEffects> {
-    let package_object_ref = authority.get_framework_object_ref().await?;
-
     call_move(
         authority,
         gas_object_id,
         sender,
         sender_key,
-        &package_object_ref,
-        module,
-        function,
-        type_args,
-        args,
-    )
-    .await
-}
-
-pub async fn create_move_object(
-    authority: &AuthorityState,
-    gas_object_id: &ObjectID,
-    sender: &SuiAddress,
-    sender_key: &AccountKeyPair,
-) -> SuiResult<TransactionEffects> {
-    call_framework_code(
-        authority,
-        gas_object_id,
-        sender,
-        sender_key,
+        package_ref,
         "object_basics",
         "create",
         vec![],

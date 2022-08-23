@@ -9,7 +9,7 @@
 /// could mutate the objects in the Bag.
 /// Bag is different from the Collection type in that Collection
 /// only supports owning objects of the same type.
-module sui::bag {
+module nfts::bag {
     use sui::object::{Self, ID, UID};
     use sui::transfer;
     use sui::typed_id::{Self, TypedID};

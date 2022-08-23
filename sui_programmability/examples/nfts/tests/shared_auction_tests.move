@@ -9,6 +9,7 @@ module nfts::shared_auction_tests {
     use sui::sui::SUI;
     use sui::object::{Self, UID};
     use sui::test_scenario::Self;
+    use sui::transfer;
     use sui::tx_context::TxContext;
 
     use nfts::shared_auction;
@@ -33,8 +34,8 @@ module nfts::shared_auction_tests {
     fun init(ctx: &mut TxContext, bidders: vector<address>) {
         while (!vector::is_empty(&bidders)) {
             let bidder = vector::pop_back(&mut bidders);
-            let coin = coin::mint_for_testing(COIN_VALUE, ctx);
-            coin::transfer<SUI>(coin, bidder);
+            let coin = coin::mint_for_testing<SUI>(COIN_VALUE, ctx);
+            transfer::transfer(coin, bidder);
         };
     }
 

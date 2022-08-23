@@ -236,7 +236,7 @@ terminal window than one used to execute `sui start`). Assuming you
 accepted the default location for configuration:
 
 ```shell
-$ sui console 
+$ sui console
 ```
 
 This command will look for the client configuration file
@@ -337,15 +337,15 @@ When not specified, the active address is used.
 
 ```shell
 $ sui client objects
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI> 
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
 ```shell
 $ sui client objects --address 0x913cf36f370613ed131868ac6f9da2420166062e
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI> 
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
 
 All commands where `address` is omitted will now use the newly specified active address:
@@ -434,7 +434,7 @@ You can use the `objects` command to view the objects owned by the address.
 `objects` command usage:
 
 ```shell
-sui-client-objects 
+sui-client-objects
 Obtain all objects owned by the address
 
 USAGE:
@@ -455,13 +455,13 @@ $ sui client objects --address 0x66af3898e7558b79e115ab61184a958497d1905a
 The result should resemble the following.
 
 ```shell
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 |     0      | uCZNPmDWOksKhCKwEaMtST5T4HbTjcgXGHRXP4qTLC8= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xd1949864f94d87cf25e1fd7b1c8ab4bf685f7801 |     0      | OsTryyECAPW9mnSbWlYWELX+QlRg5er7s/DlkgqhDww= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xddb6119c320f52f3fef9fbc272af305d985b6883 |     0      | gBCDdel7iJZnXpuf4g9dqIPT4XjaAY/4knNcDxbTons= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xe1fe79ac8d900342e617e0986f54ff64e4e323de |     0      | qjsWIzAaomo0eqFwQt99EkARsiC/aw2hPDH8quM6pYg= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     0      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xc8add7b4073900ffb0a8b4fe7d70a7db454c2e19 |     0      | uCZNPmDWOksKhCKwEaMtST5T4HbTjcgXGHRXP4qTLC8= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xd1949864f94d87cf25e1fd7b1c8ab4bf685f7801 |     0      | OsTryyECAPW9mnSbWlYWELX+QlRg5er7s/DlkgqhDww= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xddb6119c320f52f3fef9fbc272af305d985b6883 |     0      | gBCDdel7iJZnXpuf4g9dqIPT4XjaAY/4knNcDxbTons= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xe1fe79ac8d900342e617e0986f54ff64e4e323de |     0      | qjsWIzAaomo0eqFwQt99EkARsiC/aw2hPDH8quM6pYg= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 Showing 5 results.
 ```
 
@@ -470,7 +470,7 @@ If you want to view more information about the objects, you can use the `object`
 Usage of `object` command :
 
 ```shell
-sui-client-object 
+sui-client-object
 Get object info
 
 USAGE:
@@ -558,7 +558,7 @@ We will explore how to transfer coins using the Sui CLI client in this section.
 `transfer-coin` command usage:
 
 ```shell
-sui-client-transfer-coin 
+sui-client-transfer-coin
 Transfer coin object
 
 USAGE:
@@ -622,9 +622,9 @@ The account will now have one object:
 
 ```shell
 $ sui client objects --address 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     1      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 |     1      | j8qLxVk/Bm9iMdhPf9b7HcIMQIAM+qCd8LfPAwKYrFo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 ```
 
 ## Creating example NFTs
@@ -659,7 +659,7 @@ The command will invoke the `mint` function in the `devnet_nft` module, which mi
 `create-example-nft` command usage:
 
 ```shell
-sui-client-create-example-nft 
+sui-client-create-example-nft
 Create an example NFT
 
 USAGE:
@@ -692,7 +692,7 @@ We can use the `merge-coin` command and `split-coin` command to consolidate or s
 Usage of `merge-coin`:
 
 ```shell
-sui-client-merge-coin 
+sui-client-merge-coin
 Merge two coin objects into one coin
 
 USAGE:
@@ -732,13 +732,13 @@ $ sui client objects --address 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
 And its output:
 
 ```
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x1e90389f5d70d7fa6ce973155460e1c04deae194 |     0      | BC5O8Bf6Uw8S1LV1y4RCI6+kz1KhZG/aOpeqq9kTAvs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x351f08f03709cebea85dcd20e24b00fbc1851c92 |     0      | 9aYvavAzY6chYbOUtMtJj0g/5GNc+KBsqptCX5pmQ2Y= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x3c720502f9eabb17a52a999859fbbaeb408b1d14 |     0      | WUPT6P40veMZ/C7GiQpv92I4EH+hvh5BbkBt+7p9yH0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x7438af4677b9cea2094848f611143346183c11d1 |     0      | 55B56RG/kCeHrN6GXdIq0IvnyYD/hng9J7I7FNRykQ4= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x9d5f2b2564ad2255c24a03556785bddc85381508 |     0      | rmyYjq/UEED0xR0hE3Da8OYgBAu3MYxKQ3v76pGTDek= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x1e90389f5d70d7fa6ce973155460e1c04deae194 |     0      | BC5O8Bf6Uw8S1LV1y4RCI6+kz1KhZG/aOpeqq9kTAvs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x351f08f03709cebea85dcd20e24b00fbc1851c92 |     0      | 9aYvavAzY6chYbOUtMtJj0g/5GNc+KBsqptCX5pmQ2Y= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x3c720502f9eabb17a52a999859fbbaeb408b1d14 |     0      | WUPT6P40veMZ/C7GiQpv92I4EH+hvh5BbkBt+7p9yH0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x7438af4677b9cea2094848f611143346183c11d1 |     0      | 55B56RG/kCeHrN6GXdIq0IvnyYD/hng9J7I7FNRykQ4= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x9d5f2b2564ad2255c24a03556785bddc85381508 |     0      | rmyYjq/UEED0xR0hE3Da8OYgBAu3MYxKQ3v76pGTDek= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 Showing 5 results.
 ```
 
@@ -770,7 +770,7 @@ Updated Gas : Coin { id: 0x3c720502f9eabb17a52a999859fbbaeb408b1d14, value: 9944
 Usage of `split-coin`:
 
 ```shell
-sui-client-split-coin 
+sui-client-split-coin
 Split a coin object into multiple coins
 
 USAGE:
@@ -799,13 +799,13 @@ $ sui client objects --address 0x08da15bee6a3f5b01edbbd402654a75421d81397
 With output resembling:
 
 ```shell
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 |     0      | uNcjv6KP8AXgQHTFmiEPV3tpWZcYHb1HmBR0B2pMsAo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4 |     0      | /ug6IGGld90PqnmL9qijciCqn25V11nn5/PAsKjxMY0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x7f7b7c1589aceb073a7c8740b1d47d05e4d89e3c |     0      | N5+qKRenKWqb7Y6WKZuFD+fRDB6pj/OtIyri+FSQ3Q0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xe42558e82e315c9c81ee5b9f1ac3db819ece5c1d |     0      | toHeih0DeFrqxQhGzVUi9EkVwAZSbLx6hv2gpMgNBbs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xfa322fee6a7f4c266ad4840e85bf3d87689b6de0 |     0      | DxjnkJTSl0o6HlzeOX5K/If61bbFwvRDydjzd2bq8ho= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 |     0      | uNcjv6KP8AXgQHTFmiEPV3tpWZcYHb1HmBR0B2pMsAo= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4 |     0      | /ug6IGGld90PqnmL9qijciCqn25V11nn5/PAsKjxMY0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x7f7b7c1589aceb073a7c8740b1d47d05e4d89e3c |     0      | N5+qKRenKWqb7Y6WKZuFD+fRDB6pj/OtIyri+FSQ3Q0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xe42558e82e315c9c81ee5b9f1ac3db819ece5c1d |     0      | toHeih0DeFrqxQhGzVUi9EkVwAZSbLx6hv2gpMgNBbs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xfa322fee6a7f4c266ad4840e85bf3d87689b6de0 |     0      | DxjnkJTSl0o6HlzeOX5K/If61bbFwvRDydjzd2bq8ho= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 Showing 5 results.
 ```
 
@@ -840,16 +840,16 @@ Updated Gas : Coin { id: 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4, value: 9938
 
 ```
 $ sui client objects --address 0x08da15bee6a3f5b01edbbd402654a75421d81397
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x1da8193ac29f94f8207b0222bd5941b7814c1668 |     1      | nAMEV3NZ0zscjO10QQUt1drLvhNXTk4MVLAg1FXTQxw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x3653bae7851c36e0e5e827b7c1a2978ef78efd7e |     1      | blMuVATrI89PRvqA4Kuv6rNkbuAb+bYhmkMocY7pavw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 |     1      | uhfauig0guMidpxFyCO6FzhzDfucss+eA6xWzAVF3sU= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4 |     1      | sWTy2PUbt3UFEKx1Km32dEG7cQscSK+eVc3ChaZCkkA= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x7f7b7c1589aceb073a7c8740b1d47d05e4d89e3c |     0      | N5+qKRenKWqb7Y6WKZuFD+fRDB6pj/OtIyri+FSQ3Q0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xd5b694f67410d5b6cd293128cd48953aaa0a3dce |     1      | 4V0BC6eopxkN6wIOdm2FVgwN3psNbPvLKQ9/zrYtsDM= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xe42558e82e315c9c81ee5b9f1ac3db819ece5c1d |     0      | toHeih0DeFrqxQhGzVUi9EkVwAZSbLx6hv2gpMgNBbs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xfa322fee6a7f4c266ad4840e85bf3d87689b6de0 |     0      | DxjnkJTSl0o6HlzeOX5K/If61bbFwvRDydjzd2bq8ho= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x1da8193ac29f94f8207b0222bd5941b7814c1668 |     1      | nAMEV3NZ0zscjO10QQUt1drLvhNXTk4MVLAg1FXTQxw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x3653bae7851c36e0e5e827b7c1a2978ef78efd7e |     1      | blMuVATrI89PRvqA4Kuv6rNkbuAb+bYhmkMocY7pavw= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 |     1      | uhfauig0guMidpxFyCO6FzhzDfucss+eA6xWzAVF3sU= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4 |     1      | sWTy2PUbt3UFEKx1Km32dEG7cQscSK+eVc3ChaZCkkA= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x7f7b7c1589aceb073a7c8740b1d47d05e4d89e3c |     0      | N5+qKRenKWqb7Y6WKZuFD+fRDB6pj/OtIyri+FSQ3Q0= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xd5b694f67410d5b6cd293128cd48953aaa0a3dce |     1      | 4V0BC6eopxkN6wIOdm2FVgwN3psNbPvLKQ9/zrYtsDM= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xe42558e82e315c9c81ee5b9f1ac3db819ece5c1d |     0      | toHeih0DeFrqxQhGzVUi9EkVwAZSbLx6hv2gpMgNBbs= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xfa322fee6a7f4c266ad4840e85bf3d87689b6de0 |     0      | DxjnkJTSl0o6HlzeOX5K/If61bbFwvRDydjzd2bq8ho= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 Showing 8 results.
 ```
 
@@ -865,7 +865,7 @@ following function we will be calling in this tutorial:
 
 ```rust
 public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
-    coin::transfer(c, Address::new(recipient))
+    transfer::transfer(c, Address::new(recipient))
 }
 ```
 
@@ -878,13 +878,13 @@ Let us examine objects owned by address `0x48ff0a932b12976caec91d521265b009ad5b2
 
 ```shell
 $ sui client objects --address 0x48ff0a932b12976caec91d521265b009ad5b2225
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x471c8e241d0473c34753461529b70f9c4ed3151b |     0      | MCQIALghS9kQUWMclChmsd6jCuLiUxNjEn9VRV+AhSA= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     0      | VIbuA4fcsitOUmJLQ+FugZWIn7bg6LnVO8eTIAUDzkg= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x471c8e241d0473c34753461529b70f9c4ed3151b |     0      | MCQIALghS9kQUWMclChmsd6jCuLiUxNjEn9VRV+AhSA= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     0      | VIbuA4fcsitOUmJLQ+FugZWIn7bg6LnVO8eTIAUDzkg= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 Showing 5 results.
 ```
 
@@ -959,12 +959,12 @@ the sender:
 
 ```shell
 $ sui client objects --address 0x48ff0a932b12976caec91d521265b009ad5b2225
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     1      | st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     1      | st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 Showing 4 results.
 ```
 
@@ -1019,12 +1019,12 @@ $ sui client objects --address 0x3cbf06e9997b3864e3baad6bc0f0ef8ec423cd75
 Outputting:
 
 ```
-                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type               
+                 Object ID                  |  Version   |                    Digest                    |   Owner Type    |               Object Type
 ---------------------------------------------------------------------------------------------------------------------------------------------------------------------
- 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     1      | st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
- 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>     
+ 0x53b50e3020a01e1fd6acf832a871feee240183f0 |     1      | st6KVE+nTPsQgtEtxSbgJZCzSSuSB2ZsJAMbXFNLw/k= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x5c846224b8704683a1c576aec7c8d9c3413d87c1 |     0      | KO0Fr9uCPnT3KxOEishyzas33le4J9fAGg7iEOOzo7A= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0x6fe4cf8d2c21f23f2aacf60f30c98ff9e2c78226 |     0      | p2evKbTirwEoF1PxGIu5USAsSdkxzh1sUD/OxBfpdNE= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
+ 0xa28dd252ab5b984a8c1da699bbe10e7f09947a12 |     0      | 6VT+8479aijA8tYmab7YatVgjXm1TWy5jItooC416YQ= |  AddressOwner   |      0x2::coin::Coin<0x2::sui::SUI>
 Showing 4 results.
 ```
 

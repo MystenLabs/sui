@@ -1,30 +1,95 @@
 # Sui Wallet Adapter
 
-This project is an adapter for wallets on the Sui blockchain.
+> **⚠️ These packages are experimental and will change rapidly as they are being developed. Do not consider these APIs to be stable. If you have any feedback, [open an issue](https://github.com/MystenLabs/sui/issues/new/choose) or message us on [Discord](https://discord.gg/Sui).**
 
-### Demo App
+Sui Wallet Adapter is a set of libraries that makes it easy to connect your dApp to Sui wallets.
 
-To run the demo app,
+## Getting started
 
+To get started in a React application, you can install the following packages:
+
+```bash
+npm install @mysten/wallet-adapter-all-wallets @mysten/wallet-adapter-react @mysten/wallet-adapter-react-ui
 ```
+
+At the root of your application, you can then set up the wallet providers:
+
+```tsx
+import { Wallet, WalletProvider } from "@mysten/wallet-adapter-react";
+import { SuiWalletAdapter } from "@mysten/wallet-adapter-all-wallets";
+
+export function App() {
+  const supportedWallets: Wallet[] = [
+    {
+      adapter: new SuiWalletAdapter(),
+    },
+  ];
+
+  return (
+    <WalletProvider supportedWallets={supportedWallets}>
+      {/* Your application... */}
+    </WalletProvider>
+  );
+}
+```
+
+To add a **Connect Wallet** button to your page, use the `@mysten/wallet-adapter-react-ui` package:
+
+```tsx
+import { WalletWrapper } from "@mysten/wallet-adapter-react-ui";
+
+function ConnectToWallet() {
+  return <WalletWrapper />;
+}
+```
+
+To get access to the currently connected wallet, use the `useWallet()` hook from `@mysten/wallet-adapter-react` to interact with the wallet, such as proposing transactions:
+
+```tsx
+import { useWallet } from "sui-wallet-adapter-react";
+
+export function SendTransaction() {
+  const { connected, getAccounts, executeMoveCall } = useWallet();
+
+  const handleClick = async () => {
+    await executeMoveCall({
+      packageObjectId: "0x2",
+      module: "devnet_nft",
+      function: "mint",
+      typeArguments: [],
+      arguments: [
+        "name",
+        "capy",
+        "https://cdn.britannica.com/94/194294-138-B2CF7780/overview-capybara.jpg?w=800&h=450&c=crop",
+      ],
+      gasBudget: 10000,
+    });
+  };
+
+  return (
+    <Button onClick={handleClick} disabled={!connected}>
+      Send Transaction
+    </Button>
+  );
+}
+```
+
+### Usage without React
+
+We do not currently have non-React UI libraries for connecting to wallets. The wallet adapters and logic in the React library can be used as reference for implementing a wallet connection UI in other UI libraries.
+
+## Supported wallets
+
+All available wallet adapters are currently exported via the `@mysten/wallet-adapter-all-wallets` package.
+You can also install individual wallet adapters that you plan on using in your project.
+
+- **[Sui Wallet](https://docs.sui.io/devnet/explore/wallet-browser)** - `@mysten/wallet-adapter-sui-wallet`
+
+## Demo app
+
+This repo has a simple demo app to test the behavior of the wallet adapters. You can run it using the following commands:
+
+```bash
 pnpm install
-pnpm start
+pnpm dev
 ```
-
-### Modules
-
-#### packages/adapters/base-adapter
-
-Defines the base interface in which the wallet adapters will implement.
-
-#### packages/adapters/integrations
-
-Contains the integrations for each wallet. If you are importing multiple wallets, it may be beneficial to instead import the `all-wallets` module, which exports all integrated wallet adapter interfaces.
-
-#### packages/ui
-
-Contains basic UI elements such as the Connect/Manage Wallet and corresponding modals for each wallet. Check out ./src for an example of how to integrate this to your project.
-
-#### packages/react-providers
-
-Contains the react providers that inject the endpoint defined in `packages/adapters/base-adapter` into your project. Check out ./src for an example of how to integrate this to your project.

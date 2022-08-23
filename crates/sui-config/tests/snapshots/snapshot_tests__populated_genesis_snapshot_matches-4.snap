@@ -11,8 +11,9 @@ validators:
   quorum_stake_threshold: 1
   active_validators:
     - metadata:
-        sui_address: 375741c9373ae27bde5e6b5f5cc79f074cd84587
+        sui_address: 270c4ae1be3e151d6fdba2d9c369283d6c5c5d76
         pubkey_bytes:
+          - 0
           - 185
           - 198
           - 238
@@ -45,6 +46,51 @@ validators:
           - 164
           - 146
           - 0
+        network_pubkey_bytes:
+          - 65
+          - 76
+          - 110
+          - 71
+          - 55
+          - 104
+          - 89
+          - 119
+          - 55
+          - 122
+          - 53
+          - 120
+          - 69
+          - 85
+          - 83
+          - 109
+          - 83
+          - 78
+          - 115
+          - 71
+          - 117
+          - 55
+          - 73
+          - 111
+          - 84
+          - 51
+          - 74
+          - 48
+          - 122
+          - 55
+          - 55
+          - 108
+          - 80
+          - 47
+          - 122
+          - 117
+          - 85
+          - 68
+          - 122
+          - 66
+          - 112
+          - 74
+          - 73
+          - 65
         name:
           - 48
         net_address: []
@@ -64,8 +110,9 @@ validators:
   pending_validators: []
   pending_removals: []
   next_epoch_validators:
-    - sui_address: 375741c9373ae27bde5e6b5f5cc79f074cd84587
+    - sui_address: 270c4ae1be3e151d6fdba2d9c369283d6c5c5d76
       pubkey_bytes:
+        - 0
         - 185
         - 198
         - 238
@@ -98,6 +145,51 @@ validators:
         - 164
         - 146
         - 0
+      network_pubkey_bytes:
+        - 65
+        - 76
+        - 110
+        - 71
+        - 55
+        - 104
+        - 89
+        - 119
+        - 55
+        - 122
+        - 53
+        - 120
+        - 69
+        - 85
+        - 83
+        - 109
+        - 83
+        - 78
+        - 115
+        - 71
+        - 117
+        - 55
+        - 73
+        - 111
+        - 84
+        - 51
+        - 74
+        - 48
+        - 122
+        - 55
+        - 55
+        - 108
+        - 80
+        - 47
+        - 122
+        - 117
+        - 85
+        - 68
+        - 122
+        - 66
+        - 112
+        - 74
+        - 73
+        - 65
       name:
         - 48
       net_address: []

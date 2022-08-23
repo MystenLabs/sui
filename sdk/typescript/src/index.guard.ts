@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
 import { BN } from "bn.js";
 import { Buffer } from "buffer";
 import { Base64DataBuffer } from "./serialization/base64";
@@ -82,7 +82,7 @@ export function isTransferSuiTransaction(obj: any, _argumentName?: string): obj 
         isTransactionDigest(obj.suiObjectId) as boolean &&
         isSuiMoveTypeParameterIndex(obj.gasBudget) as boolean &&
         isTransactionDigest(obj.recipient) as boolean &&
-        (typeof obj.amount === "undefined" ||
+        (obj.amount === null ||
             isSuiMoveTypeParameterIndex(obj.amount) as boolean)
     )
 }
@@ -151,10 +151,14 @@ export function isPublishTransaction(obj: any, _argumentName?: string): obj is P
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        Array.isArray(obj.compiledModules) &&
-        obj.compiledModules.every((e: any) =>
-            isTransactionDigest(e) as boolean
-        ) &&
+        ((obj.compiledModules !== null &&
+            typeof obj.compiledModules === "object" ||
+            typeof obj.compiledModules === "function") &&
+            typeof obj.compiledModules["__@iterator"] === "function" ||
+            (obj.compiledModules !== null &&
+                typeof obj.compiledModules === "object" ||
+                typeof obj.compiledModules === "function") &&
+            typeof obj.compiledModules["__@iterator"] === "function") &&
         (typeof obj.gasPayment === "undefined" ||
             isTransactionDigest(obj.gasPayment) as boolean) &&
         isSuiMoveTypeParameterIndex(obj.gasBudget) as boolean
@@ -1125,6 +1129,26 @@ export function isTransferObjectTx(obj: any, _argumentName?: string): obj is Tra
     )
 }
 
+export function isTransferSuiTx(obj: any, _argumentName?: string): obj is TransferSuiTx {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        (obj.TransferSui !== null &&
+            typeof obj.TransferSui === "object" ||
+            typeof obj.TransferSui === "function") &&
+        isTransactionDigest(obj.TransferSui.recipient) as boolean &&
+        ((obj.TransferSui.amount !== null &&
+            typeof obj.TransferSui.amount === "object" ||
+            typeof obj.TransferSui.amount === "function") &&
+            isSuiMoveTypeParameterIndex(obj.TransferSui.amount.Some) as boolean ||
+            (obj.TransferSui.amount !== null &&
+                typeof obj.TransferSui.amount === "object" ||
+                typeof obj.TransferSui.amount === "function") &&
+            obj.TransferSui.amount.None === null)
+    )
+}
+
 export function isPublishTx(obj: any, _argumentName?: string): obj is PublishTx {
     return (
         (obj !== null &&
@@ -1246,6 +1270,7 @@ export function isMoveCallTx(obj: any, _argumentName?: string): obj is MoveCallT
 export function isTransaction(obj: any, _argumentName?: string): obj is Transaction {
     return (
         (isTransferObjectTx(obj) as boolean ||
+            isTransferSuiTx(obj) as boolean ||
             isPublishTx(obj) as boolean ||
             isMoveCallTx(obj) as boolean)
     )

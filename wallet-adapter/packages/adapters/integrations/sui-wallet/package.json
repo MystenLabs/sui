@@ -11,7 +11,7 @@
   "license": "ISC",
   "dependencies": {
     "@mysten/sui.js": "workspace:*",
-    "@mysten/base-wallet-adapter": "workspace:*"
+    "@mysten/wallet-adapter-base": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^4.7.4"

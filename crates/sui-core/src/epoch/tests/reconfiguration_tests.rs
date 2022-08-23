@@ -38,7 +38,7 @@ async fn test_start_epoch_change() {
     let gas_object = Object::with_id_owner_for_testing(ObjectID::random(), sender);
     let genesis_objects = vec![object.clone(), gas_object.clone()];
     // Create authority_aggregator and authority states.
-    let (net, states) = init_local_authorities(4, genesis_objects.clone()).await;
+    let (net, states, _) = init_local_authorities(4, genesis_objects.clone()).await;
     let state = states[0].clone();
 
     // Check that we initialized the genesis epoch.
@@ -170,7 +170,7 @@ async fn test_start_epoch_change() {
 async fn test_finish_epoch_change() {
     // Create authority_aggregator and authority states.
     let genesis_objects = vec![];
-    let (net, states) = init_local_authorities(4, genesis_objects.clone()).await;
+    let (net, states, _) = init_local_authorities(4, genesis_objects.clone()).await;
     let actives: Vec<_> = states
         .iter()
         .map(|state| {

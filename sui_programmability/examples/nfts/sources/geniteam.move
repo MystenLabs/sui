@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module nfts::geniteam {
-    use sui::bag::{Self, Bag};
-    use sui::collection::{Self, Collection};
+    use nfts::bag::{Self, Bag};
+    use nfts::collection::{Self, Collection};
     use sui::object::{Self, UID};
     use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
