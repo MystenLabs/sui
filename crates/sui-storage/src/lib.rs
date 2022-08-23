@@ -14,6 +14,7 @@ pub mod node_sync_store;
 pub mod write_ahead_log;
 
 use rocksdb::Options;
+use typed_store::rocks::default_rocksdb_options;
 
 /// Given a provided `db_options`, add a few default options.
 /// Returns the default option and the point lookup option.
@@ -21,7 +22,7 @@ pub fn default_db_options(
     db_options: Option<Options>,
     cache_capacity: Option<usize>,
 ) -> (Options, Options) {
-    let mut options = db_options.unwrap_or_default();
+    let mut options = db_options.unwrap_or_else(default_rocksdb_options);
 
     // One common issue when running tests on Mac is that the default ulimit is too low,
     // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
