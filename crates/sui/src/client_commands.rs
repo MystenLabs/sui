@@ -436,6 +436,9 @@ impl SuiClientCommands {
                         .split_coin(signer, coin_id, amounts, gas, gas_budget)
                         .await?
                 } else {
+                    if count == 0 {
+                        return Err(anyhow!("Coin split count must be greater than 0"));
+                    }
                     context
                         .gateway
                         .transaction_builder()
