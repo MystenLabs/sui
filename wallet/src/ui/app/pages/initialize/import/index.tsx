@@ -4,7 +4,6 @@
 import { useFormik } from 'formik';
 import { useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import TextareaAutosize from 'react-textarea-autosize';
 import * as Yup from 'yup';
 
 import Button from '_app/shared/button';
@@ -84,8 +83,7 @@ const ImportPage = () => {
 
             <h1 className={st.headerTitle}>Import wallet</h1>
             <form onSubmit={handleSubmit} noValidate autoComplete="off">
-                <TextareaAutosize
-                    minRows={2}
+                <textarea
                     onChange={handleChange}
                     value={mnemonic}
                     onBlur={onHandleMnemonicBlur}
