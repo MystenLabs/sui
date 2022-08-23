@@ -4,7 +4,6 @@ use std::sync::Arc;
 use multiaddr::Multiaddr;
 use sui_config::ValidatorInfo;
 use sui_core::authority::AuthorityState;
-use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::checkpoints::CHECKPOINT_COUNT_PER_EPOCH;
 use sui_core::safe_client::SafeClient;
@@ -163,11 +162,7 @@ fn update_checkpoint_cert_for_all(
             .as_ref()
             .unwrap()
             .lock()
-            .promote_signed_checkpoint_to_cert(
-                &checkpoint_cert,
-                &committee,
-                &CheckpointMetrics::new_for_tests(),
-            )
+            .promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee)
             .unwrap();
     }
 }
