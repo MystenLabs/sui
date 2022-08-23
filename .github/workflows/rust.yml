@@ -146,9 +146,23 @@ jobs:
     - uses: actions/checkout@v3
     - uses: EmbarkStudios/cargo-deny-action@v1
 
-  release-build:
+  release:
     needs: diff
     if: needs.diff.outputs.isRust == 'true'
+    runs-on: [ubuntu-ghcloud]
+    outputs:
+      isRelease: ${{ steps.release.outputs.isRelease }}
+    steps:
+      - name: Check for release
+        id: release
+        shell: bash
+        run: |
+          IS_RELEASE='false' ; if [[ $GITHUB_REF =~ ^refs/tags/devnet-[0-9].* ]]; then IS_RELEASE='true' ; fi
+          echo ::set-output name=isRelease::${IS_RELEASE}
+
+  release-build:
+    needs: release
+    if: needs.diff.outputs.isRelease == 'true'
     timeout-minutes: 45
     runs-on: [ubuntu-ghcloud]
     strategy:
@@ -157,15 +171,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
 
-      - name: Check for release
-        id: is-release
-        shell: bash
-        run: |
-          unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/devnet-[0-9].* ]]; then IS_RELEASE='true' ; fi
-          echo ::set-output name=IS_RELEASE::${IS_RELEASE}
-
       - name: cargo build (release)
-        if: steps.is-release.outputs.IS_RELEASE
         run: |
           cargo build --release
 
@@ -177,7 +183,6 @@ jobs:
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@master
-        if: steps.is-release.outputs.IS_RELEASE
         with:
           name: sui-binaries
           path: |
@@ -189,7 +194,6 @@ jobs:
 
       - name: Publish binaries
         uses: softprops/action-gh-release@v1
-        if: steps.is-release.outputs.IS_RELEASE
         with:
           files: |
             ${{ steps.package.outputs.BIN_SUI }}
