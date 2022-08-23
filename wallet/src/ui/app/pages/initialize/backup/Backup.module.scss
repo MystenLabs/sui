@@ -1,8 +1,36 @@
+@use '_values/colors';
+@use '_utils';
+
 .mnemonic {
-    padding: 12px;
-    border: 1px solid #90c2d866;
+    padding: 14px;
     border-radius: 6px;
     margin-bottom: 16px;
     font-size: 16px;
     font-weight: 400;
+    background: colors.$white;
+    border: 1px solid #e9eaeb;
+    border-radius: 15px;
+    font-family: Inter, sans-serif;
+    width: 320px;
+    height: 90px;
+
+    @include utils.typography('page-title');
+
+    font-weight: 500;
+    line-height: 130%;
+    color: colors.$gray-100;
+
+    &::placeholder {
+        color: colors.$gray-65;
+        font-weight: 500;
+    }
+}
+
+.header-title {
+    text-align: left;
+    margin-bottom: 20px;
+    color: colors.$gray-100;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 36px;
 }

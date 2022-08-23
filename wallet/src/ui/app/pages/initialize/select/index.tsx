@@ -38,9 +38,8 @@ const SelectPage = () => {
                             to={aSelection.url}
                             className={cl('btn', st.action)}
                         >
-                            {aSelection.action}
-
                             <Icon icon={aSelection.icon} className={st.icon} />
+                            {aSelection.action}
                         </Link>
                     </div>
                 ))}
