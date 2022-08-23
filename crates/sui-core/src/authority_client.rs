@@ -314,7 +314,7 @@ pub fn make_network_authority_client_sets_from_genesis(
             .connect_lazy(validator.network_address())
             .map_err(|err| anyhow!(err.to_string()))?;
         let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
-        authority_clients.insert(validator.public_key(), client);
+        authority_clients.insert(validator.protocol_key(), client);
     }
     Ok(authority_clients)
 }

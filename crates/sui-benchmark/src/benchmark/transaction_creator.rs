@@ -67,7 +67,7 @@ fn make_cert(network_config: &NetworkConfig, tx: &Transaction) -> CertifiedTrans
             .validator_configs()
             .get(i as usize)
             .unwrap()
-            .key_pair();
+            .protocol_key_pair();
 
         let pubx: AuthorityPublicKeyBytes = secx.public().into();
         let sig = AuthoritySignature::new(&tx.signed_data, secx);

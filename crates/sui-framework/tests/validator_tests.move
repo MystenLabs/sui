@@ -14,7 +14,8 @@ module sui::validator_tests {
 
     #[test]
     fun test_validator_owner_flow() {
-        let sender = @0x1;
+        let sender = @0xa257c6835e1d2ee0ac6e15a70a7dde97a67977fb;
+
         let scenario = &mut test_scenario::begin(&sender);
         {
             let ctx = test_scenario::ctx(scenario);
@@ -22,8 +23,9 @@ module sui::validator_tests {
             let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
             let validator = validator::new(
                 sender,
-                x"FF",
-                x"FF",
+                vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
+                vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
+                vector[184, 3, 152, 215, 72, 111, 54, 51, 255, 187, 223, 153, 215, 183, 127, 208, 59, 49, 54, 72, 5, 108, 39, 195, 202, 221, 54, 191, 114, 207, 186, 202, 122, 237, 5, 115, 98, 163, 110, 120, 159, 154, 167, 218, 11, 121, 245, 195, 70, 67, 206, 115, 3, 49, 249, 95, 70, 232, 233, 180, 109, 44, 16, 15],
                 b"Validator1",
                 x"FFFF",
                 init_stake,
@@ -48,14 +50,16 @@ module sui::validator_tests {
 
     #[test]
     fun test_pending_validator_flow() {
-        let sender = @0x1;
+        let sender = @0xa257c6835e1d2ee0ac6e15a70a7dde97a67977fb;
         let scenario = &mut test_scenario::begin(&sender);
         let ctx = test_scenario::ctx(scenario);
         let init_stake = coin::into_balance(coin::mint_for_testing(10, ctx));
+
         let validator = validator::new(
             sender,
-            x"FF",
-            x"FF",
+            vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
+            vector[171, 2, 39, 3, 139, 105, 166, 171, 153, 151, 102, 197, 151, 186, 140, 116, 114, 90, 213, 225, 20, 167, 60, 69, 203, 12, 180, 198, 9, 217, 117, 38],
+            vector[184, 3, 152, 215, 72, 111, 54, 51, 255, 187, 223, 153, 215, 183, 127, 208, 59, 49, 54, 72, 5, 108, 39, 195, 202, 221, 54, 191, 114, 207, 186, 202, 122, 237, 5, 115, 98, 163, 110, 120, 159, 154, 167, 218, 11, 121, 245, 195, 70, 67, 206, 115, 3, 49, 249, 95, 70, 232, 233, 180, 109, 44, 16, 15],
             b"Validator1",
             x"FFFF",
             init_stake,
