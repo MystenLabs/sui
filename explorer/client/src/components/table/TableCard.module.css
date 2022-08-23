@@ -16,6 +16,14 @@
     @apply text-sui-grey-75 text-sm;
 }
 
+.table abbr {
+    @apply text-sui-grey-60;
+}
+
+.table tr:hover abbr {
+    @apply text-sui-grey-90;
+}
+
 .table td section {
     @apply py-2 px-2.5;
 }
