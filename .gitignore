@@ -25,6 +25,7 @@ storage/
 
 # Node.js
 node_modules
+.tsbuildinfo
 
 # logs
 wallet.log.*

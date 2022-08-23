@@ -3,7 +3,7 @@
   "include": ["src"],
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "src"
   },
-  "references": [{ "path": "../react-providers" }]
+  "references": [{ "path": "../mock-adapter" }, { "path": "../sui-wallet" }]
 }

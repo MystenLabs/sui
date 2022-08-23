@@ -1,7 +1,7 @@
 {
-  "name": "@mysten/wallet-adapter-react-ui",
+  "name": "@mysten/wallet-adapter-mock-wallet",
   "version": "0.0.0",
-  "description": "UI for the Sui Wallet Adapter",
+  "description": "",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
   "type": "module",
@@ -16,23 +16,14 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
-    "build:types": "tsc --declaration --emitDeclarationOnly",
-    "prepublishOnly": "pnpm build"
-  },
-  "peerDependencies": {
-    "react": "*",
-    "react-dom": "*"
-  },
-  "devDependencies": {
-    "@mysten/sui.js": "workspace:*",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "tsup": "^6.2.2",
-    "typescript": "^4.7.4"
+    "build:types": "tsc --declaration --emitDeclarationOnly"
   },
   "dependencies": {
-    "@mui/icons-material": "^5.8.4",
-    "@mui/material": "^5.8.4",
-    "@mysten/wallet-adapter-react": "workspace:*"
+    "@mysten/sui.js": "workspace:*",
+    "@mysten/wallet-adapter-base": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^6.2.2",
+    "typescript": "^4.7.4"
   }
 }

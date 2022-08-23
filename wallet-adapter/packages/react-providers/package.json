@@ -2,13 +2,23 @@
   "name": "@mysten/wallet-adapter-react",
   "version": "0.0.0",
   "description": "React interface for Sui Wallet Adapter",
-  "main": "lib/index.js",
+  "license": "Apache-2.0",
+  "author": "Mysten Labs <build@mystenlabs.com>",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "build:types": "tsc --declaration --emitDeclarationOnly",
     "prepublishOnly": "pnpm build"
   },
-  "author": "",
-  "license": "ISC",
   "peerDependencies": {
     "@mysten/sui.js": "workspace:*",
     "react": "*",
@@ -18,11 +28,12 @@
     "@mysten/wallet-adapter-base": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^4.7.4",
     "@mysten/sui.js": "workspace:*",
     "@types/react": "^18.0.15",
     "@types/react-dom": "^18.0.6",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0"
+    "react-dom": "^18.2.0",
+    "tsup": "^6.2.2",
+    "typescript": "^4.7.4"
   }
 }

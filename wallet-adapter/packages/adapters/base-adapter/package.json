@@ -2,19 +2,28 @@
   "name": "@mysten/wallet-adapter-base",
   "version": "0.0.0",
   "description": "Base wallet adapter for Sui",
-  "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
+  "license": "Apache-2.0",
+  "author": "Mysten Labs <build@mystenlabs.com>",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc -p tsconfig.json",
+    "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "build:types": "tsc --declaration --emitDeclarationOnly",
     "prepublishOnly": "pnpm build"
   },
-  "author": "",
-  "license": "ISC",
   "dependencies": {
     "@mysten/sui.js": "workspace:*"
   },
   "devDependencies": {
+    "tsup": "^6.2.2",
     "typescript": "^4.7.4"
   }
 }
