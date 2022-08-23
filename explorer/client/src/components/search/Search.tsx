@@ -56,10 +56,10 @@ function Search() {
 
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
+            setInput(e.currentTarget.value);
             if (!e.currentTarget.value) {
                 setResult(null);
             } else {
-                setInput(e.currentTarget.value);
                 Promise.all(
                     SEARCH_CATEGORIES.map((category) =>
                         navigateWithCategory(
