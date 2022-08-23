@@ -217,13 +217,13 @@ impl<'a> SuiGasStatus<'a> {
 
     pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
         let computation_cost =
-            NumBytes::new(size as u64).mul(INIT_SUI_COST_TABLE.package_publish_per_byte_cost.0);
+            NumBytes::new(size as u64).mul(*INIT_SUI_COST_TABLE.package_publish_per_byte_cost);
 
         self.deduct_computation_cost(&computation_cost)
     }
 
     pub fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError> {
-        let cost = NumBytes::new(size as u64).mul(INIT_SUI_COST_TABLE.object_read_per_byte_cost.0);
+        let cost = NumBytes::new(size as u64).mul(*INIT_SUI_COST_TABLE.object_read_per_byte_cost);
         self.deduct_computation_cost(&cost)
     }
 
@@ -241,13 +241,13 @@ impl<'a> SuiGasStatus<'a> {
         // This is because to update an object in the store, we have to erase the old one and
         // write a new one.
         let cost = NumBytes::new((old_size + new_size) as u64)
-            .mul(INIT_SUI_COST_TABLE.object_mutation_per_byte_cost.0);
+            .mul(*INIT_SUI_COST_TABLE.object_mutation_per_byte_cost);
         self.deduct_computation_cost(&cost)?;
 
         self.storage_rebate += storage_rebate;
 
         let storage_cost =
-            NumBytes::new(new_size as u64).mul(INIT_SUI_COST_TABLE.storage_per_byte_cost.0);
+            NumBytes::new(new_size as u64).mul(*INIT_SUI_COST_TABLE.storage_per_byte_cost);
 
         self.deduct_storage_cost(&storage_cost).map(|q| q.into())
     }
