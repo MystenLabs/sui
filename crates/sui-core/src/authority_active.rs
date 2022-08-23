@@ -388,15 +388,12 @@ where
         let node_sync_state = self.node_sync_state.clone();
 
         info!("spawning node sync task");
-        let join_handle = tokio::task::spawn(async move {
-            node_sync_process(
-                node_sync_handle,
-                node_sync_state,
-                aggregator,
-                cancel_receiver,
-            )
-            .await;
-        });
+        let join_handle = tokio::task::spawn(node_sync_process(
+            node_sync_handle,
+            node_sync_state,
+            aggregator,
+            cancel_receiver,
+        ));
 
         *lock_guard = Some(NodeSyncProcessHandle(join_handle, cancel_sender));
     }
