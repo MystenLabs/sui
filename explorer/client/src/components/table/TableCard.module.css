@@ -45,7 +45,7 @@ td:nth-child(1) {
 }
 
 .table tbody tr td:hover .addresses {
-    @apply bg-[#6fbcf014] rounded-[4px];
+    @apply bg-sui-light rounded-[4px];
 }
 
 .addresses svg {
