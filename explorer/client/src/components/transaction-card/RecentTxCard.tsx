@@ -146,7 +146,7 @@ function SuiAmount({ amount }: { amount: BN | string | undefined }) {
 
         if (BN.isBN(amount)) {
             return (
-                <span className={styles.suiamount}>
+                <span>
                     {presentBN(amount)}
                     {SuiSuffix}
                 </span>

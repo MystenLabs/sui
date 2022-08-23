@@ -87,7 +87,3 @@ div.txadd {
 .suisuffix {
     @apply text-[10px] text-sui-grey-60 ml-[2px];
 }
-
-.suiamount {
-    @apply text-sui-grey-80;
-}

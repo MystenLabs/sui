@@ -21,7 +21,7 @@
 }
 
 .table tbody tr {
-    @apply space-y-10 mt-10 hover:bg-sui-grey-40;
+    @apply space-y-10 mt-10;
 }
 
 td:nth-child(1) {
@@ -29,7 +29,15 @@ td:nth-child(1) {
 }
 
 .table tbody tr:hover td {
-    @apply text-sui-grey-90;
+    @apply text-sui-grey-90 bg-sui-grey-40;
+}
+
+.table tbody tr:hover td:first-child {
+    @apply rounded-l-[4px];
+}
+
+.table tbody tr:hover td:last-child {
+    @apply rounded-r-[4px];
 }
 
 .addresses {
@@ -37,7 +45,7 @@ td:nth-child(1) {
 }
 
 .table tbody tr td:hover .addresses {
-    @apply bg-[#6fbcf014];
+    @apply bg-[#6fbcf014] rounded-[4px];
 }
 
 .addresses svg {
