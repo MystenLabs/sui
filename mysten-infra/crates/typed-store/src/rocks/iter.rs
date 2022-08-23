@@ -3,6 +3,7 @@
 use std::marker::PhantomData;
 
 use bincode::Options;
+use rocksdb::Direction;
 
 use super::{be_fix_int_ser, errors::TypedStoreError};
 use serde::{de::DeserializeOwned, Serialize};
@@ -13,6 +14,7 @@ use super::DBRawIteratorMultiThreaded;
 pub struct Iter<'a, K, V> {
     db_iter: DBRawIteratorMultiThreaded<'a>,
     _phantom: PhantomData<(K, V)>,
+    direction: Direction,
 }
 
 impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
@@ -20,6 +22,7 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iter<'a, K, V> {
         Self {
             db_iter,
             _phantom: PhantomData,
+            direction: Direction::Forward,
         }
     }
 }
@@ -38,7 +41,11 @@ impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for Iter<'a, K, V> {
                 .value()
                 .and_then(|v| bincode::deserialize(v).ok());
 
-            self.db_iter.next();
+            match self.direction {
+                Direction::Forward => self.db_iter.next(),
+                Direction::Reverse => self.db_iter.prev(),
+            }
+
             key.and_then(|k| value.map(|v| (k, v)))
         } else {
             None
@@ -67,5 +74,36 @@ impl<'a, K: Serialize, V> Iter<'a, K, V> {
     pub fn skip_to_last(mut self) -> Self {
         self.db_iter.seek_to_last();
         self
+    }
+
+    /// Will make the direction of the iteration reverse and will
+    /// create a new `RevIter` to consume. Every call to `next` method
+    /// will give the next element from the end.
+    pub fn reverse(mut self) -> RevIter<'a, K, V> {
+        self.direction = Direction::Reverse;
+        RevIter::new(self)
+    }
+}
+
+/// An iterator with a reverted direction to the original. The `RevIter`
+/// is hosting an iteration which is consuming in the opposing direction.
+/// It's not possible to do further manipulation (ex re-reverse) to the
+/// iterator.
+pub struct RevIter<'a, K, V> {
+    iter: Iter<'a, K, V>,
+}
+
+impl<'a, K, V> RevIter<'a, K, V> {
+    fn new(iter: Iter<'a, K, V>) -> Self {
+        Self { iter }
+    }
+}
+
+impl<'a, K: DeserializeOwned, V: DeserializeOwned> Iterator for RevIter<'a, K, V> {
+    type Item = (K, V);
+
+    /// Will give the next item backwards
+    fn next(&mut self) -> Option<Self::Item> {
+        self.iter.next()
     }
 }
