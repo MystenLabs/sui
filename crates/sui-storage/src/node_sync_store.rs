@@ -201,7 +201,10 @@ impl NodeSyncStore {
     pub fn clear_effects_votes(&self, digest: TransactionDigest) -> SuiResult {
         trace!(effects_digest = ?digest, "clearing votes");
         Ok(self.effects_votes.multi_remove(
-            self.iter_fx_digest(digest, TransactionEffectsDigest::ZERO)?
+            self.effects_votes
+                .iter()
+                .skip_to(&(digest, TransactionEffectsDigest::ZERO, AuthorityName::ZERO))?
+                .take_while(move |((d, _, _), _)| *d == digest)
                 .map(|(k, _)| k),
         )?)
     }
@@ -250,5 +253,11 @@ mod test {
         assert_eq!(db.count_effects_votes(tx1, digest1).unwrap(), 0);
         // digest2 is not
         assert_eq!(db.count_effects_votes(tx2, digest2).unwrap(), 3);
+
+        // Votes for different effects digests are isolated.
+        db.record_effects_vote(peer1, tx1, digest1, 1).unwrap();
+        db.record_effects_vote(peer2, tx1, digest2, 2).unwrap();
+        assert_eq!(db.count_effects_votes(tx1, digest1).unwrap(), 1);
+        assert_eq!(db.count_effects_votes(tx1, digest2).unwrap(), 2);
     }
 }
