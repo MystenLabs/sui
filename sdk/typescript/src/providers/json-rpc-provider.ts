@@ -64,9 +64,10 @@ export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEvent
 
 export class JsonRpcProvider extends Provider {
   private client: JsonRpcClient;
+
   private wsClient: WsRpcClient;
-  private wsConnectionState: ConnectionState = ConnectionState.NotConnected;
   private wsEndpoint: string;
+  private wsHeartbeat: any;
 
   private activeSubscriptions: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
 
@@ -445,7 +446,7 @@ export class JsonRpcProvider extends Provider {
       if (this.wsConnectionState != ConnectionState.Connected)
         throw new Error('websocket not connected');
 
-      let subId = await this.wsClient.call(
+      const subId = await this.wsClient.call(
         'sui_subscribeEvent',
         [filter],
         30000
