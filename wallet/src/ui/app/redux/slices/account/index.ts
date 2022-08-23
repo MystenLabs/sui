@@ -36,7 +36,7 @@ export const createMnemonic = createAsyncThunk(
 export const logout = createAsyncThunk(
     'account/logout',
     async (): Promise<void> => {
-        await Browser.storage.local.set({ mnemonic: null });
+        await Browser.storage.local.clear();
         window.location.reload();
     }
 );
