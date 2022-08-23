@@ -1,6 +1,6 @@
 All icons in [svgs](./svgs/) folder will be used to generate our custom font icons.
 
-Run `npm run make-font-icons` to update the font when needed.
+Run `pnpm make-font-icons` to update the font when needed.
 
 Under [output](./output/) directory, a demo page [index.html](./output/index.html) will be created with a preview of the font icons.
 
