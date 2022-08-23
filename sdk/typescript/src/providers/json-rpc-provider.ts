@@ -54,6 +54,12 @@ enum ConnectionState {
   Connected
 }
 
+type JsonRpcMethodMessage<T> = {
+  jsonrpc: '2.0',
+  method: string,
+  params: T
+}
+
 export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
 
 export class JsonRpcProvider extends Provider {
@@ -88,23 +94,29 @@ export class JsonRpcProvider extends Provider {
         this.wsConnectionState = ConnectionState.NotConnected;
       });
 
-      this.wsClient.on('message', this.onMessage);
+      // WsRpcClient.socket is private, but we need it
+      // to be able to access the underlying 'message' event
+      (this.wsClient as any).socket.on('message',
+        this.onMessage.bind(this));
+
       console.log('ws connection opened');
     });
 
-    this.wsClient.on('message', this.onMessage);
     this.wsClient.on('error', console.error);
   }
 
-  private onMessage(msg: any): void {
+  private onMessage(msg: JsonRpcMethodMessage<object>): void {
     console.log('socket message received', msg);
 
-    if(isSubscriptionEvent(msg)) {
+    const params = msg.params;
+    if(isSubscriptionEvent(params)) {
+      console.log(`Sui event subscription message received`);
+
       // call any registered handler for the message's subscription
-      const onMessage = this.activeSubscriptions.get(msg.subscription);
+      const onMessage = this.activeSubscriptions.get(params.subscription);
       if (onMessage) {
-        onMessage(msg.result);
-        console.log(`call onMessage(), subscription ${msg.subscription}`);
+        onMessage(params.result);
+        console.log(`call onMessage(), subscription ${params.subscription}`);
       }
     }
   }
