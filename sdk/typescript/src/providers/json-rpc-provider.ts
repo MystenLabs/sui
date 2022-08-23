@@ -80,16 +80,20 @@ export class JsonRpcProvider extends Provider {
     this.wsClient.connect();
     this.wsConnectionState = ConnectionState.Connecting;
 
-    this.wsClient.on('close', () => {
-      console.log('connection closed');
-      this.wsConnectionState = ConnectionState.NotConnected;
-    });
     this.wsClient.on('open', () => {
       this.wsConnectionState = ConnectionState.Connected;
+
+      this.wsClient.on('close', () => {
+        console.log('connection closed');
+        this.wsConnectionState = ConnectionState.NotConnected;
+      });
+
+      this.wsClient.on('message', this.onMessage);
       console.log('ws connection opened');
     });
+
     this.wsClient.on('message', this.onMessage);
-    this.wsClient.on('message', console.log);
+    this.wsClient.on('error', console.error);
   }
 
   private onMessage(msg: any): void {
