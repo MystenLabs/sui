@@ -188,9 +188,9 @@ pub enum SuiClientCommands {
     #[clap(name = "addresses")]
     Addresses,
 
-    /// Generate new address and keypair.
+    /// Generate new address and keypair, with optional keypair scheme {ed25519 | secp256k1}, default to ed25519.
     #[clap(name = "new-address")]
-    NewAddress,
+    NewAddress { key_scheme: Option<String> },
 
     /// Obtain all objects owned by the address.
     #[clap(name = "objects")]
@@ -406,9 +406,9 @@ impl SuiClientCommands {
                     .await?;
                 SuiClientCommandResult::SyncClientState
             }
-            SuiClientCommands::NewAddress => {
-                let (address, phrase) = context.keystore.generate_new_key()?;
-                SuiClientCommandResult::NewAddress((address, phrase))
+            SuiClientCommands::NewAddress { key_scheme } => {
+                let (address, phrase, flag) = context.keystore.generate_new_key(key_scheme)?;
+                SuiClientCommandResult::NewAddress((address, phrase, flag))
             }
             SuiClientCommands::Gas { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -771,8 +771,11 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
-            SuiClientCommandResult::NewAddress((address, recovery_phrase)) => {
-                writeln!(writer, "Created new keypair for address : [{address}]")?;
+            SuiClientCommandResult::NewAddress((address, recovery_phrase, flag)) => {
+                writeln!(
+                    writer,
+                    "Created new keypair for address with flag {flag}: [{address}]"
+                )?;
                 writeln!(writer, "Secret Recovery Phrase : [{recovery_phrase}]")?;
             }
             SuiClientCommandResult::Gas(gases) => {
@@ -940,7 +943,7 @@ pub enum SuiClientCommandResult {
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,
-    NewAddress((SuiAddress, String)),
+    NewAddress((SuiAddress, String, u8)),
     Gas(Vec<GasCoin>),
     SplitCoin(SuiTransactionResponse),
     MergeCoin(SuiTransactionResponse),

@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use base64ct::Encoding;
 use digest::Digest;
 use fastcrypto::ed25519::{
@@ -435,6 +435,23 @@ where
     get_key_pair_from_rng(&mut OsRng)
 }
 
+/// Wrapper function to return SuiKeypair based on key scheme string
+pub fn random_key_pair_by_type(
+    key_scheme: Option<String>,
+) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error> {
+    match key_scheme.as_deref() {
+        Some("secp256k1") => {
+            let (addr, key_pair): (_, Secp256k1KeyPair) = get_key_pair();
+            Ok((addr, SuiKeyPair::Secp256k1SuiKeyPair(key_pair)))
+        }
+        Some("ed25519") | None => {
+            let (addr, key_pair): (_, Ed25519KeyPair) = get_key_pair();
+            Ok((addr, SuiKeyPair::Ed25519SuiKeyPair(key_pair)))
+        }
+        Some(_) => Err(anyhow!("Unrecognized key scheme")),
+    }
+}
+
 /// Generate a keypair from the specified RNG (useful for testing with seedable rngs).
 pub fn get_key_pair_from_rng<KP: KeypairTraits, R>(csprng: &mut R) -> (SuiAddress, KP)
 where
@@ -443,6 +460,27 @@ where
 {
     let kp = KP::generate(csprng);
     (kp.public().into(), kp)
+}
+
+/// Wrapper function to return SuiKeypair based on key scheme string with seedable rng.
+pub fn random_key_pair_by_type_from_rng<R>(
+    key_scheme: Option<String>,
+    csprng: &mut R,
+) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error>
+where
+    R: rand::CryptoRng + rand::RngCore,
+{
+    match key_scheme.as_deref() {
+        Some("secp256k1") => {
+            let (addr, key_pair): (_, Secp256k1KeyPair) = get_key_pair_from_rng(csprng);
+            Ok((addr, SuiKeyPair::Secp256k1SuiKeyPair(key_pair)))
+        }
+        Some("ed25519") | None => {
+            let (addr, key_pair): (_, Ed25519KeyPair) = get_key_pair_from_rng(csprng);
+            Ok((addr, SuiKeyPair::Ed25519SuiKeyPair(key_pair)))
+        }
+        Some(_) => Err(anyhow!("Unrecognized key scheme")),
+    }
 }
 
 // TODO: C-GETTER
