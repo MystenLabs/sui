@@ -9,6 +9,7 @@ use move_core_types::ident_str;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::native_functions::NativeFunctionTable;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_with::serde_as;
 use std::collections::BTreeMap;
 use std::{fs, path::Path};
 use sui_adapter::adapter;
@@ -17,7 +18,7 @@ use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
 use sui_types::messages::InputObjects;
@@ -31,6 +32,7 @@ use sui_types::{
     committee::{Committee, EpochId},
     error::SuiResult,
     object::Object,
+    sui_serde::AuthSignature,
 };
 use tracing::trace;
 
@@ -210,9 +212,17 @@ impl<'de> Deserialize<'de> for Genesis {
     }
 }
 
+#[serde_as]
+#[derive(Serialize, Deserialize)]
+pub struct GenesisValidatorInfo {
+    pub info: ValidatorInfo,
+    #[serde_as(as = "AuthSignature")]
+    pub proof_of_possession: AuthoritySignature,
+}
+
 pub struct Builder {
     objects: BTreeMap<ObjectID, Object>,
-    validators: BTreeMap<AuthorityPublicKeyBytes, ValidatorInfo>,
+    validators: BTreeMap<AuthorityPublicKeyBytes, GenesisValidatorInfo>,
 }
 
 impl Default for Builder {
@@ -241,8 +251,18 @@ impl Builder {
         self
     }
 
-    pub fn add_validator(mut self, validator: ValidatorInfo) -> Self {
-        self.validators.insert(validator.protocol_key(), validator);
+    pub fn add_validator(
+        mut self,
+        validator: ValidatorInfo,
+        proof_of_possession: AuthoritySignature,
+    ) -> Self {
+        self.validators.insert(
+            validator.protocol_key(),
+            GenesisValidatorInfo {
+                info: validator,
+                proof_of_possession,
+            },
+        );
         self
     }
 
@@ -265,7 +285,10 @@ impl Builder {
 
         let genesis = Genesis {
             objects,
-            validator_set: validators,
+            validator_set: validators
+                .into_iter()
+                .map(|genesis_info| genesis_info.info)
+                .collect::<Vec<_>>(),
         };
 
         // Verify that all the validators were properly created onchain
@@ -329,8 +352,9 @@ impl Builder {
 
             let path = entry.path();
             let validator_info_bytes = fs::read(path)?;
-            let validator_info: ValidatorInfo = serde_yaml::from_slice(&validator_info_bytes)?;
-            committee.insert(validator_info.protocol_key(), validator_info);
+            let validator_info: GenesisValidatorInfo =
+                serde_yaml::from_slice(&validator_info_bytes)?;
+            committee.insert(validator_info.info.protocol_key(), validator_info);
         }
 
         Ok(Self {
@@ -361,7 +385,7 @@ impl Builder {
 
         for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;
-            let hex_name = encode_bytes_hex(&validator.protocol_key());
+            let hex_name = encode_bytes_hex(&validator.info.protocol_key());
             fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
         }
 
@@ -373,7 +397,7 @@ fn create_genesis_objects(
     genesis_ctx: &mut TxContext,
     modules: &[Vec<CompiledModule>],
     input_objects: &[Object],
-    validators: &[ValidatorInfo],
+    validators: &[GenesisValidatorInfo],
 ) -> Vec<Object> {
     let mut store = InMemoryStorage::new(Vec::new());
 
@@ -477,7 +501,7 @@ fn process_package(
 pub fn generate_genesis_system_object(
     store: &mut InMemoryStorage,
     move_vm: &MoveVM,
-    committee: &[ValidatorInfo],
+    committee: &[GenesisValidatorInfo],
     genesis_ctx: &mut TxContext,
 ) -> Result<()> {
     let genesis_digest = genesis_ctx.digest();
@@ -493,10 +517,14 @@ pub fn generate_genesis_system_object(
     let mut stakes = Vec::new();
     let mut gas_prices = Vec::new();
 
-    for validator in committee {
+    for GenesisValidatorInfo {
+        info: validator,
+        proof_of_possession,
+    } in committee
+    {
         pubkeys.push(validator.protocol_key());
         network_pubkeys.push(validator.network_key());
-        proof_of_possessions.push(validator.proof_of_possession().as_ref().to_vec());
+        proof_of_possessions.push(proof_of_possession.as_ref().to_vec());
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
         names.push(validator.name().to_owned().into_bytes());
@@ -578,15 +606,16 @@ mod test {
             delegation: 0,
             gas_price: 1,
             network_address: utils::new_network_address(),
-            proof_of_possession: generate_proof_of_possession(&key, account_key.public().into()),
             narwhal_primary_to_primary: utils::new_network_address(),
             narwhal_worker_to_primary: utils::new_network_address(),
             narwhal_primary_to_worker: utils::new_network_address(),
             narwhal_worker_to_worker: utils::new_network_address(),
             narwhal_consensus_address: utils::new_network_address(),
         };
-
-        let builder = Builder::new().add_objects(objects).add_validator(validator);
+        let pop = generate_proof_of_possession(&key, account_key.public().into());
+        let builder = Builder::new()
+            .add_objects(objects)
+            .add_validator(validator, pop);
         builder.save(dir.path()).unwrap();
         Builder::load(dir.path()).unwrap();
     }
