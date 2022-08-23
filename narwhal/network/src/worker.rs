@@ -10,7 +10,8 @@ use multiaddr::Multiaddr;
 use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
 use tokio::{runtime::Handle, task::JoinHandle};
-use tonic::transport::Channel;
+use tonic::{transport::Channel, Code};
+use tracing::error;
 use types::{
     BincodeEncodedPayload, WorkerMessage, WorkerPrimaryMessage, WorkerToPrimaryClient,
     WorkerToWorkerClient,
@@ -150,9 +151,19 @@ impl ReliableNetwork for WorkerNetwork {
 
             async move {
                 client.send_message(message).await.map_err(|e| {
-                    // this returns a backoff::Error::Transient
-                    // so that if tonic::Status is returned, we retry
-                    Into::<backoff::Error<eyre::Report>>::into(eyre::Report::from(e))
+                    match e.code() {
+                        Code::FailedPrecondition | Code::InvalidArgument => {
+                            // these errors are not recoverable through retrying, see
+                            // https://github.com/hyperium/tonic/blob/master/tonic/src/status.rs
+                            error!("Irrecoverable network error: {e}");
+                            backoff::Error::permanent(eyre::Report::from(e))
+                        }
+                        _ => {
+                            // this returns a backoff::Error::Transient
+                            // so that if tonic::Status is returned, we retry
+                            Into::<backoff::Error<eyre::Report>>::into(eyre::Report::from(e))
+                        }
+                    }
                 })
             }
         };
@@ -238,9 +249,19 @@ impl ReliableNetwork for WorkerToPrimaryNetwork {
 
             async move {
                 client.send_message(message).await.map_err(|e| {
-                    // this returns a backoff::Error::Transient
-                    // so that if tonic::Status is returned, we retry
-                    Into::<backoff::Error<eyre::Report>>::into(eyre::Report::from(e))
+                    match e.code() {
+                        Code::FailedPrecondition | Code::InvalidArgument => {
+                            // these errors are not recoverable through retrying, see
+                            // https://github.com/hyperium/tonic/blob/master/tonic/src/status.rs
+                            error!("Irrecoverable network error: {e}");
+                            backoff::Error::permanent(eyre::Report::from(e))
+                        }
+                        _ => {
+                            // this returns a backoff::Error::Transient
+                            // so that if tonic::Status is returned, we retry
+                            Into::<backoff::Error<eyre::Report>>::into(eyre::Report::from(e))
+                        }
+                    }
                 })
             }
         };
