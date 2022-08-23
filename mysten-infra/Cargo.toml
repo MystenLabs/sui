@@ -7,7 +7,6 @@ members = [
     "crates/telemetry-subscribers",
     "crates/typed-store",
     "crates/typed-store-macros",
-    "crates/typed-store-macros-tests",
     "crates/x",
 ]
 

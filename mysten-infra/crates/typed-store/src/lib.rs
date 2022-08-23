@@ -23,6 +23,7 @@ use tokio::sync::{
 pub mod traits;
 pub use traits::Map;
 pub mod rocks;
+
 #[cfg(test)]
 #[path = "tests/store_tests.rs"]
 pub mod store_tests;
