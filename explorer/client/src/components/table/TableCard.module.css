@@ -1,5 +1,9 @@
+.container {
+    @apply w-full overflow-x-auto;
+}
+
 .table {
-    @apply w-full text-sm text-left overflow-x-auto min-w-max border-collapse;
+    @apply text-sm text-left min-w-max border-collapse;
 
     border-bottom: 1px solid #f0f1f2;
 }
