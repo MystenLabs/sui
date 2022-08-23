@@ -22,7 +22,7 @@ pub fn default_db_options(
     db_options: Option<Options>,
     cache_capacity: Option<usize>,
 ) -> (Options, Options) {
-    let mut options = db_options.unwrap_or(default_rocksdb_options());
+    let mut options = db_options.unwrap_or_else(default_rocksdb_options);
 
     // One common issue when running tests on Mac is that the default ulimit is too low,
     // leading to I/O errors such as "Too many open files". Raising fdlimit to bypass it.
