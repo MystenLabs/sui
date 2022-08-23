@@ -1,4 +1,4 @@
-name: Rust
+name: Release Binaries
 
 on:
   push:
