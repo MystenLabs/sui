@@ -156,7 +156,16 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
+
+      - name: Check for release
+        id: is-release
+        shell: bash
+        run: |
+          unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/devnet-[0-9].* ]]; then IS_RELEASE='true' ; fi
+          echo ::set-output name=IS_RELEASE::${IS_RELEASE}
+
       - name: cargo build (release)
+        if: steps.is-release.outputs.IS_RELEASE
         run: |
           cargo build --release
 
@@ -166,33 +175,28 @@ jobs:
           echo ::set-output name=BIN_SUI_FAUCET::"target/release/sui-faucet"
           echo ::set-output name=BIN_RPC_SERVER::"target/release/rpc-server"
 
-    - name: Upload release artifacts
-      uses: actions/upload-artifact@master
-      with:
-        name: sui-binaries
-        path: |
-          ${{ steps.package.outputs.BIN_SUI }}
-          ${{ steps.package.outputs.BIN_SUI_NODE }}
-          ${{ steps.package.outputs.BIN_SUI_TOOL }}
-          ${{ steps.package.outputs.BIN_SUI_FAUCET }}
-          ${{ steps.package.outputs.BIN_RPC_SERVER }}
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@master
+        if: steps.is-release.outputs.IS_RELEASE
+        with:
+          name: sui-binaries
+          path: |
+            ${{ steps.package.outputs.BIN_SUI }}
+            ${{ steps.package.outputs.BIN_SUI_NODE }}
+            ${{ steps.package.outputs.BIN_SUI_TOOL }}
+            ${{ steps.package.outputs.BIN_SUI_FAUCET }}
+            ${{ steps.package.outputs.BIN_RPC_SERVER }}
 
-    - name: Check for release
-      id: is-release
-      shell: bash
-      run: |
-        unset IS_RELEASE ; if [[ $GITHUB_REF =~ ^refs/tags/devnet-[0-9].* ]]; then IS_RELEASE='true' ; fi
-        echo ::set-output name=IS_RELEASE::${IS_RELEASE}
 
-    - name: Publish binaries
-      uses: softprops/action-gh-release@v1
-      if: steps.is-release.outputs.IS_RELEASE
-      with:
-        files: |
-          ${{ steps.package.outputs.BIN_SUI }}
-          ${{ steps.package.outputs.BIN_SUI_NODE }}
-          ${{ steps.package.outputs.BIN_SUI_TOOL }}
-          ${{ steps.package.outputs.BIN_SUI_FAUCET }}
-          ${{ steps.package.outputs.BIN_RPC_SERVER }}
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish binaries
+        uses: softprops/action-gh-release@v1
+        if: steps.is-release.outputs.IS_RELEASE
+        with:
+          files: |
+            ${{ steps.package.outputs.BIN_SUI }}
+            ${{ steps.package.outputs.BIN_SUI_NODE }}
+            ${{ steps.package.outputs.BIN_SUI_TOOL }}
+            ${{ steps.package.outputs.BIN_SUI_FAUCET }}
+            ${{ steps.package.outputs.BIN_RPC_SERVER }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
