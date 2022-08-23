@@ -112,8 +112,9 @@ export class JsonRpcProvider extends Provider {
 
   private onSocketMessage(rawMessage: string): void {
     const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
+
     const params = msg.params;
-    if(isSubscriptionEvent(params)) {
+    if(msg?.method === 'sui_subscribeEvent' && isSubscriptionEvent(params)) {
       // call any registered handler for the message's subscription
       const onMessage = this.activeSubscriptions.get(params.subscription);
       if (onMessage) {
