@@ -1107,6 +1107,10 @@ initializers.
 Finally, we see that the gas object that was used to pay for
 publishing was updated as well.
 
+> **Important:** If the publishing attempt results in an error regarding verification failure,
+> [build your package locally](../build/move/build-test.md#building-a-package) (using the `sui move build` command)
+> to get a more verbose error message.
+
 ## Customize genesis
 
 The genesis process can be customized by providing a genesis configuration
