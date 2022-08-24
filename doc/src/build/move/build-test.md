@@ -65,7 +65,7 @@ file:
 
         // create a sword
         let sword = Sword {
-            info: object::new(&mut ctx),
+            id: object::new(&mut ctx),
             magic: 42,
             strength: 7,
         };
