@@ -117,14 +117,16 @@ function Search() {
                     <SearchIcon className={styles.searchicon} />
                 </button>
             </form>
-            {input && result?.length === 0 && <div>No Results</div>}
-            {result && (
-                <div>
+            {input && result && (
+                <div className={styles.results}>
+                    {result.length === 0 && (
+                        <p className={styles.noresults}>No Results</p>
+                    )}
                     {result.map((el, index) => (
-                        <div key={index} onClick={handleOptionClick(el)}>
-                            <h3>{el.category}</h3>
-                            <p>{el.input}</p>
-                        </div>
+                        <dl key={index}>
+                            <dt>{el.category}</dt>
+                            <dd onClick={handleOptionClick(el)}>{el.input}</dd>
+                        </dl>
                     ))}
                 </div>
             )}
