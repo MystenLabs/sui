@@ -16,6 +16,7 @@ jobs:
           repository: MystenLabs/sui-operations
           token: ${{ secrets.CHANGESETS_DEPLOY_DISPATCH }}
           event-type: changesets-snapshot
+          client-payload: '{"ref": "${{ github.ref }}", "sha": "${{ github.sha }}"}'
 
   version:
     runs-on: ubuntu-latest
