@@ -224,13 +224,13 @@ fn make_checkpoint_db() {
     assert_eq!(cps.tables.checkpoint_contents.iter().count(), 1);
     assert_eq!(cps.tables.extra_transactions.iter().count(), 2); // t3 & t6
 
-    let (_cp_seq, tx_seq) = cps
+    let cp_seq = cps
         .tables
         .transactions_to_checkpoint
         .get(&t4)
         .unwrap()
         .unwrap();
-    assert_eq!(tx_seq, 4);
+    assert_eq!(cp_seq, 0);
 }
 
 #[test]
