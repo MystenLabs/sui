@@ -16,6 +16,8 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 The following list includes the recent updates to Sui and the documentation:
 
+* [Bullshark](https://arxiv.org/abs/2201.05677) has replaced Tusk as the consensus component of the [Narwhal](https://github.com/MystenLabs/narwhal)-based [Sui consensus engine](../learn/architecture/consensus.md) for reduced latency and support for fairness with slower validators.
+* Sui now supports [shared objects](../build/objects.md#shared) that anyone can read or write to. For an example of creating and accessing a shared object, see [Shared Object](https://examples.sui.io/basics/shared-object.html#shared-object) on https://examples.sui.io/.
 * [Sui version 0.7.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.7.0) is now live in Devnet with numerous fixes and enhancements, including new designs for the [Sui Wallet Browser Extension](../explore/wallet-browser.md) and [Sui Explorer](https://explorer.devnet.sui.io/).
 * Interact with the Sui network using our new [Rust SDK](../build/rust-sdk.md), a collection of Rust language [JSON-RPC wrapper and crypto utilities](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk).
 * Sui now supports development using [Microsoft Windows 11, macOS, and Linux](../build/install.md#supported-oses). See [install Sui](../build/install.md#prerequisites) for the prerequisites of each operating system.
