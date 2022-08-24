@@ -379,6 +379,11 @@ impl CertifiedCheckpointSummary {
     }
 }
 
+/// CheckpointProposalContents represents the contents of a proposal.
+/// Contents in a proposal are not yet causally ordered, and hence we don't care about
+/// the order of transactions in the content. It's only important that two proposal
+/// contents with the same transactions should have the same digest. Hence we use BTreeSet
+/// as the container. This also has the benefit of removing any duplicate transactions.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointProposalContents {
     // TODO: Currently we are not really using the effects digests, but in the future we may be
@@ -401,6 +406,10 @@ impl CheckpointProposalContents {
     }
 }
 
+/// CheckpointContents are the transactions included in an upcoming checkpoint.
+/// They must have already been causally ordered. Since the causal order algorithm
+/// is the same among validators, we expect all honest validators to come up with
+/// the same order for each checkpoint content.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
     pub transactions: Vec<ExecutionDigests>,
