@@ -27,21 +27,17 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "16"
-          cache: 'npm'
-          cache-dependency-path: ./wallet/package-lock.json
-      - name: Install sdk dependencies
+          cache: 'pnpm'
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Build SDK
         run: pnpm --filter @mysten/sui.js build
-      - name: Install dependencies
-        working-directory: ${{env.working-directory}}
-        run: npm ci
       - name: Lint
         working-directory: ${{env.working-directory}}
-        run: npm run lint
+        run: pnpm lint
       - name: Test
         working-directory: ${{env.working-directory}}
-        run: npm test
+        run: pnpm test
       - name: Build
         working-directory: ${{env.working-directory}}
-        run: npm run build:prod
+        run: pnpm build:prod

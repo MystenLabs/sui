@@ -102,7 +102,7 @@ function DisplayBox({
     }, [display]);
 
     const handleImageFail = useCallback(
-        (error) => {
+        (error: unknown) => {
             console.log(error);
             setHasDisplayLoaded(true);
             setHasFailedToLoad(true);
@@ -135,7 +135,7 @@ function DisplayBox({
             <>
                 {hasClickedImage && (
                     <div
-                        className={`${styles.modalcontainer} 
+                        className={`${styles.modalcontainer}
                           ${isFadeEffect ? styles.fade : ''}`}
                         onClick={handleImageClick}
                     >
