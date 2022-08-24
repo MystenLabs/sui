@@ -34,7 +34,7 @@ use crate::{
     epoch::reconfiguration::Reconfigurable,
 };
 
-use sui_types::committee::{Committee, StakeUnit};
+use sui_types::committee::{Committee, EpochId, StakeUnit};
 use tracing::{debug, error, info, warn};
 
 #[cfg(test)]
@@ -281,28 +281,9 @@ pub async fn checkpoint_process<A>(
             continue;
         }
 
-        let proposal = state_checkpoints.lock().set_proposal(committee.epoch);
-
-        // (5) Now we try to create fragments and construct checkpoint.
-        // TODO: Restructure the fragment making process.
-        match proposal {
-            Ok(my_proposal) => {
-                if create_fragments_and_make_checkpoint(
-                    active_authority,
-                    state_checkpoints.clone(),
-                    &my_proposal,
-                    committee,
-                    timing.consensus_delay_estimate,
-                )
-                .await
-                {
-                    info!(cp_seq=?my_proposal.sequence_number(), "A new checkpoint is created and signed locally");
-                    metrics.checkpoints_signed.inc();
-                } else {
-                    debug!("Failed to make checkpoint after going through all available proposals");
-                    tokio::time::sleep(timing.delay_on_local_failure).await;
-                }
-            }
+        let result = state_checkpoints.lock().set_proposal(committee.epoch);
+        let my_proposal = match result {
+            Ok(proposal) => proposal,
             Err(err) => {
                 warn!(
                     "{:?} failed to make a new proposal: {:?}",
@@ -311,8 +292,86 @@ pub async fn checkpoint_process<A>(
                 tokio::time::sleep(timing.delay_on_local_failure).await;
                 continue;
             }
+        };
+
+        // (4) Now we try to create fragments and get list of transactions for the checkpoint.
+        let transactions = match create_fragments(
+            active_authority,
+            state_checkpoints.clone(),
+            &my_proposal,
+            committee,
+            timing.consensus_delay_estimate,
+        )
+        .await
+        {
+            Some(contents) => contents,
+            None => {
+                debug!("Failed to make checkpoint after going through all available proposals");
+                tokio::time::sleep(timing.delay_on_local_failure).await;
+                continue;
+            }
+        };
+
+        // (5) Execute all transactions in the checkpoint and sign it.
+        if let Err(err) = sync_and_sign_new_checkpoint(
+            active_authority,
+            my_proposal.signed_summary.auth_signature.epoch,
+            *my_proposal.sequence_number(),
+            transactions,
+        )
+        .await
+        {
+            error!(cp_seq=?*my_proposal.sequence_number(), "Failed to sync and sign new checkpoint: {:?}", err);
+            tokio::time::sleep(timing.delay_on_local_failure).await;
+            continue;
         }
+
+        info!(cp_seq=?my_proposal.sequence_number(), "A new checkpoint is created and signed locally");
+        metrics.checkpoints_signed.inc();
     }
+}
+
+pub async fn sync_and_sign_new_checkpoint<A>(
+    active_authority: &ActiveAuthority<A>,
+    epoch: EpochId,
+    seq: CheckpointSequenceNumber,
+    transactions: BTreeSet<ExecutionDigests>,
+) -> SuiResult
+where
+    A: AuthorityAPI + Send + Sync + 'static + Clone + Reconfigurable,
+{
+    let errors = active_authority
+        .node_sync_handle()
+        .sync_pending_checkpoint_transactions(transactions.iter())
+        .await?
+        .zip(futures::stream::iter(transactions.iter()))
+        .filter_map(|(r, digests)| async move {
+            r.map_err(|e| {
+                info!(?digests, "failed to execute digest from checkpoint: {}", e);
+                e
+            })
+            .err()
+        })
+        .collect::<Vec<SuiError>>()
+        .await;
+
+    if !errors.is_empty() {
+        let error = "Failed to execute transactions in checkpoint".to_string();
+        return Err(SuiError::CheckpointingError { error });
+    }
+
+    active_authority
+        .state
+        .checkpoints
+        .as_ref()
+        .unwrap()
+        .lock()
+        .sign_new_checkpoint(
+            epoch,
+            seq,
+            transactions.iter(),
+            active_authority.state.database.clone(),
+        )
 }
 
 /// Obtain the highest checkpoint certificate from all validators.
@@ -599,7 +658,7 @@ where
 
         let errors = active_authority
             .node_sync_handle()
-            .sync_checkpoint(&contents)
+            .sync_checkpoint_cert_transactions(&contents)
             .await?
             .zip(futures::stream::iter(contents.iter()))
             .filter_map(|(r, digests)| async move {
@@ -667,16 +726,18 @@ where
 }
 
 /// Picks other authorities at random and constructs checkpoint fragments
-/// that are submitted to consensus. The process terminates when a future
-/// checkpoint is created, or we run out of validators.
-/// Returns whether we have successfully created and signed a new checkpoint.
-pub async fn create_fragments_and_make_checkpoint<A>(
+/// that are submitted to consensus. The process terminates when we are able to get the full
+/// list of transactions in the checkpoint, or we run out of validators.
+/// Returns the checkpoint content, if succeeded.
+/// TODO: We should return BTreeSet<TransactionDigest> instead, because the effect digests
+/// cannot be trusted anyway.
+pub async fn create_fragments<A>(
     active_authority: &ActiveAuthority<A>,
     checkpoint_db: Arc<Mutex<CheckpointStore>>,
     my_proposal: &CheckpointProposal,
     committee: &Committee,
     consensus_delay_estimate: Duration,
-) -> bool
+) -> Option<BTreeSet<ExecutionDigests>>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -700,7 +761,7 @@ where
         // even when `available_authorities` is empty already.
         let result = checkpoint_db
             .lock()
-            .attempt_to_construct_checkpoint(active_authority.state.database.clone(), committee);
+            .attempt_to_construct_checkpoint(committee);
 
         match result {
             Err(err) => {
@@ -712,9 +773,8 @@ where
                     err
                 );
             }
-            Ok(()) => {
-                // A new checkpoint has been made.
-                return true;
+            Ok(contents) => {
+                return Some(contents);
             }
         }
 
@@ -811,7 +871,7 @@ where
             }
         }
     }
-    false
+    None
 }
 
 /// Given a fragment with this authority as the proposer and another authority as the counterpart,

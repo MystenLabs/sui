@@ -81,6 +81,7 @@ pub struct GatewayMetrics {
     num_tx_publish: IntCounter,
     num_tx_movecall: IntCounter,
     num_tx_splitcoin: IntCounter,
+    num_tx_splitcoin_equal: IntCounter,
     num_tx_mergecoin: IntCounter,
     total_tx_retries: IntCounter,
     shared_obj_tx: IntCounter,
@@ -119,6 +120,12 @@ impl GatewayMetrics {
             num_tx_splitcoin: register_int_counter_with_registry!(
                 "num_tx_splitcoin",
                 "Number of split coin transactions",
+                registry,
+            )
+            .unwrap(),
+            num_tx_splitcoin_equal: register_int_counter_with_registry!(
+                "num_tx_splitcoin_equal",
+                "Number of equal-size split coin transactions",
                 registry,
             )
             .unwrap(),
@@ -349,6 +356,18 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error>;
+
+    /// Split the coin object (identified by `coin_object_ref`) into
+    /// multiple new coins of equal amounts. Any extra remainder is
+    /// kept in the original coin object.
+    async fn split_coin_equal(
+        &self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_count: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
@@ -847,7 +866,13 @@ where
                         if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
                             self.metrics.num_tx_splitcoin.inc();
                             return Ok(Some(
-                                self.create_split_coin_response(certificate, effects)
+                                self.create_split_coin_response(certificate, effects, false)
+                                    .await?,
+                            ));
+                        } else if move_call.function.as_ref() == coin::COIN_SPLIT_N_FUNC_NAME {
+                            self.metrics.num_tx_splitcoin_equal.inc();
+                            return Ok(Some(
+                                self.create_split_coin_response(certificate, effects, true)
                                     .await?,
                             ));
                         } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
@@ -954,7 +979,8 @@ where
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
-    ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
+        equal_parts: bool,
+    ) -> anyhow::Result<SuiParsedTransactionResponse> {
         let call = Self::try_get_move_call(&certificate)?;
         let signer = certificate.signed_data.data.signer();
         let (gas_payment, _, _) = certificate.signed_data.data.gas();
@@ -969,15 +995,21 @@ where
                 .into())
             }
         };
-        let split_amounts: Vec<u64> = bcs::from_bytes(split_arg)?;
 
         if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         let created = &effects.created;
+        let saw_expected_count = if equal_parts {
+            let split_count: u64 = bcs::from_bytes(split_arg)?;
+            created.len() as u64 == split_count - 1
+        } else {
+            let split_amounts: Vec<u64> = bcs::from_bytes(split_arg)?;
+            created.len() == split_amounts.len()
+        };
         fp_ensure!(
             effects.mutated.len() == 2     // coin and gas
-               && created.len() == split_amounts.len()
+               && saw_expected_count
                && created.iter().all(|(_, owner)| owner == &signer),
             SuiError::InconsistentGatewayResult {
                 error: "Unexpected split outcome".to_owned()
@@ -1473,6 +1505,37 @@ where
             gas_budget,
         );
         debug!(?data, "Created Split Coin transaction data");
+        Ok(data)
+    }
+
+    async fn split_coin_equal(
+        &self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_count: u64,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error> {
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, BTreeSet::from([coin_object_id]))
+            .await?;
+        let coin_object = self.get_object_internal(&coin_object_id).await?;
+        let coin_object_ref = coin_object.compute_object_reference();
+        let coin_type = coin_object.get_move_template_type()?;
+        let data = TransactionData::new_move_call(
+            signer,
+            self.get_framework_object_ref().await?,
+            coin::COIN_MODULE_NAME.to_owned(),
+            coin::COIN_SPLIT_N_FUNC_NAME.to_owned(),
+            vec![coin_type],
+            gas,
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_object_ref)),
+                CallArg::Pure(bcs::to_bytes(&split_count)?),
+            ],
+            gas_budget,
+        );
+        debug!(?data, "Created equal-size Split Coin transaction data");
         Ok(data)
     }
 

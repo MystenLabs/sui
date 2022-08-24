@@ -1,42 +1,31 @@
 # Sui Wallet
 
-A chrome (v88+) extension wallet for [Sui](https://sui.io).
+A Chrome (v88+) extension wallet for [Sui](https://sui.io).
 
 # Set Up
 
 **Requirements**: Node 14.0.0 or later.
 
+Dependencies are managed using [`pnpm`](https://pnpm.io/). You can start by installing dependencies in the root of the Sui repository:
+
+```
+$ pnpm install
+```
+
 Currently the Wallet depends on an unreleased version of `sui.js`, the TypeScript SDK for Sui. Therefore, you need to build the SDK first:
 
 ```bash
-$ cd <Your Sui Repository>/sdk/typescript
-$ yarn && yarn build
+$ pnpm --filter @mysten/sui.js... build
 ```
 
-Then, in the project directory, run:
-
-```bash
-$ npm i
-```
-
-> **Note:** If you are updating the SDK and Wallet at the same time, you need to run the following commands to make sure the Explorer depends on the updated SDK.
-
-```bash
-$ cd <Your Sui Repository>/sdk/typescript
-$ yarn build
-
-$ cd ../../wallet
-$ rm -rf node_modules/ && npm i
-```
-
-Then one of the following build steps is required:
+> **Note:** If you are updating the SDK and Explorer at the same time, you need to re-build the SDK whenever you makes changes for it to be reflected in the Explorer.
 
 ## Build in watch mode (dev)
 
 To build the extension and watch for changes run:
 
 ```
-npm start
+pnpm start
 ```
 
 This will build the app in the [dist/](./dist/) directory, watch for changes and rebuild it. (Also runs prettier to format the files that changed.)
@@ -46,7 +35,7 @@ This will build the app in the [dist/](./dist/) directory, watch for changes and
 To build the app once in development mode (no optimizations etc) run
 
 ```
-npm run build:dev
+pnpm run build:dev
 ```
 
 The output directory is the same [dist/](./dist/), all build artifacts will go there
@@ -56,7 +45,7 @@ The output directory is the same [dist/](./dist/), all build artifacts will go t
 To build the app once in production mode run
 
 ```
-npm run build:prod
+pnpm run build:prod
 ```
 
 Same as above the output is [dist/](./dist/).
@@ -68,5 +57,5 @@ After building the app, the extension needs to be installed to Chrome. Follow th
 ## Testing
 
 ```
-npm run test
+pnpm run test
 ```

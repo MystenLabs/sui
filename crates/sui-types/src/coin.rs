@@ -16,6 +16,7 @@ use schemars::JsonSchema;
 pub const COIN_MODULE_NAME: &IdentStr = ident_str!("coin");
 pub const COIN_STRUCT_NAME: &IdentStr = ident_str!("Coin");
 pub const COIN_JOIN_FUNC_NAME: &IdentStr = ident_str!("join");
+pub const COIN_SPLIT_N_FUNC_NAME: &IdentStr = ident_str!("split_n");
 pub const COIN_SPLIT_VEC_FUNC_NAME: &IdentStr = ident_str!("split_vec");
 
 // Rust version of the Move sui::coin::Coin type

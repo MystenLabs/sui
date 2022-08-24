@@ -6,15 +6,21 @@ use crate::keytool::read_keypair_from_file;
 
 use super::write_keypair_to_file;
 use super::KeyToolCommand;
+use rand::rngs::StdRng;
+use rand::SeedableRng;
 use sui_sdk::crypto::KeystoreType;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::get_key_pair;
+use sui_types::crypto::get_key_pair_from_rng;
+use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::Ed25519SuiSignature;
+use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::Secp256k1SuiSignature;
 use sui_types::crypto::Signature;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
+use tempfile::TempDir;
 
 #[test]
 fn test_addresses_command() -> Result<(), anyhow::Error> {
@@ -120,4 +126,20 @@ fn test_read_write_keystore_with_flag() {
         kp_ed_read.unwrap().public().as_ref(),
         kp_ed.public().as_ref()
     );
+}
+
+#[test]
+fn test_load_keystore_err() {
+    let temp_dir = TempDir::new().unwrap();
+    let path = temp_dir.path().join("sui.keystore");
+    let path2 = path.clone();
+
+    // write encoded AuthorityKeyPair without flag byte to file
+    let kp: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let contents = kp.encode_base64();
+    let res = std::fs::write(path, contents);
+    assert!(res.is_ok());
+
+    // cannot load keypair due to missing flag
+    assert!(KeystoreType::File(path2).init().is_err());
 }

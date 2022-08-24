@@ -465,9 +465,7 @@ fn process_successful_execution<
     // there is one extra object created with ID hardcoded at 0x5, and it won't be included in
     // `newly_generated_ids`. To cope with this, we special check the ID inside `handle_transfer`.
     // It's a bit hacky. Ideally, we want `newly_generated_ids` to include it. But it's unclear how.
-    let newly_generated_ids = ctx.recreate_all_ids();
-    state_view.set_create_object_ids(newly_generated_ids.clone());
-    let mut unwrap_and_deleted = BTreeSet::new();
+    let mut newly_generated_ids = ctx.recreate_all_ids();
     let mut frozen_object_ids = BTreeSet::new();
     let mut child_count_deltas: BTreeMap<ObjectID, i64> = BTreeMap::new();
     let mut newly_generated_deleted = BTreeSet::new();
@@ -504,7 +502,7 @@ fn process_successful_execution<
                     state_view,
                     module_id,
                     &mut object_owner_map,
-                    &newly_generated_ids,
+                    &mut newly_generated_ids,
                     &mut newly_generated_unused,
                     &mut frozen_object_ids,
                     &mut child_count_deltas,
@@ -557,26 +555,29 @@ fn process_successful_execution<
                                 ctx.sender(),
                                 *obj_id,
                             ));
-                            let previous_version =
-                                match state_view.get_latest_parent_entry_ref(*obj_id) {
-                                    Ok(Some((_, previous_version, _))) => previous_version,
-                                    // TODO this error is (hopefully) transient and should not be
-                                    // a normal execution error
-                                    _ => {
-                                        return Err(ExecutionError::new_with_source(
-                                            ExecutionErrorKind::InvariantViolation,
-                                            missing_unwrapped_msg(obj_id),
-                                        ));
-                                    }
-                                };
-                            unwrap_and_deleted.insert(*obj_id);
-                            changes.insert(
-                                *obj_id,
-                                ObjectChange::Delete(
-                                    previous_version,
-                                    DeleteKind::UnwrapThenDelete,
-                                ),
-                            );
+                            match state_view.get_latest_parent_entry_ref(*obj_id) {
+                                Ok(Some((_, previous_version, _))) => {
+                                    changes.insert(
+                                        *obj_id,
+                                        ObjectChange::Delete(
+                                            previous_version,
+                                            DeleteKind::UnwrapThenDelete,
+                                        ),
+                                    );
+                                }
+                                // if the object is not in parent sync, it was wrapped before
+                                // ever being stored into storage. Thus we don't need to mark it
+                                // as being deleted
+                                Ok(None) => (),
+                                // TODO this error is (hopefully) transient and should not be
+                                // a normal execution error
+                                Err(_) => {
+                                    return Err(ExecutionError::new_with_source(
+                                        ExecutionErrorKind::InvariantViolation,
+                                        missing_unwrapped_msg(obj_id),
+                                    ));
+                                }
+                            };
                         }
                     }
                 }
@@ -678,6 +679,7 @@ fn process_successful_execution<
     }
 
     // apply object writes and object deletions
+    state_view.set_create_object_ids(newly_generated_ids);
     state_view.apply_object_changes(changes);
 
     // check all frozen objects have a child count of zero
@@ -714,7 +716,7 @@ fn handle_transfer<
     state_view: &mut S,
     module_id: &ModuleId,
     object_owner_map: &mut BTreeMap<SuiAddress, SuiAddress>,
-    newly_generated_ids: &BTreeSet<ObjectID>,
+    newly_generated_ids: &mut BTreeSet<ObjectID>,
     newly_generated_unused: &mut BTreeSet<ObjectID>,
     frozen_object_ids: &mut BTreeSet<ObjectID>,
     child_count_deltas: &mut BTreeMap<ObjectID, i64>,
@@ -729,7 +731,7 @@ fn handle_transfer<
         .expect("object contents should start with an id");
     newly_generated_unused.remove(&id);
     let old_object = by_value_objects.remove(&id);
-    let is_unwrapped = !(newly_generated_ids.contains(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID);
+    let mut is_unwrapped = !(newly_generated_ids.contains(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID);
     let (version, child_count) = match old_object {
         Some((_, version, child_count)) => (version, child_count),
         // When an object was wrapped at version `v`, we added an record into `parent_sync`
@@ -739,7 +741,16 @@ fn handle_transfer<
         // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
         None if is_unwrapped => match state_view.get_latest_parent_entry_ref(id) {
             Ok(Some((_, last_version, _))) => (last_version, None),
-            _ => {
+            // if the object is not in parent sync, it was wrapped before ever being stored into
+            // storage.
+            // we set is_unwrapped to false since the object has never been in storage
+            // and essentially is being created. Similarly, we add it to the newly_generated_ids set
+            Ok(None) => {
+                is_unwrapped = false;
+                newly_generated_ids.insert(id);
+                (SequenceNumber::new(), None)
+            }
+            Err(_) => {
                 // TODO this error is (hopefully) transient and should not be
                 // a normal execution error
                 return Err(ExecutionError::new_with_source(

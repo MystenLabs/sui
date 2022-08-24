@@ -71,7 +71,7 @@ number of created swords as follows and put into the `m1.move` file:
 
 ``` rust
     struct Forge has key, store {
-        info: Info,
+        id: UID,
         swords_created: u64,
     }
 
@@ -90,7 +90,7 @@ And module initializer is the perfect place to do it:
         use sui::transfer;
         use sui::tx_context;
         let admin = Forge {
-            info: object::new(ctx),
+            id: object::new(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher

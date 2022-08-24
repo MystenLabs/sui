@@ -216,7 +216,7 @@ The following commands are supported by the Sui client:
     split-coin            Split a coin object into multiple coins
     switch                Switch active address and network (e.g., Devnet, local RPC server)
     sync                  Synchronize client state with authorities
-    transfer-coin         Transfer coin object
+    transfer              Transfer object
     transfer-sui          Transfer SUI, and pay gas with the same SUI coin object. If amount is
                               specified, only the amount is transferred; otherwise the entire object
                               is transferred
@@ -540,7 +540,7 @@ Here is example `json` output:
 
 ## Transferring coins
 
-Coins *are* objects yet have a specific use case that allow for native commands like transfer-coin/merge-coin/split-coin to be used. This is different from non-coin objects that can only be mutated via [Move calls](#calling-move-code).
+Coins *are* objects, but they have a specific use case that allows you to use native commands such as `transfer`, `merge-coin`, and `split-coin`. This is different from non-coin objects that you can mutate only using [Move calls](#calling-move-code).
 
 If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`):
 
@@ -555,14 +555,14 @@ To add objects to the account, you can [invoke a Move function](#calling-move-co
 or you can transfer one of the existing coins from the genesis account to the new account using a dedicated Sui client command.
 We will explore how to transfer coins using the Sui CLI client in this section.
 
-`transfer-coin` command usage:
+`transfer` command usage:
 
 ```shell
-sui-client-transfer-coin
-Transfer coin object
+sui-client-transfer
+Transfer object
 
 USAGE:
-    sui client transfer-coin [OPTIONS] --to <TO> --coin-object-id <COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
+    sui client transfer [OPTIONS] --to <TO> --coin-object-id <COIN_OBJECT_ID> --gas-budget <GAS_BUDGET>
 
 OPTIONS:
         --coin-object-id <COIN_OBJECT_ID>
@@ -595,7 +595,7 @@ mechanisms. For now, just set something large enough.
 Here is an example transfer of an object to account `0xf456ebef195e4a231488df56b762ac90695be2dd`:
 
 ```shell
-$ sui client transfer-coin --to 0xf456ebef195e4a231488df56b762ac90695be2dd --coin-object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
+$ sui client transfer --to 0xf456ebef195e4a231488df56b762ac90695be2dd --coin-object-id 0x66eaa38c8ea99673a92a076a00101ab9b3a06b55 --gas-budget 100
 ```
 
 With output like:
@@ -774,11 +774,12 @@ sui-client-split-coin
 Split a coin object into multiple coins
 
 USAGE:
-    sui client split-coin [OPTIONS] --coin-id <COIN_ID> --amounts <AMOUNTS>... --gas-budget <GAS_BUDGET>
+    sui client split-coin [OPTIONS] --coin-id <COIN_ID> --gas-budget <GAS_BUDGET> <--amounts <AMOUNTS>...|--count <COUNT>>
 
 OPTIONS:
-        --amounts <AMOUNTS>...       Amount to split out from the coin
+        --amounts <AMOUNTS>...       Specific amounts to split out from the coin
         --coin-id <COIN_ID>          Coin to Split, in 20 bytes Hex string
+        --count <COUNT>              Count of equal-size coins to split into
         --gas <GAS>                  ID of the gas object for gas payment, in 20 bytes Hex string If
                                      not provided, a gas object with at least gas_budget value will
                                      be selected
@@ -787,7 +788,7 @@ OPTIONS:
         --json                       Return command outputs in json format
 ```
 
-For splitting coins, you will need at lease two coins to execute the `split-coin` command,
+For splitting coins, you will need at least two coins to execute the `split-coin` command,
 one coin to split, one for the gas payment.
 
 Let us examine objects owned by address `0x08da15bee6a3f5b01edbbd402654a75421d81397`:
@@ -809,9 +810,10 @@ With output resembling:
 Showing 5 results.
 ```
 
-Here is an example of splitting coins. We are splitting out three new coins from the original coin (first one on the list above),
-with values of 1000, 5000 and 3000, respectively; note the `--amounts` argument accepts list of values.
-We use the second coin on the list to pay for this transaction.
+Here is an example of splitting coins using specific amounts. We are splitting out three new coins
+from the original coin (first one on the list above), with values of 1000, 5000 and 3000,
+respectively; note the `--amounts` argument accepts a list of values. We use the second coin on the
+list to pay for this transaction.
 
 ```shell
 $ sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --amounts 1000 5000 3000 --gas-budget 1000
@@ -854,6 +856,34 @@ Showing 8 results.
 ```
 
 From the result, we can see three new coins were created in the transaction.
+
+Here is an example of splitting coins into equal parts without needing to specify the individual
+amount for every new coin.
+
+```shell
+$ sui client split-coin --coin-id 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1 --count 3 --gas-budget 1000
+```
+
+You will see output resembling:
+
+```
+----- Certificate ----
+Transaction Hash: qpxpv+EySl6tkz7OZ+/h/cpOlC/q1kBepr/qrDHsg7k=
+Transaction Signature: BsuWPuG9iBnvc/cQBbpBvDsBnzLXrhxPpoblpZ7ZcTQ78X9AtPO7knOaPjEbLxEJMGpOCPTIWa0eMPpoqT/SDQ==@ZXB4tfniuC6Oir8aVtIR5C00Md/tG3WSZRNN7nDDZLs=
+Signed Authorities : [k#3adde8bfae7d338b65e7d13d4ead6b523e5271ca17b2d5eb321412257ee914a4, k#5067c1e30cc9d8b9ed9fe589beffbcdd14a2829b9fed5bf602608f411dbc4d56, k#f2e5749a5fc33d45c6f546eb9e53fabf4f17681ba6f697080de9514f4e0d6a75]
+Transaction Kind : Call
+Package ID : 0x2
+Module : coin
+Function : split_n
+Arguments : ["0x4a2853304fd2c243dae7d1ba58260bb7c40724e1", 3]
+Type Arguments : ["0x2::sui::SUI"]
+----- Split Coin Results ----
+Updated Coin : Coin { id: 0x4a2853304fd2c243dae7d1ba58260bb7c40724e1, value: 33334 }
+New Coins : Coin { id: 0x1da8193ac29f94f8207b0222bd5941b7814c1668, value: 33333 },
+            Coin { id: 0x3653bae7851c36e0e5e827b7c1a2978ef78efd7e, value: 33333 }
+Updated Gas : Coin { id: 0x692c179dc434ceb0eaa51cdd198bb905b5ab27c4, value: 99385 }
+```
+From the result, we can see three coins with values of roughly one-third of 100000.
 
 ## Calling Move code
 
@@ -1076,6 +1106,10 @@ initializers.
 
 Finally, we see that the gas object that was used to pay for
 publishing was updated as well.
+
+> **Important:** If the publishing attempt results in an error regarding verification failure,
+> [build your package locally](../build/move/build-test.md#building-a-package) (using the `sui move build` command)
+> to get a more verbose error message.
 
 ## Customize genesis
 

@@ -7,6 +7,7 @@ use futures::TryFutureExt;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::option::Option::None;
+use std::time::Instant;
 use std::{sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
@@ -28,12 +29,11 @@ use sui_quorum_driver::QuorumDriverMetrics;
 use sui_quorum_driver::{QuorumDriver, QuorumDriverHandler};
 use sui_storage::{
     event_store::{EventStoreType, SqlEventStore},
-    follower_store::FollowerStore,
     node_sync_store::NodeSyncStore,
     IndexStore,
 };
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
-use tracing::info;
+use tracing::{error, info};
 
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use sui_core::epoch::epoch_store::EpochStore;
@@ -113,12 +113,6 @@ impl SuiNode {
             )))
         };
 
-        let follower_store = Arc::new(FollowerStore::open_tables_read_write(
-            config.db_path().join("follower_db"),
-            None,
-            None,
-        ));
-
         let event_store = if config.enable_event_processing {
             let path = config.db_path().join("events.db");
             let db = SqlEventStore::new_from_file(&path).await?;
@@ -196,7 +190,6 @@ impl SuiNode {
                 let active_authority = Arc::new(ActiveAuthority::new(
                     state.clone(),
                     pending_store,
-                    follower_store,
                     net,
                     GossipMetrics::new(&prometheus_registry),
                     network_metrics.clone(),
@@ -219,14 +212,22 @@ impl SuiNode {
                         ),
                     )
                 } else {
-                    // TODO: enable checkpoint sync on fullnode
-                    // let metrics = CheckpointMetrics::new(&prometheus_registry);
-                    // active_authority.sync_to_latest_checkpoint(&metrics).await?;
-                    (
-                        Some(active_authority.spawn_node_sync_process().await),
-                        None,
-                        None,
-                    )
+                    info!("Starting full node sync to latest checkpoint (this may take a while)");
+                    let metrics = CheckpointMetrics::new(&prometheus_registry);
+                    let now = Instant::now();
+                    if let Err(err) = active_authority.sync_to_latest_checkpoint(&metrics).await {
+                        error!(
+                            "Full node failed to catch up to latest checkpoint: {:?}",
+                            err
+                        );
+                    } else {
+                        info!(
+                            "Full node caught up to latest checkpoint in {:?}",
+                            now.elapsed()
+                        );
+                    }
+                    active_authority.spawn_node_sync_process().await;
+                    (None, None, None)
                 }
             } else {
                 (None, None, None)

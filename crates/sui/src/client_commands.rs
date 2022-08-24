@@ -136,16 +136,16 @@ pub enum SuiClientCommands {
         gas_budget: u64,
     },
 
-    /// Transfer coin object
-    #[clap(name = "transfer-coin")]
+    /// Transfer object
+    #[clap(name = "transfer")]
     Transfer {
         /// Recipient address
         #[clap(long)]
         to: SuiAddress,
 
-        /// Coin to transfer, in 20 bytes Hex string
+        /// Object to transfer, in 20 bytes Hex string
         #[clap(long)]
-        coin_object_id: ObjectID,
+        object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -188,9 +188,9 @@ pub enum SuiClientCommands {
     #[clap(name = "addresses")]
     Addresses,
 
-    /// Generate new address and keypair.
+    /// Generate new address and keypair, with optional keypair scheme {ed25519 | secp256k1}, default to ed25519.
     #[clap(name = "new-address")]
-    NewAddress,
+    NewAddress { key_scheme: Option<String> },
 
     /// Obtain all objects owned by the address.
     #[clap(name = "objects")]
@@ -209,18 +209,17 @@ pub enum SuiClientCommands {
     },
 
     /// Split a coin object into multiple coins.
+    #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
     SplitCoin {
         /// Coin to Split, in 20 bytes Hex string
         #[clap(long)]
         coin_id: ObjectID,
-        /// Amount to split out from the coin
-        #[clap(
-            long,
-            multiple_occurrences = false,
-            multiple_values = true,
-            required = true
-        )]
-        amounts: Vec<u64>,
+        /// Specific amounts to split out from the coin
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        amounts: Option<Vec<u64>>,
+        /// Count of equal-size coins to split into
+        #[clap(long)]
+        count: u64,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
@@ -325,7 +324,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::Transfer {
                 to,
-                coin_object_id: object_id,
+                object_id,
                 gas,
                 gas_budget,
             } => {
@@ -407,9 +406,9 @@ impl SuiClientCommands {
                     .await?;
                 SuiClientCommandResult::SyncClientState
             }
-            SuiClientCommands::NewAddress => {
-                let (address, phrase) = context.keystore.generate_new_key()?;
-                SuiClientCommandResult::NewAddress((address, phrase))
+            SuiClientCommands::NewAddress { key_scheme } => {
+                let (address, phrase, flag) = context.keystore.generate_new_key(key_scheme)?;
+                SuiClientCommandResult::NewAddress((address, phrase, flag))
             }
             SuiClientCommands::Gas { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -425,15 +424,27 @@ impl SuiClientCommands {
             SuiClientCommands::SplitCoin {
                 coin_id,
                 amounts,
+                count,
                 gas,
                 gas_budget,
             } => {
                 let signer = context.get_object_owner(&coin_id).await?;
-                let data = context
-                    .gateway
-                    .transaction_builder()
-                    .split_coin(signer, coin_id, amounts, gas, gas_budget)
-                    .await?;
+                let data = if let Some(amounts) = amounts {
+                    context
+                        .gateway
+                        .transaction_builder()
+                        .split_coin(signer, coin_id, amounts, gas, gas_budget)
+                        .await?
+                } else {
+                    if count == 0 {
+                        return Err(anyhow!("Coin split count must be greater than 0"));
+                    }
+                    context
+                        .gateway
+                        .transaction_builder()
+                        .split_coin_equal(signer, coin_id, count, gas, gas_budget)
+                        .await?
+                };
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
                     .execute_transaction(Transaction::new(data, signature))
@@ -760,8 +771,11 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
-            SuiClientCommandResult::NewAddress((address, recovery_phrase)) => {
-                writeln!(writer, "Created new keypair for address : [{address}]")?;
+            SuiClientCommandResult::NewAddress((address, recovery_phrase, flag)) => {
+                writeln!(
+                    writer,
+                    "Created new keypair for address with flag {flag}: [{address}]"
+                )?;
                 writeln!(writer, "Secret Recovery Phrase : [{recovery_phrase}]")?;
             }
             SuiClientCommandResult::Gas(gases) => {
@@ -929,7 +943,7 @@ pub enum SuiClientCommandResult {
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,
-    NewAddress((SuiAddress, String)),
+    NewAddress((SuiAddress, String, u8)),
     Gas(Vec<GasCoin>),
     SplitCoin(SuiTransactionResponse),
     MergeCoin(SuiTransactionResponse),

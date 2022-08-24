@@ -288,9 +288,10 @@ impl SignedCheckpointSummary {
         self.auth_signature.verify(&self.summary, committee)?;
 
         if let Some(contents) = contents {
+            let content_digest = contents.digest();
             fp_ensure!(
-                contents.digest() == self.summary.content_digest,
-                SuiError::from("Checkpoint contents digest mismatch")
+                content_digest == self.summary.content_digest,
+                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, received content digest {:?}, received {} transactions", self.summary, content_digest, contents.transactions.len())}
             );
         }
 
@@ -375,9 +376,10 @@ impl CertifiedCheckpointSummary {
         obligation.verify_all()?;
 
         if let Some(contents) = contents {
+            let content_digest = contents.digest();
             fp_ensure!(
-                contents.digest() == self.summary.content_digest,
-                SuiError::from("Checkpoint contents digest mismatch")
+                content_digest == self.summary.content_digest,
+                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, content digest = {:?}, transactions {}", self.summary, content_digest, contents.transactions.len())}
             );
         }
 
