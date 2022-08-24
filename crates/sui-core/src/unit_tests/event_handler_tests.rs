@@ -18,7 +18,7 @@ use sui_json_rpc_types::SuiMoveStruct;
 
 use sui_types::base_types::ObjectID;
 use sui_types::gas_coin::GasCoin;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 #[test]
 fn test_to_json_value() {
@@ -123,9 +123,9 @@ impl From<&str> for UTF8String {
 impl UTF8String {
     fn type_() -> StructTag {
         StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
+            address: MOVE_STDLIB_ADDRESS,
             name: Identifier::new("String").unwrap(),
-            module: Identifier::new("utf8").unwrap(),
+            module: Identifier::new("string").unwrap(),
             type_params: vec![],
         }
     }

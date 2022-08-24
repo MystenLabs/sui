@@ -12,7 +12,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
 use sui_types::sui_serde::Base64;
-use sui_types::{SUI_FRAMEWORK_ADDRESS, MOVE_STDLIB_ADDRESS};
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 #[test]
 fn test_move_value_to_sui_bytearray() {
