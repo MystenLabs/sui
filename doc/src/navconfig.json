@@ -204,7 +204,7 @@
         "items": [
           {
             "label": "JSON-RPC API Reference",
-            "fileName": "https://docs.sui.io/sui-jsonrpc",
+            "link": "https://docs.sui.io/sui-jsonrpc",
             "external": true
           },
           {
