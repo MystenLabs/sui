@@ -103,7 +103,7 @@ error[E06001]: unused value without 'drop'
 27 │           let sword = Sword {
    │               ----- The local variable 'sword' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
    │ ╭─────────────────────'
-28 │ │             info: object::new(&mut ctx),
+28 │ │             id: object::new(&mut ctx),
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
@@ -226,7 +226,7 @@ sword creation and transfer and put them into the `m1.move` file:
         use sui::tx_context;
         // create a sword
         let sword = Sword {
-            info: object::new(ctx),
+            id: object::new(ctx),
             magic: magic,
             strength: strength,
         };
