@@ -80,18 +80,10 @@ div.txadd {
     text-decoration: none;
 }
 
-.txlatestresults td a {
-    @apply font-mono text-[#4E555D];
-}
-
 .txlatestresults td:nth-child(1) {
     @apply text-xs;
 }
 
 .suisuffix {
-    @apply text-[10px] text-sui-grey-60 ml-[2px];
-}
-
-.suiamount {
-    @apply text-sui-grey-80;
+    @apply text-[10px] ml-[2px];
 }

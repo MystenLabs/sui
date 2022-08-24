@@ -16,7 +16,7 @@ module.exports = {
             sui: {
                 dark: '#1F6493',
                 DEFAULT: '#6fbcf0',
-                light: '#F4FBFF',
+                light: '#E1F3FF',
                 grey: {
                     100: '#182435',
                     95: '#2A3645',

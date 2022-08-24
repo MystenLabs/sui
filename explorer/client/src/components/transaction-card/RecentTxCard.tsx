@@ -142,11 +142,11 @@ type RecentTx = {
 
 function SuiAmount({ amount }: { amount: BN | string | undefined }) {
     if (amount) {
-        const SuiSuffix = <span className={styles.suisuffix}>SUI</span>;
+        const SuiSuffix = <abbr className={styles.suisuffix}>SUI</abbr>;
 
         if (BN.isBN(amount)) {
             return (
-                <span className={styles.suiamount}>
+                <span>
                     {presentBN(amount)}
                     {SuiSuffix}
                 </span>
