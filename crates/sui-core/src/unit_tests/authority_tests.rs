@@ -414,6 +414,63 @@ async fn test_handle_transfer_transaction_ok() {
 }
 
 #[tokio::test]
+async fn test_handle_transfer_transaction_underflow() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, recipient_key): (_, AccountKeyPair) = get_key_pair();
+    let object_id = ObjectID::random();
+    let gas_object_id = ObjectID::random();
+    let authority_state =
+        init_state_with_ids(vec![(sender, object_id), (sender, gas_object_id)]).await;
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let gas_object = authority_state
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap();
+
+    let transfer_transaction = {
+        let data = TransactionData::new_transfer_sui(
+            recipient,
+            sender,
+            Some(500),
+            gas_object.compute_object_reference(),
+            100,
+        );
+        let signature = Signature::new(&data, &sender_key);
+        Transaction::new(data, signature)
+    };
+
+    let cert = init_certified_transaction(transfer_transaction, &authority_state);
+
+    let resp = authority_state.handle_certificate(cert).await.unwrap();
+    let new_obj_ref = resp.signed_effects.unwrap().effects.created[0].0;
+
+    // send it back
+    let transfer_transaction = {
+        // Use a batch, which bypasses normal checks.
+        let kind = TransactionKind::Batch(vec![SingleTransactionKind::TransferSui(TransferSui {
+            recipient: sender,
+            amount: Some(500),
+        })]);
+
+        let data = TransactionData::new(kind, recipient, new_obj_ref, 100);
+
+        let signature = Signature::new(&data, &recipient_key);
+        Transaction::new(data, signature)
+    };
+    println!("{:#?}", transfer_transaction);
+
+    let cert = init_certified_transaction(transfer_transaction, &authority_state);
+
+    // must fail, gas is insufficient
+    let resp = authority_state.handle_certificate(cert).await.unwrap_err();
+}
+
+#[tokio::test]
 async fn test_transfer_package() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
