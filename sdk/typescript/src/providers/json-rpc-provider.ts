@@ -507,7 +507,7 @@ export class JsonRpcProvider extends Provider {
     onMessage: (event: SuiEventEnvelope) => void
   ): Promise<SubscriptionId> {
     try {
-      // lazily connect to websocket as needed to avoid spamming node with connections
+      // lazily connect to websocket to avoid spamming node with connections
       if (this.wsConnectionState != ConnectionState.Connected)
         await this.connect();
 
