@@ -21,6 +21,7 @@ use futures::stream::StreamExt;
 
 use clap::*;
 use sui_core::authority::MAX_ITEMS_LIMIT;
+use sui_types::object::ObjectFormatOptions;
 
 #[derive(Parser)]
 #[clap(
@@ -291,9 +292,26 @@ impl std::fmt::Display for VerboseObjectOutput {
                             }
                         }
 
-                        if let Some(ObjectResponse { lock, object, .. }) = &resp.object_and_lock {
-                            // TODO maybe show object contents if we can do so meaningfully.
-                            writeln!(f, "  -- object: <data>")?;
+                        if let Some(ObjectResponse {
+                            lock,
+                            object,
+                            layout,
+                        }) = &resp.object_and_lock
+                        {
+                            if object.is_package() {
+                                writeln!(f, "  -- object: <Move Package>")?;
+                            } else if let Some(layout) = layout {
+                                writeln!(
+                                    f,
+                                    "  -- object: Move Object: {}",
+                                    object
+                                        .data
+                                        .try_as_move()
+                                        .unwrap()
+                                        .to_move_struct(layout)
+                                        .unwrap()
+                                )?;
+                            }
                             writeln!(f, "  -- owner: {}", object.owner)?;
                             writeln!(f, "  -- locked by: {}", lock.opt_debug("<not locked>"))?;
                         }
@@ -319,8 +337,13 @@ async fn get_object(
             .handle_object_info_request(ObjectInfoRequest {
                 object_id: id,
                 request_kind: match version {
-                    None => ObjectInfoRequestKind::LatestObjectInfo(None),
-                    Some(v) => ObjectInfoRequestKind::PastObjectInfo(SequenceNumber::from_u64(v)),
+                    None => ObjectInfoRequestKind::LatestObjectInfo(Some(
+                        ObjectFormatOptions::default(),
+                    )),
+                    Some(v) => ObjectInfoRequestKind::PastObjectInfoDebug(
+                        SequenceNumber::from_u64(v),
+                        Some(ObjectFormatOptions::default()),
+                    ),
                 },
             })
             .await
