@@ -38,7 +38,10 @@ function Navigation({ className }: NavigationProps) {
                 className={makeLinkCls}
                 title="Transactions"
             >
-                <Icon className={st.icon} icon={SuiIcons.History} />
+                <Icon
+                    className={cl(st.icon, st.walletActivityIcon)}
+                    icon={SuiIcons.Activity}
+                />
                 <span className={st.title}>Activity</span>
             </NavLink>
         </nav>
