@@ -172,7 +172,7 @@ async fn run_common_single_writer_tx_costs(
     let resp = SuiClientCommands::Transfer {
         gas: None,
         to: recipient,
-        coin_object_id: obj_id,
+        object_id: obj_id,
         gas_budget: 10000,
     }
     .execute(&mut context)
@@ -193,7 +193,7 @@ async fn run_common_single_writer_tx_costs(
     let resp = SuiClientCommands::Transfer {
         gas: Some(gas),
         to: recipient,
-        coin_object_id: obj_id,
+        object_id: obj_id,
         gas_budget: 10000,
     }
     .execute(&mut context)
