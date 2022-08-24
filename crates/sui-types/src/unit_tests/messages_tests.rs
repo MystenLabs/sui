@@ -16,16 +16,15 @@ use crate::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPub
 use crate::messages_checkpoint::CheckpointContents;
 use crate::messages_checkpoint::CheckpointSummary;
 use crate::object::Owner;
-use test_utils::message::random_object_ref;
 
 use super::*;
-// fn random_object_ref() -> ObjectRef {
-//     (
-//         ObjectID::random(),
-//         SequenceNumber::new(),
-//         ObjectDigest::new([0; 32]),
-//     )
-// }
+fn random_object_ref() -> ObjectRef {
+    (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    )
+}
 
 #[test]
 fn test_signed_values() {

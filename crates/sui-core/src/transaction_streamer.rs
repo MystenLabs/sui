@@ -37,7 +37,13 @@ impl TransactionStreamer {
             error!(?tx_digest, error =? e, "Failed to send tx to dispatch");
             return false;
         }
-        return true;
+        true
+    }
+}
+
+impl Default for TransactionStreamer {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

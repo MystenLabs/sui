@@ -5,7 +5,7 @@ use crate::api::EventStreamingApiServer;
 use crate::streaming_api::spawn_subscription;
 use crate::SuiRpcModule;
 use async_trait::async_trait;
-use futures::{StreamExt, TryStream};
+use futures::StreamExt;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;

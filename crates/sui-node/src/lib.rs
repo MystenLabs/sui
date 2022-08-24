@@ -14,7 +14,6 @@ use sui_config::NodeConfig;
 use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
-use sui_core::event_handler;
 use sui_core::safe_client::SafeClientMetrics;
 use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
@@ -129,10 +128,10 @@ impl SuiNode {
         };
 
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
-        let transaction_streamer = match config.websocket_address {
-            Some(_) => Some(Arc::new(TransactionStreamer::new())),
-            None => None,
-        };
+
+        let transaction_streamer = config
+            .websocket_address
+            .map(|_| Arc::new(TransactionStreamer::new()));
 
         let state = Arc::new(
             AuthorityState::new(
@@ -412,20 +411,5 @@ pub async fn build_node_server(
         }
         None => None,
     };
-    // // TODO: we will change the conditions soon when we introduce txn subs
-    // let ws_server_handle = match (config.websocket_address, state.event_handler.clone()) {
-    //     (Some(ws_addr), Some(event_handler)) => {
-    //         let mut server = JsonRpcServerBuilder::new(true, prometheus_registry)?;
-    //         server.register_module(EventStreamingApiImpl::new(state.clone(), event_handler))?;
-    //         Some(
-    //             server
-    //                 .start(ws_addr)
-    //                 .await?
-    //                 .into_ws_server_handle()
-    //                 .expect("Expect a websocket server handle"),
-    //         )
-    //     }
-    //     _ => None,
-    // };
     Ok((Some(rpc_server_handle), ws_server_handle))
 }

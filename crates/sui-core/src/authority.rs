@@ -777,6 +777,11 @@ impl AuthorityState {
             }
         }
 
+        // Stream transaction
+        if let Some(transaction_streamer) = &self.transaction_streamer {
+            transaction_streamer.enqueue((cert, effects.clone())).await;
+        }
+
         // Emit events
         if let Some(event_handler) = &self.event_handler {
             let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);

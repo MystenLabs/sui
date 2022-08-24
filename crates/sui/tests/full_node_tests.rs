@@ -35,7 +35,6 @@ use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
-    TransactionEffects,
 };
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -486,12 +485,18 @@ async fn set_up_subscription(swarm: &Swarm) -> Result<(SuiNode, Client), anyhow:
 }
 
 /// Call this function to set up a network and a fullnode and return a jsonrpc client.
-async fn set_up_jsonrpc(swarm: &Swarm) -> Result<(SuiNode, HttpClient), anyhow::Error> {
+/// The fullnode does not have websocket enabled.
+async fn set_up_jsonrpc(
+    swarm: &Swarm,
+    fullnode_db_path: Option<&str>,
+) -> Result<(SuiNode, HttpClient), anyhow::Error> {
     let port = get_available_port();
     let jsonrpc_server_url = format!("127.0.0.1:{}", port);
     let jsonrpc_addr: SocketAddr = jsonrpc_server_url.parse().unwrap();
 
-    let mut config = swarm.config().generate_fullnode_config();
+    let mut config = swarm
+        .config()
+        .generate_fullnode_config_with_custom_db_path(fullnode_db_path, false);
     config.json_rpc_address = jsonrpc_addr;
 
     let node = SuiNode::start(&config).await?;
@@ -521,13 +526,13 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
     wait_for_all_txes(digests.clone(), node.state().clone()).await;
 
     // Wait for streaming
-    for i in 0..3 {
+    for digest in digests.iter().take(3) {
         match timeout(Duration::from_secs(3), sub.next()).await {
             Ok(Some(Ok((tx_cert, _tx_effects)))) => {
-                assert_eq!(tx_cert.transaction_digest, digests[i]);
+                assert_eq!(&tx_cert.transaction_digest, digest);
             }
             other => panic!(
-                "Failed to get Ok items from transaction streaming, but {:?}",
+                "Failed to get Ok item from transaction streaming, but {:?}",
                 other
             ),
         };
@@ -542,8 +547,9 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
         ),
     }
 
-    // FIXME test setuo hjsonrpc without wssocket and then the end point does not exist
-    // FIXME test cold sync txns streaming
+    // Node Config without websocket_address does not create a transaction streamer
+    let (node, _) = set_up_jsonrpc(&swarm, Some("another_folder")).await?;
+    assert!(node.state().transaction_streamer.is_none());
 
     Ok(())
 }
@@ -638,8 +644,8 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 #[tokio::test]
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
-    let (node, jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
-    let (transferred_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
+    let (node, jsonrpc_client) = set_up_jsonrpc(&swarm, None).await?;
+    let (transfered_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -776,7 +782,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
-    let (node, _jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
+    let (node, _jsonrpc_client) = set_up_jsonrpc(&swarm, None).await?;
     let quorum_driver = node
         .quorum_driver()
         .expect("Fullnode should have quorum driver toggled on.");
@@ -885,7 +891,7 @@ async fn test_validator_node_has_no_quorum_driver() {
 #[tokio::test]
 async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
-    let (_node, jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
+    let (_node, jsonrpc_client) = set_up_jsonrpc(&swarm, None).await?;
 
     let mut txns = make_transactions_with_wallet_context(&mut context, 3).await;
     assert!(

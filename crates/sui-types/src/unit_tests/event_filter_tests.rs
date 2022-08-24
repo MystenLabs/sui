@@ -10,7 +10,7 @@ use serde_json::json;
 use crate::base_types::{SuiAddress, TransactionDigest};
 use crate::event::{Event, EventEnvelope};
 use crate::event::{EventType, TransferType};
-use crate::event_filter::{EventFilter, Filter};
+use crate::filter::{EventFilter, Filter};
 use crate::gas_coin::GasCoin;
 use crate::object::Owner;
 use crate::{ObjectID, MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
