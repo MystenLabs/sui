@@ -57,23 +57,23 @@
             "fileName": "learn/sui-compared"
           },
           {
-            "label": "Manage Objects",
+            "label": "Objects",
             "fileName": "build/objects"
           },
           {
-            "label": "Conduct Transactions",
+            "label": "Transactions",
             "fileName": "build/transactions"
           },
           {
-            "label": "Create Single-Writer Apps",
+            "label": "Single-Writer Apps",
             "fileName": "learn/single-writer-apps"
           },
           {
-            "label": "Understand Validators",
+            "label": "Validators",
             "fileName": "learn/architecture/validators"
           },
           {
-            "label": "Employ Consensus Engine",
+            "label": "Consensus Engine",
             "fileName": "learn/architecture/consensus"
           }
         ]
@@ -115,6 +115,10 @@
       {
         "label": "Connect to Sui Devnet",
         "fileName": "build/devnet"
+      },
+      {
+        "label": "Optional - Run Locally with CLI",
+        "fileName": "contribute/cli-client"
       },
       {
         "label": "Create Smart Contracts with Move",
@@ -172,24 +176,15 @@
         "title": "Talk with Sui",
         "items": [
           {
-            "label": "Use Sui RPC Server",
+            "label": "Connect with Sui RPC Server",
             "fileName": "build/json-rpc"
           },
           {
-            "label": "Employ SuiJSON Format",
-            "fileName": "build/sui-json"
-          },
-          {
-            "label": "See JSON-RPC API Reference",
-            "link": "https://docs.sui.io/sui-jsonrpc",
-            "external": true
-          },
-          {
-            "label": "Make calls with Rust SDK",
+            "label": "Use Rust SDK",
             "fileName": "build/rust-sdk"
           },
           {
-            "label": "Write TypeScript/JavaScript",
+            "label": "Use TypeScript/JavaScript SDK",
             "link": "https://github.com/MystenLabs/sui/tree/main/sdk/typescript",
             "external": true
           },
@@ -200,6 +195,21 @@
           {
             "label": "Subscribe to Events",
             "fileName": "build/pubsub"
+          }
+        ]
+      },
+      {
+        "label": "Reference",
+        "title": "Reference",
+        "items": [
+          {
+            "label": "JSON-RPC API Reference",
+            "fileName": "https://docs.sui.io/sui-jsonrpc",
+            "external": true
+          },
+          {
+            "label": "SuiJSON Format",
+            "fileName": "build/sui-json"
           }
         ]
       }
@@ -234,10 +244,6 @@
       {
         "label": "Frequently Asked Questions",
         "fileName": "contribute/faq"
-      },
-      {
-        "label": "Sui CLI and Local Network",
-        "fileName": "contribute/cli-client"
       },
       {
         "label": "Logging",
