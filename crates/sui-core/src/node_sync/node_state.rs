@@ -61,7 +61,7 @@ where
 
     /// Returns (true, rx) if there are no other waiters yet, or else (false, rx).
     /// All rxes can be woken by calling notify(key, result)
-    async fn wait(&self, key: &Key) -> (bool, broadcast::Receiver<ResultT>) {
+    fn wait(&self, key: &Key) -> (bool, broadcast::Receiver<ResultT>) {
         let waiters = &mut self.waiters.lock().unwrap();
         let entry = waiters.entry(key.clone());
 
@@ -196,7 +196,7 @@ pub struct NodeSyncState<A> {
     pending_downloads: Arc<Waiter<TransactionDigest, SuiResult>>,
 
     // Used to wait for parent transactions to be applied locally
-    pending_txes: Waiter<TransactionDigest, ()>,
+    pending_txes: Waiter<TransactionDigest, SyncResult>,
 
     // Channels for enqueuing DigestMessage requests.
     sender: mpsc::Sender<DigestsMessage>,
@@ -233,6 +233,7 @@ impl<A> NodeSyncState<A> {
     }
 }
 
+#[derive(Clone)]
 pub enum SyncStatus {
     /// The digest has been successfully processed, but there is not yet sufficient stake
     /// voting for the digest to prove finality.
@@ -321,7 +322,7 @@ where
                 trace!(?digest, "notifying waiters");
                 state
                     .pending_txes
-                    .notify(digest, ())
+                    .notify(digest, res.clone())
                     .await
                     .tap_err(|e| debug!(?digest, "{}", e))
                     .ok();
@@ -436,6 +437,7 @@ where
     }
 
     pub fn cleanup_cert(&self, digest: &TransactionDigest) {
+        debug!(?digest, "cleaning up temporary sync data");
         let _ = self
             .node_sync_store
             .cleanup_cert(digest)
@@ -512,6 +514,17 @@ where
                 (digests, None)
             }
         };
+
+        let (is_first, mut rx) = self.pending_txes.wait(&digests.transaction);
+        if !is_first {
+            debug!(?digest, "tx is already in-progress, waiting...");
+            return rx
+                .recv()
+                .await
+                .map_err(|e| SuiError::GenericAuthorityError {
+                    error: format!("{:?}", e),
+                })?;
+        }
 
         // Download the cert and effects - either finality has been establish (above), or
         // we are a validator.
@@ -627,7 +640,7 @@ where
         std::mem::drop(permit);
 
         for parent in effects.effects.dependencies.iter() {
-            let (_, mut rx) = self.pending_txes.wait(parent).await;
+            let (_, mut rx) = self.pending_txes.wait(parent);
 
             if self.state.database.effects_exists(parent)? {
                 continue;
@@ -638,9 +651,10 @@ where
             // able to start.
             rx.recv()
                 .await
+                .map(|_| ())
                 .map_err(|e| SuiError::GenericAuthorityError {
                     error: format!("{:?}", e),
-                })?;
+                })?
         }
 
         if cfg!(debug_assertions) {
@@ -671,7 +685,7 @@ where
         }
 
         let pending_downloads = self.pending_downloads.clone();
-        let (first, mut rx) = pending_downloads.wait(&tx_digest).await;
+        let (first, mut rx) = pending_downloads.wait(&tx_digest);
         // Only start the download if there are no other concurrent downloads.
         if first {
             let aggregator = self.aggregator.clone();
