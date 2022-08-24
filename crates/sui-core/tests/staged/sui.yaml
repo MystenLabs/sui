@@ -348,6 +348,12 @@ ObjectInfoRequestKind:
       PastObjectInfo:
         NEWTYPE:
           TYPENAME: SequenceNumber
+    2:
+      PastObjectInfoDebug:
+        TUPLE:
+          - TYPENAME: SequenceNumber
+          - OPTION:
+              TYPENAME: ObjectFormatOptions
 Owner:
   ENUM:
     0:

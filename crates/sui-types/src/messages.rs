@@ -838,6 +838,11 @@ pub enum ObjectInfoRequestKind {
     LatestObjectInfo(Option<ObjectFormatOptions>),
     /// Request the object state at a specific version
     PastObjectInfo(SequenceNumber),
+    /// Similar to PastObjectInfo, except that it will also return the object content.
+    /// This is used only for debugging purpose and will not work in the long run when
+    /// we stop storing all historic versions of every object.
+    /// No production code should depend on this kind.
+    PastObjectInfoDebug(SequenceNumber, Option<ObjectFormatOptions>),
 }
 
 /// A request for information about an object and optionally its

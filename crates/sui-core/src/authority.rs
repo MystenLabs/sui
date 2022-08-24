@@ -851,7 +851,8 @@ impl AuthorityState {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let ref_and_digest = match request.request_kind {
-            ObjectInfoRequestKind::PastObjectInfo(seq) => {
+            ObjectInfoRequestKind::PastObjectInfo(seq)
+            | ObjectInfoRequestKind::PastObjectInfoDebug(seq, _) => {
                 // Get the Transaction Digest that created the object
                 self.get_parent_iterator(request.object_id, Some(seq))
                     .await?
@@ -902,6 +903,26 @@ impl AuthorityState {
                         Some(ObjectResponse {
                             object,
                             lock,
+                            layout,
+                        })
+                    }
+                    Err(e) => return Err(e),
+                    _ => None,
+                }
+            }
+            ObjectInfoRequestKind::PastObjectInfoDebug(seq, request_layout) => {
+                match self.database.get_object_by_key(&request.object_id, seq) {
+                    Ok(Some(object)) => {
+                        let layout = match request_layout {
+                            Some(format) => {
+                                object.get_layout(format, self.module_cache.as_ref())?
+                            }
+                            None => None,
+                        };
+
+                        Some(ObjectResponse {
+                            object,
+                            lock: None,
                             layout,
                         })
                     }
