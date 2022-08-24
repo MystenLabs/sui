@@ -14,7 +14,7 @@ use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolComm
 use sui_core::authority_client::{
     AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
 };
-use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
+use sui_types::{base_types::*, batch::*, messages::*, object::Owner, gas_coin::GasCoin};
 
 use anyhow::anyhow;
 use futures::stream::StreamExt;
@@ -292,7 +292,15 @@ impl std::fmt::Display for VerboseObjectOutput {
                         }
 
                         if let Some(ObjectResponse { lock, object, .. }) = &resp.object_and_lock {
-                            // TODO maybe show object contents if we can do so meaningfully.
+                            let gas_coin = object
+                                .data
+                                .try_as_move()
+                                .map(|m| Some(GasCoin::try_from(m)));
+                            if let Some(Some(Ok(gas_coin))) = gas_coin {
+                                writeln!(f, "  -- object: {:?}", gas_coin)?;
+                            } else {
+                                writeln!(f, "  -- object: <data>")?;
+                            }
                             writeln!(f, "  -- object: <data>")?;
                             writeln!(f, "  -- owner: {}", object.owner)?;
                             writeln!(f, "  -- locked by: {}", lock.opt_debug("<not locked>"))?;
