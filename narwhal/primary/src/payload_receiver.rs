@@ -8,6 +8,10 @@ use tokio::task::JoinHandle;
 use tracing::info;
 use types::{metered_channel::Receiver, BatchDigest};
 
+#[cfg(test)]
+#[path = "tests/payload_receiver_tests.rs"]
+mod payload_receiver_tests;
+
 /// Receives batches' digests of other authorities. These are only needed to verify incoming
 /// headers (i.e.. make sure we have their payload).
 pub struct PayloadReceiver {

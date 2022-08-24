@@ -7,19 +7,22 @@ use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::{LuckyNetwork, UnreliableNetwork, WorkerNetwork};
 use primary::PrimaryWorkerMessage;
+use std::collections::HashSet;
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use store::{Store, StoreError};
+use tap::TapFallible;
 use tap::TapOptional;
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
-use tracing::{debug, error, warn};
+use tracing::{debug, error, trace, warn};
+use types::error::DagError;
 use types::{
     metered_channel::{Receiver, Sender},
     BatchDigest, ReconfigureNotification, Round, SerializedBatchMessage, WorkerMessage,
@@ -138,55 +141,80 @@ impl Synchronizer {
                 // Handle primary's messages.
                 Some(message) = self.rx_message.recv() => match message {
                     PrimaryWorkerMessage::Synchronize(digests, target) => {
-                        let now = SystemTime::now()
-                            .duration_since(UNIX_EPOCH)
-                            .expect("Failed to measure time")
-                            .as_millis();
+                        let mut missing = HashSet::new();
+                        let mut available = HashSet::new();
 
-                        let mut missing = Vec::new();
-                        for digest in digests {
+                        for digest in digests.iter() {
                             // Ensure we do not send twice the same sync request.
-                            if self.pending.contains_key(&digest) {
+                            if self.pending.contains_key(digest) {
                                 continue;
                             }
 
                             // Check if we received the batch in the meantime.
-                            match self.store.read(digest).await {
+                            match self.store.read(*digest).await {
                                 Ok(None) => {
-                                    missing.push(digest);
+                                    missing.insert(*digest);
                                     debug!("Requesting sync for batch {digest}");
                                 },
                                 Ok(Some(_)) => {
                                     // The batch arrived in the meantime: no need to request it.
+                                    available.insert(*digest);
+                                    trace!("Digest {digest} already in store, nothing to sync");
+                                    continue;
                                 },
                                 Err(e) => {
                                     error!("{e}");
                                     continue;
                                 }
-                            }
-
-                            // Add the digest to the waiter.
-                            let deliver = digest;
-                            let (tx_cancel, rx_cancel) = mpsc::channel(1);
-                            let fut = Self::waiter(digest, self.store.clone(), deliver, rx_cancel);
-                            waiting.push(fut);
-                            self.pending.insert(digest, (self.round, tx_cancel, now));
+                            };
                         }
 
-                        // Send sync request to a single node. If this fails, we will send it
-                        // to other nodes when a timer times out.
-                        let address = match self.worker_cache.load().worker(&target, &self.id) {
-                            Ok(address) => address.worker_to_worker,
-                            Err(e) => {
-                                error!("The primary asked us to sync with an unknown node: {e}");
-                                continue;
+                        // reply back immediately for the available ones
+                        if !available.is_empty() {
+                            // Doing this will ensure the batch id will be populated to primary even
+                            // when other processes fail to do so (ex we received a batch from a peer
+                            // worker and message has been missed by primary).
+                            for digest in available {
+                                let message = WorkerPrimaryMessage::OthersBatch(digest, self.id);
+                                let _ = self.tx_primary.send(message).await.tap_err(|err|{
+                                    debug!("{err:?} {}", DagError::ShuttingDown);
+                                });
                             }
-                        };
+                        }
 
-                        debug!("Sending BatchRequest message to {} for missing batches {:?}", address, missing.clone());
+                        if !missing.is_empty() {
+                            let now = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .expect("Failed to measure time")
+                            .as_millis();
 
-                        let message = WorkerMessage::BatchRequest(missing, self.name.clone());
-                        self.network.unreliable_send(address, &message).await;
+                            // now add all requests as pending
+                            for digest in missing.iter() {
+                                // Add the digest to the waiter.
+                                let deliver = *digest;
+                                let (tx_cancel, rx_cancel) = mpsc::channel(1);
+                                let fut = Self::waiter(*digest, self.store.clone(), deliver, rx_cancel);
+                                waiting.push(fut);
+                                self.pending.insert(*digest, (self.round, tx_cancel, now));
+                            }
+
+                            // Send sync request to a single node. If this fails, we will send it
+                            // to other nodes when a timer times out.
+                            let address = match self.worker_cache.load().worker(&target, &self.id) {
+                                Ok(address) => address.worker_to_worker,
+                                Err(e) => {
+                                    error!("The primary asked us to sync with an unknown node: {e}");
+                                    continue;
+                                }
+                            };
+
+                            debug!("Sending BatchRequest message to {} for missing batches {:?}", address, missing.clone());
+
+                            let message = WorkerMessage::BatchRequest(missing.into_iter().collect::<Vec<_>>(), self.name.clone());
+                            self.network.unreliable_send(address, &message).await;
+                        } else {
+                            debug!("All batches are already available {:?} nothing to request from peers", digests);
+                        }
                     },
                     PrimaryWorkerMessage::Cleanup(round) => {
                         // Keep track of the primary's round number.
