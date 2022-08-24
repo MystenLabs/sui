@@ -117,6 +117,7 @@ function Search() {
                     <SearchIcon className={styles.searchicon} />
                 </button>
             </form>
+            {input && result?.length === 0 && <div>No Results</div>}
             {result && (
                 <div>
                     {result.map((el, index) => (
