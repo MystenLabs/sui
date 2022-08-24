@@ -251,7 +251,7 @@ async fn create_transfer_response(
 ) -> Result<SuiTransactionResponse, anyhow::Error> {
     let response = SuiClientCommands::Transfer {
         to: address,
-        coin_object_id: coins.first().unwrap().object_id,
+        object_id: coins.first().unwrap().object_id,
         gas: None,
         gas_budget: 1000,
     }

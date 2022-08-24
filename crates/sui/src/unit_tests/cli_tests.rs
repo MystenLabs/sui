@@ -302,7 +302,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     // Send an object
     SuiClientCommands::Transfer {
         to: recipient,
-        coin_object_id: object_to_send,
+        object_id: object_to_send,
         gas: Some(object_id),
         gas_budget: 50000,
     }
@@ -575,7 +575,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Transfer {
         gas: Some(gas_obj_id),
         to: recipient,
-        coin_object_id: obj_id,
+        object_id: obj_id,
         gas_budget: 50000,
     }
     .execute(&mut context)
@@ -665,7 +665,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let resp = SuiClientCommands::Transfer {
         gas: None,
         to: recipient,
-        coin_object_id: obj_id,
+        object_id: obj_id,
         gas_budget: 50000,
     }
     .execute(&mut context)
