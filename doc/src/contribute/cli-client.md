@@ -540,7 +540,7 @@ Here is example `json` output:
 
 ## Transferring coins
 
-Coins *are* objects yet have a specific use case that allow for native commands like transfer/merge-coin/split-coin to be used. This is different from non-coin objects that can only be mutated via [Move calls](#calling-move-code).
+Coins *are* objects, but they have a specific use case that allows you to use native commands such as `transfer`, `merge-coin`, and `split-coin`. This is different from non-coin objects that you can mutate only using [Move calls](#calling-move-code).
 
 If you inspect a newly created account, you would expect the account does not own any object. Let us inspect the fresh account we create in the [Generating a new account](#generating-a-new-account) section (`C72CF3ADCC4D11C03079CEF2C8992AEA5268677A`):
 
