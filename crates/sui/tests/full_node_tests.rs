@@ -27,13 +27,15 @@ use tracing::info;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_config::utils::get_available_port;
 use sui_json_rpc_types::{
-    SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveStruct,
-    SuiMoveValue, SuiObjectRead,
+    SuiCertifiedTransaction, SuiEvent, SuiEventEnvelope, SuiEventFilter,
+    SuiExecuteTransactionResponse, SuiMoveStruct, SuiMoveValue, SuiObjectRead,
+    SuiTransactionEffects, SuiTransactionFilter,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
+    TransactionEffects,
 };
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -496,6 +498,54 @@ async fn set_up_jsonrpc(swarm: &Swarm) -> Result<(SuiNode, HttpClient), anyhow::
 
     let client = HttpClientBuilder::default().build(&format!("http://{}", jsonrpc_server_url))?;
     Ok((node, client))
+}
+
+#[tokio::test]
+async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Error> {
+    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+    let (node, ws_client) = set_up_subscription(&swarm).await?;
+
+    let mut sub: Subscription<(SuiCertifiedTransaction, SuiTransactionEffects)> = ws_client
+        .subscribe(
+            "sui_subscribeTransaction",
+            rpc_params![SuiTransactionFilter::Any],
+            "sui_unsubscribeTransaction",
+        )
+        .await
+        .unwrap();
+    let mut digests = Vec::with_capacity(3);
+    for _i in 0..3 {
+        let (_, _, _, digest) = transfer_coin(&mut context).await?;
+        digests.push(digest);
+    }
+    wait_for_all_txes(digests.clone(), node.state().clone()).await;
+
+    // Wait for streaming
+    for i in 0..3 {
+        match timeout(Duration::from_secs(3), sub.next()).await {
+            Ok(Some(Ok((tx_cert, _tx_effects)))) => {
+                assert_eq!(tx_cert.transaction_digest, digests[i]);
+            }
+            other => panic!(
+                "Failed to get Ok items from transaction streaming, but {:?}",
+                other
+            ),
+        };
+    }
+
+    // No more
+    match timeout(Duration::from_secs(3), sub.next()).await {
+        Err(_) => (),
+        other => panic!(
+            "Expect to time out because no new txs are coming in. Got {:?}",
+            other
+        ),
+    }
+
+    // FIXME test setuo hjsonrpc without wssocket and then the end point does not exist
+    // FIXME test cold sync txns streaming
+
+    Ok(())
 }
 
 #[tokio::test]

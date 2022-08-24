@@ -13,19 +13,32 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_adapter::genesis;
 use sui_json_rpc_types::SuiObjectInfo;
 use sui_sdk::crypto::SuiKeystore;
-use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
-use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, KeypairTraits};
+use sui_types::base_types::{ObjectDigest, ObjectID, SequenceNumber};
+use sui_types::crypto::{
+    get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes, KeypairTraits,
+};
+use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
-use sui_types::messages::CallArg;
+use sui_types::messages::SignedTransactionEffects;
+use sui_types::messages::{CallArg, ExecutionStatus, TransactionEffects};
 use sui_types::messages::{
     CertifiedTransaction, ObjectArg, SignatureAggregator, SignedTransaction, Transaction,
     TransactionData,
 };
 use sui_types::object::Object;
+use sui_types::object::Owner;
 use sui_types::{base_types::SuiAddress, crypto::Signature};
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 10_000;
+
+pub fn random_object_ref() -> ObjectRef {
+    (
+        ObjectID::random(),
+        SequenceNumber::new(),
+        ObjectDigest::new([0; 32]),
+    )
+}
 
 /// A helper function to get all accounts and their owned GasCoin
 /// with a WalletContext
@@ -344,22 +357,58 @@ pub fn move_transaction_with_type_tags(
 }
 
 /// Make a test certificates for each input transaction.
-pub fn make_certificates(transactions: Vec<Transaction>) -> Vec<CertifiedTransaction> {
+pub fn make_tx_certs_and_signed_effects(
+    transactions: Vec<Transaction>,
+) -> (Vec<CertifiedTransaction>, Vec<SignedTransactionEffects>) {
     let committee = test_committee();
-    let mut certificates = Vec::new();
+    let mut tx_certs = Vec::new();
+    let mut effect_sigs = Vec::new();
     for tx in transactions {
-        let mut aggregator = SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
+        let mut signed_tx_aggregator =
+            SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
         for (key, _, _) in test_validator_keys() {
             let vote =
                 SignedTransaction::new(/* epoch */ 0, tx.clone(), key.public().into(), &key);
-            if let Some(certificate) = aggregator
+
+            if let Some(tx_cert) = signed_tx_aggregator
                 .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
                 .unwrap()
             {
-                certificates.push(certificate);
+                tx_certs.push(tx_cert);
+                let effects = dummy_transaction_effects(&tx);
+                let signed_effects = effects.to_sign_effects(
+                    committee.epoch(),
+                    &AuthorityPublicKeyBytes::from(key.public()),
+                    &key,
+                );
+                effect_sigs.push(signed_effects);
                 break;
-            }
+            };
         }
     }
-    certificates
+    (tx_certs, effect_sigs)
+}
+
+fn dummy_transaction_effects(tx: &Transaction) -> TransactionEffects {
+    TransactionEffects {
+        status: ExecutionStatus::Success,
+        gas_used: GasCostSummary {
+            computation_cost: 0,
+            storage_cost: 0,
+            storage_rebate: 0,
+        },
+        shared_objects: Vec::new(),
+        transaction_digest: *tx.digest(),
+        created: Vec::new(),
+        mutated: Vec::new(),
+        unwrapped: Vec::new(),
+        deleted: Vec::new(),
+        wrapped: Vec::new(),
+        gas_object: (
+            random_object_ref(),
+            Owner::AddressOwner(tx.signed_data.data.signer()),
+        ),
+        events: Vec::new(),
+        dependencies: Vec::new(),
+    }
 }

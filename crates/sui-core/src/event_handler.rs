@@ -18,7 +18,7 @@ use sui_types::{
 
 use crate::authority::{AuthorityStore, ResolverWrapper};
 use crate::streamer::Streamer;
-use sui_types::event_filter::EventFilter;
+use sui_types::filter::EventFilter;
 
 #[cfg(test)]
 #[path = "unit_tests/event_handler_tests.rs"]

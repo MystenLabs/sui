@@ -8,6 +8,7 @@ use serde_json::Value;
 use crate::base_types::SuiAddress;
 use crate::event::EventType;
 use crate::event::{Event, EventEnvelope};
+use crate::messages::TxCertAndSignedEffects;
 use crate::object::Owner;
 use crate::ObjectID;
 
@@ -71,6 +72,20 @@ impl EventFilter {
 impl Filter<EventEnvelope> for EventFilter {
     fn matches(&self, item: &EventEnvelope) -> bool {
         self.try_matches(item).unwrap_or_default()
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum TransactionFilter {
+    // subscribe to all transactions
+    Any,
+}
+
+impl Filter<TxCertAndSignedEffects> for TransactionFilter {
+    fn matches(&self, _item: &TxCertAndSignedEffects) -> bool {
+        match self {
+            TransactionFilter::Any => true,
+        }
     }
 }
 

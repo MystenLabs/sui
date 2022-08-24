@@ -29,6 +29,7 @@ pub mod event_api;
 pub mod gateway_api;
 pub mod quorum_driver_api;
 pub mod read_api;
+pub mod streaming_api;
 
 pub enum ServerBuilder<M = ()> {
     HttpBuilder(HttpServerBuilder<M>),

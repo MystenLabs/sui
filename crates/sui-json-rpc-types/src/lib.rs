@@ -39,7 +39,7 @@ use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature}
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferType};
 use sui_types::event::{EventEnvelope, EventType};
-use sui_types::event_filter::EventFilter;
+use sui_types::filter::{EventFilter, TransactionFilter};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -2124,6 +2124,23 @@ pub struct MoveCallParams {
     #[serde(default)]
     pub type_arguments: Vec<SuiTypeTag>,
     pub arguments: Vec<SuiJsonValue>,
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename = "SuiTransactionFilter")]
+pub enum SuiTransactionFilter {
+    Any,
+}
+
+impl TryInto<TransactionFilter> for SuiTransactionFilter {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<TransactionFilter, anyhow::Error> {
+        use SuiTransactionFilter::*;
+        Ok(match self {
+            Any => TransactionFilter::Any,
+        })
+    }
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]

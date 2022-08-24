@@ -11,6 +11,10 @@ use sui_json_rpc_types::{
     RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse,
     SuiGasCostSummary, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
     SuiObjectInfo, SuiTransactionResponse, SuiTypeTag, TransactionBytes,
+    RPCTransactionRequestParams, SuiCertifiedTransaction, SuiEventEnvelope, SuiEventFilter,
+    SuiExecuteTransactionResponse, SuiMoveNormalizedFunction, SuiMoveNormalizedModule,
+    SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects, SuiTransactionFilter,
+    SuiTransactionResponse, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -349,6 +353,18 @@ pub trait RpcBcsApi {
         /// the id of the object
         object_id: ObjectID,
     ) -> RpcResult<GetRawObjectDataResponse>;
+}
+
+#[open_rpc(namespace = "sui", tag = "Transaction Subscription")]
+#[rpc(server, client, namespace = "sui")]
+pub trait TransactionStreamingApi {
+    /// Subscribe to a stream of Sui event
+    #[subscription(name = "subscribeTransaction", item = (SuiCertifiedTransaction, SuiTransactionEffects))]
+    fn subscribe_transaction(
+        &self,
+        /// the filter criteria of the transaction stream.
+        filter: SuiTransactionFilter,
+    );
 }
 
 #[open_rpc(namespace = "sui", tag = "Event Subscription")]
