@@ -1,18 +1,14 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// This file covers running actual transactions and reporting the costs end ot end
-
+use insta::assert_yaml_snapshot;
+use std::fs;
 use std::{collections::BTreeMap, path::PathBuf};
-
-// Execute every entry function in Move framework and examples and ensure costs don't change
-use move_package::BuildConfig;
-use serde::{Deserialize, Serialize};
-use strum_macros::Display;
-use strum_macros::EnumString;
-use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
-use sui_json_rpc_types::SuiGasCostSummary;
+use sui_cost::estimator::ESTIMATE_FILE;
+use sui_cost::estimator::{
+    estimate_computational_costs_for_transaction, read_estimate_file, CommonTransactionCosts,
+};
 use sui_types::base_types::SuiAddress;
 use sui_types::coin::COIN_JOIN_FUNC_NAME;
 use sui_types::coin::COIN_MODULE_NAME;
@@ -24,227 +20,105 @@ use sui_types::{
 };
 use test_utils::messages::make_transfer_object_transaction;
 use test_utils::messages::make_transfer_sui_transaction;
+use test_utils::messages::move_transaction_with_type_tags;
 use test_utils::test_account_keys;
 use test_utils::transaction::get_framework_object;
 use test_utils::{
     authority::{spawn_test_authorities, test_authority_configs},
     messages::move_transaction,
-    network::setup_network_and_wallet,
     objects::test_gas_objects,
     transaction::{
         publish_counter_package, publish_package_for_effects, submit_shared_object_transaction,
         submit_single_owner_transaction,
     },
 };
+
 const TEST_DATA_DIR: &str = "tests/data/";
 
-#[derive(
-    Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString,
-)]
-pub enum CommonTransactionCosts {
-    Publish,
-    MergeCoin,
-    SplitCoin(usize),
-    TransferWholeCoin,
-    TransferWholeSuiCoin,
-    TransferPortionSuiCoin,
-    SharedCounterCreate,
-    SharedCounterAssertValue,
-    SharedCounterIncrement,
+// Execute every entry function in Move framework and examples and ensure costs don't change
+// To review snapshot changes, and fix snapshot differences,
+// 0. Install cargo-insta
+// 1. Run `cargo insta test --review` under `./sui-cost`.
+// 2. Review, accept or reject changes.
+
+#[tokio::test]
+async fn test_good_snapshot() -> Result<(), anyhow::Error> {
+    let common_costs = run_common_tx_costs().await?;
+    assert_yaml_snapshot!(common_costs);
+    Ok(())
+}
+
+#[tokio::test]
+async fn check_estimates() {
+    // Generate the estimates to file
+    generate_estimates().await.unwrap();
+
+    // Read the estimates
+    let cost_map = read_estimate_file().unwrap();
+
+    // Check that Sui Transfer estimate
+    let mut gas_objects = test_gas_objects();
+    let (sender, keypair) = test_account_keys().pop().unwrap();
+    let whole_sui_coin_tx = make_transfer_sui_transaction(
+        gas_objects.pop().unwrap().compute_object_reference(),
+        SuiAddress::default(),
+        None,
+        sender,
+        &keypair,
+    );
+    let partial_sui_coin_tx = make_transfer_sui_transaction(
+        gas_objects.pop().unwrap().compute_object_reference(),
+        SuiAddress::default(),
+        Some(100),
+        sender,
+        &keypair,
+    );
+
+    let e1 = estimate_computational_costs_for_transaction(whole_sui_coin_tx.signed_data.data.kind)
+        .unwrap();
+    let e2 =
+        estimate_computational_costs_for_transaction(partial_sui_coin_tx.signed_data.data.kind)
+            .unwrap();
+
+    assert_eq!(
+        e1,
+        cost_map
+            .get(&CommonTransactionCosts::TransferWholeSuiCoin)
+            .unwrap()
+            .clone()
+    );
+    assert_eq!(
+        e2,
+        cost_map
+            .get(&CommonTransactionCosts::TransferPortionSuiCoin)
+            .unwrap()
+            .clone()
+    );
+}
+
+async fn generate_estimates() -> Result<(), anyhow::Error> {
+    let common_costs: BTreeMap<_, _> = run_common_tx_costs()
+        .await?
+        .iter()
+        .map(|(k, v)| (format!("{k}"), v.clone()))
+        .collect();
+
+    let out_string = toml::to_string(&common_costs).unwrap();
+
+    fs::write(ESTIMATE_FILE, out_string).expect("Could not write estimator to file!");
+    Ok(())
 }
 
 pub async fn run_common_tx_costs(
-) -> Result<BTreeMap<CommonTransactionCosts, SuiGasCostSummary>, anyhow::Error> {
-    let mut m = run_common_single_writer_tx_costs().await?;
-    m.extend(run_counter_costs().await);
-    Ok(m)
+) -> Result<BTreeMap<CommonTransactionCosts, GasCostSummary>, anyhow::Error> {
+    Ok(run_counter_costs().await)
 }
 
-async fn run_common_single_writer_tx_costs(
-) -> Result<BTreeMap<CommonTransactionCosts, SuiGasCostSummary>, anyhow::Error> {
-    let mut ret = BTreeMap::new();
-
-    async fn split_n(n: u64) -> Result<SuiGasCostSummary, anyhow::Error> {
-        let (_network, mut context, address) = setup_network_and_wallet().await?;
-
-        let object_refs = context
-            .gateway
-            .read_api()
-            .get_objects_owned_by_address(address)
-            .await?;
-
-        // Check log output contains all object ids.
-        let gas = object_refs.first().unwrap().object_id;
-        let coin = object_refs.get(1).unwrap().object_id;
-
-        let amt_vec = vec![1000; n as usize];
-
-        // Test with gas specified
-        let resp = SuiClientCommands::SplitCoin {
-            gas: Some(gas),
-            gas_budget: 10000,
-            coin_id: coin,
-            amounts: amt_vec,
-        }
-        .execute(&mut context)
-        .await?;
-
-        if let SuiClientCommandResult::SplitCoin(response) = resp {
-            Ok(response.effects.gas_used)
-        } else {
-            unreachable!("Invalid response");
-        }
-    }
-
-    for i in 0..4 {
-        let gas_used = split_n(i).await?;
-        ret.insert(CommonTransactionCosts::SplitCoin(i as usize), gas_used);
-    }
-
-    let (_network, mut context, address) = setup_network_and_wallet().await?;
-
-    let object_refs = context
-        .gateway
-        .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
-
-    // Pairwise Merge Coin
-    let gas = object_refs.first().unwrap().object_id;
-    let primary_coin = object_refs.get(1).unwrap().object_id;
-    let coin_to_merge = object_refs.get(2).unwrap().object_id;
-
-    // Test with gas specified
-    let resp = SuiClientCommands::MergeCoin {
-        primary_coin,
-        coin_to_merge,
-        gas: Some(gas),
-        gas_budget: 10000,
-    }
-    .execute(&mut context)
-    .await?;
-
-    let gas_used = if let SuiClientCommandResult::MergeCoin(r) = resp {
-        r.effects.gas_used
-    } else {
-        panic!("Command failed")
-    };
-    ret.insert(CommonTransactionCosts::MergeCoin, gas_used);
-
-    // Publish Package
-    // Provide path to well formed package sources
-    let mut package_path = PathBuf::from(TEST_DATA_DIR);
-    package_path.push("dummy_modules_publish");
-    let build_config = BuildConfig::default();
-    let resp = SuiClientCommands::Publish {
-        package_path,
-        build_config,
-        gas: Some(gas),
-        gas_budget: 10000,
-    }
-    .execute(&mut context)
-    .await?;
-
-    let gas_used = if let SuiClientCommandResult::Publish(response) = resp {
-        response.effects.gas_used
-    } else {
-        unreachable!("Invalid response");
-    };
-    ret.insert(CommonTransactionCosts::Publish, gas_used);
-
-    SuiClientCommands::SyncClientState {
-        address: Some(address),
-    }
-    .execute(&mut context)
-    .await?;
-
-    let (_network, mut context, address) = setup_network_and_wallet().await?;
-
-    let object_refs = context
-        .gateway
-        .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
-
-    // Transfer a the whole object
-    let obj_id = object_refs.get(1).unwrap().object_id;
-    let recipient = context.keystore.addresses().get(1).cloned().unwrap();
-
-    let resp = SuiClientCommands::Transfer {
-        gas: None,
-        to: recipient,
-        coin_object_id: obj_id,
-        gas_budget: 10000,
-    }
-    .execute(&mut context)
-    .await?;
-
-    let gas_used = if let SuiClientCommandResult::Transfer(_, _, r) = resp {
-        r.gas_used
-    } else {
-        panic!("Command failed")
-    };
-    ret.insert(CommonTransactionCosts::TransferWholeCoin, gas_used);
-
-    // Transfer the whole Sui object
-
-    let obj_id = object_refs.get(4).unwrap().object_id;
-
-    let resp = SuiClientCommands::TransferSui {
-        amount: None,
-        to: recipient,
-        sui_coin_object_id: obj_id,
-        gas_budget: 10000,
-    }
-    .execute(&mut context)
-    .await?;
-
-    let gas_used = if let SuiClientCommandResult::TransferSui(_, r) = resp {
-        r.gas_used
-    } else {
-        panic!("Command failed")
-    };
-    ret.insert(CommonTransactionCosts::TransferWholeSuiCoin, gas_used);
-
-    // Transfer a portion of Sui
-    let (_network, mut context, address) = setup_network_and_wallet().await?;
-
-    let object_refs = context
-        .gateway
-        .read_api()
-        .get_objects_owned_by_address(address)
-        .await?;
-    let obj_id = object_refs.get(1).unwrap().object_id;
-
-    let resp = SuiClientCommands::TransferSui {
-        amount: Some(100),
-        to: recipient,
-        sui_coin_object_id: obj_id,
-        gas_budget: 10000,
-    }
-    .execute(&mut context)
-    .await?;
-
-    let gas_used = if let SuiClientCommandResult::TransferSui(_, r) = resp {
-        r.gas_used
-    } else {
-        panic!("Command failed")
-    };
-    ret.insert(CommonTransactionCosts::TransferPortionSuiCoin, gas_used);
-
-    Ok(ret)
+pub async fn run_counter_costs() -> BTreeMap<CommonTransactionCosts, GasCostSummary> {
+    run_cost_test().await.into_iter().collect()
 }
 
-pub async fn run_counter_costs() -> BTreeMap<CommonTransactionCosts, SuiGasCostSummary> {
-    run_counter_costs_impl()
-        .await
-        .into_iter()
-        .map(|(k, v)| (k, SuiGasCostSummary::from(v)))
-        .collect()
-}
-
-//#[cfg(test)]
-async fn run_counter_costs_impl() -> BTreeMap<CommonTransactionCosts, GasCostSummary> {
+async fn run_cost_test() -> BTreeMap<CommonTransactionCosts, GasCostSummary> {
     let mut ret = BTreeMap::new();
     let mut gas_objects = test_gas_objects();
     let (sender, keypair) = test_account_keys().pop().unwrap();
@@ -335,18 +209,19 @@ async fn run_counter_costs_impl() -> BTreeMap<CommonTransactionCosts, GasCostSum
     //
     // Merge Two Coins
     //
+    let c1 = gas_objects.pop().unwrap();
+    let type_args = vec![c1.get_move_template_type().unwrap()];
 
-    let merge_tx = move_transaction(
+    let merge_tx = move_transaction_with_type_tags(
         gas_objects.pop().unwrap(),
         COIN_MODULE_NAME.as_str(),
         COIN_JOIN_FUNC_NAME.as_str(),
         get_framework_object(configs.validator_set())
             .await
             .compute_object_reference(),
+        &type_args,
         vec![
-            CallArg::Object(ObjectArg::ImmOrOwnedObject(
-                gas_objects.pop().unwrap().compute_object_reference(),
-            )),
+            CallArg::Object(ObjectArg::ImmOrOwnedObject(c1.compute_object_reference())),
             CallArg::Object(ObjectArg::ImmOrOwnedObject(
                 gas_objects.pop().unwrap().compute_object_reference(),
             )),
@@ -442,22 +317,23 @@ async fn run_counter_costs_impl() -> BTreeMap<CommonTransactionCosts, GasCostSum
 }
 
 // Helper function to split
-//#[cfg(test)]
 async fn split_n(
     n: u64,
     coin: &Object,
     gas: &Object,
     validator_info: &[ValidatorInfo],
 ) -> GasCostSummary {
-    let split_amounts = vec![100u64; n as usize];
+    let split_amounts = vec![10u64; n as usize];
+    let type_args = vec![coin.get_move_template_type().unwrap()];
 
-    let split_tx = move_transaction(
+    let split_tx = move_transaction_with_type_tags(
         gas.clone(),
         COIN_MODULE_NAME.as_str(),
         COIN_SPLIT_VEC_FUNC_NAME.as_str(),
         get_framework_object(validator_info)
             .await
             .compute_object_reference(),
+        &type_args,
         vec![
             CallArg::Object(ObjectArg::ImmOrOwnedObject(coin.compute_object_reference())),
             CallArg::Pure(bcs::to_bytes(&split_amounts).unwrap()),
