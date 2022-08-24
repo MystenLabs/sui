@@ -34,6 +34,15 @@ body {
     box-sizing: border-box;
 }
 
+::-webkit-scrollbar {
+    width: 3px;
+}
+
+::-webkit-scrollbar-thumb {
+    background-color: #e5e6e6;
+    border-radius: 10px;
+}
+
 .btn {
     padding: 15px;
     border-radius: 4px;
