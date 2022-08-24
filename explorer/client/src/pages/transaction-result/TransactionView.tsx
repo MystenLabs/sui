@@ -210,7 +210,10 @@ function ItemView({ data }: { data: TxItemView }) {
                                 {item.link ? (
                                     <Longtext
                                         text={item.value as string}
-                                        category={item.category as Category}
+                                        category={
+                                            (item.category ||
+                                                'owner') as Category
+                                        }
                                         isLink={true}
                                     />
                                 ) : item.href ? (
@@ -269,7 +272,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
         <div key={et} className={styles.eventtitle}>
             <Longtext
                 text={et}
-                category={'unknown'}
+                category={'owner'}
                 isCopyButton={false}
                 isLink={false}
             />

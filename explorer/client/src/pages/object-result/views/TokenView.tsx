@@ -133,7 +133,7 @@ function TokenView({ data }: { data: DataType }) {
                                                 ? viewedData.owner
                                                 : typeof viewedData.owner
                                         }
-                                        category="unknown"
+                                        category="owner"
                                         isLink={
                                             viewedData.owner !== 'Immutable' &&
                                             viewedData.owner !== 'Shared'

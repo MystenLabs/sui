@@ -82,6 +82,12 @@ export const navigateWithCategory = async (
             return getDataOnObject(input, network);
         case 'address':
             return getDataOnAddress(input, network);
+        case 'owner':
+            // The owner could be an object or an address
+            // first check for an object...
+            const objResult = await getDataOnObject(input, network);
+            // if no object check for an address
+            return objResult ? objResult : getDataOnAddress(input, network);
         default:
             return null;
     }

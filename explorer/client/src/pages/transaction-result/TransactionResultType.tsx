@@ -25,4 +25,4 @@ export type Category =
     | 'transactions'
     | 'addresses'
     | 'ethAddress'
-    | 'unknown';
+    | 'owner';

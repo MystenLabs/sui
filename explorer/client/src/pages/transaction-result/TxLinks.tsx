@@ -37,7 +37,9 @@ function TxLinks({ data }: { data: Addresslist }) {
                             <li key={idx}>
                                 <Longtext
                                     text={objId}
-                                    category={data?.category as Category}
+                                    category={
+                                        (data?.category || 'owner') as Category
+                                    }
                                     isLink={true}
                                 />
                             </li>

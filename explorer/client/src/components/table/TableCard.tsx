@@ -21,7 +21,8 @@ type Category =
     | 'transactions'
     | 'addresses'
     | 'ethAddress'
-    | 'unknown';
+    | 'validators'
+    | 'owner';
 
 export type LinkObj = {
     url: string;
@@ -64,7 +65,7 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
                     <Longtext
                         text={itm.url}
                         alttext={itm.name}
-                        category={(itm.category as Category) || 'unknown'}
+                        category={(itm.category as Category) || 'owner'}
                         isLink={itm?.isLink}
                         isCopyButton={itm?.copy}
                     />

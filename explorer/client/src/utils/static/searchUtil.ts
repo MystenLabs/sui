@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SEARCH_CATEGORIES } from '../searchUtil';
 import latestTxData from './latest_transactions.json';
 import mockData from './mock_data.json';
 import mockOwnedObjectData from './owned_object.json';
@@ -16,7 +15,8 @@ const navigateWithCategory = async (
     category: string;
     result: object;
 } | null> => {
-    if ([SEARCH_CATEGORIES[0], SEARCH_CATEGORIES[1]].includes(category)) {
+    // If Object or Transaction, use findDataFromID
+    if (['object', 'transaction'].includes(category)) {
         const data = await findDataFromID(input, false);
 
         if (data?.category === category) {
@@ -27,10 +27,38 @@ const navigateWithCategory = async (
                 result: data,
             };
         }
-    } else {
+        return null;
+    }
+
+    // If Address, use findOwnedObjectsfromID:
+    if (category === 'address') {
         const data = await findDataFromID(input, false);
         const ownedObjects = await findOwnedObjectsfromID(input);
 
+        if (ownedObjects && ownedObjects.length > 0) {
+            return {
+                input: input,
+                category: 'addresses',
+                result: data,
+            };
+        }
+    }
+
+    // If Owner, could be Object or Address:
+    if (category === 'owner') {
+        const data = await findDataFromID(input, false);
+
+        // First check is Object:
+        if (data?.category === 'object') {
+            return {
+                input: input,
+                category: 'objects',
+                result: data,
+            };
+        }
+
+        //Then check is Address:
+        const ownedObjects = await findOwnedObjectsfromID(input);
         if (ownedObjects && ownedObjects.length > 0) {
             return {
                 input: input,
