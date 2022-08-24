@@ -26,7 +26,6 @@ use tracing::info;
 
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_config::utils::get_available_port;
-use sui_core::test_utils::{wait_for_all_txes, wait_for_tx};
 use sui_json_rpc_types::{
     SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveStruct,
     SuiMoveValue, SuiObjectRead,
@@ -43,6 +42,7 @@ use sui_types::{
 use test_utils::messages::get_account_and_gas_coins;
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::setup_network_and_wallet;
+use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
 
 async fn transfer_coin(
     context: &mut WalletContext,

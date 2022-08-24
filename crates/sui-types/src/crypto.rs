@@ -452,6 +452,10 @@ pub fn random_key_pair_by_type(
     }
 }
 
+pub fn get_account_key_pair() -> (SuiAddress, AccountKeyPair) {
+    get_key_pair()
+}
+
 /// Generate a keypair from the specified RNG (useful for testing with seedable rngs).
 pub fn get_key_pair_from_rng<KP: KeypairTraits, R>(csprng: &mut R) -> (SuiAddress, KP)
 where

@@ -14,12 +14,7 @@ use prometheus::{
 };
 use std::future::Future;
 use std::ops::Deref;
-use std::{
-    collections::{HashSet, VecDeque},
-    sync::Arc,
-    time::Duration,
-};
-use sui_storage::follower_store::FollowerStore;
+use std::{collections::HashSet, sync::Arc, time::Duration};
 use sui_types::committee::StakeUnit;
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
@@ -38,21 +33,10 @@ mod configurable_batch_action_client;
 #[cfg(test)]
 pub(crate) mod tests;
 
-#[derive(Copy, Clone)]
-pub(crate) enum GossipType {
-    /// Must get the full sequence of the peers it is connecting to. This is used for the full node sync logic
-    /// where a full node follows all validators.
-    Full,
-    /// Just follow the latest updates. This is used by validators to do a best effort follow of others.
-    BestEffort,
-}
-
 pub(crate) struct Follower<A> {
     pub peer_name: AuthorityName,
     client: SafeClient<A>,
     state: Arc<AuthorityState>,
-    follower_store: Arc<FollowerStore>,
-    max_seq: Option<TxSequenceNumber>,
 }
 
 const REQUEST_FOLLOW_NUM_DIGESTS: u64 = 100_000;
@@ -141,20 +125,6 @@ where
         active_authority,
         degree,
         GossipDigestHandler::new(active_authority.gossip_metrics.clone()),
-        GossipType::BestEffort,
-    )
-    .await;
-}
-
-pub async fn node_sync_process<A>(active_authority: &ActiveAuthority<A>, degree: usize)
-where
-    A: AuthorityAPI + Send + Sync + 'static + Clone,
-{
-    follower_process(
-        active_authority,
-        degree,
-        active_authority.node_sync_handle(),
-        GossipType::Full,
     )
     .await;
 }
@@ -163,7 +133,6 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
     active_authority: &ActiveAuthority<A>,
     degree: usize,
     handler: Handler,
-    gossip_type: GossipType,
 ) where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
@@ -227,7 +196,7 @@ async fn follower_process<A, Handler: DigestHandler<A> + Clone>(
             let local_active_ref_copy = local_active.clone();
             let handler_clone = handler.clone();
             gossip_tasks.push(async move {
-                let follower = Follower::new(name, &local_active_ref_copy, gossip_type);
+                let follower = Follower::new(name, &local_active_ref_copy);
                 // Add more duration if we make more than 1 to ensure overlap
                 debug!(peer = ?name, "Starting gossip from peer");
                 follower
@@ -402,40 +371,13 @@ impl<A> Follower<A>
 where
     A: AuthorityAPI + Send + Sync + 'static + Clone,
 {
-    pub fn new(
-        peer_name: AuthorityName,
-        active_authority: &ActiveAuthority<A>,
-        gossip_type: GossipType,
-    ) -> Self {
-        let start_seq = match active_authority
-            .follower_store
-            .get_next_sequence(&peer_name)
-        {
-            Err(_e) => {
-                // If there was no start sequence found for this peer, it is likely a new peer
-                // that has just joined the network, start at 0.
-                info!(peer = ?peer_name, "New gossip peer has joined");
-
-                // TODO: How does this interfere with reconfigurations, etc?
-                //       Do we start the seq number at zero for each new epoch?
-                0
-            }
-            Ok(s) => s.unwrap_or(0),
-        };
-
-        let max_seq = match gossip_type {
-            GossipType::BestEffort => None,
-            GossipType::Full => Some(start_seq),
-        };
-
-        debug!(peer = ?peer_name, ?start_seq, "Restarting follower at sequence");
+    pub fn new(peer_name: AuthorityName, active_authority: &ActiveAuthority<A>) -> Self {
+        debug!(peer = ?peer_name, "Restarting follower");
 
         Self {
             peer_name,
             client: active_authority.net.load().authority_clients[&peer_name].clone(),
             state: active_authority.state.clone(),
-            follower_store: active_authority.follower_store.clone(),
-            max_seq,
         }
     }
 
@@ -458,19 +400,11 @@ where
         // Global timeout, we do not exceed this time in this task.
         let mut timeout = Box::pin(tokio::time::sleep(duration));
         let mut results = FuturesOrdered::new();
-        let mut batch_seq_to_record = VecDeque::new();
-
-        let mut latest_seq = self.max_seq;
-
-        self.client
-            .metrics_seq_number_to_handle_batch_stream
-            .set(latest_seq.unwrap_or_default() as i64);
 
         let req = BatchInfoRequest {
-            start: latest_seq,
+            start: None,
             length: REQUEST_FOLLOW_NUM_DIGESTS,
         };
-        let mut last_seq_in_cur_batch: TxSequenceNumber = 0;
         let mut streamx = Box::pin(self.client.handle_batch_stream(req).await?);
         let metrics = handler.get_metrics();
         let mut timer = metrics.follower_stream_duration.start_timer();
@@ -489,22 +423,12 @@ where
 
                             let next_seq = signed_batch.data().next_sequence_number;
                             debug!(?peer, batch_next_seq = ?next_seq, "Received signed batch");
-                            batch_seq_to_record.push_back((next_seq, last_seq_in_cur_batch));
-                            if let Some(max_seq) = latest_seq {
-                                if next_seq < max_seq {
-                                    info!("Gossip sequence number unexpected: found {:?} but previously received {:?}", next_seq, max_seq);
-                                }
-                            }
                         },
 
                         // Upon receiving a transaction digest, store it if it is not processed already.
                         Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests))))) => {
                             trace!(?peer, ?digests, ?seq, "received tx from peer");
                             metrics.total_tx_received.inc();
-
-                            // track the last observed sequence in a batch, so we can tell when the
-                            // batch has been fully processed.
-                            last_seq_in_cur_batch = seq;
 
                             let fut = handler.handle_digest(self, digests).await?;
                             results.push_back(async move {
@@ -524,12 +448,11 @@ where
                         None => {
                             timer.stop_and_record();
                             timer = metrics.follower_stream_duration.start_timer();
-                            info!(peer = ?self.peer_name, ?latest_seq, "Gossip stream was closed. Restarting");
-                            self.client.metrics_seq_number_to_handle_batch_stream.set(latest_seq.unwrap_or_default() as i64);
+                            info!(peer = ?self.peer_name, "Gossip stream was closed. Restarting");
                             self.client.metrics_total_times_reconnect_follower_stream.inc();
                             tokio::time::sleep(Duration::from_secs(REFRESH_FOLLOWER_PERIOD_SECS / 12)).await;
                             let req = BatchInfoRequest {
-                                start: latest_seq,
+                                start: None,
                                 length: REQUEST_FOLLOW_NUM_DIGESTS,
                             };
                             streamx = Box::pin(self.client.handle_batch_stream(req).await?);
@@ -540,19 +463,6 @@ where
                 result = &mut results.next() , if !results.is_empty() => {
                     let (seq, digests) = result.unwrap()?;
                     trace!(?peer, ?seq, ?digests, "digest handler finished");
-
-                    while let Some((batch_seq, last_seq_in_batch)) = batch_seq_to_record.front() {
-                        if seq < *last_seq_in_batch {
-                            break;
-                        }
-                        self.follower_store.record_next_sequence(&self.peer_name, *batch_seq)?;
-
-                        // Here we always set the minimum next sequence number to make progress
-                        // over the sequence of the peer, even if we started with a best effort
-                        // None initial sequence number for gossip.
-                        latest_seq = Some(*batch_seq);
-                        batch_seq_to_record.pop_front();
-                    }
                 }
             };
         }
