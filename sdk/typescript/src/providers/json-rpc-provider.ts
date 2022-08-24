@@ -544,7 +544,7 @@ export class JsonRpcProvider extends Provider {
         we should still report that it was deleted successfully.
       */
       const filterDeleted = this.subscriptionFilters.delete(id);
-      return filterDeleted || this.activeSubscriptions.delete(id) || removed;
+      return this.activeSubscriptions.delete(id) || filterDeleted || removed;
     } catch (err) {
       throw new Error(
         `Error unsubscribing from event: ${err}, subscription: ${id}}`
