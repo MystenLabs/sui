@@ -14,8 +14,8 @@ use std::sync::Arc;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, AuthorityCheckpointInfo, CheckpointContents, CheckpointRequest,
-    CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
+    AuthenticatedCheckpoint, CheckpointRequest, CheckpointRequestType, CheckpointResponse,
+    CheckpointSequenceNumber,
 };
 use sui_types::{base_types::*, committee::*, fp_ensure};
 use sui_types::{
@@ -562,11 +562,11 @@ where
         Ok(())
     }
 
-    fn verify_contents_exist<T>(
+    fn verify_contents_exist<T, O>(
         &self,
         request_content: bool,
         checkpoint: &Option<T>,
-        contents: &Option<CheckpointContents>,
+        contents: &Option<O>,
     ) -> SuiResult {
         match (request_content, checkpoint, contents) {
             // If content is requested, checkpoint is not None, but we are not getting any content,
@@ -588,16 +588,19 @@ where
         // Verify response data was correct for request
         match &request.request_type {
             CheckpointRequestType::AuthenticatedCheckpoint(seq) => {
-                if let AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint) = &response.info
+                if let CheckpointResponse::AuthenticatedCheckpoint {
+                    checkpoint,
+                    contents,
+                } = &response
                 {
                     // Checks that the sequence number is correct.
                     self.verify_checkpoint_sequence(*seq, checkpoint)?;
-                    self.verify_contents_exist(request.detail, checkpoint, &response.detail)?;
+                    self.verify_contents_exist(request.detail, checkpoint, contents)?;
                     // Verify signature.
                     match checkpoint {
                         Some(c) => {
                             let epoch_id = c.summary().epoch;
-                            c.verify(&self.get_committee(&epoch_id)?, response.detail.as_ref())
+                            c.verify(&self.get_committee(&epoch_id)?, contents.as_ref())
                         }
                         None => Ok(()),
                     }
@@ -608,16 +611,17 @@ where
                 }
             }
             CheckpointRequestType::CheckpointProposal => {
-                if let AuthorityCheckpointInfo::CheckpointProposal {
+                if let CheckpointResponse::CheckpointProposal {
                     proposal,
                     prev_cert,
-                } = &response.info
+                    proposal_contents,
+                } = &response
                 {
                     // Verify signature.
                     if let Some(signed_proposal) = proposal {
                         let mut committee =
                             self.get_committee(&signed_proposal.auth_signature.epoch)?;
-                        signed_proposal.verify(&committee, response.detail.as_ref())?;
+                        signed_proposal.verify(&committee, proposal_contents.as_ref())?;
                         if signed_proposal.summary.sequence_number > 0 {
                             let cert = prev_cert.as_ref().ok_or_else(|| {
                                 SuiError::from("No checkpoint cert provided along with proposal")
@@ -640,7 +644,7 @@ where
                             );
                         }
                     }
-                    self.verify_contents_exist(request.detail, proposal, &response.detail)
+                    self.verify_contents_exist(request.detail, proposal, proposal_contents)
                 } else {
                     Err(SuiError::from(
                         "Invalid AuthorityCheckpointInfo type in the response",

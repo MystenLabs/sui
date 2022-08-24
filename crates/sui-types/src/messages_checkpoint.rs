@@ -112,20 +112,11 @@ pub enum CheckpointRequestType {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
-pub struct CheckpointResponse {
-    // The response to the request, according to the type
-    // and the information available.
-    pub info: AuthorityCheckpointInfo,
-    // If the detail flag in the request was set, then return
-    // the list of transactions as well.
-    // If the request is AuthenticatedCheckpoint, the detail is for the returned authenticated
-    // checkpoint; if the request is CheckpointProposal, the detail is for the returned proposal.
-    pub detail: Option<CheckpointContents>,
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum AuthorityCheckpointInfo {
-    AuthenticatedCheckpoint(Option<AuthenticatedCheckpoint>),
+pub enum CheckpointResponse {
+    AuthenticatedCheckpoint {
+        checkpoint: Option<AuthenticatedCheckpoint>,
+        contents: Option<CheckpointContents>,
+    },
     /// The latest proposal must be signed by the validator.
     /// For any proposal with sequence number > 0, a certified checkpoint for the previous
     /// checkpoint must be returned, in order prove that this validator can indeed make a proposal
@@ -133,6 +124,7 @@ pub enum AuthorityCheckpointInfo {
     CheckpointProposal {
         proposal: Option<SignedCheckpointProposalSummary>,
         prev_cert: Option<CertifiedCheckpointSummary>,
+        proposal_contents: Option<CheckpointProposalContents>,
     },
 }
 
@@ -388,20 +380,39 @@ impl CertifiedCheckpointSummary {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CheckpointProposalContents {
+    // TODO: Currently we are not really using the effects digests, but in the future we may be
+    // able to use it to optimize the sync process.
+    pub transactions: BTreeSet<ExecutionDigests>,
+}
+
+impl CheckpointProposalContents {
+    pub fn new<T>(contents: T) -> Self
+    where
+        T: Iterator<Item = ExecutionDigests>,
+    {
+        Self {
+            transactions: contents.collect(),
+        }
+    }
+
+    pub fn digest(&self) -> CheckpointContentsDigest {
+        sha3_hash(self)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
     pub transactions: Vec<ExecutionDigests>,
 }
 
-// TODO: We should create a type for ordered contents,
-// instead of mixing them in the same type.
-// https://github.com/MystenLabs/sui/issues/3038
 impl CheckpointContents {
-    pub fn new<T>(contents: T) -> CheckpointContents
+    pub fn new_with_causally_ordered_transactions<T>(contents: T) -> Self
     where
         T: Iterator<Item = ExecutionDigests>,
     {
-        CheckpointContents {
-            transactions: contents.collect::<BTreeSet<_>>().into_iter().collect(),
+        Self {
+            transactions: contents.collect(),
         }
     }
 
@@ -424,7 +435,7 @@ pub struct CheckpointProposalSummary {
 impl CheckpointProposalSummary {
     pub fn new(
         sequence_number: CheckpointSequenceNumber,
-        transactions: &CheckpointContents,
+        transactions: &CheckpointProposalContents,
     ) -> Self {
         let mut waypoint = Box::new(Waypoint::default());
         transactions.transactions.iter().for_each(|tx| {
@@ -457,7 +468,7 @@ impl SignedCheckpointProposalSummary {
     pub fn verify(
         &self,
         committee: &Committee,
-        contents: Option<&CheckpointContents>,
+        contents: Option<&CheckpointProposalContents>,
     ) -> SuiResult {
         self.auth_signature.verify(&self.summary, committee)?;
         if let Some(contents) = contents {
@@ -478,13 +489,13 @@ pub struct CheckpointProposal {
     pub signed_summary: SignedCheckpointProposalSummary,
     /// The transactions included in the proposal.
     /// TODO: only include a commitment by default.
-    pub transactions: CheckpointContents,
+    pub transactions: CheckpointProposalContents,
 }
 
 impl CheckpointProposal {
     pub fn new_from_signed_proposal_summary(
         signed_summary: SignedCheckpointProposalSummary,
-        transactions: CheckpointContents,
+        transactions: CheckpointProposalContents,
     ) -> Self {
         debug_assert!(signed_summary.summary.content_digest == transactions.digest());
         Self {
@@ -501,7 +512,7 @@ impl CheckpointProposal {
         sequence_number: CheckpointSequenceNumber,
         authority: AuthorityName,
         signer: &dyn signature::Signer<AuthoritySignature>,
-        transactions: CheckpointContents,
+        transactions: CheckpointProposalContents,
     ) -> Self {
         let proposal_summary = CheckpointProposalSummary::new(sequence_number, &transactions);
         let signature = AuthoritySignature::new(&proposal_summary, signer);
@@ -627,7 +638,6 @@ mod tests {
     use fastcrypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
-    use std::collections::BTreeSet;
 
     use super::*;
     use crate::utils::make_committee_key;
@@ -644,24 +654,27 @@ mod tests {
         let (authority_key, committee) = make_committee_key(&mut rng);
         let name: AuthorityName = authority_key[0].public().into();
 
-        let set = [ExecutionDigests::random()];
-        let set = CheckpointContents::new(set.iter().cloned());
+        let set = CheckpointProposalContents::new([ExecutionDigests::random()].into_iter());
 
         let mut proposal =
-            SignedCheckpointSummary::new(committee.epoch, 1, name, &authority_key[0], &set, None);
+            CheckpointProposal::new(committee.epoch, 1, name, &authority_key[0], set.clone());
 
         // Signature is correct on proposal, and with same transactions
-        assert!(proposal.verify(&committee, Some(&set)).is_ok());
+        assert!(proposal
+            .signed_summary
+            .verify(&committee, Some(&set))
+            .is_ok());
 
         // Error on different transactions
-        let contents = CheckpointContents {
-            transactions: [ExecutionDigests::random()].into_iter().collect(),
-        };
-        assert!(proposal.verify(&committee, Some(&contents)).is_err());
+        let contents = CheckpointProposalContents::new([ExecutionDigests::random()].into_iter());
+        assert!(proposal
+            .signed_summary
+            .verify(&committee, Some(&contents))
+            .is_err());
 
         // Modify the proposal, and observe the signature fail
-        proposal.summary.sequence_number = 2;
-        assert!(proposal.verify(&committee, None).is_err());
+        proposal.signed_summary.summary.sequence_number = 2;
+        assert!(proposal.signed_summary.verify(&committee, None).is_err());
     }
 
     #[test]
@@ -670,8 +683,9 @@ mod tests {
         let (keys, committee) = make_committee_key(&mut rng);
         let (_, committee2) = make_committee_key(&mut rng);
 
-        let set = [ExecutionDigests::random()];
-        let set = CheckpointContents::new(set.iter().cloned());
+        let set = CheckpointContents::new_with_causally_ordered_transactions(
+            [ExecutionDigests::random()].into_iter(),
+        );
 
         let signed_checkpoints: Vec<_> = keys
             .iter()
@@ -697,8 +711,9 @@ mod tests {
         let mut rng = StdRng::from_seed(RNG_SEED);
         let (keys, committee) = make_committee_key(&mut rng);
 
-        let set = [ExecutionDigests::random()];
-        let set = CheckpointContents::new(set.iter().cloned());
+        let set = CheckpointContents::new_with_causally_ordered_transactions(
+            [ExecutionDigests::random()].into_iter(),
+        );
 
         let signed_checkpoints: Vec<_> = keys
             .iter()
@@ -720,8 +735,9 @@ mod tests {
             .iter()
             .map(|k| {
                 let name = k.public().into();
-                let set: BTreeSet<_> = [ExecutionDigests::random()].into_iter().collect();
-                let set = CheckpointContents::new(set.iter().cloned());
+                let set = CheckpointContents::new_with_causally_ordered_transactions(
+                    [ExecutionDigests::random()].into_iter(),
+                );
 
                 SignedCheckpointSummary::new(committee.epoch, 1, name, k, &set, None)
             })
