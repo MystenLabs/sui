@@ -513,10 +513,13 @@ impl AuthorityState {
         }
     }
 
-    /// We cannot use handle_certificate in fullnode to execute a certificate because there is no
-    /// consensus engine to assign locks for shared objects. Hence we need special handling here.
+    /// Execute a certificate that's know to have already finalized (i.e. executed by a quorum of
+    /// validators). For such certificate, we don't have to wait for consensus to set shared object
+    /// locks because we already know the shared object versions based on the effects.
+    /// This function can be called either by a fullnode after seeing a quorum of signed effects,
+    /// or by a validator after seeing the certificate included by a certified checkpoint.
     #[instrument(level = "trace", skip_all)]
-    pub async fn handle_node_sync_certificate(
+    pub async fn handle_finalized_certificate(
         &self,
         certificate: CertifiedTransaction,
         // Signed effects is signed by only one validator, it is not a
@@ -528,7 +531,7 @@ impl AuthorityState {
     ) -> SuiResult {
         let _metrics_guard = start_timer(self.metrics.handle_node_sync_certificate_latency.clone());
         let digest = *certificate.digest();
-        debug!(?digest, "handle_node_sync_transaction");
+        debug!(?digest, "handle_finalized_certificate");
         fp_ensure!(
             signed_effects.effects.transaction_digest == digest,
             SuiError::ErrorWhileProcessingConfirmationTransaction {
@@ -547,7 +550,7 @@ impl AuthorityState {
         }
 
         let resp = self
-            .process_certificate(tx_guard, &certificate)
+            .process_certificate(tx_guard, &certificate, true)
             .await
             .tap_err(|e| debug!(?digest, "process_certificate failed: {}", e))?;
 
@@ -571,7 +574,23 @@ impl AuthorityState {
         certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         let _metrics_guard = start_timer(self.metrics.handle_certificate_latency.clone());
+        self.handle_certificate_impl(certificate, false).await
+    }
 
+    #[instrument(level = "trace", skip_all)]
+    pub async fn handle_certificate_bypass_validator_halt(
+        &self,
+        certificate: CertifiedTransaction,
+    ) -> SuiResult<TransactionInfoResponse> {
+        self.handle_certificate_impl(certificate, true).await
+    }
+
+    #[instrument(level = "trace", skip_all)]
+    async fn handle_certificate_impl(
+        &self,
+        certificate: CertifiedTransaction,
+        bypass_validator_halt: bool,
+    ) -> SuiResult<TransactionInfoResponse> {
         self.metrics.total_cert_attempts.inc();
         if self.is_fullnode() {
             return Err(SuiError::GenericStorageError(
@@ -603,7 +622,7 @@ impl AuthorityState {
             .instrument(span)
             .await?;
 
-        self.process_certificate(tx_guard, &certificate)
+        self.process_certificate(tx_guard, &certificate, bypass_validator_halt)
             .await
             .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {}", e))
     }
@@ -670,6 +689,7 @@ impl AuthorityState {
         &self,
         tx_guard: CertTxGuard<'_>,
         certificate: &CertifiedTransaction,
+        bypass_validator_halt: bool,
     ) -> SuiResult<TransactionInfoResponse> {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
@@ -679,7 +699,10 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
+        if self.is_halted()
+            && !bypass_validator_halt
+            && !certificate.signed_data.data.kind.is_system_tx()
+        {
             tx_guard.release();
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -1386,7 +1409,7 @@ impl AuthorityState {
                     continue;
                 }
 
-                if let Err(e) = self.process_certificate(tx_guard, &cert).await {
+                if let Err(e) = self.process_certificate(tx_guard, &cert, false).await {
                     warn!(?digest, "Failed to process in-progress certificate: {}", e);
                 }
             } else {
