@@ -60,6 +60,12 @@ type JsonRpcMethodMessage<T> = {
   params: T
 }
 
+type FilterSubHandler = {
+  id: SubscriptionId,
+  onMessage: (event: SuiEventEnvelope) => any,
+  filter: SuiEventFilter
+};
+
 export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
 
 export class JsonRpcProvider extends Provider {
@@ -70,6 +76,7 @@ export class JsonRpcProvider extends Provider {
   private wsTimeout: number = 0;
 
   private activeSubscriptions: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
+  private subscriptionFilters: Map<SubscriptionId, SuiEventFilter> = new Map();
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -95,7 +102,6 @@ export class JsonRpcProvider extends Provider {
         this.wsTimeout = 0;
       }
       this.wsConnectionState = ConnectionState.Connected;
-
       // underlying websocket is private, but we need it
       // to access messages sent by the node
       (this.wsClient as any).socket
@@ -112,7 +118,7 @@ export class JsonRpcProvider extends Provider {
     });
   }
 
-  private async connect(): Promise<any> {
+  private async connect(): Promise<void> {
     if (this.wsConnectionState === ConnectionState.Connected)
       return Promise.resolve();
 
@@ -120,20 +126,18 @@ export class JsonRpcProvider extends Provider {
     this.wsConnectionState = ConnectionState.Connecting;
 
     return new Promise<void>((resolve, reject) => {
-      const timeoutId = setTimeout(() => reject('timeout'), 15000);
+      this.wsTimeout = setTimeout(() => reject('timeout'), 15000) as any as number;
       this.wsClient.once('open', () => {
-        clearTimeout(timeoutId);
-        this.wsConnectionState = ConnectionState.Connected;
+        this.refreshSubscriptions();
         resolve();
       });
       this.wsClient.once('error', (err) => {
-        this.wsConnectionState = ConnectionState.NotConnected;
         reject(err);
       });
-
     });
   }
 
+  // called for every message received from the node over websocket
   private onSocketMessage(rawMessage: string): void {
     const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
 
@@ -143,6 +147,45 @@ export class JsonRpcProvider extends Provider {
       const onMessage = this.activeSubscriptions.get(params.subscription);
       if (onMessage)
         onMessage(params.result);
+    }
+  }
+
+
+  // call only upon reconnecting to a node over websocket
+  private async refreshSubscriptions() {
+    if(this.activeSubscriptions.size === 0)
+      return;
+
+    try {
+      console.log('refresh subscriptions');
+      let newSubs: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
+      let newSubFilters: Map<SubscriptionId, SuiEventFilter> = new Map();
+
+      let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
+        Array.from(this.activeSubscriptions.entries())
+        .map(async entry => {
+          const subId = entry[0];
+          const onMessage = entry[1];
+          const filter = this.subscriptionFilters.get(subId);
+          if(!filter)
+            return Promise.resolve(null);
+
+          // re-subscribe to the same filter & replace the subscription id
+          const id = await this.subscribeEvent(filter, onMessage);
+          return { id, onMessage, filter };
+        })
+      );
+
+      newSubsArr.forEach(entry => {
+        if(entry === null) return;
+        newSubs.set(entry.id, entry.onMessage);
+        newSubFilters.set(entry.id, entry.filter);
+      });
+
+      this.activeSubscriptions = newSubs;
+      this.subscriptionFilters = newSubFilters;
+    } catch (err) {
+      throw new Error(`error refreshing event subscriptions: ${err}`);
     }
   }
 
@@ -475,7 +518,7 @@ export class JsonRpcProvider extends Provider {
       ) as SubscriptionId;
 
       this.activeSubscriptions.set(subId, onMessage);
-
+      this.subscriptionFilters.set(subId, filter);
       return subId;
     } catch (err) {
       throw new Error(
@@ -494,9 +537,14 @@ export class JsonRpcProvider extends Provider {
         [id],
         30000
       ) as boolean;
-
-      this.activeSubscriptions.delete(id);
-      return removed;
+      /*
+        if the connection closes before unsubscribe is called,
+        the remote node will remove us from subscribers list without notification,
+        leading to 'removed' being false. but if we still had a record of it locally,
+        we should still report that it was deleted successfully.
+      */
+      const filterDeleted = this.subscriptionFilters.delete(id);
+      return filterDeleted || this.activeSubscriptions.delete(id) || removed;
     } catch (err) {
       throw new Error(
         `Error unsubscribing from event: ${err}, subscription: ${id}}`
