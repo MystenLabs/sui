@@ -8,6 +8,7 @@ module sui::crypto {
     /// @param signature: A 65-bytes signature in form (r, s, v) that is signed using 
     /// Secp256k1. Reference implementation on signature generation using RFC6979: 
     /// https://github.com/MystenLabs/narwhal/blob/5d6f6df8ccee94446ff88786c0dbbc98be7cfc09/crypto/src/secp256k1.rs
+    /// The accepted v values are {0, 1, 2, 3}.
     /// 
     /// @param hashed_msg: the hashed 32-bytes message. The message must be hashed instead 
     /// of plain text to be secure.
