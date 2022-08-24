@@ -412,12 +412,12 @@ impl Validator for ValidatorService {
         Ok(tonic::Response::new(response))
     }
 
-    type BatchInfoStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
+    type FollowTxStreamStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
 
     async fn batch_info(
         &self,
         request: tonic::Request<BatchInfoRequest>,
-    ) -> Result<tonic::Response<Self::BatchInfoStream>, tonic::Status> {
+    ) -> Result<tonic::Response<Self::FollowTxStreamStream>, tonic::Status> {
         let request = request.into_inner();
 
         let xstream = self
