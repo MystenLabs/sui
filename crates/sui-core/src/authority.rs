@@ -731,7 +731,7 @@ impl AuthorityState {
             effects.effects.all_mutated(),
             cert.signed_data
                 .data
-                .move_calls()?
+                .move_calls()
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
             seq,
