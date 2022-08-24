@@ -105,7 +105,7 @@ impl TestEvent {
     }
 }
 
-// Rust version of the Move sui::utf8::String type
+// Rust version of the Move std::string::String type
 // TODO: Do we need this in the sui-types lib?
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 struct UTF8String {
