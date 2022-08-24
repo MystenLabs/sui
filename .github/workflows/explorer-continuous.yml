@@ -1,4 +1,4 @@
-name: continuous
+name: Explorer Continuous
 
 on:
   push:
