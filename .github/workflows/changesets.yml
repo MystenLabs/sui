@@ -7,6 +7,16 @@ on:
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch Snapshot To Operations
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          repository: MystenLabs/sui-operations
+          token: ${{ secrets.REPO_ACCESS_TOKEN }}
+          event-type: changesets-snapshot
+
   version:
     runs-on: ubuntu-latest
     steps:
@@ -28,4 +38,3 @@ jobs:
         uses: changesets/action@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
