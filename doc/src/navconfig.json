@@ -117,6 +117,10 @@
         "fileName": "build/devnet"
       },
       {
+        "label": "Optional - Run Locally with CLI",
+        "fileName": "contribute/cli-client"
+      },
+      {
         "label": "Create Smart Contracts with Move",
         "fileName": "build/move/index",
         "title": "Create Smart Contracts with Move",
@@ -172,17 +176,8 @@
         "title": "Talk with Sui",
         "items": [
           {
-            "label": "Use Sui RPC Server",
+            "label": "Connect with Sui RPC Server",
             "fileName": "build/json-rpc"
-          },
-          {
-            "label": "SuiJSON Format",
-            "fileName": "build/sui-json"
-          },
-          {
-            "label": "See JSON-RPC API Reference",
-            "link": "https://docs.sui.io/sui-jsonrpc",
-            "external": true
           },
           {
             "label": "Use Rust SDK",
@@ -202,7 +197,22 @@
             "fileName": "build/pubsub"
           }
         ]
-      }
+      },
+      {
+        "label": "Reference",
+        "title": "Reference",
+        "items": [
+          {
+            "label": "JSON-RPC API Reference",
+            "fileName": "https://docs.sui.io/sui-jsonrpc",
+            "external": true
+          },
+          {
+            "label": "SuiJSON Format",
+            "fileName": "build/sui-json"
+          }
+        ]
+      },
     ],
     "explore": [
       {
@@ -234,10 +244,6 @@
       {
         "label": "Frequently Asked Questions",
         "fileName": "contribute/faq"
-      },
-      {
-        "label": "Sui CLI and Local Network",
-        "fileName": "contribute/cli-client"
       },
       {
         "label": "Logging",
