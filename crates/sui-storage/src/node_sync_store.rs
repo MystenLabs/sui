@@ -248,7 +248,7 @@ mod test {
         db.record_effects_vote(peer1, tx2, digest2, 1).unwrap();
         db.record_effects_vote(peer2, tx2, digest2, 2).unwrap();
 
-        db.clear_effects_votes(digest1).unwrap();
+        db.clear_effects_votes(tx1).unwrap();
         // digest1 is cleared
         assert_eq!(db.count_effects_votes(tx1, digest1).unwrap(), 0);
         // digest2 is not
