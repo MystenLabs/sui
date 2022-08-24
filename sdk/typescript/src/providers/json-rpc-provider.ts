@@ -84,7 +84,7 @@ export class JsonRpcProvider extends Provider {
     this.setupSocket();
   }
 
-  private setupSocket() {
+  private async setupSocket() {
     return new Promise<void>((resolve, reject): void => {
       if (this.wsConnectionState === ConnectionState.Connected)
         return;
@@ -101,17 +101,15 @@ export class JsonRpcProvider extends Provider {
         this.wsConnectionState = ConnectionState.Connected;
 
         this.wsClient.on('close', () => {
-          console.log('connection closed');
           this.wsConnectionState = ConnectionState.NotConnected;
           reject('connection closed');
         });
 
-        // WsRpcClient.socket is private, but we need it
-        // to be able to access the underlying 'message' event
-        (this.wsClient as any).socket.on('message',
-          this.onSocketMessage.bind(this));
+        // underlying websocket is private, but we need it
+        // to access messages sent by the node
+        (this.wsClient as any).socket
+          .on('message', this.onSocketMessage.bind(this));
 
-        console.log('websocket connection opened');
         resolve();
       });
 
