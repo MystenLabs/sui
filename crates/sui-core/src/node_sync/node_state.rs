@@ -824,7 +824,7 @@ impl NodeSyncHandle {
     pub async fn sync_pending_checkpoint_transactions(
         &self,
         transactions: impl Iterator<Item = &ExecutionDigests>,
-    ) -> SuiResult<impl Stream<Item = SuiResult>> {
+    ) -> SuiResult<impl Stream<Item = SyncResult>> {
         let mut futures = FuturesOrdered::new();
         for digests in transactions {
             let (tx, rx) = oneshot::channel();
