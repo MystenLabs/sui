@@ -18,7 +18,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::{
     convert::TryFrom,
-    ops::{Add, Mul},
+    ops::{Add, Deref, Mul},
 };
 
 pub type GasUnits = GasQuantity<GasUnit>;
@@ -58,34 +58,58 @@ impl GasCostSummary {
     }
 }
 
-/// ComputationCost is a newtype wrapper of InternalGas
-/// to ensure a value of this type is used specifically for computation cost.
-/// Anything that does not change the amount of bytes stored in the authority data store
-/// will charge ComputationCost.
-struct ComputationCost(InternalGasPerByte);
+// Fixed cost type
+pub struct FixedCost(InternalGas);
+impl FixedCost {
+    pub fn new(x: u64) -> Self {
+        FixedCost(InternalGas::new(x))
+    }
+}
+impl Deref for FixedCost {
+    type Target = InternalGas;
 
-impl ComputationCost {
-    /// Some computations are also linear to the size of data it operates on.
-    pub fn with_size(&self, size: usize) -> Self {
-        // TODO: this ia a hacky way to keep things compat. Normally the units here dont match
-        Self(InternalGasPerByte::new(u64::from(
-            NumBytes::new(size as u64).mul(self.0),
-        )))
+    fn deref(&self) -> &Self::Target {
+        &self.0
     }
 }
 
-/// StorageCost is a newtype wrapper of InternalGas
+/// ComputationCostPerByte is a newtype wrapper of InternalGas
+/// to ensure a value of this type is used specifically for computation cost.
+/// Anything that does not change the amount of bytes stored in the authority data store
+/// will charge ComputationCostPerByte.
+struct ComputationCostPerByte(InternalGasPerByte);
+
+impl ComputationCostPerByte {
+    pub fn new(x: u64) -> Self {
+        ComputationCostPerByte(InternalGasPerByte::new(x))
+    }
+}
+
+impl Deref for ComputationCostPerByte {
+    type Target = InternalGasPerByte;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// StorageCostPerByte is a newtype wrapper of InternalGas
 /// to ensure a value of this type is used specifically for storage cost.
 /// Anything that changes the amount of bytes stored in the authority data store
-/// will charge StorageCost.
-struct StorageCost(InternalGasPerByte);
+/// will charge StorageCostPerByte.
+struct StorageCostPerByte(InternalGasPerByte);
 
-impl StorageCost {
-    pub fn with_size(&self, size: usize) -> Self {
-        // TODO: this ia a hacky way to keep things compat. Normally the units here dont match
-        Self(InternalGasPerByte::new(u64::from(
-            NumBytes::new(size as u64).mul(self.0),
-        )))
+impl Deref for StorageCostPerByte {
+    type Target = InternalGasPerByte;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl StorageCostPerByte {
+    pub fn new(x: u64) -> Self {
+        StorageCostPerByte(InternalGasPerByte::new(x))
     }
 }
 
@@ -93,19 +117,19 @@ impl StorageCost {
 struct SuiCostTable {
     /// A flat fee charged for every transaction. This is also the mimmum amount of
     /// gas charged for a transaction.
-    pub min_transaction_cost: ComputationCost,
+    pub min_transaction_cost: FixedCost,
     /// Computation cost per byte charged for package publish. This cost is primarily
     /// determined by the cost to verify and link a package. Note that this does not
     /// include the cost of writing the package to the store.
-    pub package_publish_per_byte_cost: ComputationCost,
+    pub package_publish_per_byte_cost: ComputationCostPerByte,
     /// Per byte cost to read objects from the store. This is computation cost instead of
     /// storage cost because it does not change the amount of data stored on the db.
-    pub object_read_per_byte_cost: ComputationCost,
+    pub object_read_per_byte_cost: ComputationCostPerByte,
     /// Per byte cost to write objects to the store. This is computation cost instead of
     /// storage cost because it does not change the amount of data stored on the db.
-    pub object_mutation_per_byte_cost: ComputationCost,
+    pub object_mutation_per_byte_cost: ComputationCostPerByte,
     /// Cost to use shared objects in a transaction, which requires full consensus.
-    pub consensus_cost: ComputationCost,
+    pub consensus_cost: FixedCost,
 
     /// Unit cost of a byte in the storage. This will be used both for charging for
     /// new storage as well as rebating for deleting storage. That is, we expect users to
@@ -113,25 +137,24 @@ struct SuiCostTable {
     /// TODO: We should introduce a flat fee on storage that does not get refunded even
     /// when objects are deleted. This cost covers the cost of storing transaction metadata
     /// which will always be there even after the objects are deleted.
-    pub storage_per_byte_cost: StorageCost,
+    pub storage_per_byte_cost: StorageCostPerByte,
 }
 
 // TODO: The following numbers are arbitrary at this point.
 static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
-    min_transaction_cost: ComputationCost(InternalGasPerByte::new(10000)),
-    package_publish_per_byte_cost: ComputationCost(InternalGasPerByte::new(80)),
-    object_read_per_byte_cost: ComputationCost(InternalGasPerByte::new(15)),
-    object_mutation_per_byte_cost: ComputationCost(InternalGasPerByte::new(40)),
-    consensus_cost: ComputationCost(InternalGasPerByte::new(100000)),
+    min_transaction_cost: FixedCost::new(10000),
+    package_publish_per_byte_cost: ComputationCostPerByte::new(80),
+    object_read_per_byte_cost: ComputationCostPerByte::new(15),
+    object_mutation_per_byte_cost: ComputationCostPerByte::new(40),
+    consensus_cost: FixedCost::new(100000),
 
-    storage_per_byte_cost: StorageCost(InternalGasPerByte::new(100)),
+    storage_per_byte_cost: StorageCostPerByte::new(100),
 });
 
 pub static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| to_external(InternalGas::new(u64::MAX)).into());
 
-pub static MIN_GAS_BUDGET: Lazy<u64> = Lazy::new(|| {
-    to_external(NumBytes::new(1).mul(INIT_SUI_COST_TABLE.min_transaction_cost.0)).into()
-});
+pub static MIN_GAS_BUDGET: Lazy<u64> =
+    Lazy::new(|| to_external(*INIT_SUI_COST_TABLE.min_transaction_cost).into());
 
 fn to_external(internal_units: InternalGas) -> GasUnits {
     InternalGas::to_unit_round_down(internal_units)
@@ -185,7 +208,7 @@ impl<'a> SuiGasStatus<'a> {
     }
 
     pub fn charge_min_tx_gas(&mut self) -> Result<(), ExecutionError> {
-        self.deduct_computation_cost(&INIT_SUI_COST_TABLE.min_transaction_cost)
+        self.deduct_computation_cost(INIT_SUI_COST_TABLE.min_transaction_cost.deref())
     }
 
     pub fn charge_consensus(&mut self) -> Result<(), ExecutionError> {
@@ -193,16 +216,14 @@ impl<'a> SuiGasStatus<'a> {
     }
 
     pub fn charge_publish_package(&mut self, size: usize) -> Result<(), ExecutionError> {
-        let computation_cost = INIT_SUI_COST_TABLE
-            .package_publish_per_byte_cost
-            .with_size(size);
+        let computation_cost =
+            NumBytes::new(size as u64).mul(*INIT_SUI_COST_TABLE.package_publish_per_byte_cost);
+
         self.deduct_computation_cost(&computation_cost)
     }
 
     pub fn charge_storage_read(&mut self, size: usize) -> Result<(), ExecutionError> {
-        let cost = INIT_SUI_COST_TABLE
-            .object_read_per_byte_cost
-            .with_size(size);
+        let cost = NumBytes::new(size as u64).mul(*INIT_SUI_COST_TABLE.object_read_per_byte_cost);
         self.deduct_computation_cost(&cost)
     }
 
@@ -219,16 +240,15 @@ impl<'a> SuiGasStatus<'a> {
         // Computation cost of a mutation is charged based on the sum of the old and new size.
         // This is because to update an object in the store, we have to erase the old one and
         // write a new one.
-        let cost = INIT_SUI_COST_TABLE
-            .object_mutation_per_byte_cost
-            .with_size(old_size + new_size);
+        let cost = NumBytes::new((old_size + new_size) as u64)
+            .mul(*INIT_SUI_COST_TABLE.object_mutation_per_byte_cost);
         self.deduct_computation_cost(&cost)?;
 
         self.storage_rebate += storage_rebate;
 
-        let storage_cost = INIT_SUI_COST_TABLE
-            .storage_per_byte_cost
-            .with_size(new_size);
+        let storage_cost =
+            NumBytes::new(new_size as u64).mul(*INIT_SUI_COST_TABLE.storage_per_byte_cost);
+
         self.deduct_storage_cost(&storage_cost).map(|q| q.into())
     }
 
@@ -249,7 +269,7 @@ impl<'a> SuiGasStatus<'a> {
     pub fn summary(&self, succeeded: bool) -> GasCostSummary {
         let remaining_gas = self.gas_status.remaining_gas();
         let storage_cost = self.storage_gas_units;
-        // TODO: handle overflow how?
+        // TODO: handle underflow how?
         let computation_cost = self
             .init_budget
             .checked_sub(remaining_gas)
@@ -294,21 +314,18 @@ impl<'a> SuiGasStatus<'a> {
         }
     }
 
-    fn deduct_computation_cost(&mut self, cost: &ComputationCost) -> Result<(), ExecutionError> {
-        self.gas_status
-            .deduct_gas(NumBytes::new(1).mul(cost.0))
-            .map_err(|e| {
-                debug_assert_eq!(e.major_status(), StatusCode::OUT_OF_GAS);
-                ExecutionErrorKind::InsufficientGas.into()
-            })
+    fn deduct_computation_cost(&mut self, cost: &InternalGas) -> Result<(), ExecutionError> {
+        self.gas_status.deduct_gas(*cost).map_err(|e| {
+            debug_assert_eq!(e.major_status(), StatusCode::OUT_OF_GAS);
+            ExecutionErrorKind::InsufficientGas.into()
+        })
     }
 
-    fn deduct_storage_cost(&mut self, cost: &StorageCost) -> Result<GasUnits, ExecutionError> {
+    fn deduct_storage_cost(&mut self, cost: &InternalGas) -> Result<GasUnits, ExecutionError> {
         if self.is_unmetered() {
             return Ok(0.into());
         }
-        let ext_cost =
-            to_external(NumBytes::new(1).mul(InternalGasPerByte::new(u64::from(cost.0))));
+        let ext_cost = to_external(NumBytes::new(1).mul(InternalGasPerByte::new(u64::from(*cost))));
         let charge_amount = to_internal(ext_cost);
         let remaining_gas = self.gas_status.remaining_gas();
         if self.gas_status.deduct_gas(charge_amount).is_err() {

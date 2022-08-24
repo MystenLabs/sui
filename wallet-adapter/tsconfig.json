@@ -1,11 +1,7 @@
 {
   "compilerOptions": {
     "target": "es5",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "esnext"
-    ],
+    "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
@@ -18,9 +14,22 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@mysten/wallet-adapter-react": ["./packages/react-providers/src"],
+      "@mysten/wallet-adapter-react-ui": ["./packages/ui/src"],
+      "@mysten/wallet-adapter-all-wallets": [
+        "./packages/adapters/integrations/all-wallets/src"
+      ],
+      "@mysten/wallet-adapter-base": ["./packages/adapters/base-adapter/src"],
+      "@mysten/wallet-adapter-sui-wallet": [
+        "./packages/adapters/integrations/sui-wallet/src"
+      ],
+      "@mysten/wallet-adapter-mock-wallet": [
+        "./packages/adapters/integrations/mock-wallet/src"
+      ]
+    }
   },
-  "include": [
-    "packages"
-  ]
+  "include": ["packages", "src"]
 }

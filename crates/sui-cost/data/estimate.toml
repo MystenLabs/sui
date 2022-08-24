@@ -1,10 +1,10 @@
 [MergeCoin]
-computation_cost = 461
+computation_cost = 468
 storage_cost = 32
 storage_rebate = 0
 
 [Publish]
-computation_cost = 520
+computation_cost = 526
 storage_cost = 83
 storage_rebate = 0
 
@@ -24,7 +24,7 @@ storage_cost = 31
 storage_rebate = 15
 
 [SplitCoin]
-computation_cost = 572
+computation_cost = 579
 storage_cost = 80
 storage_rebate = 0
 

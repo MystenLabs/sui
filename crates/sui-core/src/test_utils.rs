@@ -1,22 +1,86 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::authority::AuthorityState;
+use crate::{
+    authority::AuthorityState,
+    authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
+    authority_client::{NetworkAuthorityClient, NetworkAuthorityClientMetrics},
+    epoch::epoch_store::EpochStore,
+    safe_client::SafeClientMetrics,
+};
+
+use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::{
     base_types::{dbg_addr, ObjectID, TransactionDigest},
     batch::UpdateItem,
+    committee::Committee,
     crypto::{get_key_pair, AccountKeyPair, Signature},
     messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData},
     object::Object,
 };
 
+// Can't import SuiNode directly from sui_node - circular dependency
+use test_utils::authority::{start_node, SuiNode};
+
 use futures::StreamExt;
 use tokio::time::sleep;
 use tracing::info;
+
+/// Spawn all authorities in the test committee into a separate tokio task.
+pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNode>
+where
+    I: IntoIterator<Item = Object> + Clone,
+{
+    let mut handles = Vec::new();
+    for validator in config.validator_configs() {
+        let node = start_node(validator).await;
+        let state = node.state();
+
+        for o in objects.clone() {
+            state.insert_genesis_object(o).await
+        }
+
+        handles.push(node);
+    }
+    handles
+}
+
+/// Create a test authority aggregator.
+/// (duplicated from test-utils/src/authority.rs - that function can't be used
+/// in sui-core because of type name conflicts (sui_core::safe_client::SafeClient vs
+/// safe_client::SafeClient).
+pub fn test_authority_aggregator(
+    config: &NetworkConfig,
+) -> AuthorityAggregator<NetworkAuthorityClient> {
+    let validators_info = config.validator_set();
+    let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
+    let clients: BTreeMap<_, _> = validators_info
+        .iter()
+        .map(|config| {
+            (
+                config.protocol_key(),
+                NetworkAuthorityClient::connect_lazy(
+                    config.network_address(),
+                    Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+                )
+                .unwrap(),
+            )
+        })
+        .collect();
+    let registry = prometheus::Registry::new();
+    AuthorityAggregator::new(
+        committee,
+        epoch_store,
+        clients,
+        AuthAggMetrics::new(&registry),
+        SafeClientMetrics::new(&registry),
+    )
+}
 
 pub async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>) {
     wait_for_all_txes(vec![wait_digest], state).await

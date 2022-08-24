@@ -32,15 +32,31 @@
     flex-grow: 1;
     flex-basis: 80px;
 
+    &:hover {
+        color: colors.$nav-item-hover;
+
+        i {
+            color: colors.$nav-item-hover;
+        }
+    }
+
     &.active {
         color: v.use(v.$colors-nav-item-highlighted-color);
+
+        &:hover {
+            color: #007195;
+
+            i {
+                color: #007195;
+            }
+        }
     }
 }
 
 .icon {
     font-size: 32px;
     margin-bottom: 2px;
-    color: colors.$sui-steel-blue;
+    color: colors.$gray-60;
 
     .active > & {
         color: v.use(v.$colors-nav-item-icon-highlighted-color);
@@ -57,7 +73,7 @@
     font-weight: 600;
 
     .active > & {
-        font-weight: 700;
+        font-weight: 600;
     }
 }
 
@@ -65,4 +81,9 @@
     transform: translateY(100%);
     opacity: 0;
     transition: transform 300ms ease-in-out, opacity 0ms ease-in 300ms;
+}
+
+.wallet-activity-icon {
+    font-size: 26px;
+    font-weight: 500;
 }

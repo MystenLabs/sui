@@ -15,7 +15,7 @@ See our [JSON-RPC](json-rpc.md#sui-json-rpc-methods) doc for the list of availab
 Find the `rustdoc` output for key Sui projects at:
 
 * Sui blockchain - https://mystenlabs.github.io/sui/
-* Narwhal and Tusk consensus engine - https://mystenlabs.github.io/narwhal/
+* Narwhal and Bullshark consensus engine - https://mystenlabs.github.io/narwhal/
 * Mysten Labs infrastructure - https://mystenlabs.github.io/mysten-infra/
 
 ## Configuration

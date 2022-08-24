@@ -3,7 +3,7 @@
 
 import { Button } from "@mui/material";
 import React from "react";
-import { useWallet } from "sui-wallet-adapter-react";
+import { useWallet } from "@mysten/wallet-adapter-react";
 
 export function TestButton() {
   let { connected, getAccounts, executeMoveCall } = useWallet();

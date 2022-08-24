@@ -4,7 +4,7 @@ expression: genesis.committee().unwrap()
 ---
 epoch: 0
 voting_rights:
-  - - ALnG7hYw7z5xEUSmSNsGu7IoT3J0z77lP/zuUDzBpJIA
+  - - ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
     - 1
 total_votes: 1
 

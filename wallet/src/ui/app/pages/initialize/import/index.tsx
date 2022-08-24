@@ -5,6 +5,8 @@ import { useFormik } from 'formik';
 import { useCallback } from 'react';
 import * as Yup from 'yup';
 
+import Button from '_app/shared/button';
+import Icon, { SuiIcons } from '_components/icon';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { createMnemonic, setMnemonic } from '_redux/slices/account';
 import {
@@ -73,28 +75,31 @@ const ImportPage = () => {
     );
     return (
         <>
-            <h1>Import existing wallet</h1>
+            <h1 className={st.headerTitle}>Import wallet</h1>
             <form onSubmit={handleSubmit} noValidate autoComplete="off">
                 <textarea
-                    rows={5}
                     onChange={handleChange}
                     value={mnemonic}
                     onBlur={onHandleMnemonicBlur}
                     className={st.mnemonic}
-                    placeholder="Insert your Recovery Passphrase"
+                    placeholder="Paste your 12-word passphrase"
                     name="mnemonic"
                     disabled={createInProgress || isSubmitting}
                 />
-                <div className={st.error}>
-                    {(touched.mnemonic && errors?.mnemonic) || null}
-                </div>
-                <button
+                {touched.mnemonic && errors?.mnemonic && (
+                    <div className={st.error}>{errors?.mnemonic}</div>
+                )}
+
+                <Button
                     type="submit"
-                    className="btn"
                     disabled={isSubmitting || createInProgress || !isValid}
+                    mode="primary"
+                    className={st.btn}
+                    size="large"
                 >
-                    Import
-                </button>
+                    Import wallet Now
+                    <Icon icon={SuiIcons.ArrowRight} className={st.next} />
+                </Button>
             </form>
         </>
     );

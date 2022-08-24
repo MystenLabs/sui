@@ -23,10 +23,12 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiParsedObject, SuiTransactionEffects};
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
-use sui_types::crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits, SuiKeyPair};
+use sui_types::crypto::{
+    generate_proof_of_possession, AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature,
+    KeypairTraits, Secp256k1SuiSignature, SuiKeyPair, SuiSignatureInner,
+};
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
-
 use test_utils::network::{setup_network_and_wallet, start_test_network};
 
 const TEST_DATA_DIR: &str = "src/unit_tests/data/";
@@ -105,6 +107,8 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
 async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir().unwrap();
     let working_dir = temp_dir.path();
+    let keypair: AuthorityKeyPair = get_key_pair().1;
+    let account_keypair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
 
     let wallet_config = SuiClientConfig {
         keystore: KeystoreType::File(working_dir.join(SUI_KEYSTORE_FILENAME)),
@@ -112,8 +116,13 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             db_folder_path: working_dir.join("client_db"),
             validator_set: vec![ValidatorInfo {
                 name: "0".into(),
-                public_key: get_key_pair::<AuthorityKeyPair>().1.public().into(),
+                protocol_key: keypair.public().into(),
+                account_key: account_keypair.public(),
                 network_key: get_key_pair::<AccountKeyPair>().1.public().clone().into(),
+                proof_of_possession: generate_proof_of_possession(
+                    &keypair,
+                    (&account_keypair.public()).into(),
+                ),
                 stake: 1,
                 delegation: 1,
                 gas_price: 1,
@@ -760,10 +769,10 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     context.config.active_address = None;
 
     // Create a new address
-    let os = SuiClientCommands::NewAddress {}
+    let os = SuiClientCommands::NewAddress { key_scheme: None }
         .execute(&mut context)
         .await?;
-    let new_addr = if let SuiClientCommandResult::NewAddress((a, _)) = os {
+    let new_addr = if let SuiClientCommandResult::NewAddress((a, _, _)) = os {
         a
     } else {
         panic!("Command failed")
@@ -789,6 +798,66 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
                 fullnode: None,
             })
         )
+    );
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
+    // Create Wallet context.
+    let network = start_test_network(None).await?;
+    let wallet_conf = network.dir().join(SUI_CLIENT_CONFIG);
+    let mut context = WalletContext::new(&wallet_conf).await?;
+
+    // keypairs loaded from config are Ed25519
+    assert_eq!(
+        context
+            .keystore
+            .keys()
+            .iter()
+            .filter(|k| k.flag() == Ed25519SuiSignature::SCHEME.flag())
+            .count(),
+        5
+    );
+
+    SuiClientCommands::NewAddress {
+        key_scheme: Some("secp256k1".to_string()),
+    }
+    .execute(&mut context)
+    .await?;
+
+    // new keypair generated is Secp256k1
+    assert_eq!(
+        context
+            .keystore
+            .keys()
+            .iter()
+            .filter(|k| k.flag() == Secp256k1SuiSignature::SCHEME.flag())
+            .count(),
+        1
+    );
+
+    // random key scheme errors out
+    assert!(SuiClientCommands::NewAddress {
+        key_scheme: Some("random".to_string()),
+    }
+    .execute(&mut context)
+    .await
+    .is_err());
+
+    SuiClientCommands::NewAddress { key_scheme: None }
+        .execute(&mut context)
+        .await?;
+
+    // None key scheme defaults to Ed25519
+    assert_eq!(
+        context
+            .keystore
+            .keys()
+            .iter()
+            .filter(|k| k.flag() == Ed25519SuiSignature::SCHEME.flag())
+            .count(),
+        6
     );
     Ok(())
 }
@@ -970,7 +1039,8 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
         gas: Some(gas),
         gas_budget: 1000,
         coin_id: coin,
-        amounts: vec![1000, 10],
+        amounts: Some(vec![1000, 10]),
+        count: 0,
     }
     .execute(&mut context)
     .await?;
@@ -1007,12 +1077,59 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     }
     let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());
 
+    // Test split coin into equal parts
+    let resp = SuiClientCommands::SplitCoin {
+        gas: None,
+        gas_budget: 1000,
+        coin_id: coin,
+        amounts: None,
+        count: 3,
+    }
+    .execute(&mut context)
+    .await?;
+
+    let g = if let SuiClientCommandResult::SplitCoin(r) = resp {
+        r.parsed_data.unwrap().to_split_coin_response().unwrap()
+    } else {
+        panic!("Command failed")
+    };
+
+    // Check values expected
+    assert_eq!(
+        get_gas_value(&g.updated_coin),
+        orig_value / 3 + orig_value % 3
+    );
+    assert_eq!(get_gas_value(&g.new_coins[0]), orig_value / 3);
+    assert_eq!(get_gas_value(&g.new_coins[1]), orig_value / 3);
+
+    SuiClientCommands::SyncClientState {
+        address: Some(address),
+    }
+    .execute(&mut context)
+    .await?
+    .print(true);
+
+    let object_refs = context
+        .gateway
+        .read_api()
+        .get_objects_owned_by_address(address)
+        .await?;
+
+    // Get another coin
+    for c in object_refs {
+        if get_gas_value(&get_object(c.object_id, &mut context).await.unwrap()) > 2000 {
+            coin = c.object_id;
+        }
+    }
+    let orig_value = get_gas_value(&get_object(coin, &mut context).await.unwrap());
+
     // Test with no gas specified
     let resp = SuiClientCommands::SplitCoin {
         gas: None,
         gas_budget: 1000,
         coin_id: coin,
-        amounts: vec![1000, 10],
+        amounts: Some(vec![1000, 10]),
+        count: 0,
     }
     .execute(&mut context)
     .await?;

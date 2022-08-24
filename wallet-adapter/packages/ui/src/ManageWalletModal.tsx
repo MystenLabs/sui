@@ -3,7 +3,7 @@
 
 import { Box, Button, List, Modal, Typography, ListItemButton, ListItemText}  from "@mui/material";
 import { useEffect, useState } from "react";
-import { useWallet } from "sui-wallet-adapter-react";
+import { useWallet } from "@mysten/wallet-adapter-react";
 import SettingsIcon from '@mui/icons-material/Settings';
 
 export interface Before {}
@@ -32,8 +32,8 @@ export function ManageWalletModal(props: ManageWalletButtonProps) {
     const handleClickDisconnect = () => {
         disconnect();
         setOpen(false);
-    } 
-  
+    }
+
     const handleClose = (value: string) => {
       setOpen(false);
     }
@@ -63,9 +63,9 @@ export function ManageWalletModal(props: ManageWalletButtonProps) {
 
     return (
         <>
-            { (connected && wallet) && 
+            { (connected && wallet) &&
                 <>
-                <Button color="primary" variant="contained" style={ManageWalletButtonStyle} onClick={handleClickOpen}>    
+                <Button color="primary" variant="contained" style={ManageWalletButtonStyle} onClick={handleClickOpen}>
                     <SettingsIcon/> { account.slice(0, PK_DISPLAY_LENGTH)}...
                 </Button>
                 <Modal open={open} onClose={handleClose}>

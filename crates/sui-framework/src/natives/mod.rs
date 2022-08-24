@@ -76,6 +76,11 @@ pub fn all_natives(
             make_native!(crypto::scalar_from_bytes),
         ),
         (
+            "crypto",
+            "ed25519_verify",
+            make_native!(crypto::ed25519_verify),
+        ),
+        (
             "test_scenario",
             "drop_object_for_testing",
             make_native!(test_scenario::drop_object_for_testing),

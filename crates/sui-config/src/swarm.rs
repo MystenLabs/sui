@@ -60,7 +60,8 @@ impl NetworkConfig {
     /// Generate a fullnode config based on this `NetworkConfig`. This is useful if you want to run
     /// a fullnode and have it connect to a network defined by this `NetworkConfig`.
     pub fn generate_fullnode_config(&self) -> NodeConfig {
-        let key_pair: Arc<AuthorityKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
+        let protocol_key_pair: Arc<AuthorityKeyPair> =
+            Arc::new(get_key_pair_from_rng(&mut OsRng).1);
         let account_key_pair: Arc<SuiKeyPair> = Arc::new(
             get_key_pair_from_rng::<AccountKeyPair, _>(&mut OsRng)
                 .1
@@ -77,7 +78,7 @@ impl NetworkConfig {
         db_path.pop();
 
         NodeConfig {
-            key_pair,
+            protocol_key_pair,
             account_key_pair,
             network_key_pair,
             db_path: db_path.join(FULL_NODE_DB_PATH),

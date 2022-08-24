@@ -141,7 +141,7 @@ fn make_clients(genesis: PathBuf) -> Result<BTreeMap<AuthorityName, NetworkAutho
             channel,
             Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
         );
-        let public_key_bytes = validator.public_key();
+        let public_key_bytes = validator.protocol_key();
         authority_clients.insert(public_key_bytes, client);
     }
 

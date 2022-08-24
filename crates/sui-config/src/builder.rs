@@ -16,8 +16,8 @@ use std::{
 use sui_types::{
     base_types::encode_bytes_hex,
     crypto::{
-        get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes,
-        KeypairTraits, PublicKey, SuiKeyPair,
+        generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+        AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiKeyPair,
     },
 };
 
@@ -115,15 +115,21 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .enumerate()
             .map(|(i, validator)| {
                 let name = format!("validator-{i}");
-                let public_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
+                let protocol_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
+                let account_key: PublicKey = validator.account_key_pair.public();
                 let network_key: PublicKey = validator.network_key_pair.public();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
 
                 ValidatorInfo {
                     name,
-                    public_key,
+                    protocol_key,
                     network_key,
+                    proof_of_possession: generate_proof_of_possession(
+                        &validator.key_pair,
+                        (&account_key).into(),
+                    ),
+                    account_key,
                     stake,
                     delegation: 0, // no delegation yet at genesis
                     gas_price: validator.gas_price,
@@ -175,7 +181,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 };
 
                 NodeConfig {
-                    key_pair: Arc::new(validator.key_pair),
+                    protocol_key_pair: Arc::new(validator.key_pair),
                     account_key_pair: Arc::new(validator.account_key_pair),
                     network_key_pair: Arc::new(validator.network_key_pair),
                     db_path,

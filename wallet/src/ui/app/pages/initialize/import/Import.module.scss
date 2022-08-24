@@ -1,15 +1,53 @@
+@use '_values/colors';
+@use '_utils';
+
 .mnemonic {
     resize: none;
-    width: 300px;
-    padding: 5px;
+    padding: 14px;
     margin-bottom: 3px;
+    background: colors.$white;
+    border: 1px solid #e9eaeb;
+    border-radius: 15px;
+    font-family: Inter, sans-serif;
+    width: 320px;
+    height: 90px;
+
+    @include utils.typography('page-title');
+
+    font-weight: 500;
+    line-height: 130%;
+    color: colors.$gray-100;
+
+    &::placeholder {
+        color: colors.$gray-65;
+        font-weight: 500;
+    }
 }
 
 .error {
-    margin-bottom: 12px;
-    font-size: 13px;
-    color: #b10000;
+    @include utils.error-message-box;
+}
+
+.btn {
+    width: 100%;
+    font-style: normal;
     font-weight: 400;
-    min-height: 1em;
-    line-height: 1;
+    font-size: 14px;
+    line-height: 12px;
+    margin-top: 20px;
+
+    .next {
+        margin-left: 5px;
+        font-size: 12px;
+        font-weight: 500;
+    }
+}
+
+.header-title {
+    text-align: left;
+    margin-bottom: 20px;
+    color: colors.$gray-90;
+    font-size: 30px;
+    font-weight: 700;
+    line-height: 36px;
 }

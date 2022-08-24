@@ -159,8 +159,9 @@ module sui::validator_set_tests {
         let stake_value = (hint as u64) * 100;
         let init_stake = coin::mint_for_testing(stake_value, ctx);
         let init_stake = coin::into_balance(init_stake);
-        validator::new(
+        validator::new_for_testing(
             addr,
+            vector[hint],
             vector[hint],
             vector[hint],
             vector[hint],
@@ -176,8 +177,9 @@ module sui::validator_set_tests {
         let stake_value = (hint as u64) * 100;
         let init_stake = coin::mint_for_testing(stake_value, ctx);
         let init_stake = coin::into_balance(init_stake);
-        validator::new(
+        validator::new_for_testing(
             addr,
+            vector[hint],
             vector[hint],
             vector[hint],
             vector[hint],

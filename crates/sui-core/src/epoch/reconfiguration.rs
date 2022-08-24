@@ -200,6 +200,10 @@ where
         // Resume the validator to start accepting transactions for the new epoch.
         self.state.unhalt_validator();
         info!(?epoch, "Validator unhalted.");
+
+        // Restart the node sync process so it gets the new epoch info.
+        self.respawn_node_sync_process().await;
+
         info!(
             "===== Epoch change finished. We are now at epoch {:?} =====",
             next_epoch

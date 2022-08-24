@@ -15,8 +15,10 @@ pub mod execution_engine;
 pub mod gateway_state;
 pub mod safe_client;
 pub mod streamer;
-pub mod test_utils;
 pub mod transaction_input_checker;
+
+#[cfg(test)]
+pub mod test_utils;
 
 mod node_sync;
 mod query_helpers;
