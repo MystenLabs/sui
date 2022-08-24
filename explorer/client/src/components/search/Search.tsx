@@ -32,9 +32,14 @@ function Search() {
             e.preventDefault();
 
             if (result?.length === 1) {
-                navigate(`../${result[0].category}/${result[0].input}`, {
-                    state: result[0].result,
-                });
+                navigate(
+                    `../${result[0].category}/${encodeURIComponent(
+                        result[0].input
+                    )}`,
+                    {
+                        state: result[0].result,
+                    }
+                );
 
                 setResult(null);
                 setInput('');
@@ -45,9 +50,12 @@ function Search() {
 
     const handleOptionClick = useCallback(
         (entry) => () => {
-            navigate(`../${entry.category}/${entry.input}`, {
-                state: entry.result,
-            });
+            navigate(
+                `../${entry.category}/${encodeURIComponent(entry.input)}`,
+                {
+                    state: entry.result,
+                }
+            );
             setResult(null);
             setInput('');
         },
