@@ -67,6 +67,7 @@ export class JsonRpcProvider extends Provider {
   private wsClient: WsRpcClient;
   private wsConnectionState: ConnectionState = ConnectionState.NotConnected;
   private wsEndpoint: string;
+  private wsTimeout: number = 0;
 
   private activeSubscriptions: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
 
@@ -79,41 +80,35 @@ export class JsonRpcProvider extends Provider {
     super();
 
     this.client = new JsonRpcClient(endpoint);
+
     this.wsEndpoint = getWebsocketUrl(endpoint);
-    this.wsClient = new WsRpcClient(this.wsEndpoint, { reconnect_interval: 3000, autoconnect: false })
+
+    const socketOptions = { reconnect_interval: 3000, autoconnect: false };
+    this.wsClient = new WsRpcClient(this.wsEndpoint, socketOptions);
     this.setupSocket();
   }
 
-  private async setupSocket() {
-    return new Promise<void>((resolve, reject): void => {
-      if (this.wsConnectionState === ConnectionState.Connected)
-        return;
+  private setupSocket() {
+    this.wsClient.on('open', () => {
+      if(this.wsTimeout != 0) {
+        clearTimeout(this.wsTimeout);
+        this.wsTimeout = 0;
+      }
+      this.wsConnectionState = ConnectionState.Connected;
 
-      const timeoutId = setTimeout(() => {
-        reject('timeout');
-      }, 15000)
+      // underlying websocket is private, but we need it
+      // to access messages sent by the node
+      (this.wsClient as any).socket
+        .on('message', this.onSocketMessage.bind(this));
+    });
 
-      this.wsClient.connect();
-      this.wsConnectionState = ConnectionState.Connecting;
+    this.wsClient.on('close', () => {
+      this.wsConnectionState = ConnectionState.NotConnected;
+    });
 
-      this.wsClient.on('open', () => {
-        clearTimeout(timeoutId);
-        this.wsConnectionState = ConnectionState.Connected;
-
-        this.wsClient.on('close', () => {
-          this.wsConnectionState = ConnectionState.NotConnected;
-          reject('connection closed');
-        });
-
-        // underlying websocket is private, but we need it
-        // to access messages sent by the node
-        (this.wsClient as any).socket
-          .on('message', this.onSocketMessage.bind(this));
-
-        resolve();
-      });
-
-      this.wsClient.on('error', console.error);
+    this.wsClient.on('error', (err) => {
+      this.wsConnectionState = ConnectionState.NotConnected;
+      console.error(err);
     });
   }
 
@@ -125,14 +120,17 @@ export class JsonRpcProvider extends Provider {
     this.wsConnectionState = ConnectionState.Connecting;
 
     return new Promise<void>((resolve, reject) => {
+      const timeoutId = setTimeout(() => reject('timeout'), 15000);
       this.wsClient.once('open', () => {
+        clearTimeout(timeoutId);
         this.wsConnectionState = ConnectionState.Connected;
         resolve();
       });
-      this.wsClient.once('close', () => {
+      this.wsClient.once('error', (err) => {
         this.wsConnectionState = ConnectionState.NotConnected;
-        reject('connection closed');
+        reject(err);
       });
+
     });
   }
 
@@ -140,13 +138,11 @@ export class JsonRpcProvider extends Provider {
     const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
 
     const params = msg.params;
-    if(msg?.method === 'sui_subscribeEvent' && isSubscriptionEvent(params)) {
+    if(msg.method === 'sui_subscribeEvent' && isSubscriptionEvent(params)) {
       // call any registered handler for the message's subscription
       const onMessage = this.activeSubscriptions.get(params.subscription);
-      if (onMessage) {
+      if (onMessage)
         onMessage(params.result);
-        console.log(`called onMessage() for subscription ${params.subscription}`);
-      }
     }
   }
 
@@ -468,6 +464,7 @@ export class JsonRpcProvider extends Provider {
     onMessage: (event: SuiEventEnvelope) => void
   ): Promise<SubscriptionId> {
     try {
+      // lazily connect to websocket as needed to avoid spamming node with connections
       if (this.wsConnectionState != ConnectionState.Connected)
         await this.connect();
 
@@ -478,7 +475,7 @@ export class JsonRpcProvider extends Provider {
       ) as SubscriptionId;
 
       this.activeSubscriptions.set(subId, onMessage);
-      console.log('sub id', subId, onMessage, this.activeSubscriptions, this.wsClient.eventNames());
+
       return subId;
     } catch (err) {
       throw new Error(
@@ -492,15 +489,14 @@ export class JsonRpcProvider extends Provider {
       if (this.wsConnectionState != ConnectionState.Connected)
         await this.connect();
 
-      let response = await this.wsClient.call(
+      let removed = await this.wsClient.call(
         'sui_unsubscribeEvent',
         [id],
         30000
-      ) as any;
+      ) as boolean;
 
-      console.log(response);
-
-      return this.activeSubscriptions.delete(id);
+      this.activeSubscriptions.delete(id);
+      return removed;
     } catch (err) {
       throw new Error(
         `Error unsubscribing from event: ${err}, subscription: ${id}}`
