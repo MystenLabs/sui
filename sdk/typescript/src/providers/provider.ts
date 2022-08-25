@@ -129,7 +129,7 @@ export abstract class Provider {
    abstract subscribeEvent(
     filter: SuiEventFilter,
     onMessage: (event: SuiEventEnvelope) => void
-  ): Promise<any>;
+  ): Promise<SubscriptionId>;
 
   /**
    *
