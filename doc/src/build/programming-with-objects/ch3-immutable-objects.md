@@ -122,7 +122,7 @@ $ sui client objects --address=$ADDR
 ```
 There should be one more, with ID `$OBJECT`. Let's turn it into an immutable object:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "freeze_object" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "freeze_object" --args \"$OBJECT\"
 ```
 Now let's look at the list of objects we own again:
 ```
@@ -136,6 +136,6 @@ Owner: Immutable
 ```
 If we try to mutate it:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "update" --args \"0x$OBJECT\" 0 0 0
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "update" --args \"$OBJECT\" 0 0 0
 ```
 It will complain that an immutable object cannot be passed to a mutable argument.
