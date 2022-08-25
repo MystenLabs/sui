@@ -174,8 +174,12 @@ export class JsonRpcProvider extends Provider {
           const filter = sub.filter;
           if(!filter || !onMessage)
             return Promise.resolve(null);
-
-          // re-subscribe to the same filter & replace the subscription id
+          /*
+            re-subscribe to the same filter & replace the subscription id.
+            we skip calling sui_unsubscribeEvent for the old sub id, because:
+              * we assume this is being called after a reconnection
+              * the node keys subscriptions with a combo of connection id & subscription id
+          */
           const id = await this.subscribeEvent(filter, onMessage);
           return { id, onMessage, filter };
         })
