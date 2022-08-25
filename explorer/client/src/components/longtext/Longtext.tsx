@@ -44,7 +44,7 @@ function Longtext({
     }, [setCopyIcon, text]);
 
     const navigateToOwner = useCallback(
-        (input) => () =>
+        (input: string) => () =>
             navigateWithCategory(input, 'owner', network).then((resp: any) =>
                 navigate(
                     `../${resp.category}/${encodeURIComponent(resp.input)}`,
