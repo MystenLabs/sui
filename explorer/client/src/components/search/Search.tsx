@@ -10,6 +10,8 @@ import {
     navigateWithCategory,
     SEARCH_CATEGORIES,
 } from '../../utils/searchUtil';
+import { type ResultType } from './SearchResultType';
+import SearchResults from './SearchResults';
 
 import styles from './Search.module.css';
 
@@ -18,14 +20,7 @@ function Search() {
     const [network] = useContext(NetworkContext);
     const [input, setInput] = useState('');
 
-    const [result, setResult] = useState<
-        | {
-              input: string;
-              category: typeof SEARCH_CATEGORIES[number];
-              result: object | null;
-          }[]
-        | null
-    >(null);
+    const [result, setResult] = useState<ResultType[] | null>(null);
 
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
@@ -47,9 +42,8 @@ function Search() {
         },
         [navigate, result]
     );
-
     const handleOptionClick = useCallback(
-        (entry) => () => {
+        (entry: ResultType) => () => {
             navigate(
                 `../${entry.category}/${encodeURIComponent(entry.input)}`,
                 {
@@ -117,19 +111,7 @@ function Search() {
                     <SearchIcon className={styles.searchicon} />
                 </button>
             </form>
-            {input && result && (
-                <div className={styles.results}>
-                    {result.length === 0 && (
-                        <p className={styles.noresults}>No Results</p>
-                    )}
-                    {result.map((el, index) => (
-                        <dl key={index}>
-                            <dt>{el.category}</dt>
-                            <dd onClick={handleOptionClick(el)}>{el.input}</dd>
-                        </dl>
-                    ))}
-                </div>
-            )}
+            <SearchResults result={result} optionClick={handleOptionClick} />
         </>
     );
 }

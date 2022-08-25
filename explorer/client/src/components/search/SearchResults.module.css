@@ -1,0 +1,21 @@
+.results {
+    @apply bg-white absolute z-50 w-[500px] px-[0.2vw] rounded-[6px];
+
+    /* The below is extracted from Figma */
+    /* stylelint-disable */
+    box-shadow: 0 0 29px rgba(0, 0, 0, 13%), 0 0 44px rgba(0, 0, 0, 15%),
+        0 0 0 rgba(0, 0, 0, 20%);
+    /* stylelint-enable */
+}
+
+.results dt {
+    @apply text-sui-grey-75 uppercase font-semibold text-[12px] leading-[12px] ml-[14px] mb-[6px];
+}
+
+.results dd {
+    @apply mx-[8px] px-[6px] py-[9px] font-mono hover:bg-[#6FBCF01A] rounded-[3px] cursor-pointer;
+}
+
+.noresults {
+    @apply text-center text-sui-grey-70 text-[14px] leading-[14px] italic;
+}
