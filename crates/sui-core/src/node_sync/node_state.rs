@@ -196,6 +196,9 @@ pub struct NodeSyncState<A> {
     pending_downloads: Arc<Waiter<TransactionDigest, SuiResult>>,
 
     // Used to wait for parent transactions to be applied locally
+    pending_parents: Waiter<TransactionDigest, SyncResult>,
+
+    // Used to suppress duplicate tx processing.
     pending_txes: Waiter<TransactionDigest, SyncResult>,
 
     // Channels for enqueuing DigestMessage requests.
@@ -221,6 +224,7 @@ impl<A> NodeSyncState<A> {
             aggregator,
             node_sync_store,
             pending_downloads: Arc::new(Waiter::new()),
+            pending_parents: Waiter::new(),
             pending_txes: Waiter::new(),
             sender,
             receiver: Arc::new(tokio::sync::Mutex::new(receiver)),
@@ -280,6 +284,18 @@ where
         )
     }
 
+    async fn notify(
+        waiter: &Waiter<TransactionDigest, SyncResult>,
+        digest: &TransactionDigest,
+        result: SyncResult,
+    ) {
+        waiter
+            .notify(digest, result)
+            .await
+            .tap_err(|e| debug!(?digest, "{}", e))
+            .ok();
+    }
+
     async fn handle_messages(self: Arc<Self>, receiver: &mut mpsc::Receiver<DigestsMessage>) {
         // this pattern for limiting concurrency is from
         // https://github.com/tokio-rs/tokio/discussions/2648
@@ -319,13 +335,9 @@ where
                 };
 
                 // Notify waiters even if tx failed, to avoid leaking resources.
-                trace!(?digest, "notifying waiters");
-                state
-                    .pending_txes
-                    .notify(digest, res.clone())
-                    .await
-                    .tap_err(|e| debug!(?digest, "{}", e))
-                    .ok();
+                trace!(?digest, "notifying parents and waiters");
+                Self::notify(&state.pending_parents, digest, res.clone()).await;
+                Self::notify(&state.pending_txes, digest, res.clone()).await;
 
                 if let Some(tx) = tx {
                     // Send status back to follower so that it knows whether to advance
@@ -640,7 +652,7 @@ where
         std::mem::drop(permit);
 
         for parent in effects.effects.dependencies.iter() {
-            let (_, mut rx) = self.pending_txes.wait(parent);
+            let (_, mut rx) = self.pending_parents.wait(parent);
 
             if self.state.database.effects_exists(parent)? {
                 continue;
