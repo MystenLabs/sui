@@ -1,7 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import React, { useState, useCallback, useContext } from 'react';
+import React, {
+    useState,
+    useCallback,
+    useContext,
+    useRef,
+    useEffect,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ReactComponent as SearchIcon } from '../../assets/search.svg';
@@ -17,10 +23,30 @@ import styles from './Search.module.css';
 
 function Search() {
     const navigate = useNavigate();
+    const wrapperref = useRef<HTMLDivElement>(null);
     const [network] = useContext(NetworkContext);
     const [input, setInput] = useState('');
 
     const [result, setResult] = useState<ResultType[] | null>(null);
+
+    // Clicking Outside the Search Bar and Results should clear the search
+
+    useEffect(() => {
+        document.addEventListener('click', handleClickOutside, false);
+
+        return () =>
+            document.removeEventListener('click', handleClickOutside, false);
+    }, []);
+
+    const handleClickOutside = (event: MouseEvent): void => {
+        if (
+            wrapperref.current &&
+            !wrapperref.current.contains(event.target as Node)
+        ) {
+            setResult(null);
+            setInput('');
+        }
+    };
 
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
@@ -79,7 +105,7 @@ function Search() {
     );
 
     return (
-        <>
+        <div ref={wrapperref}>
             <form
                 className={styles.form}
                 onSubmit={handleSubmit}
@@ -112,7 +138,7 @@ function Search() {
                 </button>
             </form>
             <SearchResults result={result} optionClick={handleOptionClick} />
-        </>
+        </div>
     );
 }
 
