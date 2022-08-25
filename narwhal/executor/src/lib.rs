@@ -33,9 +33,6 @@ use types::{metered_channel, Batch, BatchDigest, ReconfigureNotification, Sequen
 // Re-export SingleExecutor as a convenience adapter.
 pub use crate::core::SingleExecutor;
 
-/// Default inter-task channel size.
-pub const DEFAULT_CHANNEL_SIZE: usize = 1_000;
-
 /// Convenience type representing a serialized transaction.
 pub type SerializedTransaction = Vec<u8>;
 
@@ -130,7 +127,7 @@ impl Executor {
         let metrics = ExecutorMetrics::new(registry);
 
         let (tx_executor, rx_executor) =
-            metered_channel::channel(DEFAULT_CHANNEL_SIZE, &metrics.tx_executor);
+            metered_channel::channel(primary::CHANNEL_CAPACITY, &metrics.tx_executor);
 
         // Ensure there is a single consensus client modifying the execution state.
         ensure!(
