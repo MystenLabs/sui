@@ -37,8 +37,7 @@ $main-extra-space: sizing.$main-bottom-space;
     padding-left: 30px;
     word-break: break-all;
     padding-right: 20px;
-    max-height: 280px;
-    overflow-y: scroll;
+    position: relative;
 
     &::before {
         content: '';
