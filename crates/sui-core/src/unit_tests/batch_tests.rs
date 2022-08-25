@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use narwhal_crypto::traits::KeyPair;
+use fastcrypto::traits::KeyPair;
 use rand::{prelude::StdRng, SeedableRng};
 use sui_types::committee::Committee;
 use sui_types::crypto::get_key_pair;
@@ -32,7 +32,6 @@ use sui_types::messages::{
     CertifiedTransaction, EpochRequest, EpochResponse, ObjectInfoRequest, ObjectInfoResponse,
     Transaction, TransactionInfoRequest, TransactionInfoResponse,
 };
-use sui_types::object::Object;
 
 pub(crate) fn init_state_parameters_from_rng<R>(
     rng: &mut R,
@@ -59,9 +58,8 @@ pub(crate) async fn init_state(
     let dir = env::temp_dir();
     let epoch_path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&epoch_path).unwrap();
-    let epoch_store = Arc::new(EpochStore::new(epoch_path));
+    let epoch_store = Arc::new(EpochStore::new(epoch_path, &committee, None));
     AuthorityState::new(
-        committee,
         authority_key.public().into(),
         Arc::pin(authority_key),
         store,
@@ -355,9 +353,9 @@ async fn test_batch_manager_drop_out_of_order() {
 async fn test_handle_move_order_with_batch() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let authority_state = Arc::new(init_state_with_objects(vec![gas_payment_object]).await);
-
+    let (authority_state_, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_payment_object_id)]).await;
+    let authority_state = Arc::new(authority_state_);
     let inner_state = authority_state.clone();
     let _join = tokio::task::spawn(async move {
         inner_state
@@ -370,6 +368,7 @@ async fn test_handle_move_order_with_batch() {
     tokio::task::yield_now().await;
 
     let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_payment_object_id,
         &sender,
@@ -767,12 +766,13 @@ async fn test_safe_batch_stream() {
     // Create an authority
     let store = Arc::new(AuthorityStore::open(&path.join("store"), None));
     let state = init_state(committee.clone(), authority_key, store).await;
+    let epoch_store = state.epoch_store().clone();
 
     // Happy path:
     let auth_client = TrustworthyAuthorityClient::new(state);
     let safe_client = SafeClient::new(
         auth_client,
-        committee.clone(),
+        epoch_store,
         public_key_bytes,
         SafeClientMetrics::new_for_tests(),
     );
@@ -808,11 +808,12 @@ async fn test_safe_batch_stream() {
     let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
     let state_b =
         AuthorityState::new_for_testing(committee.clone(), &authority_key, None, None, None).await;
+    let epoch_store = state_b.epoch_store().clone();
     let auth_client_from_byzantine = ByzantineAuthorityClient::new(state_b);
     let public_key_bytes_b = authority_key.public().into();
     let safe_client_from_byzantine = SafeClient::new(
         auth_client_from_byzantine,
-        committee.clone(),
+        epoch_store,
         public_key_bytes_b,
         SafeClientMetrics::new_for_tests(),
     );

@@ -14,13 +14,16 @@ module sui::governance_test_utils {
     public fun create_validator_for_testing(
         addr: address, init_stake_amount: u64, ctx: &mut TxContext
     ): Validator {
-        validator::new(
+        validator::new_for_testing(
             addr,
+            x"FF",
+            x"FF",
             x"FF",
             b"ValidatorName",
             x"FFFF",
             balance::create_for_testing<SUI>(init_stake_amount),
             option::none(),
+            1,
             ctx
         )
     }

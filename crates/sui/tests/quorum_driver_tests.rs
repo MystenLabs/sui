@@ -5,7 +5,7 @@ use std::time::Duration;
 use sui_core::authority_aggregator::AuthorityAggregator;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_node::SuiNode;
-use sui_quorum_driver::QuorumDriverHandler;
+use sui_quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_types::base_types::SuiAddress;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -26,7 +26,7 @@ async fn setup() -> (
     let mut gas_objects = test_gas_objects();
     let configs = test_authority_configs();
     let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let clients = test_authority_aggregator(&configs);
+    let clients = test_authority_aggregator(&configs, handles[0].state().epoch_store().clone());
     let (sender, keypair) = test_account_keys().pop().unwrap();
     let tx = make_transfer_sui_transaction(
         gas_objects.pop().unwrap().compute_object_reference(),
@@ -43,7 +43,8 @@ async fn test_execute_transaction_immediate() {
     let (_handles, clients, tx) = setup().await;
     let digest = *tx.digest();
 
-    let quorum_driver_handler = QuorumDriverHandler::new(clients);
+    let quorum_driver_handler =
+        QuorumDriverHandler::new(clients, QuorumDriverMetrics::new_for_tests());
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
     let handle = tokio::task::spawn(async move {
         let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
@@ -69,7 +70,8 @@ async fn test_execute_transaction_wait_for_cert() {
     let (_handles, clients, tx) = setup().await;
     let digest = *tx.digest();
 
-    let quorum_driver_handler = QuorumDriverHandler::new(clients);
+    let quorum_driver_handler =
+        QuorumDriverHandler::new(clients, QuorumDriverMetrics::new_for_tests());
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
     let handle = tokio::task::spawn(async move {
         let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
@@ -97,7 +99,8 @@ async fn test_execute_transaction_wait_for_effects() {
     let (_handles, clients, tx) = setup().await;
     let digest = *tx.digest();
 
-    let quorum_driver_handler = QuorumDriverHandler::new(clients);
+    let quorum_driver_handler =
+        QuorumDriverHandler::new(clients, QuorumDriverMetrics::new_for_tests());
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
     let handle = tokio::task::spawn(async move {
         let (cert, effects) = quorum_driver_handler.subscribe().recv().await.unwrap();
@@ -125,7 +128,8 @@ async fn test_execute_transaction_wait_for_effects() {
 #[tokio::test]
 async fn test_update_validators() {
     let (_handles, mut clients, tx) = setup().await;
-    let quorum_driver_handler = QuorumDriverHandler::new(clients.clone());
+    let quorum_driver_handler =
+        QuorumDriverHandler::new(clients.clone(), QuorumDriverMetrics::new_for_tests());
     let quorum_driver = quorum_driver_handler.clone_quorum_driver();
     let handle = tokio::task::spawn(async move {
         // Wait till the epoch/committee is updated.

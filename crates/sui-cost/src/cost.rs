@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use move_vm_test_utils::gas_schedule::{new_from_instructions, CostTable, GasCost};
 use once_cell::sync::Lazy;
 
 use move_binary_format::{
@@ -11,9 +12,6 @@ use move_binary_format::{
     },
     file_format_common::instruction_key,
 };
-use move_core_types::gas_schedule::CostTable;
-use move_core_types::gas_schedule::GasCost;
-use move_vm_types::gas_schedule::new_from_instructions;
 
 // NOTE: all values in this file are subject to change
 
@@ -89,7 +87,7 @@ pub enum SuiNativeCostIndex {
 
 // Native costs are currently flat
 // TODO recalibrate wrt bytecode costs
-pub fn native_cost_schedule() -> Vec<GasCost> {
+pub fn _native_cost_schedule() -> Vec<GasCost> {
     use SuiNativeCostIndex as N;
 
     let mut native_table = vec![
@@ -126,7 +124,7 @@ pub fn bytecode_cost_schedule() -> Vec<(Bytecode, GasCost)> {
 }
 pub static COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
     // Note that the DiemVM is expecting the table sorted by instruction order.
-    new_from_instructions(bytecode_cost_schedule(), native_cost_schedule())
+    new_from_instructions(bytecode_cost_schedule())
 });
 
 //

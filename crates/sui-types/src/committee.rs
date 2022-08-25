@@ -6,8 +6,8 @@ use super::base_types::*;
 use crate::crypto::AuthorityPublicKey;
 use crate::error::{SuiError, SuiResult};
 use itertools::Itertools;
-use rand_latest::rngs::OsRng;
-use rand_latest::seq::SliceRandom;
+use rand::rngs::OsRng;
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
@@ -22,7 +22,6 @@ pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
-    // Note: this is a derived structure, no need to store.
     #[serde(skip)]
     expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
     #[serde(skip)]
@@ -284,7 +283,7 @@ impl Display for Committee {
 mod test {
     use super::*;
     use crate::crypto::{get_key_pair, AuthorityKeyPair};
-    use narwhal_crypto::traits::KeyPair;
+    use fastcrypto::traits::KeyPair;
 
     #[test]
     fn test_shuffle_by_weight() {

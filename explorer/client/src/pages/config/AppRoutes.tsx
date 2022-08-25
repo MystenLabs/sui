@@ -12,12 +12,11 @@ import TransactionResult from '../transaction-result/TransactionResult';
 import Transactions from '../transactions/Transactions';
 import { ValidatorPageResult } from '../validators/Validators';
 
-// Temporary use Transactions page as the default page.
 const AppRoutes = () => {
     return (
         <Routes>
-            <Route path="/" element={<Transactions />} />
-            <Route path="/home-other" element={<Home />} />
+            <Route path="/" element={<Home />} />
+            <Route path="/transactions" element={<Transactions />} />
             <Route path="/objects/:id" element={<ObjectResult />} />
             <Route path="/transactions/:id" element={<TransactionResult />} />
             <Route path="/addresses/:id" element={<AddressResult />} />

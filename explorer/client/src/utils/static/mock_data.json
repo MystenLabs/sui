@@ -644,7 +644,76 @@
                 }
             }
         },
-
+        {
+            "id": "standaloneObjectABC",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::abc::ABC>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectDEF",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::def::DEF>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectGHI",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::ghi::GHI>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectJKL",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::jkl::JKL>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
+        {
+            "id": "standaloneObjectMNO",
+            "category": "object",
+            "owner": { "SingleOwner": "player2" },
+            "version": "87",
+            "readonly": "true",
+            "objType": "0x2::coin::Coin<0x2::mno::MNO>",
+            "data": {
+                "contents": {
+                    "id": {},
+                    "balance": "1"
+                }
+            }
+        },
         {
             "id": "ProblemObject",
             "category": "object"

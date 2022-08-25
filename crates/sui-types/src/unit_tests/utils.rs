@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use narwhal_crypto::traits::KeyPair as KeypairTraits;
+use fastcrypto::traits::KeyPair as KeypairTraits;
 
 use crate::{
     committee::Committee,

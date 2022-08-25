@@ -61,6 +61,8 @@ fn main() {
     let genesis_config = GenesisConfig {
         validator_genesis_info: None,
         committee_size: bch.host_port_stake_triplets.len(),
+        grpc_load_shed: None,
+        grpc_concurrency_limit: None,
         accounts: accounts.clone(),
     };
 

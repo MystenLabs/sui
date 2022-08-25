@@ -115,13 +115,6 @@ module games::sea_hero {
         transfer::transfer(monster, recipient)
     }
 
-    /// Send `monster` to `recipient`
-    public fun transfer_monster(
-        monster: SeaMonster, recipient: address
-    ) {
-        transfer::transfer(monster, recipient)
-    }
-
     /// Reward a hero will reap from slaying this monster
     public fun monster_reward(monster: &SeaMonster): u64 {
         balance::value(&monster.reward)

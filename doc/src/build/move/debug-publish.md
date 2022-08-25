@@ -21,6 +21,9 @@ debug::print_stack_trace();
 ```
 Alternatively, any call to `abort` or assertion failure will also print the stacktrace at the point of failure.
 
+> **Important:** All calls to functions in the `debug` module must be removed from no-test code
+> before the new module can be published (test code is marked with the `#[test]` annotation).
+
 ## Publishing a package
 
 For functions in a Move package to actually be callable from Sui
@@ -68,7 +71,7 @@ number of created swords as follows and put into the `m1.move` file:
 
 ``` rust
     struct Forge has key, store {
-        info: Info,
+        id: UID,
         swords_created: u64,
     }
 
@@ -87,7 +90,7 @@ And module initializer is the perfect place to do it:
         use sui::transfer;
         use sui::tx_context;
         let admin = Forge {
-            info: object::new(ctx),
+            id: object::new(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher

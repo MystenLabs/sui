@@ -12,9 +12,9 @@ use crate::{
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
+use fastcrypto::traits::KeyPair;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
-use narwhal_crypto::traits::KeyPair;
 use prometheus::Registry;
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
@@ -177,7 +177,7 @@ impl ValidatorService {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
-        let consensus_keypair = config.key_pair().copy();
+        let consensus_keypair = config.protocol_key_pair().copy();
         let consensus_name = consensus_keypair.public().clone();
         let consensus_store = narwhal_node::NodeStorage::reopen(consensus_config.db_path());
         narwhal_node::Node::spawn_primary(
@@ -267,7 +267,7 @@ impl ValidatorService {
         let span = tracing::debug_span!(
             "process_tx",
             ?tx_digest,
-            tx_kind = transaction.data.kind_as_str()
+            tx_kind = transaction.signed_data.data.kind_as_str()
         );
 
         let info = state
@@ -323,7 +323,7 @@ impl ValidatorService {
         let span = tracing::debug_span!(
             "execute_transaction",
             ?tx_digest,
-            tx_kind = certificate.data.kind_as_str()
+            tx_kind = certificate.signed_data.data.kind_as_str()
         );
 
         let response = state
@@ -412,12 +412,12 @@ impl Validator for ValidatorService {
         Ok(tonic::Response::new(response))
     }
 
-    type BatchInfoStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
+    type FollowTxStreamStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
 
     async fn batch_info(
         &self,
         request: tonic::Request<BatchInfoRequest>,
-    ) -> Result<tonic::Response<Self::BatchInfoStream>, tonic::Status> {
+    ) -> Result<tonic::Response<Self::FollowTxStreamStream>, tonic::Status> {
         let request = request.into_inner();
 
         let xstream = self

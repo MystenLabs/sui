@@ -1,28 +1,28 @@
-use std::sync::Arc;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+use futures::future::join_all;
 use multiaddr::Multiaddr;
 use sui_config::ValidatorInfo;
-use sui_core::authority::AuthorityState;
-use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
+use sui_core::authority_active::checkpoint_driver::{
+    checkpoint_process_step, CheckpointProcessControl,
+};
 use sui_core::authority_client::AuthorityAPI;
-use sui_core::checkpoints::CHECKPOINT_COUNT_PER_EPOCH;
 use sui_core::safe_client::SafeClient;
 use sui_node::SuiNode;
-use sui_types::base_types::{ExecutionDigests, ObjectID, ObjectRef};
-use sui_types::crypto::{get_key_pair, AuthorityKeyPair, KeypairTraits};
+use sui_types::base_types::{ObjectID, ObjectRef};
+use sui_types::crypto::{
+    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair, KeypairTraits,
+};
 use sui_types::error::SuiResult;
 use sui_types::messages::ObjectInfoResponse;
 use sui_types::messages::{CallArg, ObjectArg, ObjectInfoRequest, TransactionEffects};
-use sui_types::messages_checkpoint::{
-    AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents,
-    CheckpointSequenceNumber, SignedCheckpointSummary,
-};
 use sui_types::object::Object;
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use test_utils::authority::test_authority_configs;
 use test_utils::messages::move_transaction;
 use test_utils::objects::{generate_gas_object_with_balance, test_gas_objects};
+use test_utils::test_account_keys;
 use test_utils::transaction::submit_shared_object_transaction;
 
 #[tokio::test(flavor = "current_thread", start_paused = true)]
@@ -31,25 +31,17 @@ async fn reconfig_end_to_end_tests() {
 
     let mut configs = test_authority_configs();
     for c in configs.validator_configs.iter_mut() {
-        c.enable_gossip = true;
+        // Turn off checkpoint process so that we can have fine control over it in the test.
+        c.enable_checkpoint = false;
     }
     let validator_info = configs.validator_set();
     let mut gas_objects = test_gas_objects();
     let validator_stake = generate_gas_object_with_balance(100000000000000);
     let mut states = Vec::new();
     let mut nodes = Vec::new();
-    let mut prev_signed_checkpoints = Vec::new();
     for validator in configs.validator_configs() {
         let node = SuiNode::start(validator).await.unwrap();
         let state = node.state();
-
-        // Make sure that every validator just finished checkpoint CHECKPOINT_COUNT_PER_EPOCH - 1,
-        // and is ready for checkpoint CHECKPOINT_COUNT_PER_EPOCH.
-        prev_signed_checkpoints.push(sign_checkpoint(
-            &state,
-            CHECKPOINT_COUNT_PER_EPOCH - 1,
-            std::iter::empty(),
-        ));
 
         for gas in gas_objects.clone() {
             state.insert_genesis_object(gas).await;
@@ -58,8 +50,6 @@ async fn reconfig_end_to_end_tests() {
         states.push(state);
         nodes.push(node);
     }
-
-    update_checkpoint_cert_for_all(&states, prev_signed_checkpoints.clone());
 
     // get sui system state and confirm it matches network info
     let sui_system_state = states[0].get_sui_system_state_object().await.unwrap();
@@ -94,24 +84,52 @@ async fn reconfig_end_to_end_tests() {
     let new_committee_size = sui_system_state.validators.next_epoch_validators.len();
     assert_eq!(old_committee_size + 1, new_committee_size);
 
-    let mut last_signed_checkpoints = Vec::new();
+    let mut checkpoint_processes = vec![];
     for node in &nodes {
-        node.active().unwrap().start_epoch_change().await.unwrap();
-        last_signed_checkpoints.push(sign_checkpoint(
-            &node.state(),
-            CHECKPOINT_COUNT_PER_EPOCH,
-            // The transaction that registered the new validator must be included in the checkpoint
-            std::iter::once(ExecutionDigests::new(
-                effects.transaction_digest,
-                effects.digest(),
-            )),
-        ));
+        let active = node.active().clone();
+        let handle = tokio::spawn(async move {
+            while !active
+                .state
+                .checkpoints
+                .as_ref()
+                .unwrap()
+                .lock()
+                .is_ready_to_start_epoch_change()
+            {
+                let _ =
+                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+            }
+        });
+        checkpoint_processes.push(handle);
     }
-    update_checkpoint_cert_for_all(&states, last_signed_checkpoints.clone());
+    // Wait for all validators to be ready for epoch change.
+    join_all(checkpoint_processes).await;
+
     let results: Vec<_> = nodes
         .iter()
         .map(|node| async {
-            node.active().unwrap().finish_epoch_change().await.unwrap();
+            let active = node.active().clone();
+            active.start_epoch_change().await.unwrap();
+            while !active
+                .state
+                .checkpoints
+                .as_ref()
+                .unwrap()
+                .lock()
+                .is_ready_to_finish_epoch_change()
+            {
+                let _ =
+                    checkpoint_process_step(&active, &CheckpointProcessControl::default()).await;
+            }
+        })
+        .collect();
+
+    join_all(results).await;
+
+    let results: Vec<_> = nodes
+        .iter()
+        .map(|node| async {
+            node.active().finish_epoch_change().await.unwrap();
         })
         .collect();
 
@@ -122,56 +140,6 @@ async fn reconfig_end_to_end_tests() {
     assert_eq!(sui_system_state.epoch, 1);
     // We should now have one more active validator.
     assert_eq!(sui_system_state.validators.active_validators.len(), 5);
-}
-
-fn sign_checkpoint(
-    state: &Arc<AuthorityState>,
-    seq: CheckpointSequenceNumber,
-    transactions: impl Iterator<Item = ExecutionDigests>,
-) -> SignedCheckpointSummary {
-    let mut checkpoints = state.checkpoints.as_ref().unwrap().lock();
-
-    let mut cur_locals = (*checkpoints.get_locals()).clone();
-    cur_locals.next_checkpoint = seq;
-    checkpoints.set_locals_for_testing(cur_locals).unwrap();
-
-    checkpoints
-        .sign_new_checkpoint(
-            0,
-            seq,
-            &CheckpointContents::new(transactions),
-            None,
-            state.db(),
-        )
-        .unwrap();
-    match checkpoints.get_checkpoint(seq).unwrap().unwrap() {
-        AuthenticatedCheckpoint::Signed(s) => s,
-        _ => {
-            unreachable!()
-        }
-    }
-}
-
-fn update_checkpoint_cert_for_all(
-    states: &[Arc<AuthorityState>],
-    signed_checkpoints: Vec<SignedCheckpointSummary>,
-) {
-    let committee = states[0].clone_committee();
-    let checkpoint_cert =
-        CertifiedCheckpointSummary::aggregate(signed_checkpoints, &committee).unwrap();
-    for state in states {
-        state
-            .checkpoints
-            .as_ref()
-            .unwrap()
-            .lock()
-            .promote_signed_checkpoint_to_cert(
-                &checkpoint_cert,
-                &committee,
-                &CheckpointMetrics::new_for_tests(),
-            )
-            .unwrap();
-    }
 }
 
 pub async fn create_and_register_new_validator(
@@ -189,13 +157,16 @@ pub async fn create_and_register_new_validator(
         framework_pkg,
         vec![
             CallArg::Object(ObjectArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID)),
-            CallArg::Pure(bcs::to_bytes(&new_validator.public_key()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&new_validator.protocol_key()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(new_validator.network_key()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&new_validator.proof_of_possession().as_ref()).unwrap()),
             CallArg::Pure(
                 bcs::to_bytes(format!("Validator{}", new_validator.sui_address()).as_bytes())
                     .unwrap(),
             ),
             CallArg::Pure(bcs::to_bytes(&new_validator.network_address).unwrap()),
             CallArg::Object(ObjectArg::ImmOrOwnedObject(validator_stake)),
+            CallArg::Pure(bcs::to_bytes(&new_validator.gas_price()).unwrap()),
         ],
     );
     submit_shared_object_transaction(validator_tx, validator_info).await
@@ -203,11 +174,20 @@ pub async fn create_and_register_new_validator(
 
 pub fn get_new_validator() -> ValidatorInfo {
     let keypair: AuthorityKeyPair = get_key_pair().1;
+    let network_keypair: AccountKeyPair = get_key_pair().1;
+    let account_keypair = test_account_keys().pop().unwrap().1;
     ValidatorInfo {
         name: "".to_string(),
-        public_key: keypair.public().into(),
+        protocol_key: keypair.public().into(),
+        account_key: account_keypair.public().clone().into(),
+        network_key: network_keypair.public().clone().into(),
+        proof_of_possession: generate_proof_of_possession(
+            &keypair,
+            account_keypair.public().into(),
+        ),
         stake: 1,
         delegation: 0,
+        gas_price: 1,
         network_address: sui_config::utils::new_network_address(),
         narwhal_primary_to_primary: sui_config::utils::new_network_address(),
         narwhal_worker_to_primary: sui_config::utils::new_network_address(),

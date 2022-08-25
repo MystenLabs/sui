@@ -123,38 +123,6 @@ pub struct CheckpointResponse {
     pub detail: Option<CheckpointContents>,
 }
 
-impl CheckpointResponse {
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        match &self.info {
-            AuthorityCheckpointInfo::AuthenticatedCheckpoint(ckpt) => {
-                if let Some(ckpt) = ckpt {
-                    ckpt.verify(committee, self.detail.as_ref())?;
-                }
-                Ok(())
-            }
-            AuthorityCheckpointInfo::CheckpointProposal {
-                proposal,
-                prev_cert,
-            } => {
-                if let Some(p) = proposal {
-                    p.verify(committee, self.detail.as_ref())?;
-                    if p.summary.sequence_number > 0 {
-                        let cert = prev_cert.as_ref().ok_or_else(|| {
-                            SuiError::from("No checkpoint cert provided along with proposal")
-                        })?;
-                        cert.verify(committee, None)?;
-                        fp_ensure!(
-                            p.summary.sequence_number - 1 == cert.summary.sequence_number,
-                            SuiError::from("Checkpoint proposal sequence number inconsistent with previous cert")
-                        );
-                    }
-                }
-                Ok(())
-            }
-        }
-    }
-}
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
     AuthenticatedCheckpoint(Option<AuthenticatedCheckpoint>),
@@ -313,16 +281,17 @@ impl SignedCheckpointSummary {
         contents: Option<&CheckpointContents>,
     ) -> Result<(), SuiError> {
         fp_ensure!(
-            self.summary.epoch == self.auth_signature.epoch,
+            self.summary.epoch == committee.epoch,
             SuiError::from("Epoch in the summary doesn't match with the signature")
         );
 
         self.auth_signature.verify(&self.summary, committee)?;
 
         if let Some(contents) = contents {
+            let content_digest = contents.digest();
             fp_ensure!(
-                contents.digest() == self.summary.content_digest,
-                SuiError::from("Checkpoint contents digest mismatch")
+                content_digest == self.summary.content_digest,
+                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, received content digest {:?}, received {} transactions", self.summary, content_digest, contents.transactions.len())}
             );
         }
 
@@ -407,9 +376,10 @@ impl CertifiedCheckpointSummary {
         obligation.verify_all()?;
 
         if let Some(contents) = contents {
+            let content_digest = contents.digest();
             fp_ensure!(
-                contents.digest() == self.summary.content_digest,
-                SuiError::from("Checkpoint contents digest mismatch")
+                content_digest == self.summary.content_digest,
+                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, content digest = {:?}, transactions {}", self.summary, content_digest, contents.transactions.len())}
             );
         }
 
@@ -610,7 +580,7 @@ pub struct CheckpointFragment {
 }
 
 impl CheckpointFragment {
-    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
         // Check the signatures of proposer and other
         self.proposer.verify(committee, None)?;
         self.other.verify(committee, None)?;
@@ -630,8 +600,19 @@ impl CheckpointFragment {
             SuiError::from("Waypoint diff is not valid")
         );
 
-        // TODO:
-        // - check that the certs includes all missing certs on either side.
+        // Check that the fragment contains all missing certs indicated in diff.
+        let digests = self
+            .diff
+            .first
+            .items
+            .iter()
+            .chain(self.diff.second.items.iter());
+        for digest in digests {
+            let cert = self.certs.get(digest).ok_or_else(|| {
+                SuiError::from(format!("Missing cert with digest {digest:?}").as_str())
+            })?;
+            cert.verify(committee)?;
+        }
 
         Ok(())
     }
@@ -643,7 +624,7 @@ impl CheckpointFragment {
 
 #[cfg(test)]
 mod tests {
-    use narwhal_crypto::traits::KeyPair;
+    use fastcrypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
     use std::collections::BTreeSet;

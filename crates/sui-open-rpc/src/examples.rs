@@ -16,10 +16,9 @@ use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
-    SuiCertifiedTransaction, SuiData, SuiExecutionStatus, SuiGasCostSummary, SuiMoveObject,
-    SuiObject, SuiObjectRead, SuiObjectRef, SuiParsedMoveObject, SuiRawMoveObject,
-    SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
-    TransferObjectParams,
+    SuiCertifiedTransaction, SuiData, SuiExecutionStatus, SuiGasCostSummary, SuiObject,
+    SuiObjectRead, SuiObjectRef, SuiParsedData, SuiRawData, SuiRawMoveObject, SuiTransactionData,
+    SuiTransactionEffects, SuiTransactionResponse, TransactionBytes, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -190,13 +189,11 @@ impl RpcExampleProvider {
         let coin = GasCoin::new(object_id, 10000);
 
         let result = SuiObjectRead::Exists(SuiObject {
-            data: SuiData::MoveObject(
-                SuiParsedMoveObject::try_from_layout(
-                    coin.to_object(SequenceNumber::from_u64(1)),
-                    GasCoin::layout(),
-                )
-                .unwrap(),
-            ),
+            data: SuiParsedData::try_from_object(
+                coin.to_object(SequenceNumber::from_u64(1)),
+                GasCoin::layout(),
+            )
+            .unwrap(),
             owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),
             previous_transaction: TransactionDigest::new(self.rng.gen()),
             storage_rebate: 100,
@@ -267,9 +264,11 @@ impl RpcExampleProvider {
         let coin = GasCoin::new(object_id, 10000);
         let object = coin.to_object(SequenceNumber::from_u64(1));
         let result = SuiObjectRead::Exists(SuiObject {
-            data: SuiData::MoveObject(SuiRawMoveObject {
+            data: SuiRawData::MoveObject(SuiRawMoveObject {
                 type_: GasCoin::type_().to_string(),
                 has_public_transfer: object.has_public_transfer(),
+                version: object.version(),
+                child_count: None,
                 bcs_bytes: object.into_contents(),
             }),
             owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),

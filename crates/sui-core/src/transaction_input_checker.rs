@@ -26,16 +26,18 @@ pub async fn check_transaction_input<S, T>(
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
+    transaction.signed_data.data.kind.validity_check()?;
+
     let mut gas_status = check_gas(
         store,
         transaction.gas_payment_object_ref().0,
-        transaction.data.gas_budget,
-        transaction.data.gas_price,
-        &transaction.data.kind,
+        transaction.signed_data.data.gas_budget,
+        transaction.signed_data.data.gas_price,
+        &transaction.signed_data.data.kind,
     )
     .await?;
 
-    let input_objects = check_objects(store, &transaction.data).await?;
+    let input_objects = check_objects(store, &transaction.signed_data.data).await?;
 
     if transaction.contains_shared_object() {
         // It's important that we do this here to make sure there is enough
@@ -93,18 +95,6 @@ where
     }
 }
 
-#[instrument(level = "trace", skip_all, fields(num_objects = input_objects.len()))]
-async fn fetch_objects<S>(
-    store: &SuiDataStore<S>,
-    input_objects: &[InputObjectKind],
-) -> Result<Vec<Option<Object>>, SuiError>
-where
-    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
-{
-    let ids: Vec<_> = input_objects.iter().map(|kind| kind.object_id()).collect();
-    store.get_objects(&ids[..])
-}
-
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
@@ -116,8 +106,9 @@ where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
     let input_objects = transaction.input_objects()?;
+
     // These IDs act as authenticators that can own other objects.
-    let objects = fetch_objects(store, &input_objects).await?;
+    let objects = store.get_input_objects(&input_objects)?;
 
     // Constructing the list of objects that could be used to authenticate other
     // objects. Any mutable object (either shared or owned) can be used to
@@ -224,6 +215,10 @@ fn check_one_object(
             );
 
             // Check that the seq number is the same
+            // Note that this generally can't fail, because we fetch objects at the version
+            // specified by the input objects. This makes check_transaction_input idempotent.
+            // A tx that tries to operate on older versions will fail later when checking the
+            // object locks.
             fp_ensure!(
                 object.version() == sequence_number,
                 SuiError::UnexpectedSequenceNumber {

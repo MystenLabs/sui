@@ -1,7 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use rocksdb::Options;
 use std::path::PathBuf;
+use sui_storage::default_db_options;
+use sui_types::base_types::ObjectID;
 use sui_types::committee::{Committee, EpochId};
 use sui_types::error::SuiResult;
 use sui_types::messages::{AuthenticatedEpoch, GenesisEpoch};
@@ -14,17 +17,31 @@ use typed_store_macros::DBMapUtils;
 pub struct EpochStore {
     /// Map from each epoch ID to the epoch information. The epoch is either signed by this node,
     /// or is certified (signed by a quorum).
-    #[options(optimization = "point_lookup")]
+    #[default_options_override_fn = "epochs_table_default_config"]
     pub(crate) epochs: DBMap<EpochId, AuthenticatedEpoch>,
 }
 
+// These functions are used to initialize the DB tables
+fn epochs_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+
 impl EpochStore {
-    pub fn new(path: PathBuf) -> Self {
-        Self::open_tables_read_write(path, None)
+    pub fn new(path: PathBuf, genesis_committee: &Committee, db_options: Option<Options>) -> Self {
+        let epoch_store = Self::open_tables_read_write(path, db_options, None);
+        if epoch_store.database_is_empty() {
+            epoch_store
+                .init_genesis_epoch(genesis_committee.clone())
+                .expect("Init genesis epoch data must not fail");
+        }
+        epoch_store
     }
 
-    pub fn database_is_empty(&self) -> bool {
-        self.epochs.iter().next().is_none()
+    pub fn new_for_testing(genesis_committee: &Committee) -> Self {
+        let dir = std::env::temp_dir();
+        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
+        std::fs::create_dir(&path).unwrap();
+        Self::new(path, genesis_committee, None)
     }
 
     pub fn init_genesis_epoch(&self, genesis_committee: Committee) -> SuiResult {
@@ -50,5 +67,9 @@ impl EpochStore {
             // when initializing the store.
             .unwrap()
             .1
+    }
+
+    fn database_is_empty(&self) -> bool {
+        self.epochs.iter().next().is_none()
     }
 }

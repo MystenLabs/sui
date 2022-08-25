@@ -14,10 +14,10 @@ use crate::{
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::prelude::*;
+use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use narwhal_crypto::traits::KeyPair;
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
@@ -38,6 +38,7 @@ use std::{
 use sui_adapter::adapter;
 use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
+use sui_json_rpc_types::SuiEventEnvelope;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
@@ -52,7 +53,7 @@ use sui_types::{
     fp_ensure,
     messages::*,
     object::{Object, ObjectFormatOptions, ObjectRead},
-    storage::{BackingPackageStore, DeleteKind, Storage},
+    storage::{BackingPackageStore, DeleteKind},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tap::TapFallible;
@@ -98,7 +99,7 @@ pub mod authority_notifier;
 pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
-const MAX_TX_RECOVERY_RETRY: u32 = 3;
+pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
@@ -275,8 +276,6 @@ impl AuthorityMetrics {
 pub type StableSyncAuthoritySigner =
     Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
-const DEFAULT_QUERY_LIMIT: usize = 1000;
-
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -299,14 +298,14 @@ pub struct AuthorityState {
 
     indexes: Option<Arc<IndexStore>>,
 
-    pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
+    pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     pub event_handler: Option<Arc<EventHandler>>,
 
     /// The checkpoint store
     pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
 
-    pub(crate) epoch_store: Arc<EpochStore>,
+    epoch_store: Arc<EpochStore>,
 
     // Structures needed for handling batching and notifications.
     /// The sender to notify of new transactions
@@ -346,6 +345,10 @@ impl AuthorityState {
         self.committee.load().epoch
     }
 
+    pub fn epoch_store(&self) -> &Arc<EpochStore> {
+        &self.epoch_store
+    }
+
     async fn handle_transaction_impl(
         &self,
         transaction: Transaction,
@@ -360,7 +363,7 @@ impl AuthorityState {
 
         // Validators should never sign an external system transaction.
         fp_ensure!(
-            !transaction.data.kind.is_system_tx(),
+            !transaction.signed_data.data.kind.is_system_tx(),
             SuiError::InvalidSystemTransaction
         );
 
@@ -395,7 +398,7 @@ impl AuthorityState {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.data.kind);
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
@@ -464,7 +467,7 @@ impl AuthorityState {
                 ?observed_effects_digest,
                 ?signed_effects,
                 ?resp.signed_effects,
-                input_objects = ?certificate.data.input_objects(),
+                input_objects = ?certificate.signed_data.data.input_objects(),
                 "Locally executed effects do not match canonical effects!");
         }
         Ok(())
@@ -573,7 +576,7 @@ impl AuthorityState {
             return Ok(info);
         }
 
-        if self.is_halted() && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
             tx_guard.release();
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -630,7 +633,7 @@ impl AuthorityState {
             .observe(shared_object_count as f64);
         self.metrics
             .batch_size
-            .observe(certificate.data.kind.batch_size() as f64);
+            .observe(certificate.signed_data.data.kind.batch_size() as f64);
 
         Ok(TransactionInfoResponse {
             signed_transaction: self.database.get_transaction(&digest)?,
@@ -660,7 +663,7 @@ impl AuthorityState {
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let shared_object_refs = input_objects.filter_shared_objects();
-        if !shared_object_refs.is_empty() && !certificate.data.kind.is_system_tx() {
+        if !shared_object_refs.is_empty() && !certificate.signed_data.data.kind.is_system_tx() {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             // There is no need to go through consensus for system transactions that can
@@ -682,7 +685,7 @@ impl AuthorityState {
             execution_engine::execute_transaction_to_effects(
                 shared_object_refs,
                 temporary_store,
-                certificate.data.clone(),
+                certificate.signed_data.data.clone(),
                 transaction_digest,
                 transaction_dependencies,
                 &self.move_vm,
@@ -720,10 +723,15 @@ impl AuthorityState {
     ) -> SuiResult {
         indexes.index_tx(
             cert.sender_address(),
-            cert.data.input_objects()?.iter().map(|o| o.object_id()),
+            cert.signed_data
+                .data
+                .input_objects()?
+                .iter()
+                .map(|o| o.object_id()),
             effects.effects.all_mutated(),
-            cert.data
-                .move_calls()?
+            cert.signed_data
+                .data
+                .move_calls()
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
             seq,
@@ -843,7 +851,8 @@ impl AuthorityState {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let ref_and_digest = match request.request_kind {
-            ObjectInfoRequestKind::PastObjectInfo(seq) => {
+            ObjectInfoRequestKind::PastObjectInfo(seq)
+            | ObjectInfoRequestKind::PastObjectInfoDebug(seq, _) => {
                 // Get the Transaction Digest that created the object
                 self.get_parent_iterator(request.object_id, Some(seq))
                     .await?
@@ -885,13 +894,35 @@ impl AuthorityState {
                                 .await?
                         };
                         let layout = match request_layout {
-                            Some(format) => object.get_layout(format, &self.module_cache)?,
+                            Some(format) => {
+                                object.get_layout(format, self.module_cache.as_ref())?
+                            }
                             None => None,
                         };
 
                         Some(ObjectResponse {
                             object,
                             lock,
+                            layout,
+                        })
+                    }
+                    Err(e) => return Err(e),
+                    _ => None,
+                }
+            }
+            ObjectInfoRequestKind::PastObjectInfoDebug(seq, request_layout) => {
+                match self.database.get_object_by_key(&request.object_id, seq) {
+                    Ok(Some(object)) => {
+                        let layout = match request_layout {
+                            Some(format) => {
+                                object.get_layout(format, self.module_cache.as_ref())?
+                            }
+                            None => None,
+                        };
+
+                        Some(ObjectResponse {
+                            object,
+                            lock: None,
                             layout,
                         })
                     }
@@ -1017,7 +1048,6 @@ impl AuthorityState {
     // TODO: This function takes both committee and genesis as parameter.
     // Technically genesis already contains committee information. Could consider merging them.
     pub async fn new(
-        genesis_committee: Committee,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
         store: Arc<AuthorityStore>,
@@ -1046,18 +1076,11 @@ impl AuthorityState {
                 .expect("Cannot bulk insert genesis objects");
         }
 
-        let committee = if epoch_store.database_is_empty() {
-            epoch_store
-                .init_genesis_epoch(genesis_committee.clone())
-                .expect("Init genesis epoch data must not fail");
-            genesis_committee
-        } else {
-            epoch_store
-                .get_latest_authenticated_epoch()
-                .epoch_info()
-                .committee()
-                .clone()
-        };
+        let committee = epoch_store
+            .get_latest_authenticated_epoch()
+            .epoch_info()
+            .committee()
+            .clone();
 
         let event_handler = event_store.map(|es| Arc::new(EventHandler::new(store.clone(), es)));
 
@@ -1072,7 +1095,7 @@ impl AuthorityState {
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
-            module_cache: SyncModuleCache::new(ResolverWrapper(store.clone())),
+            module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone()))),
             event_handler,
             checkpoints,
             epoch_store,
@@ -1134,6 +1157,7 @@ impl AuthorityState {
         state
     }
 
+    // TODO: Technically genesis_committee can be derived from genesis.
     pub async fn new_for_testing(
         genesis_committee: Committee,
         key: &AuthorityKeyPair,
@@ -1172,10 +1196,13 @@ impl AuthorityState {
                 .expect("No issues");
         }
 
-        let epochs = Arc::new(EpochStore::new(path.join("epochs")));
+        let epochs = Arc::new(EpochStore::new(
+            path.join("epochs"),
+            &genesis_committee,
+            None,
+        ));
 
-        AuthorityState::new(
-            genesis_committee.clone(),
+        let state = AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
@@ -1186,7 +1213,10 @@ impl AuthorityState {
             genesis,
             &prometheus::Registry::new(),
         )
-        .await
+        .await;
+
+        // add the object_basics module
+        state
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -1194,13 +1224,11 @@ impl AuthorityState {
         let mut limit = limit.unwrap_or(usize::max_value());
         while limit > 0 {
             limit -= 1;
-            if let Some(tx_guard) = self.database.wal.read_one_recoverable_tx().await {
+            if let Some((cert, tx_guard)) = self.database.wal.read_one_recoverable_tx().await? {
                 let digest = tx_guard.tx_id();
                 debug!(?digest, "replaying failed cert from log");
 
-                let (cert, retry_count) = self.database.wal.get_tx_data(&tx_guard)?;
-
-                if retry_count >= MAX_TX_RECOVERY_RETRY {
+                if tx_guard.retry_num() >= MAX_TX_RECOVERY_RETRY {
                     // This tx will be only partially executed, however the store will be in a safe
                     // state. We will simply never reach eventual consistency for this TX.
                     // TODO: Should we revert the tx entirely? I'm not sure the effort is
@@ -1320,8 +1348,10 @@ impl AuthorityState {
                             })
                         }
                         Some(object) => {
-                            let layout = object
-                                .get_layout(ObjectFormatOptions::default(), &self.module_cache)?;
+                            let layout = object.get_layout(
+                                ObjectFormatOptions::default(),
+                                self.module_cache.as_ref(),
+                            )?;
                             Ok(ObjectRead::Exists(obj_ref, object, layout))
                         }
                     }
@@ -1428,25 +1458,118 @@ impl AuthorityState {
             .map(|handler| handler.event_store.clone())
     }
 
-    /// Returns a set of events corresponding to a given transaction, in order events were emitted
-    pub async fn get_events_for_transaction(
+    /// Returns at most `limit` events emitted in the given transaction,
+    /// emitted within [start_time, end_time) in order of events emitted.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<Vec<StoredEvent>, SuiError> {
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        es.events_for_transaction(digest).await
+        let stored_events = es.events_by_transaction(digest, limit).await?;
+        StoredEvent::into_event_envelopes(stored_events)
     }
 
-    /// Returns a whole set of events for a range of time
-    pub async fn get_events_for_timerange(
+    /// Returns at most `limit` events emitted in the given module,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_transaction_module(
+        &self,
+        module_id: &ModuleId,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_module_id(start_time, end_time, module_id, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events with the given move event struct name, e.g.
+    /// `0x2::devnet_nft::MintNFTEvent` or
+    /// `0x2::SUI::test_foo<address, vector<u8>>` with type params,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_move_event_struct_name(
+        &self,
+        move_event_struct_name: &str,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_move_event_struct_name(start_time, end_time, move_event_struct_name, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events associated with the given sender,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_sender(
+        &self,
+        sender: &SuiAddress,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_sender(start_time, end_time, sender, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events associated with the given recipient,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_recipient(
+        &self,
+        recipient: &Owner,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_recipient(start_time, end_time, recipient, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events associated with the given object,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_object(
+        &self,
+        object: &ObjectID,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_object(start_time, end_time, object, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events emitted within [start_time, end_time),
+    /// sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_timerange(
         &self,
         start_time: u64,
         end_time: u64,
-        limit: Option<usize>,
-    ) -> Result<Vec<StoredEvent>, SuiError> {
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        es.event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
-            .await
+        let stored_events = es.event_iterator(start_time, end_time, limit).await?;
+        StoredEvent::into_event_envelopes(stored_events)
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {
@@ -1504,7 +1627,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        if self.is_halted() && !certificate.data.kind.is_system_tx() {
+        if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?
             return Err(SuiError::ValidatorHaltedAtEpochEnd);
@@ -1609,7 +1732,7 @@ impl ExecutionState for AuthorityState {
         _consensus_output: &narwhal_consensus::ConsensusOutput,
         consensus_index: ExecutionIndices,
         transaction: Self::Transaction,
-    ) -> Result<(Self::Outcome, Option<narwhal_config::Committee>), Self::Error> {
+    ) -> Result<Self::Outcome, Self::Error> {
         self.metrics.total_consensus_txns.inc();
         match transaction {
             ConsensusTransaction::UserTransaction(certificate) => {
@@ -1632,7 +1755,7 @@ impl ExecutionState for AuthorityState {
 
                 // TODO: This return time is not ideal.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok((Vec::default(), None))
+                Ok(Vec::default())
             }
             ConsensusTransaction::Checkpoint(fragment) => {
                 let seq = consensus_index;
@@ -1661,7 +1784,7 @@ impl ExecutionState for AuthorityState {
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
                 // is not expecting any reply.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
-                Ok((Vec::default(), None))
+                Ok(Vec::default())
             }
         }
     }
@@ -1688,13 +1811,6 @@ impl ExecutionStateError for FragmentInternalError {
             // Those are errors caused by the authority (eg. storage failure). It is not guaranteed
             // that other validators will also trigger it and they may not be deterministic.
             Self::Retry(..) => true,
-        }
-    }
-
-    fn to_string(&self) -> String {
-        match self {
-            Self::Error(sui_error) => format!("Failed to process checkpoint fragment {sui_error}"),
-            Self::Retry(fragment) => format!("Failed to sequence checkpoint fragment {fragment:?}"),
         }
     }
 }

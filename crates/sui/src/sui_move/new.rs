@@ -22,6 +22,7 @@ impl New {
             "0.0.1",
             [(SUI_PKG_NAME, SUI_PKG_PATH)],
             [(name, "0x0")],
+            "",
         )?;
         Ok(())
     }

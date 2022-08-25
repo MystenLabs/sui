@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module nfts::geniteam {
-    use sui::bag::{Self, Bag};
-    use sui::collection::{Self, Collection};
+    use nfts::bag::{Self, Bag};
+    use nfts::collection::{Self, Collection};
     use sui::object::{Self, UID};
     use sui::typed_id::{Self, TypedID};
     use sui::tx_context::{Self, TxContext};
@@ -304,7 +304,7 @@ module nfts::geniteam {
 
         // Transfer ownership of inventory to player.
         let inventory_id = typed_id::new(&inventory);
-        bag::transfer_to_object_id(inventory, &id);
+        bag::transfer_to_object_id(inventory, &mut id);
 
         let player = Player {
             id,
@@ -333,7 +333,7 @@ module nfts::geniteam {
 
         // Transfer ownership of pet monsters to farm.
         let pet_monsters_id = typed_id::new(&pet_monsters);
-        collection::transfer_to_object_id(pet_monsters, &id);
+        collection::transfer_to_object_id(pet_monsters, &mut id);
 
 
         let farm = Farm {

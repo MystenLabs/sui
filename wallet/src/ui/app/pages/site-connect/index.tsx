@@ -4,6 +4,7 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 
+import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import UserApproveContainer from '_components/user-approve-container';
 import { useAppDispatch, useAppSelector, useInitializedGuard } from '_hooks';
@@ -16,11 +17,10 @@ import type { PermissionType } from '_messages/payloads/permissions';
 import type { RootState } from '_redux/RootReducer';
 
 import st from './SiteConnectPage.module.scss';
-import stUserApprove from '_components/user-approve-container/UserApproveContainer.module.scss';
 
 const permissionTypeToTxt: Record<PermissionType, string> = {
-    viewAccount: 'View Account',
-    suggestTransactions: 'Propose transactions',
+    viewAccount: 'Share wallet address',
+    suggestTransactions: 'Suggest transactions to approve',
 };
 
 function SiteConnectPage() {
@@ -67,21 +67,25 @@ function SiteConnectPage() {
         <Loading loading={loading}>
             {permissionRequest ? (
                 <UserApproveContainer
-                    title="Connect to Sui wallet"
                     origin={permissionRequest.origin}
                     originFavIcon={permissionRequest.favIcon}
                     approveTitle="Connect"
                     rejectTitle="Cancel"
                     onSubmit={handleOnSubmit}
+                    isConnect
                 >
-                    <label className={stUserApprove.label}>Permissions</label>
-                    <div className={st.permissionsContainer}>
+                    <div className={st.label}>App Permissions</div>
+                    <ul className={st.permissions}>
                         {permissionRequest.permissions.map((aPermission) => (
-                            <span className={st.permission} key={aPermission}>
+                            <li key={aPermission} className={st.permission}>
+                                <Icon
+                                    icon={SuiIcons.Checkmark}
+                                    className={st.checkmark}
+                                />
                                 {permissionTypeToTxt[aPermission]}
-                            </span>
+                            </li>
                         ))}
-                    </div>
+                    </ul>
                 </UserApproveContainer>
             ) : null}
         </Loading>

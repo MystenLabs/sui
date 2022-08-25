@@ -244,6 +244,21 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
         Ok(TransactionBytes::from_data(data)?)
     }
 
+    async fn split_coin_equal(
+        &self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_count: u64,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = self
+            .client
+            .split_coin_equal(signer, coin_object_id, split_count, gas, gas_budget)
+            .await?;
+        Ok(TransactionBytes::from_data(data)?)
+    }
+
     async fn merge_coin(
         &self,
         signer: SuiAddress,

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::bail;
-use sui_json_rpc_types::{GetObjectDataResponse, SuiEvent, SuiObject, SuiParsedMoveObject};
+use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData, SuiEvent, SuiRawObject};
 use sui_types::gas_coin::GasCoin;
 use sui_types::{
     base_types::{ObjectID, SequenceNumber, SuiAddress},
@@ -65,7 +65,7 @@ impl ObjectChecker {
             .into_gas_coin()
     }
 
-    pub async fn check_into_sui_object(self, client: &SuiClient) -> SuiObject<SuiParsedMoveObject> {
+    pub async fn check_into_sui_object(self, client: &SuiClient) -> SuiRawObject {
         self.check(client).await.unwrap().into_sui_object()
     }
 
@@ -74,20 +74,24 @@ impl ObjectChecker {
 
         let object_id = self.object_id;
         let object_info = client
+            .read_api()
             .get_object(object_id)
             .await
             .or_else(|err| bail!("Failed to get object info (id: {}), err: {err}", object_id))?;
+
+        println!("getting object {object_id}, info :: {object_info:?}");
+
         match object_info {
-            GetObjectDataResponse::NotExists(_) => {
+            GetRawObjectDataResponse::NotExists(_) => {
                 panic!("Node can't find gas object {}", object_id)
             }
-            GetObjectDataResponse::Deleted(_) => {
+            GetRawObjectDataResponse::Deleted(_) => {
                 if !self.is_deleted {
                     panic!("Gas object {} was deleted", object_id);
                 }
                 Ok(CheckerResultObject::new(None, None))
             }
-            GetObjectDataResponse::Exists(object) => {
+            GetRawObjectDataResponse::Exists(object) => {
                 if self.is_deleted {
                     panic!("Expect Gas object {} deleted, but it is not", object_id);
                 }
@@ -104,9 +108,7 @@ impl ObjectChecker {
                         .try_as_move()
                         .unwrap_or_else(|| panic!("Object {} is not a move object", object_id));
 
-                    let gas_coin = GasCoin::try_from(&move_obj.fields).unwrap_or_else(|err| {
-                        panic!("Object {} is not a gas coin, {}", object_id, err)
-                    });
+                    let gas_coin = move_obj.deserialize()?;
                     return Ok(CheckerResultObject::new(Some(gas_coin), Some(object)));
                 }
                 Ok(CheckerResultObject::new(None, Some(object)))
@@ -117,14 +119,11 @@ impl ObjectChecker {
 
 pub struct CheckerResultObject {
     gas_coin: Option<GasCoin>,
-    sui_object: Option<SuiObject<SuiParsedMoveObject>>,
+    sui_object: Option<SuiRawObject>,
 }
 
 impl CheckerResultObject {
-    pub fn new(
-        gas_coin: Option<GasCoin>,
-        sui_object: Option<SuiObject<SuiParsedMoveObject>>,
-    ) -> Self {
+    pub fn new(gas_coin: Option<GasCoin>, sui_object: Option<SuiRawObject>) -> Self {
         Self {
             gas_coin,
             sui_object,
@@ -133,7 +132,7 @@ impl CheckerResultObject {
     pub fn into_gas_coin(self) -> GasCoin {
         self.gas_coin.unwrap()
     }
-    pub fn into_sui_object(self) -> SuiObject<SuiParsedMoveObject> {
+    pub fn into_sui_object(self) -> SuiRawObject {
         self.sui_object.unwrap()
     }
 }

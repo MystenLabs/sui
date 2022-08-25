@@ -66,7 +66,7 @@ impl Genesis {
             .iter()
             .map(|validator| {
                 let name = validator
-                    .public_key()
+                    .protocol_key()
                     .try_into()
                     .expect("Can't get narwhal public key");
                 let primary = narwhal_config::PrimaryAddresses {
@@ -122,7 +122,8 @@ impl Genesis {
         trace!("Reading Genesis from {}", path.display());
         let bytes = fs::read(path)
             .with_context(|| format!("Unable to load Genesis from {}", path.display()))?;
-        Ok(bcs::from_bytes(&bytes)?)
+        bcs::from_bytes(&bytes)
+            .with_context(|| format!("Unable to parse Genesis from {}", path.display()))
     }
 
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<(), anyhow::Error> {
@@ -241,7 +242,7 @@ impl Builder {
     }
 
     pub fn add_validator(mut self, validator: ValidatorInfo) -> Self {
-        self.validators.insert(validator.public_key(), validator);
+        self.validators.insert(validator.protocol_key(), validator);
         self
     }
 
@@ -282,7 +283,7 @@ impl Builder {
                 onchain_validator.metadata.sui_address.to_vec(),
             );
             assert_eq!(
-                validator.public_key().as_ref().to_vec(),
+                validator.protocol_key().as_ref().to_vec(),
                 onchain_validator.metadata.pubkey_bytes,
             );
             assert_eq!(validator.name().as_bytes(), onchain_validator.metadata.name);
@@ -329,7 +330,7 @@ impl Builder {
             let path = entry.path();
             let validator_info_bytes = fs::read(path)?;
             let validator_info: ValidatorInfo = serde_yaml::from_slice(&validator_info_bytes)?;
-            committee.insert(validator_info.public_key(), validator_info);
+            committee.insert(validator_info.protocol_key(), validator_info);
         }
 
         Ok(Self {
@@ -360,7 +361,7 @@ impl Builder {
 
         for (_pubkey, validator) in self.validators {
             let validator_info_bytes = serde_yaml::to_vec(&validator)?;
-            let hex_name = encode_bytes_hex(&validator.public_key());
+            let hex_name = encode_bytes_hex(&validator.protocol_key());
             fs::write(committee_dir.join(hex_name), validator_info_bytes)?;
         }
 
@@ -484,17 +485,23 @@ pub fn generate_genesis_system_object(
         TemporaryStore::new(&*store, InputObjects::new(vec![]), genesis_digest);
 
     let mut pubkeys = Vec::new();
+    let mut network_pubkeys = Vec::new();
+    let mut proof_of_possessions = Vec::new();
     let mut sui_addresses = Vec::new();
     let mut network_addresses = Vec::new();
     let mut names = Vec::new();
     let mut stakes = Vec::new();
+    let mut gas_prices = Vec::new();
 
     for validator in committee {
-        pubkeys.push(validator.public_key());
+        pubkeys.push(validator.protocol_key());
+        network_pubkeys.push(validator.network_key());
+        proof_of_possessions.push(validator.proof_of_possession().as_ref().to_vec());
         sui_addresses.push(validator.sui_address());
         network_addresses.push(validator.network_address());
         names.push(validator.name().to_owned().into_bytes());
         stakes.push(validator.stake());
+        gas_prices.push(validator.gas_price());
     }
 
     adapter::execute(
@@ -505,10 +512,13 @@ pub fn generate_genesis_system_object(
         vec![],
         vec![
             CallArg::Pure(bcs::to_bytes(&pubkeys).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&network_pubkeys).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&proof_of_possessions).unwrap()),
             CallArg::Pure(bcs::to_bytes(&sui_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&names).unwrap()),
             CallArg::Pure(bcs::to_bytes(&network_addresses).unwrap()),
             CallArg::Pure(bcs::to_bytes(&stakes).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&gas_prices).unwrap()),
         ],
         &mut SuiGasStatus::new_unmetered(),
         genesis_ctx,
@@ -533,8 +543,10 @@ const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
-    use narwhal_crypto::traits::KeyPair;
-    use sui_types::crypto::{get_key_pair_from_rng, AuthorityKeyPair};
+    use fastcrypto::traits::KeyPair;
+    use sui_types::crypto::{
+        generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+    };
 
     #[test]
     fn roundtrip() {
@@ -555,12 +567,18 @@ mod test {
             .unwrap();
 
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let account_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let network_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
-            public_key: key.public().into(),
+            protocol_key: key.public().into(),
+            account_key: account_key.public().clone().into(),
+            network_key: network_key.public().clone().into(),
             stake: 1,
             delegation: 0,
+            gas_price: 1,
             network_address: utils::new_network_address(),
+            proof_of_possession: generate_proof_of_possession(&key, account_key.public().into()),
             narwhal_primary_to_primary: utils::new_network_address(),
             narwhal_worker_to_primary: utils::new_network_address(),
             narwhal_primary_to_worker: utils::new_network_address(),

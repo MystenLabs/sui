@@ -13,8 +13,11 @@ use crate::benchmark::{
 use futures::{join, StreamExt};
 use multiaddr::Multiaddr;
 use rayon::{iter::ParallelIterator, prelude::*};
+use std::sync::Arc;
 use std::{panic, thread, thread::sleep, time::Duration};
-use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use sui_core::authority_client::{
+    AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
+};
 use sui_types::{
     batch::UpdateItem,
     messages::{BatchInfoRequest, BatchInfoResponseItem, TransactionInfoRequest},
@@ -217,7 +220,12 @@ fn run_latency_microbench(
 
 async fn run_follower(address: Multiaddr) {
     // We spawn a second client that listens to the batch interface
-    let authority_client = NetworkAuthorityClient::connect(&address).await.unwrap();
+    let authority_client = NetworkAuthorityClient::connect(
+        &address,
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+    )
+    .await
+    .unwrap();
 
     follow(authority_client, false).await;
 }

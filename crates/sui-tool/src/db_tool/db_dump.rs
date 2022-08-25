@@ -3,6 +3,7 @@
 
 use anyhow::anyhow;
 use clap::Parser;
+use eyre::eyre;
 use rocksdb::MultiThreaded;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
@@ -10,10 +11,7 @@ use strum_macros::EnumString;
 use sui_core::authority::authority_store_tables::AuthorityStoreTables;
 use sui_core::checkpoints::CheckpointStoreTables;
 use sui_storage::default_db_options;
-use sui_storage::{
-    follower_store::FollowerStore, lock_service::LockServiceImpl, node_sync_store::NodeSyncStore,
-    IndexStore,
-};
+use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use typed_store::traits::DBMapTableUtil;
 
@@ -21,7 +19,6 @@ use typed_store::traits::DBMapTableUtil;
 pub enum StoreName {
     Validator,
     Gateway,
-    Follower,
     Index,
     LocksService,
     NodeSync,
@@ -68,11 +65,6 @@ pub fn dump_table(
             db_path, None, None,
         )
         .dump(table_name, page_size, page_number),
-        StoreName::Follower => FollowerStore::open_tables_read_only(db_path, None, None).dump(
-            table_name,
-            page_size,
-            page_number,
-        ),
         StoreName::Index => IndexStore::open_tables_read_only(db_path, None, None).dump(
             table_name,
             page_size,
@@ -87,10 +79,11 @@ pub fn dump_table(
         ),
         StoreName::Checkpoints => CheckpointStoreTables::open_tables_read_only(db_path, None, None)
             .dump(table_name, page_size, page_number),
-        StoreName::Wal => Err(anyhow!(
+        StoreName::Wal => Err(eyre!(
             "Dumping WAL not yet supported. It requires kmowing the value type"
         )),
     }
+    .map_err(|err| anyhow!(err.to_string()))
 }
 
 #[cfg(test)]
@@ -107,7 +100,7 @@ mod test {
 
         // Open the DB for writing
         let _: AuthorityStoreTables<AuthoritySignInfo> =
-            AuthorityStoreTables::open_tables_read_write(primary_path.clone(), None);
+            AuthorityStoreTables::open_tables_read_write(primary_path.clone(), None, None);
 
         // Get all the tables
         let tables = list_tables(primary_path.clone()).unwrap();

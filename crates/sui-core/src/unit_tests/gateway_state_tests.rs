@@ -24,20 +24,32 @@ use crate::gateway_state::{GatewayAPI, GatewayState};
 
 use super::*;
 
-async fn create_gateway_state(genesis_objects: Vec<Object>) -> GatewayState<LocalAuthorityClient> {
+async fn create_gateway_state_with_object_basics_ref(
+    genesis_objects: Vec<Object>,
+) -> (GatewayState<LocalAuthorityClient>, ObjectRef) {
     let all_owners: HashSet<_> = genesis_objects
         .iter()
         .map(|o| o.get_single_owner().unwrap())
         .collect();
-    let (authorities, _) = init_local_authorities(4, genesis_objects).await;
+    let (authorities, _, pkg_ref) = init_local_authorities(4, genesis_objects).await;
     let path = tempfile::tempdir().unwrap().into_path();
-    let gateway =
-        GatewayState::new_with_authorities(&path, authorities, GatewayMetrics::new_for_tests())
-            .unwrap();
+    let gateway_store = Arc::new(GatewayStore::open(&path, None));
+    let gateway = GatewayState::new_with_authorities(
+        gateway_store,
+        authorities,
+        GatewayMetrics::new_for_tests(),
+    )
+    .unwrap();
     for owner in all_owners {
         gateway.sync_account_state(owner).await.unwrap();
     }
-    gateway
+    (gateway, pkg_ref)
+}
+
+async fn create_gateway_state(genesis_objects: Vec<Object>) -> GatewayState<LocalAuthorityClient> {
+    create_gateway_state_with_object_basics_ref(genesis_objects)
+        .await
+        .0
 }
 
 async fn public_transfer_object(
@@ -100,15 +112,14 @@ async fn test_move_call() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object = Object::with_owner_for_testing(addr1);
     let genesis_objects = vec![gas_object.clone()];
-    let gateway = create_gateway_state(genesis_objects).await;
+    let (gateway, pkg_ref) = create_gateway_state_with_object_basics_ref(genesis_objects).await;
 
-    let framework_obj_ref = gateway.get_framework_object_ref().await.unwrap();
     let tx = crate_object_move_transaction(
         addr1,
         &key1,
         addr1,
         100,
-        framework_obj_ref,
+        pkg_ref,
         gas_object.compute_object_reference(),
     );
 
@@ -624,7 +635,7 @@ async fn test_multiple_gateways() {
     let path = tempfile::tempdir().unwrap().into_path();
     // gateway2 shares the same set of authorities as gateway1.
     let gateway2 = GatewayState::new_with_authorities(
-        &path,
+        Arc::new(GatewayStore::open(&path, None)),
         gateway1.authorities.clone(),
         GatewayMetrics::new_for_tests(),
     )
@@ -693,13 +704,6 @@ async fn test_batch_transaction() {
             object_id: coin_object2.id(),
             recipient: addr2,
         }),
-        RPCTransactionRequestParams::MoveCallRequestParams(MoveCallParams {
-            package_object_id: gateway.get_framework_object_ref().await.unwrap().0,
-            module: "bag".to_string(),
-            function: "create".to_string(),
-            type_arguments: vec![],
-            arguments: vec![],
-        }),
     ];
     // Gateway should be able to figure out the only usable gas object.
     let data = gateway
@@ -712,6 +716,6 @@ async fn test_batch_transaction() {
         .await
         .unwrap()
         .effects;
-    assert_eq!(effects.created.len(), 1);
+    assert!(effects.created.is_empty());
     assert_eq!(effects.mutated.len(), 3);
 }

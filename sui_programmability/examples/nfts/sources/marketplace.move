@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module nfts::marketplace {
-    use sui::bag::{Self, Bag};
+    use nfts::bag::{Self, Bag};
     use sui::tx_context::{Self, TxContext};
     use sui::object::{Self, ID, UID};
     use sui::typed_id::{Self, TypedID};
@@ -32,7 +32,7 @@ module nfts::marketplace {
         let id = object::new(ctx);
         let bag = bag::new(ctx);
         let bag_id = typed_id::new(&bag);
-        bag::transfer_to_object_id(bag, &id);
+        bag::transfer_to_object_id(bag, &mut id);
         let market_place = Marketplace {
             id,
             bag_id,
@@ -124,11 +124,11 @@ module nfts::marketplace {
 #[test_only]
 module nfts::marketplaceTests {
     use sui::object::{Self, UID};
-    use sui::bag::{Self, Bag};
     use sui::transfer;
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
     use sui::test_scenario::{Self, Scenario};
+    use nfts::bag::{Self, Bag};
     use nfts::marketplace::{Self, Marketplace, Listing};
 
     // Simple Kitty-NFT data structure.

@@ -3,10 +3,10 @@
 
 use crate::authority_active::ActiveAuthority;
 use crate::authority_aggregator::{AuthorityAggregator, ReduceOutput};
-use crate::authority_client::AuthorityAPI;
+use crate::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
 use async_trait::async_trait;
+use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
-use narwhal_crypto::traits::ToFromBytes;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
@@ -27,7 +27,10 @@ use typed_store::Map;
 pub trait Reconfigurable {
     fn needs_network_recreation() -> bool;
 
-    fn recreate(channel: tonic::transport::Channel) -> Self;
+    fn recreate(
+        channel: tonic::transport::Channel,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> Self;
 }
 
 // TODO: Move these constants to a control config.
@@ -134,18 +137,20 @@ where
         }
 
         // Reconnect the network if we have an type of AuthorityClient that has a network.
-        if A::needs_network_recreation() {
-            self.recreate_network(sui_system_state, new_committee)?;
+        let new_clients = if A::needs_network_recreation() {
+            self.recreate_network(sui_system_state)?
         } else {
-            // update the authorities with the new committee
-            let new_net = Arc::new(AuthorityAggregator::new(
-                new_committee,
-                self.net.load().clone_inner_clients(),
-                self.net.load().metrics.clone(),
-                self.net.load().safe_client_metrics.clone(),
-            ));
-            self.net.store(new_net);
-        }
+            self.net.load().clone_inner_clients()
+        };
+        // Replace the clients in the authority aggregator with new clients.
+        let new_net = Arc::new(AuthorityAggregator::new(
+            new_committee,
+            self.state.epoch_store().clone(),
+            new_clients,
+            self.net.load().metrics.clone(),
+            self.net.load().safe_client_metrics.clone(),
+        ));
+        self.net.store(new_net);
 
         // TODO: Update all committee in all components safely,
         // potentially restart narwhal committee/consensus adapter,
@@ -195,8 +200,12 @@ where
         // Resume the validator to start accepting transactions for the new epoch.
         self.state.unhalt_validator();
         info!(?epoch, "Validator unhalted.");
+
+        // Restart the node sync process so it gets the new epoch info.
+        self.respawn_node_sync_process().await;
+
         info!(
-            "Epoch change finished. We are now at epoch {:?}",
+            "===== Epoch change finished. We are now at epoch {:?} =====",
             next_epoch
         );
         Ok(())
@@ -207,8 +216,7 @@ where
     pub fn recreate_network(
         &self,
         sui_system_state: SuiSystemState,
-        new_committee: Committee,
-    ) -> SuiResult {
+    ) -> SuiResult<BTreeMap<AuthorityName, A>> {
         let mut new_clients = BTreeMap::new();
         let next_epoch_validators = sui_system_state.validators.next_epoch_validators;
 
@@ -259,23 +267,14 @@ where
                 }
                 Ok(result) => result,
             };
-            let client: A = A::recreate(channel);
+            let client: A = A::recreate(channel, self.network_metrics.clone());
             debug!(
                 "New network client created for {} at {:?}",
                 public_key_bytes, address
             );
             new_clients.insert(public_key_bytes, client);
         }
-
-        // Replace the clients in the authority aggregator with new clients.
-        let new_net = Arc::new(AuthorityAggregator::new(
-            new_committee,
-            new_clients,
-            self.net.load().metrics.clone(),
-            self.net.load().safe_client_metrics.clone(),
-        ));
-        self.net.store(new_net);
-        Ok(())
+        Ok(new_clients)
     }
 
     async fn wait_for_epoch_cert(

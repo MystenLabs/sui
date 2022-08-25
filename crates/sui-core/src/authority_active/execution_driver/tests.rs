@@ -7,7 +7,6 @@ use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use std::sync::Arc;
 use std::time::Duration;
 
-use sui_adapter::genesis;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::{crypto::get_key_pair, messages::ExecutionStatus, object::Object};
 
@@ -203,14 +202,12 @@ async fn test_parent_cert_exec() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let (aggregator, authorities) =
+    let (aggregator, authorities, framework_obj_ref) =
         init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities
         .iter()
         .map(|a| &aggregator.authority_clients[&a.name])
         .collect();
-
-    let framework_obj_ref = genesis::get_framework_object_ref();
 
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;

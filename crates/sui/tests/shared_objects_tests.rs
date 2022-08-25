@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::sync::Arc;
+use sui_core::authority::GatewayStore;
 use sui_core::authority_client::AuthorityAPI;
 use sui_core::gateway_state::{GatewayAPI, GatewayMetrics, GatewayState};
 use sui_types::messages::{
@@ -366,11 +367,12 @@ async fn shared_object_on_gateway() {
     // Get the authority configs and spawn them. Note that it is important to not drop
     // the handles (or the authorities will stop).
     let configs = test_authority_configs();
-    let _handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
-    let clients = test_authority_aggregator(&configs);
+    let handles = spawn_test_authorities(gas_objects.clone(), &configs).await;
+    let clients = test_authority_aggregator(&configs, handles[0].state().epoch_store().clone());
     let path = tempfile::tempdir().unwrap().into_path();
+    let gateway_store = Arc::new(GatewayStore::open(&path.join("store"), None));
     let gateway = Arc::new(
-        GatewayState::new_with_authorities(&path, clients, GatewayMetrics::new_for_tests())
+        GatewayState::new_with_authorities(gateway_store, clients, GatewayMetrics::new_for_tests())
             .unwrap(),
     );
 

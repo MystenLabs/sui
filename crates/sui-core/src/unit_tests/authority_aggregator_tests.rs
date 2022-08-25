@@ -1,15 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use move_core_types::{account_address::AccountAddress, ident_str};
+use move_package::BuildConfig;
 use signature::Signer;
 
-use sui_adapter::genesis;
 use sui_config::genesis::Genesis;
 use sui_config::ValidatorInfo;
-use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes};
+use sui_types::crypto::{
+    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair,
+    AuthorityPublicKeyBytes, SuiKeyPair,
+};
 use sui_types::crypto::{KeypairTraits, Signature};
 
 use sui_types::messages::*;
@@ -26,21 +30,40 @@ use tokio::time::Instant;
 
 pub async fn init_local_authorities(
     committee_size: usize,
-    genesis_objects: Vec<Object>,
+    mut genesis_objects: Vec<Object>,
 ) -> (
     AuthorityAggregator<LocalAuthorityClient>,
     Vec<Arc<AuthorityState>>,
+    ObjectRef,
 ) {
+    // add object_basics package object to genesis
+    let build_config = BuildConfig::default();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/object_basics");
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let pkg = Object::new_package(modules, TransactionDigest::genesis());
+    let pkg_ref = pkg.compute_object_reference();
+    genesis_objects.push(pkg);
+
     let mut builder = sui_config::genesis::Builder::new().add_objects(genesis_objects);
     let mut key_pairs = Vec::new();
     for i in 0..committee_size {
-        let (_, key_pair): (_, AuthorityKeyPair) = get_key_pair();
+        let key_pair: AuthorityKeyPair = get_key_pair().1;
         let authority_name = key_pair.public().into();
+        let account_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
+        let network_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
         let validator_info = ValidatorInfo {
             name: format!("validator-{i}"),
-            public_key: authority_name,
+            protocol_key: authority_name,
+            account_key: account_key_pair.public(),
+            network_key: network_key_pair.public(),
+            proof_of_possession: generate_proof_of_possession(
+                &key_pair,
+                (&account_key_pair.public()).into(),
+            ),
             stake: 1,
             delegation: 0,
+            gas_price: 1,
             network_address: sui_config::utils::new_network_address(),
             narwhal_primary_to_primary: sui_config::utils::new_network_address(),
             narwhal_worker_to_primary: sui_config::utils::new_network_address(),
@@ -52,7 +75,8 @@ pub async fn init_local_authorities(
         key_pairs.push((authority_name, key_pair));
     }
     let genesis = builder.build();
-    init_local_authorities_with_genesis(&genesis, key_pairs).await
+    let (aggregator, authorities) = init_local_authorities_with_genesis(&genesis, key_pairs).await;
+    (aggregator, authorities, pkg_ref)
 }
 
 pub async fn init_local_authorities_with_genesis(
@@ -85,9 +109,11 @@ pub async fn init_local_authorities_with_genesis(
         serial_authority_request_timeout: Duration::from_secs(1),
         serial_authority_request_interval: Duration::from_secs(1),
     };
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
     (
         AuthorityAggregator::new_with_timeouts(
             committee,
+            epoch_store,
             clients,
             AuthAggMetrics::new_for_tests(),
             SafeClientMetrics::new_for_tests(),
@@ -274,7 +300,7 @@ where
                 signed.auth_sign_info.signature.clone(),
             ));
             if let Some(inner_transaction) = transaction {
-                assert!(inner_transaction.data == signed.data);
+                assert!(inner_transaction.signed_data.data == signed.signed_data.data);
             }
             transaction = Some(signed);
         }
@@ -374,7 +400,7 @@ async fn execute_transaction_with_fault_configs(
 
 #[tokio::test]
 async fn test_map_reducer() {
-    let (authorities, _) = init_local_authorities(4, vec![]).await;
+    let (authorities, _, _) = init_local_authorities(4, vec![]).await;
 
     // Test: reducer errors get propagated up
     let res = authorities
@@ -511,14 +537,13 @@ async fn test_get_all_owned_objects() {
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_ref_1 = gas_object1.compute_object_reference();
     let gas_object2 = Object::with_owner_for_testing(addr2);
-    let (authorities, _) =
+
+    let (authorities, _, pkg_ref) =
         init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
     // Make a schedule of transactions
-    let framework_obj_ref = genesis::get_framework_object_ref();
-    let create1 =
-        crate_object_move_transaction(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
+    let create1 = crate_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
 
     // Submit to 3 authorities, but not 4th
     do_transaction(authority_clients[0], &create1).await;
@@ -558,8 +583,7 @@ async fn test_get_all_owned_objects() {
 
     // Make a delete transaction
     let gas_ref_del = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let delete1 =
-        delete_object_move_transaction(addr1, &key1, created_ref, framework_obj_ref, gas_ref_del);
+    let delete1 = delete_object_move_transaction(addr1, &key1, created_ref, pkg_ref, gas_ref_del);
 
     // Get cert for delete transaction, and submit to first authority
     do_transaction(authority_clients[0], &delete1).await;
@@ -598,19 +622,16 @@ async fn test_sync_all_owned_objects() {
     let (addr2, _): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let (authorities, _) =
+    let (authorities, _, pkg_ref) =
         init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
-    let framework_obj_ref = genesis::get_framework_object_ref();
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let create1 =
-        crate_object_move_transaction(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
+    let create1 = crate_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
 
     let gas_ref_2 = get_latest_ref(authority_clients[0], gas_object2.id()).await;
-    let create2 =
-        crate_object_move_transaction(addr1, &key1, addr1, 101, framework_obj_ref, gas_ref_2);
+    let create2 = crate_object_move_transaction(addr1, &key1, addr1, 101, pkg_ref, gas_ref_2);
 
     // Submit to 3 authorities, but not 4th
     do_transaction(authority_clients[0], &create1).await;
@@ -648,19 +669,12 @@ async fn test_sync_all_owned_objects() {
 
     // Make a delete transaction
     let gas_ref_del = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let delete1 =
-        delete_object_move_transaction(addr1, &key1, new_ref_1, framework_obj_ref, gas_ref_del);
+    let delete1 = delete_object_move_transaction(addr1, &key1, new_ref_1, pkg_ref, gas_ref_del);
 
     // Make a transfer transaction
     let gas_ref_trans = get_latest_ref(authority_clients[0], gas_object2.id()).await;
-    let transfer1 = transfer_object_move_transaction(
-        addr1,
-        &key1,
-        addr2,
-        new_ref_2,
-        framework_obj_ref,
-        gas_ref_trans,
-    );
+    let transfer1 =
+        transfer_object_move_transaction(addr1, &key1, addr2, new_ref_2, pkg_ref, gas_ref_trans);
 
     do_transaction(authority_clients[0], &delete1).await;
     do_transaction(authority_clients[1], &delete1).await;
@@ -722,16 +736,13 @@ async fn test_process_certificate() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let (authorities, _) =
+    let (authorities, _, pkg_ref) =
         init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
-    let framework_obj_ref = genesis::get_framework_object_ref();
-
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let create1 =
-        crate_object_move_transaction(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
+    let create1 = crate_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
 
     do_transaction(authority_clients[0], &create1).await;
     do_transaction(authority_clients[1], &create1).await;
@@ -752,8 +763,7 @@ async fn test_process_certificate() {
 
     // Make a schedule of transactions
     let gas_ref_set = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let create2 =
-        set_object_move_transaction(addr1, &key1, new_ref_1, 100, framework_obj_ref, gas_ref_set);
+    let create2 = set_object_move_transaction(addr1, &key1, new_ref_1, 100, pkg_ref, gas_ref_set);
 
     do_transaction(authority_clients[0], &create2).await;
     do_transaction(authority_clients[1], &create2).await;
@@ -779,16 +789,13 @@ async fn test_execute_cert_to_true_effects() {
     let (addr1, key1): (_, AccountKeyPair) = get_key_pair();
     let gas_object1 = Object::with_owner_for_testing(addr1);
     let gas_object2 = Object::with_owner_for_testing(addr1);
-    let (authorities, _) =
+    let (authorities, _, pkg_ref) =
         init_local_authorities(4, vec![gas_object1.clone(), gas_object2.clone()]).await;
     let authority_clients: Vec<_> = authorities.authority_clients.values().collect();
 
-    let framework_obj_ref = genesis::get_framework_object_ref();
-
     // Make a schedule of transactions
     let gas_ref_1 = get_latest_ref(authority_clients[0], gas_object1.id()).await;
-    let create1 =
-        crate_object_move_transaction(addr1, &key1, addr1, 100, framework_obj_ref, gas_ref_1);
+    let create1 = crate_object_move_transaction(addr1, &key1, addr1, 100, pkg_ref, gas_ref_1);
 
     do_transaction(authority_clients[0], &create1).await;
     do_transaction(authority_clients[1], &create1).await;
@@ -983,9 +990,11 @@ async fn test_quorum_once_with_timeout() {
     }
 
     let committee = Committee::new(0, authorities).unwrap();
+    let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
 
     let agg = AuthorityAggregator::new_with_timeouts(
         committee,
+        epoch_store,
         clients,
         AuthAggMetrics::new_for_tests(),
         SafeClientMetrics::new_for_tests(),

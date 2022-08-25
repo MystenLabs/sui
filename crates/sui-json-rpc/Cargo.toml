@@ -10,21 +10,23 @@ edition = "2021"
 jsonrpsee = { version = "0.15.1", features = ["full"] }
 jsonrpsee-core = "0.15.1"
 jsonrpsee-proc-macros = "0.15.1"
-move-binary-format = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
 prometheus = "0.13.1"
 anyhow = "1.0.58"
 tracing = "0.1.36"
 async-trait = "0.1.57"
 serde = { version = "1.0.141", features = ["derive"] }
-futures = "0.3.21"
+futures = "0.3.23"
 tokio = { version = "1.20.1", features = ["full"] }
-signature = "1.5.0"
+signature = "1.6.0"
 
 sui-core = { path = "../sui-core" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
 sui-open-rpc = { path = "../sui-open-rpc" }
+sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 workspace-hack = { path = "../workspace-hack" }

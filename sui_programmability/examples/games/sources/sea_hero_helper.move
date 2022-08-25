@@ -87,7 +87,7 @@ module games::sea_hero_helper {
             helper_reward: _
         } = wrapper;
         object::delete(id);
-        sea_hero::transfer_monster(monster, monster_owner)
+        transfer::transfer(monster, monster_owner)
     }
 
     /// Return the number of coins that `wrapper.owner` will earn if the

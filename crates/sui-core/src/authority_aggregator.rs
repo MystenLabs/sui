@@ -27,11 +27,13 @@ use prometheus::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::string::ToString;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_types::committee::StakeUnit;
 use tokio::sync::mpsc::Receiver;
 use tokio::time::{sleep, timeout};
 
+use crate::epoch::epoch_store::EpochStore;
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use tap::TapFallible;
 
@@ -157,12 +159,14 @@ pub struct AuthorityAggregator<A> {
 impl<A> AuthorityAggregator<A> {
     pub fn new(
         committee: Committee,
+        epoch_store: Arc<EpochStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
         safe_client_metrics: SafeClientMetrics,
     ) -> Self {
         Self::new_with_timeouts(
             committee,
+            epoch_store,
             authority_clients,
             metrics,
             safe_client_metrics,
@@ -172,19 +176,25 @@ impl<A> AuthorityAggregator<A> {
 
     pub fn new_with_timeouts(
         committee: Committee,
+        epoch_store: Arc<EpochStore>,
         authority_clients: BTreeMap<AuthorityName, A>,
         metrics: AuthAggMetrics,
         safe_client_metrics: SafeClientMetrics,
         timeouts: TimeoutConfig,
     ) -> Self {
         Self {
-            committee: committee.clone(),
+            committee,
             authority_clients: authority_clients
                 .into_iter()
                 .map(|(name, api)| {
                     (
                         name,
-                        SafeClient::new(api, committee.clone(), name, safe_client_metrics.clone()),
+                        SafeClient::new(
+                            api,
+                            epoch_store.clone(),
+                            name,
+                            safe_client_metrics.clone(),
+                        ),
                     )
                 })
                 .collect(),
@@ -220,7 +230,7 @@ pub enum ReduceOutput<S> {
 }
 
 #[async_trait]
-pub trait CertificateHandler {
+trait CertificateHandler {
     async fn handle(&self, certificate: CertifiedTransaction)
         -> SuiResult<TransactionInfoResponse>;
 
@@ -267,7 +277,7 @@ where
         level = "trace",
         skip_all
     )]
-    pub async fn sync_authority_source_to_destination<CertHandler: CertificateHandler>(
+    async fn sync_authority_source_to_destination<CertHandler: CertificateHandler>(
         &self,
         cert: CertifiedTransaction,
         source_authority: AuthorityName,
@@ -393,7 +403,7 @@ where
         Ok(())
     }
 
-    pub async fn sync_certificate_to_authority(
+    async fn sync_certificate_to_authority(
         &self,
         cert: CertifiedTransaction,
         destination_authority: AuthorityName,
@@ -408,7 +418,7 @@ where
         .await
     }
 
-    pub async fn sync_certificate_to_authority_with_timeout(
+    async fn sync_certificate_to_authority_with_timeout(
         &self,
         cert: CertifiedTransaction,
         destination_authority: AuthorityName,
@@ -439,9 +449,7 @@ where
     /// stake, in order to bring the destination authority up to date to accept
     /// the certificate. The time devoted to each attempt is bounded by
     /// `timeout_milliseconds`.
-    pub async fn sync_certificate_to_authority_with_timeout_inner<
-        CertHandler: CertificateHandler,
-    >(
+    async fn sync_certificate_to_authority_with_timeout_inner<CertHandler: CertificateHandler>(
         &self,
         cert: CertifiedTransaction,
         destination_authority: AuthorityName,
@@ -1226,7 +1234,7 @@ where
             validity_threshold = validity,
             "Broadcasting transaction request to authorities"
         );
-        trace!("Transaction data: {:?}", transaction.data);
+        trace!("Transaction data: {:?}", transaction.signed_data.data);
 
         struct ProcessTransactionState {
             // The list of signatures gathered at any point

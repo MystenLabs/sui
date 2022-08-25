@@ -229,7 +229,7 @@ typically wiped clean. In order to have your fullnode continue to properly
 synchronize with the new state of Devnet, you'll need to follow a few steps
 based on how you originally set up your node. See below.
 
-## With Docker Compose
+### With Docker Compose
 
 Follow the instructions to [reset the environment](https://github.com/MystenLabs/sui/tree/main/docker/fullnode#reset-the-environment),
 namely by running the command:

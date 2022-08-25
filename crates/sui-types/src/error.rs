@@ -185,8 +185,6 @@ pub enum SuiError {
     TransferImmutableError,
 
     // Errors related to batches
-    #[error("The number of items requested exceeds defined limits of {0}.")]
-    TooManyItemsError(u64),
     #[error("The range specified is invalid.")]
     InvalidSequenceRangeError,
     #[error("No batches matched the range requested.")]
@@ -308,6 +306,12 @@ pub enum SuiError {
     StorageError(#[from] TypedStoreError),
     #[error("Non-RocksDB Storage error: {0}")]
     GenericStorageError(String),
+
+    #[error("Missing fields/data in storage error: {0}")]
+    StorageMissingFieldError(String),
+    #[error("Corrupted fields/data in storage error: {0}")]
+    StorageCorruptedFieldError(String),
+
     #[error("Batch error: cannot send transaction to batch.")]
     BatchErrorSender,
     #[error("Authority Error: {error:?}")]
@@ -315,6 +319,12 @@ pub enum SuiError {
 
     #[error("Failed to dispatch event: {error:?}")]
     EventFailedToDispatch { error: String },
+
+    #[error("Failed to serialize Owner: {error:?}")]
+    OwnerFailedToSerialize { error: String },
+
+    #[error("Failed to deserialize fields into JSON: {error:?}")]
+    ExtraFieldFailedToDeserialize { error: String },
 
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
@@ -381,8 +391,8 @@ pub enum SuiError {
 
     // These are errors that occur when an RPC fails and is simply the utf8 message sent in a
     // Tonic::Status
-    #[error("{0}")]
-    RpcError(String),
+    #[error("{1} - {0}")]
+    RpcError(String, &'static str),
 
     #[error("Use of disabled feature: {:?}", error)]
     UnsupportedFeatureError { error: String },
@@ -439,7 +449,7 @@ impl std::convert::From<SubscriberError> for SuiError {
 
 impl From<tonic::Status> for SuiError {
     fn from(status: tonic::Status) -> Self {
-        Self::RpcError(status.message().to_owned())
+        Self::RpcError(status.message().to_owned(), status.code().description())
     }
 }
 
@@ -466,10 +476,6 @@ impl ExecutionStateError for SuiError {
                 | Self::StorageError(..)
                 | Self::GenericAuthorityError { .. }
         )
-    }
-
-    fn to_string(&self) -> String {
-        ToString::to_string(&self)
     }
 }
 

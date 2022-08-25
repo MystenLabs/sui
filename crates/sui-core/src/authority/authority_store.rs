@@ -68,7 +68,8 @@ pub struct SuiDataStore<S> {
 impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     /// Open an authority store by directory path
     pub fn open(path: &Path, db_options: Option<Options>) -> Self {
-        let tables = AuthorityStoreTables::open_tables_read_write(path.to_path_buf(), db_options);
+        let tables =
+            AuthorityStoreTables::open_tables_read_write(path.to_path_buf(), db_options, None);
 
         // For now, create one LockService for each SuiDataStore, and we use a specific
         // subdir of the data store directory
@@ -99,32 +100,23 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         }
     }
 
-    pub async fn acquire_tx_guard<'a, 'b>(
-        &'a self,
-        cert: &'b CertifiedTransaction,
-    ) -> SuiResult<CertTxGuard<'a>> {
+    pub async fn acquire_tx_guard(&self, cert: &CertifiedTransaction) -> SuiResult<CertTxGuard> {
         let digest = cert.digest();
-        match self.wal.begin_tx(digest, cert).await? {
-            Some(g) => Ok(g),
-            None => {
-                // If the tx previously errored out without committing, we return an
-                // error now as well. We could retry the transaction on behalf of
-                // the client right now, but:
-                //
-                // a) This keeps the normal and recovery paths separated.
-                // b) If a client finds a way to create a tx that always fails here,
-                //    allowing them to retry it on command could be a DoS channel.
-                let err = "previous attempt of transaction resulted in an error - \
-                          transaction will be retried offline"
-                    .to_owned();
-                debug!(?digest, "{}", err);
-                Err(SuiError::ErrorWhileProcessingConfirmationTransaction { err })
-            }
+        let guard = self.wal.begin_tx(digest, cert).await?;
+
+        if guard.retry_num() > MAX_TX_RECOVERY_RETRY {
+            // If the tx has been retried too many times, it could be a poison pill, and we should
+            // prevent the client from continually retrying it.
+            let err = "tx has exceeded the maximum retry limit for transient errors".to_owned();
+            debug!(?digest, "{}", err);
+            return Err(SuiError::ErrorWhileProcessingConfirmationTransaction { err });
         }
+
+        Ok(guard)
     }
 
     /// Acquire the lock for a tx without writing to the WAL.
-    pub async fn acquire_tx_lock<'a, 'b>(&'a self, digest: &'b TransactionDigest) -> CertLockGuard {
+    pub async fn acquire_tx_lock(&self, digest: &TransactionDigest) -> CertLockGuard {
         CertLockGuard(self.wal.acquire_lock(digest).await)
     }
 
@@ -339,6 +331,26 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let mut result = Vec::new();
         for id in objects {
             result.push(self.get_object(id)?);
+        }
+        Ok(result)
+    }
+
+    /// Get many objects by their (id, version number) key.
+    pub fn get_input_objects(
+        &self,
+        objects: &[InputObjectKind],
+    ) -> Result<Vec<Option<Object>>, SuiError> {
+        let mut result = Vec::new();
+        for kind in objects {
+            let obj = match kind {
+                InputObjectKind::MovePackage(id) | InputObjectKind::SharedMoveObject(id) => {
+                    self.get_object(id)?
+                }
+                InputObjectKind::ImmOrOwnedMoveObject(objref) => {
+                    self.get_object_by_key(&objref.0, objref.1)?
+                }
+            };
+            result.push(obj);
         }
         Ok(result)
     }

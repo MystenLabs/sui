@@ -1,10 +1,13 @@
 @use '_values' as val;
 @use '_variables' as v;
+@use '_values/colors';
 
 .container {
     display: flex;
     align-items: center;
     flex-flow: column nowrap;
+    background-color: colors.$white;
+
     @include v.set(v.$sizing-nav-height-placeholder, val.$sizing-nav-height);
 
     &.nav-hidden {
@@ -15,5 +18,10 @@
     :global(.is-popup) & {
         width: val.$sizing-popup-width;
         height: val.$sizing-popup-height;
+    }
+
+    &.dynamic-size {
+        width: 100vw;
+        height: 100vh;
     }
 }

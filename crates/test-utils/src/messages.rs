@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::objects::{test_gas_objects, test_gas_objects_with_owners, test_shared_object};
-use crate::{test_account_keys, test_committee, test_keys};
+use crate::{test_account_keys, test_committee, test_validator_keys};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_package::BuildConfig;
@@ -51,9 +51,22 @@ pub async fn get_account_and_gas_coins(
     Ok(res)
 }
 
-/// A helper function to get all accounts and their owned objects
+pub async fn get_gas_objects_with_wallet_context(
+    context: &WalletContext,
+    address: SuiAddress,
+) -> Vec<SuiObjectInfo> {
+    context
+        .gas_objects(address)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|(_val, _object, object_ref)| object_ref)
+        .collect()
+}
+
+/// A helper function to get all accounts and their owned gas objects
 /// with a WalletContext.
-pub async fn get_account_and_objects(
+pub async fn get_account_and_gas_objects(
     context: &WalletContext,
 ) -> Vec<(SuiAddress, Vec<SuiObjectInfo>)> {
     let owned_gas_objects = futures::future::join_all(
@@ -61,7 +74,7 @@ pub async fn get_account_and_objects(
             .keystore
             .addresses()
             .iter()
-            .map(|account| context.gateway.get_objects_owned_by_address(*account)),
+            .map(|account| get_gas_objects_with_wallet_context(context, *account)),
     )
     .await;
     context
@@ -69,11 +82,12 @@ pub async fn get_account_and_objects(
         .addresses()
         .iter()
         .zip(owned_gas_objects.into_iter())
-        .map(|(address, objects)| (*address, objects.unwrap()))
+        .map(|(address, objects)| (*address, objects))
         .collect::<Vec<_>>()
 }
 
 /// A helper function to make Transactions with controlled accounts in WalletContext.
+/// Particularly, the wallet needs to own gas objects for transactions.
 /// However, if this function is called multiple times without any "sync" actions
 /// on gas object management, txns may fail and objects may be locked.
 ///
@@ -86,7 +100,7 @@ pub async fn make_transactions_with_wallet_context(
     max_txn_num: usize,
 ) -> Vec<Transaction> {
     let recipient = get_key_pair::<AuthorityKeyPair>().0;
-    let accounts_and_objs = get_account_and_objects(context).await;
+    let accounts_and_objs = get_account_and_gas_objects(context).await;
     let mut res = Vec::with_capacity(max_txn_num);
     for (address, objs) in &accounts_and_objs {
         for obj in objs {
@@ -150,23 +164,6 @@ pub fn make_transactions_with_pre_genesis_objects(
 
 /// Make a few different test transaction containing the same shared object.
 pub fn test_shared_object_transactions() -> Vec<Transaction> {
-    // Helper function to load genesis packages.
-    fn get_genesis_package_by_module(genesis_objects: &[Object], module: &str) -> ObjectRef {
-        genesis_objects
-            .iter()
-            .find_map(|o| match o.data.try_as_package() {
-                Some(p) => {
-                    if p.serialized_module_map().keys().any(|name| name == module) {
-                        Some(o.compute_object_reference())
-                    } else {
-                        None
-                    }
-                }
-                None => None,
-            })
-            .unwrap()
-    }
-
     // The key pair of the sender of the transaction.
     let (sender, keypair) = test_account_keys().pop().unwrap();
 
@@ -176,8 +173,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     for gas_object in test_gas_objects() {
         let module = "object_basics";
         let function = "create";
-        let genesis_package_objects = genesis::clone_genesis_packages();
-        let package_object_ref = get_genesis_package_by_module(&genesis_package_objects, module);
+        let package_object_ref = genesis::get_framework_object_ref();
 
         let data = TransactionData::new_move_call(
             sender,
@@ -339,7 +335,7 @@ pub fn make_certificates(transactions: Vec<Transaction>) -> Vec<CertifiedTransac
     let mut certificates = Vec::new();
     for tx in transactions {
         let mut aggregator = SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
-        for (_, key) in test_keys() {
+        for (key, _, _) in test_validator_keys() {
             let vote =
                 SignedTransaction::new(/* epoch */ 0, tx.clone(), key.public().into(), &key);
             if let Some(certificate) = aggregator

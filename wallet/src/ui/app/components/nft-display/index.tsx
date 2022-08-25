@@ -58,10 +58,10 @@ function NFTDisplayCard({
     );
 
     return (
-        <div className={cl(st.nftimage, wideview && st.wideview)}>
+        <div className={cl(st.nftimage, wideview && st.wideview, st[size])}>
             {filePath && (
                 <img
-                    className={cl(st.img, st[size])}
+                    className={cl(st.img)}
                     src={filePath}
                     alt={fileExtentionType?.name || 'NFT'}
                 />

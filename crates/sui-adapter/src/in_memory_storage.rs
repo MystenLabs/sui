@@ -106,9 +106,10 @@ impl InMemoryStorage {
             self.insert_object(new_object);
         }
         for (id, _) in deleted {
-            let obj = self.persistent.remove(&id).unwrap();
-            self.last_entry_for_deleted
-                .insert(id, obj.compute_object_reference());
+            if let Some(obj) = self.persistent.remove(&id) {
+                self.last_entry_for_deleted
+                    .insert(id, obj.compute_object_reference());
+            }
         }
     }
 }

@@ -3,21 +3,29 @@
 use crate::authority::get_client;
 use crate::messages::{create_publish_move_package_transaction, make_certificates};
 use crate::test_account_keys;
+use futures::StreamExt;
 use move_package::BuildConfig;
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
+use std::sync::Arc;
 use sui::client_commands::WalletContext;
 use sui_config::ValidatorInfo;
+use sui_core::authority::AuthorityState;
 use sui_core::authority_client::AuthorityAPI;
 use sui_json_rpc_types::{SuiParsedTransactionResponse, SuiTransactionResponse};
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
-use sui_types::base_types::{ObjectID, SuiAddress};
+use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::batch::UpdateItem;
 use sui_types::error::SuiResult;
-use sui_types::messages::{Transaction, TransactionEffects, TransactionInfoResponse};
+use sui_types::messages::{
+    BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionEffects,
+    TransactionInfoResponse,
+};
 use sui_types::object::{Object, Owner};
-use tracing::debug;
+use tokio::time::{sleep, Duration};
+use tracing::{debug, info};
 
 pub async fn publish_package(
     gas_object: Object,
@@ -62,6 +70,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
 
         let data = context
             .gateway
+            .transaction_builder()
             .publish(sender, all_module_bytes, None, 50000)
             .await
             .unwrap();
@@ -72,6 +81,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
 
     let resp = context
         .gateway
+        .quorum_driver()
         .execute_transaction(transaction)
         .await
         .unwrap();
@@ -97,11 +107,12 @@ pub async fn submit_move_transaction(
 
     let data = context
         .gateway
+        .transaction_builder()
         .move_call(
             sender,
             package_ref.0,
-            module.into(),
-            function.into(),
+            module,
+            function,
             vec![], // type_args
             arguments,
             gas_object,
@@ -113,7 +124,12 @@ pub async fn submit_move_transaction(
     let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
     let tx = Transaction::new(data, signature);
 
-    context.gateway.execute_transaction(tx).await.unwrap()
+    context
+        .gateway
+        .quorum_driver()
+        .execute_transaction(tx)
+        .await
+        .unwrap()
 }
 
 /// A helper function to publish the basics package and make counter objects
@@ -240,4 +256,68 @@ pub fn parse_package_ref(effects: &TransactionEffects) -> Option<ObjectRef> {
         .iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .map(|(reference, _)| *reference)
+}
+
+pub async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>) {
+    wait_for_all_txes(vec![wait_digest], state).await
+}
+
+pub async fn wait_for_all_txes(wait_digests: Vec<TransactionDigest>, state: Arc<AuthorityState>) {
+    let mut wait_digests: HashSet<_> = wait_digests.iter().collect();
+
+    let mut timeout = Box::pin(sleep(Duration::from_millis(15_000)));
+
+    let mut max_seq = Some(0);
+
+    let mut stream = Box::pin(
+        state
+            .handle_batch_streaming(BatchInfoRequest {
+                start: max_seq,
+                length: 1000,
+            })
+            .await
+            .unwrap(),
+    );
+
+    loop {
+        tokio::select! {
+            _ = &mut timeout => panic!("wait_for_tx timed out"),
+
+            items = &mut stream.next() => {
+                match items {
+                    // Upon receiving a batch
+                    Some(Ok(BatchInfoResponseItem(UpdateItem::Batch(batch)) )) => {
+                        max_seq = Some(batch.data().next_sequence_number);
+                        info!(?max_seq, "Received Batch");
+                    }
+                    // Upon receiving a transaction digest we store it, if it is not processed already.
+                    Some(Ok(BatchInfoResponseItem(UpdateItem::Transaction((_seq, digest))))) => {
+                        info!(?digest, "Received Transaction");
+                        if wait_digests.remove(&digest.transaction) {
+                            info!(?digest, "Digest found");
+                        }
+                        if wait_digests.is_empty() {
+                            info!(?digest, "all digests found");
+                            break;
+                        }
+                    },
+
+                    Some(Err( err )) => panic!("{}", err),
+                    None => {
+                        info!(?max_seq, "Restarting Batch");
+                        stream = Box::pin(
+                                state
+                                    .handle_batch_streaming(BatchInfoRequest {
+                                        start: max_seq,
+                                        length: 1000,
+                                    })
+                                    .await
+                                    .unwrap(),
+                            );
+
+                    }
+                }
+            },
+        }
+    }
 }

@@ -19,8 +19,10 @@
 .actions {
     display: flex;
     flex-flow: row nowrap;
-    max-width: 100%;
-    margin-bottom: 25px;
+    gap: 8px;
+    margin-bottom: 12px;
+    width: 320px;
+    justify-content: space-between;
 }
 
 .title {
@@ -49,16 +51,24 @@
 }
 
 .empty {
-    font-style: italic;
-    font-weight: 400;
-    font-size: 12px;
-    text-align: center;
-    color: colors.$gray-70;
-    padding: 0 16px;
+    @include utils.typography('empty');
 }
 
 .others-loader,
 .empty {
     margin-top: 47px;
     align-self: center;
+}
+
+.staking {
+    a {
+        display: flex;
+        flex-flow: row;
+        width: 320px;
+        height: 48px;
+        justify-content: center;
+        border-radius: 15px;
+    }
+
+    margin-bottom: 25px;
 }

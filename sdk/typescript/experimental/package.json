@@ -7,17 +7,16 @@
     "test": "echo \"Error: there are no tests yet\" && exit 1",
     "build": "tsc",
     "build-dev": "webpack --mode development",
-    "postinstall": "tsc"
+    "prepare": "tsc"
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@mysten/bcs": "^0.2.0",
+    "@mysten/bcs": "workspace:*",
     "bn.js": "^5.2.1",
     "js-sha3": "^0.8.0",
     "tweetnacl": "1.0.3",
     "typescript": "^4.7.4",
-    
     "@types/bn.js": "^5.1.0",
     "@types/node-fetch": "^2.6.2",
     "node-fetch": "^2",

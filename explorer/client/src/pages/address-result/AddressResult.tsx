@@ -5,7 +5,6 @@ import { useParams } from 'react-router-dom';
 
 import { ReactComponent as AddressIcon } from '../../assets/AddressIcon.svg';
 import ErrorResult from '../../components/error-result/ErrorResult';
-import GoBack from '../../components/goback/GoBack';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
 import TxForID from '../../components/transactions-for-id/TxForID';
@@ -32,7 +31,6 @@ function AddressResult() {
         return (
             <>
                 <div className={resultheaderstyle.btmborder}>
-                    <GoBack />
                     <div className={resultheaderstyle.category}>
                         <AddressIcon /> Address
                     </div>
@@ -47,7 +45,7 @@ function AddressResult() {
                 <div>
                     <h1>Owned Objects</h1>
                     <div>
-                        {<OwnedObjects id={addressID} byAddress={true} />}
+                        <OwnedObjects id={addressID} byAddress={true} />
                     </div>
                 </div>
                 <div>

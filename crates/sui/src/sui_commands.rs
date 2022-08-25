@@ -22,11 +22,12 @@ use sui_config::{
     SUI_GATEWAY_CONFIG, SUI_NETWORK_CONFIG,
 };
 use sui_sdk::crypto::KeystoreType;
-use sui_sdk::{ClientType, SuiClient};
+use sui_sdk::ClientType;
 use sui_swarm::memory::Swarm;
-use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::{KeypairTraits, SuiKeyPair};
 use tracing::info;
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
 #[clap(
     name = "sui",
@@ -246,7 +247,7 @@ impl SuiCommand {
                 let mut keystore = KeystoreType::File(keystore_path.clone()).init().unwrap();
 
                 for key in &network_config.account_keys {
-                    keystore.add_key(key.copy())?;
+                    keystore.add_key(SuiKeyPair::Ed25519SuiKeyPair(key.copy()))?;
                 }
 
                 network_config.genesis.save(&genesis_path)?;
@@ -283,6 +284,7 @@ impl SuiCommand {
                     keystore: KeystoreType::File(keystore_path),
                     gateway: ClientType::Embedded(wallet_gateway_config),
                     active_address,
+                    fullnode: None,
                 };
 
                 wallet_config.save(&client_path)?;
@@ -313,14 +315,14 @@ impl SuiCommand {
             }
             SuiCommand::Console { config } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config)?;
+                prompt_if_no_config(&config).await?;
                 let mut context = WalletContext::new(&config).await?;
                 sync_accounts(&mut context).await?;
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client { config, cmd, json } => {
                 let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config)?;
+                prompt_if_no_config(&config).await?;
                 let mut context = WalletContext::new(&config).await?;
 
                 if let Some(cmd) = cmd {
@@ -364,7 +366,7 @@ async fn sync_accounts(context: &mut WalletContext) -> Result<(), anyhow::Error>
     Ok(())
 }
 
-fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
+async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
     // Prompt user for connect to gateway if config not exists.
     if !wallet_conf_path.exists() {
         let url = match std::env::var_os("SUI_CONFIG_WITH_RPC_URL") {
@@ -390,20 +392,29 @@ fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Error> {
         };
 
         if let Some(url) = url {
+            let client = ClientType::RPC(url, None);
             // Check url is valid
-            SuiClient::new_http_client(&url)?;
+            client.init().await?;
             let keystore_path = wallet_conf_path
                 .parent()
                 .unwrap_or(&sui_config_dir()?)
                 .join(SUI_KEYSTORE_FILENAME);
             let keystore = KeystoreType::File(keystore_path);
-            let (new_address, phrase) = keystore.init()?.generate_new_key()?;
-            println!("Generated new keypair for address [{new_address}]");
+            println!("Generating keypair ...\n");
+
+            println!("Do you want to generate a secp256k1 keypair instead? [y/N] No will select Ed25519 by default. ");
+            let key_scheme = match read_line()?.trim() {
+                "y" => Some(String::from("secp256k1")),
+                _ => None,
+            };
+            let (new_address, phrase, flag) = keystore.init()?.generate_new_key(key_scheme)?;
+            println!("Generated new keypair for address with flag {flag} [{new_address}]");
             println!("Secret Recovery Phrase : [{phrase}]");
             SuiClientConfig {
                 keystore,
-                gateway: ClientType::RPC(url),
+                gateway: client,
                 active_address: Some(new_address),
+                fullnode: None,
             }
             .persisted(wallet_conf_path)
             .save()?;

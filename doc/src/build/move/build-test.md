@@ -65,7 +65,7 @@ file:
 
         // create a sword
         let sword = Sword {
-            info: object::new(&mut ctx),
+            id: object::new(&mut ctx),
             magic: 42,
             strength: 7,
         };
@@ -103,7 +103,7 @@ error[E06001]: unused value without 'drop'
 27 │           let sword = Sword {
    │               ----- The local variable 'sword' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
    │ ╭─────────────────────'
-28 │ │             info: object::new(&mut ctx),
+28 │ │             id: object::new(&mut ctx),
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
@@ -226,7 +226,7 @@ sword creation and transfer and put them into the `m1.move` file:
         use sui::tx_context;
         // create a sword
         let sword = Sword {
-            info: object::new(ctx),
+            id: object::new(ctx),
             magic: magic,
             strength: strength,
         };
@@ -314,6 +314,12 @@ of type `Sword`) owned by an address executing the current transaction
 available for manipulation by the Move code. (For now, we assume that
 there is only one such object.) In this case, the object retrieved
 from storage is transferred to another address.
+
+> **Important:** Transaction effects, such as object creation/transfer become visible only after a
+> given transaction completes. For example, if the second transaction in our running example created
+> a sword and transferred it to the admin's address, it would become available for retrieval
+> from the admin's address (via `test_scenario`s `take_owned` or `take_last_created_owned`
+> functions) only in the third transaction.
 
 The final transaction is executed by the final owner - it retrieves
 the sword object from storage and checks if it has the expected

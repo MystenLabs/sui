@@ -1,7 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer } from '@mysten/sui.js';
+import {
+    Base64DataBuffer,
+    type SuiMoveNormalizedFunction,
+} from '@mysten/sui.js';
 import {
     createAsyncThunk,
     createEntityAdapter,
@@ -21,6 +24,37 @@ const txRequestsAdapter = createEntityAdapter<TransactionRequest>({
         return aDate.getTime() - bDate.getTime();
     },
 });
+
+export const loadTransactionResponseMetadata = createAsyncThunk<
+    { txRequestID: string; metadata: SuiMoveNormalizedFunction },
+    {
+        txRequestID: string;
+        objectId: string;
+        moduleName: string;
+        functionName: string;
+    },
+    AppThunkConfig
+>(
+    'load-transaction-response-metadata',
+    async (
+        { txRequestID, objectId, moduleName, functionName },
+        { extra: { api }, getState }
+    ) => {
+        const state = getState();
+        const txRequest = txRequestsSelectors.selectById(state, txRequestID);
+        if (!txRequest) {
+            throw new Error(`TransactionRequest ${txRequestID} not found`);
+        }
+
+        const metadata = await api.instance.fullNode.getNormalizedMoveFunction(
+            objectId,
+            moduleName,
+            functionName
+        );
+
+        return { txRequestID, metadata };
+    }
+);
 
 export const respondToTransactionRequest = createAsyncThunk<
     {
@@ -83,6 +117,19 @@ const slice = createSlice({
         },
     },
     extraReducers: (build) => {
+        build.addCase(
+            loadTransactionResponseMetadata.fulfilled,
+            (state, { payload }) => {
+                const { txRequestID, metadata } = payload;
+                txRequestsAdapter.updateOne(state, {
+                    id: txRequestID,
+                    changes: {
+                        metadata,
+                    },
+                });
+            }
+        );
+
         build.addCase(
             respondToTransactionRequest.fulfilled,
             (state, { payload }) => {

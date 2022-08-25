@@ -21,7 +21,7 @@ use prometheus::{
     Registry,
 };
 use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
-use tracing::{debug, error, Instrument};
+use tracing::{debug, error, trace, Instrument};
 
 use sui_adapter::adapter::resolve_and_type_check;
 use sui_config::gateway::GatewayConfig;
@@ -41,7 +41,7 @@ use sui_types::{
 
 use crate::authority::ResolverWrapper;
 use crate::authority_aggregator::AuthAggMetrics;
-use crate::authority_client::NetworkAuthorityClient;
+use crate::authority_client::{NetworkAuthorityClient, NetworkAuthorityClientMetrics};
 use crate::safe_client::SafeClientMetrics;
 use crate::transaction_input_checker;
 use crate::{
@@ -51,12 +51,13 @@ use crate::{
 use sui_json::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
 use sui_json_rpc_types::{
     GetObjectDataResponse, GetRawObjectDataResponse, MoveCallParams, RPCTransactionRequestParams,
-    SuiMoveObject, SuiObject, SuiObjectInfo, SuiParsedMergeCoinResponse, SuiParsedPublishResponse,
+    SuiData, SuiObject, SuiObjectInfo, SuiParsedMergeCoinResponse, SuiParsedPublishResponse,
     SuiParsedSplitCoinResponse, SuiParsedTransactionResponse, SuiTransactionEffects,
     SuiTransactionResponse, SuiTypeTag, TransferObjectParams,
 };
 use sui_types::error::SuiError::ConflictingTransaction;
 
+use crate::epoch::epoch_store::EpochStore;
 use tap::TapFallible;
 
 #[cfg(test)]
@@ -80,6 +81,7 @@ pub struct GatewayMetrics {
     num_tx_publish: IntCounter,
     num_tx_movecall: IntCounter,
     num_tx_splitcoin: IntCounter,
+    num_tx_splitcoin_equal: IntCounter,
     num_tx_mergecoin: IntCounter,
     total_tx_retries: IntCounter,
     shared_obj_tx: IntCounter,
@@ -118,6 +120,12 @@ impl GatewayMetrics {
             num_tx_splitcoin: register_int_counter_with_registry!(
                 "num_tx_splitcoin",
                 "Number of split coin transactions",
+                registry,
+            )
+            .unwrap(),
+            num_tx_splitcoin_equal: register_int_counter_with_registry!(
+                "num_tx_splitcoin_equal",
+                "Number of equal-size split coin transactions",
                 registry,
             )
             .unwrap(),
@@ -176,7 +184,7 @@ pub struct GatewayState<A> {
 impl<A> GatewayState<A> {
     /// Create a new manager which stores its managed addresses at `path`
     pub fn new(
-        path: &Path,
+        base_path: &Path,
         committee: Committee,
         authority_clients: BTreeMap<AuthorityName, A>,
         prometheus_registry: &Registry,
@@ -184,10 +192,13 @@ impl<A> GatewayState<A> {
         let gateway_metrics = GatewayMetrics::new(prometheus_registry);
         let auth_agg_metrics = AuthAggMetrics::new(prometheus_registry);
         let safe_client_metrics = SafeClientMetrics::new(&prometheus::Registry::new());
+        let gateway_store = Arc::new(GatewayStore::open(&base_path.join("store"), None));
+        let epoch_store = Arc::new(EpochStore::new(base_path.join("epochs"), &committee, None));
         Self::new_with_authorities(
-            path,
+            gateway_store,
             AuthorityAggregator::new(
                 committee,
+                epoch_store,
                 authority_clients,
                 auth_agg_metrics,
                 safe_client_metrics,
@@ -197,18 +208,17 @@ impl<A> GatewayState<A> {
     }
 
     pub fn new_with_authorities(
-        path: &Path,
+        gateway_store: Arc<GatewayStore>,
         authorities: AuthorityAggregator<A>,
         metrics: GatewayMetrics,
     ) -> SuiResult<Self> {
-        let store = Arc::new(GatewayStore::open(path, None));
-        let next_tx_seq_number = AtomicU64::new(store.next_sequence_number()?);
+        let next_tx_seq_number = AtomicU64::new(gateway_store.next_sequence_number()?);
         Ok(Self {
-            store: store.clone(),
+            store: gateway_store.clone(),
             authorities,
             next_tx_seq_number,
             metrics,
-            module_cache: SyncModuleCache::new(ResolverWrapper(store)),
+            module_cache: SyncModuleCache::new(ResolverWrapper(gateway_store)),
         })
     }
 
@@ -240,9 +250,11 @@ impl GatewayState<NetworkAuthorityClient> {
         prometheus_registry: Option<&Registry>,
     ) -> Result<GatewayClient, anyhow::Error> {
         let committee = Self::make_committee(config)?;
-        let authority_clients = Self::make_authority_clients(config);
         let default_registry = Registry::new();
         let prometheus_registry = prometheus_registry.unwrap_or(&default_registry);
+        let network_metrics = NetworkAuthorityClientMetrics::new(prometheus_registry);
+        let authority_clients = Self::make_authority_clients(config, network_metrics);
+
         Ok(Arc::new(GatewayState::new(
             &config.db_folder_path,
             committee,
@@ -260,17 +272,19 @@ impl GatewayState<NetworkAuthorityClient> {
 
     pub fn make_authority_clients(
         config: &GatewayConfig,
+        network_metrics: NetworkAuthorityClientMetrics,
     ) -> BTreeMap<AuthorityName, NetworkAuthorityClient> {
         let mut authority_clients = BTreeMap::new();
         let mut network_config = mysten_network::config::Config::new();
         network_config.connect_timeout = Some(config.send_timeout);
         network_config.request_timeout = Some(config.recv_timeout);
+        let net_metrics = Arc::new(network_metrics);
         for authority in &config.validator_set {
             let channel = network_config
                 .connect_lazy(authority.network_address())
                 .unwrap();
-            let client = NetworkAuthorityClient::new(channel);
-            authority_clients.insert(authority.public_key(), client);
+            let client = NetworkAuthorityClient::new(channel, net_metrics.clone());
+            authority_clients.insert(authority.protocol_key(), client);
         }
         authority_clients
     }
@@ -342,6 +356,18 @@ pub trait GatewayAPI {
         signer: SuiAddress,
         coin_object_id: ObjectID,
         split_amounts: Vec<u64>,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error>;
+
+    /// Split the coin object (identified by `coin_object_ref`) into
+    /// multiple new coins of equal amounts. Any extra remainder is
+    /// kept in the original coin object.
+    async fn split_coin_equal(
+        &self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_count: u64,
         gas: Option<ObjectID>,
         gas_budget: u64,
     ) -> Result<TransactionData, anyhow::Error>;
@@ -452,7 +478,7 @@ where
         Ok(object)
     }
 
-    async fn get_sui_object<T: SuiMoveObject>(
+    async fn get_sui_object<T: SuiData>(
         &self,
         object_id: &ObjectID,
     ) -> Result<SuiObject<T>, anyhow::Error> {
@@ -460,7 +486,7 @@ where
         self.to_sui_object(object).await
     }
 
-    async fn to_sui_object<T: SuiMoveObject>(
+    async fn to_sui_object<T: SuiData>(
         &self,
         object: Object,
     ) -> Result<SuiObject<T>, anyhow::Error> {
@@ -571,7 +597,7 @@ where
     /// If any object does not exist in the store, give it a chance
     /// to download from authorities.
     async fn sync_input_objects_with_authorities(&self, transaction: &Transaction) -> SuiResult {
-        let input_objects = transaction.data.input_objects()?;
+        let input_objects = transaction.signed_data.data.input_objects()?;
         let mut objects = self.read_objects_from_store(&input_objects).await?;
         for (object_opt, kind) in objects.iter_mut().zip(&input_objects) {
             if object_opt.is_none() {
@@ -605,7 +631,7 @@ where
         let span = tracing::debug_span!(
             "execute_transaction",
             tx_digest = ?tx_digest,
-            tx_kind = transaction.data.kind_as_str()
+            tx_kind = transaction.signed_data.data.kind_as_str()
         );
         let exec_result = self
             .authorities
@@ -840,7 +866,13 @@ where
                         if move_call.function.as_ref() == coin::COIN_SPLIT_VEC_FUNC_NAME {
                             self.metrics.num_tx_splitcoin.inc();
                             return Ok(Some(
-                                self.create_split_coin_response(certificate, effects)
+                                self.create_split_coin_response(certificate, effects, false)
+                                    .await?,
+                            ));
+                        } else if move_call.function.as_ref() == coin::COIN_SPLIT_N_FUNC_NAME {
+                            self.metrics.num_tx_splitcoin_equal.inc();
+                            return Ok(Some(
+                                self.create_split_coin_response(certificate, effects, true)
                                     .await?,
                             ));
                         } else if move_call.function.as_ref() == coin::COIN_JOIN_FUNC_NAME {
@@ -947,10 +979,11 @@ where
         &self,
         certificate: CertifiedTransaction,
         effects: TransactionEffects,
-    ) -> Result<SuiParsedTransactionResponse, anyhow::Error> {
+        equal_parts: bool,
+    ) -> anyhow::Result<SuiParsedTransactionResponse> {
         let call = Self::try_get_move_call(&certificate)?;
-        let signer = certificate.data.signer();
-        let (gas_payment, _, _) = certificate.data.gas();
+        let signer = certificate.signed_data.data.signer();
+        let (gas_payment, _, _) = certificate.signed_data.data.gas();
         let (coin_object_id, split_arg) = match call.arguments.as_slice() {
             [CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))), CallArg::Pure(arg)] => {
                 (id, arg)
@@ -962,15 +995,21 @@ where
                 .into())
             }
         };
-        let split_amounts: Vec<u64> = bcs::from_bytes(split_arg)?;
 
         if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
         }
         let created = &effects.created;
+        let saw_expected_count = if equal_parts {
+            let split_count: u64 = bcs::from_bytes(split_arg)?;
+            created.len() as u64 == split_count - 1
+        } else {
+            let split_amounts: Vec<u64> = bcs::from_bytes(split_arg)?;
+            created.len() == split_amounts.len()
+        };
         fp_ensure!(
             effects.mutated.len() == 2     // coin and gas
-               && created.len() == split_amounts.len()
+               && saw_expected_count
                && created.iter().all(|(_, owner)| owner == &signer),
             SuiError::InconsistentGatewayResult {
                 error: "Unexpected split outcome".to_owned()
@@ -1016,7 +1055,7 @@ where
                 .into())
             }
         };
-        let (gas_payment, _, _) = certificate.data.gas();
+        let (gas_payment, _, _) = certificate.signed_data.data.gas();
 
         if let ExecutionStatus::Failure { error } = effects.status {
             return Err(error.into());
@@ -1048,7 +1087,7 @@ where
 
     fn try_get_move_call(certificate: &CertifiedTransaction) -> Result<&MoveCall, anyhow::Error> {
         if let TransactionKind::Single(SingleTransactionKind::Call(ref call)) =
-            certificate.data.kind
+            certificate.signed_data.data.kind
         {
             Ok(call)
         } else {
@@ -1211,7 +1250,7 @@ where
         &self,
         tx: Transaction,
     ) -> Result<SuiTransactionResponse, anyhow::Error> {
-        let tx_kind = tx.data.kind.clone();
+        let tx_kind = tx.signed_data.data.kind.clone();
         let tx_digest = tx.digest();
 
         debug!(tx_digest = ?tx_digest, "Received execute_transaction request");
@@ -1223,7 +1262,7 @@ where
                 let span = tracing::debug_span!(
                     "gateway_execute_transaction",
                     ?tx_digest,
-                    tx_kind = tx.data.kind_as_str()
+                    tx_kind = tx.signed_data.data.kind_as_str()
                 );
 
                 // Use start_coarse_time() if the below turns out to have a perf impact
@@ -1375,7 +1414,8 @@ where
             .sync_all_owned_objects(account_addr, Duration::from_secs(60))
             .await?;
 
-        debug!(
+        // This is quite spammy when there are a number of huge objects
+        trace!(
             ?active_object_certs,
             deletec = ?_deleted_refs_certs,
             ?account_addr,
@@ -1465,6 +1505,37 @@ where
             gas_budget,
         );
         debug!(?data, "Created Split Coin transaction data");
+        Ok(data)
+    }
+
+    async fn split_coin_equal(
+        &self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_count: u64,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> Result<TransactionData, anyhow::Error> {
+        let gas = self
+            .choose_gas_for_address(signer, gas_budget, gas, BTreeSet::from([coin_object_id]))
+            .await?;
+        let coin_object = self.get_object_internal(&coin_object_id).await?;
+        let coin_object_ref = coin_object.compute_object_reference();
+        let coin_type = coin_object.get_move_template_type()?;
+        let data = TransactionData::new_move_call(
+            signer,
+            self.get_framework_object_ref().await?,
+            coin::COIN_MODULE_NAME.to_owned(),
+            coin::COIN_SPLIT_N_FUNC_NAME.to_owned(),
+            vec![coin_type],
+            gas,
+            vec![
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_object_ref)),
+                CallArg::Pure(bcs::to_bytes(&split_count)?),
+            ],
+            gas_budget,
+        );
+        debug!(?data, "Created equal-size Split Coin transaction data");
         Ok(data)
     }
 
