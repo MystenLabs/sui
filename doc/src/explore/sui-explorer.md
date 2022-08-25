@@ -12,10 +12,10 @@ The [Sui Explorer](https://explorer.devnet.sui.io/) lets you view data about tra
 
 ## Supported Browsers
 The Sui Explorer supports the following browsers:
- * Chrome version 87 or later
- * Firefox version 78 or later
- * Safari version 13 or later
- * Edge version 88 or later
+ * Chrome
+ * Firefox
+ * Safari
+ * Edge
 
 ## Choose a network
 When you start Sui Explorer, it displays the transactions for the Devnet network by default. You can also use the Explorer to view data for a local network running in your environment or a custom RPC endpoint URL.
