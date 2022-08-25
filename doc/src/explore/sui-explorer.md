@@ -55,10 +55,13 @@ The **Transactions** table on the page includes the following columns:
  * **Gas** - Shows the Sui used to pay for the gas required to complete the transaction.
 
 You can click on a value in the **Transaction ID** or **Addresses** column to open a details page for the transaction or address that you click on. When you click a transaction ID, the page that opens depends on the type of transaction. The Explorer includes the following detail pages:
- * TransferSui transaction details
- * TransferObject transaction details
- * Call transaction details
- * Publish transaction details
+ * [Transaction details](#transaction-details-pages) for each transaction type
+     * TransferSui transaction details
+     * TransferObject transaction details
+     * Call transaction details
+     * Publish transaction details
+ * [Address details](#address-details-page)
+ * [Object details](#object-details-page)
 
 ## Transaction details pages
 When you click a transaction ID, a details page opens. The page title reflects the transaction type, and the fields displayed vary depending on the transaction type. If you don’t see one of the fields, it is because it is not available for the selected transaction type. For example, a TransferSui transaction does not include an **Events** tab.
