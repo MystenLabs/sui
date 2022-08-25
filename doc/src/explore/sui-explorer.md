@@ -10,7 +10,7 @@ The [Sui Explorer](https://explorer.devnet.sui.io/) lets you view data about tra
  * Get go-to-definition support for all smart contracts, referred to as packages in Sui.
  * View validators and geographic locations of full nodes that are currently active.
 
-## Supported Browsers
+## Supported browsers
 The Sui Explorer supports the following browsers:
  * Chrome
  * Firefox
@@ -18,14 +18,14 @@ The Sui Explorer supports the following browsers:
  * Edge
 
 ## Choose a network
-When you start Sui Explorer, it displays the transactions for the Devnet network by default. You can also use the Explorer to view data for a local network running in your environment or a custom RPC endpoint URL.
+When you start Sui Explorer, it displays the transactions for the Devnet network by default. You can also use the Explorer to view data for a local network running in your environment or a custom RPC endpoint URL. Use the drop-down menu at the top-right of the page to choose a different network.
 
 
 ## Finding your transaction
-You can search for the transactions using an address, object ID, or transaction ID. For example, you can search for your wallet address to confirm a transaction or view additional details about a transaction you’ve approved. See [Sui Wallet](../explore/wallet-browser.md) to learn how to create a wallet).  
+You can search for the transactions using an address, object ID, or transaction ID. For example, you can search for your wallet address to confirm a transaction or view additional details about a transaction you’ve approved. See [Sui Wallet](../explore/wallet-browser.md) to learn how to create a wallet.  
 
-**To search for a transaction made using the Sui wallet**
-1. Open your Sui wallet.
+**To search for a transaction made using the Sui Wallet**
+1. Open your Sui Wallet.
 1. Click the clipboard icon to copy your wallet address.
 1. Open the Sui Explorer. Select the **Coins** tab if it is not currently selected.
 1. In the search field, paste your wallet address and then press **Enter**.
@@ -49,7 +49,7 @@ The **Transactions** table on the page includes the following columns:
      * **Call** - This is an API request … For Call transactions, the table includes only the sender address. 
      * **TransferSui** - Indicates that the transaction transferred Sui from one account to another.
      * **TransferObject** - Indicates a transaction to transfer an object to a different address.
-     * **Publish** - Indicates a transaction to publish apackage.
+     * **Publish** - Indicates a transaction to publish a package.
      * **Batched** - Indicates a batch of transactions.
  * **Transaction ID** - The unique identifier for the transaction. You can click the clipboard icon to copy the ID. Click a value in the Transaction ID field to display the details about the transaction.
  * **Addresses** - Displays the address of the sender and receiver for the transaction. You can click on an address for additional details and transactions made using the address.
@@ -102,7 +102,7 @@ When you click on an object ID displayed on a transaction details page it opens 
  * **Description** includes the following fields:
      * **Type** - The type of the object, such as coin.
      * **Object ID** - The ID of the object. 	
-     * **Last Transaction ID** - 	The ID of the most recent transaction associated with the object.
+     * **Last Transaction ID** - The ID of the most recent transaction associated with the object.
      * **Version** - The version of the object. 
      * **Owner** - The address of the owner of the object.
  * **Properties** - Displays details such as the coin balance for the object.
@@ -113,7 +113,7 @@ When you click on an object ID displayed on a transaction details page it opens 
 The **Address** details page lets you view details about a specific address, including assets owned by the address and transactions that interacted with the address.
 
 The **Address** details page includes the following fields:
- * **Owned object** - displays the objects owned by the address, such as coins.
+ * **Owned object** - Displays the objects owned by the address, such as coins.
  * **Coins** - List of tokens owned and their balance. Click on an entry to view additional details.
  * **NFTs** - List of NFTs owned by the address. Click an ID to view the object details page for the NFT.
  * **Transactions** - Click to view more detailed information about each transaction.

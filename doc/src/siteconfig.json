@@ -127,7 +127,7 @@
         "sublist": [
           {
             "name": "Using Sui Explorer",
-            "url": "/explore/si-explorer"
+            "url": "/explore/sui-explorer"
           },
           {
             "name": "Make Rust SDK Calls",
