@@ -200,6 +200,7 @@
       },
       {
         "label": "Reference",
+        "fileName": "build/reference",
         "title": "Reference",
         "items": [
           {

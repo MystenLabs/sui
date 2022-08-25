@@ -9,6 +9,7 @@ Now that you've [learned about Sui](../learn/index.md), it's time to start build
 Here is our recommended workflow to interact with Sui:
 
 1. [Install](../build/install.md) all of the *required tools*.
+1. Optionally, [create](../contribute/cli-client.md#genesis) and [start](../contribute/cli-client.md#starting-the-network) a *local Sui network* to contribute to the blockchain.
 1. [Connect](../build/devnet.md) to the Sui Devnet network.
 1. [Create](../build/move/index.md) *smart contracts* with Move:
    1. [Write](../build/move/write-package.md) a package.
@@ -22,11 +23,11 @@ Here is our recommended workflow to interact with Sui:
    1. [Enable](../build/programming-with-objects/ch5-child-objects.md) objects to own other objects.
 1. [Talk](../build/comms.md) with Sui using our API and SDKs:
    * [Use](../build/json-rpc.md) the *Sui RPC Server and JSON-RPC API* to interact with a local Sui network.
-   * [Employ](../build/sui-json.md) *SuiJSON format* to align JSON inputs more closely with Move call arguments.
-   * [Follow](https://docs.sui.io/sui-jsonrpc) the Sui API Reference.
    * [Make](../build/rust-sdk.md) Rust SDK calls to Sui from your app.
-   * [Write](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/) TypeScript/JavaScript apps.
+   * [Make](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/) TypeScript/JavaScript calls to Sui from your apps.
    * [Run](../build/fullnode.md) a Sui Fullnode and [subscribe](../build/pubsub.md) to events.
-1. Optionally, [create](../contribute/cli-client.md#genesis) and [start](../contribute/cli-client.md#starting-the-network) a *local Sui network* to contribute to the blockchain.
+1. [Reference](../build/reference.md) the format for our API and SuiJSON:
+   * [Follow](https://docs.sui.io/sui-jsonrpc) the Sui API Reference.
+   * [Employ](../build/sui-json.md) *SuiJSON format* to align JSON inputs more closely with Move call arguments.
 
 Find answers to common questions about our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md) and more in our [FAQ](../contribute/faq.md).
