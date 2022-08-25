@@ -38,7 +38,7 @@ The **Top Validators** table lists the top validators on the network and include
 
 Click **More Transactions** to open the **Transactions** page and view all of the transactions on the network.
 
-## Transactions page
+## Transactions
 The **Transactions** page lists all transactions on the network. You can display 20, 40, or 60 rows of transactions per page. Use the drop-down near the bottom-right corner of the page to change the number of rows displayed per page. Use the page selector icons at the bottom of the page to view more transactions.
 
 ![Explorer Transactions page](../../static/explorer-transactions-page.png "Suin Explorer Transactions page")
@@ -69,10 +69,10 @@ You can click on a value in the **Transaction ID** or **Addresses** column to op
  * [Address details](#address-details-page)
  * [Package details](#package-details-page)
 
-## Transaction details pages
+## Transaction details
 When you click a **Transaction ID**, a details page opens. The page title reflects the transaction type, and the fields displayed vary depending on the transaction type. If you don’t see one of the fields, it is because it is not available for the selected transaction type. For example, a TransferSui transaction does not include an **Events** tab.
 
-![Explorer Transaction details page](../../static/explorer-transaction-details-page.png "Sui Explorer Transaction details page for a TransferObject transaction")
+![Explorer Transaction details](../../static/explorer-transaction-details-page.png "Sui Explorer Transaction details page for a TransferObject transaction")
 *The Sui Explorer Transaction details page*
 
 The transaction details pages include the following tabs:
@@ -103,10 +103,10 @@ The **Signatures** tab includes the following fields:
  * **Transaction Signatures** - The signature or signatures for the transaction.
  * **Validator Signatures** - The signatures from the validators that validated the transaction.
 
-## Object details page
+## Object details
 When you click on an object ID displayed on a transaction details page it opens a page that displays the details for the object, such as the transactions associated with the object.
 
-![Explorer Object details page](../../static/explorer-object-details-page.png "Sui Explorer Object details page")
+![Explorer Object details](../../static/explorer-object-details-page.png "Sui Explorer Object details page")
 *The Sui Explorer Object details page*
 
 The page includes the following details:
@@ -121,10 +121,10 @@ The page includes the following details:
  * **Child Objects** - The objects that this object owns.
 **Transactions** - The same information as the **Transactions** page, but limited to the transactions associated with the object.
 
-## Address details page
+## Address details
 The **Address** details page lets you view details about a specific address, including assets owned by the address and transactions that interacted with the address.
 
-![Explorer Address details page](../../static/explorer-address-details-page.png "Sui Explorer Address details page")
+![Explorer Address details](../../static/explorer-address-details-page.png "Sui Explorer Address details page")
 *The Sui Explorer Address details page*
 
 The **Address** details page includes the following fields:
@@ -133,10 +133,10 @@ The **Address** details page includes the following fields:
  * **NFTs** - List of NFTs owned by the address. Click an ID to view the object details page for the NFT.
  * **Transactions** - Click to view more detailed information about each transaction.
 
-## Package details page
+## Package details
 The **Package** details page displays the object ID, version, and publisher of the package. It also shows the modules used, including the code for each.
 
-![Explorer Package details page](../../static/explorer-package-details-page.png "Sui Explorer Package details page")
+![Explorer Package details](../../static/explorer-package-details-page.png "Sui Explorer Package details")
 *The Sui Explorer Package details page*
 
 The **Package** details page includes the following fields:
