@@ -576,6 +576,27 @@ fn latest_proposal() {
 }
 
 #[test]
+fn update_processed_transactions_already_in_checkpoint() {
+    let (_committee, _keys, mut stores) = random_ckpoint_store_num(1);
+    let (_, mut cps) = stores.pop().unwrap();
+
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+
+    let checkpoint = CheckpointContents::new([t1, t2].into_iter());
+    cps.update_new_checkpoint_inner(0, &checkpoint, cps.tables.checkpoints.batch())
+        .unwrap();
+    cps.update_processed_transactions(&[(2, t2), (3, t3)])
+        .unwrap();
+
+    assert_eq!(
+        vec![(t3, 3)],
+        cps.tables.extra_transactions.iter().collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn set_get_checkpoint() {
     let (committee, _keys, mut stores) = random_ckpoint_store();
     let (_, mut cps1) = stores.pop().unwrap();
