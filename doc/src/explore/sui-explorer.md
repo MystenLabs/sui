@@ -22,7 +22,8 @@ You can search for the transactions using an address, object ID, or transaction 
 **To search for a transaction made using the Sui Wallet**
 1. Open your Sui Wallet.
 1. Click the clipboard icon to copy your wallet address.
-1. Open the Sui Explorer. Select the **Coins** tab if it is not currently selected.
+1. Open the Sui Explorer. 
+1. Select the **Coins** tab if it is not currently selected.
 1. In the search field, paste your wallet address and then press **Enter**.
 
 The Explorer displays the **Address** details page for your wallet address. You should see the same transaction in Explorer that you see in your wallet history. Click on a transaction to view the details for it.
@@ -45,25 +46,25 @@ The **Transactions** page lists all transactions on the network. You can display
 
 ### Transaction table columns
 The **Transactions** table on the page includes the following columns:
- * **Time** - displays the time at which the transaction occurred.
- * **Type** - the type of transaction, one of Call, TransferSui, TransferObject, or Publish.
-     * **Call** - This is an API request … For Call transactions, the table includes only the sender address. 
-     * **TransferSui** - Indicates that the transaction transferred Sui from one address to another.
-     * **TransferObject** - Indicates a transaction to transfer an object to a different address.
-     * **Publish** - Indicates a transaction to publish a package.
-     * **Batched** - Indicates a batch of transactions.
- * **Transaction ID** - The unique identifier for the transaction. You can click the clipboard icon to copy the ID. Click a value in the **Transaction ID** column to display the details about the transaction.
- * **Addresses** - Displays the addresses of the sender and receivers for the transaction. You can click on an address for additional details and transactions made using the address.
- * **Amount** - Displays the number of coins and coin type used for the transaction.
- * **Gas** - Shows the amount of Sui used to pay for the gas required to complete the transaction.
+ * **Time** - The time at which the transaction occurred.
+ * **Type** - The type of transaction, one of Call, TransferSui, TransferObject, or Publish.
+     * **Call** - A transaction that calls a move module. For Call transactions, the table includes only the sender address. 
+     * **TransferSui** - A transaction to transfer Sui from one address to another.
+     * **TransferObject** - A transaction to transfer an object to a different address.
+     * **Publish** - A transaction to publish a package.
+     * **Batched** - A batch of transactions.
+ * **Transaction ID** - The unique identifier for the transaction. Click the clipboard icon to copy the ID. Click a value in the **Transaction ID** column to display the details about the transaction.
+ * **Addresses** - The addresses of the sender and receivers for the transaction. You can click on an address for additional details and transactions made using the address.
+ * **Amount** - The number of coins and coin type used for the transaction.
+ * **Gas** - the amount of Sui used to pay for the gas required to complete the transaction.
 
 You can click on a value in the **Transaction ID** or **Addresses** column to open a details page for the transaction or address. When you click a transaction ID, the page that opens depends on the type of transaction. Sui Eplorer provides the following detail pages:
  * [Transaction details](#transaction-details-pages) for each transaction type
-     * TransferSui transaction details
-     * TransferObject transaction details
-     * Call transaction details
-     * Publish transaction details
-     * Batch transaction details
+     * TransferSui
+     * TransferObject
+     * Call
+     * Publish
+     * Batch transactions
  * [Object details](#object-details-page)
  * [Address details](#address-details-page)
  * [Package details](#package-details-page)
@@ -71,7 +72,7 @@ You can click on a value in the **Transaction ID** or **Addresses** column to op
 ## Transaction details pages
 When you click a **Transaction ID**, a details page opens. The page title reflects the transaction type, and the fields displayed vary depending on the transaction type. If you don’t see one of the fields, it is because it is not available for the selected transaction type. For example, a TransferSui transaction does not include an **Events** tab.
 
-![Explorer Transaction details page](../../static/explorer-transfersui-details-page.png "Sui Explorer Transaction details page for a TransferSui transaction")
+![Explorer Transaction details page](../../static/explorer-transaction-details-page.png "Sui Explorer Transaction details page for a TransferObject transaction")
 *The Sui Explorer Transaction details page*
 
 The transaction details pages include the following tabs:
@@ -88,7 +89,7 @@ The **Details** tab includes the following fields:
  * **Updated** - The object ID for the object the transaction updated.
  * **Created** - The object ID for the object this transaction created.
  * **Amount** - The number and type of coins transferred for the transaction.
- * **Sender** - Displayed only for Publish transactions. The address of the sender of the transaction.
+ * **Sender** - The address of the sender of the transaction. Displayed only for Publish transactions.
  * **Sender & Recipients** - The addresses associated with the transaction. The first value is the sender's address, and the address next to the green checkmark is the recipient's address. When there are multiple recipients, the field includes multiple addresses.
  * **Modules** - Shows the module code used to create and execute the transaction.
  * **Gas and storage fees** - Details about the gas and fees for the transaction. 
@@ -110,26 +111,37 @@ When you click on an object ID displayed on a transaction details page it opens 
 
 The page includes the following details:
 
- * **Description** includes the following fields:
+ * **Description**
      * **Type** - The type of the object, such as coin.
      * **Object ID** - The ID of the object. 	
      * **Last Transaction ID** - The ID of the most recent transaction associated with the object.
      * **Version** - The version of the object. 
      * **Owner** - The address of the owner of the object.
- * **Properties** - Displays details such as the coin balance for the object.
- * **Child Objects** - Displays the objects that this object owns.
-**Transactions** - Displays the same information as the **Transactions** page, but is limited to the transactions associated with the object.
+ * **Properties** - Details such as the coin balance for the object.
+ * **Child Objects** - The objects that this object owns.
+**Transactions** - The same information as the **Transactions** page, but limited to the transactions associated with the object.
 
 ## Address details page
 The **Address** details page lets you view details about a specific address, including assets owned by the address and transactions that interacted with the address.
 
-![Explorer Address details page](../../static/explorer-address-page.png "Sui Explorer Address details page")
+![Explorer Address details page](../../static/explorer-address-details-page.png "Sui Explorer Address details page")
 *The Sui Explorer Address details page*
 
 The **Address** details page includes the following fields:
- * **Owned objects** - Displays the objects owned by the address, such as coins.
+ * **Owned objects** - The objects owned by the address, such as coins.
  * **Coins** - List of tokens owned and their aggregated balance by coin type. Click on an entry to view additional details about individual coin objects.
  * **NFTs** - List of NFTs owned by the address. Click an ID to view the object details page for the NFT.
  * **Transactions** - Click to view more detailed information about each transaction.
 
 ## Package details page
+The **Package** details page displays the object ID, version, and publisher of the package. It also shows the modules used, including the code for each.
+
+![Explorer Package details page](../../static/explorer-package-details-page.png "Sui Explorer Package details page")
+*The Sui Explorer Package details page*
+
+The **Package** details page includes the following fields:
+ * **Details**
+     * **Object ID** - The object ID of the package.
+     * **Version** - The version of the package.
+     * **Publisher** - The publisher of the package.
+ * **Modules** - Lists the modules used in the package.
