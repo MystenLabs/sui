@@ -30,15 +30,6 @@ function Search() {
     const [result, setResult] = useState<ResultType[] | null>(null);
     const [resultIndex, setResultIndex] = useState(0);
 
-    // Clicking Outside the Search Bar and Results should clear the search
-
-    useEffect(() => {
-        document.addEventListener('click', handleClickOutside, false);
-
-        return () =>
-            document.removeEventListener('click', handleClickOutside, false);
-    }, []);
-
     const handleClickOutside = (event: MouseEvent): void => {
         if (
             wrapperref.current &&
@@ -48,6 +39,46 @@ function Search() {
             setInput('');
         }
     };
+
+    const handleKeyPress = useCallback(
+        (event: KeyboardEvent): void => {
+            // Press Down Key or Tab
+            if (event.keyCode === 40 || event.keyCode === 9) {
+                event.preventDefault();
+                setResultIndex((prevIndex) =>
+                    result?.length && prevIndex < result.length - 1
+                        ? prevIndex + 1
+                        : 0
+                );
+            }
+
+            // Press Up Key
+            if (event.keyCode === 38) {
+                event.preventDefault();
+                setResultIndex((prevIndex) =>
+                    prevIndex > 0
+                        ? prevIndex - 1
+                        : result?.length && result.length > 1
+                        ? result.length - 1
+                        : prevIndex
+                );
+            }
+        },
+        [result]
+    );
+
+    // Clicking Outside the Search Bar and Results should clear the search
+
+    useEffect(() => {
+        setResultIndex(0);
+        document.addEventListener('click', handleClickOutside, false);
+        document.addEventListener('keydown', handleKeyPress, false);
+
+        return () => {
+            document.removeEventListener('click', handleClickOutside, false);
+            document.removeEventListener('keydown', handleKeyPress, false);
+        };
+    }, [handleKeyPress]);
 
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
@@ -120,6 +151,7 @@ function Search() {
                     onChange={handleTextChange}
                     autoFocus
                     type="text"
+                    autoComplete="off"
                 />
                 <input
                     className={styles.searchtextmobile}
@@ -129,6 +161,7 @@ function Search() {
                     onChange={handleTextChange}
                     autoFocus
                     type="text"
+                    autoComplete="off"
                 />
                 <button
                     id="searchBtn"
