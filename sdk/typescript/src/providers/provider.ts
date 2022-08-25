@@ -132,8 +132,7 @@ export abstract class Provider {
   ): Promise<SubscriptionId>;
 
   /**
-   *
-   * @param id the subscription
+   * Unsubscribe from an event
    */
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
   // TODO: add more interface methods
