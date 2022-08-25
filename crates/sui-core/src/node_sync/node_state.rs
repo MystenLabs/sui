@@ -14,7 +14,9 @@ use sui_types::{
     base_types::{AuthorityName, ExecutionDigests, TransactionDigest, TransactionEffectsDigest},
     committee::Committee,
     error::{SuiError, SuiResult},
-    messages::{CertifiedTransaction, SignedTransactionEffects, TransactionInfoResponse},
+    messages::{
+        CertifiedTransaction, SignedTransactionEffects, TransactionEffects, TransactionInfoResponse,
+    },
     messages_checkpoint::CheckpointContents,
 };
 
@@ -383,6 +385,19 @@ where
         }
     }
 
+    fn get_missing_parents(
+        &self,
+        effects: &TransactionEffects,
+    ) -> SuiResult<Vec<TransactionDigest>> {
+        let mut missing_parents = Vec::new();
+        for parent in effects.dependencies.iter() {
+            if !self.state.database.effects_exists(parent)? {
+                missing_parents.push(*parent);
+            }
+        }
+        Ok(missing_parents)
+    }
+
     async fn process_parent_request(
         &self,
         permit: OwnedSemaphorePermit,
@@ -392,28 +407,20 @@ where
 
         let cert = self.get_cert(digest).await?;
         let effects = self.get_true_effects(&cert).await?;
+
+        // Must release permit before enqueuing new work to prevent deadlock.
+        std::mem::drop(permit);
+
+        let missing_parents = self.get_missing_parents(&effects.effects)?;
+        self.enqueue_parent_execution_requests(digest, &missing_parents, false)
+            .await?;
+
         match self
             .state
             .handle_node_sync_certificate(cert.clone(), effects.clone())
             .await
         {
             Ok(_) => Ok(SyncStatus::CertExecuted),
-            Err(SuiError::ObjectErrors { .. }) => {
-                debug!(?digest, "cert execution failed due to missing parents");
-
-                // Must release permit before enqueuing new work to prevent deadlock.
-                std::mem::drop(permit);
-
-                self.enqueue_parent_execution_requests(&effects, false)
-                    .await?;
-
-                // Parents have been executed, so this should now succeed.
-                debug!(?digest, "parents executed, re-attempting cert");
-                self.state
-                    .handle_node_sync_certificate(cert.clone(), effects.clone())
-                    .await?;
-                Ok(SyncStatus::CertExecuted)
-            }
             Err(e) => Err(e),
         }
     }
@@ -428,7 +435,7 @@ where
 
         match self.state.handle_certificate(cert.clone()).await {
             Ok(_) => Ok(SyncStatus::CertExecuted),
-            Err(SuiError::ObjectErrors { .. }) => {
+            Err(SuiError::ObjectNotFound { .. }) | Err(SuiError::ObjectErrors { .. }) => {
                 debug!(?digest, "cert execution failed due to missing parents");
 
                 let effects = self.get_true_effects(&cert).await?;
@@ -436,7 +443,8 @@ where
                 // Must release permit before enqueuing new work to prevent deadlock.
                 std::mem::drop(permit);
 
-                self.enqueue_parent_execution_requests(&effects, true)
+                let missing_parents = self.get_missing_parents(&effects.effects)?;
+                self.enqueue_parent_execution_requests(digest, &missing_parents, true)
                     .await?;
 
                 // Parents have been executed, so this should now succeed.
@@ -592,8 +600,14 @@ where
             "wait_for_parents timed out, actively processing parents"
         );
 
+        let missing_parents = self.get_missing_parents(&effects.effects)?;
+
         if let Err(err) = self
-            .enqueue_parent_execution_requests(effects, false /* not validator */)
+            .enqueue_parent_execution_requests(
+                digest,
+                &missing_parents,
+                false, /* not validator */
+            )
             .await
         {
             let msg = "enqueue_parent_execution_requests failed";
@@ -607,11 +621,10 @@ where
 
     async fn enqueue_parent_execution_requests(
         &self,
-        effects: &SignedTransactionEffects,
+        digest: &TransactionDigest,
+        parents: &[TransactionDigest],
         is_validator: bool,
     ) -> SuiResult {
-        let parents = &effects.effects.dependencies;
-
         debug!(?parents, "attempting to execute parents");
 
         let handle = NodeSyncHandle::new_from_sender(self.sender.clone(), self.metrics.clone());
@@ -635,7 +648,7 @@ where
             Ok(())
         } else {
             Err(SuiError::ExecutionDriverError {
-                digest: effects.effects.transaction_digest,
+                digest: *digest,
                 msg: "Could not execute all parent certificates".into(),
                 errors,
             })
