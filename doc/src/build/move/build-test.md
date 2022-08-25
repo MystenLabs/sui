@@ -17,6 +17,8 @@ Build Successful
 Artifacts path: "./build"
 ```
 
+If the build fails, you will be presented with verbose error messaging you can use to troubleshoot and resolve root issues.
+
 Now that we have designed our asset and its accessor functions, let us
 test the code we have written.
 
