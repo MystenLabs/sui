@@ -1,13 +1,33 @@
-.permission {
-    font-weight: 500;
-    font-style: italic;
-    padding: 3px 6px;
-    background-color: #c7c7c7;
-    border-radius: 4px;
-    display: inline-block;
-    margin-right: 12px;
+@use '_values/colors';
 
-    &:last-child {
-        margin-right: 0;
-    }
+.label {
+    border-top: 1px solid colors.$gray-45;
+    padding-top: 20px;
+    padding-bottom: 10px;
+    text-transform: uppercase;
+    color: colors.$gray-75;
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 15px;
+}
+
+.permissions {
+    margin: 0;
+    list-style: none;
+    padding-left: 0;
+}
+
+.checkmark {
+    font-size: 10px;
+    margin-right: 10px;
+    color: colors.$success;
+}
+
+.permission {
+    margin-bottom: 6px;
+    font-weight: 500;
+    font-size: 13px;
+    line-height: 17px;
+    margin-left: 0;
+    color: colors.$gray-100;
 }

@@ -25,6 +25,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_quorum_driver::QuorumDriverHandler;
+use sui_quorum_driver::QuorumDriverMetrics;
 use sui_types::crypto::EmptySignInfo;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
@@ -153,7 +154,8 @@ impl Driver<()> for BenchDriver {
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
             // Make a per worker quorum driver, otherwise they all share the same task.
-            let quorum_driver_handler = QuorumDriverHandler::new(aggregator.clone());
+            let quorum_driver_handler =
+                QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
             let qd = quorum_driver_handler.clone_quorum_driver();
             let runner = tokio::spawn(async move {
                 cloned_barrier.wait().await;

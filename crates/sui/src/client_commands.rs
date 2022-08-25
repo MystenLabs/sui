@@ -16,24 +16,26 @@ use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
 use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
-use tracing::info;
-
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, SuiObjectInfo, SuiParsedObject, SuiTransactionResponse,
+    GetObjectDataResponse, SuiExecuteTransactionResponse, SuiObjectInfo, SuiParsedObject,
+    SuiTransactionResponse,
 };
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::SuiKeystore;
 use sui_sdk::{ClientType, SuiClient};
-use sui_types::object::Owner;
 use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
+    messages::ExecuteTransactionRequestType,
     messages::Transaction,
+    object::Owner,
     SUI_FRAMEWORK_ADDRESS,
 };
+use tracing::info;
 
 use crate::config::{Config, PersistedConfig, SuiClientConfig};
 
@@ -56,6 +58,9 @@ pub enum SuiClientCommands {
         /// used for subsequent commands.
         #[clap(long, value_hint = ValueHint::Url)]
         gateway: Option<String>,
+        /// The fullnode URL
+        #[clap(long, value_hint = ValueHint::Url)]
+        fullnode: Option<String>,
     },
 
     /// Default address used for commands when none specified
@@ -131,16 +136,16 @@ pub enum SuiClientCommands {
         gas_budget: u64,
     },
 
-    /// Transfer coin object
-    #[clap(name = "transfer-coin")]
+    /// Transfer object
+    #[clap(name = "transfer")]
     Transfer {
         /// Recipient address
         #[clap(long)]
         to: SuiAddress,
 
-        /// Coin to transfer, in 20 bytes Hex string
+        /// Object to transfer, in 20 bytes Hex string
         #[clap(long)]
-        coin_object_id: ObjectID,
+        object_id: ObjectID,
 
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
@@ -183,9 +188,9 @@ pub enum SuiClientCommands {
     #[clap(name = "addresses")]
     Addresses,
 
-    /// Generate new address and keypair.
+    /// Generate new address and keypair, with optional keypair scheme {ed25519 | secp256k1}, default to ed25519.
     #[clap(name = "new-address")]
-    NewAddress,
+    NewAddress { key_scheme: Option<String> },
 
     /// Obtain all objects owned by the address.
     #[clap(name = "objects")]
@@ -204,18 +209,17 @@ pub enum SuiClientCommands {
     },
 
     /// Split a coin object into multiple coins.
+    #[clap(group(ArgGroup::new("split").required(true).args(&["amounts", "count"])))]
     SplitCoin {
         /// Coin to Split, in 20 bytes Hex string
         #[clap(long)]
         coin_id: ObjectID,
-        /// Amount to split out from the coin
-        #[clap(
-            long,
-            multiple_occurrences = false,
-            multiple_values = true,
-            required = true
-        )]
-        amounts: Vec<u64>,
+        /// Specific amounts to split out from the coin
+        #[clap(long, multiple_occurrences = false, multiple_values = true)]
+        amounts: Option<Vec<u64>>,
+        /// Count of equal-size coins to split into
+        #[clap(long)]
+        count: u64,
         /// ID of the gas object for gas payment, in 20 bytes Hex string
         /// If not provided, a gas object with at least gas_budget value will be selected
         #[clap(long)]
@@ -286,11 +290,11 @@ impl SuiClientCommands {
                 let compiled_modules = build_move_package_to_bytes(&package_path, build_config)?;
                 let data = context
                     .gateway
+                    .transaction_builder()
                     .publish(sender, compiled_modules, gas, gas_budget)
                     .await?;
                 let signature = context.keystore.sign(&sender, &data.to_bytes())?;
                 let response = context
-                    .gateway
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
 
@@ -299,7 +303,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::Object { id } => {
                 // Fetch the object ref
-                let object_read = context.gateway.get_object(id).await?;
+                let object_read = context.gateway.read_api().get_parsed_object(id).await?;
                 SuiClientCommandResult::Object(object_read)
             }
             SuiClientCommands::Call {
@@ -320,7 +324,7 @@ impl SuiClientCommands {
 
             SuiClientCommands::Transfer {
                 to,
-                coin_object_id: object_id,
+                object_id,
                 gas,
                 gas_budget,
             } => {
@@ -329,11 +333,11 @@ impl SuiClientCommands {
 
                 let data = context
                     .gateway
+                    .transaction_builder()
                     .transfer_object(from, object_id, gas, gas_budget, to)
                     .await?;
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .gateway
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 let cert = response.certificate;
@@ -356,11 +360,11 @@ impl SuiClientCommands {
 
                 let data = context
                     .gateway
+                    .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
                 let signature = context.keystore.sign(&from, &data.to_bytes())?;
                 let response = context
-                    .gateway
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 let cert = response.certificate;
@@ -380,10 +384,12 @@ impl SuiClientCommands {
                 let address = address.unwrap_or(context.active_address()?);
                 let mut address_object = context
                     .gateway
+                    .read_api()
                     .get_objects_owned_by_address(address)
                     .await?;
                 let object_objects = context
                     .gateway
+                    .read_api()
                     .get_objects_owned_by_object(address.into())
                     .await?;
                 address_object.extend(object_objects);
@@ -393,12 +399,16 @@ impl SuiClientCommands {
 
             SuiClientCommands::SyncClientState { address } => {
                 let address = address.unwrap_or(context.active_address()?);
-                context.gateway.sync_account_state(address).await?;
+                context
+                    .gateway
+                    .wallet_sync_api()
+                    .sync_account_state(address)
+                    .await?;
                 SuiClientCommandResult::SyncClientState
             }
-            SuiClientCommands::NewAddress => {
-                let (address, phrase) = context.keystore.generate_new_key()?;
-                SuiClientCommandResult::NewAddress((address, phrase))
+            SuiClientCommands::NewAddress { key_scheme } => {
+                let (address, phrase, flag) = context.keystore.generate_new_key(key_scheme)?;
+                SuiClientCommandResult::NewAddress((address, phrase, flag))
             }
             SuiClientCommands::Gas { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -407,24 +417,36 @@ impl SuiClientCommands {
                     .await?
                     .iter()
                     // Ok to unwrap() since `get_gas_objects` guarantees gas
-                    .map(|(_, object)| GasCoin::try_from(object).unwrap())
+                    .map(|(_val, object, _object_ref)| GasCoin::try_from(object).unwrap())
                     .collect();
                 SuiClientCommandResult::Gas(coins)
             }
             SuiClientCommands::SplitCoin {
                 coin_id,
                 amounts,
+                count,
                 gas,
                 gas_budget,
             } => {
                 let signer = context.get_object_owner(&coin_id).await?;
-                let data = context
-                    .gateway
-                    .split_coin(signer, coin_id, amounts, gas, gas_budget)
-                    .await?;
+                let data = if let Some(amounts) = amounts {
+                    context
+                        .gateway
+                        .transaction_builder()
+                        .split_coin(signer, coin_id, amounts, gas, gas_budget)
+                        .await?
+                } else {
+                    if count == 0 {
+                        return Err(anyhow!("Coin split count must be greater than 0"));
+                    }
+                    context
+                        .gateway
+                        .transaction_builder()
+                        .split_coin_equal(signer, coin_id, count, gas, gas_budget)
+                        .await?
+                };
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .gateway
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
                 SuiClientCommandResult::SplitCoin(response)
@@ -438,17 +460,21 @@ impl SuiClientCommands {
                 let signer = context.get_object_owner(&primary_coin).await?;
                 let data = context
                     .gateway
+                    .transaction_builder()
                     .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
                     .await?;
                 let signature = context.keystore.sign(&signer, &data.to_bytes())?;
                 let response = context
-                    .gateway
                     .execute_transaction(Transaction::new(data, signature))
                     .await?;
 
                 SuiClientCommandResult::MergeCoin(response)
             }
-            SuiClientCommands::Switch { address, gateway } => {
+            SuiClientCommands::Switch {
+                address,
+                gateway,
+                fullnode,
+            } => {
                 if let Some(addr) = address {
                     if !context.keystore.addresses().contains(&addr) {
                         return Err(anyhow!("Address {} not managed by wallet", addr));
@@ -459,17 +485,29 @@ impl SuiClientCommands {
 
                 if let Some(gateway) = &gateway {
                     // TODO: handle embedded gateway
-                    context.config.gateway = ClientType::RPC(gateway.clone());
+                    context.config.gateway = ClientType::RPC(gateway.clone(), None);
                     context.config.save()?;
                 }
 
-                if Option::is_none(&address) && Option::is_none(&gateway) {
+                if let Some(fullnode) = &fullnode {
+                    context.config.fullnode = Some(ClientType::RPC(fullnode.clone(), None));
+                    context.config.save()?;
+                }
+
+                if Option::is_none(&address)
+                    && Option::is_none(&gateway)
+                    && Option::is_none(&fullnode)
+                {
                     return Err(anyhow!(
                         "No address or gateway specified. Please Specify one."
                     ));
                 }
 
-                SuiClientCommandResult::Switch(SwitchResponse { address, gateway })
+                SuiClientCommandResult::Switch(SwitchResponse {
+                    address,
+                    gateway,
+                    fullnode,
+                })
             }
             SuiClientCommands::ActiveAddress => {
                 SuiClientCommandResult::ActiveAddress(context.active_address().ok())
@@ -507,7 +545,7 @@ impl SuiClientCommands {
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
                     .reference
                     .object_id;
-                let object_read = context.gateway.get_object(nft_id).await?;
+                let object_read = context.gateway.read_api().get_parsed_object(nft_id).await?;
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
         });
@@ -519,6 +557,7 @@ pub struct WalletContext {
     pub config: PersistedConfig<SuiClientConfig>,
     pub keystore: SuiKeystore,
     pub gateway: SuiClient,
+    pub fullnode: Option<SuiClient>,
 }
 
 impl WalletContext {
@@ -532,10 +571,15 @@ impl WalletContext {
         let config = config.persisted(config_path);
         let keystore = config.keystore.init()?;
         let client = config.gateway.init().await?;
+        let fullnode_client = match &config.fullnode {
+            Some(client) => Some(client.init().await?),
+            None => None,
+        };
         let context = Self {
             config,
             keystore,
             gateway: client,
+            fullnode: fullnode_client,
         };
         Ok(context)
     }
@@ -561,18 +605,27 @@ impl WalletContext {
     pub async fn gas_objects(
         &self,
         address: SuiAddress,
-    ) -> Result<Vec<(u64, SuiParsedObject)>, anyhow::Error> {
-        let object_refs = self.gateway.get_objects_owned_by_address(address).await?;
+    ) -> Result<Vec<(u64, SuiParsedObject, SuiObjectInfo)>, anyhow::Error> {
+        let object_refs = self
+            .gateway
+            .read_api()
+            .get_objects_owned_by_address(address)
+            .await?;
 
         // TODO: We should ideally fetch the objects from local cache
         let mut values_objects = Vec::new();
         for oref in object_refs {
-            match self.gateway.get_object(oref.object_id).await? {
+            let response = self
+                .gateway
+                .read_api()
+                .get_parsed_object(oref.object_id)
+                .await?;
+            match response {
                 GetObjectDataResponse::Exists(o) => {
                     if matches!( o.data.type_(), Some(v)  if *v == GasCoin::type_().to_string()) {
                         // Okay to unwrap() since we already checked type
                         let gas_coin = GasCoin::try_from(&o)?;
-                        values_objects.push((gas_coin.value(), o));
+                        values_objects.push((gas_coin.value(), o, oref));
                     }
                 }
                 _ => continue,
@@ -583,7 +636,12 @@ impl WalletContext {
     }
 
     pub async fn get_object_owner(&self, id: &ObjectID) -> Result<SuiAddress, anyhow::Error> {
-        let object = self.gateway.get_object(*id).await?.into_object()?;
+        let object = self
+            .gateway
+            .read_api()
+            .get_object(*id)
+            .await?
+            .into_object()?;
         Ok(object.owner.get_owner_address()?)
     }
 
@@ -607,12 +665,46 @@ impl WalletContext {
     ) -> Result<(u64, SuiParsedObject), anyhow::Error> {
         for o in self.gas_objects(address).await.unwrap() {
             if o.0 >= budget && !forbidden_gas_objects.contains(&o.1.id()) {
-                return Ok(o);
+                return Ok((o.0, o.1));
             }
         }
         Err(anyhow!(
             "No non-argument gas objects found with value >= budget {budget}"
         ))
+    }
+
+    /// A backward-compatible migration of transaction execution from gateway to fullnode
+    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<SuiTransactionResponse> {
+        let tx_digest = *tx.digest();
+        match &self.fullnode {
+            None => self.gateway.quorum_driver().execute_transaction(tx).await,
+            Some(client) => {
+                let result = client
+                    .quorum_driver()
+                    .execute_transaction_by_fullnode(
+                        tx,
+                        ExecuteTransactionRequestType::WaitForEffectsCert,
+                    )
+                    .await;
+                match result {
+                    Ok(SuiExecuteTransactionResponse::EffectsCert {
+                        certificate,
+                        effects,
+                    }) => Ok(SuiTransactionResponse {
+                        certificate,
+                        effects: effects.effects,
+                        timestamp_ms: None,
+                        parsed_data: None,
+                    }),
+                    Err(err) => Err(anyhow!(
+                        "Failed to execute transaction {tx_digest:?} with error {err:?}"
+                    )),
+                    other => Err(anyhow!(
+                        "Expect SuiExecuteTransactionResponse::EffectsCert but got {other:?}"
+                    )),
+                }
+            }
+        }
     }
 }
 
@@ -679,8 +771,11 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
-            SuiClientCommandResult::NewAddress((address, recovery_phrase)) => {
-                writeln!(writer, "Created new keypair for address : [{address}]")?;
+            SuiClientCommandResult::NewAddress((address, recovery_phrase, flag)) => {
+                writeln!(
+                    writer,
+                    "Created new keypair for address with flag {flag}: [{address}]"
+                )?;
                 writeln!(writer, "Secret Recovery Phrase : [{recovery_phrase}]")?;
             }
             SuiClientCommandResult::Gas(gases) => {
@@ -749,11 +844,12 @@ pub async fn call_move(
 
     let data = context
         .gateway
+        .transaction_builder()
         .move_call(
             sender,
             package,
-            module.to_string(),
-            function.to_string(),
+            module,
+            function,
             type_args
                 .into_iter()
                 .map(|arg| arg.try_into())
@@ -765,7 +861,8 @@ pub async fn call_move(
         .await?;
     let signature = context.keystore.sign(&sender, &data.to_bytes())?;
     let transaction = Transaction::new(data, signature);
-    let response = context.gateway.execute_transaction(transaction).await?;
+
+    let response = context.execute_transaction(transaction).await?;
     let cert = response.certificate;
     let effects = response.effects;
 
@@ -846,7 +943,7 @@ pub enum SuiClientCommandResult {
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,
-    NewAddress((SuiAddress, String)),
+    NewAddress((SuiAddress, String, u8)),
     Gas(Vec<GasCoin>),
     SplitCoin(SuiTransactionResponse),
     MergeCoin(SuiTransactionResponse),
@@ -860,6 +957,7 @@ pub struct SwitchResponse {
     /// Active address
     pub address: Option<SuiAddress>,
     pub gateway: Option<String>,
+    pub fullnode: Option<String>,
 }
 
 impl Display for SwitchResponse {
@@ -870,6 +968,9 @@ impl Display for SwitchResponse {
         }
         if let Some(gateway) = &self.gateway {
             writeln!(writer, "Active gateway switched to {}", gateway)?;
+        }
+        if let Some(fullnode) = &self.fullnode {
+            writeln!(writer, "Active fullnode switched to {}", fullnode)?;
         }
         write!(f, "{}", writer)
     }

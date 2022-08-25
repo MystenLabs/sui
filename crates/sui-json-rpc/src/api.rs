@@ -8,14 +8,22 @@ use jsonrpsee_proc_macros::rpc;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionResponse,
-    SuiTypeTag, TransactionBytes,
+    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
+    SuiTransactionResponse, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::crypto::SignatureScheme;
+use sui_types::messages::ExecuteTransactionRequestType;
+use sui_types::object::Owner;
 use sui_types::sui_serde::Base64;
+
+/// Maximum number of events returned in an event query.
+/// This is equivalent to EVENT_STORE_QUERY_MAX_LIMIT in `sui-storage` crate.
+/// To avoid unnecessary dependency on that crate, we have a reference here
+/// for document purposes.
+pub const EVENT_QUERY_MAX_LIMIT: usize = 100;
 
 #[open_rpc(namespace = "sui", tag = "Gateway Transaction Execution API")]
 #[rpc(server, client, namespace = "sui")]
@@ -284,6 +292,22 @@ pub trait RpcTransactionBuilder {
         gas_budget: u64,
     ) -> RpcResult<TransactionBytes>;
 
+    /// Create an unsigned transaction to split a coin object into multiple equal-size coins.
+    #[method(name = "splitCoinEqual")]
+    async fn split_coin_equal(
+        &self,
+        /// the transaction signer's Sui address
+        signer: SuiAddress,
+        /// the coin object to be spilt
+        coin_object_id: ObjectID,
+        /// the number of coins to split into
+        split_count: u64,
+        /// gas object to be used in this transaction, the gateway will pick one from the signer's possession if not provided
+        gas: Option<ObjectID>,
+        /// the gas budget, the transaction will fail if the gas cost exceed the budget
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes>;
+
     /// Create an unsigned transaction to merge multiple coins into one coin.
     #[method(name = "mergeCoins")]
     async fn merge_coin(
@@ -342,83 +366,117 @@ pub trait EventStreamingApi {
 #[open_rpc(namespace = "sui", tag = "Event Read API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait EventReadApi {
-    /// Return list of events emitted by a specified transaction.
+    /// Return events emitted by the given transaction.
     #[method(name = "getEventsByTransaction")]
     async fn get_events_by_transaction(
         &self,
         /// digest of the transaction, as base-64 encoded string
         digest: TransactionDigest,
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
+        count: usize,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events emitted by a specified Move module
+    /// Return events emitted in a specified Move module
     #[method(name = "getEventsByModule")]
-    async fn get_events_by_module(
+    async fn get_events_by_transaction_module(
         &self,
         /// the Move package ID
         package: ObjectID,
         /// the module name
         module: String,
-        /// maximum size of the result
-        count: u64,
-        /// the matching events' timestamp will be after the specified start time
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
+        count: usize,
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events matching the specified event type
-    #[method(name = "getEventsByEventType")]
-    async fn get_events_by_event_type(
+    /// Return events with the given move event struct name
+    #[method(name = "getEventsByMoveEventStructName")]
+    async fn get_events_by_move_event_struct_name(
         &self,
-        /// the event type, e.g. '0x2::devnet_nft::MintNFTEvent'
-        event_type: String,
-        /// maximum size of the result
-        count: u64,
-        /// the matching events' timestamp will be after the specified start time
+        /// the event struct name type, e.g. `0x2::devnet_nft::MintNFTEvent` or `0x2::SUI::test_foo<address, vector<u8>>` with type params
+        move_event_struct_name: String,
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
+        count: usize,
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events involving a specified sender.
+    /// Return events associated with the given sender.
     #[method(name = "getEventsBySender")]
     async fn get_events_by_sender(
         &self,
         /// the sender's Sui address
         sender: SuiAddress,
-        /// maximum size of the result
-        count: u64,
-        /// the matching events' timestamp will be after the specified start time
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
+        count: usize,
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events involving a specified object
+    /// Return events associated with the given recipient
+    #[method(name = "getEventsByRecipient")]
+    async fn get_events_by_recipient(
+        &self,
+        /// the recipient
+        recipient: Owner,
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
+        count: usize,
+        /// left endpoint of time interval, inclusive
+        start_time: u64,
+        /// right endpoint of time interval, exclusive
+        end_time: u64,
+    ) -> RpcResult<Vec<SuiEventEnvelope>>;
+
+    /// Return events associated with the given object
     #[method(name = "getEventsByObject")]
     async fn get_events_by_object(
         &self,
         /// the object ID
         object: ObjectID,
-        /// maximum size of the result
-        count: u64,
-        /// the matching events' timestamp will be after the specified start time
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
+        count: usize,
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
 
-    /// Return list of events involving a specified owner.
-    #[method(name = "getEventsByOwner")]
-    async fn get_events_by_owner(
+    /// Return events emitted in [start_time, end_time) interval
+    #[method(name = "getEventsByTimeRange")]
+    async fn get_events_by_timerange(
         &self,
-        /// the owner's Sui address
-        owner: SuiAddress,
-        /// maximum size of the result
-        count: u64,
-        /// the matching events' timestamp will be after the specified start time
+        /// maximum size of the result, capped to EVENT_QUERY_MAX_LIMIT
+        count: usize,
+        /// left endpoint of time interval, inclusive
         start_time: u64,
-        /// the matching events' timestamp will be before the specified end time
+        /// right endpoint of time interval, exclusive
         end_time: u64,
     ) -> RpcResult<Vec<SuiEventEnvelope>>;
+}
+
+#[open_rpc(namespace = "sui", tag = "Quorum Driver APIs to execute transactions.")]
+#[rpc(server, client, namespace = "sui")]
+pub trait QuorumDriverApi {
+    /// Execute the transaction and wait for results if desired
+    #[method(name = "executeTransaction")]
+    async fn execute_transaction(
+        &self,
+        /// transaction data bytes, as base-64 encoded string
+        tx_bytes: Base64,
+        /// Flag of the signature scheme that is used.
+        sig_scheme: SignatureScheme,
+        /// transaction signature, as base-64 encoded string
+        signature: Base64,
+        /// signer's public key, as base-64 encoded string
+        pub_key: Base64,
+        /// The request type
+        request_type: ExecuteTransactionRequestType,
+    ) -> RpcResult<SuiExecuteTransactionResponse>;
 }

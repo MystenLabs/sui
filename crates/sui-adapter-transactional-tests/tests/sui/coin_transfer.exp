@@ -26,10 +26,11 @@ Child Count: None
 Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(106)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 10u64}}
 
 task 5 'run'. lines 16-16:
+created: object(108)
 written: object(100), object(107)
 
 task 6 'view-object'. lines 18-18:
-Owner: Account Address ( C )
+Owner: Account Address ( A )
 Version: 2
 Child Count: None
 Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 99990u64}}

@@ -29,10 +29,13 @@ module sui::genesis {
     /// all the information we need in the system.
     fun create(
         validator_pubkeys: vector<vector<u8>>,
+        validator_network_pubkeys: vector<vector<u8>>,
+        validator_proof_of_possessions: vector<vector<u8>>,
         validator_sui_addresses: vector<address>,
         validator_names: vector<vector<u8>>,
         validator_net_addresses: vector<vector<u8>>,
         validator_stakes: vector<u64>,
+        validator_gas_prices: vector<u64>,
         ctx: &mut TxContext,
     ) {
         let sui_supply = sui::new();
@@ -43,23 +46,30 @@ module sui::genesis {
             vector::length(&validator_sui_addresses) == count
                 && vector::length(&validator_stakes) == count
                 && vector::length(&validator_names) == count
-                && vector::length(&validator_net_addresses) == count,
+                && vector::length(&validator_net_addresses) == count
+                && vector::length(&validator_gas_prices) == count,
             1
         );
         let i = 0;
         while (i < count) {
             let sui_address = *vector::borrow(&validator_sui_addresses, i);
             let pubkey = *vector::borrow(&validator_pubkeys, i);
+            let network_pubkey = *vector::borrow(&validator_network_pubkeys, i);
+            let proof_of_possession = *vector::borrow(&validator_proof_of_possessions, i);
             let name = *vector::borrow(&validator_names, i);
             let net_address = *vector::borrow(&validator_net_addresses, i);
             let stake = *vector::borrow(&validator_stakes, i);
+            let gas_price = *vector::borrow(&validator_gas_prices, i);
             vector::push_back(&mut validators, validator::new(
                 sui_address,
                 pubkey,
+                network_pubkey, 
+                proof_of_possession,
                 name,
                 net_address,
                 balance::increase_supply(&mut sui_supply, stake),
                 option::none(),
+                gas_price,
                 ctx
             ));
             i = i + 1;

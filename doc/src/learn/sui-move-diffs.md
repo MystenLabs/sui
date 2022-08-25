@@ -23,7 +23,7 @@ Find a detailed description of each change below.
 
 ## Object-centric global storage
 
-In core Move, global storage is part of the programming model and can be accessed through special operations, such as _move_to_, _move_from and_ many more[ global storage operators](https://move-language.github.io/move/global-storage-operators.html). Both resources and modules are stored in the core Move global storage. When you publish a module, it’s stored into a newly generated module address inside Move. When a new object (a.k.a. resource) is created, it's usually stored into some account’s address, as well.
+In core Move, global storage is part of the programming model and can be accessed through special operations, such as _move_to_, _move_from and_ many more[ global storage operators](https://move-language.github.io/move/global-storage-operators.html). Both resources and modules are stored in the core Move global storage. When you publish a module, it’s stored into a newly generated module address inside Move. When a new object (a.k.a. resource) is created, it's usually stored into some address, as well.
 
 But on-chain storage is expensive and limited (not optimized for storage and indexing). Current blockchains cannot scale to handle storage-heavy applications such as marketplaces and social apps.
 
@@ -31,7 +31,7 @@ So there is no global storage in Sui Move. None of the global storage-related op
 
 ## Addresses represent Object IDs
 
-In Move, there is a special _address_ type. This type is used to represent account addresses in core Move. Core Move needs to know the address of an account when dealing with the global storage. The _address_ type is 16 bytes, which is sufficient for the core Move security model.
+In Move, there is a special _address_ type. This type is used to represent addresses in core Move. Core Move needs to know the address of an account when dealing with the global storage. The _address_ type is 16 bytes, which is sufficient for the core Move security model.
 
 In Sui, since we don’t support global storage in Move, we don’t need the _address_ type to represent user accounts. Instead, we use the _address_ type to represent the Object ID. Refer to the [object.move](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) file in Sui framework for an understanding of address use.
 

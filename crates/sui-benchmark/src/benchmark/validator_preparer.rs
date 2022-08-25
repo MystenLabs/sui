@@ -102,8 +102,8 @@ impl ValidatorPreparer {
                 let auth_state = make_authority_state(
                     db_cpus as i32,
                     &committee,
-                    &validator_config.public_key(),
-                    validator_config.key_pair().copy(),
+                    &validator_config.protocol_public_key(),
+                    validator_config.protocol_key_pair().copy(),
                 );
 
                 Self {

@@ -12,7 +12,6 @@ use test_fuzz::runtime::num_traits::ToPrimitive;
 
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::object::Object;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
 
 use super::{is_homogeneous, HEX_PREFIX};
 use super::{resolve_move_function_args, SuiJsonCallArg, SuiJsonValue};
@@ -397,14 +396,13 @@ fn test_basic_args_linter_top_level() {
     assert!(resolve_move_function_args(example_package, module, function, args).is_err());
 
     // Test with vecu8 as address
-    let genesis_objs = sui_adapter::genesis::clone_genesis_packages();
-    let framework_pkg = genesis_objs
-        .iter()
-        .find(|q| q.id() == ObjectID::from(SUI_FRAMEWORK_ADDRESS))
-        .expect("Unable to find framework object")
-        .data
-        .try_as_package()
-        .unwrap();
+    let path =
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../sui_programmability/examples/basics");
+    let compiled_modules =
+        sui_framework::build_and_verify_package(&path, move_package::BuildConfig::default())
+            .unwrap();
+    let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
+    let framework_pkg = example_package.data.try_as_package().unwrap();
 
     let module = Identifier::new("object_basics").unwrap();
     let function = Identifier::new("create").unwrap();

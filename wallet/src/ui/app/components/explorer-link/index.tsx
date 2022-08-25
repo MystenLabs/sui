@@ -6,12 +6,14 @@ import { memo, useMemo } from 'react';
 import { Explorer } from './Explorer';
 import { ExplorerLinkType } from './ExplorerLinkType';
 import ExternalLink from '_components/external-link';
-import Icon from '_components/icon';
+import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
 import { activeAccountSelector } from '_redux/slices/account';
 
 import type { ObjectId, SuiAddress, TransactionDigest } from '@mysten/sui.js';
 import type { ReactNode } from 'react';
+
+import st from './ExplorerLink.module.scss';
 
 export type ExplorerLinkProps = (
     | {
@@ -75,7 +77,13 @@ function ExplorerLink(props: ExplorerLinkProps) {
             showIcon={false}
         >
             <>
-                {children} {showIcon && <Icon icon="box-arrow-up-right" />}
+                {children}{' '}
+                {showIcon && (
+                    <Icon
+                        icon={SuiIcons.ArrowLeft}
+                        className={st.explorerIcon}
+                    />
+                )}
             </>
         </ExternalLink>
     );

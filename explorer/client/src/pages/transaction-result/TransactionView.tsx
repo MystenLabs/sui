@@ -11,8 +11,10 @@ import {
     getMovePackageContent,
     getObjectId,
     getTransferSuiTransaction,
+    getTransferSuiAmount,
 } from '@mysten/sui.js';
 import cl from 'classnames';
+import { Link } from 'react-router-dom';
 
 import {
     eventToDisplay,
@@ -20,8 +22,9 @@ import {
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
-import { type Link, TxAddresses } from '../../components/table/TableCard';
+import { type LinkObj, TxAddresses } from '../../components/table/TableCard';
 import Tabs from '../../components/tabs/Tabs';
+import { presentBN } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
 import TxLinks from './TxLinks';
 import TxResultHeader from './TxResultHeader';
@@ -53,7 +56,7 @@ function generateMutatedCreated(tx: TxDataProps) {
         ...(tx.mutated?.length
             ? [
                   {
-                      label: 'Mutated',
+                      label: 'Updated',
                       links: tx.mutated.map((obj) => obj.objectId),
                   },
               ]
@@ -119,6 +122,10 @@ function formatByTransactionKind(
                     value: moveCall.arguments,
                     list: true,
                 },
+                typeArguments: {
+                    value: moveCall.typeArguments,
+                    list: true,
+                },
             };
         case 'Publish':
             const publish = getPublishTransaction(data)!;
@@ -152,6 +159,7 @@ type TxItemView = {
         link?: boolean;
         category?: string;
         monotypeClass?: boolean;
+        href?: string;
     }[];
 };
 
@@ -170,7 +178,7 @@ function ItemView({ data }: { data: TxItemView }) {
             <div className={styles.itemviewcontent}>
                 {data.content.map((item, index) => {
                     // handle sender -> recipient display in one line
-                    let links: Link[] = [];
+                    let links: LinkObj[] = [];
                     let label = item.label;
                     if (Array.isArray(item)) {
                         links = getAddressesLinks(item);
@@ -205,6 +213,13 @@ function ItemView({ data }: { data: TxItemView }) {
                                         category={item.category as Category}
                                         isLink={true}
                                     />
+                                ) : item.href ? (
+                                    <Link
+                                        to={item.href}
+                                        className={styles.customhreflink}
+                                    >
+                                        {item.value}
+                                    </Link>
                                 ) : (
                                     item.value
                                 )}
@@ -219,13 +234,14 @@ function ItemView({ data }: { data: TxItemView }) {
 
 function TransactionView({ txdata }: { txdata: DataType }) {
     const txdetails = getTransactions(txdata)[0];
+    const amount = getTransferSuiAmount(txdetails);
     const txKindName = getTransactionKindName(txdetails);
     const sender = getTransactionSender(txdata);
     const recipient =
         getTransferObjectTransaction(txdetails) ||
         getTransferSuiTransaction(txdetails);
     const txKindData = formatByTransactionKind(txKindName, txdetails, sender);
-    const TabName = `${txKindName} Details`;
+    const TabName = `Details`;
 
     const txHeaderData = {
         txId: txdata.txId,
@@ -273,7 +289,8 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     const validatorSignatureData = {
         title: 'Validator Signatures',
-        content: txdata.authSignInfo.signature.map((validatorSign) => ({
+        content: txdata.authSignInfo.signature.map((validatorSign, index) => ({
+            label: `Signature #${index + 1}`,
             value: validatorSign,
             monotypeClass: true,
         })),
@@ -325,6 +342,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                           label: 'Module',
                           monotypeClass: true,
                           value: txKindData.module.value,
+                          href: `/objects/${txKindData.package.value}?module=${txKindData.module.value}`,
                       },
                       {
                           label: 'Function',
@@ -339,6 +357,15 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                   ],
               }
             : false;
+
+    if (typearguments && txKindData.typeArguments?.value) {
+        typearguments.content.push({
+            label: 'Type Arguments',
+            monotypeClass: true,
+            value: JSON.stringify(txKindData.typeArguments.value),
+        });
+    }
+
     const defaultActiveTab = 0;
 
     const modules =
@@ -366,18 +393,26 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                                 <ItemView data={typearguments} />
                             </section>
                         )}
-                        {sender && (
-                            <section
-                                className={cl([
-                                    styles.txcomponent,
-                                    styles.txsender,
-                                ])}
-                            >
-                                <div className={styles.txaddress}>
-                                    <SendReceiveView data={sendreceive} />
+                        <section
+                            className={cl([
+                                styles.txcomponent,
+                                styles.txsender,
+                            ])}
+                        >
+                            {amount !== null && (
+                                <div className={styles.amountbox}>
+                                    <div>Amount</div>
+                                    <div>
+                                        {presentBN(amount)}
+                                        <sup>SUI</sup>
+                                    </div>
                                 </div>
-                            </section>
-                        )}
+                            )}
+                            <div className={styles.txaddress}>
+                                <SendReceiveView data={sendreceive} />
+                            </div>
+                        </section>
+
                         <section
                             className={cl([
                                 styles.txcomponent,
@@ -409,16 +444,20 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                         <ItemView data={GasStorageFees} />
                     </div>
                 </section>
-                <section title="Events">
-                    <div className={styles.txevents}>
-                        <div className={styles.txeventsleft}>
-                            {eventTitlesDisplay}
+                {txEventData && txEventData?.length ? (
+                    <section title="Events">
+                        <div className={styles.txevents}>
+                            <div className={styles.txeventsleft}>
+                                {eventTitlesDisplay}
+                            </div>
+                            <div className={styles.txeventsright}>
+                                {txEventDisplay}
+                            </div>
                         </div>
-                        <div className={styles.txeventsright}>
-                            {txEventDisplay}
-                        </div>
-                    </div>
-                </section>
+                    </section>
+                ) : (
+                    <></>
+                )}
                 <section title="Signatures">
                     <div className={styles.txgridcomponent}>
                         <ItemView data={transactionSignatureData} />

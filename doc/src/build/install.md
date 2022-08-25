@@ -221,7 +221,7 @@ See more [IDE options](https://github.com/MystenLabs/awesome-move#ides) in the [
 
 ## SUI tokens
 
-To [experiment with Devnet](../explore/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
+To [experiment with Devnet](../build/devnet.md) or [use the Sui Wallet Browser Extension](../explore/wallet-browser.md), you will need SUI tokens. These coins have no financial value and will disappear each time we reset the network.
 
 To request SUI test tokens:
 
@@ -259,7 +259,7 @@ You can start exploring Sui's source code by looking into the following primary 
 
 See the Rust [Crates](https://doc.rust-lang.org/rust-by-example/crates.html) in use at:
 * https://mystenlabs.github.io/sui/ - the Sui blockchain
-* https://mystenlabs.github.io/narwhal/ - the Narwhal and Tusk consensus engine
+* https://mystenlabs.github.io/narwhal/ - the Narwhal and Bullshark consensus engine
 * https://mystenlabs.github.io/mysten-infra/ - Mysten Labs infrastructure
 
 ## Help

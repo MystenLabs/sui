@@ -20,6 +20,8 @@ pub struct SuiClientConfig {
     pub keystore: KeystoreType,
     pub gateway: ClientType,
     pub active_address: Option<SuiAddress>,
+    // Temporarily make this optional, until we fully deprecate gateway
+    pub fullnode: Option<ClientType>,
 }
 
 impl Config for SuiClientConfig {}
@@ -40,6 +42,10 @@ impl Display for SuiClientConfig {
         };
         writeln!(writer, "{}", self.keystore)?;
         write!(writer, "{}", self.gateway)?;
+
+        if let Some(fullnode_type) = &self.fullnode {
+            write!(writer, "{}", fullnode_type)?;
+        }
 
         write!(f, "{}", writer)
     }

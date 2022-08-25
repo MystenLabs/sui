@@ -15,6 +15,7 @@ export type CoinBalanceProps = {
     symbol: string;
     mode?: 'neutral' | 'positive' | 'negative';
     diffSymbol?: boolean;
+    title?: string;
 };
 
 function CoinBalance({
@@ -23,10 +24,11 @@ function CoinBalance({
     className,
     mode = 'neutral',
     diffSymbol = false,
+    title,
 }: CoinBalanceProps) {
     const intl = useIntl();
     return (
-        <div className={cl(className, st.container, st[mode])}>
+        <div className={cl(className, st.container, st[mode])} title={title}>
             <span>{intl.formatNumber(balance, balanceFormatOptions)}</span>
             <span className={cl(st.symbol, { [st.diffSymbol]: diffSymbol })}>
                 {symbol}

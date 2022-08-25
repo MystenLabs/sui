@@ -3,7 +3,7 @@ title: End-to-End Tutorial to Set Up and Play TicTacToe on Sui
 ---
 
 In this tutorial, we demonstrate the end-to-end process for starting a
-Sui network locally, connecting to it through our [CLI client](../build/cli-client.md)
+Sui network locally, connecting to it through our [CLI client](../contribute/cli-client.md)
 app, publishing a TicTacToe game written in [Move](../build/move/index.md) on Sui,
 and playing it to the end.
 
@@ -11,9 +11,9 @@ and playing it to the end.
 
 1. [Install Sui binaries](../build/install.md#binaries) and
    [download Sui source code](../build/install.md#source-code).
-1. [Create Sui genesis](../build/cli-client.md#genesis) by running the
+1. [Create Sui genesis](../contribute/cli-client.md#genesis) by running the
    `sui genesis` command.
-1. [Start the Sui network](../build/cli-client.md#starting-the-network) by
+1. [Start the Sui network](../contribute/cli-client.md#starting-the-network) by
    running the `sui start` command.
 
 After completing these steps, you will have a running local Sui instance and
@@ -26,7 +26,7 @@ network charges for gas using its native currency SUI. This transaction fee
 equals the computational effort of executing operations on the Sui network (i.e.
 gas units) times the price of gas in the SUI currency (i.e. the gas price).
 
-When you complete the setup steps, you can use the either use following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather accounts and gas objects](#gather-accounts-and-gas-objects) section.
+When you complete the setup steps, you can use the either use following script to publish and run the sample code, or perform each step manually. Using the script is optional. To manually run each step, follow the steps starting in the [Gather addresses and gas objects](#gather-addresses-and-gas-objects) section.
 
 ## Quick script
 If you prefer not to enter command step by step, or need to go though it multiple
@@ -76,9 +76,9 @@ sui client call --package $PACKAGE_ID --module tic_tac_toe --function create_gam
 # start playing the game ...
 ```
 
-## Gather accounts and gas objects
+## Gather addresses and gas objects
 
-In the new terminal session you started, use the following command in the Sui CLI client to view the account addresses we own:
+In the new terminal session you started, use the following command in the Sui CLI client to view the addresses we own:
 ```shell
 $ sui client addresses
 ```
@@ -101,7 +101,7 @@ export PLAYER_X=7B61DA6AACED7F28C1187D998955F10464BEAE55
 export PLAYER_O=251CF224B6BA3A019D04B6041357C20490F7A322
 ```
 
-For each of these addresses, let's discover the gas objects associated with each account address:
+For each of these addresses, let's discover the gas objects associated with each address:
 ```
 $ sui client gas --address $ADMIN
                 Object ID                 |  Version   |  Gas Value
@@ -128,7 +128,7 @@ $ sui client gas --address $PLAYER_O
  A0DBF58C3801EC2FEDA1D039E190A6B31A25B199 |     0      |   100000
  D5EBB8A19A35874A18B7A1D883EBFC8D897F5693 |     0      |   100000
 ```
-We only need one gas object per account address. So let's pick the first gas object of each account. In the above example, it's `38B89FE9F4A4823F1406938E87A8767CBD7F0B93`, `6F675038CAA48184707DBBE95ACFBA2030E87CD8` and `2110ADFB7BAF889A05EA6F5889AF7724299F9BED`, respectively. Again, you will see different IDs. Let's also add them to our environment variables:
+We only need one gas object per address. So let's pick the first gas object of each address. In the above example, it's `38B89FE9F4A4823F1406938E87A8767CBD7F0B93`, `6F675038CAA48184707DBBE95ACFBA2030E87CD8` and `2110ADFB7BAF889A05EA6F5889AF7724299F9BED`, respectively. Again, you will see different IDs. Let's also add them to our environment variables:
 ```
 $ export ADMIN_GAS=38B89FE9F4A4823F1406938E87A8767CBD7F0B93
 export X_GAS=6F675038CAA48184707DBBE95ACFBA2030E87CD8
@@ -175,7 +175,7 @@ Because the admin owns the gameboard, each individual player cannot place a mark
 Now let's begin the game!
 First of all, let's create a game with the command:
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function create_game --args $PLAYER_X $PLAYER_O --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function create_game --args $PLAYER_X $PLAYER_O --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 You will see output like:
@@ -241,7 +241,7 @@ public entry fun send_mark_to_game(cap: &mut MarkMintCap, game_address: address,
 ```
 The `cap` argument will be PlayerX's capability object (XCAP), and `game_address` argument will be the admin's address (ADMIN):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 1 1 --gas $X_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $XCAP $ADMIN 1 1 --gas $X_GAS --gas-budget 1000
 ```
 And its output:
 ```shell
@@ -269,7 +269,7 @@ public entry fun place_mark(game: &mut TicTacToe, mark: Mark, ctx: &mut TxContex
 ```
 The first argument is the game board, and the second argument is the mark the admin just received from the player. We will call this function (replace the second argument with the Mark object ID above):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0xAE3CE9176F1A8C1F21D922722486DF667FA00394 --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0xAE3CE9176F1A8C1F21D922722486DF667FA00394 --gas $ADMIN_GAS --gas-budget 1000
 ```
 The gameboard now looks like this (this won't be printed out, so keep it in your imagination):
 ```
@@ -280,7 +280,7 @@ _|X|_
 
 PlayerO now tries to put a mark at (0, 0):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $OCAP $ADMIN 0 0 --gas $O_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $OCAP $ADMIN 0 0 --gas $O_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -296,7 +296,7 @@ Created Objects:
 
 Note, in this second call, the second argument comes from the created objects in the first call.
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0x7A16D266DAD41145F34649258BC1F744D147BF2F --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0x7A16D266DAD41145F34649258BC1F744D147BF2F --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -316,7 +316,7 @@ _|X|_
 
 PlayerX puts a mark at (0, 2):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 0 2 --gas $X_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $XCAP $ADMIN 0 2 --gas $X_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -332,7 +332,7 @@ Created Objects:
 
 Then run:
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0x2875D50BD9021ED2009A1278C7CB6D4C876FFF6A --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0x2875D50BD9021ED2009A1278C7CB6D4C876FFF6A --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 The gameboard now looks like this:
@@ -344,7 +344,7 @@ _|X|_
 
 PlayerO places a mark at (1, 0):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $OCAP $ADMIN 1 0 --gas $O_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $OCAP $ADMIN 1 0 --gas $O_GAS --gas-budget 1000
 ```
 
 With output like:
@@ -360,7 +360,7 @@ Created Objects:
 
 Now run:
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0x4F7391F172063D87013DD9DC95B8BD45C35FD2D9 --gas $ADMIN_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0x4F7391F172063D87013DD9DC95B8BD45C35FD2D9 --gas $ADMIN_GAS --gas-budget 1000
 ...
 ```
 The gameboard now looks like:
@@ -371,7 +371,7 @@ O|X|_
 ```
 This is a chance for PlayerX to win! X now mints the winning mark at (2, 0):
 ```shell
-$ sui client call --package $PACKAGE --module TicTacToe --function send_mark_to_game --args $XCAP $ADMIN 2 0 --gas $X_GAS --gas-budget 1000
+$ sui client call --package $PACKAGE --module tic_tac_toe --function send_mark_to_game --args $XCAP $ADMIN 2 0 --gas $X_GAS --gas-budget 1000
 ```
 
 And its output:
@@ -387,7 +387,7 @@ AA7A6624E16E5E447801462FF6614013FC4AD156 SequenceNumber(1) o#e5e1b15f03531db118e
 
 And then finally the admin places the winning mark:
 ```shell
-   $ sui client call --package $PACKAGE --module TicTacToe --function place_mark --args $GAME 0xAA7A6624E16E5E447801462FF6614013FC4AD156 --gas $ADMIN_GAS --gas-budget 1000
+   $ sui client call --package $PACKAGE --module tic_tac_toe --function place_mark --args $GAME 0xAA7A6624E16E5E447801462FF6614013FC4AD156 --gas $ADMIN_GAS --gas-budget 1000
 ```
 
 With output:

@@ -381,6 +381,68 @@ module sui::test_scenarioTests {
             };
     }
 
+    #[test]
+    fun test_take_shared_by_id() {
+        let sender = @0x0;
+        let scenario = test_scenario::begin(&sender);
+        let uid1 = test_scenario::new_object(&mut scenario);
+        let uid2 = test_scenario::new_object(&mut scenario);
+        let uid3 = test_scenario::new_object(&mut scenario);
+        let id1 = object::uid_to_inner(&uid1);
+        let id2 = object::uid_to_inner(&uid2);
+        let id3 = object::uid_to_inner(&uid3);
+        {
+            let obj1 = Object { id: uid1, value: 10 };
+            let obj2 = Object { id: uid2, value: 20 };
+            let obj3 = Object { id: uid3, value: 30 };
+            transfer::share_object(obj1);
+            transfer::share_object(obj2);
+            transfer::share_object(obj3)
+        };
+        test_scenario::next_tx(&mut scenario, &sender);
+        {
+            assert!(
+                test_scenario::can_take_shared_by_id<Object>(&scenario, id1),
+                OBJECT_ID_NOT_FOUND
+            );
+            assert!(
+                test_scenario::can_take_shared_by_id<Object>(&scenario, id2),
+                OBJECT_ID_NOT_FOUND
+            );
+            assert!(
+                test_scenario::can_take_shared_by_id<Object>(&scenario, id3),
+                OBJECT_ID_NOT_FOUND
+            );
+            let obj1 = test_scenario::take_shared_by_id<Object>(&mut scenario, id1);
+            let obj3 = test_scenario::take_shared_by_id<Object>(&mut scenario, id3);
+            let obj2 = test_scenario::take_shared_by_id<Object>(&mut scenario, id2);
+            assert!(test_scenario::borrow_mut(&mut obj1).value == 10, VALUE_MISMATCH);
+            assert!(test_scenario::borrow_mut(&mut obj2).value == 20, VALUE_MISMATCH);
+            assert!(test_scenario::borrow_mut(&mut obj3).value == 30, VALUE_MISMATCH);
+            test_scenario::return_shared(&mut scenario, obj1);
+            test_scenario::return_shared(&mut scenario, obj2);
+            test_scenario::return_shared(&mut scenario, obj3);
+        };
+    }
+
+    #[test]
+    fun test_take_shared() {
+        let sender = @0x0;
+        let scenario = test_scenario::begin(&sender);
+        let uid1 = test_scenario::new_object(&mut scenario);
+        {
+            let obj1 = Object { id: uid1, value: 10 };
+            transfer::share_object(obj1);
+        };
+        test_scenario::next_tx(&mut scenario, &sender);
+        {
+            assert!(test_scenario::can_take_shared<Object>(&scenario), 1);
+            let obj1 = test_scenario::take_shared<Object>(&mut scenario);
+            assert!(test_scenario::borrow_mut(&mut obj1).value == 10, VALUE_MISMATCH);
+            test_scenario::return_shared(&mut scenario, obj1);
+        }
+    }
+
     /// Create object and parent. object is a child of parent.
     /// parent is owned by sender of `scenario`.
     fun create_parent_and_object(scenario: &mut Scenario) {

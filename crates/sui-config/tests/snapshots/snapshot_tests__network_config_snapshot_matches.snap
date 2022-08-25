@@ -3,7 +3,9 @@ source: crates/sui-config/tests/snapshot_tests.rs
 expression: network_config
 ---
 validator_configs:
-  - key-pair: drjgraDxPZBAXWrlU4a9KL3SGbigje0aqDbvzIt3Dccg/brJsQt1h7untbwWO85p55bXHk7UTBD8tEiGifehRA==
+  - protocol-key-pair: m/SaagdV+VOBH84SXyaD1QQpw7tJ4HQUfgCJpS6uFV+5xu4WMO8+cRFEpkjbBruyKE9ydM++5T/87lA8waSSAA==
+    account-key-pair: AK7z9KS47KHfw0M2G/jkNr1C3pJZwEuDFOuOIFTdboKrBWT4edJ648As6Cg0rPqMeTpinyyg3mkZYQvoL0ETJr4=
+    network-key-pair: AIpXYuIawc2zhwRCx3tMOvWMfO24d50CcObU8eL3Nn10C9WIQSA+dP6G/HEzjOAXPcYo67cZvcvMFRWFIUzAibQ=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -35,10 +37,15 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
+    grpc-load-shed: ~
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: 2kFZfFFXSI13JOA/uNhKN2pDuPQVGKEcw4e2abLuZYZ15BdN1YgiVICG8XsDfOyw7oZRa30TQAqAyFa0va9/4Q==
+  - protocol-key-pair: QiWNzaFM8RHGAriXG4zIQ+keRsqQUVHAJ0SmsBfmkxbMYjMuNLstXNafYO+7KjbLkWx+tFgwHqNmNsTbsBK9iA==
+    account-key-pair: ACOO227pqR/cjnG+UMCj+zzyktkCTdusAqqnCQlrCqnasgzWfEvezFOOi+mQwbZCXWi/06b+l2k+SEY1FZbMqKs=
+    network-key-pair: AJ1HYWoY3yA5MH8GQiJgJYi1Kmquqntv6Ma02euop4ex9Z/d0Lf1LcwMYKRIy/lRFhCwp0Lx5NI4p6RcrgVOwhw=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -70,10 +77,15 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
+    grpc-load-shed: ~
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: nwfnvlVROHqYupd8cy0IDcsPKaBI42VpEsZTPjLueu1jHBVB86S/RNTYlwYVZKqElddm9hkaP/YVYgA/GEuMZQ==
+  - protocol-key-pair: 4BB+FmG6xjjQpGNs/bv21foY4nMY2jMCltCjhxgNbIzqP8527hCzpkX7MEBRHfq0yc1gWPQZKQFNFkZvXjssKg==
+    account-key-pair: AK+0kF6VUM9GKoIAeCSgVdl1rpNEcMR32d27bSsmTDb60gL1Yotsq+ENWrgyROSyMO/U3MzvxGNYktNenctyJd8=
+    network-key-pair: AJfn7YQ/qxpCzpwhKUNSHsIqAlaHR8wAO4gfvSf3C9/g9Lcs30s8QZpYQnBLH+55QCOl6uAiOVb7LEcBbhB7hE4=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -105,10 +117,15 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
+    grpc-load-shed: ~
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: KbchdpzmTkPVcTOwdNg51THtHyhRCvtFrOEKH0t5TW++raBhJseNmLShpp9u5hiWlPD0dRU42oJPGtyLFKG1Yg==
+  - protocol-key-pair: kYP0d2s+pZoXgeVko+rpZ2k5e4q0NbJd2kGJ4QPQMc9cR/734xE9wBxW701He/5RV6/DOWmgFPi7VTfhjM7GTA==
+    account-key-pair: AIM52ZwzO7Oid/63gLjUbKwwzc2QUNviNfuMxnuRwbBqnZTXHAccZRpZcVXhUvvQe7WAB32Ak1vyNmNCX/Kl8ak=
+    network-key-pair: AIZBl/TMXKtsjt1LecSF77mlVXGLdbYD4ui5j1XsDeJnpzzqy7X725Nhn+RxRHmPNmU97IGS14ftQFbEczxPAHY=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -140,10 +157,15 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
+    grpc-load-shed: ~
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: LQmg5mMmbOGuftEIGWigdY5xjpl702LGsMNGNKmgs10ccMiRpjRoGJDfb8SqO5TSEAuhWgfHiheQi24y3xkNSw==
+  - protocol-key-pair: ZyDgEy8FWgoN24poviNcDhIx9n6fKOuCHqxbHTnJPg+9UN97gnKsq+V1YAwCB2p5S8AIWrDXl7g9SiPgHI58JA==
+    account-key-pair: APqCqu1RU9KQEL45bxLYtmFMOXx1xGE/27NtT/cE5QCrEQwhVD8hX7efjIVAYfuALmRyfmPqQ4ebKA5PameIh5A=
+    network-key-pair: ABbIisgBp4THAoTQX/i9gfBB1+pjLqfKKifGyv/WUZMM+K6cRt6kc+jMcFpq8yJS6MNJtJTF3O/XGG0atPFaJY0=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -175,10 +197,15 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
+    grpc-load-shed: ~
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: ASc3aB97XQ8oHjr95Fi8HnPS0xPJz5TAX/NxYkCiSPIfevXxsJEf9GgdcOIY8NqzmaqCNm1l12Xy+2rPYQEvSA==
+  - protocol-key-pair: RuBQj94iWraVKHboVHWawvBtJms/9hWcJ38WR6jgPck7oQxlS+QUbas9bauAs84kzjfbfHRcKyUyBdYvlnsAsw==
+    account-key-pair: AHbeP6B62JU1oXZrN5h1fIqzrvW+h97hbp4Qbdi1CXKePfZvwVtLB44RZJaahQ4x3/MIjSqeJ7+3cZ5iHO/Lu9o=
+    network-key-pair: AJa4rGKhGnR+XIC4bE9RFuaurlSscAly0yUDt5JWoVMvNeqo634LMrcrpZYZ2dT5jOG8wyg5tK6nYrRGYFGa4WE=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -210,10 +237,15 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
+    grpc-load-shed: ~
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
-  - key-pair: EyCgWNezVmvVINqqPtK/CsW4sSD7hSdzw2OXNLRckaRA9LsfqzzA5P2RKivmFTX5XcMFaP6QRsKuxgtVFJIytg==
+  - protocol-key-pair: a7tE8gojj/hBeXcgQGHOCDL2HfJ2KPJ4Q1ggrXvO/+ZVrIhjM+yKuhWtjh6KURRUoIz8t81wxY3YQsqgcI0avw==
+    account-key-pair: ACrfZkZbhZAbp8H6tlUREGwV7kmBjrBaPeWwPzyK71YXJfcI7/BU6ez/pZl1vtJqtInUc598clMt9PH7zXa0JpA=
+    network-key-pair: AJJuq7ooTMPxmJ1zkoKcpA7WW6s+2BhjqWrbPms9/1+kwLPaTXduKbN+3+E0nSv8HiQl8vlvWvap8+WWhpfrxhw=
     db-path: /tmp/foo/
     network-address: ""
     json-rpc-address: "0.0.0.0:1"
@@ -245,14 +277,17 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
+    grpc-load-shed: ~
+    grpc-concurrency-limit: 20000
     genesis:
       genesis: "[fake genesis]"
 account_keys:
-  - LdTLg/iEDS7tsVgTEGKsPx8s+P9tzRhW6GoebDFnFn7LLuH905q3rXBH/S7bfDf4/W6mpai4AJ0nEANmJMCTfw==
-  - 5aaIdCtHxa37WdTfdv0dseUe4Dscqfgqyhc+24tyk0fVp4FJTSvxoXTd/94eAsuIgc/22rcOYcve85PerAzmOQ==
-  - Tr6YD5BNEMkWRCtHg6DphIYMtslXs5w47Y9Rz/qmik0Jl3FIJlyVJyaFSf4VO4E9w7PbWOKcq7heaKRU9zRoYw==
-  - 4BAlo5xQRUa53BQGp+soFR5RUNeyBLqnGdTwkQISF9vjK71JOpv+Enog2V6Yq1WT0V9eFFLM68bFKafgXsR4xA==
-  - XPG1yExPpxqHlhChppWsUnxbVndKa4ohquiGhYaOCUykZAZuYXvNpGb8sJtOd9+Gho23M7jxFptmOxS+FsIulQ==
+  - SmwxHcV2gQzxKoBcs5t39VDlpi6qn4CTFlvWdcQ2bo98EQEujhdX27EEV3Z86OoMCQvPAkniwEgO0RrLK3A7sA==
+  - LskdaKDI6rfXAXjiEd/Ot3tQDPgwFi2lyCfU68jIPj+LhW8+xQtCFKb75H6GmzNpzkQ4ucluHTY0AxJw//j4vQ==
+  - Q9L5PWy1M9rnj1FyqfjKGyV3jMVL8RAzMJw9OdIifHVyx5W5GuC+jT9DRonmv0ccpDJ/8SX6AXiamavFW0KA5g==
+  - UzKENORv6NhWOakmfPhCH8ohVHr6Ydy2XxsoQzbtSf7RwP29fVH7wkswAtz/hkGYwp98tdl70TwMB75z9G9NRw==
+  - zqXFxYQpWyrIZx3ICuKRy6ie+Wm8m95nm9W63uaig36qOKjHsxwR6y1zCu5mSIno9fisAX34MT7/Vna0Cbrs4A==
 genesis: "[fake genesis]"
 

@@ -10,7 +10,7 @@ import { Link } from 'react-router-dom';
 import { NetworkContext } from '../../context';
 import codestyle from '../../styles/bytecode.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
-import { normalizeSuiAddress } from './util';
+import { normalizeSuiAddress } from '../../utils/stringUtils';
 
 import type { SuiMoveNormalizedType } from '@mysten/sui.js';
 import type { Language } from 'prism-react-renderer';

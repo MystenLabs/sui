@@ -56,15 +56,15 @@ Sui provides a gateway service that enables third parties, such as app or game d
 
 Genesis is the initial act of creating accounts and gas objects. Sui provides a `genesis` command that allows users to create and inspect the genesis object setting up the network for operation.
 
-For more information, see [Genesis](../build/cli-client.md#genesis).
+For more information, see [Genesis](../contribute/cli-client.md#genesis).
 
 ### Multi-writer objects
 
-Multi-writer objects are objects that are owned by more than one account. Transactions affecting multi-writer objects require consensus in Sui. This contrasts with transactions affecting only single-writer objects, which require only a confirmation of the owner’s account contents.
+Multi-writer objects are objects that are owned by more than one address. Transactions affecting multi-writer objects require consensus in Sui. This contrasts with transactions affecting only single-writer objects, which require only a confirmation of the owner’s address contents.
 
 ### Object
 
-The basic unit of storage in Sui is object. In contrast to many other blockchains, where storage is centered around accounts and each account contains a key-value store, Sui's storage is centered around objects. Sui objects have one of the following primary states:
+The basic unit of storage in Sui is object. In contrast to many other blockchains, where storage is centered around address and each address contains a key-value store, Sui's storage is centered around objects. Sui objects have one of the following primary states:
  * *Immutable* - the object cannot be modified.
  * *Mutable* - the object can be changed.
 
@@ -82,7 +82,7 @@ For more information, see [Sui Objects](../build/objects.md).
 
 ### Single-writer objects
 
-Single-writer objects are owned by one account. In Sui, transactions affecting only single-writer objects owned by the same address may proceed with only a verification of the sender’s address, greatly speeding transaction times. We refer to these as *simple transactions*. See [Single-Writer Apps](single-writer-apps.md) for example applications of this simple transaction model.
+Single-writer objects are owned by one address. In Sui, transactions affecting only single-writer objects owned by the same address may proceed with only a verification of the sender’s address, greatly speeding transaction times. We refer to these as *simple transactions*. See [Single-Writer Apps](single-writer-apps.md) for example applications of this simple transaction model.
 
 ### Smart contract
 
@@ -102,15 +102,15 @@ For more information, see [Causal order vs total order](sui-compared.md#causal-o
 
 A transaction in Sui is a change to the blockchain. This may be a *simple transaction* affecting only single-writer, single-address objects, such as minting an NFT or transferring an NFT or another token. These transactions may bypass the consensus protocol in Sui.
 
-More *complex transactions* affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, go through the [Narwhal and Tusk](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
+More *complex transactions* affecting objects that are shared or owned by multiple addresses, such as asset management and other DeFi use cases, go through the [Narwhal and Bullshark](https://github.com/MystenLabs/narwhal) DAG-based mempool and efficient Byzantine Fault Tolerant (BFT) consensus.
 
 ### Transfer
 
 A transfer is switching the owner address of a token to a new one via command in Sui. This is accomplished via the
-[Sui CLI client](../build/cli-client.md) command line interface. It is one of the more common of many commands
+[Sui CLI client](../contribute/cli-client.md) command line interface. It is one of the more common of many commands
 available in the CLI client.
 
-For more information, see [Transferring objects](../build/cli-client.md#transferring-objects).
+For more information, see [Transferring objects](../contribute/cli-client.md#transferring-objects).
 
 ### Validator
 

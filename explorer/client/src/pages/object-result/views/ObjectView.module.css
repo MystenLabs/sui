@@ -109,7 +109,11 @@ table.properties {
 }
 
 td.objectid {
-    @apply text-sui-dark;
+    @apply text-sui-grey-90;
+}
+
+.objecttypelink {
+    @apply no-underline text-sui-dark;
 }
 
 /* Clickable Header CSS */

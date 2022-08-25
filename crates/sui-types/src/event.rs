@@ -1,6 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::str::FromStr;
+
+use crate::error::SuiError;
+use crate::object::MoveObject;
+use crate::object::ObjectFormatOptions;
+use crate::object::Owner;
+use crate::{
+    base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
+    committee::EpochId,
+    messages_checkpoint::CheckpointSequenceNumber,
+};
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::IdentStr;
@@ -15,16 +26,7 @@ use serde_with::serde_as;
 use serde_with::Bytes;
 use strum::VariantNames;
 use strum_macros::{EnumDiscriminants, EnumVariantNames};
-
-use crate::error::SuiError;
-use crate::object::MoveObject;
-use crate::object::ObjectFormatOptions;
-use crate::object::Owner;
-use crate::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest},
-    committee::EpochId,
-    messages_checkpoint::CheckpointSequenceNumber,
-};
+use tracing::error;
 
 /// A universal Sui event type encapsulating different types of events
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -64,8 +66,21 @@ impl EventEnvelope {
 }
 
 #[derive(
-    Eq, Debug, strum_macros::Display, Clone, PartialEq, Deserialize, Serialize, Hash, JsonSchema,
+    EnumVariantNames,
+    Eq,
+    Debug,
+    strum_macros::Display,
+    Copy,
+    Clone,
+    strum_macros::EnumString,
+    PartialEq,
+    Deserialize,
+    Serialize,
+    Hash,
+    JsonSchema,
+    EnumDiscriminants,
 )]
+#[strum_discriminants(name(TransferTypeVariants))]
 pub enum TransferType {
     Coin,
     ToAddress,
@@ -86,8 +101,9 @@ pub enum TransferType {
     EnumDiscriminants,
     EnumVariantNames,
 )]
+#[strum_discriminants(derive(strum_macros::EnumString))]
 #[strum_discriminants(name(EventType), derive(Serialize, Deserialize, JsonSchema))]
-// Developer note: PLEASE only append new entries, do not modify existing entries (binary compat)
+// Developer note: PLEASE only append new entries, do not modify existing entries (binary compact)
 pub enum Event {
     /// Move-specific event
     MoveEvent {
@@ -254,6 +270,71 @@ impl Event {
             }
             _ => None,
         }
+    }
+
+    /// Extracts the serialized recipient from a SuiEvent, if available
+    pub fn recipient_serialized(&self) -> Result<Option<String>, SuiError> {
+        match self {
+            Event::TransferObject { recipient, .. } | Event::NewObject { recipient, .. } => {
+                let res = serde_json::to_string(recipient);
+                if let Err(e) = res {
+                    error!("Failed to serialize recipient field of event: {:?}", self);
+                    Err(SuiError::OwnerFailedToSerialize {
+                        error: (e.to_string()),
+                    })
+                } else {
+                    Ok(res.ok())
+                }
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// Extracts the bcs move content from a SuiEvent, if available
+    pub fn move_event_contents(&self) -> Option<&[u8]> {
+        if let Event::MoveEvent { contents, .. } = self {
+            Some(contents)
+        } else {
+            None
+        }
+    }
+
+    /// Extracts the move event name (StructTag) from a SuiEvent, if available
+    /// "0x2::devnet_nft::MintNFTEvent"
+    pub fn move_event_name(&self) -> Option<String> {
+        if let Event::MoveEvent { type_, .. } = self {
+            Some(type_.to_string())
+        } else {
+            None
+        }
+    }
+
+    /// Extracts the TransferType from a SuiEvent, if available
+    pub fn transfer_type(&self) -> Option<&TransferType> {
+        if let Event::TransferObject { type_, .. } = self {
+            Some(type_)
+        } else {
+            None
+        }
+    }
+
+    /// Extracts the Object Version from a SuiEvent, if available
+    pub fn object_version(&self) -> Option<&SequenceNumber> {
+        if let Event::TransferObject { version, .. } = self {
+            Some(version)
+        } else {
+            None
+        }
+    }
+
+    pub fn transfer_type_from_ordinal(ordinal: usize) -> Result<TransferType, SuiError> {
+        TransferType::from_str(TransferType::VARIANTS[ordinal]).map_err(|e| {
+            SuiError::BadObjectType {
+                error: format!(
+                    "Could not parse tranfer type from ordinal: {ordinal} into TransferType: {e:?}"
+                ),
+            }
+        })
     }
 
     pub fn move_event_to_move_struct(

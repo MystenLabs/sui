@@ -36,6 +36,7 @@ impl TestCaseImpl for NativeTransferTest {
         let (recipient_addr, _): (_, AccountKeyPair) = get_key_pair();
         let data = ctx
             .get_gateway()
+            .transaction_builder()
             .transfer_object(
                 signer,
                 *obj_to_transfer.id(),
@@ -82,6 +83,7 @@ impl TestCaseImpl for NativeTransferTest {
             .owner(Owner::AddressOwner(recipient_addr))
             .check(ctx.get_fullnode())
             .await;
+
         Ok(())
     }
 }

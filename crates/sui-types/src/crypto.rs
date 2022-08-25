@@ -4,22 +4,22 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::str::FromStr;
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use base64ct::Encoding;
 use digest::Digest;
-use narwhal_crypto::ed25519::{
+use fastcrypto::ed25519::{
     Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
     Ed25519Signature,
 };
-use narwhal_crypto::secp256k1::{
+use fastcrypto::secp256k1::{
     Secp256k1KeyPair, Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1Signature,
 };
-pub use narwhal_crypto::traits::KeyPair as KeypairTraits;
-pub use narwhal_crypto::traits::{
+pub use fastcrypto::traits::KeyPair as KeypairTraits;
+pub use fastcrypto::traits::{
     AggregateAuthenticator, Authenticator, EncodeDecodeBase64, SigningKey, ToFromBytes,
     VerifyingKey,
 };
-use narwhal_crypto::Verifier;
+use fastcrypto::Verifier;
 use rand::rngs::OsRng;
 use roaring::RoaringBitmap;
 use schemars::JsonSchema;
@@ -48,6 +48,21 @@ pub type AccountPublicKey = Ed25519PublicKey;
 pub type AccountPrivateKey = Ed25519PrivateKey;
 pub type AccountSignature = Ed25519Signature;
 
+pub const PROOF_OF_POSSESSION_DOMAIN: &[u8] = b"kosk";
+
+// Creates a proof that the keypair is possesed, as well as binds this proof to a specific SuiAddress.
+pub fn generate_proof_of_possession<K: KeypairTraits>(
+    keypair: &K,
+    address: SuiAddress,
+) -> <K as KeypairTraits>::Sig {
+    let mut domain_with_pk: Vec<u8> = Vec::new();
+    domain_with_pk.extend_from_slice(PROOF_OF_POSSESSION_DOMAIN);
+    domain_with_pk.extend_from_slice(keypair.public().as_bytes());
+    domain_with_pk.extend_from_slice(address.as_ref());
+    keypair.sign(&domain_with_pk[..])
+}
+
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
 pub enum SuiKeyPair {
     Ed25519SuiKeyPair(Ed25519KeyPair),
@@ -59,6 +74,18 @@ pub enum PublicKey {
     Ed25519KeyPair(Ed25519PublicKey),
     Secp256k1KeyPair(Secp256k1PublicKey),
 }
+
+impl PartialEq for PublicKey {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (PublicKey::Ed25519KeyPair(a), PublicKey::Ed25519KeyPair(b)) => a == b,
+            (PublicKey::Secp256k1KeyPair(a), PublicKey::Secp256k1KeyPair(b)) => a == b,
+            _ => false,
+        }
+    }
+}
+
+impl Eq for PublicKey {}
 
 impl SuiKeyPair {
     pub fn public(&self) -> PublicKey {
@@ -134,12 +161,108 @@ impl EncodeDecodeBase64 for SuiKeyPair {
     }
 }
 
+impl Serialize for SuiKeyPair {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = self.encode_base64();
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> Deserialize<'de> for SuiKeyPair {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let s = String::deserialize(deserializer)?;
+        <SuiKeyPair as EncodeDecodeBase64>::decode_base64(&s)
+            .map_err(|e| Error::custom(e.to_string()))
+    }
+}
+
+impl From<Ed25519KeyPair> for SuiKeyPair {
+    fn from(key: Ed25519KeyPair) -> Self {
+        SuiKeyPair::Ed25519SuiKeyPair(key)
+    }
+}
+
+impl From<Secp256k1KeyPair> for SuiKeyPair {
+    fn from(key: Secp256k1KeyPair) -> Self {
+        SuiKeyPair::Secp256k1SuiKeyPair(key)
+    }
+}
+
 impl AsRef<[u8]> for PublicKey {
     fn as_ref(&self) -> &[u8] {
         match self {
             PublicKey::Ed25519KeyPair(pk) => pk.as_ref(),
             PublicKey::Secp256k1KeyPair(pk) => pk.as_ref(),
         }
+    }
+}
+
+impl From<Ed25519PublicKey> for PublicKey {
+    fn from(key: Ed25519PublicKey) -> Self {
+        PublicKey::Ed25519KeyPair(key)
+    }
+}
+
+impl From<Secp256k1PublicKey> for PublicKey {
+    fn from(key: Secp256k1PublicKey) -> Self {
+        PublicKey::Secp256k1KeyPair(key)
+    }
+}
+
+impl EncodeDecodeBase64 for PublicKey {
+    fn encode_base64(&self) -> String {
+        let mut bytes: Vec<u8> = Vec::new();
+        bytes.extend_from_slice(&[self.flag()]);
+        bytes.extend_from_slice(self.as_ref());
+        base64ct::Base64::encode_string(&bytes[..])
+    }
+
+    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
+        let bytes =
+            base64ct::Base64::decode_vec(value).map_err(|e| eyre::eyre!("{}", e.to_string()))?;
+        match bytes.first() {
+            Some(x) => {
+                if x == &<Ed25519PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
+                    let pk = Ed25519PublicKey::from_bytes(&bytes[1..])?;
+                    Ok(PublicKey::Ed25519KeyPair(pk))
+                } else if x == &<Secp256k1PublicKey as SuiPublicKey>::SIGNATURE_SCHEME.flag() {
+                    let pk = Secp256k1PublicKey::from_bytes(&bytes[1..])?;
+                    Ok(PublicKey::Secp256k1KeyPair(pk))
+                } else {
+                    Err(eyre::eyre!("Invalid flag byte"))
+                }
+            }
+            _ => Err(eyre::eyre!("Invalid bytes")),
+        }
+    }
+}
+
+impl Serialize for PublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let s = self.encode_base64();
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> Deserialize<'de> for PublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        use serde::de::Error;
+        let s = String::deserialize(deserializer)?;
+        <PublicKey as EncodeDecodeBase64>::decode_base64(&s)
+            .map_err(|e| Error::custom(e.to_string()))
     }
 }
 
@@ -151,6 +274,7 @@ impl PublicKey {
         }
     }
 }
+
 //
 // Define Bytes representation of the Authority's PublicKey
 //
@@ -176,7 +300,7 @@ impl TryFrom<AuthorityPublicKeyBytes> for AuthorityPublicKey {
     type Error = signature::Error;
 
     fn try_from(bytes: AuthorityPublicKeyBytes) -> Result<AuthorityPublicKey, Self::Error> {
-        AuthorityPublicKey::from_bytes(bytes.as_ref()).map_err(|_| Self::Error::new())
+        AuthorityPublicKey::from_bytes(bytes.as_ref()).map_err(|_| signature::Error::new())
     }
 }
 
@@ -213,8 +337,10 @@ impl ToFromBytes for AuthorityPublicKeyBytes {
 }
 
 impl AuthorityPublicKeyBytes {
+    pub const ZERO: Self = Self::new([0u8; AccountPublicKey::LENGTH]);
+
     /// This ensures it's impossible to construct an instance with other than registered lengths
-    pub fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
+    pub const fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
 where {
         AuthorityPublicKeyBytes(bytes)
     }
@@ -266,7 +392,7 @@ impl SuiAuthoritySignature for AuthoritySignature {
         T: Signable<Vec<u8>>,
     {
         // is this a cryptographically valid public Key?
-        let public_key = AuthorityPublicKey::from_bytes(author.as_ref()).map_err(|_| {
+        let public_key = AuthorityPublicKey::try_from(author).map_err(|_| {
             SuiError::KeyConversionError(
                 "Failed to serialize public key bytes to valid public key".to_string(),
             )
@@ -311,6 +437,31 @@ where
     get_key_pair_from_rng(&mut OsRng)
 }
 
+/// Wrapper function to return SuiKeypair based on key scheme string
+pub fn random_key_pair_by_type(
+    key_scheme: Option<String>,
+) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error> {
+    match key_scheme.as_deref() {
+        Some("secp256k1") => {
+            let (addr, key_pair): (_, Secp256k1KeyPair) = get_key_pair();
+            Ok((addr, SuiKeyPair::Secp256k1SuiKeyPair(key_pair)))
+        }
+        Some("ed25519") | None => {
+            let (addr, key_pair): (_, Ed25519KeyPair) = get_key_pair();
+            Ok((addr, SuiKeyPair::Ed25519SuiKeyPair(key_pair)))
+        }
+        Some(_) => Err(anyhow!("Unrecognized key scheme")),
+    }
+}
+
+pub fn get_account_key_pair() -> (SuiAddress, AccountKeyPair) {
+    get_key_pair()
+}
+
+pub fn get_authority_key_pair() -> (SuiAddress, AuthorityKeyPair) {
+    get_key_pair()
+}
+
 /// Generate a keypair from the specified RNG (useful for testing with seedable rngs).
 pub fn get_key_pair_from_rng<KP: KeypairTraits, R>(csprng: &mut R) -> (SuiAddress, KP)
 where
@@ -319,6 +470,27 @@ where
 {
     let kp = KP::generate(csprng);
     (kp.public().into(), kp)
+}
+
+/// Wrapper function to return SuiKeypair based on key scheme string with seedable rng.
+pub fn random_key_pair_by_type_from_rng<R>(
+    key_scheme: Option<String>,
+    csprng: &mut R,
+) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error>
+where
+    R: rand::CryptoRng + rand::RngCore,
+{
+    match key_scheme.as_deref() {
+        Some("secp256k1") => {
+            let (addr, key_pair): (_, Secp256k1KeyPair) = get_key_pair_from_rng(csprng);
+            Ok((addr, SuiKeyPair::Secp256k1SuiKeyPair(key_pair)))
+        }
+        Some("ed25519") | None => {
+            let (addr, key_pair): (_, Ed25519KeyPair) = get_key_pair_from_rng(csprng);
+            Ok((addr, SuiKeyPair::Ed25519SuiKeyPair(key_pair)))
+        }
+        Some(_) => Err(anyhow!("Unrecognized key scheme")),
+    }
 }
 
 // TODO: C-GETTER
@@ -1150,7 +1322,7 @@ impl SignatureScheme {
     pub fn flag(&self) -> u8 {
         match self {
             SignatureScheme::ED25519 => 0x00,
-            SignatureScheme::Secp256k1 => 0xed,
+            SignatureScheme::Secp256k1 => 0x01,
         }
     }
 }

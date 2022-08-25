@@ -14,6 +14,7 @@ use crate::{
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::prelude::*;
+use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
@@ -40,6 +41,7 @@ use std::{
 use sui_adapter::adapter;
 use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
+use sui_json_rpc_types::SuiEventEnvelope;
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
@@ -101,7 +103,7 @@ pub mod authority_notifier;
 pub const MAX_ITEMS_LIMIT: u64 = 1_000;
 const BROADCAST_CAPACITY: usize = 10_000;
 
-const MAX_TX_RECOVERY_RETRY: u32 = 3;
+pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
@@ -278,8 +280,6 @@ impl AuthorityMetrics {
 pub type StableSyncAuthoritySigner =
     Pin<Arc<dyn signature::Signer<AuthoritySignature> + Send + Sync>>;
 
-const DEFAULT_QUERY_LIMIT: usize = 1000;
-
 pub struct AuthorityState {
     // Fixed size, static, identity of the authority
     /// The name of this authority.
@@ -302,7 +302,7 @@ pub struct AuthorityState {
 
     indexes: Option<Arc<IndexStore>>,
 
-    pub module_cache: SyncModuleCache<ResolverWrapper<AuthorityStore>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
+    pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     pub event_handler: Option<Arc<EventHandler>>,
 
@@ -405,7 +405,7 @@ impl AuthorityState {
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
-        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data kind: {:?}", transaction.signed_data.data.kind);
+        debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
@@ -738,7 +738,7 @@ impl AuthorityState {
             effects.effects.all_mutated(),
             cert.signed_data
                 .data
-                .move_calls()?
+                .move_calls()
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
             seq,
@@ -858,7 +858,8 @@ impl AuthorityState {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let ref_and_digest = match request.request_kind {
-            ObjectInfoRequestKind::PastObjectInfo(seq) => {
+            ObjectInfoRequestKind::PastObjectInfo(seq)
+            | ObjectInfoRequestKind::PastObjectInfoDebug(seq, _) => {
                 // Get the Transaction Digest that created the object
                 self.get_parent_iterator(request.object_id, Some(seq))
                     .await?
@@ -900,13 +901,35 @@ impl AuthorityState {
                                 .await?
                         };
                         let layout = match request_layout {
-                            Some(format) => object.get_layout(format, &self.module_cache)?,
+                            Some(format) => {
+                                object.get_layout(format, self.module_cache.as_ref())?
+                            }
                             None => None,
                         };
 
                         Some(ObjectResponse {
                             object,
                             lock,
+                            layout,
+                        })
+                    }
+                    Err(e) => return Err(e),
+                    _ => None,
+                }
+            }
+            ObjectInfoRequestKind::PastObjectInfoDebug(seq, request_layout) => {
+                match self.database.get_object_by_key(&request.object_id, seq) {
+                    Ok(Some(object)) => {
+                        let layout = match request_layout {
+                            Some(format) => {
+                                object.get_layout(format, self.module_cache.as_ref())?
+                            }
+                            None => None,
+                        };
+
+                        Some(ObjectResponse {
+                            object,
+                            lock: None,
                             layout,
                         })
                     }
@@ -1080,7 +1103,7 @@ impl AuthorityState {
             indexes,
             // `module_cache` uses a separate in-mem cache from `event_handler`
             // this is because they largely deal with different types of MoveStructs
-            module_cache: SyncModuleCache::new(ResolverWrapper(store.clone())),
+            module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone()))),
             event_handler,
             checkpoints,
             epoch_store,
@@ -1189,7 +1212,7 @@ impl AuthorityState {
             None,
         ));
 
-        AuthorityState::new(
+        let state = AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
@@ -1201,7 +1224,10 @@ impl AuthorityState {
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
         )
-        .await
+        .await;
+
+        // add the object_basics module
+        state
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -1209,13 +1235,11 @@ impl AuthorityState {
         let mut limit = limit.unwrap_or(usize::max_value());
         while limit > 0 {
             limit -= 1;
-            if let Some(tx_guard) = self.database.wal.read_one_recoverable_tx().await {
+            if let Some((cert, tx_guard)) = self.database.wal.read_one_recoverable_tx().await? {
                 let digest = tx_guard.tx_id();
                 debug!(?digest, "replaying failed cert from log");
 
-                let (cert, retry_count) = self.database.wal.get_tx_data(&tx_guard)?;
-
-                if retry_count >= MAX_TX_RECOVERY_RETRY {
+                if tx_guard.retry_num() >= MAX_TX_RECOVERY_RETRY {
                     // This tx will be only partially executed, however the store will be in a safe
                     // state. We will simply never reach eventual consistency for this TX.
                     // TODO: Should we revert the tx entirely? I'm not sure the effort is
@@ -1335,8 +1359,10 @@ impl AuthorityState {
                             })
                         }
                         Some(object) => {
-                            let layout = object
-                                .get_layout(ObjectFormatOptions::default(), &self.module_cache)?;
+                            let layout = object.get_layout(
+                                ObjectFormatOptions::default(),
+                                self.module_cache.as_ref(),
+                            )?;
                             Ok(ObjectRead::Exists(obj_ref, object, layout))
                         }
                     }
@@ -1443,25 +1469,118 @@ impl AuthorityState {
             .map(|handler| handler.event_store.clone())
     }
 
-    /// Returns a set of events corresponding to a given transaction, in order events were emitted
-    pub async fn get_events_for_transaction(
+    /// Returns at most `limit` events emitted in the given transaction,
+    /// emitted within [start_time, end_time) in order of events emitted.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> Result<Vec<StoredEvent>, SuiError> {
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        es.events_for_transaction(digest).await
+        let stored_events = es.events_by_transaction(digest, limit).await?;
+        StoredEvent::into_event_envelopes(stored_events)
     }
 
-    /// Returns a whole set of events for a range of time
-    pub async fn get_events_for_timerange(
+    /// Returns at most `limit` events emitted in the given module,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_transaction_module(
+        &self,
+        module_id: &ModuleId,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_module_id(start_time, end_time, module_id, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events with the given move event struct name, e.g.
+    /// `0x2::devnet_nft::MintNFTEvent` or
+    /// `0x2::SUI::test_foo<address, vector<u8>>` with type params,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_move_event_struct_name(
+        &self,
+        move_event_struct_name: &str,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_move_event_struct_name(start_time, end_time, move_event_struct_name, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events associated with the given sender,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_sender(
+        &self,
+        sender: &SuiAddress,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_sender(start_time, end_time, sender, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events associated with the given recipient,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_recipient(
+        &self,
+        recipient: &Owner,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_recipient(start_time, end_time, recipient, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events associated with the given object,
+    /// emitted within [start_time, end_time), sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_object(
+        &self,
+        object: &ObjectID,
+        start_time: u64,
+        end_time: u64,
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
+        let stored_events = es
+            .events_by_object(start_time, end_time, object, limit)
+            .await?;
+        StoredEvent::into_event_envelopes(stored_events)
+    }
+
+    /// Returns at most `limit` events emitted within [start_time, end_time),
+    /// sorted in in descending time.
+    /// `limit` is capped to EVENT_STORE_QUERY_MAX_LIMIT
+    pub async fn get_events_by_timerange(
         &self,
         start_time: u64,
         end_time: u64,
-        limit: Option<usize>,
-    ) -> Result<Vec<StoredEvent>, SuiError> {
+        limit: usize,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
         let es = self.get_event_store().ok_or(SuiError::NoEventStore)?;
-        es.event_iterator(start_time, end_time, limit.unwrap_or(DEFAULT_QUERY_LIMIT))
-            .await
+        let stored_events = es.event_iterator(start_time, end_time, limit).await?;
+        StoredEvent::into_event_envelopes(stored_events)
     }
 
     pub async fn insert_genesis_object(&self, object: Object) {

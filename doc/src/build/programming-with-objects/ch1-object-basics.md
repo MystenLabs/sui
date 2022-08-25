@@ -57,7 +57,7 @@ All of the APIs for adding objects to persistent storage live in the [`transfer`
 ```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
-This places `obj` in global storage along with metadata that records `recipient` as the owner of the object. In Sui, every object must have an owner, which can be either an account address, another object, or "shared"--see [object ownership](../objects.md#object-ownership) for more details.
+This places `obj` in global storage along with metadata that records `recipient` as the owner of the object. In Sui, every object must have an owner, which can be either an address, another object, or "shared"--see [object ownership](../objects.md#object-ownership) for more details.
 
 > :bulb: In core Move, we would call `move_to<T>(a: address, t: T)` to add the entry `(a, T) -> t` to the global storage. But because (as explained above) the schema of Sui Move's global storage is different, we use the `Transfer` APIs instead of `move_to` or the other [global storage operators](https://github.com/move-language/move/blob/main/language/documentation/book/src/global-storage-operators.md) in core Move. These operators cannot be used in Sui Move.
 
@@ -101,7 +101,7 @@ An instance of the `Scenario` struct contains a per-address object pool emulatin
 
 Now let's try to write a test for the `create` function. Tests that need to use `test_scenario` must be in a separate module, either under a `tests` directory, or in the same file but in a module annotated with `#[test_only]`. This is because `test_scenario` itself is a test-only module, and can be used only by test-only modules.
 
-First of all, we begin the test with a hardcoded test address, which will also give us a transaction context as if we are sending a transaction from this address. We then call the `create` function, which should create a `ColorObject` and transfer it to the test address:
+First of all, we begin the test with a hardcoded test address, which will also give us a transaction context as if we are sending the transaction started with `test_scenario::begin` from this address. We then call the `create` function, which should create a `ColorObject` and transfer it to the test address:
 ```rust
 let owner = @0x1;
 // Create a ColorObject and transfer it to @owner.
@@ -113,7 +113,7 @@ let scenario = &mut test_scenario::begin(&owner);
 ```
 >:books: Note there is a "`;`" after "`}`". `;` is required to sequence a series of expressions, and even the block `{ ... }` is an expression! Refer to the [Move book](https://move-book.com/syntax-basics/expression-and-scope.html) for a detailed explanation.
 
-Now account `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
+Now, after the first transaction completes (**and only after the first transaction completes**), address `@0x1` should own the object. Let's first make sure it's not owned by anyone else:
 ```rust
 let not_owner = @0x2;
 // Check that not_owner does not own the just-created ColorObject.

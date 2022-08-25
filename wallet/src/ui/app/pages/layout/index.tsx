@@ -28,10 +28,13 @@ function PageLayout({
     return (
         <Loading loading={guardLoading}>
             <div
-                className={cl(st.container, {
-                    [st.forcedPopupSize]: limitToPopUpSize,
-                    [st.navHidden]: !isNavVisible,
-                })}
+                className={cl(
+                    st.container,
+                    limitToPopUpSize ? st.forcedPopupSize : st.dynamicSize,
+                    {
+                        [st.navHidden]: !isNavVisible,
+                    }
+                )}
             >
                 {children}
             </div>

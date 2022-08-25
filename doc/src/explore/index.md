@@ -10,7 +10,7 @@ Find answers to common questions about our [roadmap](https://github.com/MystenLa
 
 Experiment with:
 
-* [Sui DevNet](../explore/devnet.md) - to gain operational experience with the Sui software in a public setting
+* [Sui DevNet](../build/devnet.md) - to gain operational experience with the Sui software in a public setting
 * [Sui Incentivized Testnet](https://sui.io/resources-sui/announcing-sui-incentivized-testnet/) -  will feature a menu of incentives to encourage and reward meaningful participation during the Testnet waves
 
 ## Tutorial

@@ -66,7 +66,6 @@ impl SimpleFaucet {
             // Ok to unwrap() since `get_gas_objects` guarantees gas
             .map(|q| GasCoin::try_from(&q.1).unwrap())
             .collect::<Vec<GasCoin>>();
-        info!("Coins held: {:?}", coins);
 
         let (producer, consumer) = mpsc::channel(coins.len());
         for coin in &coins {
@@ -75,7 +74,7 @@ impl SimpleFaucet {
             }
         }
 
-        info!("Using coins: {:?}", coins);
+        debug!("Using coins: {:?}", coins);
 
         let metrics = FaucetMetrics::new(prometheus_registry);
 
@@ -234,6 +233,7 @@ impl SimpleFaucet {
     ) -> Result<TransactionData, anyhow::Error> {
         self.wallet
             .gateway
+            .transaction_builder()
             .transfer_sui(signer, coin_id, budget, recipient, Some(amount))
             .await
             .map_err(|e| {
@@ -263,7 +263,11 @@ impl SimpleFaucet {
 
         let tx = Transaction::new(data, signature);
         info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");
-        let response = context.gateway.execute_transaction(tx).await?;
+        let response = context
+            .gateway
+            .quorum_driver()
+            .execute_transaction(tx)
+            .await?;
         let effects = &response.effects;
         if matches!(effects.status, SuiExecutionStatus::Failure { .. }) {
             return Err(anyhow!("Error transferring object: {:#?}", effects.status));

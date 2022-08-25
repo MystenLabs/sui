@@ -4,9 +4,9 @@
 import React from 'react';
 import './App.css';
 import { root } from '.';
-import { Wallet, WalletProvider } from 'sui-wallet-adapter-react';
-import { SuiWalletAdapter, MockWalletAdapter} from '@sui-wallet-adapter/all-wallets';
-import { WalletWrapper } from 'sui-wallet-adapter-ui';
+import { Wallet, WalletProvider } from '@mysten/wallet-adapter-react';
+import { SuiWalletAdapter, MockWalletAdapter} from '@mysten/wallet-adapter-all-wallets';
+import { WalletWrapper } from '@mysten/wallet-adapter-react-ui';
 import { Button } from '@mui/material';
 import { TestButton } from './TestButton';
 

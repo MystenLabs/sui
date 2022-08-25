@@ -12,6 +12,7 @@ use crate::{
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
+use fastcrypto::traits::KeyPair;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use narwhal_config::Committee as ConsensusCommittee;
@@ -181,7 +182,7 @@ impl ValidatorService {
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
         let consensus_keypair = config.key_pair().copy();
-        let consensus_committee = config.genesis()?.narwhal_committee().load();
+        let consensus_committee = config.genesis()?.narwhal_committee();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
         let consensus_execution_state = state.clone();
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
@@ -190,7 +191,7 @@ impl ValidatorService {
         tokio::spawn(async move {
             narwhal_node::restarter::NodeRestarter::watch(
                 consensus_keypair,
-                &(&*consensus_committee).clone(),
+                consensus_committee,
                 consensus_storage_base_path,
                 consensus_execution_state,
                 consensus_parameters,
@@ -413,12 +414,12 @@ impl Validator for ValidatorService {
         Ok(tonic::Response::new(response))
     }
 
-    type BatchInfoStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
+    type FollowTxStreamStream = BoxStream<'static, Result<BatchInfoResponseItem, tonic::Status>>;
 
     async fn batch_info(
         &self,
         request: tonic::Request<BatchInfoRequest>,
-    ) -> Result<tonic::Response<Self::BatchInfoStream>, tonic::Status> {
+    ) -> Result<tonic::Response<Self::FollowTxStreamStream>, tonic::Status> {
         let request = request.into_inner();
 
         let xstream = self

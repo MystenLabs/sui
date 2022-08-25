@@ -31,16 +31,17 @@ created: object(111), object(112)
 written: object(110)
 
 task 7 'view-object'. lines 78-78:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(111) )
 Version: 1
-Child Count: Some(1)
+Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}}
 
 task 8 'run'. lines 80-80:
-written: object(111), object(112), object(113)
+Error: Transaction Effects Status: Invalid Freezing of Parent Object with Children. Parent object fake(111) was made immutable before its children were deleted or transferred.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidParentFreezing { parent: fake(111) }, source: None } }
 
 task 9 'view-object'. lines 82-86:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(111) )
 Version: 2
 Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(112)}}}
@@ -50,16 +51,16 @@ created: object(115), object(116)
 written: object(114)
 
 task 11 'view-object'. lines 90-90:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(116) )
 Version: 1
-Child Count: Some(1)
+Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(115)}}}
 
 task 12 'run'. lines 92-92:
 written: object(115), object(116), object(117)
 
 task 13 'view-object'. lines 94-98:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(116) )
 Version: 2
 Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(115)}}}
@@ -73,16 +74,17 @@ created: object(122), object(123)
 written: object(121)
 
 task 16 'view-object'. lines 104-104:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(119) )
 Version: 1
-Child Count: Some(1)
+Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(120)}}}
 
 task 17 'run'. lines 106-106:
-written: object(119), object(120), object(123), object(124)
+Error: Transaction Effects Status: Missing Object Owner. Missing object owner, the parent object fake(122) for child object fake(123).
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MissingObjectOwner(MissingObjectOwner { child: fake(123), parent: fake(122) }), source: None } }
 
 task 18 'view-object'. lines 108-112:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(119) )
 Version: 2
 Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(120)}}}
@@ -96,16 +98,17 @@ created: object(129), object(130)
 written: object(128)
 
 task 21 'view-object'. lines 118-118:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(126) )
 Version: 1
-Child Count: Some(1)
+Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(127)}}}
 
 task 22 'run'. lines 120-120:
-written: object(126), object(127), object(130), object(131)
+Error: Transaction Effects Status: Missing Object Owner. Missing object owner, the parent object fake(129) for child object fake(130).
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: MissingObjectOwner(MissingObjectOwner { child: fake(130), parent: fake(129) }), source: None } }
 
 task 23 'view-object'. lines 122-126:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(126) )
 Version: 2
 Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(127)}}}
@@ -115,17 +118,17 @@ created: object(133), object(134)
 written: object(132)
 
 task 25 'view-object'. lines 130-130:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(133) )
 Version: 1
-Child Count: Some(1)
+Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(134)}}}
 
 task 26 'run'. lines 132-132:
-written: object(134), object(135)
-deleted: object(133)
+Error: Transaction Effects Status: Invalid Deletion of Parent Object with Children. Parent object fake(133) was deleted before its children were deleted or transferred.
+Execution Error: ExecutionError: ExecutionError { inner: ExecutionErrorInner { kind: InvalidParentDeletion { parent: fake(133), kind: Some(Normal) }, source: None } }
 
 task 27 'view-object'. lines 134-138:
-Owner: Account Address ( A )
+Owner: Object ID: ( fake(133) )
 Version: 2
 Child Count: None
 Contents: test::m::S {id: sui::object::UID {id: sui::object::ID {bytes: fake(134)}}}

@@ -7,8 +7,12 @@ use sui_sdk::SuiClient;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_ws_client("ws://127.0.0.1:9001").await?;
-    let mut subscribe_all = sui.subscribe_event(SuiEventFilter::All(vec![])).await?;
+    let sui =
+        SuiClient::new_rpc_client("http://127.0.0.1:5001", Some("ws://127.0.0.1:9001")).await?;
+    let mut subscribe_all = sui
+        .event_api()
+        .subscribe_event(SuiEventFilter::All(vec![]))
+        .await?;
     loop {
         println!("{:?}", subscribe_all.next().await);
     }

@@ -3,7 +3,7 @@
 
 //! A secret seed value, useful for deterministic private key and SuiAddress generation.
 
-use narwhal_crypto::{hkdf::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits};
+use fastcrypto::{hkdf::hkdf_generate_from_ikm, traits::KeyPair as KeypairTraits};
 use rand::{CryptoRng, RngCore};
 use sha3::Sha3_256;
 use zeroize::{Zeroize, ZeroizeOnDrop};

@@ -6,9 +6,16 @@ import { useCallback, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 
-import TransferCoinForm from './TransferCoinForm';
-import { createValidationSchema } from './validation';
+import StepOne from './TransferCoinForm/StepOne';
+import StepTwo from './TransferCoinForm/StepTwo';
+import {
+    createValidationSchemaStepOne,
+    createValidationSchemaStepTwo,
+} from './validation';
+import { Content } from '_app/shared/bottom-menu-layout';
+import PageTitle from '_app/shared/page-title';
 import Loading from '_components/loading';
+import ProgressBar from '_components/progress-bar';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import {
     accountAggregateBalancesSelector,
@@ -21,6 +28,8 @@ import { balanceFormatOptions } from '_shared/formatting';
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
 
+import st from './TransferCoinPage.module.scss';
+
 const initialValues = {
     to: '',
     amount: '',
@@ -28,10 +37,13 @@ const initialValues = {
 
 export type FormValues = typeof initialValues;
 
+const DEFAULT_FORM_STEP = 1;
+
 // TODO: show out of sync when sui objects locally might be outdated
 function TransferCoinPage() {
     const [searchParams] = useSearchParams();
-    const coinType = useMemo(() => searchParams.get('type'), [searchParams]);
+    const coinType = searchParams.get('type');
+
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
@@ -42,19 +54,25 @@ function TransferCoinPage() {
         () => balances[GAS_TYPE_ARG]?.length || 0,
         [balances]
     );
+
     const gasAggregateBalance = useMemo(
         () => aggregateBalances[GAS_TYPE_ARG] || BigInt(0),
         [aggregateBalances]
     );
+
     const coinSymbol = useMemo(
         () => (coinType && Coin.getCoinSymbol(coinType)) || '',
         [coinType]
     );
+
     const [sendError, setSendError] = useState<string | null>(null);
+    const [currentStep, setCurrentStep] = useState<number>(DEFAULT_FORM_STEP);
+    const [formData] = useState<FormValues>(initialValues);
+
     const intl = useIntl();
-    const validationSchema = useMemo(
+    const validationSchemaStepOne = useMemo(
         () =>
-            createValidationSchema(
+            createValidationSchemaStepOne(
                 coinType || '',
                 coinBalance,
                 coinSymbol,
@@ -72,6 +90,11 @@ function TransferCoinPage() {
             intl,
         ]
     );
+    const validationSchemaStepTwo = useMemo(
+        () => createValidationSchemaStepTwo(),
+        []
+    );
+
     const dispatch = useAppDispatch();
     const navigate = useNavigate();
     const onHandleSubmit = useCallback(
@@ -91,44 +114,105 @@ function TransferCoinPage() {
                         tokenTypeArg: coinType,
                     })
                 ).unwrap();
-                const txDigest = response.certificate.transactionDigest;
+
                 resetForm();
-                navigate(`/tx/${encodeURIComponent(txDigest)}`);
+                const txDigest = response.certificate.transactionDigest;
+                const recieptUrl = `/receipt?txdigest=${encodeURIComponent(
+                    txDigest
+                )}&transfer=coin`;
+
+                navigate(recieptUrl);
             } catch (e) {
                 setSendError((e as SerializedError).message || null);
             }
         },
         [dispatch, navigate, coinType]
     );
+
+    const handleNextStep = useCallback(
+        (
+            { amount }: FormValues,
+            { setSubmitting, setFieldValue }: FormikHelpers<FormValues>
+        ) => {
+            setCurrentStep((prev) => prev + 1);
+            setSubmitting(false);
+        },
+        []
+    );
+
+    const handleBackStep = useCallback(() => {
+        setCurrentStep(DEFAULT_FORM_STEP);
+    }, []);
+
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
     }, []);
     const loadingBalance = useAppSelector(
         ({ suiObjects }) => suiObjects.loading && !suiObjects.lastSync
     );
+
     if (!coinType) {
         return <Navigate to="/" replace={true} />;
     }
-    return (
-        <>
-            <h3>Send {coinSymbol}</h3>
-            <Loading loading={loadingBalance}>
-                <Formik
-                    initialValues={initialValues}
-                    validateOnMount={true}
-                    validationSchema={validationSchema}
-                    onSubmit={onHandleSubmit}
-                >
-                    <TransferCoinForm
-                        submitError={sendError}
-                        coinBalance={coinBalance.toString()}
-                        coinSymbol={coinSymbol}
-                        onClearSubmitError={handleOnClearSubmitError}
-                    />
-                </Formik>
-            </Loading>
-        </>
+
+    const StepOneForm = (
+        <Formik
+            initialValues={formData}
+            validateOnMount={true}
+            validationSchema={validationSchemaStepOne}
+            onSubmit={handleNextStep}
+        >
+            <StepOne
+                submitError={sendError}
+                coinBalance={coinBalance.toString()}
+                coinSymbol={coinSymbol}
+                coinType={coinType}
+                onClearSubmitError={handleOnClearSubmitError}
+            />
+        </Formik>
     );
+
+    const StepTwoForm = (
+        <Formik
+            initialValues={formData}
+            validateOnMount={true}
+            validationSchema={validationSchemaStepTwo}
+            onSubmit={onHandleSubmit}
+        >
+            <StepTwo
+                submitError={sendError}
+                coinBalance={coinBalance.toString()}
+                coinSymbol={coinSymbol}
+                coinType={coinType}
+                onClearSubmitError={handleOnClearSubmitError}
+            />
+        </Formik>
+    );
+
+    const steps = [StepOneForm, StepTwoForm];
+
+    const SendCoin = (
+        <div className={st.container}>
+            <PageTitle
+                title="Send Coins"
+                backLink={'/'}
+                className={st.pageTitle}
+                {...(currentStep > 1 && { onClick: handleBackStep })}
+            />
+
+            <Content>
+                <Loading loading={loadingBalance}>
+                    <ProgressBar
+                        currentStep={currentStep}
+                        stepsName={['Amount', 'Address']}
+                    />
+                    {steps[currentStep - 1]}
+                </Loading>
+            </Content>
+        </div>
+    );
+
+    return <>{SendCoin}</>;
 }
 
 export default TransferCoinPage;

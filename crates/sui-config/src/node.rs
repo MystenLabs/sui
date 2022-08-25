@@ -14,18 +14,31 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
+use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::crypto::AuthoritySignature;
 use sui_types::crypto::KeypairTraits;
-use sui_types::sui_serde::KeyPairBase64;
+use sui_types::crypto::PublicKey as AccountsPublicKey;
+use sui_types::crypto::SuiKeyPair;
+use sui_types::sui_serde::{AuthSignature, KeyPairBase64};
+
+// Default max number of concurrent requests served
+pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000;
 
 #[serde_as]
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
 pub struct NodeConfig {
+    /// The keypair that is used to deal with consensus transactions
     #[serde(default = "default_key_pair")]
     #[serde_as(as = "Arc<KeyPairBase64>")]
-    pub key_pair: Arc<AuthorityKeyPair>,
+    pub protocol_key_pair: Arc<AuthorityKeyPair>,
+    /// The keypair that the authority uses to receive payments
+    #[serde(default = "default_sui_key_pair")]
+    pub account_key_pair: Arc<SuiKeyPair>,
+    #[serde(default = "default_sui_key_pair")]
+    pub network_key_pair: Arc<SuiKeyPair>,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
@@ -48,14 +61,27 @@ pub struct NodeConfig {
     #[serde(default)]
     pub enable_gossip: bool,
 
+    #[serde(default = "bool_true")]
+    pub enable_checkpoint: bool,
+
     #[serde(default)]
     pub enable_reconfig: bool,
+
+    #[serde(default)]
+    pub grpc_load_shed: Option<bool>,
+
+    #[serde(default = "default_concurrency_limit")]
+    pub grpc_concurrency_limit: Option<usize>,
 
     pub genesis: Genesis,
 }
 
 fn default_key_pair() -> Arc<AuthorityKeyPair> {
     Arc::new(sui_types::crypto::get_key_pair().1)
+}
+
+fn default_sui_key_pair() -> Arc<SuiKeyPair> {
+    Arc::new((sui_types::crypto::get_key_pair::<AccountKeyPair>().1).into())
 }
 
 fn default_grpc_address() -> Multiaddr {
@@ -82,19 +108,27 @@ pub fn default_websocket_address() -> Option<SocketAddr> {
     Some(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), 9001))
 }
 
+pub fn default_concurrency_limit() -> Option<usize> {
+    Some(DEFAULT_GRPC_CONCURRENCY_LIMIT)
+}
+
+pub fn bool_true() -> bool {
+    true
+}
+
 impl Config for NodeConfig {}
 
 impl NodeConfig {
-    pub fn key_pair(&self) -> &AuthorityKeyPair {
-        &self.key_pair
+    pub fn protocol_key_pair(&self) -> &AuthorityKeyPair {
+        &self.protocol_key_pair
     }
 
-    pub fn public_key(&self) -> AuthorityPublicKeyBytes {
-        self.key_pair.public().into()
+    pub fn protocol_public_key(&self) -> AuthorityPublicKeyBytes {
+        self.protocol_key_pair.public().into()
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        (&self.public_key()).into()
+        (&self.account_key_pair.public()).into()
     }
 
     pub fn db_path(&self) -> &Path {
@@ -139,13 +173,19 @@ impl ConsensusConfig {
 
 /// Publicly known information about a validator
 /// TODO read most of this from on-chain
+#[serde_as]
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct ValidatorInfo {
     pub name: String,
-    pub public_key: AuthorityPublicKeyBytes,
+    pub account_key: AccountsPublicKey,
+    pub protocol_key: AuthorityPublicKeyBytes,
+    pub network_key: AccountsPublicKey,
+    #[serde_as(as = "AuthSignature")]
+    pub proof_of_possession: AuthoritySignature,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
+    pub gas_price: u64,
     pub network_address: Multiaddr,
     pub narwhal_primary_to_primary: Multiaddr,
 
@@ -162,11 +202,23 @@ impl ValidatorInfo {
     }
 
     pub fn sui_address(&self) -> SuiAddress {
-        (&self.public_key()).into()
+        self.account_key().into()
     }
 
-    pub fn public_key(&self) -> AuthorityPublicKeyBytes {
-        self.public_key
+    pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
+        self.protocol_key
+    }
+
+    pub fn network_key(&self) -> &AccountsPublicKey {
+        &self.network_key
+    }
+
+    pub fn account_key(&self) -> &AccountsPublicKey {
+        &self.account_key
+    }
+
+    pub fn proof_of_possession(&self) -> &AuthoritySignature {
+        &self.proof_of_possession
     }
 
     pub fn stake(&self) -> StakeUnit {
@@ -175,6 +227,10 @@ impl ValidatorInfo {
 
     pub fn delegation(&self) -> StakeUnit {
         self.delegation
+    }
+
+    pub fn gas_price(&self) -> u64 {
+        self.gas_price
     }
 
     pub fn network_address(&self) -> &Multiaddr {
@@ -186,7 +242,7 @@ impl ValidatorInfo {
             .iter()
             .map(|validator| {
                 (
-                    validator.public_key(),
+                    validator.protocol_key(),
                     validator.stake() + validator.delegation(),
                 )
             })

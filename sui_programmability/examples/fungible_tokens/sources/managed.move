@@ -32,11 +32,6 @@ module fungible_tokens::managed {
         coin::burn(treasury_cap, coin);
     }
 
-    /// Manager can transfer the treasury capability to a new manager
-    public entry fun transfer_cap(treasury_cap: TreasuryCap<MANAGED>, recipient: address) {
-        coin::transfer_cap<MANAGED>(treasury_cap, recipient);
-    }
-
     #[test_only]
     /// Wrapper of module initializer for testing
     public fun test_init(ctx: &mut TxContext) {

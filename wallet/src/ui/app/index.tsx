@@ -5,18 +5,18 @@ import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppType } from './redux/slices/app/AppType';
+import { routes as stakeRoutes } from './staking';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
 import HomePage, {
     NftsPage,
-    StakeNew,
-    StakePage,
     TokensPage,
     TransactionDetailsPage,
     TransactionsPage,
     TransferCoinPage,
     NFTDetailsPage,
     ReceiptPage,
+    CoinsSelectorPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -28,7 +28,13 @@ import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
 import { setNavVisibility } from '_redux/slices/app';
 
-const HIDDEN_MENU_PATHS = ['/stake-new', '/nft-details', '/receipt'];
+const HIDDEN_MENU_PATHS = [
+    '/stake',
+    '/nft-details',
+    '/receipt',
+    '/send',
+    '/send/select',
+];
 
 const App = () => {
     const dispatch = useAppDispatch();
@@ -49,25 +55,40 @@ const App = () => {
     return (
         <Routes>
             <Route path="/*" element={<HomePage />}>
-                <Route
-                    index
-                    element={<Navigate to="/tokens" replace={true} />}
-                />
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
                 <Route path="nft-details" element={<NFTDetailsPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
-                <Route path="stake" element={<StakePage />} />
-                {process.env.NODE_ENV === 'development' ? (
-                    <Route path="stake-new" element={<StakeNew />} />
-                ) : null}
+                <Route path="send/select" element={<CoinsSelectorPage />} />
+                {stakeRoutes}
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}
                 />
                 <Route path="receipt" element={<ReceiptPage />} />
+                <Route
+                    path="*"
+                    element={<Navigate to="/tokens" replace={true} />}
+                />
             </Route>
+
+            <Route
+                path="/dapp/*"
+                element={
+                    <HomePage disableNavigation limitToPopUpSize={false} />
+                }
+            >
+                <Route
+                    path="connect/:requestID"
+                    element={<SiteConnectPage />}
+                />
+                <Route
+                    path="tx-approval/:txID"
+                    element={<DappTxApprovalPage />}
+                />
+            </Route>
+
             <Route path="welcome" element={<WelcomePage />} />
             <Route path="/initialize" element={<InitializePage />}>
                 <Route path="select" element={<SelectPage />} />
@@ -75,12 +96,6 @@ const App = () => {
                 <Route path="import" element={<ImportPage />} />
                 <Route path="backup" element={<BackupPage />} />
             </Route>
-            <Route path="/connect/:requestID" element={<SiteConnectPage />} />
-            <Route path="/tx-approval/:txID" element={<DappTxApprovalPage />} />
-            <Route
-                path="*"
-                element={<Navigate to="/tokens" replace={true} />}
-            />
         </Routes>
     );
 };

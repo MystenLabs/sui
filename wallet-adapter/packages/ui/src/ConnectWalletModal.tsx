@@ -3,7 +3,7 @@
 
 import { Box, Button, List, Modal, Typography, ListItemButton, ListItemText, CircularProgress } from "@mui/material";
 import { useEffect, useState } from "react";
-import { useWallet } from "sui-wallet-adapter-react";
+import { useWallet } from "@mysten/wallet-adapter-react";
 
 export interface ConnectWalletButtonProps {}
 
@@ -15,7 +15,7 @@ export function ConnectWalletModal(props: ConnectWalletButtonProps) {
     const handleClickOpen = () => {
       setOpen(true);
     }
-  
+
     const handleClose = () => {
       setOpen(false);
     }

@@ -9,18 +9,20 @@ WARNING: Note that we are still iterating on the RPC and SDK API before TestNet,
 The SDK will be published to [npm registry](https://www.npmjs.com/package/@mysten/sui.js) with the same bi-weekly release cycle as the DevNet validators and [RPC Server](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md). To use the SDK in your project, you can do:
 
 ```bash
-$ yarn add @mysten/sui.js
+$ npm install @mysten/sui.js
 ```
+
+You can also use your preferred npm client, such as yarn or pnpm.
 
 ## Working with local network
 
 Note that the [published SDK](https://www.npmjs.com/package/@mysten/sui.js) might go out of sync with the RPC server on the `main` branch until the next bi-weekly release, therefore it's recommended to build the SDK locally if you want to test against the local network.
 
-Run the following command in the `sui/sdk/typescript` directory to build the SDK and [create a symlink](https://docs.npmjs.com/cli/v8/commands/npm-link) in the global folder.
+To get started you need to install [pnpm](https://pnpm.io/), then run the following command in the `sui/sdk/typescript` directory to build the SDK and [create a symlink](https://docs.npmjs.com/cli/v8/commands/npm-link) in the global folder.
 
 ```bash
 $ cd <path to sui repo>/sdk/typescript
-$ yarn && yarn build
+$ pnpm install && pnpm build
 $ npm link
 ```
 
@@ -31,13 +33,19 @@ cd <your project directory>
 npm link @mysten/sui.js
 ```
 
+If you wish to rebuild all dependencies of the TypeScript SDK, or if you're encountering issues with the `@mysten/bcs` module not being found, you can re-build the SDK module and all of it's local dependencies using the following command:
+
+```bash
+pnpm --filter @mysten/sui.js... build
+```
+
 Refer to the [JSON RPC doc](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md) for instructions about how to start a local network and local RPC server
 
 ## Type Doc
 
 You can view the generated [Type Doc](https://typedoc.org/) for the [current release of the SDK](https://www.npmjs.com/package/@mysten/sui.js) at http://typescript-sdk-docs.s3-website-us-east-1.amazonaws.com/.
 
-For the latest docs for the `main` branch, run `yarn doc` and open the [doc/index.html](doc/index.html) in your browser.
+For the latest docs for the `main` branch, run `pnpm doc` and open the [doc/index.html](doc/index.html) in your browser.
 
 ## Usage
 
@@ -163,7 +171,7 @@ const signer = new RawSigner(
   keypair,
   new JsonRpcProvider('https://gateway.devnet.sui.io:443')
 );
-const bytecode = await fs.readFile('path/to/project/build/project_name/bytecode_modules/module_name.mv', 'base64');  
+const bytecode = await fs.readFile('path/to/project/build/project_name/bytecode_modules/module_name.mv', 'base64');
 const publishTxn = await signer.publish(
   {
     compiledModules: [bytecode.toString()],

@@ -13,6 +13,7 @@ use move_package::BuildConfig;
 use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use sui_types::messages::Transaction;
 
 use crate::examples::RpcExampleProvider;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
@@ -30,12 +31,10 @@ use sui_json_rpc::read_api::{FullNodeApi, ReadApi};
 use sui_json_rpc::sui_rpc_doc;
 use sui_json_rpc::SuiRpcModule;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiObjectInfo,
+    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiData, SuiObjectInfo,
     SuiTransactionResponse, TransactionBytes,
 };
 use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::crypto::SuiSignature;
-use sui_types::sui_serde::Base64;
 use sui_types::SUI_FRAMEWORK_ADDRESS;
 use test_utils::network::{start_rpc_test_network, TestNetwork};
 
@@ -139,16 +138,22 @@ async fn create_response_sample() -> Result<
     let mut context = WalletContext::new(&config).await?;
     let address = context.keystore.addresses().first().cloned().unwrap();
 
-    context.gateway.sync_account_state(address).await?;
+    context
+        .gateway
+        .wallet_sync_api()
+        .sync_account_state(address)
+        .await?;
 
     // Create coin response
     let coins = context
         .gateway
+        .read_api()
         .get_objects_owned_by_address(address)
         .await?;
     let coin = context
         .gateway
-        .get_object(coins.first().unwrap().object_id)
+        .read_api()
+        .get_parsed_object(coins.first().unwrap().object_id)
         .await?;
 
     let example_move_function_arg_types = create_move_function_arg_type_response()?;
@@ -220,21 +225,20 @@ async fn create_package_object_response(
     .execute(context)
     .await?;
     if let SuiClientCommandResult::Publish(response) = result {
-        Ok((
-            context
-                .gateway
-                .get_object(
-                    response
-                        .parsed_data
-                        .clone()
-                        .unwrap()
-                        .to_publish_response()?
-                        .package
-                        .object_id,
-                )
-                .await?,
-            response,
-        ))
+        let object = context
+            .gateway
+            .read_api()
+            .get_parsed_object(
+                response
+                    .parsed_data
+                    .clone()
+                    .unwrap()
+                    .to_publish_response()?
+                    .package
+                    .object_id,
+            )
+            .await?;
+        Ok((object, response))
     } else {
         panic!()
     }
@@ -247,7 +251,7 @@ async fn create_transfer_response(
 ) -> Result<SuiTransactionResponse, anyhow::Error> {
     let response = SuiClientCommands::Transfer {
         to: address,
-        coin_object_id: coins.first().unwrap().object_id,
+        object_id: coins.first().unwrap().object_id,
         gas: None,
         gas_budget: 1000,
     }
@@ -332,10 +336,12 @@ async fn create_hero_response(
 
         if let SuiClientCommandResult::Call(_, effect) = result {
             let hero = effect.created.first().unwrap();
-            Ok((
-                package_id,
-                context.gateway.get_object(hero.reference.object_id).await?,
-            ))
+            let object = context
+                .gateway
+                .read_api()
+                .get_parsed_object(hero.reference.object_id)
+                .await?;
+            Ok((package_id, object))
         } else {
             panic!()
         }
@@ -369,10 +375,10 @@ async fn create_error_response(
     let signature = context
         .keystore
         .sign(&address, &response.tx_bytes.to_vec()?)?;
-    let sig_scheme = signature.scheme();
-    let signature_byte = Base64::from_bytes(signature.signature_bytes());
-    let pub_key = Base64::from_bytes(signature.public_key_bytes());
-    let tx_data = response.tx_bytes;
+
+    let tx = Transaction::new(response.to_data().unwrap(), signature);
+
+    let (tx_data, sig_scheme, signature_bytes, pub_key) = tx.to_network_data_for_execution();
 
     let client = Client::new();
     let request = Request::builder()
@@ -383,7 +389,7 @@ async fn create_error_response(
             "{{ \"jsonrpc\": \"2.0\",\"method\": \"sui_executeTransaction\",\"params\": [{}, {}, {}, {}],\"id\": 1 }}",
             json![tx_data],
             json![sig_scheme],
-            json![signature_byte],
+            json![signature_bytes],
             json![pub_key]
         )))?;
 
@@ -400,7 +406,8 @@ async fn create_coin_split_response(
     // create coin_split response
     let result = SuiClientCommands::SplitCoin {
         coin_id: coins.first().unwrap().object_id,
-        amounts: vec![20, 20, 20, 20, 20],
+        amounts: Some(vec![20, 20, 20, 20, 20]),
+        count: 0,
         gas: None,
         gas_budget: 1000,
     }
@@ -442,7 +449,8 @@ async fn get_nft_response(
     if let SuiClientCommandResult::Call(certificate, effects) = result {
         let object = context
             .gateway
-            .get_object(effects.created.first().unwrap().reference.object_id)
+            .read_api()
+            .get_parsed_object(effects.created.first().unwrap().reference.object_id)
             .await?;
         let tx = SuiTransactionResponse {
             certificate,

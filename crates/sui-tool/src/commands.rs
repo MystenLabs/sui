@@ -3,18 +3,25 @@
 
 use anyhow::Result;
 use futures::future::join_all;
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
 use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 
-use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
+use sui_core::authority_client::{
+    AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
+};
 use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
 
+use anyhow::anyhow;
 use futures::stream::StreamExt;
 
 use clap::*;
+use sui_core::authority::MAX_ITEMS_LIMIT;
+use sui_types::object::ObjectFormatOptions;
 
 #[derive(Parser)]
 #[clap(
@@ -128,9 +135,14 @@ fn make_clients(genesis: PathBuf) -> Result<BTreeMap<AuthorityName, NetworkAutho
     let mut authority_clients = BTreeMap::new();
 
     for validator in genesis.validator_set() {
-        let channel = net_config.connect_lazy(&validator.network_address)?;
-        let client = NetworkAuthorityClient::new(channel);
-        let public_key_bytes = validator.public_key();
+        let channel = net_config
+            .connect_lazy(&validator.network_address)
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let client = NetworkAuthorityClient::new(
+            channel,
+            Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+        );
+        let public_key_bytes = validator.protocol_key();
         authority_clients.insert(public_key_bytes, client);
     }
 
@@ -280,9 +292,26 @@ impl std::fmt::Display for VerboseObjectOutput {
                             }
                         }
 
-                        if let Some(ObjectResponse { lock, object, .. }) = &resp.object_and_lock {
-                            // TODO maybe show object contents if we can do so meaningfully.
-                            writeln!(f, "  -- object: <data>")?;
+                        if let Some(ObjectResponse {
+                            lock,
+                            object,
+                            layout,
+                        }) = &resp.object_and_lock
+                        {
+                            if object.is_package() {
+                                writeln!(f, "  -- object: <Move Package>")?;
+                            } else if let Some(layout) = layout {
+                                writeln!(
+                                    f,
+                                    "  -- object: Move Object: {}",
+                                    object
+                                        .data
+                                        .try_as_move()
+                                        .unwrap()
+                                        .to_move_struct(layout)
+                                        .unwrap()
+                                )?;
+                            }
                             writeln!(f, "  -- owner: {}", object.owner)?;
                             writeln!(f, "  -- locked by: {}", lock.opt_debug("<not locked>"))?;
                         }
@@ -308,8 +337,13 @@ async fn get_object(
             .handle_object_info_request(ObjectInfoRequest {
                 object_id: id,
                 request_kind: match version {
-                    None => ObjectInfoRequestKind::LatestObjectInfo(None),
-                    Some(v) => ObjectInfoRequestKind::PastObjectInfo(SequenceNumber::from_u64(v)),
+                    None => ObjectInfoRequestKind::LatestObjectInfo(Some(
+                        ObjectFormatOptions::default(),
+                    )),
+                    Some(v) => ObjectInfoRequestKind::PastObjectInfoDebug(
+                        SequenceNumber::from_u64(v),
+                        Some(ObjectFormatOptions::default()),
+                    ),
                 },
             })
             .await
@@ -380,14 +414,26 @@ impl ToolCommand {
                     })
                     .collect();
 
-                let req = BatchInfoRequest {
-                    start: seq,
-                    length: len,
-                };
-
                 for (name, c) in clients.iter() {
                     println!("validator batch stream: {:?}", name);
-                    handle_batch(*c, &req).await;
+                    if let Some(seq) = seq {
+                        let requests =
+                            (seq..(seq + len))
+                                .step_by(MAX_ITEMS_LIMIT as usize)
+                                .map(|start| BatchInfoRequest {
+                                    start: Some(start),
+                                    length: min(MAX_ITEMS_LIMIT, seq + len - start),
+                                });
+                        for request in requests {
+                            handle_batch(*c, &request).await;
+                        }
+                    } else {
+                        let req = BatchInfoRequest {
+                            start: seq,
+                            length: len,
+                        };
+                        handle_batch(*c, &req).await;
+                    }
                 }
             }
             ToolCommand::FetchObject {

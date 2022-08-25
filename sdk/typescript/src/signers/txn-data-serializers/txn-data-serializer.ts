@@ -2,7 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Base64DataBuffer } from '../../serialization/base64';
-import { ObjectId, SuiAddress, SuiJsonValue } from '../../types';
+import {
+  CallArg,
+  ObjectId,
+  SuiAddress,
+  SuiJsonValue,
+  TypeTag,
+} from '../../types';
 
 ///////////////////////////////
 // Exported Types
@@ -17,7 +23,7 @@ export interface TransferSuiTransaction {
   suiObjectId: ObjectId;
   gasBudget: number;
   recipient: SuiAddress;
-  amount?: number;
+  amount: number | null;
 }
 
 export interface MergeCoinTransaction {
@@ -38,18 +44,49 @@ export interface MoveCallTransaction {
   packageObjectId: ObjectId;
   module: string;
   function: string;
-  typeArguments: string[];
-  arguments: SuiJsonValue[];
+  /**
+   * Usage: pass in string[] if you use RpcTxnDataSerializer,
+   * Otherwise you need to pass in TypeTag[]. We will remove
+   * RpcTxnDataSerializer soon.
+   */
+  typeArguments: string[] | TypeTag[];
+  /**
+   * Usage: pass in SuiJsonValue[] if you use RpcTxnDataSerializer,
+   * Otherwise you need to pass in CallArg[].
+   */
+  arguments: SuiJsonValue[] | CallArg[];
   gasPayment?: ObjectId;
   gasBudget: number;
 }
 
 export interface PublishTransaction {
-  compiledModules: string[],
+  /**
+   * Transaction type used for publishing Move modules to the Sui.
+   * Should be already compiled using `sui-move`, example:
+   * ```
+   * $ sui move build
+   * $ cat build/project_name/bytecode_modules/module.mv
+   * ```
+   * In JS:
+   *
+   * ```
+   * // If you are using `RpcTxnDataSerializer`,
+   * let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv', 'base64');
+   * let compiledModules = [file.toString()]
+   *
+   * // If you are using `LocalTxnDataSerializer`,
+   * let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv');
+   * let modules = [ Array.from(file) ];
+   *
+   * // ... publish logic ...
+   * ```
+   *
+   * Each module should be represented as a sequence of bytes.
+   */
+  compiledModules: Iterable<string> | Iterable<Iterable<number>>;
   gasPayment?: ObjectId;
   gasBudget: number;
 }
-
 
 ///////////////////////////////
 // Exported Abstracts

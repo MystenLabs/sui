@@ -50,11 +50,10 @@ jobs:
     # - uses: bmwill/rust-cache@v1 # Fork of 'Swatinem/rust-cache' which allows caching additional paths
     #   with:
     #     path: ~/.cargo/registry/src/**/librocksdb-sys-*
-    - name: Install huniq, and cache the binary
-      uses: baptiste0928/cargo-install@v1
+    - name: Install huniq
+      uses: actions-rs/install@v0.1
       with:
         crate: huniq
-        locked: true
     - name: prepare artifact directory
       run: |
         mkdir -p artifacts
