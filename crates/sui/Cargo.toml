@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
-serde = { version = "1.0.143", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 serde_json = "1.0.83"
 signature = "1.6.0"
 camino = "1.0.9"
@@ -39,7 +39,7 @@ rocksdb = "0.19.0"
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e"}
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "f4aa523d3029bd6a23bead5f04c182f2cfa04c5e"} 
 tempfile = "3.3.0"
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "4deb0684df6935281bb781adbefcd76b8cec6c40", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "fbea0cad2baa535f1d656c7a36d337e36bba1c17", package = "executor" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a", features = ["address20"] }
 move-prover = { git = "https://github.com/move-language/move", rev = "79071528524f08b12e9abb84c1094d8e976aa17a" }
