@@ -24,7 +24,7 @@ serde_with = { version = "1.14.0", features = ["hex"] }
 sui-storage = { path = "../sui-storage" }
 strum_macros = "^0.24"
 strum = "0.24.1"
-serde = { version = "1.0.143", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
