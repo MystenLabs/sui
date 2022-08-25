@@ -160,7 +160,6 @@ There are two ways to transfer a child object:
 #### transfer
 First of all, let's look at how to transfer a child object to an address. Recall the `transfer` function as defined in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
 ```rust
-```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
 `transfer` transfers an object, in this case a child object, to an address.
