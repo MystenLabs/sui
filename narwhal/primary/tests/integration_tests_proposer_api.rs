@@ -263,13 +263,11 @@ async fn test_node_read_causal_signed_certificates() {
     // Write genesis certs to primary 1 & 2
     primary_store_1
         .certificate_store
-        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
-        .await
+        .write_all(genesis_certs.clone())
         .unwrap();
     primary_store_2
         .certificate_store
-        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
-        .await
+        .write_all(genesis_certs.clone())
         .unwrap();
 
     let genesis = genesis_certs
@@ -294,22 +292,14 @@ async fn test_node_read_causal_signed_certificates() {
     // Write the certificates to Primary 1 but intentionally miss one certificate.
     primary_store_1
         .certificate_store
-        .write_all(
-            certificates
-                .clone()
-                .into_iter()
-                .skip(1)
-                .map(|c| (c.digest(), c)),
-        )
-        .await
+        .write_all(certificates.clone().into_iter().skip(1))
         .unwrap();
 
     // Write all certificates to Primary 2, so Primary 1 has a place to retrieve
     // missing certificate from.
     primary_store_2
         .certificate_store
-        .write_all(certificates.clone().into_iter().map(|c| (c.digest(), c)))
-        .await
+        .write_all(certificates.clone())
         .unwrap();
 
     let (tx_feedback, rx_feedback) =

@@ -16,6 +16,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
+use storage::CertificateStore;
 use store::Store;
 use test_utils::{
     certificate, committee, fixture_batch_with_transactions, fixture_header_builder, keys,
@@ -72,10 +73,7 @@ async fn test_get_collections() {
         collection_ids.push(block_id);
 
         // Write the certificate
-        store
-            .certificate_store
-            .write(certificate.digest(), certificate.clone())
-            .await;
+        store.certificate_store.write(certificate.clone()).unwrap();
 
         // Write the header
         store
@@ -271,10 +269,7 @@ async fn test_remove_collections() {
         collection_ids.push(block_id);
 
         // Write the certificate
-        store
-            .certificate_store
-            .write(certificate.digest(), certificate.clone())
-            .await;
+        store.certificate_store.write(certificate.clone()).unwrap();
         dag.insert(certificate.clone()).await.unwrap();
 
         // Write the header
@@ -350,7 +345,6 @@ async fn test_remove_collections() {
         store
             .certificate_store
             .read(block_to_be_removed)
-            .await
             .unwrap()
             .is_some(),
         "Certificate should still exist"
@@ -399,7 +393,6 @@ async fn test_remove_collections() {
         store
             .certificate_store
             .read(block_to_be_removed)
-            .await
             .unwrap()
             .is_none(),
         "Certificate shouldn't exist"
@@ -419,7 +412,6 @@ async fn test_remove_collections() {
         store
             .certificate_store
             .read_all(collection_ids.clone())
-            .await
             .unwrap()
             .iter()
             .filter(|c| c.is_some())
@@ -464,13 +456,11 @@ async fn test_read_causal_signed_certificates() {
     // Write genesis certs to primary 1 & 2
     primary_store_1
         .certificate_store
-        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
-        .await
+        .write_all(genesis_certs.clone())
         .unwrap();
     primary_store_2
         .certificate_store
-        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
-        .await
+        .write_all(genesis_certs.clone())
         .unwrap();
 
     let genesis = genesis_certs
@@ -495,22 +485,14 @@ async fn test_read_causal_signed_certificates() {
     // Write the certificates to Primary 1 but intentionally miss one certificate.
     primary_store_1
         .certificate_store
-        .write_all(
-            certificates
-                .clone()
-                .into_iter()
-                .skip(1)
-                .map(|c| (c.digest(), c)),
-        )
-        .await
+        .write_all(certificates.clone().into_iter().skip(1))
         .unwrap();
 
     // Write all certificates to Primary 2, so Primary 1 has a place to retrieve
     // missing certificate from.
     primary_store_2
         .certificate_store
-        .write_all(certificates.clone().into_iter().map(|c| (c.digest(), c)))
-        .await
+        .write_all(certificates.clone())
         .unwrap();
 
     let (tx_feedback, rx_feedback) =
@@ -680,13 +662,11 @@ async fn test_read_causal_unsigned_certificates() {
     // Write genesis certs to primary 1 & 2
     primary_store_1
         .certificate_store
-        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
-        .await
+        .write_all(genesis_certs.clone())
         .unwrap();
     primary_store_2
         .certificate_store
-        .write_all(genesis_certs.clone().into_iter().map(|c| (c.digest(), c)))
-        .await
+        .write_all(genesis_certs.clone())
         .unwrap();
 
     let genesis = genesis_certs
@@ -719,22 +699,14 @@ async fn test_read_causal_unsigned_certificates() {
     // Write the certificates to Primary 1 but intentionally miss one certificate.
     primary_store_1
         .certificate_store
-        .write_all(
-            certificates
-                .clone()
-                .into_iter()
-                .skip(1)
-                .map(|c| (c.digest(), c)),
-        )
-        .await
+        .write_all(certificates.clone().into_iter().skip(1))
         .unwrap();
 
     // Write all certificates to Primary 2, so Primary 1 has a place to retrieve
     // missing certificate from.
     primary_store_2
         .certificate_store
-        .write_all(certificates.clone().into_iter().map(|c| (c.digest(), c)))
-        .await
+        .write_all(certificates.clone())
         .unwrap();
 
     let (tx_feedback, rx_feedback) =
@@ -1074,7 +1046,7 @@ async fn test_get_collections_with_missing_certificates() {
 async fn fixture_certificate(
     key: &KeyPair,
     header_store: Store<HeaderDigest, Header>,
-    certificate_store: Store<CertificateDigest, Certificate>,
+    certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     batch_store: Store<BatchDigest, SerializedBatchMessage>,
 ) -> (Certificate, Batch) {
@@ -1106,9 +1078,7 @@ async fn fixture_certificate(
     let certificate = certificate(&header);
 
     // Write the certificate
-    certificate_store
-        .write(certificate.digest(), certificate.clone())
-        .await;
+    certificate_store.write(certificate.clone()).unwrap();
 
     // Write the header
     header_store.write(header.clone().id, header.clone()).await;

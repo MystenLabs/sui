@@ -27,10 +27,10 @@ crypto = { path = "../crypto" }
 network = { path = "../network" }
 primary = { path = "../primary" }
 types = { path = "../types" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 prometheus = "0.13.1"
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]

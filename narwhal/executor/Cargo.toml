@@ -26,9 +26,9 @@ prometheus = "0.13.1"
 backoff = { version = "0.4.0", features = ["tokio"] }
 
 types = { path = "../types" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 match_opt = "0.1.2"
 
@@ -39,4 +39,4 @@ tempfile = "3.3.0"
 primary = { path = "../primary" }
 test_utils = { path = "../test_utils" }
 types = { path = "../types" }
-telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }

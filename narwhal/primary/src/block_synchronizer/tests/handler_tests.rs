@@ -78,9 +78,7 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
 
     // AND a certificate stored
     let cert_stored = certificate(&fixture_header_with_payload(1));
-    certificate_store
-        .write(cert_stored.digest(), cert_stored.clone())
-        .await;
+    certificate_store.write(cert_stored.clone()).unwrap();
 
     // AND a certificate NOT stored
     let cert_missing = certificate(&fixture_header_with_payload(2));
@@ -120,7 +118,7 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
         match rx_core.recv().await {
             Some(PrimaryMessage::Certificate(c)) => {
                 assert_eq!(c.digest(), cert_missing.digest());
-                certificate_store.write(c.digest(), c).await;
+                certificate_store.write(c).unwrap();
             }
             _ => panic!("Didn't receive certificate message"),
         }
@@ -165,9 +163,7 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
 
     // AND a certificate stored
     let cert_stored = certificate(&fixture_header_with_payload(1));
-    certificate_store
-        .write(cert_stored.digest(), cert_stored.clone())
-        .await;
+    certificate_store.write(cert_stored.clone()).unwrap();
 
     // AND a certificate NOT stored
     let cert_missing = certificate(&fixture_header_with_payload(2));

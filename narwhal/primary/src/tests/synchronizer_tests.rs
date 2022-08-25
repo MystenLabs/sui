@@ -96,9 +96,7 @@ async fn deliver_certificate_using_store() {
 
     // insert the certificates in the DAG
     for certificate in certificates.clone() {
-        certificates_store
-            .write(certificate.digest(), certificate)
-            .await;
+        certificates_store.write(certificate).unwrap();
     }
 
     // take the last one (top) and test for parents

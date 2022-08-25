@@ -162,7 +162,7 @@ async fn process_certificate_missing_parents_in_reverse() {
     tokio::time::sleep(Duration::from_secs(2)).await;
     // Ensure all certificates are now stored
     for id in ids.into_iter().rev() {
-        assert!(certificates_store.read(id).await.unwrap().is_some());
+        assert!(certificates_store.read(id).unwrap().is_some());
     }
 }
 
@@ -303,7 +303,10 @@ async fn process_certificate_check_gc_fires() {
         .unwrap();
 
     // check the header is still not written (see also process_header_missing_parent)
-    assert!(certificates_store.read(id).await.unwrap().is_none());
+    assert!(certificates_store.read(id).unwrap().is_none());
+
+    // wait a little bit so we give the change to the message to get processed
+    tokio::time::sleep(Duration::from_millis(1_000)).await;
 
     // Move the round so that this pending certificate moves well past the GC bound
     tx_consensus_round_updates.send(60u64).unwrap();
@@ -312,5 +315,5 @@ async fn process_certificate_check_gc_fires() {
     tokio::time::sleep(Duration::from_millis(GC_RESOLUTION)).await;
 
     // check the header is written, as the cert has been delivered w/o antecedents
-    assert!(certificates_store.read(id).await.unwrap().is_some());
+    assert!(certificates_store.read(id).unwrap().is_some());
 }

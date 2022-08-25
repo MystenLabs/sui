@@ -31,6 +31,7 @@ use multiaddr::{Multiaddr, Protocol};
 use network::{metrics::Metrics, PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
+use storage::CertificateStore;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use tonic::{Request, Response, Status};
@@ -38,10 +39,9 @@ use tracing::info;
 use types::{
     error::DagError,
     metered_channel::{channel, Receiver, Sender},
-    BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate, CertificateDigest, Empty,
-    Header, HeaderDigest, PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification,
-    WorkerInfoResponse, WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary,
-    WorkerToPrimaryServer,
+    BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate, Empty, Header, HeaderDigest,
+    PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification, WorkerInfoResponse,
+    WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
@@ -71,7 +71,7 @@ impl Primary {
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
         header_store: Store<HeaderDigest, Header>,
-        certificate_store: Store<CertificateDigest, Certificate>,
+        certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         tx_consensus: Sender<Certificate>,
         rx_consensus: Receiver<Certificate>,

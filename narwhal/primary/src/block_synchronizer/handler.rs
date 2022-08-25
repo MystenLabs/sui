@@ -13,7 +13,7 @@ use futures::future::join_all;
 #[cfg(test)]
 use mockall::*;
 use std::time::Duration;
-use store::Store;
+use storage::CertificateStore;
 use thiserror::Error;
 use tokio::{sync::mpsc::channel, time::timeout};
 use tracing::{debug, error, instrument, trace};
@@ -104,7 +104,7 @@ pub struct BlockSynchronizerHandler {
     tx_core: metered_channel::Sender<PrimaryMessage>,
 
     /// The store that holds the certificates.
-    certificate_store: Store<CertificateDigest, Certificate>,
+    certificate_store: CertificateStore,
 
     /// The timeout while waiting for a certificate to become available
     /// after submitting for processing to core.
@@ -115,7 +115,7 @@ impl BlockSynchronizerHandler {
     pub fn new(
         tx_block_synchronizer: metered_channel::Sender<Command>,
         tx_core: metered_channel::Sender<PrimaryMessage>,
-        certificate_store: Store<CertificateDigest, Certificate>,
+        certificate_store: CertificateStore,
         certificate_deliver_timeout: Duration,
     ) -> Self {
         Self {
@@ -142,9 +142,7 @@ impl BlockSynchronizerHandler {
         )
         .await
         {
-            result
-                .map_err(|_| Error::Internal { block_id })?
-                .ok_or(Error::BlockNotFound { block_id })
+            result.map_err(|_| Error::Internal { block_id })
         } else {
             Err(Error::BlockDeliveryTimeout { block_id })
         }

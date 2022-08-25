@@ -94,9 +94,7 @@ async fn test_successful_blocks_delete() {
         let block_id = certificate.digest();
 
         // write the certificate
-        certificate_store
-            .write(certificate.digest(), certificate.clone())
-            .await;
+        certificate_store.write(certificate.clone()).unwrap();
         dag.insert(certificate).await.unwrap();
 
         // write the header
@@ -168,7 +166,7 @@ async fn test_successful_blocks_delete() {
 
             // ensure that certificates have been deleted from store
             for block_id in block_ids.clone() {
-                assert!(certificate_store.read(block_id).await.unwrap().is_none(), "Certificate shouldn't exist");
+                assert!(certificate_store.read(block_id).unwrap().is_none(), "Certificate shouldn't exist");
             }
 
             // ensure that headers have been deleted from store
@@ -260,9 +258,7 @@ async fn test_timeout() {
         let block_id = certificate.digest();
 
         // write the certificate
-        certificate_store
-            .write(certificate.digest(), certificate.clone())
-            .await;
+        certificate_store.write(certificate.clone()).unwrap();
         dag.insert(certificate).await.unwrap();
 
         // write the header
@@ -319,7 +315,7 @@ async fn test_timeout() {
 
             // ensure that certificates have NOT been deleted from store
             for block_id in block_ids {
-                assert!(certificate_store.read(block_id).await.unwrap().is_some(), "Certificate should exist");
+                assert!(certificate_store.read(block_id).unwrap().is_some(), "Certificate should exist");
             }
 
             // ensure that headers have NOT been deleted from store
@@ -393,9 +389,7 @@ async fn test_unlocking_pending_requests() {
     let block_id = certificate.digest();
 
     // write the certificate
-    certificate_store
-        .write(certificate.digest(), certificate.clone())
-        .await;
+    certificate_store.write(certificate.clone()).unwrap();
     dag.insert(certificate).await.unwrap();
 
     // write the header

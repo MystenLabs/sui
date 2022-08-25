@@ -13,6 +13,7 @@ use futures::{
 use itertools::Either;
 use network::{PrimaryToWorkerNetwork, UnreliableNetwork};
 use std::{collections::HashMap, sync::Arc, time::Duration};
+use storage::CertificateStore;
 use store::{rocks::TypedStoreError, Store};
 use tokio::{
     sync::{mpsc, oneshot, watch},
@@ -91,27 +92,30 @@ pub struct DeleteBatchMessage {
 /// # use tempfile::tempdir;
 /// # use primary::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage, PayloadToken};
 /// # use test_utils::test_channel;
-/// # use types::{BatchDigest, Certificate, CertificateDigest, HeaderDigest, Header};
+/// # use types::{Round, BatchDigest, Certificate, CertificateDigest, HeaderDigest, Header};
 /// # use prometheus::Registry;
 /// # use consensus::metrics::ConsensusMetrics;
+/// # use storage::{CertificateStore, CertificateToken};
 ///
 /// #[tokio::main(flavor = "current_thread")]
 /// # async fn main() {
 ///     const CERTIFICATES_CF: &str = "certificates";
+///     const CERTIFICATE_ID_BY_ROUND_CF: &str = "certificate_id_by_round";
 ///     const HEADERS_CF: &str = "headers";
 ///     const PAYLOAD_CF: &str = "payload";
 ///
 ///     let temp_dir = tempdir().expect("Failed to open temporary directory").into_path();
 ///
 ///     // Basic setup: datastore, channels & BlockWaiter
-///     let rocksdb = rocks::open_cf(temp_dir, None, &[CERTIFICATES_CF, HEADERS_CF, PAYLOAD_CF])
+///     let rocksdb = rocks::open_cf(temp_dir, None, &[CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF, HEADERS_CF, PAYLOAD_CF])
 ///         .expect("Failed creating database");
 ///
-///     let (certificate_map, headers_map, payload_map) = reopen!(&rocksdb,
+///     let (certificate_map, certificate_id_by_round_map, headers_map, payload_map) = reopen!(&rocksdb,
 ///             CERTIFICATES_CF;<CertificateDigest, Certificate>,
+///             CERTIFICATE_ID_BY_ROUND_CF;<(Round, CertificateDigest), CertificateToken>,
 ///             HEADERS_CF;<HeaderDigest, Header>,
 ///             PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
-///     let certificate_store = Store::new(certificate_map);
+///     let certificate_store = CertificateStore::new(certificate_map, certificate_id_by_round_map);
 ///     let headers_store = Store::new(headers_map);
 ///     let payload_store = Store::new(payload_map);
 ///
@@ -136,7 +140,7 @@ pub struct DeleteBatchMessage {
 ///     )
 ///     .await;
 ///
-///     BlockRemover::spawn(
+///     let _ = BlockRemover::spawn(
 ///         name,
 ///         committee,
 ///         worker_cache,
@@ -191,7 +195,7 @@ pub struct BlockRemover {
     worker_cache: SharedWorkerCache,
 
     /// Storage that keeps the Certificates by their digest id.
-    certificate_store: Store<CertificateDigest, Certificate>,
+    certificate_store: CertificateStore,
 
     /// Storage that keeps the headers by their digest id
     header_store: Store<HeaderDigest, Header>,
@@ -235,7 +239,7 @@ impl BlockRemover {
         name: PublicKey,
         committee: Committee,
         worker_cache: SharedWorkerCache,
-        certificate_store: Store<CertificateDigest, Certificate>,
+        certificate_store: CertificateStore,
         header_store: Store<HeaderDigest, Header>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         dag: Option<Arc<Dag>>,
@@ -420,8 +424,7 @@ impl BlockRemover {
         }
 
         self.certificate_store
-            .remove_all(certificate_ids)
-            .await
+            .delete_all(certificate_ids)
             .map_err(Either::Left)?;
 
         // Now output all the removed certificates
@@ -475,7 +478,7 @@ impl BlockRemover {
                 }
 
                 // find the blocks in certificates store
-                match self.certificate_store.read_all(ids.clone()).await {
+                match self.certificate_store.read_all(ids.clone()) {
                     Ok(certificates) => {
                         let non_found_certificates: Vec<(Option<Certificate>, CertificateDigest)> =
                             certificates

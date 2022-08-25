@@ -15,6 +15,7 @@ use std::{
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
+use storage::CertificateStore;
 use store::Store;
 use tokio::{
     sync::{oneshot, watch},
@@ -26,7 +27,7 @@ use types::{
     bounded_future_queue::BoundedFuturesUnordered,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    try_fut_and_permit, BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest,
+    try_fut_and_permit, BatchDigest, CertificateDigest, Header, HeaderDigest,
     ReconfigureNotification, Round,
 };
 
@@ -54,7 +55,7 @@ pub struct HeaderWaiter {
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     /// The persistent storage for parent Certificates.
-    certificate_store: Store<CertificateDigest, Certificate>,
+    certificate_store: CertificateStore,
     /// The persistent storage for payload markers from workers.
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// A watch channel receiver to get consensus round updates.
@@ -101,7 +102,7 @@ impl HeaderWaiter {
         name: PublicKey,
         committee: Committee,
         worker_cache: SharedWorkerCache,
-        certificate_store: Store<CertificateDigest, Certificate>,
+        certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
@@ -152,6 +153,21 @@ impl HeaderWaiter {
         T: Serialize + DeserializeOwned + Send + Clone,
         V: Serialize + DeserializeOwned + Send,
     {
+        let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
+        tokio::select! {
+            result = try_join_all(waiting) => {
+                result.map(|_| Some(deliver)).map_err(DagError::from)
+            }
+            _ = handler => Ok(None),
+        }
+    }
+
+    async fn wait_for_parents(
+        missing: Vec<CertificateDigest>,
+        store: CertificateStore,
+        deliver: Header,
+        handler: oneshot::Receiver<()>,
+    ) -> DagResult<Option<Header>> {
         let waiting: Vec<_> = missing.into_iter().map(|x| store.notify_read(x)).collect();
         tokio::select! {
             result = try_join_all(waiting) => {
@@ -238,7 +254,7 @@ impl HeaderWaiter {
                             let wait_for = missing.clone();
                             let (tx_cancel, rx_cancel) = oneshot::channel();
                             self.pending.insert(header_id, (round, tx_cancel));
-                            let fut = Self::waiter(wait_for, self.certificate_store.clone(), header, rx_cancel);
+                            let fut = Self::wait_for_parents(wait_for, self.certificate_store.clone(), header, rx_cancel);
                             // pointer-size allocation, bounded by the # of blocks (may eventually go away, see rust RFC #1909)
                             waiting.push(Box::pin(fut)).await;
 

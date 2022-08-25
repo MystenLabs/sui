@@ -18,6 +18,7 @@ use std::{
     sync::Arc,
     time::Instant,
 };
+use storage::CertificateStore;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
@@ -25,7 +26,7 @@ use types::{
     ensure,
     error::{DagError, DagResult},
     metered_channel::{Receiver, Sender},
-    Certificate, CertificateDigest, Header, HeaderDigest, ReconfigureNotification, Round, Vote,
+    Certificate, Header, HeaderDigest, ReconfigureNotification, Round, Vote,
 };
 
 #[cfg(test)]
@@ -42,7 +43,7 @@ pub struct Core {
     /// The persistent storage keyed to headers.
     header_store: Store<HeaderDigest, Header>,
     /// The persistent storage keyed to certificates.
-    certificate_store: Store<CertificateDigest, Certificate>,
+    certificate_store: CertificateStore,
     /// Handles synchronization with other nodes and our workers.
     synchronizer: Synchronizer,
     /// Service to sign headers.
@@ -95,7 +96,7 @@ impl Core {
         committee: Committee,
         worker_cache: SharedWorkerCache,
         header_store: Store<HeaderDigest, Header>,
-        certificate_store: Store<CertificateDigest, Certificate>,
+        certificate_store: CertificateStore,
         synchronizer: Synchronizer,
         signature_service: SignatureService<Signature>,
         rx_consensus_round_updates: watch::Receiver<u64>,
@@ -396,9 +397,7 @@ impl Core {
         }
 
         // Store the certificate.
-        self.certificate_store
-            .write(certificate.digest(), certificate.clone())
-            .await;
+        self.certificate_store.write(certificate.clone())?;
 
         let certificate_source = if self.name.eq(&certificate.header.author) {
             "own"

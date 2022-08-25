@@ -15,10 +15,10 @@ clap = "2.34"
 dhat = { version = "0.3.0", optional = true }
 futures = "0.3.23"
 multiaddr = "0.14.0"
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 rand = "0.8.5"
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
-telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
+telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = "0.1.9"
@@ -37,6 +37,7 @@ executor = { path = "../executor" }
 network = { path = "../network" }
 primary = { path = "../primary" }
 prometheus = "0.13.1"
+storage = { path = "../storage" }
 types = { path = "../types" }
 worker = { path = "../worker" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

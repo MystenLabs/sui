@@ -38,9 +38,10 @@ fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae
 crypto = { path = "../crypto" }
 network = { path = "../network" }
 types = { path = "../types" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+storage = { path = "../storage" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
@@ -51,13 +52,14 @@ indexmap = { version = "1.9.1", features = ["serde"] }
 itertools = "0.10.3"
 mockall = "0.11.2"
 node = { path = "../node" }
-telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 tempfile = "3.3.0"
 test_utils = { path = "../test_utils" }
 thiserror = "1.0.32"
 tracing = "0.1.36"
 tracing-test = "0.2.3"
 worker = { path = "../worker" }
+storage = { path = "../storage" }
 
 [features]
 benchmark = []

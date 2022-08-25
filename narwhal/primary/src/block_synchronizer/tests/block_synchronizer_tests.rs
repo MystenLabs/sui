@@ -652,9 +652,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         certificates.insert(certificate.clone().digest(), certificate.clone());
 
         if i > NUM_OF_MISSING_CERTIFICATES {
-            certificate_store
-                .write(certificate.digest(), certificate)
-                .await;
+            certificate_store.write(certificate).unwrap();
         }
     }
 
@@ -746,9 +744,7 @@ async fn test_reply_with_payload_already_in_storage() {
         certificates_map.insert(certificate.clone().digest(), certificate.clone());
 
         if i > NUM_OF_CERTIFICATES_WITH_MISSING_PAYLOAD {
-            certificate_store
-                .write(certificate.digest(), certificate.clone())
-                .await;
+            certificate_store.write(certificate.clone()).unwrap();
 
             for entry in certificate.header.payload {
                 payload_store.write(entry, 1).await;

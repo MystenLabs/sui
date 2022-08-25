@@ -10,6 +10,7 @@ use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 #[cfg(test)]
 use std::collections::{BTreeSet, VecDeque};
+use storage::CertificateStore;
 use store::{reopen, rocks, rocks::DBMap};
 use test_utils::mock_committee;
 #[allow(unused_imports)]
@@ -32,19 +33,23 @@ pub fn make_consensus_store(store_path: &std::path::Path) -> Arc<ConsensusStore>
     Arc::new(ConsensusStore::new(last_committed_map, sequence_map))
 }
 
-pub fn make_certificate_store(
-    store_path: &std::path::Path,
-) -> store::Store<CertificateDigest, Certificate> {
+pub fn make_certificate_store(store_path: &std::path::Path) -> CertificateStore {
     const CERTIFICATES_CF: &str = "certificates";
+    const CERTIFICATE_ID_BY_ROUND_CF: &str = "certificate_id_by_round";
 
-    let rocksdb =
-        rocks::open_cf(store_path, None, &[CERTIFICATES_CF]).expect("Failed creating database");
+    let rocksdb = rocks::open_cf(
+        store_path,
+        None,
+        &[CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF],
+    )
+    .expect("Failed creating database");
 
-    let certificate_map = reopen!(&rocksdb,
-        CERTIFICATES_CF;<CertificateDigest, Certificate>
+    let (certificate_map, certificate_id_by_round_map) = reopen!(&rocksdb,
+        CERTIFICATES_CF;<CertificateDigest, Certificate>,
+        CERTIFICATE_ID_BY_ROUND_CF;<(Round, CertificateDigest), u8>
     );
 
-    store::Store::new(certificate_map)
+    CertificateStore::new(certificate_map, certificate_id_by_round_map)
 }
 
 // Run for 4 dag rounds in ideal conditions (all nodes reference all other nodes). We should commit

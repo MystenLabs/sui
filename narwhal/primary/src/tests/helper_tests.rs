@@ -11,15 +11,16 @@ use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
+use storage::CertificateStore;
 use store::{reopen, rocks, rocks::DBMap, Store};
 use test_utils::{
     certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
     resolve_name_committee_and_worker_cache, temp_dir, PrimaryToPrimaryMockServer, CERTIFICATES_CF,
-    PAYLOAD_CF,
+    CERTIFICATE_ID_BY_ROUND_CF, PAYLOAD_CF,
 };
 use tokio::{sync::watch, time::timeout};
 use tracing_test::traced_test;
-use types::{BatchDigest, Certificate, CertificateDigest, ReconfigureNotification};
+use types::{BatchDigest, Certificate, CertificateDigest, ReconfigureNotification, Round};
 
 #[tokio::test]
 async fn test_process_certificates_stream_mode() {
@@ -55,7 +56,7 @@ async fn test_process_certificates_stream_mode() {
         let id = certificate.clone().digest();
 
         // write the certificate
-        certificate_store.write(id, certificate.clone()).await;
+        certificate_store.write(certificate.clone()).unwrap();
 
         certificates.insert(id, certificate.clone());
     }
@@ -139,7 +140,7 @@ async fn test_process_certificates_batch_mode() {
         // should be returned back as non found.
         if i < 5 {
             // write the certificate
-            certificate_store.write(id, certificate.clone()).await;
+            certificate_store.write(certificate.clone()).unwrap();
         } else {
             missing_certificates.insert(id);
         }
@@ -236,7 +237,7 @@ async fn test_process_payload_availability_success() {
         // should be returned back as non found.
         if i < 7 {
             // write the certificate
-            certificate_store.write(id, certificate.clone()).await;
+            certificate_store.write(certificate.clone()).unwrap();
 
             for payload in certificate.header.payload {
                 payload_store.write(payload, 1).await;
@@ -303,14 +304,19 @@ async fn test_process_payload_availability_when_failures() {
     // GIVEN
     // We initialise the test stores manually to allow us
     // inject some wrongly serialised values to cause data store errors.
-    let rocksdb = rocks::open_cf(temp_dir(), None, &[CERTIFICATES_CF, PAYLOAD_CF])
-        .expect("Failed creating database");
+    let rocksdb = rocks::open_cf(
+        temp_dir(),
+        None,
+        &[CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF, PAYLOAD_CF],
+    )
+    .expect("Failed creating database");
 
-    let (certificate_map, payload_map) = reopen!(&rocksdb,
+    let (certificate_map, certificate_id_by_round_map, payload_map) = reopen!(&rocksdb,
         CERTIFICATES_CF;<CertificateDigest, Certificate>,
+        CERTIFICATE_ID_BY_ROUND_CF;<(Round, CertificateDigest), u8>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
-    let certificate_store: Store<CertificateDigest, Certificate> = Store::new(certificate_map);
+    let certificate_store = CertificateStore::new(certificate_map, certificate_id_by_round_map);
     let payload_store: Store<(types::BatchDigest, WorkerId), PayloadToken> =
         Store::new(payload_map);
 

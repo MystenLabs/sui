@@ -5,30 +5,44 @@ use config::WorkerId;
 
 use serde::de::DeserializeOwned;
 use std::time::Duration;
+use storage::CertificateStore;
 use store::{reopen, rocks, rocks::DBMap, Store};
-use test_utils::{temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, HEADERS_CF, PAYLOAD_CF};
-use types::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest};
+use test_utils::{
+    temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF, HEADERS_CF,
+    PAYLOAD_CF,
+};
+use types::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round};
 
 use crate::PayloadToken;
 use tokio::{task::JoinHandle, time::timeout};
 
 pub fn create_db_stores() -> (
     Store<HeaderDigest, Header>,
-    Store<CertificateDigest, Certificate>,
+    CertificateStore,
     Store<(BatchDigest, WorkerId), PayloadToken>,
 ) {
     // Create a new test store.
-    let rocksdb = rocks::open_cf(temp_dir(), None, &[HEADERS_CF, CERTIFICATES_CF, PAYLOAD_CF])
-        .expect("Failed creating database");
+    let rocksdb = rocks::open_cf(
+        temp_dir(),
+        None,
+        &[
+            HEADERS_CF,
+            CERTIFICATES_CF,
+            CERTIFICATE_ID_BY_ROUND_CF,
+            PAYLOAD_CF,
+        ],
+    )
+    .expect("Failed creating database");
 
-    let (header_map, certificate_map, payload_map) = reopen!(&rocksdb,
+    let (header_map, certificate_map, certificate_id_by_round_map, payload_map) = reopen!(&rocksdb,
         HEADERS_CF;<HeaderDigest, Header>,
         CERTIFICATES_CF;<CertificateDigest, Certificate>,
+        CERTIFICATE_ID_BY_ROUND_CF;<(Round, CertificateDigest), u8>,
         PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>);
 
     (
         Store::new(header_map),
-        Store::new(certificate_map),
+        CertificateStore::new(certificate_map, certificate_id_by_round_map),
         Store::new(payload_map),
     )
 }

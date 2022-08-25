@@ -23,6 +23,7 @@ use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
+use storage::CertificateStore;
 use store::Store;
 use thiserror::Error;
 use tokio::{
@@ -188,7 +189,7 @@ pub struct BlockSynchronizer {
     worker_network: PrimaryToWorkerNetwork,
 
     /// The store that holds the certificates
-    certificate_store: Store<CertificateDigest, Certificate>,
+    certificate_store: CertificateStore,
 
     /// The persistent storage for payload markers from workers
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -215,7 +216,7 @@ impl BlockSynchronizer {
         rx_payload_availability_responses: metered_channel::Receiver<PayloadAvailabilityResponse>,
         network: PrimaryNetwork,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-        certificate_store: Store<CertificateDigest, Certificate>,
+        certificate_store: CertificateStore,
         parameters: BlockSynchronizerParameters,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -519,7 +520,7 @@ impl BlockSynchronizer {
         respond_to: Sender<BlockSynchronizeResult<BlockHeader>>,
     ) -> HashSet<CertificateDigest> {
         // find the certificates that already exist in storage
-        match self.certificate_store.read_all(block_ids.clone()).await {
+        match self.certificate_store.read_all(block_ids.clone()) {
             Ok(certificates) => {
                 let (found, missing): (
                     Vec<(CertificateDigest, Option<Certificate>)>,

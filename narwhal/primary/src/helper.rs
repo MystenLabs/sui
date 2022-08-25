@@ -6,6 +6,7 @@ use config::{Committee, WorkerId};
 use crypto::PublicKey;
 use fastcrypto::traits::EncodeDecodeBase64;
 use network::{PrimaryNetwork, UnreliableNetwork};
+use storage::CertificateStore;
 use store::{Store, StoreError};
 use thiserror::Error;
 use tokio::{sync::watch, task::JoinHandle};
@@ -38,7 +39,7 @@ pub struct Helper {
     /// The committee information.
     committee: Committee,
     /// The certificate persistent storage.
-    certificate_store: Store<CertificateDigest, Certificate>,
+    certificate_store: CertificateStore,
     /// The payloads (batches) persistent storage.
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     /// Watch channel to reconfigure the committee.
@@ -54,7 +55,7 @@ impl Helper {
     pub fn spawn(
         name: PublicKey,
         committee: Committee,
-        certificate_store: Store<CertificateDigest, Certificate>,
+        certificate_store: CertificateStore,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_committee: watch::Receiver<ReconfigureNotification>,
         rx_primaries: Receiver<PrimaryMessage>,
@@ -155,7 +156,7 @@ impl Helper {
 
         let mut result: Vec<(CertificateDigest, bool)> = Vec::new();
 
-        let certificates = match self.certificate_store.read_all(digests.to_owned()).await {
+        let certificates = match self.certificate_store.read_all(digests.to_owned()) {
             Ok(certificates) => certificates,
             Err(err) => {
                 // just return at this point. Send back to the requestor
@@ -234,7 +235,7 @@ impl Helper {
         };
 
         // TODO [issue #195]: Do some accounting to prevent bad nodes from monopolizing our resources.
-        let certificates = match self.certificate_store.read_all(digests.to_owned()).await {
+        let certificates = match self.certificate_store.read_all(digests.to_owned()) {
             Ok(certificates) => certificates,
             Err(err) => {
                 error!("Error while retrieving certificates: {err}");

@@ -11,6 +11,7 @@ base64 = "0.13.0"
 bincode = "1.3.3"
 blake2 = "0.9"
 bytes = "1.2.1"
+dashmap = "5.3.4"
 derive_builder = "0.11.2"
 futures = "0.3.23"
 indexmap = { version = "1.9.1", features = ["serde"] }
@@ -21,11 +22,12 @@ prost = "0.10.4"
 rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
 signature = "1.6.0"
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 thiserror = "1.0.32"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = { version = "0.7.2", features = ["tls"] }
+tracing = "0.1.36"
 
 config = { path = "../config" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b" }
@@ -37,6 +39,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 criterion = "0.3.6"
 hex = "0.4.3"
 serde_test = "1.0.144"
+test_utils = { path = "../test_utils" }
 
 [build-dependencies]
 prost-build = "0.10.4"

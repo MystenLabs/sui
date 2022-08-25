@@ -10,7 +10,7 @@ use std::{
     collections::HashMap,
     sync::Arc,
 };
-use store::Store;
+use storage::CertificateStore;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{info, instrument};
 use types::{
@@ -61,7 +61,7 @@ impl ConsensusState {
         genesis: Vec<Certificate>,
         metrics: Arc<ConsensusMetrics>,
         recover_last_committed: HashMap<PublicKey, Round>,
-        cert_store: Store<CertificateDigest, Certificate>,
+        cert_store: CertificateStore,
         gc_depth: Round,
     ) -> Self {
         let last_committed_round = *recover_last_committed
@@ -88,7 +88,7 @@ impl ConsensusState {
 
     #[instrument(level = "info", skip_all)]
     pub async fn construct_dag_from_cert_store(
-        cert_store: Store<CertificateDigest, Certificate>,
+        cert_store: CertificateStore,
         last_committed_round: Round,
         gc_depth: Round,
     ) -> Dag {
@@ -99,14 +99,11 @@ impl ConsensusState {
         );
 
         let min_round = last_committed_round.saturating_sub(gc_depth);
-        let cert_map = cert_store
-            .iter(Some(Box::new(move |(_dig, cert)| {
-                cert.header.round > min_round
-            })))
-            .await;
+        // get all certificates at a round > min_round
+        let cert_map = cert_store.after_round(min_round + 1).unwrap();
 
         let num_certs = cert_map.len();
-        for (digest, cert) in cert_map {
+        for (digest, cert) in cert_map.into_iter().map(|c| (c.digest(), c)) {
             let inner = dag.get_mut(&cert.header.round);
             match inner {
                 Some(m) => {
@@ -205,7 +202,7 @@ where
     pub fn spawn(
         committee: Committee,
         store: Arc<ConsensusStore>,
-        cert_store: Store<CertificateDigest, Certificate>,
+        cert_store: CertificateStore,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_primary: metered_channel::Receiver<Certificate>,
         tx_primary: metered_channel::Sender<Certificate>,
@@ -248,7 +245,7 @@ where
     async fn run(
         &mut self,
         recover_last_committed: HashMap<PublicKey, Round>,
-        cert_store: Store<CertificateDigest, Certificate>,
+        cert_store: CertificateStore,
         gc_depth: Round,
     ) -> StoreResult<()> {
         // The consensus state (everything else is immutable).

@@ -9,7 +9,7 @@ use test_utils::{
     certificate, fixture_batch_with_transactions, header, headers, keys, pure_committee_from_keys,
     shared_worker_cache_from_keys, votes, PrimaryToPrimaryMockServer,
 };
-use types::{Header, Vote};
+use types::{CertificateDigest, Header, Vote};
 
 #[tokio::test]
 async fn process_header() {
@@ -463,7 +463,7 @@ async fn process_certificates() {
 
     // Ensure the certificates are stored.
     for x in &certificates {
-        let stored = certificates_store.read(x.digest()).await.unwrap();
+        let stored = certificates_store.read(x.digest()).unwrap();
         assert_eq!(stored, Some(x.clone()));
     }
 

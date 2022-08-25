@@ -7,7 +7,7 @@ use dashmap::DashMap;
 use futures::future::try_join_all;
 use once_cell::sync::OnceCell;
 use std::sync::Arc;
-use store::Store;
+use storage::CertificateStore;
 use tokio::{
     sync::{oneshot, watch},
     task::JoinHandle,
@@ -36,7 +36,7 @@ pub struct CertificateWaiter {
     /// The committee information.
     committee: Committee,
     /// The persistent storage.
-    store: Store<CertificateDigest, Certificate>,
+    store: CertificateStore,
     /// Receiver for signal of round change
     rx_consensus_round_updates: watch::Receiver<u64>,
     /// The depth of the garbage collector.
@@ -66,7 +66,7 @@ impl CertificateWaiter {
     #[must_use]
     pub fn spawn(
         committee: Committee,
-        store: Store<CertificateDigest, Certificate>,
+        store: CertificateStore,
         rx_consensus_round_updates: watch::Receiver<u64>,
         gc_depth: Round,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
@@ -95,7 +95,7 @@ impl CertificateWaiter {
     /// delivers the specified header.
     async fn waiter(
         missing: Vec<CertificateDigest>,
-        store: &Store<CertificateDigest, Certificate>,
+        store: CertificateStore,
         deliver: Certificate,
         cancel_handle: oneshot::Receiver<()>,
     ) -> DagResult<Certificate> {
@@ -145,7 +145,7 @@ impl CertificateWaiter {
                         inner
                     };
                     self.pending.insert(header_id, (certificate.round(), once_cancel));
-                    let fut = Self::waiter(wait_for, &self.store, certificate, rx_cancel);
+                    let fut = Self::waiter(wait_for, self.store.clone(), certificate, rx_cancel);
                     waiting.push(fut).await;
                 }
                 // we poll the availability of a slot to send the result to the core simultaneously
