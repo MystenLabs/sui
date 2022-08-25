@@ -1891,7 +1891,16 @@ pub async fn init_state_with_committee(
         }
     };
 
-    AuthorityState::new_for_testing(committee, &authority_key, None, None, None).await
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+    AuthorityState::new_for_testing(
+        committee,
+        &authority_key,
+        None,
+        None,
+        None,
+        tx_reconfigure_consensus,
+    )
+    .await
 }
 
 #[cfg(test)]

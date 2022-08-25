@@ -442,8 +442,16 @@ impl AuthorityAPI for LocalAuthorityClient {
 impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
-        let state =
-            AuthorityState::new_for_testing(committee, &secret, None, Some(genesis), None).await;
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+        let state = AuthorityState::new_for_testing(
+            committee,
+            &secret,
+            None,
+            Some(genesis),
+            None,
+            tx_reconfigure_consensus,
+        )
+        .await;
         Self {
             state: Arc::new(state),
             fault_config: LocalAuthorityClientFaultConfig::default(),

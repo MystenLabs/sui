@@ -62,7 +62,16 @@ pub struct ConfigurableBatchActionClient {
 impl ConfigurableBatchActionClient {
     #[cfg(test)]
     pub async fn new(committee: Committee, secret: AuthorityKeyPair) -> Self {
-        let state = AuthorityState::new_for_testing(committee, &secret, None, None, None).await;
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+        let state = AuthorityState::new_for_testing(
+            committee,
+            &secret,
+            None,
+            None,
+            None,
+            tx_reconfigure_consensus,
+        )
+        .await;
 
         ConfigurableBatchActionClient {
             state: Arc::new(state),
