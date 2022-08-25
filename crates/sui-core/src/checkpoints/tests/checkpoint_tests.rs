@@ -1149,12 +1149,10 @@ fn set_fragment_external() {
         for key_pair in keys.iter() {
             sigs.push((
                 key_pair.public().into(),
-                AuthoritySignature::new(&tx.signed_data, key_pair),
+                AuthoritySignature::new(tx.data(), key_pair),
             ));
         }
-        let mut certificate =
-            CertifiedTransaction::new_with_signatures(tx, sigs, &committee).unwrap();
-        certificate.auth_sign_info.epoch = committee.epoch();
+        let certificate = CertifiedTransaction::new(tx, sigs, &committee).unwrap();
         fragment12.certs.insert(digest, certificate);
     }
     // let fragment13 = p1.diff_with(&p3);

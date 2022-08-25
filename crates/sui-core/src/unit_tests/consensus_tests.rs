@@ -10,7 +10,6 @@ use narwhal_types::{Empty, TransactionProto};
 use sui_network::tonic;
 use sui_types::{
     base_types::{ObjectID, TransactionDigest},
-    crypto::Signature,
     gas_coin::GasCoin,
     messages::{
         CallArg, CertifiedTransaction, ObjectArg, SignatureAggregator, Transaction, TransactionData,
@@ -68,8 +67,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
             ],
             /* max_gas */ 10_000,
         );
-        let signature = Signature::new(&data, &keypair);
-        let transaction = Transaction::new(data, signature);
+        let transaction = Transaction::from_data(data, &keypair);
 
         // Submit the transaction and assemble a certificate.
         let response = authority
@@ -79,7 +77,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         let vote = response.signed_transaction.unwrap();
         let certificate = SignatureAggregator::try_new(transaction, &authority.committee.load())
             .unwrap()
-            .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
+            .append(vote.auth_signature.authority, vote.auth_signature.signature)
             .unwrap()
             .unwrap();
         certificates.push(certificate);
@@ -150,7 +148,7 @@ async fn submit_transaction_to_consensus() {
     objects.push(test_shared_object());
     let state = init_state_with_objects(objects).await;
     let certificate = test_certificates(&state).await.pop().unwrap();
-    let expected_transaction = certificate.clone().to_transaction();
+    let expected_transaction = Transaction::from_signed(certificate.clone());
 
     let committee = state.clone_committee();
     let state_guard = Arc::new(state);
@@ -218,7 +216,7 @@ async fn submit_transaction_to_consensus() {
     let message = bincode::deserialize(&bytes).unwrap();
     match message {
         ConsensusTransaction::UserTransaction(x) => {
-            assert_eq!(x.to_transaction(), expected_transaction)
+            assert_eq!(Transaction::from_signed(*x), expected_transaction)
         }
         _ => panic!("Unexpected message {message:?}"),
     }

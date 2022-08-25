@@ -75,8 +75,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
             .await
             .unwrap();
 
-        let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
-        Transaction::new(data, signature)
+        Transaction::from_data(data, &context.keystore.signer(sender))
     };
 
     let resp = context
@@ -121,9 +120,7 @@ pub async fn submit_move_transaction(
         .await
         .unwrap();
 
-    let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
-    let tx = Transaction::new(data, signature);
-
+    let tx = Transaction::from_data(data, &context.keystore.signer(sender));
     context
         .gateway
         .quorum_driver()

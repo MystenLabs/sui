@@ -14,7 +14,7 @@ use sui_types::gas_coin::GasCoin;
 use sui_types::object::GAS_VALUE_FOR_TESTING;
 use sui_types::{
     base_types::dbg_addr,
-    crypto::{get_key_pair, Signature},
+    crypto::get_key_pair,
     gas::{SuiGasStatus, MAX_GAS_BUDGET, MIN_GAS_BUDGET},
     messages::Transaction,
 };
@@ -172,8 +172,7 @@ async fn test_transfer_sui_insufficient_gas() {
         amount: None,
     }));
     let data = TransactionData::new_with_gas_price(kind, sender, gas_object_ref, 50, 1);
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::from_data(data, &sender_key);
 
     let effects = send_and_confirm_transaction(&authority_state, tx)
         .await
@@ -280,7 +279,7 @@ async fn test_publish_gas() -> anyhow::Result<()> {
         .certified_transaction
         .as_ref()
         .unwrap()
-        .signed_data
+        .data()
         .data
         .kind
         .single_transactions()
@@ -391,8 +390,7 @@ async fn test_move_call_gas() -> SuiResult {
         args.clone(),
         GAS_VALUE_FOR_TESTING,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
+    let transaction = Transaction::from_data(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.signed_effects.unwrap().effects;
     let created_object_ref = effects.created[0].0;
@@ -454,8 +452,7 @@ async fn test_move_call_gas() -> SuiResult {
         ))],
         expected_gas_balance,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
+    let transaction = Transaction::from_data(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.signed_effects.unwrap().effects;
     assert!(effects.status.is_ok());
@@ -480,8 +477,7 @@ async fn test_move_call_gas() -> SuiResult {
         args,
         budget,
     );
-    let signature = Signature::new(&data, &sender_key);
-    let transaction = Transaction::new(data, signature);
+    let transaction = Transaction::from_data(data, &sender_key);
     let response = send_and_confirm_transaction(&authority_state, transaction).await?;
     let effects = response.signed_effects.unwrap().effects;
     let gas_cost = effects.gas_used;
@@ -551,8 +547,7 @@ async fn execute_transfer_with_price(
     }));
     let data =
         TransactionData::new_with_gas_price(kind, sender, gas_object_ref, gas_budget, gas_price);
-    let signature = Signature::new(&data, &sender_key);
-    let tx = Transaction::new(data, signature);
+    let tx = Transaction::from_data(data, &sender_key);
 
     let response = if run_confirm {
         send_and_confirm_transaction(&authority_state, tx).await

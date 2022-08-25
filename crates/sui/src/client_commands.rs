@@ -293,10 +293,8 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .publish(sender, compiled_modules, gas, gas_budget)
                     .await?;
-                let signature = context.keystore.sign(&sender, &data.to_bytes())?;
-                let response = context
-                    .execute_transaction(Transaction::new(data, signature))
-                    .await?;
+                let tx = Transaction::from_data(data, &context.keystore.signer(sender));
+                let response = context.execute_transaction(tx).await?;
 
                 SuiClientCommandResult::Publish(response)
             }
@@ -336,10 +334,8 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_object(from, object_id, gas, gas_budget, to)
                     .await?;
-                let signature = context.keystore.sign(&from, &data.to_bytes())?;
-                let response = context
-                    .execute_transaction(Transaction::new(data, signature))
-                    .await?;
+                let tx = Transaction::from_data(data, &context.keystore.signer(from));
+                let response = context.execute_transaction(tx).await?;
                 let cert = response.certificate;
                 let effects = response.effects;
 
@@ -363,10 +359,8 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .transfer_sui(from, object_id, gas_budget, to, amount)
                     .await?;
-                let signature = context.keystore.sign(&from, &data.to_bytes())?;
-                let response = context
-                    .execute_transaction(Transaction::new(data, signature))
-                    .await?;
+                let tx = Transaction::from_data(data, &context.keystore.signer(from));
+                let response = context.execute_transaction(tx).await?;
                 let cert = response.certificate;
                 let effects = response.effects;
 
@@ -445,10 +439,8 @@ impl SuiClientCommands {
                         .split_coin_equal(signer, coin_id, count, gas, gas_budget)
                         .await?
                 };
-                let signature = context.keystore.sign(&signer, &data.to_bytes())?;
-                let response = context
-                    .execute_transaction(Transaction::new(data, signature))
-                    .await?;
+                let tx = Transaction::from_data(data, &context.keystore.signer(signer));
+                let response = context.execute_transaction(tx).await?;
                 SuiClientCommandResult::SplitCoin(response)
             }
             SuiClientCommands::MergeCoin {
@@ -463,10 +455,8 @@ impl SuiClientCommands {
                     .transaction_builder()
                     .merge_coins(signer, primary_coin, coin_to_merge, gas, gas_budget)
                     .await?;
-                let signature = context.keystore.sign(&signer, &data.to_bytes())?;
-                let response = context
-                    .execute_transaction(Transaction::new(data, signature))
-                    .await?;
+                let tx = Transaction::from_data(data, &context.keystore.signer(signer));
+                let response = context.execute_transaction(tx).await?;
 
                 SuiClientCommandResult::MergeCoin(response)
             }
@@ -859,10 +849,9 @@ pub async fn call_move(
             gas_budget,
         )
         .await?;
-    let signature = context.keystore.sign(&sender, &data.to_bytes())?;
-    let transaction = Transaction::new(data, signature);
-
-    let response = context.execute_transaction(transaction).await?;
+    let signer = context.keystore.signer(sender);
+    let tx = Transaction::from_data(data, &signer);
+    let response = context.execute_transaction(tx).await?;
     let cert = response.certificate;
     let effects = response.effects;
 

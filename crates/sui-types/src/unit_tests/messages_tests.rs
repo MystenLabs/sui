@@ -2,7 +2,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 
 use fastcrypto::traits::AggregateAuthenticator;
@@ -69,33 +68,33 @@ fn test_signed_values() {
 
     let v = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction.data().clone(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
     assert!(v.verify(&committee).is_ok());
 
     let v = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec2.public()),
+        transaction.data().clone(),
         &sec2,
+        AuthorityPublicKeyBytes::from(sec2.public()),
     );
     assert!(v.verify(&committee).is_err());
 
     let v = SignedTransaction::new(
         committee.epoch(),
-        transaction,
-        AuthorityPublicKeyBytes::from(sec3.public()),
+        transaction.into_data(),
         &sec3,
+        AuthorityPublicKeyBytes::from(sec3.public()),
     );
     assert!(v.verify(&committee).is_err());
 
     let v = SignedTransaction::new(
         committee.epoch(),
-        bad_transaction,
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        bad_transaction.into_data(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
     assert!(v.verify(&committee).is_err());
 }
@@ -142,33 +141,33 @@ fn test_certificates() {
 
     let v1 = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction.data().clone(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
     let v2 = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec2.public()),
+        transaction.data().clone(),
         &sec2,
+        AuthorityPublicKeyBytes::from(sec2.public()),
     );
     let v3 = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec3.public()),
+        transaction.data().clone(),
         &sec3,
+        AuthorityPublicKeyBytes::from(sec3.public()),
     );
 
     let mut builder = SignatureAggregator::try_new(transaction.clone(), &committee).unwrap();
     assert!(builder
         .append(
-            v1.auth_sign_info.authority,
-            v1.auth_sign_info.signature.clone()
+            v1.auth_signature.authority,
+            v1.auth_signature.signature.clone()
         )
         .unwrap()
         .is_none());
     let c = builder
-        .append(v2.auth_sign_info.authority, v2.auth_sign_info.signature)
+        .append(v2.auth_signature.authority, v2.auth_signature.signature)
         .unwrap()
         .unwrap();
 
@@ -176,11 +175,11 @@ fn test_certificates() {
 
     let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
     assert!(builder
-        .append(v1.auth_sign_info.authority, v1.auth_sign_info.signature)
+        .append(v1.auth_signature.authority, v1.auth_signature.signature)
         .unwrap()
         .is_none());
     assert!(builder
-        .append(v3.auth_sign_info.authority, v3.auth_sign_info.signature)
+        .append(v3.auth_signature.authority, v3.auth_signature.signature)
         .is_err());
 
     assert!(SignatureAggregator::try_new(bad_transaction, &committee).is_err());
@@ -386,27 +385,18 @@ fn test_digest_caching() {
         &ssec2,
     );
 
-    let mut signed_tx = SignedTransaction::new(
+    let signed_tx = SignedTransaction::new(
         committee.epoch(),
-        transaction,
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction.data().clone(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
     assert!(signed_tx.verify(&committee).is_ok());
 
     let initial_digest = *signed_tx.digest();
 
-    signed_tx.signed_data.data.gas_budget += 1;
-
     // digest is cached
     assert_eq!(initial_digest, *signed_tx.digest());
-
-    let serialized_tx = bincode::serialize(&signed_tx).unwrap();
-
-    let deserialized_tx: SignedTransaction = bincode::deserialize(&serialized_tx).unwrap();
-
-    // cached digest was not serialized/deserialized
-    assert_ne!(initial_digest, *deserialized_tx.digest());
 
     let effects = TransactionEffects {
         status: ExecutionStatus::Success,
@@ -468,13 +458,13 @@ fn test_user_signature_committed_in_transactions() {
     assert_ne!(tx_digest_a, tx_digest_b);
 
     // Test hash non-equality
-    let mut hasher = DefaultHasher::new();
-    transaction_a.hash(&mut hasher);
-    let hash_a = hasher.finish();
-    let mut hasher = DefaultHasher::new();
-    transaction_b.hash(&mut hasher);
-    let hash_b = hasher.finish();
-    assert_ne!(hash_a, hash_b);
+    // let mut hasher = DefaultHasher::new();
+    // transaction_a.hash(&mut hasher);
+    // let hash_a = hasher.finish();
+    // let mut hasher = DefaultHasher::new();
+    // transaction_b.hash(&mut hasher);
+    // let hash_b = hasher.finish();
+    // assert_ne!(hash_a, hash_b);
 
     // test equality
     assert_ne!(transaction_a, transaction_b)
@@ -498,15 +488,15 @@ fn test_user_signature_committed_in_signed_transactions() {
     let transaction_b = Transaction::from_data(tx_data, &sender_sec2);
     let signed_tx_a = SignedTransaction::new(
         0,
-        transaction_a.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction_a.data().clone(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
     let signed_tx_b = SignedTransaction::new(
         0,
-        transaction_b.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction_b.data().clone(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
     let tx_digest_a = signed_tx_a.digest();
@@ -518,22 +508,22 @@ fn test_user_signature_committed_in_signed_transactions() {
     authorities.insert(AuthorityPublicKeyBytes::from(sec1.public()), 1);
     let committee = Committee::new(0, authorities.clone()).unwrap();
     assert!(signed_tx_a
-        .auth_sign_info
-        .verify(&transaction_a.signed_data, &committee)
+        .auth_signature
+        .verify(transaction_a.data(), &committee)
         .is_ok());
     assert!(signed_tx_a
-        .auth_sign_info
-        .verify(&transaction_b.signed_data, &committee)
+        .auth_signature
+        .verify(transaction_b.data(), &committee)
         .is_err());
 
-    // Test hash non-equality
-    let mut hasher = DefaultHasher::new();
-    signed_tx_a.hash(&mut hasher);
-    let hash_a = hasher.finish();
-    let mut hasher = DefaultHasher::new();
-    signed_tx_b.hash(&mut hasher);
-    let hash_b = hasher.finish();
-    assert_ne!(hash_a, hash_b);
+    // // Test hash non-equality
+    // let mut hasher = DefaultHasher::new();
+    // signed_tx_a.hash(&mut hasher);
+    // let hash_a = hasher.finish();
+    // let mut hasher = DefaultHasher::new();
+    // signed_tx_b.hash(&mut hasher);
+    // let hash_b = hasher.finish();
+    // assert_ne!(hash_a, hash_b);
 
     // test equality
     assert_ne!(signed_tx_a, signed_tx_b)
@@ -643,21 +633,21 @@ fn verify_sender_signature_correctly_with_flag() {
     // create tx also signed by authority
     let signed_tx = SignedTransaction::new(
         committee.epoch(),
-        transaction.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction.data().clone(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
     // signature contains the correct Secp256k1 flag
     assert_eq!(
-        transaction.signed_data.tx_signature.scheme().flag(),
+        transaction.data().tx_signature.scheme().flag(),
         Secp256k1SuiSignature::SCHEME.flag()
     );
 
     // authority accepts signs tx after verification
     assert!(signed_tx
-        .auth_sign_info
-        .verify(&transaction.signed_data, &committee)
+        .auth_signature
+        .verify(transaction.data(), &committee)
         .is_ok());
 
     // creates transaction envelope with Ed25519 signature
@@ -674,25 +664,25 @@ fn verify_sender_signature_correctly_with_flag() {
 
     let signed_tx_1 = SignedTransaction::new(
         committee.epoch(),
-        transaction_1.clone(),
-        AuthorityPublicKeyBytes::from(sec1.public()),
+        transaction_1.data().clone(),
         &sec1,
+        AuthorityPublicKeyBytes::from(sec1.public()),
     );
 
     // signature contains the correct Ed25519 flag
     assert_eq!(
-        transaction_1.signed_data.tx_signature.scheme().flag(),
+        transaction_1.data().tx_signature.scheme().flag(),
         Ed25519SuiSignature::SCHEME.flag()
     );
 
     // signature verified
     assert!(signed_tx_1
-        .auth_sign_info
-        .verify(&transaction_1.signed_data, &committee)
+        .auth_signature
+        .verify(transaction_1.data(), &committee)
         .is_ok());
 
     assert!(signed_tx_1
-        .auth_sign_info
-        .verify(&transaction.signed_data, &committee)
+        .auth_signature
+        .verify(transaction.data(), &committee)
         .is_err());
 }

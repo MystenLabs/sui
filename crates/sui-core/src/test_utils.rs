@@ -18,7 +18,7 @@ use sui_types::{
     base_types::{dbg_addr, ObjectID, TransactionDigest},
     batch::UpdateItem,
     committee::Committee,
-    crypto::{get_key_pair, AccountKeyPair, Signature},
+    crypto::{get_key_pair, AccountKeyPair},
     messages::{BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionData},
     object::Object,
 };
@@ -160,6 +160,5 @@ pub fn create_fake_transaction() -> Transaction {
         object.compute_object_reference(),
         10000,
     );
-    let signature = Signature::new(&data, &sender_key);
-    Transaction::new(data, signature)
+    Transaction::from_data(data, &sender_key)
 }

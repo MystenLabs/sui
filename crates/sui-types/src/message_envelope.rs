@@ -5,7 +5,7 @@ use crate::base_types::AuthorityName;
 use crate::committee::{Committee, EpochId};
 use crate::crypto::{
     AuthorityQuorumSignInfo, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
-    Signable, SuiAuthoritySignature, VerificationObligation,
+    EmptySignInfo, Signable, SuiAuthoritySignature, VerificationObligation,
 };
 use crate::error::SuiResult;
 use once_cell::sync::OnceCell;
@@ -33,12 +33,14 @@ pub trait Message {
 pub struct Envelope<T: Message, S> {
     #[serde(skip)]
     digest: OnceCell<T::DigestType>,
+    #[serde(skip)]
+    verified: bool,
 
     data: T,
-    auth_signature: S,
+    pub auth_signature: S,
 }
 
-impl<T: Message, S> Envelope<T, S> {
+impl<T: Message, S: AuthoritySignInfoTrait> Envelope<T, S> {
     pub fn into_data(self) -> T {
         self.data
     }
@@ -62,14 +64,28 @@ where
     pub fn data(&self) -> &T {
         &self.data
     }
+
     pub fn auth_sig(&self) -> &S {
         &self.auth_signature
     }
 
+    pub fn is_verified(&self) -> bool {
+        self.verified
+    }
+
     /// A convenient interface to verify this message only.
     pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.data.verify()?;
-        self.auth_signature.verify(&self.data, committee)
+        if !self.verified {
+            self.data.verify()?;
+            self.auth_signature.verify(&self.data, committee)?;
+        }
+        Ok(())
+    }
+
+    pub fn verify_mut(&mut self, committee: &Committee) -> SuiResult {
+        self.verify(committee)?;
+        self.verified = true;
+        Ok(())
     }
 
     /// Add this message to `obligation` for verification.
@@ -85,6 +101,42 @@ where
         let idx = obligation.add_message(&self.data);
         self.auth_signature
             .add_to_verification_obligation(committee, obligation, idx)
+    }
+}
+
+impl<T> Envelope<T, EmptySignInfo>
+where
+    T: Message + Signable<Vec<u8>>,
+{
+    pub fn from_signed<S: AuthoritySignInfoTrait>(envelope: Envelope<T, S>) -> Self {
+        Self {
+            digest: envelope.digest,
+            data: envelope.data,
+            auth_signature: EmptySignInfo {},
+            verified: false,
+        }
+    }
+
+    pub fn verify_user_sig(&self) -> SuiResult {
+        if self.verified {
+            return Ok(());
+        }
+        self.data.verify()
+    }
+
+    pub fn mut_verify_user_sig(&mut self) -> SuiResult {
+        self.verify_user_sig()?;
+        self.verified = true;
+        Ok(())
+    }
+
+    pub fn new(data: T) -> Self {
+        Self {
+            digest: OnceCell::new(),
+            data,
+            auth_signature: EmptySignInfo {},
+            verified: false,
+        }
     }
 }
 
@@ -107,6 +159,7 @@ where
                 authority,
                 signature,
             },
+            verified: false,
         }
     }
 }
@@ -115,24 +168,39 @@ impl<T, const S: bool> Envelope<T, AuthorityQuorumSignInfo<S>>
 where
     T: Message + Signable<Vec<u8>>,
 {
-    pub fn new(
-        data: T,
-        signatures: Vec<AuthoritySignInfo>,
+    pub fn new<U>(
+        unsigned_envelop: Envelope<T, U>,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
         committee: &Committee,
     ) -> SuiResult<Self> {
+        let Envelope { digest, data, .. } = unsigned_envelop;
         let cert = Self {
-            digest: OnceCell::new(),
+            digest,
             data,
             auth_signature: AuthorityQuorumSignInfo::<S>::new_with_signatures(
-                signatures
-                    .into_iter()
-                    .map(|v| (v.authority, v.signature))
-                    .collect(),
+                signatures.into_iter().map(|v| (v.0, v.1)).collect(),
                 committee,
             )?,
+            verified: false,
         };
 
         cert.verify(committee)?;
+        Ok(cert)
+    }
+
+    pub fn new_empty<U>(
+        unsigned_envelop: Envelope<T, U>,
+        committee: &Committee,
+    ) -> SuiResult<Self> {
+        let Envelope { digest, data, .. } = unsigned_envelop;
+        let cert = Self {
+            digest,
+            data,
+            auth_signature: AuthorityQuorumSignInfo::new(committee.epoch),
+            verified: false,
+        };
+
+        cert.data().verify()?;
         Ok(cert)
     }
 }

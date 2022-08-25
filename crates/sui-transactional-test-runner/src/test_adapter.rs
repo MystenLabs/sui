@@ -49,7 +49,10 @@ use sui_types::{
     crypto::{get_key_pair_from_rng, AccountKeyPair, Signature},
     event::Event,
     gas,
-    messages::{ExecutionStatus, InputObjects, Transaction, TransactionData, TransactionEffects},
+    messages::{
+        ExecutionStatus, InputObjects, SenderSignedData, Transaction, TransactionData,
+        TransactionEffects,
+    },
     object::{self, Object, ObjectFormatOptions, GAS_VALUE_FOR_TESTING},
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS,
 };
@@ -454,8 +457,8 @@ impl<'a> SuiTestAdapter<'a> {
         let storage_mut = Arc::get_mut(&mut self.storage).unwrap();
         storage_mut.insert_object(gas_object);
         let data = txn_data(sender, gas_payment);
-        let signature = Signature::new(&data, sender_key);
-        Transaction::new(data, signature)
+        let tx_signature = Signature::new(&data, sender_key);
+        Transaction::new(SenderSignedData { data, tx_signature })
     }
 
     fn execute_txn(
@@ -466,7 +469,7 @@ impl<'a> SuiTestAdapter<'a> {
         let gas_status = gas::start_gas_metering(gas_budget, 1, 1).unwrap();
         let transaction_digest = TransactionDigest::new(self.rng.gen());
         let objects_by_kind = transaction
-            .signed_data
+            .data()
             .data
             .input_objects()
             .unwrap()
@@ -502,7 +505,7 @@ impl<'a> SuiTestAdapter<'a> {
         ) = execution_engine::execute_transaction_to_effects(
             shared_object_refs,
             temporary_store,
-            transaction.signed_data.data,
+            transaction.into_data().data,
             transaction_digest,
             transaction_dependencies,
             &self.vm,

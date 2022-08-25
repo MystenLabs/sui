@@ -14,6 +14,7 @@ use sui_json_rpc_types::SuiObjectInfo;
 use sui_sdk::crypto::SuiKeystore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::ObjectRef;
+use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, KeypairTraits};
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::CallArg;
@@ -22,7 +23,6 @@ use sui_types::messages::{
     TransactionData,
 };
 use sui_types::object::Object;
-use sui_types::{base_types::SuiAddress, crypto::Signature};
 /// The maximum gas per transaction.
 pub const MAX_GAS: u64 = 10_000;
 
@@ -114,9 +114,8 @@ pub async fn make_transactions_with_wallet_context(
                 obj.to_object_ref(),
                 MAX_GAS,
             );
-            let sig = context.keystore.sign(address, &data.to_bytes()).unwrap();
-
-            res.push(Transaction::new(data, sig));
+            let tx = Transaction::from_data(data, &context.keystore.signer(*address));
+            res.push(tx);
         }
     }
     res
@@ -156,8 +155,7 @@ pub fn make_transactions_with_pre_genesis_objects(
             /* gas_object_ref */ o2.compute_object_reference(),
             MAX_GAS,
         );
-        let signature = Signature::new(&data, &signer);
-        transactions.push(Transaction::new(data, signature));
+        transactions.push(Transaction::from_data(data, &signer));
     }
     (transactions, gas_objects)
 }
@@ -190,8 +188,7 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
             ],
             MAX_GAS,
         );
-        let signature = Signature::new(&data, &keypair);
-        transactions.push(Transaction::new(data, signature));
+        transactions.push(Transaction::from_data(data, &keypair));
     }
     transactions
 }
@@ -215,8 +212,7 @@ pub fn create_publish_move_package_transaction(
         })
         .collect();
     let data = TransactionData::new_module(sender, gas_object_ref, all_module_bytes, MAX_GAS);
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    Transaction::from_data(data, keypair)
 }
 
 pub fn make_transfer_sui_transaction(
@@ -227,8 +223,7 @@ pub fn make_transfer_sui_transaction(
     keypair: &AccountKeyPair,
 ) -> Transaction {
     let data = TransactionData::new_transfer_sui(recipient, sender, amount, gas_object, MAX_GAS);
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    Transaction::from_data(data, keypair)
 }
 
 pub fn make_transfer_object_transaction(
@@ -239,8 +234,7 @@ pub fn make_transfer_object_transaction(
     recipient: SuiAddress,
 ) -> Transaction {
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    Transaction::from_data(data, keypair)
 }
 
 pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {
@@ -258,8 +252,7 @@ pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {
         })
         .collect();
     let data = TransactionData::new_module(sender, gas_object, all_module_bytes, MAX_GAS);
-    let signature = Signature::new(&data, &keypair);
-    Transaction::new(data, signature)
+    Transaction::from_data(data, &keypair)
 }
 
 pub fn make_counter_create_transaction(
@@ -278,8 +271,7 @@ pub fn make_counter_create_transaction(
         vec![],
         MAX_GAS,
     );
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    Transaction::from_data(data, keypair)
 }
 
 pub fn make_counter_increment_transaction(
@@ -299,8 +291,7 @@ pub fn make_counter_increment_transaction(
         vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
         MAX_GAS,
     );
-    let signature = Signature::new(&data, keypair);
-    Transaction::new(data, signature)
+    Transaction::from_data(data, keypair)
 }
 
 /// Make a transaction calling a specific move module & function.
@@ -325,21 +316,26 @@ pub fn move_transaction(
         arguments,
         MAX_GAS,
     );
-    let signature = Signature::new(&data, &keypair);
-    Transaction::new(data, signature)
+    Transaction::from_data(data, &keypair)
 }
 
 /// Make a test certificates for each input transaction.
 pub fn make_certificates(transactions: Vec<Transaction>) -> Vec<CertifiedTransaction> {
+    println!("0x123458");
     let committee = test_committee();
+    println!("0x123457");
     let mut certificates = Vec::new();
     for tx in transactions {
         let mut aggregator = SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
         for (key, _, _) in test_validator_keys() {
-            let vote =
-                SignedTransaction::new(/* epoch */ 0, tx.clone(), key.public().into(), &key);
+            let vote = SignedTransaction::new(
+                /* epoch */ 0,
+                tx.data().clone(),
+                &key,
+                key.public().into(),
+            );
             if let Some(certificate) = aggregator
-                .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
+                .append(vote.auth_sig().authority, vote.auth_sig().signature.clone())
                 .unwrap()
             {
                 certificates.push(certificate);

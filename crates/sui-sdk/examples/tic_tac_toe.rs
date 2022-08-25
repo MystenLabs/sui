@@ -18,7 +18,6 @@ use sui_sdk::{
     json::SuiJsonValue,
     types::{
         base_types::{ObjectID, SuiAddress},
-        crypto::Signature,
         id::UID,
         messages::Transaction,
     },
@@ -97,14 +96,10 @@ impl TicTacToe {
         let signer = self.keystore.signer(player_x);
 
         // Sign the transaction
-        let signature = Signature::new(&create_game_call, &signer);
+        let tx = Transaction::from_data(create_game_call, &signer);
 
         // Execute the transaction.
-        let response = self
-            .client
-            .quorum_driver()
-            .execute_transaction(Transaction::new(create_game_call, signature))
-            .await?;
+        let response = self.client.quorum_driver().execute_transaction(tx).await?;
 
         // We know `create_game` move function will create 1 object.
         let game_id = response
@@ -187,14 +182,12 @@ impl TicTacToe {
             // Get signer from keystore
             let signer = self.keystore.signer(my_identity);
 
-            // Sign the transaction
-            let signature = Signature::new(&place_mark_call, &signer);
-
+            let transaction = Transaction::from_data(place_mark_call, &signer);
             // Execute the transaction.
             let response = self
                 .client
                 .quorum_driver()
-                .execute_transaction(Transaction::new(place_mark_call, signature))
+                .execute_transaction(transaction)
                 .await?;
 
             // Print any execution error.
