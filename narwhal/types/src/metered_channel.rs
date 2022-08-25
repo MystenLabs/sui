@@ -1,13 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 #![allow(dead_code)] // TODO: complete tests - This kinda sorta facades the whole tokio::mpsc::{Sender, Receiver}: without tests, this will be fragile to maintain.
-use futures::{FutureExt, Stream};
+use futures::{FutureExt, Stream, TryFutureExt};
 use prometheus::IntGauge;
 use std::task::{Context, Poll};
 use tokio::sync::mpsc::{
     self,
     error::{SendError, TryRecvError, TrySendError},
-    Permit,
 };
 
 /// An [`mpsc::Sender`](tokio::sync::mpsc::Sender) with an [`IntGauge`]
@@ -80,11 +79,44 @@ impl<T> Receiver<T> {
 
 impl<T> Unpin for Receiver<T> {}
 
+/// A newtype for an `mpsc::Permit` which allows us to inject gauge accounting
+/// in the case the permit is dropped w/o sending
+pub struct Permit<'a, T> {
+    permit: Option<mpsc::Permit<'a, T>>,
+    gauge_ref: &'a IntGauge,
+}
+
+impl<'a, T> Permit<'a, T> {
+    pub fn new(permit: mpsc::Permit<'a, T>, gauge_ref: &'a IntGauge) -> Permit<'a, T> {
+        Permit {
+            permit: Some(permit),
+            gauge_ref,
+        }
+    }
+
+    pub fn send(mut self, value: T) {
+        let sender = self.permit.take().expect("Permit invariant violated!");
+        sender.send(value);
+        // skip the drop logic, see https://github.com/tokio-rs/tokio/blob/a66884a2fb80d1180451706f3c3e006a3fdcb036/tokio/src/sync/mpsc/bounded.rs#L1155-L1163
+        std::mem::forget(self);
+    }
+}
+
+impl<'a, T> Drop for Permit<'a, T> {
+    fn drop(&mut self) {
+        // in the case the permit is dropped without sending, we still want to decrease the occupancy of the channel
+        self.gauge_ref.dec()
+    }
+}
+
 impl<T> Sender<T> {
     /// Sends a value, waiting until there is capacity.
     /// Increments the gauge in case of a successful `send`.
     pub async fn send(&self, value: T) -> Result<(), SendError<T>> {
-        self.inner.send(value).inspect(|_| self.gauge.inc()).await
+        self.inner
+            .send(value)
+            .inspect_ok(|_| self.gauge.inc())
+            .await
     }
 
     /// Completes when the receiver has dropped.
@@ -122,10 +154,10 @@ impl<T> Sender<T> {
             .reserve()
             // remove this unsightly hack once https://github.com/rust-lang/rust/issues/91345 is resolved
             .map(|val| {
-                if val.is_ok() {
+                val.map(|permit| {
                     self.gauge.inc();
-                }
-                val
+                    Permit::new(permit, &self.gauge)
+                })
             })
             .await
     }
@@ -137,7 +169,7 @@ impl<T> Sender<T> {
         self.inner.try_reserve().map(|val| {
             // remove this unsightly hack once https://github.com/rust-lang/rust/issues/91345 is resolved
             self.gauge.inc();
-            val
+            Permit::new(val, &self.gauge)
         })
     }
 
