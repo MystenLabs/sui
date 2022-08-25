@@ -64,8 +64,8 @@ You can click on a value in the **Transaction ID** or **Addresses** column to op
      * Call transaction details
      * Publish transaction details
      * Batch transaction details
- * [Address details](#address-details-page)
  * [Object details](#object-details-page)
+ * [Address details](#address-details-page)
 
 ## Transaction details pages
 When you click a **Transaction ID**, a details page opens. The page title reflects the transaction type, and the fields displayed vary depending on the transaction type. If you don’t see one of the fields, it is because it is not available for the selected transaction type. For example, a TransferSui transaction does not include an **Events** tab.
