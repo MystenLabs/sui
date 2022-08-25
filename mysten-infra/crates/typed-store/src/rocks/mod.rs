@@ -12,7 +12,7 @@ use rocksdb::{ColumnFamilyDescriptor, DBWithThreadMode, MultiThreaded, WriteBatc
 use serde::{de::DeserializeOwned, Serialize};
 use std::{borrow::Borrow, collections::BTreeMap, env, marker::PhantomData, path::Path, sync::Arc};
 use tap::TapFallible;
-use tracing::{info, instrument};
+use tracing::{debug, info, instrument};
 
 use self::{iter::Iter, keys::Keys, values::Values};
 pub use errors::TypedStoreError;
@@ -440,7 +440,7 @@ where
 
 fn read_size_from_env(var_name: &str) -> Option<usize> {
     env::var(var_name)
-        .tap_err(|e| info!("Env var {} is not set: {}", var_name, e))
+        .tap_err(|e| debug!("Env var {} is not set: {}", var_name, e))
         .ok()?
         .parse::<usize>()
         .tap_err(|e| {
