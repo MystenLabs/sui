@@ -117,10 +117,6 @@
         "fileName": "build/devnet"
       },
       {
-        "label": "Optional - Run Locally with CLI",
-        "fileName": "contribute/cli-client"
-      },
-      {
         "label": "Create Smart Contracts with Move",
         "fileName": "build/move/index",
         "title": "Create Smart Contracts with Move",
@@ -249,6 +245,10 @@
       {
         "label": "Frequently Asked Questions",
         "fileName": "contribute/faq"
+      },
+      {
+        "label": "Local Network with CLI",
+        "fileName": "contribute/cli-client"
       },
       {
         "label": "Logging",
