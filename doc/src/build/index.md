@@ -9,6 +9,7 @@ Now that you've [learned about Sui](../learn/index.md), it's time to start build
 Here is our recommended workflow to interact with Sui:
 
 1. [Install](../build/install.md) all of the *required tools*.
+1. Optionally, [create](../contribute/cli-client.md#genesis) and [start](../contribute/cli-client.md#starting-the-network) a *local Sui network* to contribute to the blockchain.
 1. [Connect](../build/devnet.md) to the Sui Devnet network.
 1. [Create](../build/move/index.md) *smart contracts* with Move:
    1. [Write](../build/move/write-package.md) a package.
@@ -25,7 +26,6 @@ Here is our recommended workflow to interact with Sui:
    * [Make](../build/rust-sdk.md) Rust SDK calls to Sui from your app.
    * [Make](https://github.com/MystenLabs/sui/tree/main/sdk/typescript/) TypeScript/JavaScript calls to Sui from your apps.
    * [Run](../build/fullnode.md) a Sui Fullnode and [subscribe](../build/pubsub.md) to events.
-1. Optionally, [create](../contribute/cli-client.md#genesis) and [start](../contribute/cli-client.md#starting-the-network) a *local Sui network* to contribute to the blockchain.
 1. [Reference](../build/reference.md) the format for our API and SuiJSON:
    * [Follow](https://docs.sui.io/sui-jsonrpc) the Sui API Reference.
    * [Employ](../build/sui-json.md) *SuiJSON format* to align JSON inputs more closely with Move call arguments.
