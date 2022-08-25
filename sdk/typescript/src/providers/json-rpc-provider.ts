@@ -171,7 +171,6 @@ export class JsonRpcProvider extends Provider {
       return;
 
     try {
-      console.log('refresh subscriptions');
       let newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
 
       let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
