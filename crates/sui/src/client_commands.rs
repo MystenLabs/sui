@@ -12,7 +12,7 @@ use std::{
 use anyhow::anyhow;
 use clap::*;
 use colored::Colorize;
-use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
+use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
@@ -33,7 +33,7 @@ use sui_types::{
     messages::ExecuteTransactionRequestType,
     messages::Transaction,
     object::Owner,
-    SUI_FRAMEWORK_ADDRESS,
+    parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
 };
 use tracing::info;
 
@@ -117,7 +117,7 @@ pub enum SuiClientCommands {
         /// Function name in module
         #[clap(
         long,
-        parse(try_from_str = parse_type_tag),
+        parse(try_from_str = parse_sui_type_tag),
         multiple_occurrences = false,
         multiple_values = true
         )]
