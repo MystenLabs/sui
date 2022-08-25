@@ -7267,6 +7267,7 @@ dependencies = [
  "itertools",
  "move-binary-format",
  "move-bytecode-utils",
+ "move-command-line-common",
  "move-core-types",
  "schemars",
  "serde 1.0.143",

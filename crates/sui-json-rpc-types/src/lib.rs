@@ -17,9 +17,9 @@ use move_binary_format::normalized::{
     Struct as NormalizedStruct, Type as NormalizedType,
 };
 use move_bytecode_utils::module_cache::GetModule;
+use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::parser::{parse_struct_tag, parse_type_tag};
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::ser::Error;
@@ -27,6 +27,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 use tracing::warn;
 
 use sui_json::SuiJsonValue;
@@ -2207,5 +2208,23 @@ impl TransactionBytes {
 
     pub fn to_data(self) -> Result<TransactionData, anyhow::Error> {
         TransactionData::from_signable_bytes(&self.tx_bytes.to_vec()?)
+    }
+}
+
+fn parse_struct_tag(s: &str) -> anyhow::Result<StructTag> {
+    use move_command_line_common::types::ParsedStructType;
+    ParsedStructType::parse(s)?.into_struct_tag(&resolve_address)
+}
+
+fn parse_type_tag(s: &str) -> anyhow::Result<TypeTag> {
+    use move_command_line_common::types::ParsedType;
+    ParsedType::parse(s)?.into_type_tag(&resolve_address)
+}
+
+fn resolve_address(addr: &str) -> Option<AccountAddress> {
+    match addr {
+        "std" => Some(MOVE_STDLIB_ADDRESS.into()),
+        "sui" => Some(SUI_FRAMEWORK_ADDRESS.into()),
+        _ => None,
     }
 }
