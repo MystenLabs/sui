@@ -154,7 +154,11 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  // call only upon reconnecting to a node over websocket
+  /*
+    call only upon reconnecting to a node over websocket.
+    calling multiple times on the same connection will result
+    in multiple message handlers firing each time
+  */
   private async refreshSubscriptions() {
     if(this.activeSubscriptions.size === 0)
       return;
@@ -164,9 +168,8 @@ export class JsonRpcProvider extends Provider {
       let newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
 
       let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
-        Array.from(this.activeSubscriptions.entries())
-        .map(async entry => {
-          const sub = entry[1];
+        Array.from(this.activeSubscriptions.values())
+        .map(async sub => {
           const onMessage = sub.onMessage;
           const filter = sub.filter;
           if(!filter || !onMessage)
@@ -541,7 +544,7 @@ export class JsonRpcProvider extends Provider {
       /*
         if the connection closes before unsubscribe is called,
         the remote node will remove us from its subscribers list without notification,
-        leading to 'removed' being false. but if we still had a record of it locally,
+        leading to removedOnNode being false. but if we still had a record of it locally,
         we should still report that it was deleted successfully
       */
       return this.activeSubscriptions.delete(id) || removedOnNode;
