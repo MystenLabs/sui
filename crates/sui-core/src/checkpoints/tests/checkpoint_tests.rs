@@ -531,7 +531,7 @@ fn latest_proposal() {
     .collect();
     // We only need f+1 to make a cert. 2 is sufficient.
     let cert = CertifiedCheckpointSummary::aggregate(signed, &committee).unwrap();
-    cps1.promote_signed_checkpoint_to_cert(&cert, &committee, &CheckpointMetrics::new_for_tests())
+    cps1.promote_signed_checkpoint_to_cert(&cert, &committee)
         .unwrap();
 
     let response = cps1.handle_proposal(false).expect("no errors");
@@ -578,7 +578,6 @@ fn latest_proposal() {
 #[test]
 fn set_get_checkpoint() {
     let (committee, _keys, mut stores) = random_ckpoint_store();
-    let metrics = CheckpointMetrics::new_for_tests();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
     let (_, mut cps3) = stores.pop().unwrap();
@@ -702,7 +701,7 @@ fn set_get_checkpoint() {
         CertifiedCheckpointSummary::aggregate(signed_checkpoint, &committee).unwrap();
 
     // Send the certificate to a party that has the data
-    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee, &metrics)
+    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee)
         .unwrap();
 
     // Now we have a certified checkpoint
@@ -725,7 +724,6 @@ fn set_get_checkpoint() {
         &contents,
         &committee,
         TestCausalOrderPendCertNoop,
-        &metrics,
     );
     assert!(response_ckp.is_err());
 
@@ -736,7 +734,6 @@ fn set_get_checkpoint() {
         &contents,
         &committee,
         TestCausalOrderPendCertNoop,
-        &metrics,
     )
     .unwrap();
 
@@ -828,12 +825,8 @@ fn checkpoint_integration() {
                 })
                 .collect();
             let cert = CertifiedCheckpointSummary::aggregate(signatures, &committee).unwrap();
-            cps.promote_signed_checkpoint_to_cert(
-                &cert,
-                &committee,
-                &CheckpointMetrics::new_for_tests(),
-            )
-            .unwrap();
+            cps.promote_signed_checkpoint_to_cert(&cert, &committee)
+                .unwrap();
 
             // Loop invariant to ensure termination or error
             assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
@@ -1657,7 +1650,6 @@ async fn checkpoint_messaging_flow_bug() {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_messaging_flow() {
     let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
-    let metrics = CheckpointMetrics::new_for_tests();
 
     // Check that the system is running.
     let t = setup.transactions.pop().unwrap();
@@ -1794,13 +1786,12 @@ async fn checkpoint_messaging_flow() {
                     &contents,
                     &setup.committee,
                     TestCausalOrderPendCertNoop,
-                    &metrics,
                 )
                 .unwrap();
         } else {
             auth.checkpoint
                 .lock()
-                .promote_signed_checkpoint_to_cert(&checkpoint_cert, &setup.committee, &metrics)
+                .promote_signed_checkpoint_to_cert(&checkpoint_cert, &setup.committee)
                 .unwrap();
         }
     }

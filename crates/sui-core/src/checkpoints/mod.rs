@@ -36,7 +36,6 @@ use typed_store::{
 };
 use typed_store_macros::DBMapUtils;
 
-use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use crate::checkpoints::causal_order_effects::CausalOrder;
 use crate::{
     authority::StableSyncAuthoritySigner,
@@ -740,7 +739,6 @@ impl CheckpointStore {
         &mut self,
         checkpoint: &CertifiedCheckpointSummary,
         committee: &Committee,
-        metrics: &CheckpointMetrics,
     ) -> SuiResult {
         checkpoint.verify(committee, None)?;
         debug_assert!(matches!(
@@ -751,7 +749,6 @@ impl CheckpointStore {
         self.tables
             .checkpoints
             .insert(seq, &AuthenticatedCheckpoint::Certified(checkpoint.clone()))?;
-        metrics.checkpoint_sequence_number.set(*seq as i64);
         self.clear_proposal(*seq + 1)?;
         Ok(())
     }
@@ -765,10 +762,9 @@ impl CheckpointStore {
         contents: &CheckpointContents,
         committee: &Committee,
         effects_store: impl CausalOrder + PendCertificateForExecution,
-        metrics: &CheckpointMetrics,
     ) -> SuiResult {
         self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
-        self.process_synced_checkpoint_certificate(checkpoint, contents, committee, metrics)
+        self.process_synced_checkpoint_certificate(checkpoint, contents, committee)
     }
 
     /// Unlike process_new_checkpoint_certificate this does not verify that transactions are executed
@@ -778,7 +774,6 @@ impl CheckpointStore {
         checkpoint: &CertifiedCheckpointSummary,
         contents: &CheckpointContents,
         committee: &Committee,
-        metrics: &CheckpointMetrics,
     ) -> SuiResult {
         let seq = checkpoint.summary.sequence_number();
         debug_assert!(self.tables.checkpoints.get(seq)?.is_none());
@@ -789,7 +784,6 @@ impl CheckpointStore {
             &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
             contents,
         )?;
-        metrics.checkpoint_sequence_number.set(*seq as i64);
         self.clear_proposal(*seq + 1)?;
         Ok(())
     }

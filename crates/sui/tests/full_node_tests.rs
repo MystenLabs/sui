@@ -121,7 +121,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     wait_for_tx(digest, node.state().clone()).await;
 
     // verify that the intermediate sync data is cleared.
-    let sync_store = node.active().unwrap().node_sync_state.store();
+    let sync_store = node.active().node_sync_state.store();
     assert!(sync_store.get_cert(&digest).unwrap().is_none());
     assert!(sync_store.get_effects(&digest).unwrap().is_none());
 
@@ -589,13 +589,13 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
     let (node, jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
-    let (transfered_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
+    let (transferred_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
     let txes = node
         .state()
-        .get_transactions_by_input_object(transfered_object)
+        .get_transactions_by_input_object(transferred_object)
         .await?;
 
     assert_eq!(txes.len(), 1);
@@ -613,7 +613,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
         transaction_module: "native".into(),
         sender,
         recipient: Owner::AddressOwner(receiver),
-        object_id: transfered_object,
+        object_id: transferred_object,
         version: SequenceNumber::from_u64(1),
         type_: TransferType::Coin,
     };
@@ -655,7 +655,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 
     // query by object
     let params = rpc_params![
-        transfered_object,
+        transferred_object,
         10,
         ts.unwrap() - HOUR_MS,
         ts.unwrap() + HOUR_MS

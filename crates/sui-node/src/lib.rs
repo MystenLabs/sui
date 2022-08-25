@@ -58,10 +58,10 @@ pub struct SuiNode {
     _batch_subsystem_handle: tokio::task::JoinHandle<Result<()>>,
     _post_processing_subsystem_handle: Option<tokio::task::JoinHandle<Result<()>>>,
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
-    _execute_driver_handle: Option<tokio::task::JoinHandle<()>>,
+    _execute_driver_handle: tokio::task::JoinHandle<()>,
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
     state: Arc<AuthorityState>,
-    active: Option<Arc<ActiveAuthority<NetworkAuthorityClient>>>,
+    active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     quorum_driver_handler: Option<QuorumDriverHandler<NetworkAuthorityClient>>,
 }
 
@@ -175,63 +175,57 @@ impl SuiNode {
         } else {
             None
         };
-        let should_start_follower = is_full_node || config.enable_gossip;
 
-        let mut active = None;
+        let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
+            config.db_path().join("node_sync_db"),
+            None,
+            None,
+        ));
+        let active_authority = Arc::new(ActiveAuthority::new(
+            state.clone(),
+            pending_store,
+            net,
+            GossipMetrics::new(&prometheus_registry),
+            network_metrics.clone(),
+        )?);
 
-        let (gossip_handle, execute_driver_handle, checkpoint_process_handle) =
-            if should_start_follower {
-                let pending_store = Arc::new(NodeSyncStore::open_tables_read_write(
-                    config.db_path().join("node_sync_db"),
-                    None,
-                    None,
-                ));
-
-                let active_authority = Arc::new(ActiveAuthority::new(
-                    state.clone(),
-                    pending_store,
-                    net,
-                    GossipMetrics::new(&prometheus_registry),
-                    network_metrics.clone(),
-                )?);
-                active = Some(Arc::clone(&active_authority));
-
-                if is_validator {
-                    // TODO: get degree from config file.
-                    let degree = 4;
-                    (
-                        Some(active_authority.clone().spawn_gossip_process(degree).await),
-                        Some(active_authority.clone().spawn_execute_process().await),
-                        Some(
-                            active_authority
-                                .spawn_checkpoint_process(
-                                    CheckpointMetrics::new(&prometheus_registry),
-                                    config.enable_reconfig,
-                                )
-                                .await,
-                        ),
-                    )
-                } else {
-                    info!("Starting full node sync to latest checkpoint (this may take a while)");
-                    let metrics = CheckpointMetrics::new(&prometheus_registry);
-                    let now = Instant::now();
-                    if let Err(err) = active_authority.sync_to_latest_checkpoint(&metrics).await {
-                        error!(
-                            "Full node failed to catch up to latest checkpoint: {:?}",
-                            err
-                        );
-                    } else {
-                        info!(
-                            "Full node caught up to latest checkpoint in {:?}",
-                            now.elapsed()
-                        );
-                    }
-                    active_authority.spawn_node_sync_process().await;
-                    (None, None, None)
-                }
+        let gossip_handle = if is_full_node {
+            info!("Starting full node sync to latest checkpoint (this may take a while)");
+            let now = Instant::now();
+            if let Err(err) = active_authority.sync_to_latest_checkpoint().await {
+                error!(
+                    "Full node failed to catch up to latest checkpoint: {:?}",
+                    err
+                );
             } else {
-                (None, None, None)
-            };
+                info!(
+                    "Full node caught up to latest checkpoint in {:?}",
+                    now.elapsed()
+                );
+            }
+            active_authority.clone().spawn_node_sync_process().await;
+            None
+        } else if config.enable_gossip {
+            // TODO: get degree from config file.
+            let degree = 4;
+            Some(active_authority.clone().spawn_gossip_process(degree).await)
+        } else {
+            None
+        };
+        let execute_driver_handle = active_authority.clone().spawn_execute_process().await;
+        let checkpoint_process_handle = if config.enable_checkpoint {
+            Some(
+                active_authority
+                    .clone()
+                    .spawn_checkpoint_process(
+                        CheckpointMetrics::new(&prometheus_registry),
+                        config.enable_reconfig,
+                    )
+                    .await,
+            )
+        } else {
+            None
+        };
 
         let batch_subsystem_handle = {
             // Start batch system so that this node can be followed
@@ -301,7 +295,7 @@ impl SuiNode {
             _batch_subsystem_handle: batch_subsystem_handle,
             _post_processing_subsystem_handle: post_processing_subsystem_handle,
             state,
-            active,
+            active: active_authority,
             quorum_driver_handler,
         };
 
@@ -314,8 +308,8 @@ impl SuiNode {
         self.state.clone()
     }
 
-    pub fn active(&self) -> Option<Arc<ActiveAuthority<NetworkAuthorityClient>>> {
-        self.active.clone()
+    pub fn active(&self) -> &Arc<ActiveAuthority<NetworkAuthorityClient>> {
+        &self.active
     }
 
     pub fn quorum_driver(&self) -> Option<Arc<QuorumDriver<NetworkAuthorityClient>>> {

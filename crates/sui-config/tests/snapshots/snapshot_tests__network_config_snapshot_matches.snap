@@ -37,6 +37,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000
@@ -76,6 +77,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000
@@ -115,6 +117,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000
@@ -154,6 +157,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000
@@ -193,6 +197,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000
@@ -232,6 +237,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000
@@ -271,6 +277,7 @@ validator_configs:
           socket_addr: /ip4/127.0.0.1/tcp/1234
     enable-event-processing: false
     enable-gossip: true
+    enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
     grpc-concurrency-limit: 20000
