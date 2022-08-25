@@ -30,7 +30,7 @@ The Explorer displays the **Address** details page for your wallet address. You 
 ## Explorer start page
 When you open the Sui Explorer, the page displays the transactions and top validators on the network. The **Transactions** table lists the most recent transaction first.
 
-![Explorer main page](../../static/explorer-start-page.png "Sui Explorer start page")
+![Explorer start page](../../static/explorer-start-page.png "Sui Explorer start page")
 *The page displayed when you open Sui Explorer*
 
 The **Top Validators** table lists the top validators on the network and includes a map showing the geographic locations of all nodes on the network.
@@ -66,6 +66,7 @@ You can click on a value in the **Transaction ID** or **Addresses** column to op
      * Batch transaction details
  * [Object details](#object-details-page)
  * [Address details](#address-details-page)
+ * [Package details](#package-details-page)
 
 ## Transaction details pages
 When you click a **Transaction ID**, a details page opens. The page title reflects the transaction type, and the fields displayed vary depending on the transaction type. If you don’t see one of the fields, it is because it is not available for the selected transaction type. For example, a TransferSui transaction does not include an **Events** tab.
@@ -79,12 +80,13 @@ The transaction details pages include the following tabs:
  * **Signatures** - Lists the signatures from validators for the transaction.
 
 The **Details** tab includes the following fields:
- * **Package Details** - Displayed only for Call transactions. Displays the Package ID associated with the transaction and the following fields:
-     * Module - The module used for the transaction.
-     * Function - The Function called for the transaction.
-     * Argument - Any arguments included with the function.
- * **Updated** - The object ID for the object the transaction updated. Click the ID to view the [Object details](#object-details-page) page for more details.
- * **Created** - The object ID for the object this transaction created. Click the ID to view the [Object details](#object-details-page) page for more details.
+ * **Package Details** - Displayed only for Call transactions. 
+     * **Package ID** - The ID of the package associated with the Call transaction.
+     * **Module** - The module used for the transaction.
+     * **Function** - The function called for the transaction.
+     * **Argument** - Any arguments included with the function.
+ * **Updated** - The object ID for the object the transaction updated.
+ * **Created** - The object ID for the object this transaction created.
  * **Amount** - The number and type of coins transferred for the transaction.
  * **Sender** - Displayed only for Publish transactions. The address of the sender of the transaction.
  * **Sender & Recipients** - The addresses associated with the transaction. The first value is the sender's address, and the address next to the green checkmark is the recipient's address. When there are multiple recipients, the field includes multiple addresses.
@@ -121,7 +123,7 @@ The page includes the following details:
 ## Address details page
 The **Address** details page lets you view details about a specific address, including assets owned by the address and transactions that interacted with the address.
 
-![Explorer Transactions page](../../static/explorer-transactions-page.png "Sui Explorer Address details page")
+![Explorer Address details page](../../static/explorer-address-page.png "Sui Explorer Address details page")
 *The Sui Explorer Address details page*
 
 The **Address** details page includes the following fields:
@@ -129,3 +131,5 @@ The **Address** details page includes the following fields:
  * **Coins** - List of tokens owned and their aggregated balance by coin type. Click on an entry to view additional details about individual coin objects.
  * **NFTs** - List of NFTs owned by the address. Click an ID to view the object details page for the NFT.
  * **Transactions** - Click to view more detailed information about each transaction.
+
+## Package details page
