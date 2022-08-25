@@ -137,3 +137,7 @@
 .amountbox > :nth-child(2) sup {
     @apply font-medium text-sui-grey-80 text-[13px] h-[13px] leading-[100%] ml-[4px];
 }
+
+.customhreflink {
+    @apply no-underline;
+}
