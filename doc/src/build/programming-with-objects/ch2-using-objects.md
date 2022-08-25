@@ -124,7 +124,7 @@ The first part is the same as what we have seen in [Chapter 1](./ch1-object-basi
 #### Option 2. Transfer the object
 The owner of the object may want to transfer it to another address. To support this, the `ColorObject` module will need to define a `transfer` API:
 ```rust
-public entry fun transfer(object: ColorObject, recipient: address) {
+public entry fun transfer(object: ColorObject, recipient: address, _ctx: &mut TxContext) {
     transfer::transfer(object, recipient)
 }
 ```
@@ -145,7 +145,7 @@ test_scenario::next_tx(scenario, &owner);
 {
     let object = test_scenario::take_owned<ColorObject>(scenario);
     let ctx = test_scenario::ctx(scenario);
-    transfer::transfer(object, recipient, ctx);
+    color_object::transfer(object, recipient, ctx);
 };
 ```
 Note that in the second transaction, the sender of the transaction should still be `owner`, because only the `owner` can transfer the object that it owns. After the tranfser, we can verify that `owner` no longer owns the object, while `recipient` now owns it:
