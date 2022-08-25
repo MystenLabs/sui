@@ -66,6 +66,11 @@ type FilterSubHandler = {
   filter: SuiEventFilter
 };
 
+type SubscriptionData = {
+  filter: SuiEventFilter,
+  onMessage: (event: SuiEventEnvelope) => any
+}
+
 export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
 
 export class JsonRpcProvider extends Provider {
@@ -75,8 +80,7 @@ export class JsonRpcProvider extends Provider {
   private wsEndpoint: string;
   private wsTimeout: number = 0;
 
-  private activeSubscriptions: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
-  private subscriptionFilters: Map<SubscriptionId, SuiEventFilter> = new Map();
+  private activeSubscriptions: Map<SubscriptionId, SubscriptionData> = new Map();
 
   /**
    * Establish a connection to a Sui Gateway endpoint
@@ -144,12 +148,11 @@ export class JsonRpcProvider extends Provider {
     const params = msg.params;
     if(msg.method === 'sui_subscribeEvent' && isSubscriptionEvent(params)) {
       // call any registered handler for the message's subscription
-      const onMessage = this.activeSubscriptions.get(params.subscription);
-      if (onMessage)
-        onMessage(params.result);
+      const sub = this.activeSubscriptions.get(params.subscription);
+      if (sub)
+        sub.onMessage(params.result);
     }
   }
-
 
   // call only upon reconnecting to a node over websocket
   private async refreshSubscriptions() {
@@ -158,16 +161,15 @@ export class JsonRpcProvider extends Provider {
 
     try {
       console.log('refresh subscriptions');
-      let newSubs: Map<SubscriptionId, (event: SuiEventEnvelope) => any> = new Map();
-      let newSubFilters: Map<SubscriptionId, SuiEventFilter> = new Map();
+      let newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
 
       let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
         Array.from(this.activeSubscriptions.entries())
         .map(async entry => {
-          const subId = entry[0];
-          const onMessage = entry[1];
-          const filter = this.subscriptionFilters.get(subId);
-          if(!filter)
+          const sub = entry[1];
+          const onMessage = sub.onMessage;
+          const filter = sub.filter;
+          if(!filter || !onMessage)
             return Promise.resolve(null);
 
           // re-subscribe to the same filter & replace the subscription id
@@ -178,12 +180,12 @@ export class JsonRpcProvider extends Provider {
 
       newSubsArr.forEach(entry => {
         if(entry === null) return;
-        newSubs.set(entry.id, entry.onMessage);
-        newSubFilters.set(entry.id, entry.filter);
+        const filter = entry.filter;
+        const onMessage = entry.onMessage;
+        newSubs.set(entry.id, { filter, onMessage });
       });
 
       this.activeSubscriptions = newSubs;
-      this.subscriptionFilters = newSubFilters;
     } catch (err) {
       throw new Error(`error refreshing event subscriptions: ${err}`);
     }
@@ -517,8 +519,7 @@ export class JsonRpcProvider extends Provider {
         30000
       ) as SubscriptionId;
 
-      this.activeSubscriptions.set(subId, onMessage);
-      this.subscriptionFilters.set(subId, filter);
+      this.activeSubscriptions.set(subId, { filter, onMessage });
       return subId;
     } catch (err) {
       throw new Error(
@@ -532,19 +533,18 @@ export class JsonRpcProvider extends Provider {
       if (this.wsConnectionState != ConnectionState.Connected)
         await this.connect();
 
-      let removed = await this.wsClient.call(
+      let removedOnNode = await this.wsClient.call(
         'sui_unsubscribeEvent',
         [id],
         30000
       ) as boolean;
       /*
         if the connection closes before unsubscribe is called,
-        the remote node will remove us from subscribers list without notification,
+        the remote node will remove us from its subscribers list without notification,
         leading to 'removed' being false. but if we still had a record of it locally,
-        we should still report that it was deleted successfully.
+        we should still report that it was deleted successfully
       */
-      const filterDeleted = this.subscriptionFilters.delete(id);
-      return this.activeSubscriptions.delete(id) || filterDeleted || removed;
+      return this.activeSubscriptions.delete(id) || removedOnNode;
     } catch (err) {
       throw new Error(
         `Error unsubscribing from event: ${err}, subscription: ${id}}`
