@@ -60,10 +60,25 @@ fn test_reserve() {
     let permit = block_on(tx.reserve()).unwrap();
     assert_eq!(counter.get(), 1);
 
-    permit.send(42);
+    permit.send(item);
     let received_item = block_on(rx.recv()).unwrap();
 
     assert_eq!(received_item, item);
+    assert_eq!(counter.get(), 0);
+}
+
+#[test]
+fn test_reserve_and_drop() {
+    let counter = IntGauge::new("TEST_COUNTER", "test").unwrap();
+    let (tx, _rx) = metered_channel::channel::<i32>(8, &counter);
+
+    assert_eq!(counter.get(), 0);
+
+    let permit = block_on(tx.reserve()).unwrap();
+    assert_eq!(counter.get(), 1);
+
+    std::mem::drop(permit);
+
     assert_eq!(counter.get(), 0);
 }
 
