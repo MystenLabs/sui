@@ -10,12 +10,6 @@ The [Sui Explorer](https://explorer.devnet.sui.io/) lets you view data about tra
  * Get go-to-definition support for all smart contracts, referred to as packages in Sui.
  * View validators and geographic locations of full nodes that are currently active.
 
-## Supported browsers
-The Sui Explorer supports the following browsers:
- * Chrome
- * Firefox
- * Safari
- * Edge
 
 ## Choose a network
 When you start Sui Explorer, it displays the transactions for the Devnet network by default. You can also use the Explorer to view data for a local network running in your environment or a custom RPC endpoint URL. Use the drop-down menu at the top-right of the page to choose a different network.
@@ -47,14 +41,14 @@ The **Transactions** table on the page includes the following columns:
  * **Time** - displays the time at which the transaction occurred.
  * **Type** - the type of transaction, one of Call, TransferSui, TransferObject, or Publish.
      * **Call** - This is an API request … For Call transactions, the table includes only the sender address. 
-     * **TransferSui** - Indicates that the transaction transferred Sui from one account to another.
+     * **TransferSui** - Indicates that the transaction transferred Sui from one address to another.
      * **TransferObject** - Indicates a transaction to transfer an object to a different address.
      * **Publish** - Indicates a transaction to publish a package.
      * **Batched** - Indicates a batch of transactions.
- * **Transaction ID** - The unique identifier for the transaction. You can click the clipboard icon to copy the ID. Click a value in the Transaction ID field to display the details about the transaction.
- * **Addresses** - Displays the address of the sender and receiver for the transaction. You can click on an address for additional details and transactions made using the address.
+ * **Transaction ID** - The unique identifier for the transaction. You can click the clipboard icon to copy the ID. Click a value in the **Transaction ID** column to display the details about the transaction.
+ * **Addresses** - Displays the addresses of the sender and receivers for the transaction. You can click on an address for additional details and transactions made using the address.
  * **Amount** - Displays the number of coins and coin type used for the transaction.
- * **Gas** - Shows the Sui used to pay for the gas required to complete the transaction.
+ * **Gas** - Shows the amount of Sui used to pay for the gas required to complete the transaction.
 
 You can click on a value in the **Transaction ID** or **Addresses** column to open a details page for the transaction or address that you click on. When you click a transaction ID, the page that opens depends on the type of transaction. Sui Eplorer provides the following detail pages:
  * [Transaction details](#transaction-details-pages) for each transaction type
@@ -113,8 +107,8 @@ When you click on an object ID displayed on a transaction details page it opens 
 The **Address** details page lets you view details about a specific address, including assets owned by the address and transactions that interacted with the address.
 
 The **Address** details page includes the following fields:
- * **Owned object** - Displays the objects owned by the address, such as coins.
- * **Coins** - List of tokens owned and their balance. Click on an entry to view additional details.
+ * **Owned objects** - Displays the objects owned by the address, such as coins.
+ * **Coins** - List of tokens owned and their aggregated balance by coin type. Click on an entry to view additional details about individual coin objects.
  * **NFTs** - List of NFTs owned by the address. Click an ID to view the object details page for the NFT.
  * **Transactions** - Click to view more detailed information about each transaction.
 
