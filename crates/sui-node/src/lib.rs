@@ -227,7 +227,6 @@ impl SuiNode {
             None
         };
 
-        // TODO: Do not enable batch for fullnode.
         let batch_subsystem_handle = {
             // Start batch system so that this node can be followed
             let batch_state = state.clone();
