@@ -214,7 +214,12 @@ function ItemView({ data }: { data: TxItemView }) {
                                         isLink={true}
                                     />
                                 ) : item.href ? (
-                                    <Link to={item.href}> {item.value} </Link>
+                                    <Link
+                                        to={item.href}
+                                        className={styles.customhreflink}
+                                    >
+                                        {item.value}
+                                    </Link>
                                 ) : (
                                     item.value
                                 )}
