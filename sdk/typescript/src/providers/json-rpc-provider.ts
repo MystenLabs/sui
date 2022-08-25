@@ -126,10 +126,7 @@ export class JsonRpcProvider extends Provider {
       this.wsConnectionState = ConnectionState.NotConnected;
     });
 
-    this.wsClient.on('error', (err) => {
-      this.wsConnectionState = ConnectionState.NotConnected;
-      console.error(err);
-    });
+    this.wsClient.on('error', console.error);
   }
 
   private async connect(): Promise<void> {
