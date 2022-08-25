@@ -94,8 +94,7 @@ pub struct CheckpointStoreTables {
     /// The list of all transaction/effects that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
     #[default_options_override_fn = "transactions_to_checkpoint_table_default_config"]
-    pub transactions_to_checkpoint:
-        DBMap<ExecutionDigests, (CheckpointSequenceNumber, TxSequenceNumber)>,
+    pub transactions_to_checkpoint: DBMap<ExecutionDigests, CheckpointSequenceNumber>,
 
     /// The mapping from checkpoint to transaction/effects contained within the checkpoint.
     /// The checkpoint content should be causally ordered and is consistent among
@@ -975,14 +974,7 @@ impl CheckpointStore {
 
         // Now write the checkpoint data to the database
 
-        let transactions_to_checkpoint: Vec<_> = transactions
-            .iter()
-            .zip(transactions_with_seq.iter())
-            .filter_map(|(tx, opt)| {
-                // If iseq is missing here then batch service will update this index in update_processed_transactions
-                opt.as_ref().map(|iseq| (*tx, (seq, *iseq)))
-            })
-            .collect();
+        let transactions_to_checkpoint: Vec<_> = transactions.iter().map(|tx| (*tx, seq)).collect();
 
         let batch = batch.insert_batch(
             &self.tables.transactions_to_checkpoint,
@@ -1007,9 +999,22 @@ impl CheckpointStore {
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<(), SuiError> {
         let batch = self.tables.extra_transactions.batch();
+        let already_in_checkpoint = self
+            .tables
+            .transactions_to_checkpoint
+            .multi_get(transactions.iter().map(|(_seq, digest)| *digest))?;
         let batch = batch.insert_batch(
             &self.tables.extra_transactions,
-            transactions.iter().map(|(seq, digest)| (digest, seq)),
+            transactions
+                .iter()
+                .zip(already_in_checkpoint.iter())
+                .filter_map(|((seq, digest), cpk)| {
+                    if cpk.is_some() {
+                        None
+                    } else {
+                        Some((digest, seq))
+                    }
+                }),
         )?;
 
         // Write to the database.
