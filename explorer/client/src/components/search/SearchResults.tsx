@@ -7,9 +7,13 @@ import styles from './SearchResults.module.css';
 
 function SearchResults({
     result,
+    resultIndex,
+    setResultIndex,
     optionClick,
 }: {
     result: ResultType[] | null;
+    resultIndex: number;
+    setResultIndex: (index: number) => void;
     optionClick: (el: ResultType) => () => void;
 }) {
     if (!result) return <></>;
@@ -21,7 +25,14 @@ function SearchResults({
             {result.map((el, index) => (
                 <dl key={index}>
                     <dt>{el.category}</dt>
-                    <dd onClick={optionClick(el)}>{el.input}</dd>
+                    <dd
+                        className={
+                            index === resultIndex ? styles.selectedoption : ''
+                        }
+                        onClick={optionClick(el)}
+                    >
+                        {el.input}
+                    </dd>
                 </dl>
             ))}
         </div>

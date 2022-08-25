@@ -28,6 +28,7 @@ function Search() {
     const [input, setInput] = useState('');
 
     const [result, setResult] = useState<ResultType[] | null>(null);
+    const [resultIndex, setResultIndex] = useState(0);
 
     // Clicking Outside the Search Bar and Results should clear the search
 
@@ -52,13 +53,13 @@ function Search() {
         (e: React.FormEvent<HTMLFormElement>) => {
             e.preventDefault();
 
-            if (result?.length === 1) {
+            if (result?.length && result.length >= 1) {
                 navigate(
-                    `../${result[0].category}/${encodeURIComponent(
-                        result[0].input
+                    `../${result[resultIndex].category}/${encodeURIComponent(
+                        result[resultIndex].input
                     )}`,
                     {
-                        state: result[0].result,
+                        state: result[resultIndex].result,
                     }
                 );
 
@@ -66,7 +67,7 @@ function Search() {
                 setInput('');
             }
         },
-        [navigate, result]
+        [navigate, result, resultIndex]
     );
     const handleOptionClick = useCallback(
         (entry: ResultType) => () => {
@@ -137,7 +138,12 @@ function Search() {
                     <SearchIcon className={styles.searchicon} />
                 </button>
             </form>
-            <SearchResults result={result} optionClick={handleOptionClick} />
+            <SearchResults
+                result={result}
+                resultIndex={resultIndex}
+                setResultIndex={setResultIndex}
+                optionClick={handleOptionClick}
+            />
         </div>
     );
 }

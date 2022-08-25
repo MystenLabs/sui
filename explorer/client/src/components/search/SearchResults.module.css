@@ -19,3 +19,7 @@
 .noresults {
     @apply text-center text-sui-grey-70 text-[14px] leading-[14px] italic;
 }
+
+.selectedoption {
+    @apply bg-[#6FBCF01A];
+}
