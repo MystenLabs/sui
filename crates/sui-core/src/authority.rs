@@ -14,13 +14,12 @@ use crate::{
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::prelude::*;
+use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use narwhal_config::Committee as ConsensusCommittee;
-use narwhal_crypto::traits::KeyPair;
-use narwhal_crypto::KeyPair as ConsensusKeyPair;
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
