@@ -1,5 +1,5 @@
 .results {
-    @apply bg-white absolute z-50 w-[500px] px-[0.2vw] rounded-[6px];
+    @apply bg-white absolute z-50 w-[70%] max-w-[500px] px-[0.2vw] rounded-[6px];
 
     /* The below is extracted from Figma */
     /* stylelint-disable */
@@ -13,7 +13,7 @@
 }
 
 .results dd {
-    @apply mx-[8px] px-[6px] py-[9px] font-mono hover:bg-[#6FBCF01A] rounded-[3px] cursor-pointer;
+    @apply mx-[8px] px-[6px] py-[9px] font-mono hover:bg-[#6FBCF01A] rounded-[3px] cursor-pointer break-all;
 }
 
 .noresults {
