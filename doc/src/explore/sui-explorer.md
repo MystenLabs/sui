@@ -1,5 +1,5 @@
 ---
-title: Use the Sui Explorer
+title: Use Sui Explorer
 ---
 
 The [Sui Explorer](https://explorer.devnet.sui.io/) lets you view data about transactions and activity on the Sui network. In addition to viewing activity on the network, you can use the Explorer to:
@@ -13,6 +13,7 @@ The [Sui Explorer](https://explorer.devnet.sui.io/) lets you view data about tra
 When you start Sui Explorer, it displays the transactions for the Devnet network by default. You can also use the Explorer to view data for a local network running in your environment or a custom RPC endpoint URL. Use the drop-down menu at the top-right of the page to choose a different network.
 
 ![Choose a network](../../static/explorer-choose-network.png "Choose a network")
+
 *Choose a network for Sui Explorer*
 
 ## Finding your transaction
