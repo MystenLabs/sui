@@ -217,10 +217,6 @@
     ],
     "explore": [
       {
-        "label": "Sui Explorer",
-        "fileName": "explore/sui-explorer"
-      },
-      {
         "label": "Wallet in Browser",
         "fileName": "explore/wallet-browser"
       },
