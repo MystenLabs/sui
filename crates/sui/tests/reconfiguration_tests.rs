@@ -26,6 +26,7 @@ use test_utils::objects::{generate_gas_object_with_balance, test_gas_objects};
 use test_utils::test_account_keys;
 use test_utils::transaction::submit_shared_object_transaction;
 
+#[ignore]
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn reconfig_end_to_end_tests() {
     telemetry_subscribers::init_for_testing();
