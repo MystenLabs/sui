@@ -57,6 +57,10 @@ impl SuiJsonValue {
         Ok(Self(json_value))
     }
 
+    pub fn from_object_id(id: ObjectID) -> SuiJsonValue {
+        Self(JsonValue::String(id.to_hex_literal()))
+    }
+
     pub fn to_bcs_bytes(&self, ty: &MoveTypeLayout) -> Result<Vec<u8>, anyhow::Error> {
         let move_value = Self::to_move_value(&self.0, ty)?;
         MoveValue::simple_serialize(&move_value)

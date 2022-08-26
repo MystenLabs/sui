@@ -4,7 +4,7 @@
 import RpcClient from 'jayson/lib/client/browser';
 import fetch from 'cross-fetch';
 import { isErrorResponse, isValidResponse } from './client.guard';
-const LosslessJSON = require('lossless-json');
+import * as LosslessJSON from 'lossless-json';
 
 /**
  * An object defining headers to be passed to the RPC server
@@ -18,6 +18,11 @@ export type RpcParams = {
   method: string;
   args: Array<any>;
 };
+
+const TYPE_MISMATCH_ERROR =
+  `The response returned from RPC server does not match ` +
+  `the TypeScript definition. This is likely because the SDK version is not ` +
+  `compatible with the RPC server. Please update your SDK version to the latest. `;
 
 export class JsonRpcClient {
   private rpcClient: RpcClient;
@@ -47,11 +52,16 @@ export class JsonRpcClient {
           let res: Response = await fetch(url, options);
           const text = await res.text();
           const result = JSON.stringify(
-            LosslessJSON.parse(text, (key: string, value: any) => {
+            LosslessJSON.parse(text, (key, value) => {
               if (value == null) {
                 return value;
               }
-              if (key === 'balance') return value.toString();
+
+              // TODO: This is a bad hack, we really shouldn't be doing this here:
+              if (key === 'balance' && typeof value === 'number') {
+                return value.toString();
+              }
+
               try {
                 if (value.isLosslessNumber) return value.valueOf();
               } catch {
@@ -78,19 +88,25 @@ export class JsonRpcClient {
   async requestWithType<T>(
     method: string,
     args: Array<any>,
-    isT: (val: any) => val is T
+    isT: (val: any) => val is T,
+    skipDataValidation: boolean = false
   ): Promise<T> {
     const response = await this.request(method, args);
     if (isErrorResponse(response)) {
       throw new Error(`RPC Error: ${response.error.message}`);
     } else if (isValidResponse(response)) {
-      if (isT(response.result)) return response.result;
-      else
-        throw new Error(
-          `RPC Error: result not of expected type. Result received was: ${JSON.stringify(
-            response.result
-          )}`
-        );
+      const expectedSchema = isT(response.result);
+      const errMsg =
+        TYPE_MISMATCH_ERROR +
+        `Result received was: ${JSON.stringify(response.result)}`;
+
+      if (skipDataValidation && !expectedSchema) {
+        console.warn(errMsg);
+        return response.result;
+      } else if (!expectedSchema) {
+        throw new Error(`RPC Error: ${errMsg}`);
+      }
+      return response.result;
     }
     throw new Error(`Unexpected RPC Response: ${response}`);
   }
@@ -109,13 +125,46 @@ export class JsonRpcClient {
 
   async batchRequestWithType<T>(
     requests: RpcParams[],
-    isT: (val: any) => val is T
+    isT: (val: any) => val is T,
+    skipDataValidation: boolean = false
   ): Promise<T[]> {
     const responses = await this.batchRequest(requests);
     // TODO: supports other error modes such as throw or return
     const validResponses = responses.filter(
-      (response: any) => isValidResponse(response) && isT(response.result)
+      (response: any) =>
+        isValidResponse(response) &&
+        (skipDataValidation || isT(response.result))
     );
+
+    if (responses.length > validResponses.length) {
+      console.warn(
+        `Batch request contains invalid responses. ${responses.length -
+          validResponses.length} of the ${
+          responses.length
+        } requests has invalid schema.`
+      );
+      const exampleTypeMismatch = responses.find((r: any) => !isT(r.result));
+      const exampleInvalidResponseIndex = responses.findIndex(
+        (r: any) => !isValidResponse(r)
+      );
+      if (exampleTypeMismatch) {
+        console.warn(
+          TYPE_MISMATCH_ERROR +
+            `One example mismatch is: ${JSON.stringify(
+              exampleTypeMismatch.result
+            )}`
+        );
+      }
+      if (exampleInvalidResponseIndex !== -1) {
+        console.warn(
+          `The request ${JSON.stringify(
+            requests[exampleInvalidResponseIndex]
+          )} within a batch request returns an invalid response ${JSON.stringify(
+            responses[exampleInvalidResponseIndex]
+          )}`
+        );
+      }
+    }
 
     return validResponses.map((response: ValidResponse) => response.result);
   }

@@ -63,7 +63,7 @@ $ git push # either to the shared workspace or another branch followed by a PR
 Add configuration for any initial gas objects that should be created at genesis.
 
 ```
-$ git genesis-ceremony add-gas-object \
+$ sui genesis-ceremony add-gas-object \
     --address <SuiAddress> \
     --object-id <ObjectId> \
     --valud <# of sui coins>
@@ -77,7 +77,7 @@ $ git push
 Once all validators and gas objects have been added, the MC can build the genesis object:
 
 ```
-$ git genesis-ceremony build
+$ sui genesis-ceremony build
 $ git add .
 $ git commit -m "build genesis"
 $ git push
@@ -88,7 +88,7 @@ $ git push
 Once genesis is built each validator will need to verify and sign genesis:
 
 ```
-$ git genesis-ceremony verify-and-sign \
+$ sui genesis-ceremony verify-and-sign \
     --key-file <path to key file>
 $ git add .
 $ git commit -m "sign genesis"
@@ -101,5 +101,5 @@ Once all validators have successfully verified and signed genesis, the MC can fi
 and then the genesis state can be distributed:
 
 ```
-$ git genesis-ceremony finalize
+$ sui genesis-ceremony finalize
 ```

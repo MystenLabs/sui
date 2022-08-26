@@ -11,4 +11,6 @@ export { default as useSuiObjectFields } from './useSuiObjectFields';
 export { default as useNumberDelimiters } from './useNumberDelimiters';
 export { default as useOnClickOutside } from './useOnClickOutside';
 export { default as useOnKeyboardEvent } from './useOnKeyboardEvent';
+export { default as useFileExtentionType } from './useFileExtentionType';
+export { default as useNFTBasicData } from './useNFTBasicData';
 export { useObjectsState } from './useObjectsState';

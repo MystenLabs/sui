@@ -7,8 +7,9 @@ module nfts::shared_auction_tests {
 
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::test_scenario::Self;
+    use sui::transfer;
     use sui::tx_context::TxContext;
 
     use nfts::shared_auction;
@@ -23,7 +24,7 @@ module nfts::shared_auction_tests {
 
     // Example of an object type that could be sold at an auction.
     struct SomeItemToSell has key, store {
-        info: Info,
+        id: UID,
         value: u64,
     }
 
@@ -33,8 +34,8 @@ module nfts::shared_auction_tests {
     fun init(ctx: &mut TxContext, bidders: vector<address>) {
         while (!vector::is_empty(&bidders)) {
             let bidder = vector::pop_back(&mut bidders);
-            let coin = coin::mint_for_testing(COIN_VALUE, ctx);
-            coin::transfer<SUI>(coin, bidder);
+            let coin = coin::mint_for_testing<SUI>(COIN_VALUE, ctx);
+            transfer::transfer(coin, bidder);
         };
     }
 
@@ -59,7 +60,7 @@ module nfts::shared_auction_tests {
         let ctx = test_scenario::ctx(scenario);
         {
             let to_sell = SomeItemToSell {
-                info: object::new(ctx),
+                id: object::new(ctx),
                 value: 42,
             };
             shared_auction::create_auction(to_sell, ctx);

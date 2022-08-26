@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 import { memo, useEffect } from 'react';
 
-import AccountAddress from '_components/account-address';
+import { Content } from '_app/shared/bottom-menu-layout';
+import PageTitle from '_app/shared/page-title';
 import TransactionCard from '_components/transactions-card';
 import { useAppSelector, useAppDispatch } from '_hooks';
 import { getTransactionsByAddress } from '_redux/slices/txresults';
@@ -22,13 +23,15 @@ function TransactionsPage() {
     }, [dispatch]);
 
     return txByAddress && txByAddress.length ? (
-        <div className={st.txContainer}>
-            <h4>
-                Last 5 transaction for <AccountAddress />
-            </h4>
-            {txByAddress.slice(0, 5).map((txn) => (
-                <TransactionCard txn={txn} key={txn.txId} />
-            ))}
+        <div className={st.container}>
+            <PageTitle title="Activity" className={st.pageTitle} />
+            <Content>
+                <section className={st.txContent}>
+                    {txByAddress.map((txn) => (
+                        <TransactionCard txn={txn} key={txn.txId} />
+                    ))}
+                </section>
+            </Content>
         </div>
     ) : null;
 }

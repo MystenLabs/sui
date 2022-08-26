@@ -6,6 +6,7 @@ use anyhow::Result;
 use futures::future::try_join_all;
 use rand::rngs::OsRng;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 use std::num::NonZeroUsize;
 use std::{
     mem, ops,
@@ -23,6 +24,9 @@ pub struct SwarmBuilder<R = OsRng> {
     dir: Option<PathBuf>,
     committee_size: NonZeroUsize,
     initial_accounts_config: Option<GenesisConfig>,
+    fullnode_count: usize,
+    fullnode_rpc_addr: Option<SocketAddr>,
+    websocket_rpc_addr: Option<SocketAddr>,
 }
 
 impl SwarmBuilder {
@@ -33,6 +37,9 @@ impl SwarmBuilder {
             dir: None,
             committee_size: NonZeroUsize::new(1).unwrap(),
             initial_accounts_config: None,
+            fullnode_count: 0,
+            fullnode_rpc_addr: None,
+            websocket_rpc_addr: None,
         }
     }
 }
@@ -44,6 +51,9 @@ impl<R> SwarmBuilder<R> {
             dir: self.dir,
             committee_size: self.committee_size,
             initial_accounts_config: self.initial_accounts_config,
+            fullnode_count: self.fullnode_count,
+            fullnode_rpc_addr: self.fullnode_rpc_addr,
+            websocket_rpc_addr: self.websocket_rpc_addr,
         }
     }
 
@@ -67,6 +77,21 @@ impl<R> SwarmBuilder<R> {
 
     pub fn initial_accounts_config(mut self, initial_accounts_config: GenesisConfig) -> Self {
         self.initial_accounts_config = Some(initial_accounts_config);
+        self
+    }
+
+    pub fn with_fullnode_count(mut self, fullnode_count: usize) -> Self {
+        self.fullnode_count = fullnode_count;
+        self
+    }
+
+    pub fn with_fullnode_rpc_addr(mut self, fullnode_rpc_addr: SocketAddr) -> Self {
+        self.fullnode_rpc_addr = Some(fullnode_rpc_addr);
+        self
+    }
+
+    pub fn with_websocket_rpc_addr(mut self, websocket_rpc_addr: SocketAddr) -> Self {
+        self.websocket_rpc_addr = Some(websocket_rpc_addr);
         self
     }
 }
@@ -97,11 +122,23 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
             .map(|config| (config.sui_address(), Node::new(config.to_owned())))
             .collect();
 
+        let mut fullnodes = HashMap::new();
+
+        if self.fullnode_count > 0 {
+            (0..self.fullnode_count).for_each(|_| {
+                let mut config = network_config.generate_fullnode_config();
+                if let Some(fullnode_rpc_addr) = self.fullnode_rpc_addr {
+                    config.json_rpc_address = fullnode_rpc_addr;
+                }
+                config.websocket_address = self.websocket_rpc_addr;
+                fullnodes.insert(config.sui_address(), Node::new(config));
+            });
+        }
         Swarm {
             dir,
             network_config,
             validators,
-            fullnodes: HashMap::new(),
+            fullnodes,
         }
     }
 
@@ -140,11 +177,12 @@ impl Swarm {
 
     /// Start all of the Validators associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
-        // Start all the validators
-        let start_handles = self
+        let nodes_iter = self
             .validators
             .values_mut()
-            .map(|validator| validator.spawn())
+            .chain(self.fullnodes.values_mut());
+        let start_handles = nodes_iter
+            .map(|node| node.spawn())
             .collect::<Result<Vec<_>>>()?;
 
         try_join_all(start_handles).await?;
@@ -166,6 +204,11 @@ impl Swarm {
     /// Return a reference to this Swarm's `NetworkConfig`.
     pub fn config(&self) -> &NetworkConfig {
         &self.network_config
+    }
+
+    /// Return a mutable reference to this Swarm's `NetworkConfig`.
+    pub fn config_mut(&mut self) -> &mut NetworkConfig {
+        &mut self.network_config
     }
 
     /// Attempt to lookup and return a shared reference to the Validator with the provided `name`.
@@ -265,12 +308,17 @@ mod test {
         telemetry_subscribers::init_for_testing();
         let mut swarm = Swarm::builder()
             .committee_size(NonZeroUsize::new(4).unwrap())
+            .with_fullnode_count(1)
             .build();
 
         swarm.launch().await.unwrap();
 
         for validator in swarm.validators() {
             validator.health_check().await.unwrap();
+        }
+
+        for fullnode in swarm.fullnodes() {
+            fullnode.health_check().await.unwrap();
         }
     }
 }

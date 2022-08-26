@@ -3,27 +3,26 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority::AuthorityState;
+use anyhow::anyhow;
 use async_trait::async_trait;
+use fastcrypto::traits::ToFromBytes;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
+use mysten_network::config::Config;
+use prometheus::{register_histogram_with_registry, Histogram};
+use std::collections::BTreeMap;
 use std::sync::Arc;
-
+use sui_config::genesis::Genesis;
 use sui_network::{api::ValidatorClient, tonic};
+use sui_types::crypto::AuthorityPublicKeyBytes;
+use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
+use sui_types::sui_system_state::SuiSystemState;
 use sui_types::{error::SuiError, messages::*};
 
-use sui_types::messages_checkpoint::{CheckpointRequest, CheckpointResponse};
-
 #[cfg(test)]
-use sui_types::{
-    base_types::ObjectID,
-    committee::Committee,
-    crypto::{KeyPair, PublicKeyBytes},
-    object::Object,
-};
+use sui_types::{committee::Committee, crypto::AuthorityKeyPair, object::Object};
 
 use crate::epoch::reconfiguration::Reconfigurable;
-#[cfg(test)]
-use sui_config::genesis::Genesis;
 use sui_network::tonic::transport::Channel;
 
 #[async_trait]
@@ -67,6 +66,8 @@ pub trait AuthorityAPI {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError>;
+
+    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError>;
 }
 
 pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoResponseItem, SuiError>>;
@@ -74,22 +75,36 @@ pub type BatchInfoResponseItemStream = BoxStream<'static, Result<BatchInfoRespon
 #[derive(Clone)]
 pub struct NetworkAuthorityClient {
     client: ValidatorClient<tonic::transport::Channel>,
+    metrics: Arc<NetworkAuthorityClientMetrics>,
 }
 
 impl NetworkAuthorityClient {
-    pub async fn connect(address: &Multiaddr) -> anyhow::Result<Self> {
-        let channel = mysten_network::client::connect(address).await?;
-        Ok(Self::new(channel))
+    pub async fn connect(
+        address: &Multiaddr,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> anyhow::Result<Self> {
+        let channel = mysten_network::client::connect(address)
+            .await
+            .map_err(|err| anyhow!(err.to_string()))?;
+        Ok(Self::new(channel, metrics))
     }
 
-    pub fn connect_lazy(address: &Multiaddr) -> anyhow::Result<Self> {
-        let channel = mysten_network::client::connect_lazy(address)?;
-        Ok(Self::new(channel))
+    pub fn connect_lazy(
+        address: &Multiaddr,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> anyhow::Result<Self> {
+        let channel = mysten_network::client::connect_lazy(address)
+            .map_err(|err| anyhow!(err.to_string()))?;
+        Ok(Self::new(channel, metrics))
     }
 
-    pub fn new(channel: tonic::transport::Channel) -> Self {
+    pub fn new(
+        channel: tonic::transport::Channel,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> Self {
         Self {
             client: ValidatorClient::new(channel),
+            metrics,
         }
     }
 
@@ -104,8 +119,11 @@ impl Reconfigurable for NetworkAuthorityClient {
         true
     }
 
-    fn recreate(channel: tonic::transport::Channel) -> Self {
-        NetworkAuthorityClient::new(channel)
+    fn recreate(
+        channel: tonic::transport::Channel,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> Self {
+        NetworkAuthorityClient::new(channel, metrics)
     }
 }
 
@@ -116,11 +134,21 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.client()
+        let timer = self
+            .metrics
+            .handle_transaction_request_latency
+            .start_timer();
+
+        let response = self
+            .client()
             .transaction(transaction)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        timer.stop_and_record();
+
+        response
     }
 
     /// Execute a certificate.
@@ -128,33 +156,63 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.client()
+        let timer = self
+            .metrics
+            .handle_certificate_request_latency
+            .start_timer();
+
+        let response = self
+            .client()
             .handle_certificate(certificate)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        timer.stop_and_record();
+
+        response
     }
 
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
-        self.client()
+        let timer = self
+            .metrics
+            .handle_account_info_request_latency
+            .start_timer();
+
+        let response = self
+            .client()
             .account_info(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        timer.stop_and_record();
+
+        response
     }
 
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
-        self.client()
+        let timer = self
+            .metrics
+            .handle_object_info_request_latency
+            .start_timer();
+
+        let response = self
+            .client()
             .object_info(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        timer.stop_and_record();
+
+        response
     }
 
     /// Handle Object information requests for this account.
@@ -162,11 +220,21 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.client()
+        let timer = self
+            .metrics
+            .handle_transaction_info_request_latency
+            .start_timer();
+
+        let response = self
+            .client()
             .transaction_info(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into)
+            .map_err(Into::into);
+
+        timer.stop_and_record();
+
+        response
     }
 
     /// Handle Batch information requests for this authority.
@@ -174,6 +242,10 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
+        self.metrics
+            .batch_info_request_start_seq
+            .observe(request.start.unwrap_or(0) as f64);
+
         let stream = self
             .client()
             .batch_info(request)
@@ -189,12 +261,62 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        self.client()
+        let timer = self.metrics.handle_checkpoint_request_latency.start_timer();
+
+        let response = self
+            .client()
             .checkpoint(request)
+            .await
+            .map(tonic::Response::into_inner)
+            .map_err(Into::into);
+
+        timer.stop_and_record();
+
+        response
+    }
+
+    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        self.client()
+            .epoch_info(request)
             .await
             .map(tonic::Response::into_inner)
             .map_err(Into::into)
     }
+}
+
+pub fn make_network_authority_client_sets_from_system_state(
+    sui_system_state: &SuiSystemState,
+    network_config: &Config,
+    network_metrics: Arc<NetworkAuthorityClientMetrics>,
+) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+    let mut authority_clients = BTreeMap::new();
+    for validator in &sui_system_state.validators.active_validators {
+        let address = Multiaddr::try_from(validator.metadata.net_address.clone())?;
+        let channel = network_config
+            .connect_lazy(&address)
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
+        let name: &[u8] = &validator.metadata.name;
+        let public_key_bytes = AuthorityPublicKeyBytes::from_bytes(name)?;
+        authority_clients.insert(public_key_bytes, client);
+    }
+    Ok(authority_clients)
+}
+
+pub fn make_network_authority_client_sets_from_genesis(
+    genesis: &Genesis,
+    network_config: &Config,
+    network_metrics: Arc<NetworkAuthorityClientMetrics>,
+) -> anyhow::Result<BTreeMap<AuthorityPublicKeyBytes, NetworkAuthorityClient>> {
+    let mut authority_clients = BTreeMap::new();
+    for validator in genesis.validator_set() {
+        let channel = network_config
+            .connect_lazy(validator.network_address())
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let client = NetworkAuthorityClient::new(channel, network_metrics.clone());
+        authority_clients.insert(validator.protocol_key(), client);
+    }
+    Ok(authority_clients)
 }
 
 #[derive(Clone, Copy, Default)]
@@ -222,7 +344,7 @@ impl Reconfigurable for LocalAuthorityClient {
         false
     }
 
-    fn recreate(_channel: Channel) -> Self {
+    fn recreate(_channel: Channel, _metrics: Arc<NetworkAuthorityClientMetrics>) -> Self {
         unreachable!(); // this function should not get called because the above function returns false
     }
 }
@@ -309,52 +431,25 @@ impl AuthorityAPI for LocalAuthorityClient {
 
         state.handle_checkpoint_request(&request)
     }
+
+    async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
+        let state = self.state.clone();
+
+        state.handle_epoch_request(&request)
+    }
 }
 
 impl LocalAuthorityClient {
     #[cfg(test)]
-    pub async fn new(
-        committee: Committee,
-        address: PublicKeyBytes,
-        secret: KeyPair,
-        genesis: &Genesis,
-    ) -> Self {
-        use crate::authority::AuthorityStore;
-        use crate::checkpoints::CheckpointStore;
-        use parking_lot::Mutex;
-        use std::{env, fs};
-
-        // Random directory
-        let dir = env::temp_dir();
-        let path = dir.join(format!("DB_{:?}", ObjectID::random()));
-        fs::create_dir(&path).unwrap();
-
-        let secret = Arc::pin(secret);
-
-        let mut store_path = path.clone();
-        store_path.push("store");
-        let store = Arc::new(AuthorityStore::open(&store_path, None));
-        let mut checkpoints_path = path.clone();
-        checkpoints_path.push("checkpoints");
-        let checkpoints = CheckpointStore::open(
-            &checkpoints_path,
+    pub async fn new(committee: Committee, secret: AuthorityKeyPair, genesis: &Genesis) -> Self {
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+        let state = AuthorityState::new_for_testing(
+            committee,
+            &secret,
             None,
-            committee.epoch,
-            address,
-            secret.clone(),
-        )
-        .expect("Should not fail to open local checkpoint DB");
-
-        let state = AuthorityState::new(
-            committee.clone(),
-            address,
-            secret.clone(),
-            store,
+            Some(genesis),
             None,
-            None,
-            Some(Arc::new(Mutex::new(checkpoints))),
-            genesis,
-            &prometheus::Registry::new(),
+            tx_reconfigure_consensus,
         )
         .await;
         Self {
@@ -366,12 +461,11 @@ impl LocalAuthorityClient {
     #[cfg(test)]
     pub async fn new_with_objects(
         committee: Committee,
-        address: PublicKeyBytes,
-        secret: KeyPair,
+        secret: AuthorityKeyPair,
         objects: Vec<Object>,
         genesis: &Genesis,
     ) -> Self {
-        let client = Self::new(committee, address, secret, genesis).await;
+        let client = Self::new(committee, secret, genesis).await;
 
         for object in objects {
             client.state.insert_genesis_object(object).await;
@@ -385,5 +479,71 @@ impl LocalAuthorityClient {
             state,
             fault_config: LocalAuthorityClientFaultConfig::default(),
         }
+    }
+}
+
+#[derive(Clone)]
+pub struct NetworkAuthorityClientMetrics {
+    pub handle_transaction_request_latency: Histogram,
+    pub handle_certificate_request_latency: Histogram,
+    pub handle_account_info_request_latency: Histogram,
+    pub handle_object_info_request_latency: Histogram,
+    pub handle_transaction_info_request_latency: Histogram,
+    pub handle_checkpoint_request_latency: Histogram,
+
+    pub batch_info_request_start_seq: Histogram,
+}
+
+impl NetworkAuthorityClientMetrics {
+    pub fn new(registry: &prometheus::Registry) -> Self {
+        Self {
+            handle_transaction_request_latency: register_histogram_with_registry!(
+                "handle_transaction_request_latency",
+                "Latency of handle transaction request",
+                registry
+            )
+            .unwrap(),
+            handle_certificate_request_latency: register_histogram_with_registry!(
+                "handle_certificate_request_latency",
+                "Latency of handle certificate request",
+                registry
+            )
+            .unwrap(),
+            handle_account_info_request_latency: register_histogram_with_registry!(
+                "handle_account_info_request_latency",
+                "Latency of handle account info request",
+                registry
+            )
+            .unwrap(),
+            handle_object_info_request_latency: register_histogram_with_registry!(
+                "handle_object_info_request_latency",
+                "Latency of handle object info request",
+                registry
+            )
+            .unwrap(),
+            handle_transaction_info_request_latency: register_histogram_with_registry!(
+                "handle_transaction_info_request_latency",
+                "Latency of handle transaction info request",
+                registry
+            )
+            .unwrap(),
+            handle_checkpoint_request_latency: register_histogram_with_registry!(
+                "handle_checkpoint_request_latency",
+                "Latency of handle checkpoint request",
+                registry
+            )
+            .unwrap(),
+            batch_info_request_start_seq: register_histogram_with_registry!(
+                "batch_info_request_start_seq",
+                "The start sequences of the batch info requests",
+                registry
+            )
+            .unwrap(),
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = prometheus::Registry::new();
+        Self::new(&registry)
     }
 }

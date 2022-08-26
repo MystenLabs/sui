@@ -2,31 +2,40 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::authority_active::ActiveAuthority;
-use crate::authority_aggregator::AuthorityAggregator;
-use crate::authority_client::AuthorityAPI;
+use crate::authority_aggregator::{AuthorityAggregator, ReduceOutput};
+use crate::authority_client::{AuthorityAPI, NetworkAuthorityClientMetrics};
 use async_trait::async_trait;
+use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
-use narwhal_crypto::traits::ToFromBytes;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
 use sui_network::tonic;
-use sui_types::committee::Committee;
-use sui_types::crypto::PublicKeyBytes;
+use sui_types::base_types::AuthorityName;
+use sui_types::committee::{Committee, EpochId, StakeUnit};
+use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
 use sui_types::error::{SuiError, SuiResult};
-use sui_types::messages::SignedTransaction;
+use sui_types::messages::{
+    AuthenticatedEpoch, CertifiedEpoch, EpochInfoDigest, EpochRequest, EpochResponse,
+    SignedTransaction,
+};
 use sui_types::sui_system_state::SuiSystemState;
-use tracing::{debug, info, warn};
+use tracing::{debug, error, info, warn};
 use typed_store::Map;
 
 #[async_trait]
 pub trait Reconfigurable {
     fn needs_network_recreation() -> bool;
 
-    fn recreate(channel: tonic::transport::Channel) -> Self;
+    fn recreate(
+        channel: tonic::transport::Channel,
+        metrics: Arc<NetworkAuthorityClientMetrics>,
+    ) -> Self;
 }
 
-const WAIT_BETWEEN_EPOCH_TX_QUERY_RETRY: Duration = Duration::from_millis(300);
+// TODO: Move these constants to a control config.
+const WAIT_BETWEEN_EPOCH_QUERY_RETRY: Duration = Duration::from_millis(300);
+const QUORUM_TIMEOUT: Duration = Duration::from_secs(60);
 
 impl<A> ActiveAuthority<A>
 where
@@ -38,24 +47,15 @@ where
     pub async fn start_epoch_change(&self) -> SuiResult {
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Starting epoch change");
-        if let Some(checkpoints) = &self.state.checkpoints {
-            assert!(
-                checkpoints.lock().is_ready_to_start_epoch_change(),
-                "start_epoch_change called at the wrong checkpoint",
-            );
-        } else {
-            unreachable!();
-        }
+        let checkpoints = self.state.checkpoints.as_ref().unwrap();
+        assert!(
+            checkpoints.lock().is_ready_to_start_epoch_change(),
+            "start_epoch_change called at the wrong checkpoint",
+        );
 
         self.state.halt_validator();
         info!(?epoch, "Validator halted for epoch change");
-        // TODO: The following doesn't work: we also need to make sure that the transactions
-        // all have been included in a batch (and hence will be included in the next checkpoint
-        // proposal).
-        // TODO: Use a conditional variable pattern instead of while + sleep.
-        while !self.state.batch_notifier.ticket_drained() {
-            tokio::time::sleep(Duration::from_millis(10)).await;
-        }
+        self.wait_for_validator_batch().await;
         info!(?epoch, "Epoch change started");
         Ok(())
     }
@@ -66,40 +66,36 @@ where
     pub async fn finish_epoch_change(&self) -> SuiResult {
         let epoch = self.state.committee.load().epoch;
         info!(?epoch, "Finishing epoch change");
-        let last_checkpoint = if let Some(checkpoints) = &self.state.checkpoints {
+        let checkpoints = self.state.checkpoints.as_ref().unwrap();
+        {
             let mut checkpoints = checkpoints.lock();
             assert!(
                 checkpoints.is_ready_to_finish_epoch_change(),
                 "finish_epoch_change called at the wrong checkpoint",
             );
 
-            for (tx_digest, _) in checkpoints.extra_transactions.iter() {
-                debug!(?epoch, tx_digest=?tx_digest.transaction, "Reverting local transaction effects");
+            for (tx_digest, _) in checkpoints.tables.extra_transactions.iter() {
+                warn!(?epoch, tx_digest=?tx_digest.transaction, "Reverting local transaction effects");
                 self.state
                     .database
                     .revert_state_update(&tx_digest.transaction)?;
             }
 
             // Delete any extra certificates now unprocessed.
-            checkpoints.extra_transactions.clear()?;
+            checkpoints.tables.extra_transactions.clear()?;
 
             self.state.database.remove_all_pending_certificates()?;
-
-            checkpoints.next_checkpoint() - 1
-
-            // drop checkpoints lock
-        } else {
-            unreachable!();
-        };
+        }
+        let next_checkpoint = checkpoints.lock().next_checkpoint();
 
         let sui_system_state = self.state.get_sui_system_state_object().await?;
-        let next_epoch = sui_system_state.epoch + 1;
+        let next_epoch = epoch + 1;
         let next_epoch_validators = &sui_system_state.validators.next_epoch_validators;
         let votes = next_epoch_validators
             .iter()
             .map(|metadata| {
                 (
-                    PublicKeyBytes::from_bytes(metadata.pubkey_bytes.as_ref())
+                    AuthorityPublicKeyBytes::from_bytes(metadata.pubkey_bytes.as_ref())
                         .expect("Validity of public key bytes should be verified on-chain"),
                     metadata.next_epoch_stake + metadata.next_epoch_delegation,
                 )
@@ -108,23 +104,54 @@ where
         let new_committee = Committee::new(next_epoch, votes)?;
         debug!(
             ?epoch,
-            "New committee for the next epoch: {:?}", new_committee
+            "New committee for the next epoch: {}", new_committee
         );
+        let old_committee = self.state.clone_committee();
         self.state
-            .sign_new_epoch_and_update_committee(new_committee.clone(), last_checkpoint)?;
+            .sign_new_epoch_and_update_committee(new_committee.clone(), next_checkpoint)?;
+
+        loop {
+            let err = match self
+                .wait_for_epoch_cert(next_epoch, &old_committee, QUORUM_TIMEOUT)
+                .await
+            {
+                Ok(cert) => {
+                    info!(epoch=?next_epoch, "Epoch Certificate Formed");
+                    debug!("Epoch Certificate: {:?}", cert);
+                    match self.state.promote_signed_epoch_to_cert(cert) {
+                        Ok(()) => {
+                            break;
+                        }
+                        Err(err) => err,
+                    }
+                }
+                Err(err) => err,
+            };
+            debug!(
+                ?epoch,
+                "Failed to obtain certificate for the next epoch: {:?}", err
+            );
+            // TODO: Instead of actively waiting in a loop, we could instead use a notification
+            // pattern.
+            tokio::time::sleep(WAIT_BETWEEN_EPOCH_QUERY_RETRY).await;
+        }
 
         // Reconnect the network if we have an type of AuthorityClient that has a network.
-        if A::needs_network_recreation() {
-            self.recreate_network(sui_system_state, new_committee)?;
+        let new_clients = if A::needs_network_recreation() {
+            self.recreate_network(sui_system_state)?
         } else {
-            // update the authorities with the new committee
-            let new_net = Arc::new(AuthorityAggregator::new(
-                new_committee,
-                self.net.load().clone_inner_clients(),
-                self.net.load().metrics.clone(),
-            ));
-            self.net.store(new_net);
-        }
+            self.net.load().clone_inner_clients()
+        };
+        // Replace the clients in the authority aggregator with new clients.
+        let new_net = Arc::new(AuthorityAggregator::new(
+            new_committee,
+            self.state.epoch_store().clone(),
+            new_clients,
+            self.net.load().metrics.clone(),
+            self.net.load().safe_client_metrics.clone(),
+        ));
+        self.net.store(new_net);
+
         // TODO: Update all committee in all components safely,
         // potentially restart narwhal committee/consensus adapter,
         // all active processes, maybe batch service.
@@ -163,16 +190,24 @@ where
                 },
                 Err(err) => err,
             };
-            warn!(
+            debug!(
                 ?epoch,
                 "Error when processing advance epoch transaction: {:?}", err
             );
-            tokio::time::sleep(WAIT_BETWEEN_EPOCH_TX_QUERY_RETRY).await;
+            tokio::time::sleep(WAIT_BETWEEN_EPOCH_QUERY_RETRY).await;
         }
 
         // Resume the validator to start accepting transactions for the new epoch.
         self.state.unhalt_validator();
-        info!(?epoch, "Validator unhalted. Epoch change finished");
+        info!(?epoch, "Validator unhalted.");
+
+        // Restart the node sync process so it gets the new epoch info.
+        self.respawn_node_sync_process().await;
+
+        info!(
+            "===== Epoch change finished. We are now at epoch {:?} =====",
+            next_epoch
+        );
         Ok(())
     }
 
@@ -181,8 +216,7 @@ where
     pub fn recreate_network(
         &self,
         sui_system_state: SuiSystemState,
-        new_committee: Committee,
-    ) -> SuiResult {
+    ) -> SuiResult<BTreeMap<AuthorityName, A>> {
         let mut new_clients = BTreeMap::new();
         let next_epoch_validators = sui_system_state.validators.next_epoch_validators;
 
@@ -191,40 +225,180 @@ where
         net_config.request_timeout = Some(Duration::from_secs(5));
         net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
 
-        for validator in next_epoch_validators {
-            let net_addr: &[u8] = &validator.net_address.clone();
-            let str_addr =
-                std::str::from_utf8(net_addr).map_err(|e| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                });
-            let address: Multiaddr = str_addr
-                .unwrap()
-                .parse()
-                .map_err(|e: multiaddr::Error| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                })
-                .unwrap();
+        let cur_clients = self.net.load().authority_clients.clone();
 
-            let channel = net_config
-                .connect_lazy(&address)
-                .map_err(|e| SuiError::GenericAuthorityError {
-                    error: e.to_string(),
-                })
-                .unwrap();
-            let client: A = A::recreate(channel);
-            let name: &[u8] = &validator.name;
-            let public_key_bytes = PublicKeyBytes::from_bytes(name)
-                .map_err(|e| SuiError::KeyConversionError(e.to_string()))?;
+        for validator in next_epoch_validators {
+            let public_key_bytes = match AuthorityPublicKeyBytes::from_bytes(
+                &validator.pubkey_bytes,
+            ) {
+                Err(err) => {
+                    error!("Error parsing validator public key. Skip this validator in the committee: {:?}", err);
+                    continue;
+                }
+                Ok(result) => result,
+            };
+            // TODO: We only recreate network connection if this is a new validator.
+            // This is because creating a new network connection on the same address doesn't
+            // work. We may want to look into this and see why it doesn't work.
+            if let Some(existing_client) = cur_clients.get(&public_key_bytes) {
+                // TODO: Since we rely purely on the public key to decide whether to recreate
+                // the network, it means that validators won't be able to modify their network
+                // information without also using a new public key.
+                new_clients.insert(public_key_bytes, existing_client.authority_client().clone());
+                debug!(
+                    "Adding unchanged client to the new network: {}",
+                    public_key_bytes
+                );
+                continue;
+            }
+
+            let address = match Multiaddr::try_from(validator.net_address) {
+                Err(err) => {
+                    error!("Error parsing validator network address. Skip this validator in the committee: {:?}", err);
+                    continue;
+                }
+                Ok(result) => result,
+            };
+
+            let channel = match net_config.connect_lazy(&address) {
+                Err(err) => {
+                    error!("Error connecting to client {} with address {:?}. Skip this validator in the committee: {:?}", public_key_bytes, address, err);
+                    continue;
+                }
+                Ok(result) => result,
+            };
+            let client: A = A::recreate(channel, self.network_metrics.clone());
+            debug!(
+                "New network client created for {} at {:?}",
+                public_key_bytes, address
+            );
             new_clients.insert(public_key_bytes, client);
         }
+        Ok(new_clients)
+    }
 
-        // Replace the clients in the authority aggregator with new clients.
-        let new_net = Arc::new(AuthorityAggregator::new(
-            new_committee,
-            new_clients,
-            self.net.load().metrics.clone(),
-        ));
-        self.net.store(new_net);
-        Ok(())
+    async fn wait_for_epoch_cert(
+        &self,
+        epoch_id: EpochId,
+        old_committee: &Committee,
+        timeout_until_quorum: Duration,
+    ) -> SuiResult<CertifiedEpoch> {
+        #[derive(Default)]
+        struct Signatures {
+            total_stake: StakeUnit,
+            sigs: Vec<(AuthorityName, AuthoritySignature)>,
+        }
+        #[derive(Default)]
+        struct Summaries {
+            bad_weight: StakeUnit,
+            signed: BTreeMap<EpochInfoDigest, Signatures>,
+            cert: Option<CertifiedEpoch>,
+            errors: Vec<(AuthorityName, SuiError)>,
+        }
+        let initial_state = Summaries::default();
+        let net = self.net.load();
+        let threshold = net.committee.quorum_threshold();
+        let validity = net.committee.validity_threshold();
+        let final_state = net
+            .quorum_map_then_reduce_with_timeout(
+                initial_state,
+                |_name, client| {
+                    Box::pin(async move {
+                        client
+                            .handle_epoch(EpochRequest { epoch_id: Some(epoch_id) })
+                            .await
+                    })
+                },
+                |mut state, name, weight, result| {
+                    Box::pin(async move {
+                        if let Ok(EpochResponse {
+                                      epoch_info: Some(epoch_info)
+                                  }) = result
+                        {
+                            match epoch_info {
+                                AuthenticatedEpoch::Signed(s) => {
+                                    let entry = state.signed.entry(s.epoch_info.digest()).or_default();
+                                    entry.total_stake += weight;
+                                    entry.sigs.push((name, s.auth_sign_info.signature));
+                                    if entry.total_stake >= threshold {
+                                        let maybe_cert = CertifiedEpoch::new(
+                                            &s.epoch_info,
+                                            entry.sigs.clone(),
+                                            old_committee
+                                        );
+                                        match maybe_cert {
+                                            Ok(cert) => {
+                                                state.cert = Some(cert);
+                                                return Ok(ReduceOutput::End(state));
+                                            },
+                                            Err(err) => {
+                                                error!("Unexpected error when creating epoch cert: {:?}", err);
+                                                state.errors.push((name, err));
+                                            }
+                                        }
+                                    }
+                                }
+                                AuthenticatedEpoch::Certified(c) => {
+                                    state.cert = Some(c);
+                                    return Ok(ReduceOutput::End(state));
+                                }
+                                AuthenticatedEpoch::Genesis(_) => {
+                                    unreachable!();
+                                }
+                            }
+                        } else {
+                            state.bad_weight += weight;
+
+                            // Add to the list of errors.
+                            match result {
+                                Err(err) => state.errors.push((name, err)),
+                                Ok(_) => state.errors.push((
+                                    name,
+                                    SuiError::from("Epoch info not yet available"),
+                                )),
+                            }
+
+                            // Return all errors if a quorum is not possible.
+                            if state.bad_weight > validity {
+                                return Err(SuiError::TooManyIncorrectAuthorities {
+                                    errors: state.errors,
+                                    action: "wait_for_epoch_cert",
+                                });
+                            }
+                        }
+
+                        Ok(ReduceOutput::Continue(state))
+                    })
+                },
+                // A long timeout before we hear back from a quorum
+                timeout_until_quorum,
+            )
+            .await?;
+        if let Some(cert) = final_state.cert {
+            Ok(cert)
+        } else {
+            Err(SuiError::TooManyIncorrectAuthorities {
+                errors: final_state.errors,
+                action: "wait_for_epoch_cert",
+            })
+        }
+    }
+
+    /// Check that all transactions that have been sequenced and are about to be committed get
+    /// committed. Also make sure that all the transactions that have been committed have made
+    /// into a batch. This ensures that they will all made to the next checkpoint proposal.
+    /// TODO: We need to ensure that this does not halt forever and is more efficient.
+    /// https://github.com/MystenLabs/sui/issues/3915
+    async fn wait_for_validator_batch(&self) {
+        while !self.state.batch_notifier.ticket_drained_til(
+            self.state
+                .checkpoints
+                .as_ref()
+                .unwrap()
+                .lock()
+                .next_transaction_sequence_expected(),
+        ) {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+        }
     }
 }

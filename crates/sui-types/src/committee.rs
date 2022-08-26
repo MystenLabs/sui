@@ -3,14 +3,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::base_types::*;
-use crate::crypto::PublicKey;
+use crate::crypto::AuthorityPublicKey;
 use crate::error::{SuiError, SuiResult};
 use itertools::Itertools;
-use rand_latest::rngs::OsRng;
-use rand_latest::seq::SliceRandom;
+use rand::rngs::OsRng;
+use rand::seq::SliceRandom;
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::fmt::{Display, Formatter};
 
 pub type EpochId = u64;
 
@@ -21,9 +22,8 @@ pub struct Committee {
     pub epoch: EpochId,
     pub voting_rights: Vec<(AuthorityName, StakeUnit)>,
     pub total_votes: StakeUnit,
-    // Note: this is a derived structure, no need to store.
     #[serde(skip)]
-    expanded_keys: HashMap<AuthorityName, PublicKey>,
+    expanded_keys: HashMap<AuthorityName, AuthorityPublicKey>,
     #[serde(skip)]
     index_map: HashMap<AuthorityName, usize>,
     #[serde(skip)]
@@ -76,10 +76,10 @@ impl Committee {
     pub fn load_inner(
         voting_rights: &[(AuthorityName, StakeUnit)],
     ) -> (
-        HashMap<AuthorityName, PublicKey>,
+        HashMap<AuthorityName, AuthorityPublicKey>,
         HashMap<AuthorityName, usize>,
     ) {
-        let expanded_keys: HashMap<AuthorityName, PublicKey> = voting_rights
+        let expanded_keys: HashMap<AuthorityName, AuthorityPublicKey> = voting_rights
             .iter()
             // TODO: Verify all code path to make sure we always have valid public keys.
             // e.g. when a new validator is registering themself on-chain.
@@ -120,7 +120,7 @@ impl Committee {
         self.epoch
     }
 
-    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<PublicKey> {
+    pub fn public_key(&self, authority: &AuthorityName) -> SuiResult<AuthorityPublicKey> {
         match self.expanded_keys.get(authority) {
             // TODO: Check if this is unnecessary copying.
             Some(v) => Ok(v.clone()),
@@ -133,21 +133,53 @@ impl Committee {
     /// Samples authorities by weight
     pub fn sample(&self) -> &AuthorityName {
         // unwrap safe unless committee is empty
-        self.choose_multiple_weighted(1).next().unwrap()
+        Self::choose_multiple_weighted(&self.voting_rights[..], 1)
+            .next()
+            .unwrap()
     }
 
-    fn choose_multiple_weighted(&self, count: usize) -> impl Iterator<Item = &AuthorityName> {
+    fn choose_multiple_weighted(
+        slice: &[(AuthorityName, StakeUnit)],
+        count: usize,
+    ) -> impl Iterator<Item = &AuthorityName> {
         // unwrap is safe because we validate the committee composition in `new` above.
         // See https://docs.rs/rand/latest/rand/distributions/weighted/enum.WeightedError.html
         // for possible errors.
-        self.voting_rights[..]
+        slice
             .choose_multiple_weighted(&mut OsRng, count, |(_, weight)| *weight as f64)
             .unwrap()
             .map(|(a, _)| a)
     }
 
-    pub fn shuffle_by_stake(&self) -> impl Iterator<Item = &AuthorityName> {
-        self.choose_multiple_weighted(self.voting_rights.len())
+    pub fn shuffle_by_stake(
+        &self,
+        // try these authorities first
+        preferences: Option<&BTreeSet<AuthorityName>>,
+        // only attempt from these authorities.
+        restrict_to: Option<&BTreeSet<AuthorityName>>,
+    ) -> Vec<AuthorityName> {
+        let restricted = self
+            .voting_rights
+            .iter()
+            .filter(|(name, _)| {
+                if let Some(restrict_to) = restrict_to {
+                    restrict_to.contains(name)
+                } else {
+                    true
+                }
+            })
+            .cloned();
+
+        let (preferred, rest): (Vec<_>, Vec<_>) = if let Some(preferences) = preferences {
+            restricted.partition(|(name, _)| preferences.contains(name))
+        } else {
+            (Vec::new(), restricted.collect())
+        };
+
+        Self::choose_multiple_weighted(&preferred, preferred.len())
+            .chain(Self::choose_multiple_weighted(&rest, rest.len()))
+            .cloned()
+            .collect()
     }
 
     pub fn weight(&self, author: &AuthorityName) -> StakeUnit {
@@ -199,7 +231,7 @@ impl Committee {
         let mut total = 0;
         for (v, s, a) in items {
             total += s;
-            if threshold < total {
+            if threshold <= total {
                 return (a, v);
             }
         }
@@ -234,5 +266,101 @@ impl PartialEq for Committee {
         self.epoch == other.epoch
             && self.voting_rights == other.voting_rights
             && self.total_votes == other.total_votes
+    }
+}
+
+impl Display for Committee {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "Committee (epoch={:?}): {:?}",
+            self.epoch, self.voting_rights
+        )
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::crypto::{get_key_pair, AuthorityKeyPair};
+    use fastcrypto::traits::KeyPair;
+
+    #[test]
+    fn test_shuffle_by_weight() {
+        let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
+        let a1: AuthorityName = sec1.public().into();
+        let a2: AuthorityName = sec2.public().into();
+        let a3: AuthorityName = sec3.public().into();
+
+        let mut authorities = BTreeMap::new();
+        authorities.insert(a1, 1);
+        authorities.insert(a2, 1);
+        authorities.insert(a3, 1);
+
+        let committee = Committee::new(0, authorities).unwrap();
+
+        assert_eq!(committee.shuffle_by_stake(None, None).len(), 3);
+
+        let mut pref = BTreeSet::new();
+        pref.insert(a2);
+
+        // preference always comes first
+        for _ in 0..100 {
+            assert_eq!(
+                a2,
+                *committee
+                    .shuffle_by_stake(Some(&pref), None)
+                    .first()
+                    .unwrap()
+            );
+        }
+
+        let mut restrict = BTreeSet::new();
+        restrict.insert(a2);
+
+        for _ in 0..100 {
+            let res = committee.shuffle_by_stake(None, Some(&restrict));
+            assert_eq!(1, res.len());
+            assert_eq!(a2, res[0]);
+        }
+
+        // empty preferences are valid
+        let res = committee.shuffle_by_stake(Some(&BTreeSet::new()), None);
+        assert_eq!(3, res.len());
+
+        let res = committee.shuffle_by_stake(None, Some(&BTreeSet::new()));
+        assert_eq!(0, res.len());
+    }
+
+    #[test]
+    fn test_robust_value() {
+        let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec3): (_, AuthorityKeyPair) = get_key_pair();
+        let (_, sec4): (_, AuthorityKeyPair) = get_key_pair();
+        let a1: AuthorityName = sec1.public().into();
+        let a2: AuthorityName = sec2.public().into();
+        let a3: AuthorityName = sec3.public().into();
+        let a4: AuthorityName = sec4.public().into();
+
+        let mut authorities = BTreeMap::new();
+        authorities.insert(a1, 1);
+        authorities.insert(a2, 1);
+        authorities.insert(a3, 1);
+        authorities.insert(a4, 1);
+        let committee = Committee::new(0, authorities).unwrap();
+        let items = vec![(a1, 666), (a2, 1), (a3, 2), (a4, 0)];
+        assert_eq!(
+            committee.robust_value(items.into_iter(), committee.quorum_threshold()),
+            (a3, 2)
+        );
+
+        let items = vec![(a1, "a"), (a2, "b"), (a3, "c"), (a4, "d")];
+        assert_eq!(
+            committee.robust_value(items.into_iter(), committee.quorum_threshold()),
+            (a3, "c")
+        );
     }
 }

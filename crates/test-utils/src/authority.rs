@@ -1,26 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{messages::make_certificates, TEST_COMMITTEE_SIZE};
+use crate::TEST_COMMITTEE_SIZE;
 use rand::{prelude::StdRng, SeedableRng};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::Duration;
-use sui_config::{NetworkConfig, ValidatorInfo};
+use sui_config::{NetworkConfig, NodeConfig, ValidatorInfo};
+use sui_core::authority_client::NetworkAuthorityClientMetrics;
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::{
     authority_active::{
         checkpoint_driver::{CheckpointMetrics, CheckpointProcessControl},
         ActiveAuthority,
     },
     authority_aggregator::{AuthAggMetrics, AuthorityAggregator},
-    authority_client::{AuthorityAPI, NetworkAuthorityClient},
+    authority_client::NetworkAuthorityClient,
+    safe_client::SafeClientMetrics,
 };
-use sui_node::SuiNode;
-use sui_types::{
-    committee::Committee,
-    error::SuiResult,
-    messages::{Transaction, TransactionInfoResponse},
-    object::Object,
-};
+use sui_types::{committee::Committee, object::Object};
+
+pub use sui_node::SuiNode;
 
 /// The default network buffer size of a test authority.
 pub const NETWORK_BUFFER_SIZE: usize = 65_000;
@@ -52,6 +51,10 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
     configs
 }
 
+pub async fn start_node(config: &NodeConfig) -> SuiNode {
+    SuiNode::start(config).await.unwrap()
+}
+
 /// Spawn all authorities in the test committee into a separate tokio task.
 pub async fn spawn_test_authorities<I>(objects: I, config: &NetworkConfig) -> Vec<SuiNode>
 where
@@ -59,7 +62,7 @@ where
 {
     let mut handles = Vec::new();
     for validator in config.validator_configs() {
-        let node = SuiNode::start(validator).await.unwrap();
+        let node = start_node(validator).await;
         let state = node.state();
 
         for o in objects.clone() {
@@ -80,8 +83,9 @@ pub async fn spawn_checkpoint_processes(
     for authority in handles {
         let state = authority.state().clone();
         let inner_agg = aggregator.clone();
-        let active_state =
-            Arc::new(ActiveAuthority::new_with_ephemeral_storage(state, inner_agg).unwrap());
+        let active_state = Arc::new(
+            ActiveAuthority::new_with_ephemeral_storage_for_test(state, inner_agg).unwrap(),
+        );
         let checkpoint_process_control = CheckpointProcessControl {
             long_pause_between_checkpoints: Duration::from_millis(10),
             ..CheckpointProcessControl::default()
@@ -99,6 +103,7 @@ pub async fn spawn_checkpoint_processes(
 /// Create a test authority aggregator.
 pub fn test_authority_aggregator(
     config: &NetworkConfig,
+    epoch_store: Arc<EpochStore>,
 ) -> AuthorityAggregator<NetworkAuthorityClient> {
     let validators_info = config.validator_set();
     let committee = Committee::new(0, ValidatorInfo::voting_rights(validators_info)).unwrap();
@@ -106,73 +111,30 @@ pub fn test_authority_aggregator(
         .iter()
         .map(|config| {
             (
-                config.public_key(),
-                NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap(),
+                config.protocol_key(),
+                NetworkAuthorityClient::connect_lazy(
+                    config.network_address(),
+                    Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+                )
+                .unwrap(),
             )
         })
         .collect();
-    let metrics = AuthAggMetrics::new(&prometheus::Registry::new());
-    AuthorityAggregator::new(committee, clients, metrics)
+    let registry = prometheus::Registry::new();
+    AuthorityAggregator::new(
+        committee,
+        epoch_store,
+        clients,
+        AuthAggMetrics::new(&registry),
+        SafeClientMetrics::new(&registry),
+    )
 }
 
 /// Get a network client to communicate with the consensus.
 pub fn get_client(config: &ValidatorInfo) -> NetworkAuthorityClient {
-    NetworkAuthorityClient::connect_lazy(config.network_address()).unwrap()
-}
-
-/// Submit a certificate containing only owned-objects to all authorities.
-pub async fn submit_single_owner_transaction(
-    transaction: Transaction,
-    configs: &[ValidatorInfo],
-) -> Vec<TransactionInfoResponse> {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-
-    let mut responses = Vec::new();
-    for config in configs {
-        let client = get_client(config);
-        let reply = client
-            .handle_certificate(certificate.clone())
-            .await
-            .unwrap();
-        responses.push(reply);
-    }
-    responses
-}
-
-/// Keep submitting the certificates of a shared-object transaction until it is sequenced by
-/// at least one consensus node. We use the loop since some consensus protocols (like Tusk)
-/// may drop transactions. The certificate is submitted to every Sui authority.
-pub async fn submit_shared_object_transaction(
-    transaction: Transaction,
-    configs: &[ValidatorInfo],
-) -> Vec<SuiResult<TransactionInfoResponse>> {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
-
-    loop {
-        let futures: Vec<_> = configs
-            .iter()
-            .map(|config| {
-                let client = get_client(config);
-                let cert = certificate.clone();
-                async move { client.handle_certificate(cert).await }
-            })
-            .collect();
-
-        let replies: Vec<_> = futures::future::join_all(futures)
-            .await
-            .into_iter()
-            // Remove all `FailedToHearBackFromConsensus` replies. Note that the original Sui error type
-            // `SuiError::FailedToHearBackFromConsensus(..)` is lost when the message is sent through the
-            // network (it is replaced by `RpcError`). As a result, the following filter doesn't work:
-            // `.filter(|result| !matches!(result, Err(SuiError::FailedToHearBackFromConsensus(..))))`.
-            .filter(|result| match result {
-                Err(e) => !e.to_string().contains("deadline has elapsed"),
-                _ => true,
-            })
-            .collect();
-
-        if !replies.is_empty() {
-            break replies;
-        }
-    }
+    NetworkAuthorityClient::connect_lazy(
+        config.network_address(),
+        Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+    )
+    .unwrap()
 }

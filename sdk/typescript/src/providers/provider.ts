@@ -1,12 +1,19 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { SignatureScheme } from '../cryptography/publickey';
 import {
   GetObjectDataResponse,
   SuiObjectInfo,
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
-  TransactionResponse,
+  SuiTransactionResponse,
+  SuiObjectRef,
+  SuiMoveFunctionArgTypes,
+  SuiMoveNormalizedFunction,
+  SuiMoveNormalizedStruct,
+  SuiMoveNormalizedModule,
+  SuiMoveNormalizedModules,
 } from '../types';
 
 ///////////////////////////////
@@ -21,9 +28,22 @@ export abstract class Provider {
   ): Promise<SuiObjectInfo[]>;
 
   /**
+   * Convenience method for getting all gas objects(SUI Tokens) owned by an address
+   */
+  abstract getGasObjectsOwnedByAddress(
+    _address: string
+  ): Promise<SuiObjectInfo[]>;
+
+  /**
    * Get details about an object
    */
   abstract getObject(objectId: string): Promise<GetObjectDataResponse>;
+
+  /**
+   * Get object reference(id, tx digest, version id)
+   * @param objectId
+   */
+  abstract getObjectRef(objectId: string): Promise<SuiObjectRef | undefined>;
 
   // Transactions
   /**
@@ -51,9 +71,53 @@ export abstract class Provider {
 
   abstract executeTransaction(
     txnBytes: string,
+    signatureScheme: SignatureScheme,
     signature: string,
     pubkey: string
-  ): Promise<TransactionResponse>;
+  ): Promise<SuiTransactionResponse>;
 
+  // Move info
+  /**
+   * Get Move function argument types like read, write and full access
+   */
+  abstract getMoveFunctionArgTypes(
+    objectId: string,
+    moduleName: string,
+    functionName: string
+  ): Promise<SuiMoveFunctionArgTypes>;
+
+  /**
+   * Get a map from module name to
+   * structured representations of Move modules
+   */
+  abstract getNormalizedMoveModulesByPackage(objectId: string,): Promise<SuiMoveNormalizedModules>;
+
+  /**
+   * Get a structured representation of Move module
+   */
+  abstract getNormalizedMoveModule(
+    objectId: string,
+    moduleName: string,
+  ): Promise<SuiMoveNormalizedModule>;
+
+  /**
+   * Get a structured representation of Move function
+   */
+  abstract getNormalizedMoveFunction(
+    objectId: string,
+    moduleName: string,
+    functionName: string
+  ): Promise<SuiMoveNormalizedFunction> 
+
+  /**
+   * Get a structured representation of Move struct
+   */
+  abstract getNormalizedMoveStruct(
+    objectId: string,
+    moduleName: string,
+    structName: string
+  ): Promise<SuiMoveNormalizedStruct>;
+
+  abstract syncAccountState(address: string): Promise<any>;
   // TODO: add more interface methods
 }

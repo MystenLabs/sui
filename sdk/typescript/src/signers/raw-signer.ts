@@ -27,6 +27,7 @@ export class RawSigner extends SignerWithProvider {
 
   async signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
     return {
+      signatureScheme: 'ED25519',
       signature: this.keypair.signData(data),
       pubKey: this.keypair.getPublicKey(),
     };

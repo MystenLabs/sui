@@ -76,10 +76,19 @@ fn main() -> Result<()> {
         .method(
             Method::builder()
                 .name("batch_info")
-                .route_name("BatchInfo")
+                .route_name("FollowTxStream")
                 .input_type("sui_types::messages::BatchInfoRequest")
                 .output_type("sui_types::messages::BatchInfoResponseItem")
                 .server_streaming()
+                .codec_path(codec_path)
+                .build(),
+        )
+        .method(
+            Method::builder()
+                .name("epoch_info")
+                .route_name("Epoch")
+                .input_type("sui_types::messages::EpochRequest")
+                .output_type("sui_types::messages::EpochResponse")
                 .codec_path(codec_path)
                 .build(),
         )

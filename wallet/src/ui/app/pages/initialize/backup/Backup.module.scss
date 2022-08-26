@@ -1,8 +1,77 @@
-.mnemonic {
-    padding: 12px;
-    border: 1px solid #90c2d866;
-    border-radius: 6px;
-    margin-bottom: 16px;
-    font-size: 16px;
-    font-weight: 400;
+@use '_values/colors';
+@use '_utils';
+
+.wallet-created {
+    .mnemonic {
+        padding: 14px;
+        border-radius: 15px;
+        margin: auto;
+        margin-bottom: 16px;
+        background: colors.$white;
+        border: 1px solid #e9eaeb;
+        font-family: Inter, sans-serif;
+        width: 320px;
+        height: 90px;
+
+        @include utils.typography('header/search-text');
+
+        line-height: 130%;
+        color: colors.$gray-85;
+    }
+
+    .header-title {
+        text-align: left;
+        margin-bottom: 20px;
+        color: colors.$gray-100;
+        font-size: 30px;
+        font-weight: 700;
+        line-height: 36px;
+    }
+
+    .sub-title {
+        text-align: center;
+        color: colors.$gray-90;
+        font-weight: 600;
+        font-size: 18px;
+        line-height: 100%;
+    }
+
+    .success-icon {
+        border-radius: 50%;
+        width: 46px;
+        height: 46px;
+        margin: auto;
+        border: 3px dotted colors.$success;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        .success-bg {
+            background-color: colors.$success;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        i {
+            color: colors.$white;
+            font-size: 25px;
+        }
+    }
+
+    .btn {
+        width: 100%;
+        margin: auto;
+        max-width: 320px;
+        margin-top: 20px;
+
+        i {
+            margin-right: 10px;
+            font-weight: 500;
+            font-size: 12px;
+        }
+    }
 }

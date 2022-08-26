@@ -8,11 +8,14 @@ import {
     getTransferObjectTransaction,
     getExecutionStatusType,
     getTotalGasUsed,
+    getTransferSuiTransaction,
+    getExecutionStatusError,
 } from '@mysten/sui.js';
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 
+import { batchFetchObject } from '_redux/slices/sui-objects';
+
 import type {
-    TransactionEffectsResponse,
     GetTxnDigestsResponse,
     CertifiedTransaction,
     TransactionKindName,
@@ -21,24 +24,34 @@ import type {
 import type { AppThunkConfig } from '_store/thunk-extras';
 
 export type TxResultState = {
-    To?: string;
+    to?: string;
     seq: number;
     txId: string;
     status: ExecutionStatusType;
     txGas: number;
     kind: TransactionKindName | undefined;
-    From: string;
+    from: string;
+    amount?: number;
+    timestampMs?: number;
+    url?: string;
+    objectId: string;
+    description?: string;
+    name?: string;
+    isSender?: boolean;
+    error?: string;
 };
 
 interface TransactionManualState {
     loading: boolean;
     error: false | { code?: string; message?: string; name?: string };
     latestTx: TxResultState[];
+    recentAddresses: string[];
 }
 
 const initialState: TransactionManualState = {
     loading: true,
     latestTx: [],
+    recentAddresses: [],
     error: false,
 };
 type TxResultByAddress = TxResultState[];
@@ -57,7 +70,10 @@ export const getTransactionsByAddress = createAsyncThunk<
     AppThunkConfig
 >(
     'sui-transactions/get-transactions-by-address',
-    async (_, { getState, extra: { api } }): Promise<TxResultByAddress> => {
+    async (
+        _,
+        { getState, dispatch, extra: { api } }
+    ): Promise<TxResultByAddress> => {
         const address = getState().account.address;
 
         if (!address) {
@@ -71,10 +87,10 @@ export const getTransactionsByAddress = createAsyncThunk<
         if (!transactions || !transactions.length) {
             return [];
         }
-        //getTransactionWithEffectsBatch
+
         const resp = await api.instance.fullNode
             .getTransactionWithEffectsBatch(deduplicate(transactions))
-            .then((txEffs: TransactionEffectsResponse[]) => {
+            .then(async (txEffs) => {
                 return (
                     txEffs
                         .map((txEff, i) => {
@@ -84,15 +100,22 @@ export const getTransactionsByAddress = createAsyncThunk<
                                     getTransactionDigest(txEff.certificate)
                             )[0];
                             const res: CertifiedTransaction = txEff.certificate;
-                            // TODO: handle multiple transactions
+
                             const txns = getTransactions(res);
                             if (txns.length > 1) {
                                 return null;
                             }
+                            // TODO handle batch transactions
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
+
+                            const transferSui = getTransferSuiTransaction(txn);
+                            const txTransferObject =
+                                getTransferObjectTransaction(txn);
+
                             const recipient =
-                                getTransferObjectTransaction(txn)?.recipient;
+                                transferSui?.recipient ??
+                                txTransferObject?.recipient;
 
                             return {
                                 seq,
@@ -100,23 +123,70 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 status: getExecutionStatusType(txEff),
                                 txGas: getTotalGasUsed(txEff),
                                 kind: txKind,
-                                From: res.data.sender,
+                                from: res.data.sender,
+                                ...(txTransferObject
+                                    ? {
+                                          objectId:
+                                              txTransferObject?.objectRef
+                                                  .objectId,
+                                      }
+                                    : {}),
+                                error: getExecutionStatusError(txEff),
+                                timestampMs: txEff.timestamp_ms,
+                                isSender: res.data.sender === address,
+                                ...(transferSui?.amount
+                                    ? { amount: transferSui.amount }
+                                    : {}),
                                 ...(recipient
                                     ? {
-                                          To: recipient,
+                                          to: recipient,
                                       }
                                     : {}),
                             };
                         })
                         // Remove failed transactions and sort by sequence number
-                        .filter((itm) => itm)
-                        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                        .sort((a, b) => b!.seq - a!.seq)
+                        .filter(notEmpty)
+                        .sort((a, b) => b.seq - a.seq)
                 );
             });
-        return resp as TxResultByAddress;
+
+        // Get all objectId and batch fetch objects for transactions with objectIds
+        // remove duplicates
+        const objectIDs = [
+            ...new Set(resp.map((itm) => itm.objectId).filter(notEmpty)),
+        ];
+
+        const getObjectBatch = await dispatch(batchFetchObject(objectIDs));
+        const txObjects = getObjectBatch.payload;
+
+        const txnResp = resp.map((itm) => {
+            const objectTxObj =
+                txObjects && itm?.objectId && Array.isArray(txObjects)
+                    ? txObjects.find(
+                          (obj) => obj.reference.objectId === itm.objectId
+                      )
+                    : null;
+
+            return {
+                ...itm,
+                ...(objectTxObj
+                    ? {
+                          description: objectTxObj.data.fields.description,
+                          name: objectTxObj.data.fields.name,
+                          url: objectTxObj.data.fields.url,
+                      }
+                    : {}),
+            };
+        });
+
+        return txnResp as TxResultByAddress;
     }
 );
+
+function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
+    return value !== null && value !== undefined;
+}
+
 const txSlice = createSlice({
     name: 'txresult',
     initialState,
@@ -127,10 +197,20 @@ const txSlice = createSlice({
                 state.loading = false;
                 state.error = false;
                 state.latestTx = action.payload;
+                // Add recent addresses to the list
+                const recentAddresses = action.payload.map((tx) => [
+                    tx?.to as string,
+                    tx.from as string,
+                ]);
+                // Remove duplicates
+                state.recentAddresses = [
+                    ...new Set(recentAddresses.flat().filter((itm) => itm)),
+                ];
             })
             .addCase(getTransactionsByAddress.pending, (state, action) => {
                 state.loading = true;
                 state.latestTx = [];
+                state.recentAddresses = [];
             })
             .addCase(
                 getTransactionsByAddress.rejected,
@@ -138,6 +218,7 @@ const txSlice = createSlice({
                     state.loading = false;
                     state.error = { code, message, name };
                     state.latestTx = [];
+                    state.recentAddresses = [];
                 }
             );
     },

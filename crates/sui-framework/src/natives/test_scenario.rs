@@ -1,15 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::EventType;
+use crate::{legacy_emit_cost, EventType};
 use core::panic;
+use linked_hash_map::LinkedHashMap;
 use move_binary_format::errors::PartialVMResult;
 use move_core_types::{account_address::AccountAddress, value::MoveTypeLayout};
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
-    gas_schedule::NativeCostIndex,
     loaded_data::runtime_types::Type,
-    natives::function::{native_gas, NativeResult},
+    natives::function::NativeResult,
     pop_arg,
     values::{StructRef, Value, VectorRef},
 };
@@ -52,7 +52,7 @@ struct OwnedObj {
 // This will require extending NativeContext with a function to map `Type` (which is just an index
 // into the module's StructHandle table for structs) to something human-readable like `TypeTag`.
 // TODO: add a native function that prints the log of transfers, deletes, wraps for debugging purposes
-type Inventory = BTreeMap<ObjectID, OwnedObj>;
+type Inventory = LinkedHashMap<ObjectID, OwnedObj>;
 
 /// Return the object ID involved in an event.
 /// This depends on the value format for each event type.
@@ -241,7 +241,7 @@ pub fn emit_wrapped_object_events(
         )?;
     }
 
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_emit_cost();
     Ok(NativeResult::ok(cost, smallvec![]))
 }
 
@@ -255,7 +255,7 @@ pub fn num_events(
     debug_assert!(args.is_empty());
 
     // Gas amount doesn't matter as this is test only.
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_emit_cost();
 
     let num_events = context.events().len();
     Ok(NativeResult::ok(
@@ -276,7 +276,7 @@ pub fn get_account_owned_inventory(
     let tx_end_index = pop_arg!(args, u64) as usize;
     let owner_address = pop_arg!(args, AccountAddress);
 
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_emit_cost();
     match get_inventory_for(
         Owner::AddressOwner(account_to_sui_address(owner_address)),
         None,
@@ -308,7 +308,7 @@ pub fn get_unowned_inventory(
         Owner::Shared
     };
 
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_emit_cost();
     match get_inventory_for(owner, None, &ty_args[0], tx_end_index, context.events()) {
         Ok(inventory) => Ok(NativeResult::ok(
             cost,
@@ -330,7 +330,7 @@ pub fn get_object_owned_inventory(
     let parent_object = pop_arg!(args, AccountAddress);
     let signer_address = pop_arg!(args, AccountAddress);
 
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_emit_cost();
     match get_inventory_for(
         Owner::AddressOwner(account_to_sui_address(signer_address)),
         Some(parent_object),
@@ -348,7 +348,7 @@ pub fn get_object_owned_inventory(
 
 /// Delete the given object
 pub fn drop_object_for_testing(
-    context: &mut NativeContext,
+    _context: &mut NativeContext,
     ty_args: Vec<Type>,
     args: VecDeque<Value>,
 ) -> PartialVMResult<NativeResult> {
@@ -356,7 +356,7 @@ pub fn drop_object_for_testing(
     debug_assert_eq!(args.len(), 1);
 
     // Gas amount doesn't matter as this is test only.
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_emit_cost();
     Ok(NativeResult::ok(cost, smallvec![]))
 }
 
@@ -372,7 +372,7 @@ pub fn update_object(
     let obj = args.pop_back().unwrap();
 
     // Gas amount doesn't matter as this is test only.
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 0);
+    let cost = legacy_emit_cost();
     context.save_event(vec![], UPDATE_OBJECT_EVENT, ty, obj)?;
     // Run through the events to make sure the object we returned didn't violate any rules.
     match get_global_inventory(context.events()) {

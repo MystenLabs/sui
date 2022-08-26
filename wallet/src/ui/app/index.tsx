@@ -2,19 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { useEffect } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppType } from './redux/slices/app/AppType';
+import { routes as stakeRoutes } from './staking';
 import { useAppDispatch, useAppSelector } from '_hooks';
 import { DappTxApprovalPage } from '_pages/dapp-tx-approval';
 import HomePage, {
     NftsPage,
-    StakePage,
     TokensPage,
     TransactionDetailsPage,
     TransactionsPage,
     TransferCoinPage,
-    TransferNFTPage,
+    NFTDetailsPage,
+    ReceiptPage,
+    CoinsSelectorPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -24,6 +26,15 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
+import { setNavVisibility } from '_redux/slices/app';
+
+const HIDDEN_MENU_PATHS = [
+    '/stake',
+    '/nft-details',
+    '/receipt',
+    '/send',
+    '/send/select',
+];
 
 const App = () => {
     const dispatch = useAppDispatch();
@@ -36,24 +47,48 @@ const App = () => {
     useEffect(() => {
         document.body.classList[isPopup ? 'add' : 'remove']('is-popup');
     }, [isPopup]);
+    const location = useLocation();
+    useEffect(() => {
+        const menuVisible = !HIDDEN_MENU_PATHS.includes(location.pathname);
+        dispatch(setNavVisibility(menuVisible));
+    }, [location, dispatch]);
     return (
         <Routes>
-            <Route path="/" element={<HomePage />}>
-                <Route
-                    index
-                    element={<Navigate to="/tokens" replace={true} />}
-                />
+            <Route path="/*" element={<HomePage />}>
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
+                <Route path="nft-details" element={<NFTDetailsPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />
-                <Route path="send-nft" element={<TransferNFTPage />} />
-                <Route path="stake" element={<StakePage />} />
+                <Route path="send/select" element={<CoinsSelectorPage />} />
+                {stakeRoutes}
                 <Route
                     path="tx/:txDigest"
                     element={<TransactionDetailsPage />}
                 />
+                <Route path="receipt" element={<ReceiptPage />} />
+                <Route
+                    path="*"
+                    element={<Navigate to="/tokens" replace={true} />}
+                />
             </Route>
+
+            <Route
+                path="/dapp/*"
+                element={
+                    <HomePage disableNavigation limitToPopUpSize={false} />
+                }
+            >
+                <Route
+                    path="connect/:requestID"
+                    element={<SiteConnectPage />}
+                />
+                <Route
+                    path="tx-approval/:txID"
+                    element={<DappTxApprovalPage />}
+                />
+            </Route>
+
             <Route path="welcome" element={<WelcomePage />} />
             <Route path="/initialize" element={<InitializePage />}>
                 <Route path="select" element={<SelectPage />} />
@@ -61,12 +96,6 @@ const App = () => {
                 <Route path="import" element={<ImportPage />} />
                 <Route path="backup" element={<BackupPage />} />
             </Route>
-            <Route path="/connect/:requestID" element={<SiteConnectPage />} />
-            <Route path="/tx-approval/:txID" element={<DappTxApprovalPage />} />
-            <Route
-                path="*"
-                element={<Navigate to="/tokens" replace={true} />}
-            />
         </Routes>
     );
 };

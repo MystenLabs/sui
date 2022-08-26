@@ -3,8 +3,9 @@
 
 /// Coin<SUI> is the token used to pay for gas in Sui
 module sui::sui {
-    use sui::coin;
     use sui::balance::{Self, Supply};
+    use sui::coin;
+    use sui::transfer;
 
     friend sui::genesis;
 
@@ -17,8 +18,7 @@ module sui::sui {
         balance::create_supply(SUI {})
     }
 
-    /// Transfer to a recipient
     public entry fun transfer(c: coin::Coin<SUI>, recipient: address) {
-        coin::transfer(c, recipient)
+        transfer::transfer(c, recipient)
     }
 }

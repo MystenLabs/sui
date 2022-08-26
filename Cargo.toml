@@ -8,6 +8,7 @@ members = [
     "crates/sui-cluster-test",
     "crates/sui-config",
     "crates/sui-core",
+    "crates/sui-cost",
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-build",
@@ -23,6 +24,8 @@ members = [
     "crates/sui-sdk",
     "crates/sui-storage",
     "crates/sui-swarm",
+    "crates/sui-telemetry",
+    "crates/sui-test-validator",
     "crates/sui-tool",
     "crates/sui-transactional-test-runner",
     "crates/sui-types",
@@ -33,10 +36,13 @@ members = [
     "crates/x",
 ]
 
-# Debug symbols are really important for profiling
-# [profile.release]
-# debug = true
-# strip = "debuginfo"
+[profile.release]
+# The following two lines add minimal symbol information, which helps certain profilers like Bytehound
+# without significantly increasing binary size
+debug = true
+strip = 'debuginfo'
 
 [profile.bench]
+# Do not strip any debug info.  This helps the widest set of profiling tools
 debug = true
+strip = 'none'

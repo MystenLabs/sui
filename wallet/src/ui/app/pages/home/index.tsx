@@ -1,8 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import cl from 'classnames';
 import { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Link, Outlet } from 'react-router-dom';
 import { of, filter, switchMap, from, defer, repeat } from 'rxjs';
 
 import Loading from '_components/loading';
@@ -11,13 +12,18 @@ import { MenuButton, MenuContent } from '_components/menu';
 import Navigation from '_components/navigation';
 import { useInitializedGuard, useAppDispatch } from '_hooks';
 import PageLayout from '_pages/layout';
-import { fetchAllOwnedObjects } from '_redux/slices/sui-objects';
+import { fetchAllOwnedAndRequiredObjects } from '_redux/slices/sui-objects';
 
 import st from './Home.module.scss';
 
 const POLL_SUI_OBJECTS_INTERVAL = 4000;
 
-const HomePage = () => {
+interface Props {
+    disableNavigation?: boolean;
+    limitToPopUpSize?: boolean;
+}
+
+const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
     const guardChecking = useInitializedGuard(true);
     const dispatch = useAppDispatch();
     useEffect(() => {
@@ -25,9 +31,9 @@ const HomePage = () => {
             .pipe(
                 filter(() => !guardChecking),
                 switchMap(() =>
-                    defer(() => from(dispatch(fetchAllOwnedObjects()))).pipe(
-                        repeat({ delay: POLL_SUI_OBJECTS_INTERVAL })
-                    )
+                    defer(() =>
+                        from(dispatch(fetchAllOwnedAndRequiredObjects()))
+                    ).pipe(repeat({ delay: POLL_SUI_OBJECTS_INTERVAL }))
                 )
             )
             .subscribe();
@@ -35,19 +41,30 @@ const HomePage = () => {
     }, [guardChecking, dispatch]);
 
     return (
-        <PageLayout limitToPopUpSize={true}>
+        <PageLayout limitToPopUpSize={limitToPopUpSize}>
             <Loading loading={guardChecking}>
                 <div className={st.container}>
                     <div className={st.header}>
                         <span />
-                        <Logo className={st.logo} txt={true} />
-                        <MenuButton className={st.menuButton} />
+                        <Link to="/tokens" className={st.logoLink}>
+                            <Logo className={st.logo} txt={true} />
+                        </Link>
+                        {disableNavigation ? (
+                            <span />
+                        ) : (
+                            <MenuButton className={st.menuButton} />
+                        )}
                     </div>
                     <div className={st.content}>
-                        <main className={st.main}>
+                        <main
+                            className={cl(
+                                st.main,
+                                !disableNavigation && st.withNav
+                            )}
+                        >
                             <Outlet />
                         </main>
-                        <Navigation />
+                        {!disableNavigation && <Navigation />}
                         <MenuContent />
                     </div>
                 </div>
@@ -58,9 +75,10 @@ const HomePage = () => {
 
 export default HomePage;
 export { default as NftsPage } from './nfts';
-export { default as StakePage } from './stake';
 export { default as TokensPage } from './tokens';
 export { default as TransactionDetailsPage } from './transaction-details';
 export { default as TransactionsPage } from './transactions';
 export { default as TransferCoinPage } from './transfer-coin';
-export { default as TransferNFTPage } from './transfer-nft';
+export { default as NFTDetailsPage } from './nft-details';
+export { default as ReceiptPage } from './receipt';
+export { default as CoinsSelectorPage } from './transfer-coin/CoinSelector';

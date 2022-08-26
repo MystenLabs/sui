@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use anyhow::anyhow;
 use anyhow::Result;
 use futures::FutureExt;
 use std::thread;
@@ -43,6 +44,10 @@ impl Node {
         self.config.sui_address()
     }
 
+    pub fn json_rpc_address(&self) -> std::net::SocketAddr {
+        self.config.json_rpc_address
+    }
+
     /// Start this Node, returning a handle that will resolve when the node has completed starting
     /// up.
     pub fn spawn(&mut self) -> Result<tokio::sync::oneshot::Receiver<()>> {
@@ -77,6 +82,7 @@ impl Node {
 
         let channel = mysten_network::client::connect(self.config.network_address())
             .await
+            .map_err(|err| anyhow!(err.to_string()))
             .map_err(HealthCheckError::Failure)
             .tap_err(|e| error!("error connecting to {}: {e}", self.name()))?;
         let mut client = tonic_health::proto::health_client::HealthClient::new(channel);

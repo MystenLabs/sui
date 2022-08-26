@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module tutorial::color_object {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     struct ColorObject has key {
-        info: Info,
+        id: UID,
         red: u8,
         green: u8,
         blue: u8,
@@ -17,7 +17,7 @@ module tutorial::color_object {
 
     fun new(red: u8, green: u8, blue: u8, ctx: &mut TxContext): ColorObject {
         ColorObject {
-            info: object::new(ctx),
+            id: object::new(ctx),
             red,
             green,
             blue,
@@ -43,12 +43,8 @@ module tutorial::color_object {
     }
 
     public entry fun delete(object: ColorObject) {
-        let ColorObject { info, red: _, green: _, blue: _ } = object;
-        object::delete(info);
-    }
-
-    public entry fun transfer(object: ColorObject, recipient: address) {
-        transfer::transfer(object, recipient)
+        let ColorObject { id, red: _, green: _, blue: _ } = object;
+        object::delete(id);
     }
 
     // == Functions covered in Chapter 3 ==
@@ -77,6 +73,7 @@ module tutorial::color_objectTests {
     use sui::test_scenario;
     use tutorial::color_object::{Self, ColorObject};
     use sui::object;
+    use sui::transfer;
     use sui::tx_context;
 
     // == Tests covered in Chapter 1 ==
@@ -180,7 +177,7 @@ module tutorial::color_objectTests {
         test_scenario::next_tx(scenario, &owner);
         {
             let object = test_scenario::take_owned<ColorObject>(scenario);
-            color_object::transfer(object, recipient);
+            transfer::transfer(object, recipient);
         };
         // Check that owner no longer owns the object.
         test_scenario::next_tx(scenario, &owner);

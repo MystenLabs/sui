@@ -6,6 +6,8 @@ import { memo } from 'react';
 import { NavLink } from 'react-router-dom';
 
 import Icon, { SuiIcons } from '_components/icon';
+import { useAppSelector } from '_hooks';
+import { getNavIsVisible } from '_redux/slices/app';
 
 import st from './Navigation.module.scss';
 
@@ -18,8 +20,11 @@ export type NavigationProps = {
 };
 
 function Navigation({ className }: NavigationProps) {
+    const isVisible = useAppSelector(getNavIsVisible);
     return (
-        <nav className={cl(st.container, className)}>
+        <nav
+            className={cl(st.container, className, { [st.hidden]: !isVisible })}
+        >
             <NavLink to="./tokens" className={makeLinkCls} title="Tokens">
                 <Icon className={st.icon} icon={SuiIcons.Tokens} />
                 <span className={st.title}>Coins</span>
@@ -33,7 +38,10 @@ function Navigation({ className }: NavigationProps) {
                 className={makeLinkCls}
                 title="Transactions"
             >
-                <Icon className={st.icon} icon={SuiIcons.History} />
+                <Icon
+                    className={cl(st.icon, st.walletActivityIcon)}
+                    icon={SuiIcons.Activity}
+                />
                 <span className={st.title}>Activity</span>
             </NavLink>
         </nav>

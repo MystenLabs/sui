@@ -51,3 +51,15 @@ export function getOwnerStr(owner: ObjectOwner | string): string {
     }
     return owner;
 }
+
+export const checkIsPropertyType = (value: any) =>
+    ['number', 'string'].includes(typeof value);
+
+export const extractName = (
+    contents: object | undefined
+): string | undefined => {
+    if (!contents) return undefined;
+    return Object.entries(contents)
+        .filter(([key, _]) => key === 'name')
+        .map(([_, value]) => value)?.[0];
+};

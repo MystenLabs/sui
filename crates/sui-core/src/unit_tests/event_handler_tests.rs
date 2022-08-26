@@ -16,9 +16,9 @@ use serde::Serialize;
 use serde_json::json;
 use sui_json_rpc_types::SuiMoveStruct;
 
-use sui_types::base_types::{ObjectID, SequenceNumber};
+use sui_types::base_types::ObjectID;
 use sui_types::gas_coin::GasCoin;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 #[test]
 fn test_to_json_value() {
@@ -27,9 +27,9 @@ fn test_to_json_value() {
         name: "test_event".into(),
         data: vec![100, 200, 300],
         coins: vec![
-            GasCoin::new(ObjectID::random(), SequenceNumber::from_u64(10), 1000000),
-            GasCoin::new(ObjectID::random(), SequenceNumber::from_u64(20), 2000000),
-            GasCoin::new(ObjectID::random(), SequenceNumber::from_u64(30), 3000000),
+            GasCoin::new(ObjectID::random(), 1000000),
+            GasCoin::new(ObjectID::random(), 2000000),
+            GasCoin::new(ObjectID::random(), 3000000),
         ],
     };
     let event_bytes = bcs::to_bytes(&move_event).unwrap();
@@ -53,19 +53,7 @@ fn test_to_json_value() {
     );
     assert_eq!(
         Some(&json!(move_event.coins[0].id().to_string())),
-        json_value.pointer("/coins/0/info/id")
-    );
-    assert_eq!(
-        Some(&json!(10)),
-        json_value.pointer("/coins/0/info/version")
-    );
-    assert_eq!(
-        Some(&json!(20)),
-        json_value.pointer("/coins/1/info/version")
-    );
-    assert_eq!(
-        Some(&json!(30)),
-        json_value.pointer("/coins/2/info/version")
+        json_value.pointer("/coins/0/id/id")
     );
     assert_eq!(
         Some(&json!(format!("{:#x}", move_event.creator))),
@@ -117,7 +105,7 @@ impl TestEvent {
     }
 }
 
-// Rust version of the Move sui::utf8::String type
+// Rust version of the Move std::string::String type
 // TODO: Do we need this in the sui-types lib?
 #[derive(Debug, Serialize, Deserialize, Clone, Eq, PartialEq)]
 struct UTF8String {
@@ -135,9 +123,9 @@ impl From<&str> for UTF8String {
 impl UTF8String {
     fn type_() -> StructTag {
         StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
+            address: MOVE_STDLIB_ADDRESS,
             name: Identifier::new("String").unwrap(),
-            module: Identifier::new("utf8").unwrap(),
+            module: Identifier::new("string").unwrap(),
             type_params: vec![],
         }
     }

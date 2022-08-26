@@ -6,14 +6,14 @@ module 0x0.m {
     import 0x2.object;
 
     struct Foo has key {
-        info: object.Info,
+        id: object.UID,
     }
 
-    foo(f: Self.Foo, ref: &mut object.Info) {
-        let info: object.Info;
+    foo(f: Self.Foo, ref: &mut object.UID) {
+        let id: object.UID;
         label l0:
-        Foo { info } = move(f);
-        *move(ref) = move(info);
+        Foo { id } = move(f);
+        *move(ref) = move(id);
         return;
     }
 

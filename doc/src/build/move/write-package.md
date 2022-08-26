@@ -34,7 +34,7 @@ $ which sui
 Now proceed to creating a package directory structure in the current
 directory, parallel to the `sui` repository. It will contain an
 empty manifest file and an empty module source file following the
-[Move code organization](index.md#move-code-organization)
+[Move code organization](../move/index.md#move-code-organization)
 described earlier.
 
 So from the same directory containing the `sui` repository create a
@@ -66,7 +66,7 @@ will be represented by Sui objects; in particular, we want a sword to
 be an upgradable asset that can be shared between different players. A
 sword asset can be defined similarly to another asset we are already
 familiar with from our
-[First look at Move source code](index.md#first-look-at-move-source-code). That
+[First look at Move source code](../move/index.md#first-look-at-move-source-code). That
 is a `Coin` struct type.
 
 
@@ -75,11 +75,11 @@ definitions in the `m1.move` file:
 
 ``` rust
 module my_first_package::m1 {
-    use sui::object::Info;
+    use sui::object::{Self, UID};
     use sui::tx_context::TxContext;
 
     struct Sword has key, store {
-        info: Info,
+        id: UID,
         magic: u64,
         strength: u64,
     }

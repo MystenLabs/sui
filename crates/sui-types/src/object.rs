@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryFrom;
 use std::fmt::{Debug, Display, Formatter};
 use std::mem::size_of;
 
@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
 use serde_with::Bytes;
 
-use crate::crypto::{sha3_hash, BcsSignable};
+use crate::crypto::sha3_hash;
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
 use crate::move_package::MovePackage;
@@ -37,16 +37,16 @@ pub struct MoveObject {
     /// Determines if it is usable with the TransferObject
     /// Derived from the type_
     has_public_transfer: bool,
+    version: SequenceNumber,
+    /// The number of immediate children for this object.
+    /// It is an option to reduce object size, as most objects will not have children.
+    child_count: Option<u32>,
     #[serde_as(as = "Bytes")]
     contents: Vec<u8>,
 }
 
-/// Byte encoding of a 64 byte unsigned integer in BCS
-type BcsU64 = [u8; 8];
 /// Index marking the end of the object's ID + the beginning of its version
-const ID_END_INDEX: usize = ObjectID::LENGTH;
-/// Index marking the end of the object's version + the beginning of type-specific data
-const VERSION_END_INDEX: usize = ID_END_INDEX + 8;
+pub const ID_END_INDEX: usize = ObjectID::LENGTH;
 
 /// Different schemes for converting a Move value into a structured representation
 #[derive(Eq, PartialEq, Debug, Clone, Deserialize, Serialize, Hash)]
@@ -72,20 +72,28 @@ impl MoveObject {
     pub unsafe fn new_from_execution(
         type_: StructTag,
         has_public_transfer: bool,
+        version: SequenceNumber,
+        child_count: Option<u32>,
         contents: Vec<u8>,
     ) -> Self {
         // coins should always have public transfer, as they always should have store.
         // Thus, type_ == GasCoin::type_() ==> has_public_transfer
         debug_assert!(type_ != GasCoin::type_() || has_public_transfer);
+        let child_count = match child_count {
+            Some(0) => None,
+            cc => cc,
+        };
         Self {
             type_,
             has_public_transfer,
+            child_count,
+            version,
             contents,
         }
     }
 
-    pub fn new_gas_coin(contents: Vec<u8>) -> Self {
-        unsafe { Self::new_from_execution(GasCoin::type_(), true, contents) }
+    pub fn new_gas_coin(version: SequenceNumber, contents: Vec<u8>) -> Self {
+        unsafe { Self::new_from_execution(GasCoin::type_(), true, version, None, contents) }
     }
 
     pub fn has_public_transfer(&self) -> bool {
@@ -97,18 +105,23 @@ impl MoveObject {
     }
 
     pub fn version(&self) -> SequenceNumber {
-        SequenceNumber::from(u64::from_le_bytes(*self.version_bytes()))
+        self.version
+    }
+
+    pub fn child_count(&self) -> Option<u32> {
+        debug_assert_ne!(self.child_count, Some(0));
+        self.child_count
     }
 
     /// Contents of the object that are specific to its type--i.e., not its ID and version, which all objects have
     /// For example if the object was declared as `struct S has key { id: ID, f1: u64, f2: bool },
     /// this returns the slice containing `f1` and `f2`.
     pub fn type_specific_contents(&self) -> &[u8] {
-        &self.contents[VERSION_END_INDEX..]
+        &self.contents[ID_END_INDEX..]
     }
 
-    pub fn id_version_contents(&self) -> &[u8] {
-        &self.contents[..VERSION_END_INDEX]
+    pub fn id_contents(&self) -> &[u8] {
+        &self.contents[..ID_END_INDEX]
     }
 
     /// Update the contents of this object and increment its version
@@ -136,20 +149,35 @@ impl MoveObject {
 
     /// Increase the version of this object by one
     pub fn increment_version(&mut self) {
-        let new_version = self.version().increment();
-        // TODO: better bit tricks are probably possible here. for now, just do the obvious thing
-        self.version_bytes_mut()
-            .copy_from_slice(bcs::to_bytes(&new_version).unwrap().as_slice());
+        self.version = self.version.increment();
     }
 
-    fn version_bytes(&self) -> &BcsU64 {
-        self.contents[ID_END_INDEX..VERSION_END_INDEX]
-            .try_into()
-            .unwrap()
+    #[allow(clippy::result_unit_err)]
+    pub fn change_child_count(&mut self, delta: i64) -> Result<(), ()> {
+        Self::apply_child_count_delta(&mut self.child_count, delta)
     }
 
-    fn version_bytes_mut(&mut self) -> &mut [u8] {
-        &mut self.contents[ID_END_INDEX..VERSION_END_INDEX]
+    #[allow(clippy::result_unit_err)]
+    pub fn apply_child_count_delta(child_count: &mut Option<u32>, delta: i64) -> Result<(), ()> {
+        let ichild_count = child_count.unwrap_or(0) as i64;
+        debug_assert!(
+            delta > 0 || ichild_count >= delta.abs(),
+            "apply_child_count_delta should only be called by values generated via Move. \
+            As such, it is an invariant that the delta doesn't pull the count negative"
+        );
+        let new_child_count: i64 = match ichild_count.checked_add(delta) {
+            None => return Err(()),
+            Some(n) => n,
+        };
+        debug_assert!(new_child_count >= 0);
+        let new_child_count: u32 = new_child_count.try_into().map_err(|_| ())?;
+        let new_child_count = if new_child_count == 0 {
+            None
+        } else {
+            Some(new_child_count)
+        };
+        *child_count = new_child_count;
+        Ok(())
     }
 
     pub fn contents(&self) -> &[u8] {
@@ -218,8 +246,17 @@ impl MoveObject {
     pub fn object_size_for_gas_metering(&self) -> usize {
         let seriealized_type_tag =
             bcs::to_bytes(&self.type_).expect("Serializing type tag should not fail");
+        let child_count_size = if self.child_count.is_some() {
+            // 1 for option enum variant
+            // 4 for u32
+            5
+        } else {
+            // 1 for option enum variant
+            1
+        };
         // + 1 for 'has_public_transfer'
-        self.contents.len() + seriealized_type_tag.len() + 1
+        // + 8 for `version`
+        self.contents.len() + seriealized_type_tag.len() + child_count_size + 1 + 8
     }
 }
 
@@ -360,8 +397,6 @@ pub struct Object {
     pub storage_rebate: u64,
 }
 
-impl BcsSignable for Object {}
-
 impl Object {
     /// Create a new Move object
     pub fn new_move(o: MoveObject, owner: Owner, previous_transaction: TransactionDigest) -> Self {
@@ -478,7 +513,9 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+            version: SequenceNumber::new(),
+            child_count: None,
+            contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
             owner: Owner::Immutable,
@@ -492,7 +529,9 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, SequenceNumber::new(), gas).to_bcs_bytes(),
+            version: SequenceNumber::new(),
+            child_count: None,
+            contents: GasCoin::new(id, gas).to_bcs_bytes(),
         });
         Self {
             owner: Owner::AddressOwner(owner),
@@ -506,7 +545,9 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, SequenceNumber::new(), GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+            version: SequenceNumber::new(),
+            child_count: None,
+            contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
             owner: Owner::ObjectOwner(owner.into()),
@@ -529,7 +570,9 @@ impl Object {
         let data = Data::Move(MoveObject {
             type_: GasCoin::type_(),
             has_public_transfer: true,
-            contents: GasCoin::new(id, version, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
+            version,
+            child_count: None,
+            contents: GasCoin::new(id, GAS_VALUE_FOR_TESTING).to_bcs_bytes(),
         });
         Self {
             owner: Owner::AddressOwner(owner),

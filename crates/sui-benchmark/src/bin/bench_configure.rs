@@ -5,6 +5,7 @@ use clap::*;
 use std::path::Path;
 use sui_config::genesis_config::{AccountConfig, GenesisConfig, ObjectConfigRange};
 use sui_config::Config;
+use sui_types::crypto::AccountKeyPair;
 
 use sui_types::{base_types::ObjectID, crypto::get_key_pair};
 
@@ -35,7 +36,7 @@ fn main() {
     // For each load gen, create an account
     for _ in 0..bch.number_of_generators {
         // Create a keypair for this account
-        let (account_address, account_keypair) = get_key_pair();
+        let (account_address, account_keypair): (_, AccountKeyPair) = get_key_pair();
 
         // Populate the range configs
         let range_cfg = ObjectConfigRange {
@@ -60,6 +61,8 @@ fn main() {
     let genesis_config = GenesisConfig {
         validator_genesis_info: None,
         committee_size: bch.host_port_stake_triplets.len(),
+        grpc_load_shed: None,
+        grpc_concurrency_limit: None,
         accounts: accounts.clone(),
     };
 

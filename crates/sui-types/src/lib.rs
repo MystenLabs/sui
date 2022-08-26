@@ -23,6 +23,7 @@ pub mod event;
 pub mod gas;
 pub mod gas_coin;
 pub mod id;
+pub mod message_envelope;
 pub mod messages;
 pub mod messages_checkpoint;
 pub mod move_package;
@@ -44,6 +45,7 @@ pub const MOVE_STDLIB_ADDRESS: AccountAddress = AccountAddress::ONE;
 /// 0x2-- account address where sui framework modules are stored
 /// Same as the ObjectID
 pub const SUI_FRAMEWORK_ADDRESS: AccountAddress = get_hex_address_two();
+pub const SUI_FRAMEWORK_OBJECT_ID: ObjectID = ObjectID::from_single_byte(2);
 
 /// 0x5: hardcoded object ID for the singleton sui system state object.
 pub const SUI_SYSTEM_STATE_OBJECT_ID: ObjectID = ObjectID::from_single_byte(5);
@@ -52,4 +54,8 @@ const fn get_hex_address_two() -> AccountAddress {
     let mut addr = [0u8; AccountAddress::LENGTH];
     addr[AccountAddress::LENGTH - 1] = 2u8;
     AccountAddress::new(addr)
+}
+
+pub fn sui_framework_address_concat_string(suffix: &str) -> String {
+    format!("{}{suffix}", SUI_FRAMEWORK_ADDRESS.to_hex_literal())
 }

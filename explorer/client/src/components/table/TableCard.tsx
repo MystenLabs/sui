@@ -23,7 +23,7 @@ type Category =
     | 'ethAddress'
     | 'unknown';
 
-type Link = {
+export type LinkObj = {
     url: string;
     name?: string;
     copy?: boolean;
@@ -37,7 +37,7 @@ type TableColumn = {
 };
 // TODO: update Link to use Tuple type
 // type Links = [Link, Link?];
-type Links = Link[];
+type Links = LinkObj[];
 
 type TxStatus = {
     txTypeName: TransactionKindName | undefined;
@@ -56,7 +56,7 @@ type TxType = {
         | TxStatus;
 };
 
-function TxAddresses({ content }: { content: Link[] }) {
+export function TxAddresses({ content }: { content: LinkObj[] }) {
     return (
         <section className={styles.addresses}>
             {content.map((itm, idx) => (
@@ -83,9 +83,9 @@ function TxStatusType({ content }: { content: TxStatus }) {
     const TxResultStatus =
         content.status === 'success' ? TxStatus.success : TxStatus.fail;
     return (
-        <>
+        <section>
             <TxResultStatus /> {content.txTypeName}
-        </>
+        </section>
     );
 }
 
@@ -111,7 +111,7 @@ function columnsContent(columns: TableColumn[]) {
                 return <TxStatusType content={content} />;
             }
             // handle most common types
-            return content;
+            return <section>{content}</section>;
         },
     }));
 }
@@ -137,12 +137,12 @@ function TableCard({
     });
 
     return (
-        <div className={styles.content}>
+        <div className={styles.container}>
             <table className={styles.table}>
                 <thead>
-                    {table.getHeaderGroups().map((headerGroup) => (
+                    {table.getHeaderGroups().map((headerGroup: any) => (
                         <tr key={headerGroup.id}>
-                            {headerGroup.headers.map((header) => (
+                            {headerGroup.headers.map((header: any) => (
                                 <th
                                     key={header.id}
                                     colSpan={header.colSpan}
@@ -160,13 +160,10 @@ function TableCard({
                     ))}
                 </thead>
                 <tbody>
-                    {table.getRowModel().rows.map((row) => (
+                    {table.getRowModel().rows.map((row: any) => (
                         <tr key={row.id}>
-                            {row.getVisibleCells().map((cell) => (
-                                <td
-                                    key={cell.id}
-                                    className={styles.tablespacing}
-                                >
+                            {row.getVisibleCells().map((cell: any) => (
+                                <td key={cell.id}>
                                     {flexRender(
                                         cell.column.columnDef.cell,
                                         cell.getContext()

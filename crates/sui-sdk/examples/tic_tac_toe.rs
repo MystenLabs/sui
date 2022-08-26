@@ -11,15 +11,16 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
+use sui_json_rpc_types::SuiData;
+use sui_sdk::crypto::KeystoreType;
 use sui_sdk::{
-    crypto::{Keystore, SuiKeystore},
+    crypto::SuiKeystore,
     json::SuiJsonValue,
     types::{
         base_types::{ObjectID, SuiAddress},
-        crypto::SignableBytes,
-        id::Info,
-        messages::TransactionData,
-        sui_serde::Base64,
+        crypto::Signature,
+        id::UID,
+        messages::Transaction,
     },
     SuiClient,
 };
@@ -28,11 +29,11 @@ use sui_sdk::{
 async fn main() -> Result<(), anyhow::Error> {
     let opts: TicTacToeOpts = TicTacToeOpts::parse();
     let keystore_path = opts.keystore_path.unwrap_or_else(default_keystore_path);
-    let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+    let keystore = KeystoreType::File(keystore_path).init()?;
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
-        client: SuiClient::new_http_client(&opts.rpc_server_url)?,
+        client: SuiClient::new_rpc_client(&opts.rpc_server_url, None).await?,
         keystore,
     };
 
@@ -68,16 +69,20 @@ impl TicTacToe {
         let player_o = player_o.unwrap_or_else(|| self.keystore.addresses()[1]);
 
         // Force a sync of signer's state in gateway.
-        self.client.sync_account_state(player_x).await?;
+        self.client
+            .wallet_sync_api()
+            .sync_account_state(player_x)
+            .await?;
 
         // Create a move call transaction using the TransactionBuilder API.
         let create_game_call = self
             .client
+            .transaction_builder()
             .move_call(
                 player_x,
                 self.game_package_id,
-                "shared_tic_tac_toe".to_string(),
-                "create_game".to_string(),
+                "shared_tic_tac_toe",
+                "create_game",
                 vec![],
                 vec![
                     SuiJsonValue::from_str(&player_x.to_string())?,
@@ -88,26 +93,21 @@ impl TicTacToe {
             )
             .await?;
 
-        // Sign the transaction.
-        let transaction_bytes = create_game_call.tx_bytes.to_vec()?;
+        // Get signer from keystore
+        let signer = self.keystore.signer(player_x);
 
-        // You can do some extra verification here to make sure the transaction created is correct before signing.
-        let _transaction = TransactionData::from_signable_bytes(&transaction_bytes)?;
-
-        // Create a signature using the keystore.
-        let signature = self.keystore.sign(&player_x, &transaction_bytes)?;
-        let signature_base64 = Base64::from_bytes(signature.signature_bytes());
-        let pub_key = Base64::from_bytes(signature.public_key_bytes());
+        // Sign the transaction
+        let signature = Signature::new(&create_game_call, &signer);
 
         // Execute the transaction.
         let response = self
             .client
-            .execute_transaction(create_game_call.tx_bytes, signature_base64, pub_key)
+            .quorum_driver()
+            .execute_transaction(Transaction::new(create_game_call, signature))
             .await?;
 
         // We know `create_game` move function will create 1 object.
         let game_id = response
-            .to_effect_response()?
             .effects
             .created
             .first()
@@ -167,11 +167,12 @@ impl TicTacToe {
             // Create a move call transaction using the TransactionBuilder API.
             let place_mark_call = self
                 .client
+                .transaction_builder()
                 .move_call(
                     my_identity,
                     self.game_package_id,
-                    "shared_tic_tac_toe".to_string(),
-                    "place_mark".to_string(),
+                    "shared_tic_tac_toe",
+                    "place_mark",
                     vec![],
                     vec![
                         SuiJsonValue::from_str(&game_state.info.object_id().to_hex_literal())?,
@@ -183,20 +184,21 @@ impl TicTacToe {
                 )
                 .await?;
 
-            // Sign the transaction.
-            let transaction_bytes = place_mark_call.tx_bytes.to_vec()?;
-            let signature = self.keystore.sign(&my_identity, &transaction_bytes)?;
-            let signature_base64 = Base64::from_bytes(signature.signature_bytes());
-            let pub_key = Base64::from_bytes(signature.public_key_bytes());
+            // Get signer from keystore
+            let signer = self.keystore.signer(my_identity);
+
+            // Sign the transaction
+            let signature = Signature::new(&place_mark_call, &signer);
 
             // Execute the transaction.
             let response = self
                 .client
-                .execute_transaction(place_mark_call.tx_bytes, signature_base64, pub_key)
+                .quorum_driver()
+                .execute_transaction(Transaction::new(place_mark_call, signature))
                 .await?;
 
             // Print any execution error.
-            let status = response.to_effect_response()?.effects.status;
+            let status = response.effects.status;
             if status.is_err() {
                 eprintln!("{:?}", status);
             }
@@ -228,15 +230,13 @@ impl TicTacToe {
     // Retrieve the latest game state from the server.
     async fn fetch_game_state(&self, game_id: ObjectID) -> Result<TicTacToeState, anyhow::Error> {
         // Get the raw BCS serialised move object data
-        let current_game = self.client.get_raw_object(game_id).await?;
-        let current_game_bytes = current_game
+        let current_game = self.client.read_api().get_object(game_id).await?;
+        current_game
             .object()?
             .data
             .try_as_move()
-            .map(|m| &m.bcs_bytes)
-            .unwrap();
-        // Deserialize the data bytes into TicTacToeState struct
-        Ok(bcs::from_bytes(current_game_bytes)?)
+            .unwrap()
+            .deserialize()
     }
 }
 
@@ -303,7 +303,7 @@ enum TicTacToeCommand {
 // Data structure mirroring move object `games::shared_tic_tac_toe::TicTacToe` for deserialization.
 #[derive(Deserialize, Debug)]
 struct TicTacToeState {
-    info: Info,
+    info: UID,
     gameboard: Vec<Vec<u8>>,
     cur_turn: u8,
     game_status: u8,

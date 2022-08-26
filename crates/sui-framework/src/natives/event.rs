@@ -1,15 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::EventType;
+use crate::{legacy_emit_cost, EventType};
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
-use move_core_types::{gas_schedule::GasAlgebra, vm_status::StatusCode};
+use move_core_types::vm_status::StatusCode;
 use move_vm_runtime::native_functions::NativeContext;
 use move_vm_types::{
-    gas_schedule::NativeCostIndex,
-    loaded_data::runtime_types::Type,
-    natives::function::{native_gas, NativeResult},
-    values::Value,
+    loaded_data::runtime_types::Type, natives::function::NativeResult, values::Value,
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
@@ -28,8 +25,7 @@ pub fn emit(
     let event = args.pop_back().unwrap();
 
     // gas cost is proportional to size of event
-    let event_size = event.size();
-    let cost = native_gas(context.cost_table(), NativeCostIndex::EMIT_EVENT, 1).add(event_size);
+    let cost = legacy_emit_cost();
     match ty {
         Type::Struct(..) | Type::StructInstantiation(..) => (),
         ty => {

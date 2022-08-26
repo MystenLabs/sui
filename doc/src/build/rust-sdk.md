@@ -1,27 +1,41 @@
 ---
-title: Sui Rust SDK
+title: Interact with Sui over Rust SDK
 ---
 
 ## Overview
-The Sui SDK is a collection of rust JSON-RPC wrapper and crypto utilities that you can use to interact with the Sui Gateway and Sui Full Node.
-The `SuiClient` can be used to create a http(`SuiClient::new_http_client`) or a websocket client(`SuiClient::new_ws_client`).  
-See [JSON-RPC doc](json-rpc.md#sui-json-rpc-methods) for list of available methods.
+The [Sui SDK](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) is a collection of Rust language JSON-RPC wrapper and crypto utilities you can use to interact with the [Sui Devnet Gateway](../build/devnet.md) and [Sui Full Node](fullnode.md).
 
-> Note: As of v0.6.0, the web socket client is for subscription only, please use http client for other api methods.
+The [`SuiClient`](cli-client.md) can be used to create an HTTP (`SuiClient::new_http_client`) or a WebSocket client(`SuiClient::new_ws_client`).  
+See our [JSON-RPC](json-rpc.md#sui-json-rpc-methods) doc for the list of available methods.
 
-## Examples
-Add the sui-sdk crate in your Cargo.toml:
+> Note: As of [Sui version 0.6.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.0), the WebSocket client is for [subscription only](pubsub.md); use the HTTP client for other API methods.
+
+## References
+
+Find the `rustdoc` output for key Sui projects at:
+
+* Sui blockchain - https://mystenlabs.github.io/sui/
+* Narwhal and Bullshark consensus engine - https://mystenlabs.github.io/narwhal/
+* Mysten Labs infrastructure - https://mystenlabs.github.io/mysten-infra/
+
+## Configuration
+Add the `sui-sdk` crate in your [`Cargo.toml`](https://doc.rust-lang.org/cargo/reference/manifest.html) file like so:
 ```toml
 [dependencies]
 sui-sdk = { git = "https://github.com/MystenLabs/sui" }
 ```
-Use the devnet branch if you are connecting to the devnet. 
+If you are connecting to the devnet, use the `devnet` branch instead:
 ```toml
 [dependencies]
 sui-sdk = { git = "https://github.com/MystenLabs/sui", branch = "devnet" }
 ```
 
+## Examples
+
 ### Example 1 - Get all objects owned by an address
+
+This will print a list of object summaries owned by the address `"0xec11cad080d0496a53bafcea629fcbcfff2a9866"`:
+
 ```rust
 use std::str::FromStr;
 use sui_sdk::types::base_types::SuiAddress;
@@ -36,16 +50,24 @@ async fn main() -> Result<(), anyhow::Error> {
     Ok(())
 }
 ```
-This will print a list of object summaries owned by the address "0xec11cad080d0496a53bafcea629fcbcfff2a9866".
-You can verify the result with the [Sui explorer](https://explorer.devnet.sui.io/) if you are using the Sui devnet.
+
+You can verify the result with the [Sui Explorer](https://explorer.devnet.sui.io/) if you are using the Sui Devnet Gateway.
 
 ### Example 2 - Create and execute transaction
+
+Use this example to conduct a transaction in Sui using the Sui Devnet Gateway:
+
 ```rust
 use std::str::FromStr;
-use sui_sdk::crypto::{Keystore, SuiKeystore};
-use sui_sdk::types::base_types::{ObjectID, SuiAddress};
-use sui_sdk::types::sui_serde::Base64;
-use sui_sdk::SuiClient;
+use sui_sdk::{
+    crypto::SuiKeystore,
+    types::{
+        base_types::{ObjectID, SuiAddress},
+        crypto::Signature,
+        messages::Transaction,
+    },
+    SuiClient,
+};
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -55,7 +77,6 @@ async fn main() -> Result<(), anyhow::Error> {
         Some(v) => v.join(".sui").join("sui_config").join("sui.keystore"),
         None => panic!("Cannot obtain home directory path"),
     };
-    let keystore = SuiKeystore::load_or_create(&keystore_path)?;
 
     let my_address = SuiAddress::from_str("0x47722589dc23d63e82862f7814070002ffaaa465")?;
     let gas_object_id = ObjectID::from_str("0x273b2a83f1af1fda3ddbc02ad31367fcb146a814")?;
@@ -66,16 +87,16 @@ async fn main() -> Result<(), anyhow::Error> {
         .transfer_sui(my_address, gas_object_id, 1000, recipient, Some(1000))
         .await?;
 
+    // Get signer from keystore
+    let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+    let signer = keystore.signer(my_address);
+
     // Sign the transaction
-    let signature = keystore.sign(&my_address, &transfer_tx.tx_bytes.to_vec()?)?;
+    let signature = Signature::new(&transfer_tx, &signer);
 
     // Execute the transaction
     let transaction_response = sui
-        .execute_transaction(
-            transfer_tx.tx_bytes,
-            Base64::from_bytes(signature.signature_bytes()),
-            Base64::from_bytes(signature.public_key_bytes()),
-        )
+        .execute_transaction(Transaction::new(transfer_tx, signature))
         .await?;
 
     println!("{:?}", transaction_response);
@@ -85,6 +106,9 @@ async fn main() -> Result<(), anyhow::Error> {
 ```
 
 ### Example 3 - Event subscription
+
+Use the the WebSocket client to [subscribe to events](pubsub.md).
+
 ```rust
 use futures::StreamExt;
 use sui_sdk::rpc_types::SuiEventFilter;
@@ -99,8 +123,9 @@ async fn main() -> Result<(), anyhow::Error> {
     }
 }
 ```
-> Note: You will need to connect to a fullnode for the Event subscription service, see [Fullnode setup](fullnode.md#fullnode-setup) if you want to run a fullnode.
+> Note: You will need to connect to a fullnode for the Event subscription service, see [Fullnode setup](fullnode.md#fullnode-setup) if you want to run a Sui Fullnode.
 
 
-## Larger Examples
-[Tic Tac Toe](../../../crates/sui-sdk/README.md)
+## Larger examples
+
+See the Sui Rust SDK README for the [Tic Tac Toe](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) example.

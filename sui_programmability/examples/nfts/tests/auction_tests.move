@@ -7,8 +7,9 @@ module nfts::auction_tests {
 
     use sui::coin::{Self, Coin};
     use sui::sui::SUI;
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::test_scenario::Self;
+    use sui::transfer;
     use sui::tx_context::TxContext;
 
     use nfts::auction::{Self, Bid};
@@ -19,7 +20,7 @@ module nfts::auction_tests {
 
     // Example of an object type that could be sold at an auction.
     struct SomeItemToSell has key, store {
-        info: Info,
+        id: UID,
         value: u64,
     }
 
@@ -29,8 +30,8 @@ module nfts::auction_tests {
     fun init(ctx: &mut TxContext, bidders: vector<address>) {
         while (!vector::is_empty(&bidders)) {
             let bidder = vector::pop_back(&mut bidders);
-            let coin = coin::mint_for_testing(100, ctx);
-            coin::transfer<SUI>(coin, bidder);
+            let coin = coin::mint_for_testing<SUI>(100, ctx);
+            transfer::transfer(coin, bidder);
         };
     }
 
@@ -54,7 +55,7 @@ module nfts::auction_tests {
         test_scenario::next_tx(scenario, &owner);
         let ctx = test_scenario::ctx(scenario);
         let to_sell = SomeItemToSell {
-            info: object::new(ctx),
+            id: object::new(ctx),
             value: 42,
         };
         // generate unique auction ID (it would be more natural to
@@ -65,7 +66,7 @@ module nfts::auction_tests {
         // auction_id is used - otherwise id would still be considered
         // borrowed and could not be passed argument to a function
         // consuming it
-        let auction_id = *object::info_id(&id);
+        let auction_id = object::uid_to_inner(&id);
         auction::create_auction(to_sell, id, auctioneer, ctx);
 
         // a transaction by the first bidder to create and put a bid

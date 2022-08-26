@@ -8,13 +8,13 @@
 module nfts::cross_chain_airdrop {
     use std::vector;
     use sui::erc721_metadata::{Self, ERC721Metadata, TokenID};
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
 
     /// The oracle manages one `PerContractAirdropInfo` for each Ethereum contract
     struct CrossChainAirdropOracle has key {
-        info: Info,
+        id: UID,
         // TODO: replace this with SparseSet for O(1) on-chain uniqueness check
         managed_contracts: vector<PerContractAirdropInfo>,
     }
@@ -39,7 +39,7 @@ module nfts::cross_chain_airdrop {
 
     /// The Sui representation of the original ERC721 NFT on Eth
     struct ERC721 has key, store {
-        info: Info,
+        id: UID,
         /// The address of the source contract, e.g, the Ethereum contract address
         source_contract_address: SourceContractAddress,
         /// The metadata associated with this NFT
@@ -57,7 +57,7 @@ module nfts::cross_chain_airdrop {
     fun init(ctx: &mut TxContext) {
         transfer::transfer(
             CrossChainAirdropOracle {
-                info: object::new(ctx),
+                id: object::new(ctx),
                 managed_contracts: vector::empty(),
             },
             tx_context::sender(ctx)
@@ -79,7 +79,7 @@ module nfts::cross_chain_airdrop {
         // NOTE: this is where the globally uniqueness check happens
         assert!(!is_token_claimed(contract, &token_id), ETokenIDClaimed);
         let nft = ERC721 {
-            info: object::new(ctx),
+            id: object::new(ctx),
             source_contract_address: SourceContractAddress { address: source_contract_address },
             metadata: erc721_metadata::new(token_id, name, token_uri),
         };
@@ -91,9 +91,9 @@ module nfts::cross_chain_airdrop {
         let index = 0;
         // TODO: replace this with SparseSet so that the on-chain uniqueness check can be O(1)
         while (index < vector::length(&oracle.managed_contracts)) {
-            let info = vector::borrow_mut(&mut oracle.managed_contracts, index);
-            if (&info.source_contract_address.address == source_contract_address) {
-                return info
+            let id = vector::borrow_mut(&mut oracle.managed_contracts, index);
+            if (&id.source_contract_address.address == source_contract_address) {
+                return id
             };
             index = index + 1;
         };
@@ -102,11 +102,11 @@ module nfts::cross_chain_airdrop {
     }
 
     fun create_contract(oracle: &mut CrossChainAirdropOracle, source_contract_address: &vector<u8>): &mut PerContractAirdropInfo {
-        let info =  PerContractAirdropInfo {
+        let id =  PerContractAirdropInfo {
             source_contract_address: SourceContractAddress { address: *source_contract_address },
             claimed_source_token_ids: vector::empty()
         };
-        vector::push_back(&mut oracle.managed_contracts, info);
+        vector::push_back(&mut oracle.managed_contracts, id);
         let idx = vector::length(&oracle.managed_contracts) - 1;
         vector::borrow_mut(&mut oracle.managed_contracts, idx)
     }

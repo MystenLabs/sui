@@ -12,7 +12,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
 use sui_types::sui_serde::Base64;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 #[test]
 fn test_move_value_to_sui_bytearray() {
@@ -32,10 +32,10 @@ fn test_move_value_to_sui_bytearray() {
 fn test_move_value_to_sui_coin() {
     let id = ObjectID::random();
     let value = 10000;
-    let coin = GasCoin::new(id, SequenceNumber::new(), value);
+    let coin = GasCoin::new(id, value);
     let bcs = coin.to_bcs_bytes();
 
-    let move_object = MoveObject::new_gas_coin(bcs);
+    let move_object = MoveObject::new_gas_coin(SequenceNumber::new(), bcs);
     let layout = GasCoin::layout();
 
     let move_struct = move_object.to_move_struct(&layout).unwrap();
@@ -56,8 +56,8 @@ fn test_move_value_to_string() {
 
     let move_value = MoveValue::Struct(MoveStruct::WithTypes {
         type_: StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: ident_str!("utf8").to_owned(),
+            address: MOVE_STDLIB_ADDRESS,
+            module: ident_str!("string").to_owned(),
             name: ident_str!("String").to_owned(),
             type_params: vec![],
         },
@@ -80,8 +80,8 @@ fn test_move_value_to_url() {
 
     let string_move_value = MoveValue::Struct(MoveStruct::WithTypes {
         type_: StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: ident_str!("utf8").to_owned(),
+            address: MOVE_STDLIB_ADDRESS,
+            module: ident_str!("string").to_owned(),
             name: ident_str!("String").to_owned(),
             type_params: vec![],
         },
@@ -107,9 +107,8 @@ fn test_move_value_to_url() {
 fn test_serde() {
     let test_values = [
         SuiMoveValue::Number(u64::MAX),
-        SuiMoveValue::Info {
+        SuiMoveValue::UID {
             id: ObjectID::random(),
-            version: u64::MAX,
         },
         SuiMoveValue::String("some test string".to_string()),
         SuiMoveValue::Address(SuiAddress::random_for_testing_only()),

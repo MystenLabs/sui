@@ -18,24 +18,49 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7
       - name: Install Nodejs
         uses: actions/setup-node@v3
         with:
           node-version: "16"
-          cache: "yarn"
-          cache-dependency-path: ./explorer/client/yarn.lock
-      - name: Build TS sdk
-        working-directory: ./sdk/typescript
-        run: yarn install; yarn build
-      - name: Install yarn dependencies
-        working-directory: ./explorer/client
-        run: yarn install --force
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build SDK
+        run: pnpm --filter @mysten/sui.js build
       - name: Lint
-        working-directory: ./explorer/client
-        run: yarn lint
-      - name: Test
-        working-directory: ./explorer/client
-        run: yarn test
+        run: pnpm --filter sui-explorer lint
+      - name: Unit Tests
+        run: pnpm --filter sui-explorer test:unit
       - name: Build
-        working-directory: ./explorer/client
-        run: yarn build
+        run: pnpm --filter sui-explorer build
+  end_to_end:
+    name: End-to-end tests
+    needs: diff
+    if: needs.diff.outputs.isClient == 'true'
+    runs-on: [ubuntu-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build TS sdk
+        run: pnpm --filter @mysten/sui.js build
+      - name: Install Cypress
+        run: pnpm --filter sui-explorer exec cypress install
+      - name: Run e2e tests
+        uses: cypress-io/github-action@v4
+        with:
+          install: false
+          start: pnpm dev:static
+          working-directory: ./explorer/client

@@ -9,7 +9,7 @@
 }
 
 .label span {
-    @apply text-sui-grey-80 font-[500] text-[13px] mb-2;
+    @apply block sm:inline text-sui-grey-80 font-[500] text-[13px] mb-2;
 }
 
 .recipient.txaddresssender a,
@@ -79,7 +79,7 @@
 }
 
 .txrecipents {
-    @apply break-all relative;
+    @apply break-all relative mt-0 !important;
 }
 
 .txrecipents li::before {

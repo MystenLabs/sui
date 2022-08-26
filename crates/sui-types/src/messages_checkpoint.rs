@@ -2,20 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet, HashSet};
+use std::fmt::{Display, Formatter};
 use std::slice::Iter;
 
 use crate::base_types::ExecutionDigests;
 use crate::committee::EpochId;
-use crate::crypto::{AuthoritySignInfo, AuthorityWeakQuorumSignInfo};
+use crate::crypto::{AuthoritySignInfo, AuthoritySignInfoTrait, AuthorityWeakQuorumSignInfo};
 use crate::error::SuiResult;
 use crate::messages::CertifiedTransaction;
 use crate::waypoint::{Waypoint, WaypointDiff};
 use crate::{
     base_types::AuthorityName,
     committee::Committee,
-    crypto::{
-        sha3_hash, AuthoritySignature, BcsSignable, SuiAuthoritySignature, VerificationObligation,
-    },
+    crypto::{sha3_hash, AuthoritySignature, SuiAuthoritySignature, VerificationObligation},
     error::SuiError,
 };
 use serde::{Deserialize, Serialize};
@@ -87,17 +86,16 @@ pub struct CheckpointRequest {
 
 impl CheckpointRequest {
     /// Create a request for the latest checkpoint proposal from the authority
-    pub fn latest(detail: bool) -> CheckpointRequest {
+    pub fn proposal(detail: bool) -> CheckpointRequest {
         CheckpointRequest {
-            request_type: CheckpointRequestType::LatestCheckpointProposal,
+            request_type: CheckpointRequestType::CheckpointProposal,
             detail,
         }
     }
 
-    /// Create a request for a past checkpoint from the authority
-    pub fn past(seq: CheckpointSequenceNumber, detail: bool) -> CheckpointRequest {
+    pub fn authenticated(seq: Option<CheckpointSequenceNumber>, detail: bool) -> CheckpointRequest {
         CheckpointRequest {
-            request_type: CheckpointRequestType::PastCheckpoint(seq),
+            request_type: CheckpointRequestType::AuthenticatedCheckpoint(seq),
             detail,
         }
     }
@@ -105,10 +103,12 @@ impl CheckpointRequest {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CheckpointRequestType {
-    // Request the latest proposal and previous checkpoint.
-    LatestCheckpointProposal,
-    // Requests a past checkpoint
-    PastCheckpoint(CheckpointSequenceNumber),
+    /// Request a stored authenticated checkpoint.
+    /// if a sequence number is specified, return the checkpoint with that sequence number;
+    /// otherwise if None returns the latest authenticated checkpoint stored.
+    AuthenticatedCheckpoint(Option<CheckpointSequenceNumber>),
+    /// Request the current checkpoint proposal.
+    CheckpointProposal,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -118,50 +118,27 @@ pub struct CheckpointResponse {
     pub info: AuthorityCheckpointInfo,
     // If the detail flag in the request was set, then return
     // the list of transactions as well.
+    // If the request is AuthenticatedCheckpoint, the detail is for the returned authenticated
+    // checkpoint; if the request is CheckpointProposal, the detail is for the returned proposal.
     pub detail: Option<CheckpointContents>,
-}
-
-impl CheckpointResponse {
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        match &self.info {
-            AuthorityCheckpointInfo::Success => Ok(()),
-            AuthorityCheckpointInfo::Proposal { current, previous } => {
-                if let Some(current) = current {
-                    current.verify(committee, self.detail.as_ref())?;
-                    // detail pertains to the current proposal, not the previous
-                    previous.verify(committee, None)?;
-                }
-                Ok(())
-            }
-            AuthorityCheckpointInfo::Past(ckpt) => ckpt.verify(committee, self.detail.as_ref()),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthorityCheckpointInfo {
-    // Denotes success of he operation with no return
-    Success,
-    // Returns the current proposal if any, and
-    // the previous checkpoint.
-    Proposal {
-        current: Option<SignedCheckpointProposalSummary>,
-        previous: AuthenticatedCheckpoint,
-        // Include in all responses the local state of the sequence
-        // of transaction to allow followers to track the latest
-        // updates.
-        // last_local_sequence: TxSequenceNumber,
+    AuthenticatedCheckpoint(Option<AuthenticatedCheckpoint>),
+    /// The latest proposal must be signed by the validator.
+    /// For any proposal with sequence number > 0, a certified checkpoint for the previous
+    /// checkpoint must be returned, in order prove that this validator can indeed make a proposal
+    /// for its sequence number.
+    CheckpointProposal {
+        proposal: Option<SignedCheckpointProposalSummary>,
+        prev_cert: Option<CertifiedCheckpointSummary>,
     },
-    // Returns the requested checkpoint.
-    Past(AuthenticatedCheckpoint),
 }
 
 // TODO: Rename to AuthenticatedCheckpointSummary
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum AuthenticatedCheckpoint {
-    // No authentication information is available
-    // or checkpoint is not available on this authority.
-    None,
     // The checkpoint with just a single authority
     // signature.
     Signed(SignedCheckpointSummary),
@@ -174,7 +151,6 @@ impl AuthenticatedCheckpoint {
         match self {
             Self::Signed(s) => &s.summary,
             Self::Certified(c) => &c.summary,
-            Self::None => unreachable!(),
         }
     }
 
@@ -182,7 +158,6 @@ impl AuthenticatedCheckpoint {
         match self {
             Self::Signed(s) => s.verify(committee, detail),
             Self::Certified(c) => c.verify(committee, detail),
-            Self::None => Ok(()),
         }
     }
 }
@@ -231,12 +206,32 @@ impl CheckpointSummary {
     }
 }
 
-impl BcsSignable for CheckpointSummary {}
+impl Display for CheckpointSummary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "CheckpointSummary {{ epoch: {:?}, seq: {:?}, content_digest: {} }}",
+            self.epoch,
+            self.sequence_number,
+            hex::encode(&self.content_digest),
+        )
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointSummaryEnvelope<S> {
     pub summary: CheckpointSummary,
     pub auth_signature: S,
+}
+
+impl Display for SignedCheckpointSummary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "SignedCheckpointSummary {{ summary: {}, signature: {} }}",
+            self.summary, self.auth_signature,
+        )
+    }
 }
 
 pub type SignedCheckpointSummary = CheckpointSummaryEnvelope<AuthoritySignInfo>;
@@ -286,16 +281,17 @@ impl SignedCheckpointSummary {
         contents: Option<&CheckpointContents>,
     ) -> Result<(), SuiError> {
         fp_ensure!(
-            self.summary.epoch == self.auth_signature.epoch,
+            self.summary.epoch == committee.epoch,
             SuiError::from("Epoch in the summary doesn't match with the signature")
         );
 
         self.auth_signature.verify(&self.summary, committee)?;
 
         if let Some(contents) = contents {
+            let content_digest = contents.digest();
             fp_ensure!(
-                contents.digest() == self.summary.content_digest,
-                SuiError::from("Checkpoint contents digest mismatch")
+                content_digest == self.summary.content_digest,
+                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, received content digest {:?}, received {} transactions", self.summary, content_digest, contents.transactions.len())}
             );
         }
 
@@ -312,6 +308,16 @@ impl SignedCheckpointSummary {
 // clients and more efficient sync protocols.
 
 pub type CertifiedCheckpointSummary = CheckpointSummaryEnvelope<AuthorityWeakQuorumSignInfo>;
+
+impl Display for CertifiedCheckpointSummary {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        writeln!(
+            f,
+            "CertifiedCheckpointSummary {{ summary: {}, signature: {} }}",
+            self.summary, self.auth_signature,
+        )
+    }
+}
 
 impl CertifiedCheckpointSummary {
     /// Aggregate many checkpoint signatures to form a checkpoint certificate.
@@ -333,7 +339,6 @@ impl CertifiedCheckpointSummary {
         let certified_checkpoint = CertifiedCheckpointSummary {
             summary: signed_checkpoints[0].summary.clone(),
             auth_signature: AuthorityWeakQuorumSignInfo::new_with_signatures(
-                committee.epoch,
                 signed_checkpoints
                     .into_iter()
                     .map(|v| (v.auth_signature.authority, v.auth_signature.signature))
@@ -371,9 +376,10 @@ impl CertifiedCheckpointSummary {
         obligation.verify_all()?;
 
         if let Some(contents) = contents {
+            let content_digest = contents.digest();
             fp_ensure!(
-                contents.digest() == self.summary.content_digest,
-                SuiError::from("Checkpoint contents digest mismatch")
+                content_digest == self.summary.content_digest,
+                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, content digest = {:?}, transactions {}", self.summary, content_digest, contents.transactions.len())}
             );
         }
 
@@ -385,8 +391,6 @@ impl CertifiedCheckpointSummary {
 pub struct CheckpointContents {
     pub transactions: Vec<ExecutionDigests>,
 }
-
-impl BcsSignable for CheckpointContents {}
 
 // TODO: We should create a type for ordered contents,
 // instead of mixing them in the same type.
@@ -438,8 +442,6 @@ impl CheckpointProposalSummary {
         sha3_hash(self)
     }
 }
-
-impl BcsSignable for CheckpointProposalSummary {}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct SignedCheckpointProposalSummary {
@@ -578,7 +580,7 @@ pub struct CheckpointFragment {
 }
 
 impl CheckpointFragment {
-    pub fn verify(&self, committee: &Committee) -> Result<(), SuiError> {
+    pub fn verify(&self, committee: &Committee) -> SuiResult {
         // Check the signatures of proposer and other
         self.proposer.verify(committee, None)?;
         self.other.verify(committee, None)?;
@@ -598,8 +600,19 @@ impl CheckpointFragment {
             SuiError::from("Waypoint diff is not valid")
         );
 
-        // TODO:
-        // - check that the certs includes all missing certs on either side.
+        // Check that the fragment contains all missing certs indicated in diff.
+        let digests = self
+            .diff
+            .first
+            .items
+            .iter()
+            .chain(self.diff.second.items.iter());
+        for digest in digests {
+            let cert = self.certs.get(digest).ok_or_else(|| {
+                SuiError::from(format!("Missing cert with digest {digest:?}").as_str())
+            })?;
+            cert.verify(committee)?;
+        }
 
         Ok(())
     }
@@ -611,7 +624,7 @@ impl CheckpointFragment {
 
 #[cfg(test)]
 mod tests {
-    use narwhal_crypto::traits::KeyPair;
+    use fastcrypto::traits::KeyPair;
     use rand::prelude::StdRng;
     use rand::SeedableRng;
     use std::collections::BTreeSet;

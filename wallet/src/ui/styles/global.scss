@@ -4,8 +4,9 @@
 @font-face {
     font-family: Inter;
     font-style: normal;
-    font-display: swap;
+    font-display: block;
     src: url('_assets/fonts/inter.ttf');
+    font-weight: 100 900;
 }
 
 html,
@@ -58,4 +59,9 @@ body {
         cursor: initial;
         color: #707070;
     }
+}
+
+input:focus,
+textarea {
+    outline: none !important;
 }

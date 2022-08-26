@@ -5,7 +5,7 @@ use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorGenesisInfo},
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
-    CONSENSUS_DB_NAME, DEFAULT_STAKE,
+    CONSENSUS_DB_NAME, DEFAULT_GAS_PRICE, DEFAULT_STAKE,
 };
 use rand::rngs::OsRng;
 use std::{
@@ -15,7 +15,10 @@ use std::{
 };
 use sui_types::{
     base_types::encode_bytes_hex,
-    crypto::{get_key_pair_from_rng, KeypairTraits, PublicKeyBytes},
+    crypto::{
+        generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
+        AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiKeyPair,
+    },
 };
 
 pub struct ConfigBuilder<R = OsRng> {
@@ -69,17 +72,38 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     //TODO right now we always randomize ports, we may want to have a default port configuration
     pub fn build(mut self) -> NetworkConfig {
         let validators = (0..self.committee_size.get())
-            .map(|_| get_key_pair_from_rng(&mut self.rng).1)
-            .map(|key_pair| ValidatorGenesisInfo {
-                key_pair,
-                network_address: utils::new_network_address(),
-                stake: DEFAULT_STAKE,
-                narwhal_primary_to_primary: utils::new_network_address(),
-                narwhal_worker_to_primary: utils::new_network_address(),
-                narwhal_primary_to_worker: utils::new_network_address(),
-                narwhal_worker_to_worker: utils::new_network_address(),
-                narwhal_consensus_address: utils::new_network_address(),
+            .map(|_| {
+                (
+                    get_key_pair_from_rng(&mut self.rng).1,
+                    get_key_pair_from_rng::<AccountKeyPair, _>(&mut self.rng)
+                        .1
+                        .into(),
+                    get_key_pair_from_rng::<AccountKeyPair, _>(&mut self.rng)
+                        .1
+                        .into(),
+                )
             })
+            .map(
+                |(key_pair, account_key_pair, network_key_pair): (
+                    AuthorityKeyPair,
+                    SuiKeyPair,
+                    SuiKeyPair,
+                )| {
+                    ValidatorGenesisInfo {
+                        key_pair,
+                        account_key_pair,
+                        network_key_pair,
+                        network_address: utils::new_network_address(),
+                        stake: DEFAULT_STAKE,
+                        gas_price: DEFAULT_GAS_PRICE,
+                        narwhal_primary_to_primary: utils::new_network_address(),
+                        narwhal_worker_to_primary: utils::new_network_address(),
+                        narwhal_primary_to_worker: utils::new_network_address(),
+                        narwhal_worker_to_worker: utils::new_network_address(),
+                        narwhal_consensus_address: utils::new_network_address(),
+                    }
+                },
+            )
             .collect::<Vec<_>>();
 
         self.build_with_validators(validators)
@@ -91,15 +115,24 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .enumerate()
             .map(|(i, validator)| {
                 let name = format!("validator-{i}");
-                let public_key: PublicKeyBytes = validator.key_pair.public().into();
+                let protocol_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
+                let account_key: PublicKey = validator.account_key_pair.public();
+                let network_key: PublicKey = validator.network_key_pair.public();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
 
                 ValidatorInfo {
                     name,
-                    public_key,
+                    protocol_key,
+                    network_key,
+                    proof_of_possession: generate_proof_of_possession(
+                        &validator.key_pair,
+                        (&account_key).into(),
+                    ),
+                    account_key,
                     stake,
                     delegation: 0, // no delegation yet at genesis
+                    gas_price: validator.gas_price,
                     network_address,
                     narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
                     narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
@@ -130,7 +163,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let validator_configs = validators
             .into_iter()
             .map(|validator| {
-                let public_key: PublicKeyBytes = validator.key_pair.public().into();
+                let public_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
                 let db_path = self
                     .config_directory
                     .join(AUTHORITIES_DB_NAME)
@@ -148,7 +181,9 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 };
 
                 NodeConfig {
-                    key_pair: Arc::new(validator.key_pair),
+                    protocol_key_pair: Arc::new(validator.key_pair),
+                    account_key_pair: Arc::new(validator.account_key_pair),
+                    network_key_pair: Arc::new(validator.network_key_pair),
                     db_path,
                     network_address,
                     metrics_address: utils::available_local_socket_address(),
@@ -158,8 +193,11 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     consensus_config: Some(consensus_config),
                     enable_event_processing: false,
                     enable_gossip: true,
+                    enable_checkpoint: true,
                     enable_reconfig: false,
                     genesis: crate::node::Genesis::new(genesis.clone()),
+                    grpc_load_shed: initial_accounts_config.grpc_load_shed,
+                    grpc_concurrency_limit: initial_accounts_config.grpc_concurrency_limit,
                 }
             })
             .collect();

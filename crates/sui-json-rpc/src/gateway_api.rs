@@ -15,10 +15,11 @@ use crate::SuiRpcModule;
 use sui_core::gateway_state::{GatewayClient, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo, SuiTypeTag,
-    TransactionBytes, TransactionEffectsResponse, TransactionResponse,
+    GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo, SuiTransactionResponse,
+    SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
+use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::Base64;
 use sui_types::{
     base_types::{ObjectID, SuiAddress, TransactionDigest},
@@ -71,13 +72,16 @@ impl RpcGatewayApiServer for RpcGatewayImpl {
     async fn execute_transaction(
         &self,
         tx_bytes: Base64,
+        sig_scheme: SignatureScheme,
         signature: Base64,
         pub_key: Base64,
-    ) -> RpcResult<TransactionResponse> {
+    ) -> RpcResult<SuiTransactionResponse> {
         let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
-        let signature =
-            crypto::Signature::from_bytes(&[&*signature.to_vec()?, &*pub_key.to_vec()?].concat())
-                .map_err(|e| anyhow!(e))?;
+        let flag = vec![sig_scheme.flag()];
+        let signature = crypto::Signature::from_bytes(
+            &[&*flag, &*signature.to_vec()?, &pub_key.to_vec()?].concat(),
+        )
+        .map_err(|e| anyhow!(e))?;
         let result = self
             .client
             .execute_transaction(Transaction::new(data, signature))
@@ -147,7 +151,7 @@ impl RpcReadApiServer for GatewayReadApiImpl {
     async fn get_transaction(
         &self,
         digest: TransactionDigest,
-    ) -> RpcResult<TransactionEffectsResponse> {
+    ) -> RpcResult<SuiTransactionResponse> {
         Ok(self.client.get_transaction(digest).await?)
     }
 
@@ -236,6 +240,21 @@ impl RpcTransactionBuilderServer for TransactionBuilderImpl {
         let data = self
             .client
             .split_coin(signer, coin_object_id, split_amounts, gas, gas_budget)
+            .await?;
+        Ok(TransactionBytes::from_data(data)?)
+    }
+
+    async fn split_coin_equal(
+        &self,
+        signer: SuiAddress,
+        coin_object_id: ObjectID,
+        split_count: u64,
+        gas: Option<ObjectID>,
+        gas_budget: u64,
+    ) -> RpcResult<TransactionBytes> {
+        let data = self
+            .client
+            .split_coin_equal(signer, coin_object_id, split_count, gas, gas_budget)
             .await?;
         Ok(TransactionBytes::from_data(data)?)
     }

@@ -1,0 +1,86 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - devnet.*
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Disable incremental compilation.
+  #
+  # Incremental compilation is useful as part of an edit-build-test-edit cycle,
+  # as it lets the compiler avoid recompiling code that hasn't changed. However,
+  # on CI, we're not making small edits; we're almost always building the entire
+  # project from scratch. Thus, incremental compilation on CI actually
+  # introduces *additional* overhead to support making future builds
+  # faster...but no future builds will ever occur in any given CI environment.
+  #
+  # See https://matklad.github.io/2021/09/04/fast-rust-builds.html#ci-workflow
+  # for details.
+  CARGO_INCREMENTAL: 0
+  # Allow more retries for network requests in cargo (downloading crates) and
+  # rustup (installing toolchains). This should help to reduce flaky CI failures
+  # from transient network timeouts or other issues.
+  CARGO_NET_RETRY: 10
+  RUSTUP_MAX_RETRIES: 10
+  # Don't emit giant backtraces in the CI logs.
+  RUST_BACKTRACE: short
+
+jobs:
+  release:
+    runs-on: [ubuntu-ghcloud]
+    outputs:
+      isRelease: ${{ steps.release.outputs.isRelease }}
+    steps:
+      - name: Check for release
+        id: release
+        shell: bash
+        run: |
+          IS_RELEASE='false' ; if [[ $GITHUB_REF =~ ^refs/tags/devnet-[0-9].* ]]; then IS_RELEASE='true' ; fi
+          echo ::set-output name=isRelease::${IS_RELEASE}
+
+  release-build:
+    needs: release
+    if: needs.release.outputs.isRelease == 'true'
+    timeout-minutes: 45
+    runs-on: [ubuntu-ghcloud]
+    strategy:
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+
+      - name: cargo build (release)
+        run: |
+          cargo build --release
+
+          echo ::set-output name=BIN_SUI::"target/release/sui"
+          echo ::set-output name=BIN_SUI_NODE::"target/release/sui-node"
+          echo ::set-output name=BIN_SUI_TOOL::"target/release/sui-tool"
+          echo ::set-output name=BIN_SUI_FAUCET::"target/release/sui-faucet"
+          echo ::set-output name=BIN_RPC_SERVER::"target/release/rpc-server"
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@master
+        with:
+          name: sui-binaries
+          path: |
+            ${{ steps.package.outputs.BIN_SUI }}
+            ${{ steps.package.outputs.BIN_SUI_NODE }}
+            ${{ steps.package.outputs.BIN_SUI_TOOL }}
+            ${{ steps.package.outputs.BIN_SUI_FAUCET }}
+            ${{ steps.package.outputs.BIN_RPC_SERVER }}
+
+      - name: Publish binaries
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ steps.package.outputs.BIN_SUI }}
+            ${{ steps.package.outputs.BIN_SUI_NODE }}
+            ${{ steps.package.outputs.BIN_SUI_TOOL }}
+            ${{ steps.package.outputs.BIN_SUI_FAUCET }}
+            ${{ steps.package.outputs.BIN_RPC_SERVER }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

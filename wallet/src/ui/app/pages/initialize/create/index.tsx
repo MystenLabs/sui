@@ -4,7 +4,9 @@
 import { useCallback, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import Button from '_app/shared/button';
 import ExternalLink from '_components/external-link';
+import Icon, { SuiIcons } from '_components/icon';
 import { ToS_LINK } from '_shared/constants';
 import Loading from '_src/ui/app/components/loading';
 import { useAppDispatch, useAppSelector } from '_src/ui/app/hooks';
@@ -32,36 +34,47 @@ const CreatePage = () => {
     const creatingMnemonic = useAppSelector(({ account }) => account.creating);
     return (
         <>
-            <h1>Create new wallet</h1>
-            <div className={st.desc}>
-                Creating a wallet generates a Recovery Passphrase. Using it you
-                can restore the wallet.
-            </div>
-            <label className={st.terms}>
-                <input
-                    type="checkbox"
-                    onChange={onHandleTerms}
-                    checked={termsAccepted}
-                />
-                <span>
-                    I have read and agree to the{' '}
-                    <ExternalLink href={ToS_LINK}>
-                        Terms of Service
-                    </ExternalLink>
-                </span>
-            </label>
-            <div>
-                <Loading loading={creatingMnemonic}>
-                    <button
-                        type="button"
-                        onClick={onHandleCreate}
-                        disabled={!termsAccepted || creatingMnemonic}
-                        className="btn"
-                    >
-                        Create
-                    </button>
-                </Loading>
-            </div>
+            <section className={st.content}>
+                <div>
+                    <h1 className={st.headerTitle}>Create new wallet</h1>
+                    <div className={st.desc}>
+                        Creating a wallet generates new recovery passphrase.
+                        Using it you can backup and restore your wallet.
+                    </div>
+                    <label className={st.terms}>
+                        <input
+                            type="checkbox"
+                            onChange={onHandleTerms}
+                            checked={termsAccepted}
+                        />
+                        <span className={st.checkBox}></span>
+                        <span className={st.checkboxLabel}>
+                            I have read and agree to the{' '}
+                            <ExternalLink href={ToS_LINK} showIcon={false}>
+                                Terms of Service
+                            </ExternalLink>
+                        </span>
+                    </label>
+                    <div>
+                        <Loading loading={creatingMnemonic}>
+                            <Button
+                                type="button"
+                                onClick={onHandleCreate}
+                                disabled={!termsAccepted || creatingMnemonic}
+                                mode="primary"
+                                className={st.btn}
+                                size="large"
+                            >
+                                Create Wallet Now
+                                <Icon
+                                    icon={SuiIcons.ArrowRight}
+                                    className={st.next}
+                                />
+                            </Button>
+                        </Loading>
+                    </div>
+                </div>
+            </section>
         </>
     );
 };

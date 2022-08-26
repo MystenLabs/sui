@@ -3,6 +3,8 @@
 
 import { useEffect } from 'react';
 
+const COOKIE_NAME = 'sui_explorer_cookie_consent';
+
 async function loadAndEnableAnalytics() {
     if (process.env.NODE_ENV === 'production') {
         await import('./analytics');
@@ -19,7 +21,7 @@ export function CookiesConsent() {
                 revision: 0,
                 autorun: true,
                 current_lang: 'en',
-                cookie_name: 'sui_io_cookie',
+                cookie_name: COOKIE_NAME,
                 gui_options: {
                     consent_modal: {
                         layout: 'box',
@@ -32,11 +34,8 @@ export function CookiesConsent() {
                         transition: 'slide',
                     },
                 },
-                // @ts-expect-error no types
-                onAccept: function (cookie: {
-                    level: ('necessary' | 'analytics')[];
-                }) {
-                    if (cookie?.level?.includes('analytics')) {
+                onAccept(cookie) {
+                    if (cookie.categories.includes('analytics')) {
                         loadAndEnableAnalytics();
                     }
                 },
@@ -55,7 +54,6 @@ export function CookiesConsent() {
                                 role: 'accept_necessary',
                             },
                         },
-                        // @ts-expect-error no types
                         settings_modal: {
                             title: 'Cookie preferences',
                             save_settings_btn: 'Save settings',

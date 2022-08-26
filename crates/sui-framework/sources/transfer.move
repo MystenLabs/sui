@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 module sui::transfer {
-    use sui::object::{Self, Info};
+    use sui::object::{Self, UID};
 
     /// Transfer ownership of `obj` to `recipient`. `obj` must have the
     /// `key` attribute, which (in turn) ensures that `obj` has a globally
@@ -14,7 +14,7 @@ module sui::transfer {
 
     /// Transfer ownership of `obj` to another object `owner`.
     public fun transfer_to_object<T: key, R: key>(obj: T, owner: &mut R) {
-        let owner_id = object::id_address(object::id(owner));
+        let owner_id = object::id_address(owner);
         transfer_internal(obj, owner_id, true);
     }
 
@@ -24,11 +24,12 @@ module sui::transfer {
     /// use this function to transfer an object to the parent object identified by its id.
     /// Additionally, this API is useful for transfering to objects, outside of that object's
     /// module. The object's module can expose a function that returns a reference to the object's
-    /// verssioned ID, `&Info`. Which can then be used with this function.
+    /// UID, `&mut UID`, which can then be used with this function. The mutable `&mut UID` reference
+    /// prevents child objects from being added to immutable objects (immutable objects cannot have
+    /// child objects).
     /// The child object is specified in `obj`, and the parent object id is specified in `owner_id`.
-    public fun transfer_to_object_id<T: key>(obj: T, owner_id: &Info) {
-        let inner_owner_id = *object::info_id(owner_id);
-        transfer_internal(obj, object::id_address(&inner_owner_id), true);
+    public fun transfer_to_object_id<T: key>(obj: T, owner_id: &mut UID) {
+        transfer_internal(obj, object::uid_to_address(owner_id), true);
     }
 
     /// Freeze `obj`. After freezing `obj` becomes immutable and can no
@@ -51,26 +52,31 @@ module sui::transfer {
     // Cost calibration functions
     #[test_only]
     public fun calibrate_freeze_object<T: key>(obj: T) {
-        freeze_object(obj)
+        freeze_object(obj);
     }
     #[test_only]
-    public fun calibrate_freeze_object_nop<T: key + drop>(_obj: T) {
+    public fun calibrate_freeze_object_nop<T: key + drop>(obj: T) {
+        let _ = obj;
     }
 
     #[test_only]
     public fun calibrate_share_object<T: key>(obj: T) {
-        share_object(obj)
+        share_object(obj);
     }
     #[test_only]
-    public fun calibrate_share_object_nop<T: key + drop>(_obj: T) {
+    public fun calibrate_share_object_nop<T: key + drop>(obj: T) {
+        let _ = obj;
     }
 
     #[test_only]
     public fun calibrate_transfer_internal<T: key>(obj: T, recipient: address, to_object: bool) {
-        transfer_internal(obj, recipient, to_object)
+        transfer_internal(obj, recipient, to_object);
     }
     #[test_only]
-    public fun calibrate_transfer_internal_nop<T: key + drop>(_obj: T, _recipient: address, _to_object: bool) {
+    public fun calibrate_transfer_internal_nop<T: key + drop>(obj: T, recipient: address, to_object: bool) {
+        let _ = obj;
+        let _ = recipient;
+        let _ = to_object;
     }
 
 }

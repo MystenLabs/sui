@@ -43,12 +43,12 @@ function TabFooter({
             {(stats || paging) && (
                 <div className={styles.stats}>
                     {stats && (
-                        <p>
+                        <>
                             {typeof stats.count === 'number'
                                 ? numberSuffix(stats.count)
                                 : stats.count}{' '}
                             {stats.stats_text}
-                        </p>
+                        </>
                     )}
                     {paging && (
                         <div className={styles.pagedropdown}>

@@ -16,6 +16,7 @@ module.exports = {
             sui: {
                 dark: '#1F6493',
                 DEFAULT: '#6fbcf0',
+                light: '#E1F3FF',
                 grey: {
                     100: '#182435',
                     95: '#2A3645',
@@ -33,6 +34,7 @@ module.exports = {
                     35: '#FEFEFE',
                 },
             },
+            cardDark: '#F3F4F5',
             success: '#2DD7A7',
             error: '#2DD7A7',
             header: '#2A4362',

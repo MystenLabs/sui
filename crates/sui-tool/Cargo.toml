@@ -1,6 +1,6 @@
 [package]
 name = "sui-tool"
-version = "0.6.1"
+version = "0.7.0"
 authors = ["Mysten Labs <build@mystenlabs.com>"]
 license = "Apache-2.0"
 publish = false
@@ -8,22 +8,28 @@ edition = "2021"
 
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
-tokio = { version = "1.20.0", features = ["full"] }
-tracing = "0.1.35"
-clap = { version = "3.1.17", features = ["derive"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "123c9e40b529315e1c1d91a54fb717111c3e349c" }
+tokio = { version = "1.20.1", features = ["full"] }
+tracing = "0.1.36"
+clap = { version = "3.2.17", features = ["derive"] }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
 textwrap = "0.15"
-futures = "0.3.21"
+futures = "0.3.23"
+rocksdb = "0.19.0"
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"}
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab"} 
+tempfile = "3.3.0"
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "f4cab79d77cf70b0d564fa640fb748584a3ba36f", package = "executor" }
+serde_with = { version = "1.14.0", features = ["hex"] }
+sui-storage = { path = "../sui-storage" }
+strum_macros = "^0.24"
+strum = "0.24.1"
+serde = { version = "1.0.141", features = ["derive"] }
+eyre = "0.6.8"
 
 sui-core = { path = "../sui-core" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 
-rustyline = "9.1.2"
-rustyline-derive = "0.7.0"
 colored = "2.0.0"
-unescape = "0.1.0"
-shell-words = "1.1.0"
-
 workspace-hack = { path = "../workspace-hack"}

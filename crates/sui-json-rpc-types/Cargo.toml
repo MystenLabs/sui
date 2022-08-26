@@ -7,24 +7,22 @@ publish = false
 edition = "2021"
 
 [dependencies]
-async-trait = "0.1.53"
+async-trait = "0.1.57"
 anyhow = "1.0.58"
 schemars = { version = "0.8.10", features = ["either"] }
-jsonrpsee = { version = "0.14.0", features = ["full"] }
-jsonrpsee-proc-macros = "0.14.0"
-serde = { version = "1.0.139", features = ["derive"] }
-serde_json = "1.0.80"
+serde = { version = "1.0.141", features = ["derive"] }
+serde_json = "1.0.83"
 serde_with = { version = "1.14.0", features = ["hex"] }
 colored = "2.0.0"
 either = "1.7.0"
 itertools = "0.10.3"
-tracing = "0.1.35"
+tracing = "0.1.36"
+bcs = "0.1.3"
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f", features = ["address20"] }
-move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "7733658048a8bc80e9ba415b8c99aed9234eaa5f" }
+move-binary-format = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
+move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
-sui-open-rpc = { path = "../sui-open-rpc" }
-sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 workspace-hack = { path = "../workspace-hack"}

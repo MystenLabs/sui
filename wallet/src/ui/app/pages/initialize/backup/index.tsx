@@ -4,6 +4,8 @@
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import Button from '_app/shared/button';
+import Icon, { SuiIcons } from '_components/icon';
 import { useAppDispatch, useAppSelector } from '_src/ui/app/hooks';
 import { setMnemonic } from '_src/ui/app/redux/slices/account';
 
@@ -22,13 +24,28 @@ const BackupPage = () => {
         }
     }, [navigate, dispatch, mnemonic]);
     return (
-        <>
-            <h1>Backup Recovery Passphrase</h1>
+        <div className={st.walletCreated}>
+            <div className={st.successIcon}>
+                <div className={st.successBg}>
+                    <Icon icon={SuiIcons.ThumbsUp} />
+                </div>
+            </div>
+
+            <h1 className={st.headerTitle}>Wallet Successfully Created!</h1>
+            <h2 className={st.subTitle}>Backup Recovery Passphrase</h2>
             <div className={st.mnemonic}>{mnemonic}</div>
-            <button type="button" onClick={handleOnClick} className="btn">
+
+            <Button
+                type="button"
+                className={st.btn}
+                size="large"
+                mode="primary"
+                onClick={handleOnClick}
+            >
+                <Icon icon={SuiIcons.Checkmark} className={st.success} />
                 Done
-            </button>
-        </>
+            </Button>
+        </div>
     );
 };
 

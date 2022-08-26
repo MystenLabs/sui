@@ -3,13 +3,13 @@
 
 /// A freely transfererrable Wrapper for custom data.
 module examples::wrapper {
-    use sui::object::{Self, Info};
-    use sui::tx_context::{Self, TxContext};
+    use sui::object::{Self, UID};
+    use sui::tx_context::TxContext;
 
     /// An object with `store` can be transferred in any
     /// module without a custom transfer implementation.
     struct Wrapper<T: store> has key, store {
-        info: Info,
+        id: UID,
         contents: T
     }
 
@@ -24,7 +24,7 @@ module examples::wrapper {
     ): Wrapper<T> {
         Wrapper {
             contents,
-            info: object::new(ctx),
+            id: object::new(ctx),
         }
     }
 
@@ -39,7 +39,7 @@ module examples::wrapper {
 module examples::profile {
     use sui::transfer;
     use sui::url::{Self, Url};
-    use sui::utf8::{Self, String};
+    use std::string::{Self, String};
     use sui::tx_context::{Self, TxContext};
 
     // using Wrapper functionality
@@ -69,7 +69,7 @@ module examples::profile {
     ) {
         // create a new container and wrap ProfileInfo into it
         let container = wrapper::create(ProfileInfo {
-            name: utf8::string_unsafe(name),
+            name: string::utf8(name),
             url: url::new_unsafe_from_bytes(url)
         }, ctx);
 

@@ -16,7 +16,9 @@ fn main() {
         .unwrap();
 
     let working_dir = tempfile::tempdir().unwrap();
-    let wal = Arc::new(DBWriteAheadLog::<usize>::new(working_dir));
+    let wal = Arc::new(DBWriteAheadLog::<usize>::new(
+        working_dir.path().to_path_buf(),
+    ));
 
     let num_tasks = 20000;
     let num_txes_per_task = 10;
@@ -33,10 +35,8 @@ fn main() {
                     let tx = TransactionDigest::random();
                     let g = wal.begin_tx(&tx, &0).await.unwrap();
 
-                    if let Some(g) = g {
-                        sleep(Duration::from_millis(1)).await;
-                        g.commit_tx();
-                    }
+                    sleep(Duration::from_millis(1)).await;
+                    g.commit_tx();
                 }
             }));
         }

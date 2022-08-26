@@ -11,21 +11,36 @@
 //! Events are also archived into checkpoints so this API should support that as well.
 //!
 
+use anyhow::anyhow;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use futures::prelude::stream::BoxStream;
+use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
 use move_core_types::value::MoveValue;
 use serde_json::Value;
-use sui_types::base_types::{ObjectID, TransactionDigest};
+use std::collections::BTreeMap;
+use std::str::FromStr;
+use sui_json_rpc_types::{SuiEvent, SuiEventEnvelope};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::error::SuiError;
+use sui_types::error::SuiError::{StorageCorruptedFieldError, StorageMissingFieldError};
+use sui_types::event::{Event, TransferType};
 use sui_types::event::{EventEnvelope, EventType};
+use sui_types::object::Owner;
 use tokio_stream::StreamExt;
 
 pub mod sql;
+pub mod test_utils;
 pub use sql::SqlEventStore;
 
 use flexstr::SharedStr;
+
+/// Maximum number of events one can ask for right now
+pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 100;
+
+pub const TRANSFER_TYPE_KEY: &str = "xfer_type";
+pub const OBJECT_VERSION_KEY: &str = "obj_ver";
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
@@ -56,7 +71,239 @@ pub struct StoredEvent {
     /// * `version` - used by TransferObject
     /// * `destination` - address, in hex bytes, used by TransferObject
     /// * `type` - used by TransferObject (TransferType - Coin, ToAddress, ToObject)
-    fields: Vec<(SharedStr, EventValue)>, // Change this to something based on CBOR for binary values, or our own value types for efficiency
+    fields: BTreeMap<SharedStr, EventValue>, // Change this to something based on CBOR for binary values, or our own value types for efficiency
+    /// Contents for MoveEvent
+    move_event_contents: Option<Vec<u8>>,
+    /// StructTag in string form for MoveEvent, e.g. "0x2::devnet_nft::MintNFTEvent"
+    move_event_name: Option<String>,
+    /// Sender in the event
+    sender: Option<SuiAddress>,
+    /// Recipient in the event
+    recipient: Option<Owner>,
+}
+
+impl StoredEvent {
+    pub fn into_move_event(self) -> Result<SuiEvent, anyhow::Error> {
+        let package_id = self.package_id()?;
+        let transaction_module = self.transaction_module()?;
+        let sender = self.sender()?;
+        let type_ = self.move_event_name.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(StorageMissingFieldError(format!(
+                "Missing move_event_name for event {:?}",
+                self
+            )))
+        })?;
+        if self.move_event_contents.is_none() {
+            anyhow::bail!(StorageMissingFieldError(format!(
+                "Missing move_event_contents for event {:?}",
+                self
+            )))
+        }
+        // Safe to unwrap as we checked it nullability above
+        let bcs = self.move_event_contents.unwrap();
+        Ok(SuiEvent::MoveEvent {
+            package_id,
+            transaction_module,
+            sender,
+            type_: type_.clone(),
+            fields: None,
+            bcs,
+        })
+    }
+
+    pub fn into_publish(self) -> Result<SuiEvent, anyhow::Error> {
+        let package_id = self.package_id()?;
+        let sender = self.sender()?;
+        Ok(SuiEvent::Publish { sender, package_id })
+    }
+
+    pub fn into_transfer_object(self) -> Result<SuiEvent, anyhow::Error> {
+        let package_id = self.package_id()?;
+        let transaction_module = self.transaction_module()?;
+        let sender = self.sender()?;
+        let recipient = self.recipient()?;
+        let object_id = self.object_id()?;
+        let version = self.object_version()?.ok_or_else(|| {
+            anyhow::anyhow!("Can't extract object version from StoredEvent: {self:?}")
+        })?;
+        let type_ = self.transfer_type()?.ok_or_else(|| {
+            anyhow::anyhow!("Can't extract transfer type from StoredEvent: {self:?}")
+        })?;
+        Ok(SuiEvent::TransferObject {
+            package_id,
+            transaction_module,
+            sender,
+            recipient,
+            object_id,
+            version,
+            type_,
+        })
+    }
+
+    pub fn into_delete_object(self) -> Result<SuiEvent, anyhow::Error> {
+        let package_id = self.package_id()?;
+        let transaction_module = self.transaction_module()?;
+        let sender = self.sender()?;
+        let object_id = self.object_id()?;
+        Ok(SuiEvent::DeleteObject {
+            package_id,
+            transaction_module,
+            sender,
+            object_id,
+        })
+    }
+
+    pub fn into_new_object(self) -> Result<SuiEvent, anyhow::Error> {
+        let package_id = self.package_id()?;
+        let transaction_module = self.transaction_module()?;
+        let sender = self.sender()?;
+        let object_id = self.object_id()?;
+        let recipient = self.recipient()?;
+        Ok(SuiEvent::NewObject {
+            package_id,
+            transaction_module,
+            sender,
+            recipient,
+            object_id,
+        })
+    }
+
+    /// Convert a vec of StoredEvents into a vec of SuiEventEnvelope.
+    /// Returns Err when any conversion fails.
+    pub fn into_event_envelopes(
+        stored_events: Vec<Self>,
+    ) -> Result<Vec<SuiEventEnvelope>, anyhow::Error> {
+        let mut events = Vec::with_capacity(stored_events.len());
+        for stored_event in stored_events {
+            let event_envelope: SuiEventEnvelope = stored_event.try_into()?;
+            events.push(event_envelope);
+        }
+        Ok(events)
+    }
+
+    fn package_id(&self) -> Result<ObjectID, anyhow::Error> {
+        self.package_id.ok_or_else(|| {
+            anyhow::anyhow!(StorageMissingFieldError(format!(
+                "Missing package_id for event {:?}",
+                self
+            )))
+        })
+    }
+
+    fn transaction_module(&self) -> Result<String, anyhow::Error> {
+        let module_name = self.module_name.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(StorageMissingFieldError(format!(
+                "Missing transaction_module for event {:?}",
+                self
+            )))
+        })?;
+        Ok(Identifier::from_str(module_name.as_str())
+            .map_err(|e| {
+                anyhow!(StorageCorruptedFieldError(format!(
+                    "Module identifier is invalid for event {:?}: {e:?}",
+                    self
+                )))
+            })?
+            .to_string())
+    }
+
+    fn sender(&self) -> Result<SuiAddress, anyhow::Error> {
+        self.sender.ok_or_else(|| {
+            anyhow::anyhow!(StorageMissingFieldError(format!(
+                "Missing sender for event {:?}",
+                self
+            )))
+        })
+    }
+
+    fn recipient(&self) -> Result<Owner, anyhow::Error> {
+        self.recipient.ok_or_else(|| {
+            anyhow::anyhow!(StorageMissingFieldError(format!(
+                "Missing recipient for event {:?}",
+                self
+            )))
+        })
+    }
+
+    fn object_id(&self) -> Result<ObjectID, anyhow::Error> {
+        self.object_id.ok_or_else(|| {
+            anyhow::anyhow!(StorageMissingFieldError(format!(
+                "Missing object_id for event {:?}",
+                self
+            )))
+        })
+    }
+
+    fn object_version(&self) -> Result<Option<SequenceNumber>, anyhow::Error> {
+        let object_version = self.fields.get(OBJECT_VERSION_KEY);
+        match object_version {
+            Some(EventValue::Json(serde_json::Value::Number(object_version_ordinal))) => {
+                let object_version_ordinal = object_version_ordinal.as_u64().ok_or_else(|| {
+                    SuiError::ExtraFieldFailedToDeserialize {
+                        error: format!(
+                            "Error parsing object version from extra fields: {object_version:?}"
+                        ),
+                    }
+                })?;
+                Ok(Some(SequenceNumber::from_u64(object_version_ordinal)))
+            }
+            None => Ok(None),
+            Some(other_value) => anyhow::bail!(SuiError::ExtraFieldFailedToDeserialize {
+                error: format!("Got unexpected stored value for object_version: {other_value:?}"),
+            }),
+        }
+    }
+
+    fn transfer_type(&self) -> Result<Option<TransferType>, anyhow::Error> {
+        let transfer_type = self.fields.get(TRANSFER_TYPE_KEY);
+        match transfer_type {
+            Some(EventValue::Json(serde_json::Value::Number(transfer_type_ordinal))) => {
+                let transfer_type_ordinal = transfer_type_ordinal.as_u64().ok_or_else(|| {
+                    SuiError::ExtraFieldFailedToDeserialize {
+                        error: format!(
+                            "Error parsing transfer type from extra fields: {transfer_type:?}"
+                        ),
+                    }
+                })?;
+                Ok(Some(Event::transfer_type_from_ordinal(
+                    transfer_type_ordinal as usize,
+                )?))
+            }
+            None => Ok(None),
+            Some(other_value) => anyhow::bail!(SuiError::ExtraFieldFailedToDeserialize {
+                error: format!("Got unexpected stored value for transfer_type: {other_value:?}"),
+            }),
+        }
+    }
+}
+
+impl TryInto<SuiEventEnvelope> for StoredEvent {
+    type Error = anyhow::Error;
+    fn try_into(self) -> Result<SuiEventEnvelope, Self::Error> {
+        let timestamp = self.timestamp;
+        let tx_digest = self.tx_digest;
+        let event_type_str = self.event_type.as_str();
+        let event = match EventType::from_str(event_type_str) {
+            Ok(type_) => {
+                match type_ {
+                    EventType::MoveEvent => self.into_move_event(),
+                    EventType::Publish => self.into_publish(),
+                    EventType::TransferObject => self.into_transfer_object(),
+                    EventType::DeleteObject => self.into_delete_object(),
+                    EventType::NewObject => self.into_new_object(),
+                    // TODO support "EpochChange" and "Checkpoint"
+                    EventType::EpochChange => anyhow::bail!("Unsupported event type: EpochChange"),
+                    EventType::Checkpoint => anyhow::bail!("Unsupported event type: Checkpoint"),
+                }
+            }
+            Err(e) => anyhow::bail!("Invalid EventType {event_type_str}: {e:?}"),
+        }?;
+        Ok(SuiEventEnvelope {
+            timestamp,
+            tx_digest,
+            event,
+        })
+    }
 }
 
 /// Enum for different types of values returnable from events in the EventStore
@@ -83,21 +330,24 @@ pub trait EventStore {
     /// Semantics: events are appended.  The sequence number must be nondecreasing - EventEnvelopes
     /// which have sequence numbers below the current one will be skipped.  This feature
     /// is intended for deduplication.
+    /// Returns Ok(rows_affected).
     async fn add_events(
         &self,
         events: &[EventEnvelope],
         checkpoint_num: u64,
-    ) -> Result<(), SuiError>;
+    ) -> Result<u64, SuiError>;
 
-    /// Queries for events emitted by a given transaction, returned in order emitted
-    /// NOTE: Not all events come from transactions
-    async fn events_for_transaction(
+    /// Returns at most `limit` events emitted by a given
+    /// transaction, sorted in order emitted.
+    async fn events_by_transaction(
         &self,
         digest: TransactionDigest,
+        limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
-    /// Queries for all events of a certain EventType within a given time window.
-    /// Will return at most limit of the most recent events within the window, sorted in descending time.
+    /// Returns at most `limit` events of a certain EventType
+    /// (e.g. `TransferObject`) within [start_time, end_time),
+    /// sorted in in descending time.
     async fn events_by_type(
         &self,
         start_time: u64,
@@ -106,30 +356,71 @@ pub trait EventStore {
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
-    /// Generic event iteration bounded by time.  Return in ingestion order.
-    /// start_time is inclusive and end_time is exclusive.
-    async fn event_iterator(
+    /// Returns at most `limit` events emitted in a certain Module ID during
+    /// [start_time, end_time), sorted in descending time.
+    async fn events_by_module_id(
         &self,
         start_time: u64,
         end_time: u64,
+        module: &ModuleId,
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 
-    /// Generic event iteration bounded by checkpoint number.  Return in ingestion order.
-    /// Checkpoint numbers are inclusive on both ends.
+    /// Returns at most `limit` events with the move event struct name
+    /// (e.g. `0x2::devnet_nft::MintNFTEvent`) emitted
+    /// during [start_time, end_time), sorted in descending time.
+    async fn events_by_move_event_struct_name(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        move_event_struct_name: &str,
+        limit: usize,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
+
+    /// Returns at most `limit` events associated with a certain sender
+    /// emitted during [start_time, end_time), sorted in descending time.
+    async fn events_by_sender(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        sender: &SuiAddress,
+        limit: usize,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
+
+    /// Returns at most `limit` events associated with a certain recipient
+    /// emitted during [start_time, end_time), sorted in descending time.
+    async fn events_by_recipient(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        recipient: &Owner,
+        limit: usize,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
+
+    /// Returns at most `limit` events associated with a certain object id
+    /// emitted during [start_time, end_time), sorted in descending time.
+    async fn events_by_object(
+        &self,
+        start_time: u64,
+        end_time: u64,
+        object: &ObjectID,
+        limit: usize,
+    ) -> Result<Vec<StoredEvent>, SuiError>;
+
+    /// Generic event iterator to return events emitted in checkpoints
+    /// [start_checkpoint, end_checkpoint), order not guaranteed.
     fn events_by_checkpoint(
         &self,
         start_checkpoint: u64,
         end_checkpoint: u64,
     ) -> Result<StreamedResult, SuiError>;
 
-    /// Queries all Move events belonging to a certain Module ID within a given time window.
-    /// Will return at most limit of the most recent events within the window, sorted in descending time.
-    async fn events_by_module_id(
+    /// Generic event iterator that returns events emitted between
+    /// [start_time, end_time), sorted in descending time.
+    async fn event_iterator(
         &self,
         start_time: u64,
         end_time: u64,
-        module: ModuleId,
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
 }

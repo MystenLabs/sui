@@ -3,15 +3,25 @@
 
 use anyhow::Result;
 use futures::future::join_all;
+use std::cmp::min;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use sui_config::genesis::Genesis;
+use sui_tool::db_tool::{execute_db_tool_command, print_db_all_tables, DbToolCommand};
 
-use sui_core::authority_client::{AuthorityAPI, NetworkAuthorityClient};
-use sui_types::{base_types::*, messages::*};
+use sui_core::authority_client::{
+    AuthorityAPI, NetworkAuthorityClient, NetworkAuthorityClientMetrics,
+};
+use sui_types::{base_types::*, batch::*, messages::*, object::Owner};
+
+use anyhow::anyhow;
+use futures::stream::StreamExt;
 
 use clap::*;
+use sui_core::authority::MAX_ITEMS_LIMIT;
+use sui_types::object::ObjectFormatOptions;
 
 #[derive(Parser)]
 #[clap(
@@ -60,6 +70,58 @@ pub enum ToolCommand {
         #[clap(long = "no-header", help = "don't show header in concise output")]
         no_header: bool,
     },
+
+    #[clap(name = "fetch-transaction")]
+    FetchTransaction {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+
+        #[clap(long, help = "The object ID to fetch")]
+        digest: TransactionDigest,
+    },
+    /// Tool to read validator & gateway db.
+    #[clap(name = "db-tool")]
+    DbTool {
+        /// Path of the DB to read
+        #[clap(long = "db-path")]
+        db_path: String,
+        #[clap(subcommand)]
+        cmd: Option<DbToolCommand>,
+    },
+
+    /// Pull down the batch stream for a validator(s).
+    /// Note that this command currently operates sequentially, so it will block on the first
+    /// validator indefinitely. Therefore you should generally use this with a --validator=
+    /// argument.
+    #[clap(name = "batch-stream")]
+    BatchStream {
+        #[clap(long, help = "SequenceNumber to start at")]
+        seq: Option<u64>,
+
+        #[clap(long, help = "Number of items to request", default_value_t = 1000)]
+        len: u64,
+
+        #[clap(
+            long,
+            help = "Validator to fetch from - if not specified, all validators are queried"
+        )]
+        validator: Option<AuthorityName>,
+
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+    },
+
+    #[clap(name = "dump-validators")]
+    DumpValidators {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+    },
+
+    #[clap(name = "dump-genesis")]
+    DumpGenesis {
+        #[clap(long = "genesis")]
+        genesis: PathBuf,
+    },
 }
 
 fn make_clients(genesis: PathBuf) -> Result<BTreeMap<AuthorityName, NetworkAuthorityClient>> {
@@ -73,9 +135,14 @@ fn make_clients(genesis: PathBuf) -> Result<BTreeMap<AuthorityName, NetworkAutho
     let mut authority_clients = BTreeMap::new();
 
     for validator in genesis.validator_set() {
-        let channel = net_config.connect_lazy(&validator.network_address)?;
-        let client = NetworkAuthorityClient::new(channel);
-        let public_key_bytes = validator.public_key();
+        let channel = net_config
+            .connect_lazy(&validator.network_address)
+            .map_err(|err| anyhow!(err.to_string()))?;
+        let client = NetworkAuthorityClient::new(
+            channel,
+            Arc::new(NetworkAuthorityClientMetrics::new_for_tests()),
+        );
+        let public_key_bytes = validator.protocol_key();
         authority_clients.insert(public_key_bytes, client);
     }
 
@@ -119,13 +186,35 @@ where
     }
 }
 
+struct OwnerOutput(Owner);
+
+// grep/awk-friendly output for Owner
+impl std::fmt::Display for OwnerOutput {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self.0 {
+            Owner::AddressOwner(address) => {
+                write!(f, "address({})", address)
+            }
+            Owner::ObjectOwner(address) => {
+                write!(f, "object({})", address)
+            }
+            Owner::Immutable => {
+                write!(f, "immutable")
+            }
+            Owner::Shared => {
+                write!(f, "shared")
+            }
+        }
+    }
+}
+
 struct ConciseObjectOutput(ObjectData);
 
 impl ConciseObjectOutput {
     fn header() -> String {
         format!(
-            "{:<66} {:<8} {:<66} {:<45}",
-            "validator", "version", "digest", "parent_cert"
+            "{:<66} {:<8} {:<66} {:<45} {}",
+            "validator", "version", "digest", "parent_cert", "owner"
         )
     }
 }
@@ -143,8 +232,8 @@ impl std::fmt::Display for ConciseObjectOutput {
                 match resp {
                     Err(_) => writeln!(
                         f,
-                        "{:<66} {:<45}",
-                        "object-fetch-failed", "no-cert-available"
+                        "{:<66} {:<45} {:<51}",
+                        "object-fetch-failed", "no-cert-available", "no-owner-available"
                     )?,
                     Ok(resp) => {
                         let objref = resp
@@ -156,7 +245,12 @@ impl std::fmt::Display for ConciseObjectOutput {
                             .as_ref()
                             .map(|c| *c.digest())
                             .opt_debug("<genesis>");
-                        write!(f, " {:<66} {:<45}", objref, cert)?;
+                        let owner = resp
+                            .object_and_lock
+                            .as_ref()
+                            .map(|o| OwnerOutput(o.object.owner))
+                            .opt_display("no-owner-available");
+                        write!(f, " {:<66} {:<45} {:<51}", objref, cert, owner)?;
                     }
                 }
                 writeln!(f)?;
@@ -198,9 +292,27 @@ impl std::fmt::Display for VerboseObjectOutput {
                             }
                         }
 
-                        if let Some(ObjectResponse { lock, .. }) = &resp.object_and_lock {
-                            // TODO maybe show object contents if we can do so meaningfully.
-                            writeln!(f, "  -- object: <data>")?;
+                        if let Some(ObjectResponse {
+                            lock,
+                            object,
+                            layout,
+                        }) = &resp.object_and_lock
+                        {
+                            if object.is_package() {
+                                writeln!(f, "  -- object: <Move Package>")?;
+                            } else if let Some(layout) = layout {
+                                writeln!(
+                                    f,
+                                    "  -- object: Move Object: {}",
+                                    object
+                                        .data
+                                        .try_as_move()
+                                        .unwrap()
+                                        .to_move_struct(layout)
+                                        .unwrap()
+                                )?;
+                            }
+                            writeln!(f, "  -- owner: {}", object.owner)?;
                             writeln!(f, "  -- locked by: {}", lock.opt_debug("<not locked>"))?;
                         }
                     }
@@ -225,8 +337,13 @@ async fn get_object(
             .handle_object_info_request(ObjectInfoRequest {
                 object_id: id,
                 request_kind: match version {
-                    None => ObjectInfoRequestKind::LatestObjectInfo(None),
-                    Some(v) => ObjectInfoRequestKind::PastObjectInfo(SequenceNumber::from_u64(v)),
+                    None => ObjectInfoRequestKind::LatestObjectInfo(Some(
+                        ObjectFormatOptions::default(),
+                    )),
+                    Some(v) => ObjectInfoRequestKind::PastObjectInfoDebug(
+                        SequenceNumber::from_u64(v),
+                        Some(ObjectFormatOptions::default()),
+                    ),
                 },
             })
             .await
@@ -254,9 +371,71 @@ async fn get_object(
     ret
 }
 
+async fn handle_batch(client: &dyn AuthorityAPI, req: &BatchInfoRequest) {
+    let mut streamx = Box::pin(client.handle_batch_stream(req.clone()).await.unwrap());
+
+    while let Some(item) = streamx.next().await {
+        match item {
+            Ok(BatchInfoResponseItem(UpdateItem::Batch(signed_batch))) => {
+                println!("batch: {:?}", signed_batch);
+            }
+
+            Ok(BatchInfoResponseItem(UpdateItem::Transaction((seq, digests)))) => {
+                println!("item: {:?}, {:?}", seq, digests);
+            }
+
+            // Return any errors.
+            Err(err) => {
+                println!("error: {}", err);
+            }
+        }
+    }
+}
+
 impl ToolCommand {
     pub async fn execute(self) -> Result<(), anyhow::Error> {
         match self {
+            ToolCommand::BatchStream {
+                seq,
+                validator,
+                genesis,
+                len,
+            } => {
+                let clients = make_clients(genesis)?;
+
+                let clients: Vec<_> = clients
+                    .iter()
+                    .filter(|(name, _)| {
+                        if let Some(v) = validator {
+                            v == **name
+                        } else {
+                            true
+                        }
+                    })
+                    .collect();
+
+                for (name, c) in clients.iter() {
+                    println!("validator batch stream: {:?}", name);
+                    if let Some(seq) = seq {
+                        let requests =
+                            (seq..(seq + len))
+                                .step_by(MAX_ITEMS_LIMIT as usize)
+                                .map(|start| BatchInfoRequest {
+                                    start: Some(start),
+                                    length: min(MAX_ITEMS_LIMIT, seq + len - start),
+                                });
+                        for request in requests {
+                            handle_batch(*c, &request).await;
+                        }
+                    } else {
+                        let req = BatchInfoRequest {
+                            start: seq,
+                            length: len,
+                        };
+                        handle_batch(*c, &req).await;
+                    }
+                }
+            }
             ToolCommand::FetchObject {
                 id,
                 validator,
@@ -299,8 +478,38 @@ impl ToolCommand {
                     println!("{}", VerboseObjectOutput(output));
                 }
             }
-        }
+            ToolCommand::FetchTransaction { genesis, digest } => {
+                let clients = make_clients(genesis)?;
 
+                let responses = join_all(clients.iter().map(|(name, client)| async {
+                    let result = client
+                        .handle_transaction_info_request(TransactionInfoRequest {
+                            transaction_digest: digest,
+                        })
+                        .await;
+                    (*name, result)
+                }))
+                .await;
+                println!("{:#?}", responses);
+            }
+            ToolCommand::DbTool { db_path, cmd } => {
+                let path = PathBuf::from(db_path);
+                match cmd {
+                    Some(c) => execute_db_tool_command(path, c)?,
+                    None => print_db_all_tables(path)?,
+                }
+            }
+
+            ToolCommand::DumpValidators { genesis } => {
+                let genesis = Genesis::load(genesis).unwrap();
+                println!("{:#?}", genesis.validator_set());
+            }
+
+            ToolCommand::DumpGenesis { genesis } => {
+                let genesis = Genesis::load(genesis).unwrap();
+                println!("{:#?}", genesis);
+            }
+        };
         Ok(())
     }
 }

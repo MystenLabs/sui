@@ -11,6 +11,7 @@ pub(crate) mod checkpoint_tests;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::{collections::HashSet, path::Path, sync::Arc};
 use sui_storage::default_db_options;
 use sui_types::messages_checkpoint::CheckpointProposal;
@@ -22,18 +23,19 @@ use sui_types::{
     fp_ensure,
     messages_checkpoint::{
         AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
-        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointRequest,
-        CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
+        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointResponse,
+        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
-use tracing::{debug, info};
+use thiserror::Error;
+use tracing::{debug, error, info};
+use typed_store::traits::DBMapTableUtil;
 use typed_store::{
-    reopen,
-    rocks::{open_cf_opts, DBBatch, DBMap},
+    rocks::{DBBatch, DBMap},
     Map,
 };
+use typed_store_macros::DBMapUtils;
 
-use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use crate::checkpoints::causal_order_effects::CausalOrder;
 use crate::{
     authority::StableSyncAuthoritySigner,
@@ -49,7 +51,7 @@ const LOCALS: DBLabel = 0;
 // TODO: Make this bigger.
 pub const CHECKPOINT_COUNT_PER_EPOCH: u64 = 3;
 
-#[derive(Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, Serialize, Deserialize, Default, Debug)]
 pub struct CheckpointLocals {
     // The next checkpoint number expected.
     pub next_checkpoint: CheckpointSequenceNumber,
@@ -78,23 +80,21 @@ pub trait ConsensusSender: Send + Sync + 'static {
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum FragmentInternalError {
+    #[error("Sui error: {0}")]
     Error(SuiError),
+    #[error("Error processing fragment, retrying")]
     Retry(Box<CheckpointFragment>),
 }
 
-pub struct CheckpointStore {
-    // Fixed size, static, identity of the authority
-    /// The name of this authority.
-    pub name: AuthorityName,
-    /// The signature key of the authority.
-    pub secret: StableSyncAuthoritySigner,
-
+/// DBMap tables for checkpoints
+#[derive(DBMapUtils)]
+pub struct CheckpointStoreTables {
     /// The list of all transaction/effects that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
-    pub transactions_to_checkpoint:
-        DBMap<ExecutionDigests, (CheckpointSequenceNumber, TxSequenceNumber)>,
+    #[default_options_override_fn = "transactions_to_checkpoint_table_default_config"]
+    pub transactions_to_checkpoint: DBMap<ExecutionDigests, CheckpointSequenceNumber>,
 
     /// The mapping from checkpoint to transaction/effects contained within the checkpoint.
     /// The checkpoint content should be causally ordered and is consistent among
@@ -105,9 +105,11 @@ pub struct CheckpointStore {
     /// The set of transaction/effects this authority has processed but have not yet been
     /// included in a checkpoint, and their sequence number in the local sequence
     /// of this authority.
+    #[default_options_override_fn = "extra_transactions_table_default_config"]
     pub extra_transactions: DBMap<ExecutionDigests, TxSequenceNumber>,
 
     /// The list of checkpoint, along with their authentication information
+    #[default_options_override_fn = "checkpoints_table_default_config"]
     pub checkpoints: DBMap<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
 
     // --- Logic related to fragments on the way to making checkpoints
@@ -115,6 +117,7 @@ pub struct CheckpointStore {
     // A list of own fragments indexed by the other node that the fragment connects
     // to. These are used for the local node to potentially reconstruct the full
     // transaction set.
+    #[default_options_override_fn = "local_fragments_table_default_config"]
     pub local_fragments: DBMap<AuthorityName, CheckpointFragment>,
 
     /// Store the fragments received in order, the counter is purely internal,
@@ -123,6 +126,38 @@ pub struct CheckpointStore {
     /// already contain all relevant information from previous checkpoints.
     pub fragments: DBMap<ExecutionIndices, CheckpointFragment>,
 
+    /// A single entry table to store locals.
+    #[default_options_override_fn = "locals_table_default_config"]
+    pub locals: DBMap<DBLabel, CheckpointLocals>,
+}
+
+// These functions are used to initialize the DB tables
+fn transactions_to_checkpoint_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn extra_transactions_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+
+fn checkpoints_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+fn local_fragments_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+
+fn locals_table_default_config() -> Options {
+    default_db_options(None, None).1
+}
+
+pub struct CheckpointStore {
+    // Fixed size, static, identity of the authority
+    /// The name of this authority.
+    pub name: AuthorityName,
+    /// The signature key of the authority.
+    pub secret: StableSyncAuthoritySigner,
+
+    // --- Logic related to fragments on the way to making checkpoints
     /// The local sequence at which the proposal for the next checkpoint is created
     /// This is a sequence number containing all unprocessed transactions lower than
     /// this sequence number. At this point the unprocessed_transactions sequence
@@ -130,11 +165,11 @@ pub struct CheckpointStore {
     /// the proposal, although we could re-create it from the database.
     memory_locals: Option<Arc<CheckpointLocals>>,
 
-    /// A single entry table to store locals.
-    pub locals: DBMap<DBLabel, CheckpointLocals>,
-
     // Consensus sender
     sender: Option<Box<dyn ConsensusSender>>,
+
+    /// DBMap tables
+    pub tables: CheckpointStoreTables,
 }
 
 impl CheckpointStore {
@@ -142,7 +177,7 @@ impl CheckpointStore {
         &self,
         seq: CheckpointSequenceNumber,
     ) -> Result<Option<AuthenticatedCheckpoint>, SuiError> {
-        Ok(self.checkpoints.get(&seq)?)
+        Ok(self.tables.checkpoints.get(&seq)?)
     }
 
     fn get_prev_checkpoint_digest(
@@ -152,13 +187,7 @@ impl CheckpointStore {
         // Extract the previous checkpoint digest if there is one.
         Ok(if checkpoint_sequence > 0 {
             self.get_checkpoint(checkpoint_sequence - 1)?
-                .map(|prev_checkpoint| match prev_checkpoint {
-                    AuthenticatedCheckpoint::Certified(cert) => cert.summary.digest(),
-                    AuthenticatedCheckpoint::Signed(signed) => signed.summary.digest(),
-                    _ => {
-                        unreachable!();
-                    }
-                })
+                .map(|prev_checkpoint| prev_checkpoint.summary().digest())
         } else {
             None
         })
@@ -169,11 +198,11 @@ impl CheckpointStore {
     /// Loads the locals from the store -- do this at init
     fn load_locals(&mut self, epoch: EpochId) -> Result<CheckpointLocals, SuiError> {
         // Loads locals from disk, or inserts initial locals
-        let mut locals = match self.locals.get(&LOCALS)? {
+        let mut locals = match self.tables.locals.get(&LOCALS)? {
             Some(locals) => locals,
             None => {
                 let locals = CheckpointLocals::default();
-                self.locals.insert(&LOCALS, &locals)?;
+                self.tables.locals.insert(&LOCALS, &locals)?;
                 locals
             }
         };
@@ -182,6 +211,7 @@ impl CheckpointStore {
         if locals.proposal_next_transaction.is_some() {
             let checkpoint_sequence = locals.next_checkpoint;
             let transactions = self
+                .tables
                 .extra_transactions
                 .iter()
                 .filter(|(_, seq)| seq < locals.proposal_next_transaction.as_ref().unwrap())
@@ -209,12 +239,11 @@ impl CheckpointStore {
         _previous: Arc<CheckpointLocals>,
         locals: CheckpointLocals,
     ) -> Result<(), SuiError> {
-        self.locals.insert(&LOCALS, &locals)?;
+        self.tables.locals.insert(&LOCALS, &locals)?;
         self.memory_locals = Some(Arc::new(locals));
         Ok(())
     }
 
-    #[cfg(test)]
     pub fn set_locals_for_testing(&mut self, locals: CheckpointLocals) -> Result<(), SuiError> {
         self.set_locals(Arc::new(locals.clone()), locals)
     }
@@ -232,61 +261,23 @@ impl CheckpointStore {
 
     /// Open a checkpoint store to use to generate checkpoints, incl the information
     /// needed to sign new checkpoints.
-    pub fn open<P: AsRef<Path>>(
-        path: P,
+    pub fn open(
+        path: &Path,
         db_options: Option<Options>,
         current_epoch: EpochId,
         name: AuthorityName,
         secret: StableSyncAuthoritySigner,
     ) -> Result<CheckpointStore, SuiError> {
-        let (options, point_lookup) = default_db_options(db_options, None);
-
-        let db = open_cf_opts(
-            &path,
-            Some(options.clone()),
-            &[
-                ("transactions_to_checkpoint", &point_lookup),
-                ("checkpoint_contents", &options),
-                ("extra_transactions", &point_lookup),
-                ("checkpoints", &point_lookup),
-                ("local_fragments", &point_lookup),
-                ("fragments", &options),
-                ("locals", &point_lookup),
-            ],
-        )
-        .expect("Cannot open DB.");
-
-        let (
-            transactions_to_checkpoint,
-            checkpoint_contents,
-            extra_transactions,
-            checkpoints,
-            local_fragments,
-            fragments,
-            locals,
-        ) = reopen! (
-            &db,
-            "transactions_to_checkpoint";<ExecutionDigests,(CheckpointSequenceNumber, TxSequenceNumber)>,
-            "checkpoint_contents";<CheckpointSequenceNumber,CheckpointContents>,
-            "extra_transactions";<ExecutionDigests,TxSequenceNumber>,
-            "checkpoints";<CheckpointSequenceNumber, AuthenticatedCheckpoint>,
-            "local_fragments";<AuthorityName, CheckpointFragment>,
-            "fragments";<ExecutionIndices, CheckpointFragment>,
-            "locals";<DBLabel, CheckpointLocals>
-        );
-
         let mut checkpoint_db = CheckpointStore {
             name,
             secret,
-            transactions_to_checkpoint,
-            checkpoint_contents,
-            extra_transactions,
-            checkpoints,
-            local_fragments,
-            fragments,
             memory_locals: None,
-            locals,
             sender: None,
+            tables: CheckpointStoreTables::open_tables_read_write(
+                path.to_path_buf(),
+                db_options,
+                None,
+            ),
         };
 
         // Initialize the locals
@@ -297,107 +288,86 @@ impl CheckpointStore {
 
     // Define handlers for request
 
-    pub fn handle_latest_proposal(
-        &mut self,
-        request: &CheckpointRequest,
-    ) -> Result<CheckpointResponse, SuiError> {
-        // Try to load any latest proposal
+    pub fn handle_proposal(&mut self, detail: bool) -> Result<CheckpointResponse, SuiError> {
         let locals = self.get_locals();
         let latest_checkpoint_proposal = &locals.current_proposal;
 
-        // Load the latest checkpoint from the database
-        let previous_checkpoint = self
-            .checkpoints
-            .iter()
-            .skip_to_last()
-            .next()
-            .map(|(_, c)| c)
-            .unwrap_or(AuthenticatedCheckpoint::None);
-
-        // Get the current proposal if there is one.
-        let current = latest_checkpoint_proposal
+        let signed_proposal = latest_checkpoint_proposal
             .as_ref()
             .map(|proposal| proposal.signed_summary.clone());
 
-        // If requested include either the transactions in the latest checkpoint proposal
-        // or the unprocessed transactions that block the generation of a proposal.
-        let detail = if request.detail {
-            latest_checkpoint_proposal
-                .as_ref()
-                // If the checkpoint exist return its contents.
-                .map(|proposal| proposal.transactions.clone())
-        } else {
-            None
+        let contents = match (detail, &latest_checkpoint_proposal) {
+            (true, Some(proposal)) => Some(proposal.transactions.clone()),
+            _ => None,
         };
 
-        // Make the response
+        let prev_cert = match &signed_proposal {
+            Some(proposal) if proposal.summary.sequence_number > 0 => {
+                let seq = proposal.summary.sequence_number;
+                let checkpoint = self.tables.checkpoints.get(&(seq - 1))?;
+                match checkpoint {
+                    Some(AuthenticatedCheckpoint::Signed(_)) | None => {
+                        error!(
+                            "Invariant violation detected: Validator is making a proposal for checkpoint {:?}, but no certificate exists for checkpoint {:?}",
+                            seq,
+                            seq - 1,
+                        );
+                        return Err(SuiError::from(
+                            "Checkpoint proposal sequence number inconsistent with latest cert",
+                        ));
+                    }
+                    Some(AuthenticatedCheckpoint::Certified(c)) => Some(c),
+                }
+            }
+            _ => None,
+        };
+
         Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Proposal {
-                current,
-                previous: previous_checkpoint,
+            info: AuthorityCheckpointInfo::CheckpointProposal {
+                proposal: signed_proposal,
+                prev_cert,
             },
-            detail,
+            detail: contents,
         })
     }
 
-    pub fn handle_past_checkpoint(
-        &self,
+    pub fn handle_authenticated_checkpoint(
+        &mut self,
+        seq: &Option<CheckpointSequenceNumber>,
         detail: bool,
-        seq: CheckpointSequenceNumber,
-    ) -> Result<CheckpointResponse, SuiError> {
-        // Get the checkpoint with a given sequence number
-        let checkpoint = self
-            .checkpoints
-            .get(&seq)?
-            .unwrap_or(AuthenticatedCheckpoint::None);
-
-        // If a checkpoint is found, and if requested, return the list of transaction digest in it.
-        let detail = if let &AuthenticatedCheckpoint::None = &checkpoint {
-            None
-        } else if detail {
-            self.checkpoint_contents.get(&seq)?
-        } else {
-            None
+    ) -> SuiResult<CheckpointResponse> {
+        let checkpoint = match seq {
+            Some(s) => self.tables.checkpoints.get(s)?,
+            None => self.latest_stored_checkpoint(),
         };
-
+        let contents = match (&checkpoint, detail) {
+            (Some(c), true) => self
+                .tables
+                .checkpoint_contents
+                .get(&c.summary().sequence_number)?,
+            _ => None,
+        };
         Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Past(checkpoint),
-            detail,
+            info: AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint),
+            detail: contents,
         })
     }
 
-    pub fn sign_new_checkpoint(
+    pub fn sign_new_checkpoint<'a>(
         &mut self,
         epoch: EpochId,
         sequence_number: CheckpointSequenceNumber,
-        candidate_contents: &CheckpointContents,
-        previous_digest: Option<CheckpointDigest>,
+        transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         effects_store: impl CausalOrder + PendCertificateForExecution,
     ) -> SuiResult {
-        // The checkpoint content is constructed using all fragments received.
-        // When receiving the fragments, we have verified that all certs are valid.
-        // However, we did not verify that all transactions have not been checkpointed.
-        // Here we filter out any transaction that has already been checkpointed.
-        let new_transactions = self
-            .transactions_to_checkpoint
-            .multi_get(candidate_contents.transactions.iter())?
-            .into_iter()
-            .zip(candidate_contents.transactions.iter())
-            .filter_map(
-                |(opt_seq, tx)| {
-                    if opt_seq.is_none() {
-                        Some(tx)
-                    } else {
-                        None
-                    }
-                },
-            );
-
         // Make sure that all transactions in the checkpoint have been executed locally.
-        self.check_checkpoint_transactions(new_transactions.clone(), &effects_store)?;
+        self.check_checkpoint_transactions(transactions.clone(), &effects_store)?;
+
+        let previous_digest = self.get_prev_checkpoint_digest(sequence_number)?;
+
         // Create a causal order of all transactions in the checkpoint.
         let ordered_contents = CheckpointContents {
-            transactions: effects_store.get_complete_causal_order(new_transactions, self)?,
+            transactions: effects_store.get_complete_causal_order(transactions, self)?,
         };
 
         let summary =
@@ -406,7 +376,7 @@ impl CheckpointStore {
         let checkpoint = AuthenticatedCheckpoint::Signed(
             SignedCheckpointSummary::new_from_summary(summary, self.name, &*self.secret),
         );
-        self.handle_internal_set_checkpoint(&checkpoint, &ordered_contents, effects_store)
+        self.handle_internal_set_checkpoint(&checkpoint, &ordered_contents)
     }
 
     /// Call this function internally to update the latest checkpoint.
@@ -417,15 +387,17 @@ impl CheckpointStore {
         &mut self,
         checkpoint: &AuthenticatedCheckpoint,
         contents: &CheckpointContents,
-        effects_store: impl CausalOrder + PendCertificateForExecution,
     ) -> SuiResult {
         let summary = checkpoint.summary();
         let checkpoint_sequence_number = *summary.sequence_number();
 
-        debug_assert!(self.checkpoints.get(&checkpoint_sequence_number)?.is_none());
+        debug_assert!(self
+            .tables
+            .checkpoints
+            .get(&checkpoint_sequence_number)?
+            .is_none());
         debug_assert!(self.next_checkpoint() == checkpoint_sequence_number);
 
-        self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
         debug!(
             "Number of transactions in checkpoint {:?}: {:?}",
             checkpoint_sequence_number,
@@ -433,18 +405,18 @@ impl CheckpointStore {
         );
 
         // Make a DB batch
-        let batch = self.checkpoints.batch();
+        let batch = self.tables.checkpoints.batch();
 
         // Last store the actual checkpoints.
         let batch = batch
             .insert_batch(
-                &self.checkpoints,
+                &self.tables.checkpoints,
                 [(&checkpoint_sequence_number, checkpoint)],
             )?
             // Drop the fragments for the previous checkpoint
             .delete_batch(
-                &self.fragments,
-                self.fragments.iter().filter_map(|(k, v)| {
+                &self.tables.fragments,
+                self.tables.fragments.iter().filter_map(|(k, v)| {
                     // Delete all keys for checkpoints smaller than what we are committing now.
                     if v.proposer.summary.sequence_number <= checkpoint_sequence_number {
                         Some(k)
@@ -453,7 +425,10 @@ impl CheckpointStore {
                     }
                 }),
             )?
-            .delete_batch(&self.local_fragments, self.local_fragments.keys())?;
+            .delete_batch(
+                &self.tables.local_fragments,
+                self.tables.local_fragments.keys(),
+            )?;
 
         // Update the transactions databases.
         self.update_new_checkpoint_inner(checkpoint_sequence_number, contents, batch)
@@ -484,7 +459,7 @@ impl CheckpointStore {
         &mut self,
         fragment: &CheckpointFragment,
         committee: &Committee,
-    ) -> Result<CheckpointResponse, SuiError> {
+    ) -> SuiResult {
         // Check structure is correct and signatures verify
         fragment.verify(committee)?;
 
@@ -513,8 +488,8 @@ impl CheckpointStore {
         } else {
             fragment.proposer.authority()
         };
-        if !self.local_fragments.contains_key(other_name)? {
-            self.local_fragments.insert(other_name, fragment)?;
+        if !self.tables.local_fragments.contains_key(other_name)? {
+            self.tables.local_fragments.insert(other_name, fragment)?;
         } else {
             // We already have this fragment, so we can ignore it.
             return Err(SuiError::GenericAuthorityError {
@@ -522,24 +497,19 @@ impl CheckpointStore {
             });
         }
 
-        let locals = self.get_locals();
-        if !locals.no_more_fragments {
-            // Send to consensus for sequencing.
-            if let Some(sender) = &self.sender {
-                sender.send_to_consensus(fragment.clone())?;
-            } else {
-                return Err(SuiError::from("No consensus sender configured"));
-            }
+        // Send to consensus for sequencing.
+        if let Some(sender) = &self.sender {
+            debug!("Send fragment: {} -- {}", self.name, other_name);
+            sender.send_to_consensus(fragment.clone())?;
+        } else {
+            return Err(SuiError::from("No consensus sender configured"));
         }
 
         // NOTE: we should charge the node that sends this into consensus
         //       according to the byte length of the fragment, to create
         //       incentives for nodes to submit smaller fragments.
 
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::Success,
-            detail: None,
-        })
+        Ok(())
     }
 
     /// This function should be called by the consensus output, it is idempotent,
@@ -552,8 +522,16 @@ impl CheckpointStore {
         committee: &Committee,
         handle_pending_cert: impl PendCertificateForExecution,
     ) -> Result<(), FragmentInternalError> {
+        let fragment_seq = fragment.proposer.summary.sequence_number;
+        debug!(
+            execution_index=?seq,
+            cp_seq=?fragment_seq,
+            "Fragment received from consensus. Proposer: {}, Other: {}",
+            fragment.proposer.authority(),
+            fragment.other.authority(),
+        );
         // Ensure we have not already processed this fragment.
-        if let Some((last_seq, _)) = self.fragments.iter().skip_to_last().next() {
+        if let Some((last_seq, _)) = self.tables.fragments.iter().skip_to_last().next() {
             if seq <= last_seq {
                 // We have already processed this fragment, just exit.
                 return Ok(());
@@ -566,6 +544,7 @@ impl CheckpointStore {
             .map_err(FragmentInternalError::Error)?;
 
         // Schedule for execution all the certificates that are included here.
+        // TODO: We should not schedule a cert if it has already been executed.
         handle_pending_cert
             .add_pending_certificates(
                 fragment
@@ -581,17 +560,21 @@ impl CheckpointStore {
             })?;
 
         // Save the new fragment in the DB
-        self.fragments.insert(&seq, &fragment).map_err(|_err| {
-            // There is a possibility this was not stored!
-            let fragment = fragment.clone();
-            FragmentInternalError::Retry(Box::new(fragment))
-        })?;
+        self.tables
+            .fragments
+            .insert(&seq, &fragment)
+            .map_err(|_err| {
+                // There is a possibility this was not stored!
+                let fragment = fragment.clone();
+                FragmentInternalError::Retry(Box::new(fragment))
+            })?;
 
         // If the fragment contains us also save it in the list of local fragments
         let next_sequence_number = self.next_checkpoint();
         if fragment.proposer.summary.sequence_number == next_sequence_number {
             if fragment.proposer.authority() == &self.name {
-                self.local_fragments
+                self.tables
+                    .local_fragments
                     .insert(fragment.other.authority(), &fragment)
                     .map_err(|_err| {
                         // There is a possibility this was not stored!
@@ -600,7 +583,8 @@ impl CheckpointStore {
                     })?;
             }
             if fragment.other.authority() == &self.name {
-                self.local_fragments
+                self.tables
+                    .local_fragments
                     .insert(fragment.proposer.authority(), &fragment)
                     .map_err(|_err| {
                         // There is a possibility this was not stored!
@@ -617,25 +601,37 @@ impl CheckpointStore {
     /// Returns OK if a checkpoint is successfully constructed.
     pub fn attempt_to_construct_checkpoint(
         &mut self,
-        effects_store: impl CausalOrder + PendCertificateForExecution,
         committee: &Committee,
-    ) -> SuiResult {
+    ) -> SuiResult<BTreeSet<ExecutionDigests>> {
         // We have a proposal so lets try to re-construct the checkpoint.
-        let next_sequence_number = self.next_checkpoint();
         let locals = self.get_locals();
 
         // Ok to unwrap because we won't enter the checkpoint process unless we have a proposal.
         let our_proposal = locals.current_proposal.as_ref().unwrap();
 
-        let candidate_contents = self.reconstruct_contents(committee, our_proposal)?;
-        let previous_digest = self.get_prev_checkpoint_digest(next_sequence_number)?;
-        self.sign_new_checkpoint(
-            committee.epoch,
-            next_sequence_number,
-            &candidate_contents,
-            previous_digest,
-            effects_store,
-        )
+        let candidate_transactions = self.reconstruct_contents(committee, our_proposal)?;
+
+        // The checkpoint content is constructed using all fragments received.
+        // When receiving the fragments, we have verified that all certs are valid.
+        // However, we did not verify that all transactions have not been checkpointed.
+        // Here we filter out any transaction that has already been checkpointed.
+        let new_transactions: BTreeSet<_> = self
+            .tables
+            .transactions_to_checkpoint
+            .multi_get(candidate_transactions.iter())?
+            .into_iter()
+            .zip(candidate_transactions.iter())
+            .filter_map(
+                |(opt_seq, tx)| {
+                    if opt_seq.is_none() {
+                        Some(*tx)
+                    } else {
+                        None
+                    }
+                },
+            )
+            .collect();
+        Ok(new_transactions)
     }
 
     /// Attempts to reconstruct a checkpoint contents using a local proposals and
@@ -644,9 +640,10 @@ impl CheckpointStore {
         &mut self,
         committee: &Committee,
         our_proposal: &CheckpointProposal,
-    ) -> SuiResult<CheckpointContents> {
+    ) -> SuiResult<BTreeSet<ExecutionDigests>> {
         let next_sequence_number = self.next_checkpoint();
         let fragments: Vec<_> = self
+            .tables
             .fragments
             .values()
             .filter(|frag| frag.proposer.summary.sequence_number == next_sequence_number)
@@ -688,12 +685,12 @@ impl CheckpointStore {
                     .clone(),
             );
 
-            return Ok(contents);
+            return Ok(contents.transactions.into_iter().collect());
         }
 
         // Strategy 2 to reconstruct checkpoint -- There is a link between us and the checkpoint set
 
-        let local_links: HashSet<_> = self.local_fragments.keys().collect();
+        let local_links: HashSet<_> = self.tables.local_fragments.keys().collect();
         let checkpoint_keys: HashSet<_> = reconstructed
             .global
             .authority_waypoints
@@ -702,7 +699,7 @@ impl CheckpointStore {
             .collect();
 
         if let Some(auth) = local_links.intersection(&checkpoint_keys).next() {
-            let fragment = self.local_fragments.get(auth)?.unwrap();
+            let fragment = self.tables.local_fragments.get(auth)?.unwrap();
 
             // Extract the diff
             let diff = if fragment.proposer.authority() == &self.name {
@@ -720,7 +717,6 @@ impl CheckpointStore {
                     .cloned()
                     .collect(),
             ) {
-                let contents = CheckpointContents::new(contents.into_iter());
                 return Ok(contents);
             }
         }
@@ -730,6 +726,7 @@ impl CheckpointStore {
         let locals = self.get_locals();
         let mut new_locals = locals.as_ref().clone();
         new_locals.no_more_fragments = true;
+        debug!("no_more_fragments is set");
         self.set_locals(locals, new_locals)?;
 
         Err(SuiError::from(
@@ -741,17 +738,17 @@ impl CheckpointStore {
         &mut self,
         checkpoint: &CertifiedCheckpointSummary,
         committee: &Committee,
-        metrics: &CheckpointMetrics,
     ) -> SuiResult {
         checkpoint.verify(committee, None)?;
         debug_assert!(matches!(
-            self.latest_stored_checkpoint()?,
+            self.latest_stored_checkpoint(),
             Some(AuthenticatedCheckpoint::Signed(_))
         ));
         let seq = checkpoint.summary.sequence_number();
-        self.checkpoints
+        self.tables
+            .checkpoints
             .insert(seq, &AuthenticatedCheckpoint::Certified(checkpoint.clone()))?;
-        metrics.checkpoint_sequence_number.set(*seq as i64);
+        self.clear_proposal(*seq + 1)?;
         Ok(())
     }
 
@@ -764,20 +761,44 @@ impl CheckpointStore {
         contents: &CheckpointContents,
         committee: &Committee,
         effects_store: impl CausalOrder + PendCertificateForExecution,
-        metrics: &CheckpointMetrics,
+    ) -> SuiResult {
+        self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
+        self.process_synced_checkpoint_certificate(checkpoint, contents, committee)
+    }
+
+    /// Unlike process_new_checkpoint_certificate this does not verify that transactions are executed
+    /// Checkpoint sync process executes it because it verifies transactions when downloading checkpoint
+    pub fn process_synced_checkpoint_certificate(
+        &mut self,
+        checkpoint: &CertifiedCheckpointSummary,
+        contents: &CheckpointContents,
+        committee: &Committee,
     ) -> SuiResult {
         let seq = checkpoint.summary.sequence_number();
-        debug_assert!(self.checkpoints.get(seq)?.is_none());
+        debug_assert!(self.tables.checkpoints.get(seq)?.is_none());
         // Check and process contents
         checkpoint.verify(committee, Some(contents))?;
 
         self.handle_internal_set_checkpoint(
             &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
             contents,
-            effects_store,
         )?;
-        metrics.checkpoint_sequence_number.set(*seq as i64);
+        self.clear_proposal(*seq + 1)?;
         Ok(())
+    }
+
+    fn clear_proposal(
+        &mut self,
+        new_expected_next_checkpoint: CheckpointSequenceNumber,
+    ) -> SuiResult {
+        let locals = self.get_locals();
+
+        let mut new_locals = locals.as_ref().clone();
+        new_locals.current_proposal = None;
+        new_locals.proposal_next_transaction = None;
+        new_locals.no_more_fragments = false;
+        new_locals.next_checkpoint = new_expected_next_checkpoint;
+        self.set_locals(locals, new_locals)
     }
 
     // Helper read functions
@@ -793,15 +814,13 @@ impl CheckpointStore {
     }
 
     /// Get the latest stored checkpoint if there is one
-    pub fn latest_stored_checkpoint(
-        &mut self,
-    ) -> Result<Option<AuthenticatedCheckpoint>, SuiError> {
-        Ok(self
+    pub fn latest_stored_checkpoint(&mut self) -> Option<AuthenticatedCheckpoint> {
+        self.tables
             .checkpoints
             .iter()
             .skip_to_last()
             .next()
-            .map(|(_, ckp)| ckp))
+            .map(|(_, ckp)| ckp)
     }
 
     pub fn is_ready_to_start_epoch_change(&mut self) -> bool {
@@ -812,6 +831,14 @@ impl CheckpointStore {
     pub fn is_ready_to_finish_epoch_change(&mut self) -> bool {
         let next_seq = self.next_checkpoint();
         next_seq % CHECKPOINT_COUNT_PER_EPOCH == 1 && next_seq != 1
+    }
+
+    pub fn validators_already_fragmented_with(&mut self) -> BTreeSet<AuthorityName> {
+        self.tables
+            .local_fragments
+            .iter()
+            .map(|(name, _)| name)
+            .collect()
     }
 
     // Helper write functions
@@ -831,13 +858,21 @@ impl CheckpointStore {
         // Include the sequence number of all extra transactions not already in a
         // checkpoint. And make a list of the transactions.
         let checkpoint_sequence = self.next_checkpoint();
-        let next_local_tx_sequence = if let Some(m) = self.extra_transactions.values().max() {
+        let next_local_tx_sequence = if let Some(m) = self.tables.extra_transactions.values().max()
+        {
             m + 1
         } else {
             0
         };
 
-        let transactions = CheckpointContents::new(self.extra_transactions.keys());
+        let transactions = CheckpointContents::new(self.tables.extra_transactions.keys());
+        let size = transactions.transactions.len();
+        info!(cp_seq=?checkpoint_sequence, ?size, "A new checkpoint proposal is created");
+        debug!(
+            "Transactions included in the checkpoint proposal: {:?}",
+            transactions.transactions
+        );
+
         let checkpoint_proposal = CheckpointProposal::new(
             epoch,
             checkpoint_sequence,
@@ -852,7 +887,6 @@ impl CheckpointStore {
         new_locals.proposal_next_transaction = Some(next_local_tx_sequence);
         self.set_locals(locals, new_locals)?;
 
-        info!(cp_seq=?checkpoint_sequence, "A new checkpoint proposal is created");
         Ok(checkpoint_proposal)
     }
 
@@ -861,7 +895,10 @@ impl CheckpointStore {
         transactions: impl Iterator<Item = &'a ExecutionDigests> + Clone,
         pending_execution: &impl PendCertificateForExecution,
     ) -> SuiResult {
-        let extra_tx = self.extra_transactions.multi_get(transactions.clone())?;
+        let extra_tx = self
+            .tables
+            .extra_transactions
+            .multi_get(transactions.clone())?;
         let tx_to_execute: Vec<_> = extra_tx
             .iter()
             .zip(transactions)
@@ -898,7 +935,7 @@ impl CheckpointStore {
         // Ensure we have processed all transactions contained in this checkpoint.
         self.check_checkpoint_transactions(transactions.iter(), &effects_store)?;
 
-        let batch = self.transactions_to_checkpoint.batch();
+        let batch = self.tables.transactions_to_checkpoint.batch();
         self.update_new_checkpoint_inner(seq, transactions, batch)?;
         Ok(())
     }
@@ -921,15 +958,14 @@ impl CheckpointStore {
             });
         }
 
-        let transactions_with_seq = self.extra_transactions.multi_get(transactions.iter())?;
-
-        // Debug check that we only make a checkpoint if we have processed all the checkpointed
-        // transactions and their history.
-        debug_assert!(transactions_with_seq.iter().all(|item| item.is_some()));
+        let transactions_with_seq = self
+            .tables
+            .extra_transactions
+            .multi_get(transactions.iter())?;
 
         // Delete the extra transactions now used
         let batch = batch.delete_batch(
-            &self.extra_transactions,
+            &self.tables.extra_transactions,
             transactions_with_seq
                 .iter()
                 .zip(transactions.iter())
@@ -938,111 +974,56 @@ impl CheckpointStore {
 
         // Now write the checkpoint data to the database
 
-        let transactions_to_checkpoint: Vec<_> = transactions
-            .iter()
-            .zip(transactions_with_seq.iter())
-            .map(|(tx, opt)| {
-                // Unwrap safe since we have checked all transactions are processed
-                // to get to this point.
-                let iseq = opt.as_ref().unwrap();
-                (*tx, (seq, *iseq))
-            })
-            .collect();
-
-        let batch =
-            batch.insert_batch(&self.transactions_to_checkpoint, transactions_to_checkpoint)?;
+        let transactions_to_checkpoint: Vec<_> = transactions.iter().map(|tx| (*tx, seq)).collect();
 
         let batch = batch.insert_batch(
-            &self.checkpoint_contents,
+            &self.tables.transactions_to_checkpoint,
+            transactions_to_checkpoint,
+        )?;
+
+        let batch = batch.insert_batch(
+            &self.tables.checkpoint_contents,
             std::iter::once((seq, transactions)),
         )?;
 
         // Write to the database.
         batch.write()?;
 
-        // Clean up our proposal if any
-        let locals = self.get_locals();
-
-        let mut new_locals = locals.as_ref().clone();
-        new_locals.current_proposal = None;
-        new_locals.proposal_next_transaction = None;
-        new_locals.no_more_fragments = false;
-        new_locals.next_checkpoint = expected_seq + 1;
-        self.set_locals(locals, new_locals)?;
-
         Ok(())
     }
 
     /// Updates the store on the basis of transactions that have been processed. This is idempotent
-    /// and nothing unsafe happens if it is called twice. Returns the lowest checkpoint number with
-    /// unprocessed transactions (this is the low watermark).
+    /// and nothing unsafe happens if it is called twice.
     fn update_processed_transactions(
         &mut self, // We take by &mut to prevent concurrent access.
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<(), SuiError> {
-        let in_checkpoint = self
+        let batch = self.tables.extra_transactions.batch();
+        let already_in_checkpoint = self
+            .tables
             .transactions_to_checkpoint
-            .multi_get(transactions.iter().map(|(_, tx)| tx))?;
-
-        let batch = self.transactions_to_checkpoint.batch();
-
-        // Check we are not re-proposing the same transactions that are already in a
-        // final checkpoint. This should not be possible since we only accept (sign /
-        // record) a checkpoint if we have already processed all transactions within.
-        let already_in_checkpoint_tx = transactions
-            .iter()
-            .zip(&in_checkpoint)
-            .filter_map(
-                |((_seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some(tx)
-                    } else {
-                        None
-                    }
-                },
-            )
-            .count();
-
-        if already_in_checkpoint_tx != 0 {
-            return Err(SuiError::CheckpointingError {
-                error: "Processing transactions already in a checkpoint.".to_string(),
-            });
-        }
-
-        // Update the entry to the transactions_to_checkpoint
-
+            .multi_get(transactions.iter().map(|(_seq, digest)| *digest))?;
         let batch = batch.insert_batch(
-            &self.transactions_to_checkpoint,
+            &self.tables.extra_transactions,
             transactions
                 .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_some() {
-                        Some((tx, (in_chk.unwrap().0, *seq)))
-                    } else {
+                .zip(already_in_checkpoint.iter())
+                .filter_map(|((seq, digest), cpk)| {
+                    if cpk.is_some() {
                         None
-                    }
-                }),
-        )?;
-
-        // If the transactions processed did not belong to a checkpoint yet, we add them to the list
-        // of `extra` transactions, that we should be actively propagating to others.
-        let batch = batch.insert_batch(
-            &self.extra_transactions,
-            transactions
-                .iter()
-                .zip(&in_checkpoint)
-                .filter_map(|((seq, tx), in_chk)| {
-                    if in_chk.is_none() {
-                        Some((tx, seq))
                     } else {
-                        None
+                        Some((digest, seq))
                     }
                 }),
         )?;
 
         // Write to the database.
         batch.write()?;
+
+        debug!(
+            "Transactions added to extra_transactions: {:?}",
+            transactions
+        );
 
         Ok(())
     }

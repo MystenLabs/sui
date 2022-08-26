@@ -19,18 +19,24 @@ use rand::{
 };
 use std::collections::BTreeMap;
 use std::fs;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
 use std::{convert::TryInto, env};
 use sui_adapter::genesis;
 use sui_types::{
     base_types::dbg_addr,
     crypto::{get_key_pair, Signature},
-    crypto::{KeyPair, KeypairTraits},
+    crypto::{AccountKeyPair, AuthorityKeyPair, KeypairTraits},
     messages::Transaction,
-    object::{Owner, OBJECT_START_VERSION},
+    object::{Owner, GAS_VALUE_FOR_TESTING, OBJECT_START_VERSION},
     sui_system_state::SuiSystemState,
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
-use sui_types::{crypto::PublicKeyBytes, object::Data};
+use sui_types::{crypto::AuthorityPublicKeyBytes, object::Data};
+
+use tracing::info;
 
 pub enum TestCallArg {
     Object(ObjectID),
@@ -90,7 +96,7 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_bad_signature() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -117,10 +123,10 @@ async fn test_handle_transfer_transaction_bad_signature() {
     let num_orders = authority_state.metrics.tx_orders.get();
     let num_errors = authority_state.metrics.signature_errors.get();
 
-    let (_unknown_address, unknown_key) = get_key_pair();
+    let (_unknown_address, unknown_key): (_, AccountKeyPair) = get_key_pair();
     let mut bad_signature_transfer_transaction = transfer_transaction.clone();
-    bad_signature_transfer_transaction.tx_signature =
-        Signature::new(&transfer_transaction.data, &unknown_key);
+    bad_signature_transfer_transaction.signed_data.tx_signature =
+        Signature::new(&transfer_transaction.signed_data.data, &unknown_key);
     assert!(authority_state
         .handle_transaction(bad_signature_transfer_transaction)
         .await
@@ -155,7 +161,7 @@ async fn test_handle_transfer_transaction_bad_signature() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_with_max_sequence_number() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
     let recipient = dbg_addr(2);
@@ -187,7 +193,7 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
     assert!(res.is_err());
     assert_eq!(
         res.err(),
-        Some(SuiError::LockErrors {
+        Some(SuiError::ObjectErrors {
             errors: vec![SuiError::InvalidSequenceNumber],
         })
     );
@@ -195,7 +201,7 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_shared_object_with_max_sequence_number() {
-    let (sender, keypair) = get_key_pair();
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();
@@ -207,8 +213,8 @@ async fn test_handle_shared_object_with_max_sequence_number() {
         use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
 
-        let content = GasCoin::new(shared_object_id, SequenceNumber::MAX, 10);
-        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
+        let content = GasCoin::new(shared_object_id, 10);
+        let obj = MoveObject::new_gas_coin(SequenceNumber::MAX, content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
     let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
@@ -240,7 +246,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
     assert!(response.is_err());
     assert_eq!(
         response.err(),
-        Some(SuiError::LockErrors {
+        Some(SuiError::ObjectErrors {
             errors: vec![SuiError::InvalidSequenceNumber],
         })
     );
@@ -248,7 +254,7 @@ async fn test_handle_shared_object_with_max_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_unknown_sender() {
-    let sender = get_new_address();
+    let sender = get_new_address::<AccountKeyPair>();
     let (unknown_address, unknown_key) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -302,7 +308,7 @@ async fn test_handle_transfer_transaction_unknown_sender() {
 
 #[test]
 fn test_handle_transfer_transaction_bad_sequence_number() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id: ObjectID = random_object_id();
     let recipient = Address::Sui(dbg_addr(2));
     let authority_state = init_state_with_object(sender, object_id);
@@ -327,7 +333,7 @@ fn test_handle_transfer_transaction_bad_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_ok() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -401,14 +407,15 @@ async fn test_handle_transfer_transaction_ok() {
             .unwrap()
             .as_ref()
             .unwrap()
+            .signed_data
             .data,
-        transfer_transaction.data
+        transfer_transaction.signed_data.data
     );
 }
 
 #[tokio::test]
 async fn test_transfer_package() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
@@ -436,7 +443,7 @@ async fn test_transfer_package() {
 // We expect it to fail early during transaction handle phase.
 #[tokio::test]
 async fn test_immutable_gas() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let mut_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, mut_object_id)]).await;
@@ -470,7 +477,7 @@ async fn test_immutable_gas() {
 // We expect it to fail early during transaction handle phase.
 #[tokio::test]
 async fn test_objected_owned_gas() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let parent_object_id = ObjectID::random();
     let authority_state = init_state_with_ids(vec![(sender, parent_object_id)]).await;
@@ -536,7 +543,7 @@ fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
 // Test that publishing a module that depends on an existing one works
 #[tokio::test]
 async fn test_publish_dependent_module_ok() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
@@ -586,7 +593,7 @@ async fn test_publish_dependent_module_ok() {
 // Test that publishing a module with no dependencies works
 #[tokio::test]
 async fn test_publish_module_no_dependencies_ok() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_balance = MAX_GAS;
     let gas_payment_object =
@@ -613,7 +620,7 @@ async fn test_publish_module_no_dependencies_ok() {
 
 #[tokio::test]
 async fn test_publish_non_existing_dependent_module() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
     let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
     let gas_payment_object_ref = gas_payment_object.compute_object_reference();
@@ -668,12 +675,13 @@ async fn test_publish_non_existing_dependent_module() {
 
 #[tokio::test]
 async fn test_handle_move_transaction() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_payment_object_id = ObjectID::random();
-    let gas_payment_object = Object::with_id_owner_for_testing(gas_payment_object_id, sender);
-    let authority_state = init_state_with_objects(vec![gas_payment_object]).await;
+    let (authority_state, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_payment_object_id)]).await;
 
     let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_payment_object_id,
         &sender,
@@ -700,7 +708,7 @@ async fn test_handle_move_transaction() {
 
 #[tokio::test]
 async fn test_handle_transfer_transaction_double_spend() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -738,9 +746,37 @@ async fn test_handle_transfer_transaction_double_spend() {
 }
 
 #[tokio::test]
+async fn test_handle_transfer_sui_with_amount_insufficient_gas() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let object_id = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![(sender, object_id)]).await;
+    let object = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    let data = TransactionData::new_transfer_sui(
+        recipient,
+        sender,
+        Some(GAS_VALUE_FOR_TESTING),
+        object.compute_object_reference(),
+        200,
+    );
+    let signature = Signature::new(&data, &sender_key);
+    let transaction = Transaction::new(data, signature);
+
+    let result = authority_state.handle_transaction(transaction).await;
+    assert!(matches!(
+        result.unwrap_err(),
+        SuiError::InsufficientGas { .. }
+    ));
+}
+
+#[tokio::test]
 async fn test_handle_confirmation_transaction_unknown_sender() {
     let recipient = dbg_addr(2);
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let authority_state = init_state().await;
 
     let object = Object::with_id_owner_for_testing(
@@ -775,7 +811,7 @@ async fn test_handle_confirmation_transaction_bad_sequence_number() {
     // * Create an explicit transfer, and execute it.
     // * Then try to execute it again.
 
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let object_id: ObjectID = ObjectID::random();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
@@ -892,7 +928,7 @@ async fn test_handle_confirmation_transaction_receiver_equal_sender() {
 
 #[tokio::test]
 async fn test_handle_confirmation_transaction_ok() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -977,9 +1013,124 @@ async fn test_handle_confirmation_transaction_ok() {
     );
 }
 
+struct LimitedPoll<F: Future> {
+    inner: Pin<Box<F>>,
+    count: u64,
+    limit: u64,
+}
+
+impl<F: Future> LimitedPoll<F> {
+    fn new(limit: u64, inner: F) -> Self {
+        Self {
+            inner: Box::pin(inner),
+            count: 0,
+            limit,
+        }
+    }
+}
+
+impl<F: Future> Future for LimitedPoll<F> {
+    type Output = Option<F::Output>;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        if self.count >= self.limit {
+            return Poll::Ready(None);
+        }
+        self.count += 1;
+        match self.inner.as_mut().poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(val) => Poll::Ready(Some(val)),
+        }
+    }
+}
+
+#[tokio::test(flavor = "current_thread", start_paused = true)]
+async fn test_handle_certificate_interrupted_retry() {
+    telemetry_subscribers::init_for_testing();
+
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let recipient = dbg_addr(2);
+    let gas_object_id = ObjectID::random();
+
+    // We repeatedly timeout certs after a variety of delays, using LimitedPoll to ensure that we
+    // interrupt the future at every point at which it is possible to be interrupted.
+    // At the time of writing this comment, there is only 1 point at which the future is
+    // interruptible (probably when it contacts the lock service), so the loop below runs
+    // only once. However, if more .await points are added later, this test will automatically
+    // exercise them.
+    let delays: Vec<_> = (1..100).collect();
+
+    let mut objects: Vec<_> = delays
+        .iter()
+        .map(|_| (sender, ObjectID::random()))
+        .collect();
+    objects.push((sender, gas_object_id));
+
+    let authority_state = Arc::new(init_state_with_ids(objects.clone()).await);
+
+    let mut interrupted_count = 0;
+    for (limit, (_, object_id)) in delays.iter().zip(objects) {
+        info!("Testing with poll limit {}", limit);
+        let object = authority_state
+            .get_object(&object_id)
+            .await
+            .unwrap()
+            .unwrap();
+        let gas_object = authority_state
+            .get_object(&gas_object_id)
+            .await
+            .unwrap()
+            .unwrap();
+
+        let certified_transfer_transaction = init_certified_transfer_transaction(
+            sender,
+            &sender_key,
+            recipient,
+            object.compute_object_reference(),
+            gas_object.compute_object_reference(),
+            &authority_state,
+        );
+
+        let clone1 = certified_transfer_transaction.clone();
+        let state1 = authority_state.clone();
+
+        let limited_fut = Box::pin(LimitedPoll::new(*limit, async move {
+            state1.handle_certificate(clone1).await.unwrap();
+        }));
+
+        let res = limited_fut.await;
+        if res.is_some() {
+            info!(?limit, "limit was high enough that future completed");
+            break;
+        }
+        interrupted_count += 1;
+
+        let g = authority_state
+            .database
+            .acquire_tx_guard(&certified_transfer_transaction)
+            .await
+            .unwrap();
+
+        // assert that the tx was dropped mid-stream due to the timeout.
+        assert_eq!(g.retry_num(), 1);
+        std::mem::drop(g);
+
+        // Now run the tx to completion
+        let info = authority_state
+            .handle_certificate(certified_transfer_transaction.clone())
+            .await
+            .unwrap();
+
+        assert!(info.signed_effects.is_some());
+    }
+
+    // ensure we tested something
+    assert!(interrupted_count >= 1);
+}
+
 #[tokio::test]
 async fn test_handle_confirmation_transaction_idempotent() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let object_id = ObjectID::random();
     let gas_object_id = ObjectID::random();
@@ -1039,29 +1190,43 @@ async fn test_handle_confirmation_transaction_idempotent() {
 
 #[tokio::test]
 async fn test_move_call_mutable_object_not_mutated() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let (authority_state, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
-    let (new_object_id1, seq1, _) = effects.created[0].0;
-
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
-    let (new_object_id2, seq2, _) = effects.created[0].0;
-
-    let effects = call_framework_code(
+    let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
+    let (new_object_id1, seq1, _) = effects.created[0].0;
+
+    let effects = create_move_object(
+        &pkg_ref,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
+    let (new_object_id2, seq2, _) = effects.created[0].0;
+
+    let effects = call_move(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &pkg_ref,
         "object_basics",
         "update",
         vec![],
@@ -1096,30 +1261,130 @@ async fn test_move_call_mutable_object_not_mutated() {
 }
 
 #[tokio::test]
+async fn test_move_call_insufficient_gas() {
+    // This test attempts to trigger a transaction execution that would fail due to insufficient gas.
+    // We want to ensure that even though the transaction failed to execute, all objects
+    // are mutated properly.
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, recipient_key): (_, AccountKeyPair) = get_key_pair();
+    let object_id = ObjectID::random();
+    let gas_object_id1 = ObjectID::random();
+    let gas_object_id2 = ObjectID::random();
+    let authority_state = init_state_with_ids(vec![
+        (sender, object_id),
+        (sender, gas_object_id1),
+        (recipient, gas_object_id2),
+    ])
+    .await;
+
+    // First execute a transaction successfully to obtain the amount of gas needed for this
+    // type of transaction.
+    // After this transaction, object_id will be owned by recipient.
+    let certified_transfer_transaction = init_certified_transfer_transaction(
+        sender,
+        &sender_key,
+        recipient,
+        authority_state
+            .get_object(&object_id)
+            .await
+            .unwrap()
+            .unwrap()
+            .compute_object_reference(),
+        authority_state
+            .get_object(&gas_object_id1)
+            .await
+            .unwrap()
+            .unwrap()
+            .compute_object_reference(),
+        &authority_state,
+    );
+    let effects = authority_state
+        .handle_certificate(certified_transfer_transaction)
+        .await
+        .unwrap()
+        .signed_effects
+        .unwrap()
+        .effects;
+    let gas_used = effects.gas_used.gas_used();
+    let obj_ref = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .compute_object_reference();
+
+    // Now we try to construct a transaction with a smaller gas budget than required.
+    let data = TransactionData::new_transfer(
+        sender,
+        obj_ref,
+        recipient,
+        authority_state
+            .get_object(&gas_object_id2)
+            .await
+            .unwrap()
+            .unwrap()
+            .compute_object_reference(),
+        gas_used - 5,
+    );
+
+    let signature = Signature::new(&data, &recipient_key);
+    let transaction = Transaction::new(data, signature);
+
+    let tx_digest = *transaction.digest();
+    let response = send_and_confirm_transaction(&authority_state, transaction)
+        .await
+        .unwrap();
+    let effects = response.signed_effects.unwrap().effects;
+    assert!(effects.status.is_err());
+    let obj = authority_state
+        .get_object(&object_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(obj.previous_transaction, tx_digest);
+    assert_eq!(obj.version(), obj_ref.1.increment());
+    assert_eq!(obj.owner, recipient);
+}
+
+#[tokio::test]
 async fn test_move_call_delete() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let (authority_state, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
-    let (new_object_id1, _seq1, _) = effects.created[0].0;
-
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    assert!(effects.status.is_ok());
-    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
-    let (new_object_id2, _seq2, _) = effects.created[0].0;
-
-    let effects = call_framework_code(
+    let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
+    let (new_object_id1, _seq1, _) = effects.created[0].0;
+
+    let effects = create_move_object(
+        &pkg_ref,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+    assert!(effects.status.is_ok());
+    assert_eq!((effects.created.len(), effects.mutated.len()), (1, 1));
+    let (new_object_id2, _seq2, _) = effects.created[0].0;
+
+    let effects = call_move(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &pkg_ref,
         "object_basics",
         "update",
         vec![],
@@ -1135,11 +1400,12 @@ async fn test_move_call_delete() {
     // obj1, obj2 and gas are all mutated here.
     assert_eq!((effects.created.len(), effects.mutated.len()), (0, 3));
 
-    let effects = call_framework_code(
+    let effects = call_move(
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+        &pkg_ref,
         "object_basics",
         "delete",
         vec![],
@@ -1152,26 +1418,51 @@ async fn test_move_call_delete() {
 }
 
 #[tokio::test]
+async fn test_get_latest_parent_entry_genesis() {
+    let authority_state = init_state().await;
+    // There should not be any object with ID zero
+    assert!(authority_state
+        .get_latest_parent_entry(ObjectID::ZERO)
+        .await
+        .unwrap()
+        .is_none());
+}
+
+#[tokio::test]
 async fn test_get_latest_parent_entry() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
-    let authority_state = init_state_with_ids(vec![(sender, gas_object_id)]).await;
+    let (authority_state, pkg_ref) =
+        init_state_with_ids_and_object_basics(vec![(sender, gas_object_id)]).await;
 
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    let (new_object_id1, _seq1, _) = effects.created[0].0;
-
-    let effects = create_move_object(&authority_state, &gas_object_id, &sender, &sender_key)
-        .await
-        .unwrap();
-    let (new_object_id2, _seq2, _) = effects.created[0].0;
-
-    let effects = call_framework_code(
+    let effects = create_move_object(
+        &pkg_ref,
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+    )
+    .await
+    .unwrap();
+    let (new_object_id1, _seq1, _) = effects.created[0].0;
+
+    let effects = create_move_object(
+        &pkg_ref,
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+    )
+    .await
+    .unwrap();
+    let (new_object_id2, _seq2, _) = effects.created[0].0;
+
+    let effects = call_move(
+        &authority_state,
+        &gas_object_id,
+        &sender,
+        &sender_key,
+        &pkg_ref,
         "object_basics",
         "update",
         vec![],
@@ -1193,11 +1484,12 @@ async fn test_get_latest_parent_entry() {
     assert_eq!(obj_ref.1, SequenceNumber::from(2));
     assert_eq!(effects.transaction_digest, tx);
 
-    let effects = call_framework_code(
+    let effects = call_move(
         &authority_state,
         &gas_object_id,
         &sender,
         &sender_key,
+        &pkg_ref,
         "object_basics",
         "delete",
         vec![],
@@ -1207,13 +1499,6 @@ async fn test_get_latest_parent_entry() {
     .unwrap();
 
     // Test get_latest_parent_entry function
-
-    // The very first object returns None
-    assert!(authority_state
-        .get_latest_parent_entry(ObjectID::ZERO)
-        .await
-        .unwrap()
-        .is_none());
 
     // The objects just after the gas object also returns None
     let mut x = gas_object_id.to_vec();
@@ -1325,7 +1610,7 @@ async fn test_idempotent_reversed_confirmation() {
     // and then receive the raw transaction latter. We should still ensure idempotent
     // response and be able to get back the same result.
     let recipient = dbg_addr(2);
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
 
     let object = Object::with_owner_for_testing(sender);
     let object_ref = object.compute_object_reference();
@@ -1391,7 +1676,8 @@ async fn test_change_epoch_transaction() {
     );
     let committee = authority_state.committee.load();
     let mut builder =
-        SignatureAggregator::try_new(signed_tx.clone().to_transaction(), &committee).unwrap();
+        SignatureAggregator::new_unsafe(signed_tx.clone().to_transaction(), &committee);
+
     let certificate = builder
         .append(
             signed_tx.auth_sign_info.authority,
@@ -1410,7 +1696,7 @@ async fn test_change_epoch_transaction() {
 
 #[tokio::test]
 async fn test_transfer_sui_no_amount() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
@@ -1461,7 +1747,7 @@ async fn test_transfer_sui_no_amount() {
 
 #[tokio::test]
 async fn test_transfer_sui_with_amount() {
-    let (sender, sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
     let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
@@ -1515,8 +1801,8 @@ async fn test_transfer_sui_with_amount() {
 #[tokio::test]
 async fn test_store_revert_state_update() {
     // This test checks the correctness of revert_state_update in SuiDataStore.
-    let (sender, sender_key) = get_key_pair();
-    let (recipient, _sender_key) = get_key_pair();
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let (recipient, _sender_key): (_, AccountKeyPair) = get_key_pair();
     let gas_object_id = ObjectID::random();
     let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
     let gas_object_ref = gas_object.compute_object_reference();
@@ -1582,12 +1868,6 @@ async fn test_store_revert_state_update() {
 }
 
 // helpers
-#[cfg(test)]
-fn init_store() -> Arc<AuthorityStore> {
-    let dir = tempfile::tempdir().unwrap();
-    let path = dir.path().join("authority_db");
-    Arc::new(AuthorityStore::open(path, None))
-}
 
 #[cfg(test)]
 pub async fn init_state() -> AuthorityState {
@@ -1595,12 +1875,14 @@ pub async fn init_state() -> AuthorityState {
 }
 
 #[cfg(test)]
-pub async fn init_state_with_committee(committee: Option<(Committee, KeyPair)>) -> AuthorityState {
-    let (committee, authority_key) = match committee {
+pub async fn init_state_with_committee(
+    committee: Option<(Committee, AuthorityKeyPair)>,
+) -> AuthorityState {
+    let (committee, authority_key): (_, AuthorityKeyPair) = match committee {
         Some(c) => c,
         None => {
-            let (_authority_address, authority_key) = get_key_pair();
-            let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+            let (_authority_address, authority_key): (_, AuthorityKeyPair) = get_key_pair();
+            let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
             authorities.insert(
                 /* address */ authority_key.public().into(),
                 /* voting right */ 1,
@@ -1609,18 +1891,14 @@ pub async fn init_state_with_committee(committee: Option<(Committee, KeyPair)>) 
         }
     };
 
-    let store = init_store();
-
-    AuthorityState::new(
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+    AuthorityState::new_for_testing(
         committee,
-        authority_key.public().into(),
-        Arc::pin(authority_key),
-        store,
+        &authority_key,
         None,
         None,
         None,
-        &sui_config::genesis::Genesis::get_default_genesis(),
-        &prometheus::Registry::new(),
+        tx_reconfigure_consensus,
     )
     .await
 }
@@ -1635,6 +1913,31 @@ pub async fn init_state_with_ids<I: IntoIterator<Item = (SuiAddress, ObjectID)>>
         state.insert_genesis_object(obj).await;
     }
     state
+}
+
+#[cfg(test)]
+pub async fn init_state_with_ids_and_object_basics<
+    I: IntoIterator<Item = (SuiAddress, ObjectID)>,
+>(
+    objects: I,
+) -> (AuthorityState, ObjectRef) {
+    use move_package::BuildConfig;
+
+    let state = init_state().await;
+    for (address, object_id) in objects {
+        let obj = Object::with_id_owner_for_testing(object_id, address);
+        state.insert_genesis_object(obj).await;
+    }
+
+    // add object_basics package object to genesis, since lots of test use it
+    let build_config = BuildConfig::default();
+    let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    path.push("src/unit_tests/data/object_basics");
+    let modules = sui_framework::build_move_package(&path, build_config).unwrap();
+    let pkg = Object::new_package(modules, TransactionDigest::genesis());
+    let pkg_ref = pkg.compute_object_reference();
+    state.insert_genesis_object(pkg).await;
+    (state, pkg_ref)
 }
 
 #[cfg(test)]
@@ -1657,7 +1960,7 @@ pub async fn init_state_with_objects<I: IntoIterator<Item = Object>>(objects: I)
 
 pub async fn init_state_with_objects_and_committee<I: IntoIterator<Item = Object>>(
     objects: I,
-    committee_and_keypair: Option<(Committee, KeyPair)>,
+    committee_and_keypair: Option<(Committee, AuthorityKeyPair)>,
 ) -> AuthorityState {
     let state = init_state_with_committee(committee_and_keypair).await;
     for o in objects {
@@ -1686,7 +1989,7 @@ pub async fn update_state_with_object_id_and_version(
 #[cfg(test)]
 pub fn init_transfer_transaction(
     sender: SuiAddress,
-    secret: &KeyPair,
+    secret: &AccountKeyPair,
     recipient: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
@@ -1699,7 +2002,7 @@ pub fn init_transfer_transaction(
 #[cfg(test)]
 fn init_certified_transfer_transaction(
     sender: SuiAddress,
-    secret: &KeyPair,
+    secret: &AccountKeyPair,
     recipient: SuiAddress,
     object_ref: ObjectRef,
     gas_object_ref: ObjectRef,
@@ -1733,7 +2036,7 @@ pub async fn call_move(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
-    sender_key: &KeyPair,
+    sender_key: &AccountKeyPair,
     package: &ObjectRef,
     module: &'_ str,
     function: &'_ str,
@@ -1764,43 +2067,19 @@ pub async fn call_move(
     Ok(response.signed_effects.unwrap().effects)
 }
 
-async fn call_framework_code(
+pub async fn create_move_object(
+    package_ref: &ObjectRef,
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
     sender: &SuiAddress,
-    sender_key: &KeyPair,
-    module: &'_ str,
-    function: &'_ str,
-    type_args: Vec<TypeTag>,
-    args: Vec<TestCallArg>,
+    sender_key: &AccountKeyPair,
 ) -> SuiResult<TransactionEffects> {
-    let package_object_ref = authority.get_framework_object_ref().await?;
-
     call_move(
         authority,
         gas_object_id,
         sender,
         sender_key,
-        &package_object_ref,
-        module,
-        function,
-        type_args,
-        args,
-    )
-    .await
-}
-
-pub async fn create_move_object(
-    authority: &AuthorityState,
-    gas_object_id: &ObjectID,
-    sender: &SuiAddress,
-    sender_key: &KeyPair,
-) -> SuiResult<TransactionEffects> {
-    call_framework_code(
-        authority,
-        gas_object_id,
-        sender,
-        sender_key,
+        package_ref,
         "object_basics",
         "create",
         vec![],
@@ -1812,7 +2091,7 @@ pub async fn create_move_object(
 #[cfg(test)]
 async fn make_test_transaction(
     sender: &SuiAddress,
-    sender_key: &KeyPair,
+    sender_key: &AccountKeyPair,
     shared_object_id: ObjectID,
     gas_object_ref: &ObjectRef,
     authorities: &[&AuthorityState],
@@ -1862,7 +2141,7 @@ async fn make_test_transaction(
 
 #[tokio::test]
 async fn shared_object() {
-    let (sender, keypair) = get_key_pair();
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
     // Initialize an authority with a (owned) gas object and a shared object.
     let gas_object_id = ObjectID::random();
@@ -1874,8 +2153,8 @@ async fn shared_object() {
         use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
 
-        let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
-        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
+        let content = GasCoin::new(shared_object_id, 10);
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
 
@@ -1894,11 +2173,16 @@ async fn shared_object() {
 
     // Sending the certificate now fails since it was not sequenced.
     let result = authority.handle_certificate(certificate.clone()).await;
-    assert!(matches!(result, Err(SuiError::LockErrors { .. })));
+    assert!(matches!(result, Err(SuiError::ObjectErrors { .. })));
 
     // Sequence the certificate to assign a sequence number to the shared object.
     authority
         .handle_consensus_transaction(
+            // TODO [2533]: use this once integrating Narwhal reconfiguration
+            &narwhal_consensus::ConsensusOutput {
+                certificate: narwhal_types::Certificate::default(),
+                consensus_index: narwhal_types::SequenceNumber::default(),
+            },
             /* last_consensus_index */ ExecutionIndices::default(),
             ConsensusTransaction::UserTransaction(Box::new(certificate.clone())),
         )
@@ -1938,11 +2222,11 @@ async fn shared_object() {
 async fn test_consensus_message_processed() {
     telemetry_subscribers::init_for_testing();
 
-    let (sender, keypair) = get_key_pair();
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
 
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
-    let (_a1, sec1) = get_key_pair();
-    let (_a2, sec2) = get_key_pair();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
+    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 1);
 
@@ -1957,8 +2241,8 @@ async fn test_consensus_message_processed() {
         use sui_types::gas_coin::GasCoin;
         use sui_types::object::MoveObject;
 
-        let content = GasCoin::new(shared_object_id, OBJECT_START_VERSION, 10);
-        let obj = MoveObject::new_gas_coin(content.to_bcs_bytes());
+        let content = GasCoin::new(shared_object_id, 10);
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
         Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
     };
 
@@ -1976,7 +2260,12 @@ async fn test_consensus_message_processed() {
     async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction) {
         authority
             .handle_consensus_transaction(
-                ExecutionIndices::default(),
+                // TODO [2533]: use this once integrating Narwhal reconfiguration
+                &narwhal_consensus::ConsensusOutput {
+                    certificate: narwhal_types::Certificate::default(),
+                    consensus_index: narwhal_types::SequenceNumber::default(),
+                },
+                /* last_consensus_index */ ExecutionIndices::default(),
                 ConsensusTransaction::UserTransaction(Box::new(cert.clone())),
             )
             .await
@@ -2032,6 +2321,7 @@ async fn test_consensus_message_processed() {
                 .unwrap();
             authority2
                 .database
+                .tables
                 .effects
                 .get(transaction_digest)
                 .unwrap()

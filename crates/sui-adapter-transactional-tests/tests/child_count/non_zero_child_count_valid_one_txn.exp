@@ -1,0 +1,24 @@
+processed 6 tasks
+
+init:
+A: object(100), B: object(101)
+
+task 1 'publish'. lines 9-50:
+created: object(105)
+written: object(104)
+
+task 2 'run'. lines 52-52:
+created: object(107)
+written: object(106)
+
+task 3 'run'. lines 54-59:
+created: object(109), object(110)
+written: object(107), object(108)
+
+task 4 'run'. lines 61-65:
+created: object(112), object(113)
+written: object(111)
+
+task 5 'run'. lines 67-67:
+created: object(115), object(116)
+written: object(114)

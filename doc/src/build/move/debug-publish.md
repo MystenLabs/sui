@@ -1,25 +1,28 @@
 ---
-title: Debug and Publish the SUi Move Package
+title: Debug and Publish the Sui Move Package
 ---
 
 ## Debugging a package
-At the moment there isn't a yet debugger for Move. To help with debugging, however, you could use `Std::Debug` module to print out arbitrary value. To do so, first import the `Debug` module:
+At the moment there isn't a yet debugger for Move. To help with debugging, however, you could use `std::debug` module to print out arbitrary value. To do so, first import the `debug` module:
 ```
-use Std::Debug;
+use std::debug;
 ```
 Then in places where you want to print out a value `v`, regardless of its type, simply do:
 ```
-Debug::print(&v);
+debug::print(&v);
 ```
 or the following if v is already a reference:
 ```
-Debug::print(v);
+debug::print(v);
 ```
-`Debug` module also provides a function to print out the current stacktrace:
+The `debug` module also provides a function to print out the current stacktrace:
 ```
-Debug::print_stack_trace();
+debug::print_stack_trace();
 ```
 Alternatively, any call to `abort` or assertion failure will also print the stacktrace at the point of failure.
+
+> **Important:** All calls to functions in the `debug` module must be removed from no-test code
+> before the new module can be published (test code is marked with the `#[test]` annotation).
 
 ## Publishing a package
 
@@ -68,7 +71,7 @@ number of created swords as follows and put into the `m1.move` file:
 
 ``` rust
     struct Forge has key, store {
-        info: Info,
+        id: UID,
         swords_created: u64,
     }
 
@@ -87,7 +90,7 @@ And module initializer is the perfect place to do it:
         use sui::transfer;
         use sui::tx_context;
         let admin = Forge {
-            info: object::new(ctx),
+            id: object::new(ctx),
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher

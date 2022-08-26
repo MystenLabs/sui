@@ -55,7 +55,7 @@ allow smart contracts to define custom access control logic. A user may have one
 multiple signature keys for convenience or privacy reasons. An address does not need any pre-registration, and sending
 an asset to an address automatically creates this address on the network. However, this means that users should
 be careful to check the recipient address of transfers, or parties involved in any other operations, as sending assets to
-an in correct address may have irrevocable effects.
+an incorrect address may have irrevocable effects.
 
 ### Smart contracts define asset types and their logic
 
@@ -80,7 +80,7 @@ on which address and how the shared assets may be used.
 A valid transaction submitted to all validators to be certified and its certificate also has to be submitted to all validators
 to be finalized. Even if a subset of validators do not follow the protocol, the transaction can be finalized through the
 remaining validators that correctly follow the Sui protocol. This is achieved through the use of cryptographic
-Byzantine fault tolerant agremment protocols for broadcast and consensus defined by the Sui protocol. These protocols
+Byzantine fault tolerant agreement protocols for broadcast and consensus defined by the Sui protocol. These protocols
 ensure both safety, meaning that the incorrect validators cannot convince correct clients of incorrect state, and
 liveness, meaning that incorrect validators cannot prevent transaction processing.
 

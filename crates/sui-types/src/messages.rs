@@ -1,17 +1,19 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-
 use super::{base_types::*, batch::*, committee::Committee, error::*, event::Event};
 use crate::committee::{EpochId, StakeUnit};
 use crate::crypto::{
-    sha3_hash, AggregateAccountSignature, AggregateAuthoritySignature, AuthoritySignInfo,
-    AuthoritySignature, AuthorityStrongQuorumSignInfo, BcsSignable, EmptySignInfo, Signable,
-    Signature, SuiAuthoritySignature, VerificationObligation,
+    sha3_hash, AuthoritySignInfo, AuthoritySignInfoTrait, AuthoritySignature,
+    AuthorityStrongQuorumSignInfo, Ed25519SuiSignature, EmptySignInfo, Signable, Signature,
+    SignatureScheme, SuiAuthoritySignature, SuiSignature, SuiSignatureInner, ToFromBytes,
+    VerificationObligation,
 };
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
+use crate::storage::DeleteKind;
+use crate::sui_serde::Base64;
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
 use itertools::Either;
@@ -24,7 +26,6 @@ use move_core_types::{
     value::MoveStructLayout,
 };
 use name_variant::NamedVariant;
-use narwhal_crypto::traits::AggregateAuthenticator;
 use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
@@ -296,6 +297,35 @@ impl TransactionKind {
             TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
         )
     }
+
+    pub fn validity_check(&self) -> SuiResult {
+        match self {
+            Self::Batch(b) => {
+                fp_ensure!(
+                    !b.is_empty(),
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch Transaction cannot be empty".to_string(),
+                    }
+                );
+                // Check that all transaction kinds can be in a batch.
+                let valid = self.single_transactions().all(|s| match s {
+                    SingleTransactionKind::Call(_) => true,
+                    SingleTransactionKind::TransferObject(_) => true,
+                    SingleTransactionKind::TransferSui(_) => false,
+                    SingleTransactionKind::ChangeEpoch(_) => false,
+                    SingleTransactionKind::Publish(_) => false,
+                });
+                fp_ensure!(
+                    valid,
+                    SuiError::InvalidBatchTransaction {
+                        error: "Batch transaction contains non-batchable transactions. Only Call and TransferObject are allowed".to_string()
+                    }
+                );
+            }
+            Self::Single(_) => (),
+        }
+        Ok(())
+    }
 }
 
 impl Display for TransactionKind {
@@ -326,10 +356,7 @@ pub struct TransactionData {
     pub gas_budget: u64,
 }
 
-impl TransactionData
-where
-    Self: BcsSignable,
-{
+impl TransactionData {
     pub fn new(
         kind: TransactionKind,
         sender: SuiAddress,
@@ -339,6 +366,7 @@ where
         TransactionData {
             kind,
             sender,
+            // TODO: Update local-txn-data-serializer.ts if `gas_price` is changed
             gas_price: 1,
             gas_payment,
             gas_budget,
@@ -448,46 +476,22 @@ where
         &self.gas_payment
     }
 
-    pub fn move_calls(&self) -> SuiResult<Vec<&MoveCall>> {
-        let move_calls = match &self.kind {
-            TransactionKind::Single(s) => s.move_call().into_iter().collect(),
-            TransactionKind::Batch(b) => {
-                let mut result = vec![];
-                for kind in b {
-                    fp_ensure!(
-                        !matches!(kind, &SingleTransactionKind::Publish(..)),
-                        SuiError::InvalidBatchTransaction {
-                            error: "Publish transaction is not allowed in Batch Transaction"
-                                .to_owned(),
-                        }
-                    );
-                    result.extend(kind.move_call().into_iter());
-                }
-                result
-            }
-        };
-        Ok(move_calls)
+    pub fn move_calls(&self) -> Vec<&MoveCall> {
+        self.kind
+            .single_transactions()
+            .flat_map(|s| s.move_call())
+            .collect()
     }
 
     pub fn input_objects(&self) -> SuiResult<Vec<InputObjectKind>> {
-        let mut inputs = match &self.kind {
-            TransactionKind::Single(s) => s.input_objects()?,
-            TransactionKind::Batch(b) => {
-                let mut result = vec![];
-                for kind in b {
-                    fp_ensure!(
-                        !matches!(kind, &SingleTransactionKind::Publish(..)),
-                        SuiError::InvalidBatchTransaction {
-                            error: "Publish transaction is not allowed in Batch Transaction"
-                                .to_owned(),
-                        }
-                    );
-                    let sub = kind.input_objects()?;
-                    result.extend(sub);
-                }
-                result
-            }
-        };
+        let mut inputs: Vec<_> = self
+            .kind
+            .single_transactions()
+            .map(|s| s.input_objects())
+            .collect::<SuiResult<Vec<_>>>()?
+            .into_iter()
+            .flatten()
+            .collect();
         if !self.kind.is_system_tx() {
             inputs.push(InputObjectKind::ImmOrOwnedMoveObject(
                 *self.gas_payment_object_ref(),
@@ -516,62 +520,58 @@ pub struct TransactionEnvelope<S> {
     #[serde(skip)]
     pub is_verified: bool,
 
-    pub data: TransactionData,
-    /// tx_signature is signed by the transaction sender, applied on `data`.
-    pub tx_signature: Signature,
-    /// authority signature information, if available, is signed by an authority, applied on `data`.
+    // The packet of data that authorities will sign on. Stores the tx data and the sender signature.
+    pub signed_data: SenderSignedData,
+
+    /// authority signature information, if available, is signed by an authority, applied on `tx_signature` || `data`.
     pub auth_sign_info: S,
     // Note: If any new field is added here, make sure the Hash and PartialEq
     // implementation are adjusted to include that new field (unless the new field
     // does not participate in the hash and comparison).
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct SenderSignedData {
+    pub data: TransactionData,
+    /// tx_signature is signed by the transaction sender, applied on `data`.
+    pub tx_signature: Signature,
+}
+
 impl<S> TransactionEnvelope<S> {
+    #[allow(dead_code)]
     fn add_sender_sig_to_verification_obligation(
         &self,
-        obligation: &mut VerificationObligation<AggregateAccountSignature>,
+        obligation: &mut VerificationObligation,
         idx: usize,
     ) -> SuiResult<()> {
         // We use this flag to see if someone has checked this before
         // and therefore we can skip the check. Note that the flag has
         // to be set to true manually, and is not set by calling this
         // "check" function.
-        if self.is_verified || self.data.kind.is_system_tx() {
+        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
             return Ok(());
         }
 
-        let (signature, public_key) = self
+        self.signed_data
             .tx_signature
-            .get_verification_inputs(self.data.sender)?;
-        let key = public_key
-            .try_into()
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Invalid public key".to_owned(),
-            })?;
+            .add_to_verification_obligation_or_verify(self.signed_data.data.sender, obligation, idx)
+    }
 
-        obligation
-            .public_keys
-            .get_mut(idx)
-            .ok_or(SuiError::InvalidAuthenticator)?
-            .push(key);
-        obligation
-            .signatures
-            .get_mut(idx)
-            .ok_or(SuiError::InvalidAuthenticator)?
-            .add_signature(signature)
-            .map_err(|_| SuiError::InvalidSignature {
-                error: "Failed to add signature to obligation".to_string(),
-            })?;
-
-        Ok(())
+    pub fn verify_sender_signature(&self) -> SuiResult<()> {
+        if self.is_verified || self.signed_data.data.kind.is_system_tx() {
+            return Ok(());
+        }
+        self.signed_data
+            .tx_signature
+            .verify(&self.signed_data.data, self.signed_data.data.sender)
     }
 
     pub fn sender_address(&self) -> SuiAddress {
-        self.data.sender
+        self.signed_data.data.sender
     }
 
     pub fn gas_payment_object_ref(&self) -> &ObjectRef {
-        self.data.gas_payment_object_ref()
+        self.signed_data.data.gas_payment_object_ref()
     }
 
     pub fn contains_shared_object(&self) -> bool {
@@ -579,7 +579,7 @@ impl<S> TransactionEnvelope<S> {
     }
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
-        match &self.data.kind {
+        match &self.signed_data.data.kind {
             TransactionKind::Single(s) => Either::Left(s.shared_input_objects()),
             TransactionKind::Batch(b) => {
                 Either::Right(b.iter().flat_map(|kind| kind.shared_input_objects()))
@@ -590,7 +590,7 @@ impl<S> TransactionEnvelope<S> {
     /// Get the transaction digest and write it to the cache
     pub fn digest(&self) -> &TransactionDigest {
         self.transaction_digest
-            .get_or_init(|| TransactionDigest::new(sha3_hash(&self.data)))
+            .get_or_init(|| TransactionDigest::new(sha3_hash(&self.signed_data)))
     }
 
     pub fn input_objects_in_compiled_modules(
@@ -652,7 +652,7 @@ where
     }
 }
 
-// TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction
+// TODO: this should maybe be called ClientSignedTransaction + SignedTransaction -> AuthoritySignedTransaction.
 /// A transaction that is signed by a sender but not yet by an authority.
 pub type Transaction = TransactionEnvelope<EmptySignInfo>;
 
@@ -667,31 +667,37 @@ impl Transaction {
         Self {
             transaction_digest: OnceCell::new(),
             is_verified: false,
-            data,
-            tx_signature: signature,
+            signed_data: SenderSignedData {
+                data,
+                tx_signature: signature,
+            },
             auth_sign_info: EmptySignInfo {},
         }
     }
 
     pub fn verify(&self) -> Result<(), SuiError> {
-        let mut obligation = VerificationObligation::default();
+        self.verify_sender_signature()
+    }
 
-        let idx = obligation.add_message(&self.data);
-
-        self.add_sender_sig_to_verification_obligation(&mut obligation, idx)?;
-        obligation.verify_all().map(|_| ())
+    pub fn to_network_data_for_execution(&self) -> (Base64, SignatureScheme, Base64, Base64) {
+        (
+            Base64::from_bytes(&self.signed_data.data.to_bytes()),
+            self.signed_data.tx_signature.scheme(),
+            Base64::from_bytes(self.signed_data.tx_signature.signature_bytes()),
+            Base64::from_bytes(self.signed_data.tx_signature.public_key_bytes()),
+        )
     }
 }
 
 impl Hash for Transaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.data.hash(state);
+        self.signed_data.hash(state);
     }
 }
 
 impl PartialEq for Transaction {
     fn eq(&self, other: &Self) -> bool {
-        self.data == other.data
+        self.signed_data == other.signed_data
     }
 }
 impl Eq for Transaction {}
@@ -707,12 +713,11 @@ impl SignedTransaction {
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
     ) -> Self {
-        let signature = AuthoritySignature::new(&transaction.data, secret);
+        let signature = AuthoritySignature::new(&transaction.signed_data, secret);
         Self {
             transaction_digest: OnceCell::new(),
             is_verified: transaction.is_verified,
-            data: transaction.data,
-            tx_signature: transaction.tx_signature,
+            signed_data: transaction.signed_data,
             auth_sign_info: AuthoritySignInfo {
                 epoch,
                 authority,
@@ -740,12 +745,18 @@ impl SignedTransaction {
             (ObjectID::ZERO, SequenceNumber::default(), ObjectDigest::MIN),
             0,
         );
-        let signature = AuthoritySignature::new(&data, secret);
+        let signed_data = SenderSignedData {
+            data,
+            // Arbitrary keypair
+            tx_signature: Ed25519SuiSignature::from_bytes(&[0; Ed25519SuiSignature::LENGTH])
+                .unwrap()
+                .into(),
+        };
+        let signature = AuthoritySignature::new(&signed_data, secret);
         Self {
             transaction_digest: OnceCell::new(),
             is_verified: false,
-            data,
-            tx_signature: Signature::new_empty(),
+            signed_data,
             auth_sign_info: AuthoritySignInfo {
                 epoch: next_epoch,
                 authority,
@@ -756,11 +767,10 @@ impl SignedTransaction {
 
     /// Verify the signature and return the non-zero voting right of the authority.
     pub fn verify(&self, committee: &Committee) -> SuiResult {
+        self.verify_sender_signature()?;
+
         let mut obligation = VerificationObligation::default();
-
-        let idx = obligation.add_message(&self.data);
-
-        self.add_sender_sig_to_verification_obligation(&mut obligation, idx)?;
+        let idx = obligation.add_message(&self.signed_data);
         self.auth_sign_info
             .add_to_verification_obligation(committee, &mut obligation, idx)?;
 
@@ -772,13 +782,13 @@ impl SignedTransaction {
     // forming a CertifiedTransaction, where each transaction's authority signature
     // is taking out to form an aggregated signature.
     pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.data, self.tx_signature)
+        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
     }
 }
 
 impl Hash for SignedTransaction {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        self.data.hash(state);
+        self.signed_data.hash(state);
         self.auth_sign_info.hash(state);
     }
 }
@@ -787,7 +797,7 @@ impl PartialEq for SignedTransaction {
     fn eq(&self, other: &Self) -> bool {
         // We do not compare the tx_signature, because there can be multiple
         // valid signatures for the same data and signer.
-        self.data == other.data && self.auth_sign_info == other.auth_sign_info
+        self.signed_data == other.signed_data && self.auth_sign_info == other.auth_sign_info
     }
 }
 
@@ -828,6 +838,11 @@ pub enum ObjectInfoRequestKind {
     LatestObjectInfo(Option<ObjectFormatOptions>),
     /// Request the object state at a specific version
     PastObjectInfo(SequenceNumber),
+    /// Similar to PastObjectInfo, except that it will also return the object content.
+    /// This is used only for debugging purpose and will not work in the long run when
+    /// we stop storing all historic versions of every object.
+    /// No production code should depend on this kind.
+    PastObjectInfoDebug(SequenceNumber, Option<ObjectFormatOptions>),
 }
 
 /// A request for information about an object and optionally its
@@ -984,6 +999,16 @@ pub enum ExecutionFailureStatus {
     MissingObjectOwner(MissingObjectOwner),
     InvalidSharedChildUse(InvalidSharedChildUse),
     InvalidSharedByValue(InvalidSharedByValue),
+    TooManyChildObjects {
+        object: ObjectID,
+    },
+    InvalidParentDeletion {
+        parent: ObjectID,
+        kind: Option<DeleteKind>,
+    },
+    InvalidParentFreezing {
+        parent: ObjectID,
+    },
 
     //
     // MovePublish errors
@@ -1116,6 +1141,33 @@ impl std::fmt::Display for ExecutionFailureStatus {
             }
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
                 write!(f, "Invalid Shared Object By-Value Usage. {data}.")
+            }
+            ExecutionFailureStatus::TooManyChildObjects { object } => {
+                write!(
+                    f,
+                    "Object {object} has too many child objects. \
+                    The number of child objects cannot exceed 2^32 - 1."
+                )
+            }
+            ExecutionFailureStatus::InvalidParentDeletion { parent, kind } => {
+                let method = match kind {
+                    Some(DeleteKind::Normal) => "deleted",
+                    Some(DeleteKind::UnwrapThenDelete) => "unwrapped then deleted",
+                    Some(DeleteKind::Wrap) => "wrapped in another object",
+                    None => "created and destroyed",
+                };
+                write!(
+                    f,
+                    "Invalid Deletion of Parent Object with Children. Parent object {parent} was \
+                    {method} before its children were deleted or transferred."
+                )
+            }
+            ExecutionFailureStatus::InvalidParentFreezing { parent } => {
+                write!(
+                    f,
+                    "Invalid Freezing of Parent Object with Children. Parent object {parent} was \
+                    made immutable before its children were deleted or transferred."
+                )
             }
             ExecutionFailureStatus::PublishErrorEmptyPackage => write!(
                 f,
@@ -1405,8 +1457,6 @@ impl TransactionEffects {
     }
 }
 
-impl BcsSignable for TransactionEffects {}
-
 impl Display for TransactionEffects {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let mut writer = String::new();
@@ -1482,7 +1532,6 @@ pub type CertifiedTransactionEffects = TransactionEffectsEnvelope<AuthorityStron
 
 impl CertifiedTransactionEffects {
     pub fn new(
-        epoch: EpochId,
         effects: TransactionEffects,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
         committee: &Committee,
@@ -1491,7 +1540,7 @@ impl CertifiedTransactionEffects {
             transaction_effects_digest: OnceCell::from(effects.digest()),
             effects,
             auth_signature: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                epoch, signatures, committee,
+                signatures, committee,
             )?,
         })
     }
@@ -1657,7 +1706,8 @@ impl<'a> SignatureAggregator<'a> {
         authority: AuthorityName,
         signature: AuthoritySignature,
     ) -> Result<Option<CertifiedTransaction>, SuiError> {
-        signature.verify(&self.partial.data, authority)?;
+        signature.verify(&self.partial.signed_data, authority)?;
+
         // Check that each authority only appears once.
         fp_ensure!(
             !self.used_authorities.contains(&authority),
@@ -1674,7 +1724,6 @@ impl<'a> SignatureAggregator<'a> {
 
         if self.weight >= self.committee.quorum_threshold() {
             self.partial.auth_sign_info = AuthorityStrongQuorumSignInfo::new_with_signatures(
-                self.partial.auth_sign_info.epoch,
                 self.signature_stash.clone(),
                 self.committee,
             )?;
@@ -1690,14 +1739,12 @@ impl CertifiedTransaction {
         CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
-            data: transaction.data,
-            tx_signature: transaction.tx_signature,
+            signed_data: transaction.signed_data,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new(epoch),
         }
     }
 
     pub fn new_with_signatures(
-        epoch: EpochId,
         transaction: Transaction,
         signatures: Vec<(AuthorityName, AuthoritySignature)>,
         committee: &Committee,
@@ -1705,16 +1752,15 @@ impl CertifiedTransaction {
         Ok(CertifiedTransaction {
             transaction_digest: transaction.transaction_digest,
             is_verified: false,
-            data: transaction.data,
-            tx_signature: transaction.tx_signature,
+            signed_data: transaction.signed_data,
             auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
-                epoch, signatures, committee,
+                signatures, committee,
             )?,
         })
     }
 
     pub fn to_transaction(self) -> Transaction {
-        Transaction::new(self.data, self.tx_signature)
+        Transaction::new(self.signed_data.data, self.signed_data.tx_signature)
     }
 
     /// Verify the certificate.
@@ -1727,24 +1773,16 @@ impl CertifiedTransaction {
             return Ok(());
         }
 
-        let mut obligation = VerificationObligation::default();
-        self.add_to_verification_obligation(committee, &mut obligation)?;
-        obligation.verify_all().map(|_| ())
-    }
-
-    fn add_to_verification_obligation(
-        &self,
-        committee: &Committee,
-        obligation: &mut VerificationObligation<AggregateAuthoritySignature>,
-    ) -> SuiResult<()> {
-        // Add the obligation of the authority signature verifications.
-        let idx = obligation.add_message(&self.data);
-
         // Add the obligation of the sender signature verification.
-        self.add_sender_sig_to_verification_obligation(obligation, idx)?;
+        self.verify_sender_signature()?;
 
+        let mut obligation = VerificationObligation::default();
+        // Add the obligation of the authority signature verifications.
+        let idx = obligation.add_message(&self.signed_data);
         self.auth_sign_info
-            .add_to_verification_obligation(committee, obligation, idx)
+            .add_to_verification_obligation(committee, &mut obligation, idx)?;
+
+        obligation.verify_all().map(|_| ())
     }
 }
 
@@ -1757,12 +1795,10 @@ impl Display for CertifiedTransaction {
             "Signed Authorities Bitmap : {:?}",
             self.auth_sign_info.signers_map
         )?;
-        write!(writer, "{}", &self.data.kind)?;
+        write!(writer, "{}", &self.signed_data.data.kind)?;
         write!(f, "{}", writer)
     }
 }
-
-impl BcsSignable for TransactionData {}
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ConsensusOutput {
@@ -1791,7 +1827,7 @@ impl ConsensusTransaction {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, schemars::JsonSchema)]
 pub enum ExecuteTransactionRequestType {
     ImmediateReturn,
     WaitForTxCert,
@@ -1816,63 +1852,53 @@ pub enum ExecuteTransactionResponse {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EpochInfo {
-    /// The epoch number of this epoch info.
-    /// Although we could derive it from the epoch number of `next_epoch_committee`, a potential
-    /// byzantine node may set next_epoch_committee.epoch as 0, which will make it very
-    /// inconvenient to obtain the epoch number.
-    epoch: EpochId,
-    /// The committee of the NEXT epoch. The committee of the epoch identified by the `epoch`
-    /// field is not part of this data structure. Instead, it will always be in the previous epoch
-    /// data structure. The committee for the very first epoch would be the genesis committee, which
-    /// is not in any epoch data structure, but in the genesis blob.
-    /// It's important that we commit to the next epoch committee in the current epoch, so that we
-    /// know what committee to use when verifying the next epoch data structure.
-    next_epoch_committee: Committee,
-    /// The last checkpoint included in this epoch. The first checkpoint can always be derived
-    /// from the previous epoch. The first checkpoint of the first epoch would be 0.
-    last_checkpoint: CheckpointSequenceNumber,
+    /// The committee of this epoch.
+    committee: Committee,
+    /// The first checkpoint included in this epoch.
+    first_checkpoint: CheckpointSequenceNumber,
+    /// Digest of the epoch info from the previous epoch.
+    prev_digest: EpochInfoDigest,
 }
-
-impl BcsSignable for EpochInfo {}
 
 impl EpochInfo {
     pub fn new(
-        epoch: EpochId,
-        next_epoch_committee: Committee,
-        last_checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult<Self> {
-        fp_ensure!(
-            epoch < EpochId::MAX && epoch + 1 == next_epoch_committee.epoch,
-            SuiError::from("Current epoch number and next epoch number are inconsistent")
-        );
-        Ok(Self {
-            epoch,
-            next_epoch_committee,
-            last_checkpoint,
-        })
+        committee: Committee,
+        first_checkpoint: CheckpointSequenceNumber,
+        prev_digest: EpochInfoDigest,
+    ) -> Self {
+        Self {
+            committee,
+            first_checkpoint,
+            prev_digest,
+        }
     }
 
     pub fn epoch(&self) -> EpochId {
-        self.epoch
+        self.committee.epoch
     }
 
-    pub fn next_epoch_committee(&self) -> &Committee {
-        &self.next_epoch_committee
+    pub fn committee(&self) -> &Committee {
+        &self.committee
     }
 
-    pub fn last_checkpoint(&self) -> &CheckpointSequenceNumber {
-        &self.last_checkpoint
+    pub fn into_committee(self) -> Committee {
+        self.committee
     }
 
-    pub fn verify(&self) -> SuiResult {
-        let next_epoch = self.next_epoch_committee.epoch;
-        fp_ensure!(
-            next_epoch > 0 && next_epoch - 1 == self.epoch,
-            SuiError::from("Epoch number mismatch in epoch info")
-        );
-        Ok(())
+    pub fn first_checkpoint(&self) -> &CheckpointSequenceNumber {
+        &self.first_checkpoint
+    }
+
+    pub fn prev_epoch_info_digest(&self) -> &EpochInfoDigest {
+        &self.prev_digest
+    }
+
+    pub fn digest(&self) -> EpochInfoDigest {
+        sha3_hash(self)
     }
 }
+
+pub type EpochInfoDigest = [u8; 32];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EpochEnvelop<S> {
@@ -1880,40 +1906,155 @@ pub struct EpochEnvelop<S> {
     pub auth_sign_info: S,
 }
 
+pub type GenesisEpoch = EpochEnvelop<EmptySignInfo>;
 pub type SignedEpoch = EpochEnvelop<AuthoritySignInfo>;
 pub type CertifiedEpoch = EpochEnvelop<AuthorityStrongQuorumSignInfo>;
 
+impl GenesisEpoch {
+    pub fn new(committee: Committee) -> Self {
+        Self {
+            epoch_info: EpochInfo::new(committee, 0, EpochInfoDigest::default()),
+            auth_sign_info: EmptySignInfo {},
+        }
+    }
+
+    pub fn verify(&self, genesis_committee: &Committee) -> SuiResult {
+        fp_ensure!(
+            self.epoch_info.first_checkpoint == 0,
+            SuiError::InvalidAuthenticatedEpoch(
+                "Genesis epoch's first checkpoint must be 0".to_string()
+            )
+        );
+        fp_ensure!(
+            self.epoch_info.epoch() == 0,
+            SuiError::InvalidAuthenticatedEpoch("Genesis epoch must be epoch 0".to_string())
+        );
+        fp_ensure!(
+            &self.epoch_info.committee == genesis_committee,
+            SuiError::InvalidAuthenticatedEpoch("Genesis epoch committee mismatch".to_string())
+        );
+        Ok(())
+    }
+}
+
 impl SignedEpoch {
     pub fn new(
-        epoch: EpochId,
-        next_epoch_committee: Committee,
+        committee: Committee,
         authority: AuthorityName,
         secret: &dyn signature::Signer<AuthoritySignature>,
-        last_checkpoint: CheckpointSequenceNumber,
-    ) -> SuiResult<Self> {
-        let epoch_info = EpochInfo::new(epoch, next_epoch_committee, last_checkpoint)?;
+        first_checkpoint: CheckpointSequenceNumber,
+        prev_epoch_info: &EpochInfo,
+    ) -> Self {
+        let epoch = committee.epoch;
+        let epoch_info = EpochInfo::new(committee, first_checkpoint, prev_epoch_info.digest());
         let signature = AuthoritySignature::new(&epoch_info, secret);
-        Ok(Self {
+        Self {
             epoch_info,
             auth_sign_info: AuthoritySignInfo {
-                epoch,
+                // A epoch is always authenticated by validators from the previous epoch.
+                // This is critical: we won't be able to use the same committee to verify itself,
+                // hence we rely on the committee from the previous epoch to verify the current
+                // epoch data structure.
+                epoch: epoch - 1,
                 authority,
                 signature,
             },
-        })
+        }
     }
 
-    pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.epoch_info.verify()?;
-        self.auth_sign_info.verify(&self.epoch_info, committee)?;
+    /// Verify the signature of this signed epoch. The committee to verify this must be the
+    /// committee from the previous epoch, as this is signed by a validator from the previous epoch.
+    pub fn verify(&self, prev_epoch_committee: &Committee) -> SuiResult {
+        let epoch = self.epoch_info.epoch();
+        fp_ensure!(
+            epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
+            SuiError::InvalidAuthenticatedEpoch(
+                "Epoch number in the committee inconsistent with signature".to_string()
+            )
+        );
+        self.auth_sign_info
+            .verify(&self.epoch_info, prev_epoch_committee)?;
         Ok(())
     }
 }
 
 impl CertifiedEpoch {
+    pub fn new(
+        epoch_info: &EpochInfo,
+        signatures: Vec<(AuthorityName, AuthoritySignature)>,
+        prev_epoch_committee: &Committee,
+    ) -> SuiResult<Self> {
+        Ok(Self {
+            epoch_info: epoch_info.clone(),
+            auth_sign_info: AuthorityStrongQuorumSignInfo::new_with_signatures(
+                signatures,
+                prev_epoch_committee,
+            )?,
+        })
+    }
+
+    /// Verify the signature of this certified epoch. The committee to verify this must be the
+    /// committee from the previous epoch, as this is signed by a quorum from the previous epoch.
     pub fn verify(&self, committee: &Committee) -> SuiResult {
-        self.epoch_info.verify()?;
+        let epoch = self.epoch_info.epoch();
+        fp_ensure!(
+            epoch != 0 && epoch - 1 == self.auth_sign_info.epoch,
+            SuiError::InvalidAuthenticatedEpoch(
+                "Epoch number in the committee inconsistent with signature".to_string()
+            )
+        );
         self.auth_sign_info.verify(&self.epoch_info, committee)?;
         Ok(())
     }
+}
+
+/// An AuthenticatedEpoch is an epoch data structure that's verifiable.
+/// The genesis epoch is the only one that doesn't require a committee to verify it, as there is
+/// only one genesis trusted from start. For a Signed or Certified epoch, it can be verified by
+/// the committee from the previous epoch.
+#[derive(Clone, Serialize, Deserialize, Debug)]
+pub enum AuthenticatedEpoch {
+    Genesis(GenesisEpoch),
+    Signed(SignedEpoch),
+    Certified(CertifiedEpoch),
+}
+
+impl AuthenticatedEpoch {
+    pub fn epoch(&self) -> EpochId {
+        match self {
+            Self::Signed(s) => s.epoch_info.epoch(),
+            Self::Certified(c) => c.epoch_info.epoch(),
+            Self::Genesis(g) => {
+                let epoch = g.epoch_info.epoch();
+                debug_assert_eq!(epoch, 0);
+                epoch
+            }
+        }
+    }
+
+    pub fn epoch_info(&self) -> &EpochInfo {
+        match self {
+            Self::Signed(s) => &s.epoch_info,
+            Self::Certified(c) => &c.epoch_info,
+            Self::Genesis(g) => &g.epoch_info,
+        }
+    }
+
+    pub fn into_epoch_info(self) -> EpochInfo {
+        match self {
+            Self::Signed(s) => s.epoch_info,
+            Self::Certified(c) => c.epoch_info,
+            Self::Genesis(g) => g.epoch_info,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochRequest {
+    pub epoch_id: Option<EpochId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EpochResponse {
+    pub epoch_info: Option<AuthenticatedEpoch>,
 }

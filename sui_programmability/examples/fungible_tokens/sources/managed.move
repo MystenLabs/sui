@@ -16,9 +16,9 @@ module fungible_tokens::managed {
     /// Register the managed currency to acquire its `TreasuryCap`. Because
     /// this is a module initializer, it ensures the currency only gets
     /// registered once.
-    fun init(ctx: &mut TxContext) {
+    fun init(witness: MANAGED, ctx: &mut TxContext) {
         // Get a treasury cap for the coin and give it to the transaction sender
-        let treasury_cap = coin::create_currency<MANAGED>(MANAGED{}, ctx);
+        let treasury_cap = coin::create_currency<MANAGED>(witness, ctx);
         transfer::transfer(treasury_cap, tx_context::sender(ctx))
     }
 
@@ -32,14 +32,9 @@ module fungible_tokens::managed {
         coin::burn(treasury_cap, coin);
     }
 
-    /// Manager can transfer the treasury capability to a new manager
-    public entry fun transfer_cap(treasury_cap: TreasuryCap<MANAGED>, recipient: address) {
-        coin::transfer_cap<MANAGED>(treasury_cap, recipient);
-    }
-
     #[test_only]
     /// Wrapper of module initializer for testing
     public fun test_init(ctx: &mut TxContext) {
-        init(ctx)
+        init(MANAGED {}, ctx)
     }
 }

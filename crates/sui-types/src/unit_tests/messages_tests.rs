@@ -2,16 +2,22 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::hash_map::DefaultHasher;
 use std::collections::BTreeMap;
 
-use narwhal_crypto::traits::KeyPair;
+use fastcrypto::traits::AggregateAuthenticator;
+use fastcrypto::traits::KeyPair;
 use roaring::RoaringBitmap;
 
-use crate::crypto::{get_key_pair, PublicKeyBytes};
+use crate::crypto::bcs_signable_test::{get_obligation_input, Foo};
+use crate::crypto::Secp256k1SuiSignature;
+use crate::crypto::SuiKeyPair;
+use crate::crypto::{get_key_pair, AccountKeyPair, AuthorityKeyPair, AuthorityPublicKeyBytes};
+use crate::messages_checkpoint::CheckpointContents;
+use crate::messages_checkpoint::CheckpointSummary;
 use crate::object::Owner;
 
 use super::*;
-
 fn random_object_ref() -> ObjectRef {
     (
         ObjectID::random(),
@@ -22,35 +28,49 @@ fn random_object_ref() -> ObjectRef {
 
 #[test]
 fn test_signed_values() {
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     // TODO: refactor this test to not reuse the same keys for user and authority signing
-    let (a1, sec1) = get_key_pair();
-    let (a2, sec2) = get_key_pair();
-    let (_, sec3) = get_key_pair();
+    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
+    let (_a3, sec3): (_, AuthorityKeyPair) = get_key_pair();
+    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
+    let (_a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
 
     authorities.insert(
-        /* address */ sec1.public().into(),
+        /* address */ AuthorityPublicKeyBytes::from(sec1.public()),
         /* voting right */ 1,
     );
     authorities.insert(
-        /* address */ sec2.public().into(),
+        /* address */ AuthorityPublicKeyBytes::from(sec2.public()),
         /* voting right */ 0,
     );
     let committee = Committee::new(0, authorities).unwrap();
 
     let transaction = Transaction::from_data(
-        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
-        &sec1,
+        TransactionData::new_transfer(
+            _a2,
+            random_object_ref(),
+            a_sender,
+            random_object_ref(),
+            10000,
+        ),
+        &sender_sec,
     );
     let bad_transaction = Transaction::from_data(
-        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
-        &sec2,
+        TransactionData::new_transfer(
+            _a2,
+            random_object_ref(),
+            a_sender,
+            random_object_ref(),
+            10000,
+        ),
+        &sender_sec2,
     );
 
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        PublicKeyBytes::from(sec1.public()),
+        AuthorityPublicKeyBytes::from(sec1.public()),
         &sec1,
     );
     assert!(v.verify(&committee).is_ok());
@@ -58,7 +78,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        PublicKeyBytes::from(sec2.public()),
+        AuthorityPublicKeyBytes::from(sec2.public()),
         &sec2,
     );
     assert!(v.verify(&committee).is_err());
@@ -66,7 +86,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         transaction,
-        PublicKeyBytes::from(sec3.public()),
+        AuthorityPublicKeyBytes::from(sec3.public()),
         &sec3,
     );
     assert!(v.verify(&committee).is_err());
@@ -74,7 +94,7 @@ fn test_signed_values() {
     let v = SignedTransaction::new(
         committee.epoch(),
         bad_transaction,
-        PublicKeyBytes::from(sec1.public()),
+        AuthorityPublicKeyBytes::from(sec1.public()),
         &sec1,
     );
     assert!(v.verify(&committee).is_err());
@@ -82,46 +102,60 @@ fn test_signed_values() {
 
 #[test]
 fn test_certificates() {
-    let (a1, sec1) = get_key_pair();
-    let (a2, sec2) = get_key_pair();
-    let (_, sec3) = get_key_pair();
+    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
+    let (_a3, sec3): (_, AuthorityKeyPair) = get_key_pair();
+    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
+    let (_a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
 
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     authorities.insert(
-        /* address */ PublicKeyBytes::from(sec1.public()),
+        /* address */ AuthorityPublicKeyBytes::from(sec1.public()),
         /* voting right */ 1,
     );
     authorities.insert(
-        /* address */ PublicKeyBytes::from(sec2.public()),
+        /* address */ AuthorityPublicKeyBytes::from(sec2.public()),
         /* voting right */ 1,
     );
     let committee = Committee::new(0, authorities).unwrap();
 
     let transaction = Transaction::from_data(
-        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
-        &sec1,
+        TransactionData::new_transfer(
+            a2,
+            random_object_ref(),
+            a_sender,
+            random_object_ref(),
+            10000,
+        ),
+        &sender_sec,
     );
     let bad_transaction = Transaction::from_data(
-        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
-        &sec2,
+        TransactionData::new_transfer(
+            a2,
+            random_object_ref(),
+            a_sender,
+            random_object_ref(),
+            10000,
+        ),
+        &sender_sec2,
     );
 
     let v1 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        PublicKeyBytes::from(sec1.public()),
+        AuthorityPublicKeyBytes::from(sec1.public()),
         &sec1,
     );
     let v2 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        PublicKeyBytes::from(sec2.public()),
+        AuthorityPublicKeyBytes::from(sec2.public()),
         &sec2,
     );
     let v3 = SignedTransaction::new(
         committee.epoch(),
         transaction.clone(),
-        PublicKeyBytes::from(sec3.public()),
+        AuthorityPublicKeyBytes::from(sec3.public()),
         &sec3,
     );
 
@@ -152,28 +186,24 @@ fn test_certificates() {
     assert!(SignatureAggregator::try_new(bad_transaction, &committee).is_err());
 }
 
-#[derive(Serialize, Deserialize)]
-struct Foo(String);
-impl BcsSignable for Foo {}
-
 #[test]
 fn test_new_with_signatures() {
+    let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
     for _ in 0..5 {
-        let (_, sec) = get_key_pair();
-        let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        signatures.push((PublicKeyBytes::from(sec.public()), sig));
-        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+        let sig = AuthoritySignature::new(&message, &sec);
+        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
+        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
     }
-    let (_, sec) = get_key_pair();
-    authorities.insert(PublicKeyBytes::from(sec.public()), 1);
+    let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
+    authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures.clone(), &committee)
-            .unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures.clone(), &committee).unwrap();
 
     let sig_clone = signatures.clone();
     let mut alphabetical_authorities = sig_clone
@@ -188,40 +218,34 @@ fn test_new_with_signatures() {
             .unwrap(),
         alphabetical_authorities
     );
-}
 
-fn get_obligation_input<T>(
-    value: &T,
-) -> (VerificationObligation<AggregateAuthoritySignature>, usize)
-where
-    T: BcsSignable,
-{
-    let mut obligation = VerificationObligation::default();
-    // Add the obligation of the authority signature verifications.
-    let idx = obligation.add_message(value);
-    (obligation, idx)
+    let (mut obligation, idx) = get_obligation_input(&message);
+    assert!(quorum
+        .add_to_verification_obligation(&committee, &mut obligation, idx)
+        .is_ok());
+    assert!(obligation.verify_all().is_ok());
 }
 
 #[test]
 fn test_handle_reject_malicious_signature() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
 
     for i in 0..5 {
-        let (_, sec) = get_key_pair();
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
+        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
         if i < 4 {
-            signatures.push((PublicKeyBytes::from(sec.public()), sig))
+            signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig))
         };
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures, &committee).unwrap();
     {
-        let (_, sec) = get_key_pair();
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new(&message, &sec);
         quorum.signature.add_signature(sig).unwrap();
     }
@@ -236,17 +260,17 @@ fn test_handle_reject_malicious_signature() {
 fn test_bitmap_out_of_range() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
-        let (_, sec) = get_key_pair();
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
-        signatures.push((PublicKeyBytes::from(sec.public()), sig));
+        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
+        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures, &committee).unwrap();
 
     // Insert outside of range
     quorum.signers_map.insert(10);
@@ -261,12 +285,12 @@ fn test_bitmap_out_of_range() {
 fn test_reject_extra_public_key() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
-        let (_, sec) = get_key_pair();
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
-        signatures.push((PublicKeyBytes::from(sec.public()), sig));
+        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
+        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
     }
 
     signatures.sort_by_key(|k| k.0);
@@ -280,7 +304,7 @@ fn test_reject_extra_public_key() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, used_signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(used_signatures, &committee).unwrap();
 
     quorum.signers_map.insert(3);
 
@@ -294,12 +318,12 @@ fn test_reject_extra_public_key() {
 fn test_reject_reuse_signatures() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
-        let (_, sec) = get_key_pair();
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
-        signatures.push((PublicKeyBytes::from(sec.public()), sig));
+        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
+        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
     }
 
     let used_signatures: Vec<(AuthorityName, AuthoritySignature)> = vec![
@@ -311,7 +335,7 @@ fn test_reject_reuse_signatures() {
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, used_signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(used_signatures, &committee).unwrap();
 
     let (mut obligation, idx) = get_obligation_input(&message);
     assert!(quorum
@@ -323,17 +347,17 @@ fn test_reject_reuse_signatures() {
 fn test_empty_bitmap() {
     let message: messages_tests::Foo = Foo("some data".to_string());
     let mut signatures: Vec<(AuthorityName, AuthoritySignature)> = Vec::new();
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     for _ in 0..5 {
-        let (_, sec) = get_key_pair();
+        let (_, sec): (_, AuthorityKeyPair) = get_key_pair();
         let sig = AuthoritySignature::new(&Foo("some data".to_string()), &sec);
-        authorities.insert(PublicKeyBytes::from(sec.public()), 1);
-        signatures.push((PublicKeyBytes::from(sec.public()), sig));
+        authorities.insert(AuthorityPublicKeyBytes::from(sec.public()), 1);
+        signatures.push((AuthorityPublicKeyBytes::from(sec.public()), sig));
     }
 
     let committee = Committee::new(0, authorities.clone()).unwrap();
     let mut quorum =
-        AuthorityStrongQuorumSignInfo::new_with_signatures(0, signatures, &committee).unwrap();
+        AuthorityStrongQuorumSignInfo::new_with_signatures(signatures, &committee).unwrap();
     quorum.signers_map = RoaringBitmap::new();
 
     let (mut obligation, idx) = get_obligation_input(&message);
@@ -344,31 +368,35 @@ fn test_empty_bitmap() {
 
 #[test]
 fn test_digest_caching() {
-    let mut authorities: BTreeMap<PublicKeyBytes, u64> = BTreeMap::new();
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
     // TODO: refactor this test to not reuse the same keys for user and authority signing
-    let (a1, sec1) = get_key_pair();
-    let (a2, sec2) = get_key_pair();
+    let (a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (_a2, sec2): (_, AuthorityKeyPair) = get_key_pair();
+
+    let (sa1, _ssec1): (_, AccountKeyPair) = get_key_pair();
+    let (sa2, ssec2): (_, AccountKeyPair) = get_key_pair();
 
     authorities.insert(sec1.public().into(), 1);
     authorities.insert(sec2.public().into(), 0);
+
     let committee = Committee::new(0, authorities).unwrap();
 
     let transaction = Transaction::from_data(
-        TransactionData::new_transfer(a2, random_object_ref(), a1, random_object_ref(), 10000),
-        &sec1,
+        TransactionData::new_transfer(sa1, random_object_ref(), sa2, random_object_ref(), 10000),
+        &ssec2,
     );
 
     let mut signed_tx = SignedTransaction::new(
         committee.epoch(),
         transaction,
-        PublicKeyBytes::from(sec1.public()),
+        AuthorityPublicKeyBytes::from(sec1.public()),
         &sec1,
     );
     assert!(signed_tx.verify(&committee).is_ok());
 
     let initial_digest = *signed_tx.digest();
 
-    signed_tx.data.gas_budget += 1;
+    signed_tx.signed_data.data.gas_budget += 1;
 
     // digest is cached
     assert_eq!(initial_digest, *signed_tx.digest());
@@ -401,7 +429,7 @@ fn test_digest_caching() {
 
     let mut signed_effects = effects.to_sign_effects(
         committee.epoch(),
-        &PublicKeyBytes::from(sec1.public()),
+        &AuthorityPublicKeyBytes::from(sec1.public()),
         &sec1,
     );
 
@@ -418,4 +446,253 @@ fn test_digest_caching() {
 
     // cached digest was not serialized/deserialized
     assert_ne!(initial_effects_digest, *deserialized_effects.digest());
+}
+
+#[test]
+fn test_user_signature_committed_in_transactions() {
+    // TODO: refactor this test to not reuse the same keys for user and authority signing
+    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
+    let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
+
+    let tx_data = TransactionData::new_transfer(
+        a_sender2,
+        random_object_ref(),
+        a_sender,
+        random_object_ref(),
+        10000,
+    );
+    let transaction_a = Transaction::from_data(tx_data.clone(), &sender_sec);
+    let transaction_b = Transaction::from_data(tx_data, &sender_sec2);
+    let tx_digest_a = transaction_a.digest();
+    let tx_digest_b = transaction_b.digest();
+    assert_ne!(tx_digest_a, tx_digest_b);
+
+    // Test hash non-equality
+    let mut hasher = DefaultHasher::new();
+    transaction_a.hash(&mut hasher);
+    let hash_a = hasher.finish();
+    let mut hasher = DefaultHasher::new();
+    transaction_b.hash(&mut hasher);
+    let hash_b = hasher.finish();
+    assert_ne!(hash_a, hash_b);
+
+    // test equality
+    assert_ne!(transaction_a, transaction_b)
+}
+
+#[test]
+fn test_user_signature_committed_in_signed_transactions() {
+    // TODO: refactor this test to not reuse the same keys for user and authority signing
+    let (_a1, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
+    let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
+
+    let tx_data = TransactionData::new_transfer(
+        a_sender2,
+        random_object_ref(),
+        a_sender,
+        random_object_ref(),
+        10000,
+    );
+    let transaction_a = Transaction::from_data(tx_data.clone(), &sender_sec);
+    let transaction_b = Transaction::from_data(tx_data, &sender_sec2);
+    let signed_tx_a = SignedTransaction::new(
+        0,
+        transaction_a.clone(),
+        AuthorityPublicKeyBytes::from(sec1.public()),
+        &sec1,
+    );
+    let signed_tx_b = SignedTransaction::new(
+        0,
+        transaction_b.clone(),
+        AuthorityPublicKeyBytes::from(sec1.public()),
+        &sec1,
+    );
+
+    let tx_digest_a = signed_tx_a.digest();
+    let tx_digest_b = signed_tx_b.digest();
+    assert_ne!(tx_digest_a, tx_digest_b);
+
+    // Ensure that signed tx verifies against the transaction with a correct user signature.
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
+    authorities.insert(AuthorityPublicKeyBytes::from(sec1.public()), 1);
+    let committee = Committee::new(0, authorities.clone()).unwrap();
+    assert!(signed_tx_a
+        .auth_sign_info
+        .verify(&transaction_a.signed_data, &committee)
+        .is_ok());
+    assert!(signed_tx_a
+        .auth_sign_info
+        .verify(&transaction_b.signed_data, &committee)
+        .is_err());
+
+    // Test hash non-equality
+    let mut hasher = DefaultHasher::new();
+    signed_tx_a.hash(&mut hasher);
+    let hash_a = hasher.finish();
+    let mut hasher = DefaultHasher::new();
+    signed_tx_b.hash(&mut hasher);
+    let hash_b = hasher.finish();
+    assert_ne!(hash_a, hash_b);
+
+    // test equality
+    assert_ne!(signed_tx_a, signed_tx_b)
+}
+
+#[test]
+fn test_user_signature_committed_in_checkpoints() {
+    let (a1, _sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (a_sender, sender_sec): (_, AccountKeyPair) = get_key_pair();
+    let (a_sender2, sender_sec2): (_, AccountKeyPair) = get_key_pair();
+
+    let tx_data = TransactionData::new_transfer(
+        a_sender2,
+        random_object_ref(),
+        a_sender,
+        random_object_ref(),
+        10000,
+    );
+
+    let transaction_a = Transaction::from_data(tx_data.clone(), &sender_sec);
+    let transaction_b = Transaction::from_data(tx_data, &sender_sec2);
+
+    let tx_digest_a = transaction_a.digest();
+    let tx_digest_b = transaction_b.digest();
+
+    let effects_a = TransactionEffects {
+        status: ExecutionStatus::Success,
+        gas_used: GasCostSummary {
+            computation_cost: 0,
+            storage_cost: 0,
+            storage_rebate: 0,
+        },
+        shared_objects: Vec::new(),
+        transaction_digest: *tx_digest_a,
+        created: Vec::new(),
+
+        mutated: Vec::new(),
+        unwrapped: Vec::new(),
+        deleted: Vec::new(),
+        wrapped: Vec::new(),
+        gas_object: (random_object_ref(), Owner::AddressOwner(a1)),
+        events: Vec::new(),
+        dependencies: Vec::new(),
+    };
+
+    let mut effects_b = effects_a.clone();
+    effects_b.transaction_digest = *tx_digest_b;
+
+    let execution_digest_a = ExecutionDigests::new(*tx_digest_a, effects_a.digest());
+
+    let execution_digest_b = ExecutionDigests::new(*tx_digest_b, effects_b.digest());
+
+    let checkpoint_summary_a = CheckpointSummary::new(
+        0,
+        1,
+        &CheckpointContents {
+            transactions: vec![execution_digest_a],
+        },
+        None,
+    );
+    let checkpoint_summary_b = CheckpointSummary::new(
+        0,
+        1,
+        &CheckpointContents {
+            transactions: vec![execution_digest_b],
+        },
+        None,
+    );
+
+    assert_ne!(checkpoint_summary_a.digest(), checkpoint_summary_b.digest());
+
+    // test non equality
+    assert_ne!(checkpoint_summary_a, checkpoint_summary_b);
+}
+
+#[test]
+fn verify_sender_signature_correctly_with_flag() {
+    // set up authorities
+    let mut authorities: BTreeMap<AuthorityPublicKeyBytes, u64> = BTreeMap::new();
+    let (_, sec1): (_, AuthorityKeyPair) = get_key_pair();
+    let (_, sec2): (_, AuthorityKeyPair) = get_key_pair();
+    authorities.insert(sec1.public().into(), 1);
+    authorities.insert(sec2.public().into(), 0);
+    let committee = Committee::new(0, authorities).unwrap();
+
+    // create a receiver keypair with Secp256k1
+    let receiver_kp = SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1);
+    let receiver_address = (&receiver_kp.public()).into();
+
+    // create a sender keypair with Secp256k1
+    let sender_kp = SuiKeyPair::Secp256k1SuiKeyPair(get_key_pair().1);
+
+    // create a sender keypair with Ed25519
+    let sender_kp_2 = SuiKeyPair::Ed25519SuiKeyPair(get_key_pair().1);
+
+    // creates transaction envelope with user signed Secp256k1 signature
+    let tx_data = TransactionData::new_transfer(
+        receiver_address,
+        random_object_ref(),
+        (&sender_kp.public()).into(),
+        random_object_ref(),
+        10000,
+    );
+
+    let transaction = Transaction::from_data(tx_data, &sender_kp);
+
+    // create tx also signed by authority
+    let signed_tx = SignedTransaction::new(
+        committee.epoch(),
+        transaction.clone(),
+        AuthorityPublicKeyBytes::from(sec1.public()),
+        &sec1,
+    );
+
+    // signature contains the correct Secp256k1 flag
+    assert_eq!(
+        transaction.signed_data.tx_signature.scheme().flag(),
+        Secp256k1SuiSignature::SCHEME.flag()
+    );
+
+    // authority accepts signs tx after verification
+    assert!(signed_tx
+        .auth_sign_info
+        .verify(&transaction.signed_data, &committee)
+        .is_ok());
+
+    // creates transaction envelope with Ed25519 signature
+    let transaction_1 = Transaction::from_data(
+        TransactionData::new_transfer(
+            receiver_address,
+            random_object_ref(),
+            (&sender_kp_2.public()).into(),
+            random_object_ref(),
+            10000,
+        ),
+        &sender_kp_2,
+    );
+
+    let signed_tx_1 = SignedTransaction::new(
+        committee.epoch(),
+        transaction_1.clone(),
+        AuthorityPublicKeyBytes::from(sec1.public()),
+        &sec1,
+    );
+
+    // signature contains the correct Ed25519 flag
+    assert_eq!(
+        transaction_1.signed_data.tx_signature.scheme().flag(),
+        Ed25519SuiSignature::SCHEME.flag()
+    );
+
+    // signature verified
+    assert!(signed_tx_1
+        .auth_sign_info
+        .verify(&transaction_1.signed_data, &committee)
+        .is_ok());
+
+    assert!(signed_tx_1
+        .auth_sign_info
+        .verify(&transaction.signed_data, &committee)
+        .is_err());
 }
