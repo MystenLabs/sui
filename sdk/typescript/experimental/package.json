@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "",
   "main": "dist/index.js",
+  "private": true,
   "scripts": {
     "test": "echo \"Error: there are no tests yet\" && exit 1",
     "build": "tsc",

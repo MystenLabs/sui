@@ -10,5 +10,8 @@
       "async": "3.2.2",
       "nth-check": "2.0.1"
     }
+  },
+  "devDependencies": {
+    "@changesets/cli": "^2.24.3"
   }
 }
