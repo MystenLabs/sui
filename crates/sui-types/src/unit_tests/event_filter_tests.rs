@@ -82,6 +82,7 @@ fn test_transfer_filter() {
         object_id,
         version: Default::default(),
         type_: TransferType::Coin,
+        amount: None,
     };
     let envelope = EventEnvelope {
         timestamp: 0,

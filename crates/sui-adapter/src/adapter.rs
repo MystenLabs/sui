@@ -806,6 +806,7 @@ fn handle_transfer<
                 object_id: obj_id,
                 version: old_obj_ver,
                 type_,
+                amount: None,
             })
         }
     } else {

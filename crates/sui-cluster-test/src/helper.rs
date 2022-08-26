@@ -160,6 +160,7 @@ pub struct TransferObjectEventChecker {
     object_id: Option<ObjectID>,
     version: Option<SequenceNumber>,
     type_: Option<TransferType>,
+    amount: Option<u64>,
 }
 
 impl TransferObjectEventChecker {
@@ -196,6 +197,11 @@ impl TransferObjectEventChecker {
         self
     }
 
+    pub fn amount(mut self, amount: u64) -> Self {
+        self.amount = Some(amount);
+        self
+    }
+
     pub fn check(self, event: &SuiEvent) {
         if let SuiEvent::TransferObject {
             package_id,
@@ -205,6 +211,7 @@ impl TransferObjectEventChecker {
             object_id,
             version,
             type_,
+            amount,
         } = event
         {
             assert_eq_if_present!(self.package_id, package_id, "package_id");
@@ -218,6 +225,7 @@ impl TransferObjectEventChecker {
             assert_eq_if_present!(self.object_id, object_id, "object_id");
             assert_eq_if_present!(self.version, version, "version");
             assert_eq_if_present!(self.type_, type_, "type_");
+            assert_eq!(self.amount, *amount);
         } else {
             panic!("event {:?} is not TransferObject Event", event);
         }

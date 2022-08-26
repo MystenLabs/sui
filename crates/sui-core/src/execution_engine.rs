@@ -268,6 +268,7 @@ fn transfer_object<S>(
         object_id: object.id(),
         version: object.version(),
         type_: TransferType::Coin,
+        amount: None, // TODO: check if object is a Coin, and find the amount transferred
     });
     temporary_store.write_object(object);
     Ok(())
@@ -325,7 +326,16 @@ fn transfer_sui<S>(
         object.transfer_without_version_change(recipient);
     }
 
-    // TODO: Emit a new event type for this.
+    temporary_store.log_event(Event::TransferObject {
+        package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+        transaction_module: Identifier::from(ident_str!("native")),
+        sender: tx_ctx.sender(),
+        recipient: Owner::AddressOwner(recipient),
+        object_id: object.id(),
+        version: object.version(),
+        type_: TransferType::Coin, // Should this be a separate type, like SuiCoin?
+        amount,
+    });
 
     #[cfg(debug_assertions)]
     assert_eq!(object.version(), version);

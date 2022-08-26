@@ -1758,6 +1758,7 @@ pub enum SuiEvent {
         object_id: ObjectID,
         version: SequenceNumber,
         type_: TransferType,
+        amount: Option<u64>,
     },
     /// Delete object
     #[serde(rename_all = "camelCase")]
@@ -1825,6 +1826,7 @@ impl SuiEvent {
                 object_id,
                 version,
                 type_,
+                amount,
             } => SuiEvent::TransferObject {
                 package_id,
                 transaction_module: transaction_module.to_string(),
@@ -1833,6 +1835,7 @@ impl SuiEvent {
                 object_id,
                 version,
                 type_,
+                amount,
             },
             Event::DeleteObject {
                 package_id,
@@ -1918,6 +1921,7 @@ impl PartialEq<SuiEvent> for Event {
                 type_: self_type,
                 object_id: self_object_id,
                 version: self_version,
+                amount: self_amount,
             } => {
                 if let SuiEvent::TransferObject {
                     package_id,
@@ -1927,6 +1931,7 @@ impl PartialEq<SuiEvent> for Event {
                     object_id,
                     version,
                     type_,
+                    amount,
                 } = other
                 {
                     package_id == self_package_id
@@ -1936,6 +1941,7 @@ impl PartialEq<SuiEvent> for Event {
                         && self_object_id == object_id
                         && self_version == version
                         && self_type == type_
+                        && self_amount == amount
                 } else {
                     false
                 }
