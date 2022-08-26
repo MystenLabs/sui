@@ -9,7 +9,6 @@ import { BrowserRouter as Router } from 'react-router-dom';
 
 import App from './app/App';
 import { CURRENT_ENV, IS_PROD_ENV, IS_STAGING_ENV } from './utils/envUtil';
-import reportWebVitals from './utils/reportWebVitals';
 
 import './index.css';
 
@@ -35,5 +34,3 @@ ReactDOM.render(
     </React.StrictMode>,
     document.getElementById('root')
 );
-
-reportWebVitals();

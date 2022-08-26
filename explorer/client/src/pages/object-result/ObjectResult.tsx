@@ -16,6 +16,7 @@ import { NetworkContext } from '../../context';
 import theme from '../../styles/theme.module.css';
 import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
+import { findDataFromID } from '../../utils/static/searchUtil';
 import {
     instanceOfDataType,
     translate,
@@ -132,7 +133,6 @@ const ObjectResultAPI = ({ objID }: { objID: string }): JSX.Element => {
 };
 
 const ObjectResultStatic = ({ objID }: { objID: string }): JSX.Element => {
-    const { findDataFromID } = require('../../utils/static/searchUtil');
     const data = findDataFromID(objID, undefined);
 
     if (instanceOfDataType(data)) {
