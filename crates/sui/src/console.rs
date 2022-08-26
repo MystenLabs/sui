@@ -32,8 +32,8 @@ pub struct ConsoleOpts {
 
 pub async fn start_console(
     context: WalletContext,
-    out: &mut dyn Write,
-    err: &mut dyn Write,
+    out: &mut (dyn Write + Send),
+    err: &mut (dyn Write + Send),
 ) -> Result<(), anyhow::Error> {
     let app: Command = SuiClientCommands::command();
     writeln!(out, "{}", SUI.cyan().bold())?;
