@@ -5,7 +5,7 @@ title: Interact with Sui over Rust SDK
 ## Overview
 The [Sui SDK](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk) is a collection of Rust language JSON-RPC wrapper and crypto utilities you can use to interact with the [Sui Devnet Gateway](../build/devnet.md) and [Sui Full Node](fullnode.md).
 
-The [`SuiClient`](cli-client.md) can be used to create an HTTP (`SuiClient::new_http_client`) or a WebSocket client(`SuiClient::new_ws_client`).  
+The [`SuiClient`](cli-client.md) can be used to create an HTTP or a WebSocket client (`SuiClient::new_rpc_client`).  
 See our [JSON-RPC](json-rpc.md#sui-json-rpc-methods) doc for the list of available methods.
 
 > Note: As of [Sui version 0.6.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.6.0), the WebSocket client is for [subscription only](pubsub.md); use the HTTP client for other API methods.
@@ -43,9 +43,9 @@ use sui_sdk::SuiClient;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_http_client("https://gateway.devnet.sui.io:443")?;
+    let sui = SuiClient::new_rpc_client("https://gateway.devnet.sui.io:443", None).await?;
     let address = SuiAddress::from_str("0xec11cad080d0496a53bafcea629fcbcfff2a9866")?;
-    let objects = sui.get_objects_owned_by_address(address).await?;
+    let objects = sui.read_api().get_objects_owned_by_address(address).await?;
     println!("{:?}", objects);
     Ok(())
 }
@@ -71,7 +71,7 @@ use sui_sdk::{
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_http_client("https://gateway.devnet.sui.io:443")?;
+    let sui = SuiClient::new_rpc_client("https://gateway.devnet.sui.io:443", None).await?;
     // Load keystore from ~/.sui/sui_config/sui.keystore
     let keystore_path = match dirs::home_dir() {
         Some(v) => v.join(".sui").join("sui_config").join("sui.keystore"),
@@ -84,11 +84,12 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Create a sui transfer transaction
     let transfer_tx = sui
+        .transaction_builder()
         .transfer_sui(my_address, gas_object_id, 1000, recipient, Some(1000))
         .await?;
 
     // Get signer from keystore
-    let keystore = SuiKeystore::load_or_create(&keystore_path)?;
+    let keystore = KeystoreType::File(keystore_path).init()?;
     let signer = keystore.signer(my_address);
 
     // Sign the transaction
@@ -96,6 +97,7 @@ async fn main() -> Result<(), anyhow::Error> {
 
     // Execute the transaction
     let transaction_response = sui
+        .quorum_driver()
         .execute_transaction(Transaction::new(transfer_tx, signature))
         .await?;
 
@@ -116,8 +118,8 @@ use sui_sdk::SuiClient;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
-    let sui = SuiClient::new_ws_client("ws://127.0.0.1:9001").await?;
-    let mut subscribe_all = sui.subscribe_event(SuiEventFilter::All(vec![])).await?;
+    let sui = SuiClient::new_rpc_client("https://gateway.devnet.sui.io:443", Some("ws://127.0.0.1:9001")).await?;
+    let mut subscribe_all = sui.event_api().subscribe_event(SuiEventFilter::All(vec![])).await?;
     loop {
         println!("{:?}", subscribe_all.next().await);
     }
