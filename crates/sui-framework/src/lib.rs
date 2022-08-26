@@ -217,10 +217,10 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn cmework_move_unit_tests() {
+    fn run_framework_move_unit_tests() {
         get_sui_framework();
         get_move_stdlib();
-        build_move_package(
+        build_and_verify_package(
             &PathBuf::from(DEFAULT_FRAMEWORK_PATH),
             BuildConfig::default(),
         )
