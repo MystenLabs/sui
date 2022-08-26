@@ -27,7 +27,6 @@ use sui_types::{
         CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
     },
 };
-use thiserror::Error;
 use tracing::{debug, error, info};
 use typed_store::traits::DBMapTableUtil;
 use typed_store::{
@@ -78,14 +77,6 @@ pub struct CheckpointLocals {
 pub trait ConsensusSender: Send + Sync + 'static {
     // Send an item to the consensus
     fn send_to_consensus(&self, fragment: CheckpointFragment) -> Result<(), SuiError>;
-}
-
-#[derive(Debug, Error)]
-pub enum FragmentInternalError {
-    #[error("Sui error: {0}")]
-    Error(SuiError),
-    #[error("Error processing fragment, retrying")]
-    Retry(Box<CheckpointFragment>),
 }
 
 /// DBMap tables for checkpoints
@@ -519,9 +510,8 @@ impl CheckpointStore {
         &mut self,
         seq: ExecutionIndices,
         fragment: CheckpointFragment,
-        committee: &Committee,
         handle_pending_cert: impl PendCertificateForExecution,
-    ) -> Result<(), FragmentInternalError> {
+    ) -> SuiResult {
         let fragment_seq = fragment.proposer.summary.sequence_number;
         debug!(
             execution_index=?seq,
@@ -538,36 +528,18 @@ impl CheckpointStore {
             }
         }
 
-        // Check structure is correct and signatures verify
-        fragment
-            .verify(committee)
-            .map_err(FragmentInternalError::Error)?;
-
         // Schedule for execution all the certificates that are included here.
         // TODO: We should not schedule a cert if it has already been executed.
-        handle_pending_cert
-            .add_pending_certificates(
-                fragment
-                    .certs
-                    .iter()
-                    .map(|(digest, cert)| (digest.transaction, Some(cert.clone())))
-                    .collect(),
-            )
-            .map_err(|_err| {
-                // There is a possibility this was not stored!
-                let fragment = fragment.clone();
-                FragmentInternalError::Retry(Box::new(fragment))
-            })?;
+        handle_pending_cert.add_pending_certificates(
+            fragment
+                .certs
+                .iter()
+                .map(|(digest, cert)| (digest.transaction, Some(cert.clone())))
+                .collect(),
+        )?;
 
         // Save the new fragment in the DB
-        self.tables
-            .fragments
-            .insert(&seq, &fragment)
-            .map_err(|_err| {
-                // There is a possibility this was not stored!
-                let fragment = fragment.clone();
-                FragmentInternalError::Retry(Box::new(fragment))
-            })?;
+        self.tables.fragments.insert(&seq, &fragment)?;
 
         // If the fragment contains us also save it in the list of local fragments
         let next_sequence_number = self.next_checkpoint();
@@ -575,22 +547,12 @@ impl CheckpointStore {
             if fragment.proposer.authority() == &self.name {
                 self.tables
                     .local_fragments
-                    .insert(fragment.other.authority(), &fragment)
-                    .map_err(|_err| {
-                        // There is a possibility this was not stored!
-                        let fragment = fragment.clone();
-                        FragmentInternalError::Retry(Box::new(fragment))
-                    })?;
+                    .insert(fragment.other.authority(), &fragment)?;
             }
             if fragment.other.authority() == &self.name {
                 self.tables
                     .local_fragments
-                    .insert(fragment.proposer.authority(), &fragment)
-                    .map_err(|_err| {
-                        // There is a possibility this was not stored!
-                        let fragment = fragment.clone();
-                        FragmentInternalError::Retry(Box::new(fragment))
-                    })?;
+                    .insert(fragment.proposer.authority(), &fragment)?;
             }
         }
 

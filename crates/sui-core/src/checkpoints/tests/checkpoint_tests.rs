@@ -1410,12 +1410,7 @@ fn test_fragment_full_flow() {
     while let Ok(fragment) = rx.try_recv() {
         all_fragments.push(fragment.clone());
         assert!(cps0
-            .handle_internal_fragment(
-                seq.clone(),
-                fragment,
-                &committee,
-                PendCertificateForExecutionNoop
-            )
+            .handle_internal_fragment(seq.clone(), fragment, PendCertificateForExecutionNoop)
             .is_ok());
         seq.next(
             /* total_batches */ 100, /* total_transactions */ 100,
@@ -1445,7 +1440,6 @@ fn test_fragment_full_flow() {
         let _ = cps6.handle_internal_fragment(
             seq.clone(),
             fragment.clone(),
-            &committee,
             PendCertificateForExecutionNoop,
         );
         seq.next(
@@ -1466,7 +1460,6 @@ fn test_fragment_full_flow() {
         let _ = cps6.handle_internal_fragment(
             seq.clone(),
             fragment.clone(),
-            &committee,
             PendCertificateForExecutionNoop,
         );
         seq.next(
@@ -1621,7 +1614,6 @@ pub async fn checkpoint_tests_setup(
         .iter()
         .map(|a| (a.authority.clone(), a.checkpoint.clone()))
         .collect();
-    let c = committee.clone();
     let _join = tokio::task::spawn(async move {
         let mut seq = ExecutionIndices::default();
         while let Some(msg) = _rx.recv().await {
@@ -1630,7 +1622,6 @@ pub async fn checkpoint_tests_setup(
                     if let Err(err) = cps.lock().handle_internal_fragment(
                         seq.clone(),
                         msg.clone(),
-                        &c,
                         PendCertificateForExecutionNoop,
                     ) {
                         println!("Error: {:?}", err);
@@ -1638,7 +1629,6 @@ pub async fn checkpoint_tests_setup(
                 } else if let Err(err) = cps.lock().handle_internal_fragment(
                     seq.clone(),
                     msg.clone(),
-                    &c,
                     authority.database.clone(),
                 ) {
                     println!("Error: {:?}", err);
