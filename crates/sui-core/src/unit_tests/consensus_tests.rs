@@ -3,7 +3,7 @@
 use super::*;
 use crate::authority::{authority_tests::init_state_with_objects, AuthorityState};
 use move_core_types::{account_address::AccountAddress, ident_str};
-use narwhal_executor::{ExecutionIndices, ExecutionState};
+use narwhal_executor::{ExecutionIndices, SingleExecutionState};
 use narwhal_types::Transactions;
 use narwhal_types::TransactionsServer;
 use narwhal_types::{Empty, TransactionProto};

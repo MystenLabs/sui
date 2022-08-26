@@ -23,7 +23,7 @@ move-prover-boogie-backend = { git = "https://github.com/move-language/move", re
 move-unit-test = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-cli = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-package = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
-serde = { version = "1.0.141", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 strum = { version = "0.24", features = ["derive"] }
 strum_macros = "0.24"
 toml = "0.5.9"
