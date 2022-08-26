@@ -9,9 +9,9 @@ use fastcrypto::traits::{
 };
 use fastcrypto::{Hash, SignatureService};
 
+use crate::bls12377::CELO_BLS_PRIVATE_KEY_LENGTH;
 use rand::{rngs::StdRng, SeedableRng as _};
 use signature::{Signer, Verifier};
-
 pub fn keys() -> Vec<BLS12377KeyPair> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..4)
@@ -369,4 +369,53 @@ async fn signature_service() {
 
     // Verify the signature we received.
     assert!(pk.verify(digest.as_ref(), &signature).is_ok());
+}
+
+#[test]
+fn test_sk_zeroization_on_drop() {
+    let ptr: *const u8;
+    let bytes_ptr: *const u8;
+
+    let mut sk_bytes = Vec::new();
+
+    {
+        let mut rng = StdRng::from_seed([9; 32]);
+        let kp = BLS12377KeyPair::generate(&mut rng);
+        let sk = kp.private();
+        sk_bytes.extend_from_slice(sk.as_ref());
+
+        ptr = std::ptr::addr_of!(sk.privkey) as *const u8;
+        bytes_ptr = &sk.as_ref()[0] as *const u8;
+
+        // Assert the exact location in SecretKey is stored as private key bytes.
+        unsafe {
+            for (i, &byte) in sk_bytes
+                .iter()
+                .enumerate()
+                .take(CELO_BLS_PRIVATE_KEY_LENGTH)
+            {
+                assert_eq!(*ptr.add(i + 41), byte);
+            }
+        }
+        let sk_memory: &[u8] =
+            unsafe { ::std::slice::from_raw_parts(bytes_ptr, CELO_BLS_PRIVATE_KEY_LENGTH) };
+        // Assert that this is equal to sk_bytes before deletion.
+        assert_eq!(sk_memory, &sk_bytes[..]);
+    }
+
+    // Assert the exact position in SecretKey is no longer private key bytes.
+    unsafe {
+        for (i, &byte) in sk_bytes
+            .iter()
+            .enumerate()
+            .take(CELO_BLS_PRIVATE_KEY_LENGTH)
+        {
+            assert_ne!(*ptr.add(i + 41), byte);
+        }
+    }
+
+    // Check that self.bytes is reset to OnceCell default.
+    let sk_memory: &[u8] =
+        unsafe { ::std::slice::from_raw_parts(bytes_ptr, CELO_BLS_PRIVATE_KEY_LENGTH) };
+    assert_ne!(sk_memory, &sk_bytes[..]);
 }

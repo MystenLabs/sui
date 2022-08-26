@@ -27,6 +27,7 @@ use serde_with::serde_as;
 use signature::{Signer, Verifier};
 
 use fastcrypto::traits::{Authenticator, KeyPair, SigningKey, VerifyingKey};
+use zeroize::Zeroize;
 
 mod ark_serialize;
 
@@ -400,7 +401,7 @@ impl KeyPair for BLS12377KeyPair {
     }
 
     fn private(self) -> Self::PrivKey {
-        self.secret
+        BLS12377PrivateKey::from_bytes(self.secret.as_ref()).unwrap()
     }
 
     fn generate<R: rand::CryptoRng + rand::RngCore>(rng: &mut R) -> Self {
@@ -590,5 +591,34 @@ impl TryFrom<BLS12377PublicKeyBytes> for BLS12377PublicKey {
 impl From<&BLS12377PublicKey> for BLS12377PublicKeyBytes {
     fn from(pk: &BLS12377PublicKey) -> Self {
         BLS12377PublicKeyBytes::from_bytes(pk.as_ref()).unwrap()
+    }
+}
+
+impl zeroize::Zeroize for BLS12377PrivateKey {
+    fn zeroize(&mut self) {
+        // PrivateKey.zeroize here is not necessary here because the underlying implicitly zeroizes.
+        self.bytes.take().zeroize();
+    }
+}
+
+impl zeroize::ZeroizeOnDrop for BLS12377PrivateKey {}
+
+impl Drop for BLS12377PrivateKey {
+    fn drop(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl zeroize::Zeroize for BLS12377KeyPair {
+    fn zeroize(&mut self) {
+        self.secret.zeroize()
+    }
+}
+
+impl zeroize::ZeroizeOnDrop for BLS12377KeyPair {}
+
+impl Drop for BLS12377KeyPair {
+    fn drop(&mut self) {
+        self.zeroize();
     }
 }
