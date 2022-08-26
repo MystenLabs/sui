@@ -8,7 +8,12 @@ license = "Apache-2.0"
 publish = false
 
 [dependencies]
+<<<<<<< HEAD
 anyhow = { version = "1.0.64", features = ["backtrace"] }
+=======
+anyhow = { version = "1.0.58", features = ["backtrace"] }
+better_any = "0.1.1"
+>>>>>>> 636036735 ([WIP] New Move object runtime. New test scenario implementation)
 bcs = "0.1.3"
 linked-hash-map = "0.5.6"
 smallvec = "1.9.0"
