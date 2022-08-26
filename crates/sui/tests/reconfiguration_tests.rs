@@ -12,7 +12,8 @@ use sui_core::safe_client::SafeClient;
 use sui_node::SuiNode;
 use sui_types::base_types::{ObjectID, ObjectRef};
 use sui_types::crypto::{
-    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair, KeypairTraits,
+    generate_proof_of_possession, get_key_pair, AccountKeyPair, AuthorityKeyPair,
+    AuthoritySignature, KeypairTraits,
 };
 use sui_types::error::SuiResult;
 use sui_types::messages::ObjectInfoResponse;
@@ -148,7 +149,7 @@ pub async fn create_and_register_new_validator(
     validator_stake: ObjectRef,
     validator_info: &[ValidatorInfo],
 ) -> SuiResult<TransactionEffects> {
-    let new_validator = get_new_validator();
+    let (new_validator, new_validator_pop) = get_new_validator();
 
     let validator_tx = move_transaction(
         gas_objects.pop().unwrap(),
@@ -159,7 +160,7 @@ pub async fn create_and_register_new_validator(
             CallArg::Object(ObjectArg::SharedObject(SUI_SYSTEM_STATE_OBJECT_ID)),
             CallArg::Pure(bcs::to_bytes(&new_validator.protocol_key()).unwrap()),
             CallArg::Pure(bcs::to_bytes(new_validator.network_key()).unwrap()),
-            CallArg::Pure(bcs::to_bytes(&new_validator.proof_of_possession().as_ref()).unwrap()),
+            CallArg::Pure(bcs::to_bytes(&new_validator_pop.as_ref()).unwrap()),
             CallArg::Pure(
                 bcs::to_bytes(format!("Validator{}", new_validator.sui_address()).as_bytes())
                     .unwrap(),
@@ -172,29 +173,29 @@ pub async fn create_and_register_new_validator(
     submit_shared_object_transaction(validator_tx, validator_info).await
 }
 
-pub fn get_new_validator() -> ValidatorInfo {
+pub fn get_new_validator() -> (ValidatorInfo, AuthoritySignature) {
     let keypair: AuthorityKeyPair = get_key_pair().1;
     let network_keypair: AccountKeyPair = get_key_pair().1;
     let account_keypair = test_account_keys().pop().unwrap().1;
-    ValidatorInfo {
-        name: "".to_string(),
-        protocol_key: keypair.public().into(),
-        account_key: account_keypair.public().clone().into(),
-        network_key: network_keypair.public().clone().into(),
-        proof_of_possession: generate_proof_of_possession(
-            &keypair,
-            account_keypair.public().into(),
-        ),
-        stake: 1,
-        delegation: 0,
-        gas_price: 1,
-        network_address: sui_config::utils::new_network_address(),
-        narwhal_primary_to_primary: sui_config::utils::new_network_address(),
-        narwhal_worker_to_primary: sui_config::utils::new_network_address(),
-        narwhal_primary_to_worker: sui_config::utils::new_network_address(),
-        narwhal_worker_to_worker: sui_config::utils::new_network_address(),
-        narwhal_consensus_address: sui_config::utils::new_network_address(),
-    }
+    let pop = generate_proof_of_possession(&keypair, account_keypair.public().into());
+    (
+        ValidatorInfo {
+            name: "".to_string(),
+            protocol_key: keypair.public().into(),
+            account_key: account_keypair.public().clone().into(),
+            network_key: network_keypair.public().clone().into(),
+            stake: 1,
+            delegation: 0,
+            gas_price: 1,
+            network_address: sui_config::utils::new_network_address(),
+            narwhal_primary_to_primary: sui_config::utils::new_network_address(),
+            narwhal_worker_to_primary: sui_config::utils::new_network_address(),
+            narwhal_primary_to_worker: sui_config::utils::new_network_address(),
+            narwhal_worker_to_worker: sui_config::utils::new_network_address(),
+            narwhal_consensus_address: sui_config::utils::new_network_address(),
+        },
+        pop,
+    )
 }
 
 #[allow(dead_code)]

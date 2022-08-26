@@ -115,25 +115,25 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(validator_key_file)?;
             let account_keypair: SuiKeyPair = read_keypair_from_file(account_key_file)?;
             let network_keypair: SuiKeyPair = read_keypair_from_file(network_key_file)?;
-            builder = builder.add_validator(sui_config::ValidatorInfo {
-                name,
-                protocol_key: keypair.public().into(),
-                account_key: account_keypair.public(),
-                network_key: network_keypair.public(),
-                proof_of_possession: generate_proof_of_possession(
-                    &keypair,
-                    (&account_keypair.public()).into(),
-                ),
-                stake: 1,
-                delegation: 0,
-                gas_price: 1,
-                network_address,
-                narwhal_primary_to_primary,
-                narwhal_worker_to_primary,
-                narwhal_primary_to_worker,
-                narwhal_worker_to_worker,
-                narwhal_consensus_address,
-            });
+            let pop = generate_proof_of_possession(&keypair, (&account_keypair.public()).into());
+            builder = builder.add_validator(
+                sui_config::ValidatorInfo {
+                    name,
+                    protocol_key: keypair.public().into(),
+                    account_key: account_keypair.public(),
+                    network_key: network_keypair.public(),
+                    stake: 1,
+                    delegation: 0,
+                    gas_price: 1,
+                    network_address,
+                    narwhal_primary_to_primary,
+                    narwhal_worker_to_primary,
+                    narwhal_primary_to_worker,
+                    narwhal_worker_to_worker,
+                    narwhal_consensus_address,
+                },
+                pop,
+            );
             builder.save(dir)?;
         }
 
@@ -287,10 +287,6 @@ mod test {
                     protocol_key: keypair.public().into(),
                     account_key: account_keypair.public().clone().into(),
                     network_key: network_keypair.public().clone().into(),
-                    proof_of_possession: generate_proof_of_possession(
-                        &keypair,
-                        account_keypair.public().into(),
-                    ),
                     stake: 1,
                     delegation: 0,
                     gas_price: 1,

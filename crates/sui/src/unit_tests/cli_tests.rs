@@ -24,8 +24,8 @@ use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiParsedObject, SuiTra
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
 use sui_types::crypto::{
-    generate_proof_of_possession, AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature,
-    KeypairTraits, Secp256k1SuiSignature, SuiKeyPair, SuiSignatureInner,
+    AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature, KeypairTraits, Secp256k1SuiSignature,
+    SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
@@ -119,10 +119,6 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
                 protocol_key: keypair.public().into(),
                 account_key: account_keypair.public(),
                 network_key: get_key_pair::<AccountKeyPair>().1.public().clone().into(),
-                proof_of_possession: generate_proof_of_possession(
-                    &keypair,
-                    (&account_keypair.public()).into(),
-                ),
                 stake: 1,
                 delegation: 1,
                 gas_price: 1,

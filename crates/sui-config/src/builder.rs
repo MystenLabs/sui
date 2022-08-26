@@ -120,26 +120,29 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 let network_key: PublicKey = validator.network_key_pair.public();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
+                let pop = generate_proof_of_possession(
+                    &validator.key_pair,
+                    (&validator.account_key_pair.public()).into(),
+                );
 
-                ValidatorInfo {
-                    name,
-                    protocol_key,
-                    network_key,
-                    proof_of_possession: generate_proof_of_possession(
-                        &validator.key_pair,
-                        (&account_key).into(),
-                    ),
-                    account_key,
-                    stake,
-                    delegation: 0, // no delegation yet at genesis
-                    gas_price: validator.gas_price,
-                    network_address,
-                    narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
-                    narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
-                    narwhal_primary_to_worker: validator.narwhal_primary_to_worker.clone(),
-                    narwhal_worker_to_worker: validator.narwhal_worker_to_worker.clone(),
-                    narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
-                }
+                (
+                    ValidatorInfo {
+                        name,
+                        protocol_key,
+                        network_key,
+                        account_key,
+                        stake,
+                        delegation: 0, // no delegation yet at genesis
+                        gas_price: validator.gas_price,
+                        network_address,
+                        narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
+                        narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
+                        narwhal_primary_to_worker: validator.narwhal_primary_to_worker.clone(),
+                        narwhal_worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                        narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
+                    },
+                    pop,
+                )
             })
             .collect::<Vec<_>>();
 
@@ -153,8 +156,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let genesis = {
             let mut builder = genesis::Builder::new().add_objects(objects);
 
-            for validator in validator_set {
-                builder = builder.add_validator(validator);
+            for (validator, proof_of_possession) in validator_set {
+                builder = builder.add_validator(validator, proof_of_possession);
             }
 
             builder.build()
