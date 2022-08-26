@@ -140,7 +140,7 @@ GET /object_info?objectId={{monster_id}}
     }
 
     // Creates a basic Monster object
-    public entry fun create_monster_(
+    public fun create_monster_(
         monster_name: vector<u8>,
         monster_img_index: u64,
         breed: u8,
