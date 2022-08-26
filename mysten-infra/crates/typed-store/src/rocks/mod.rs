@@ -583,6 +583,26 @@ pub fn open_cf_opts_secondary<P: AsRef<Path>>(
     Ok(rocksdb)
 }
 
+pub fn list_tables(path: std::path::PathBuf) -> eyre::Result<Vec<String>> {
+    const DB_DEFAULT_CF_NAME: &str = "default";
+
+    let opts = rocksdb::Options::default();
+    rocksdb::DBWithThreadMode::<rocksdb::MultiThreaded>::list_cf(&opts, &path)
+        .map_err(|e| e.into())
+        .map(|q| {
+            q.iter()
+                .filter_map(|s| {
+                    // The `default` table is not used
+                    if s != DB_DEFAULT_CF_NAME {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
+                })
+                .collect()
+        })
+}
+
 /// TODO: Good description of why we're doing this : RocksDB stores keys in BE and has a seek operator on iterators, see https://github.com/facebook/rocksdb/wiki/Iterator#introduction
 #[inline]
 pub(crate) fn be_fix_int_ser<S>(t: &S) -> Result<Vec<u8>, TypedStoreError>

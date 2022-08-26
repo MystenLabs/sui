@@ -9,11 +9,13 @@
 )]
 
 use eyre::Result;
+use rocksdb::MultiThreaded;
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     cmp::Eq,
     collections::{HashMap, VecDeque},
     hash::Hash,
+    sync::Arc,
 };
 use tokio::sync::{
     mpsc::{channel, Sender},
@@ -49,6 +51,7 @@ pub enum StoreCommand<Key, Value> {
 #[derive(Clone)]
 pub struct Store<K, V> {
     channel: Sender<StoreCommand<K, V>>,
+    pub rocksdb: Arc<rocksdb::DBWithThreadMode<MultiThreaded>>,
 }
 
 impl<Key, Value> Store<Key, Value>
@@ -58,6 +61,7 @@ where
 {
     pub fn new(keyed_db: rocks::DBMap<Key, Value>) -> Self {
         let mut obligations = HashMap::<Key, VecDeque<oneshot::Sender<_>>>::new();
+        let clone_db = keyed_db.rocksdb.clone();
         let (tx, mut rx) = channel(100);
         tokio::spawn(async move {
             while let Some(command) = rx.recv().await {
@@ -139,7 +143,10 @@ where
                 }
             }
         });
-        Self { channel: tx }
+        Self {
+            channel: tx,
+            rocksdb: clone_db,
+        }
     }
 }
 
