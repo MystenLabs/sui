@@ -5,6 +5,8 @@
   "pnpm": {
     "overrides": {
       "async": "3.2.2",
+      "jest": "27",
+      "ts-jest": "27",
       "nth-check": "2.0.1"
     }
   },
