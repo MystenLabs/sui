@@ -12,8 +12,8 @@ use std::{
     mem, ops,
     path::{Path, PathBuf},
 };
-use sui_config::builder::ConfigBuilder;
-use sui_config::genesis_config::GenesisConfig;
+use sui_config::builder::{CommitteeConfig, ConfigBuilder};
+use sui_config::genesis_config::{GenesisConfig, ValidatorGenesisInfo};
 use sui_config::NetworkConfig;
 use sui_types::base_types::SuiAddress;
 use tempfile::TempDir;
@@ -22,7 +22,7 @@ pub struct SwarmBuilder<R = OsRng> {
     rng: R,
     // template: NodeConfig,
     dir: Option<PathBuf>,
-    committee_size: NonZeroUsize,
+    committee: CommitteeConfig,
     initial_accounts_config: Option<GenesisConfig>,
     fullnode_count: usize,
     fullnode_rpc_addr: Option<SocketAddr>,
@@ -35,7 +35,7 @@ impl SwarmBuilder {
         Self {
             rng: OsRng,
             dir: None,
-            committee_size: NonZeroUsize::new(1).unwrap(),
+            committee: CommitteeConfig::Size(NonZeroUsize::new(1).unwrap()),
             initial_accounts_config: None,
             fullnode_count: 0,
             fullnode_rpc_addr: None,
@@ -49,7 +49,7 @@ impl<R> SwarmBuilder<R> {
         SwarmBuilder {
             rng,
             dir: self.dir,
-            committee_size: self.committee_size,
+            committee: self.committee,
             initial_accounts_config: self.initial_accounts_config,
             fullnode_count: self.fullnode_count,
             fullnode_rpc_addr: self.fullnode_rpc_addr,
@@ -71,7 +71,12 @@ impl<R> SwarmBuilder<R> {
     ///
     /// Defaults to 1.
     pub fn committee_size(mut self, committee_size: NonZeroUsize) -> Self {
-        self.committee_size = committee_size;
+        self.committee = CommitteeConfig::Size(committee_size);
+        self
+    }
+
+    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> Self {
+        self.committee = CommitteeConfig::Validators(validators);
         self
     }
 
@@ -112,7 +117,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> SwarmBuilder<R> {
         }
 
         let network_config = config_builder
-            .committee_size(self.committee_size)
+            .committee(self.committee)
+            .with_swarm()
             .rng(self.rng)
             .build();
 
