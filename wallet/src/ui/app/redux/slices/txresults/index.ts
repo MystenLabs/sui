@@ -109,12 +109,12 @@ export const getTransactionsByAddress = createAsyncThunk<
                             const txn = txns[0];
                             const txKind = getTransactionKindName(txn);
 
-                            const tranferSui = getTransferSuiTransaction(txn);
+                            const transferSui = getTransferSuiTransaction(txn);
                             const txTransferObject =
                                 getTransferObjectTransaction(txn);
 
                             const recipient =
-                                tranferSui?.recipient ??
+                                transferSui?.recipient ??
                                 txTransferObject?.recipient;
 
                             return {
@@ -134,8 +134,8 @@ export const getTransactionsByAddress = createAsyncThunk<
                                 error: getExecutionStatusError(txEff),
                                 timestampMs: txEff.timestamp_ms,
                                 isSender: res.data.sender === address,
-                                ...(tranferSui?.amount
-                                    ? { amount: tranferSui.amount }
+                                ...(transferSui?.amount
+                                    ? { amount: transferSui.amount }
                                     : {}),
                                 ...(recipient
                                     ? {
@@ -145,18 +145,15 @@ export const getTransactionsByAddress = createAsyncThunk<
                             };
                         })
                         // Remove failed transactions and sort by sequence number
-                        .filter((itm) => itm)
-                        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-                        .sort((a, b) => b!.seq - a!.seq)
+                        .filter(notEmpty)
+                        .sort((a, b) => b.seq - a.seq)
                 );
             });
 
         // Get all objectId and batch fetch objects for transactions with objectIds
         // remove duplicates
         const objectIDs = [
-            ...new Set(
-                resp.filter((itm) => itm).map((itm) => itm?.objectId || '')
-            ),
+            ...new Set(resp.map((itm) => itm.objectId).filter(notEmpty)),
         ];
 
         const getObjectBatch = await dispatch(batchFetchObject(objectIDs));
@@ -185,6 +182,10 @@ export const getTransactionsByAddress = createAsyncThunk<
         return txnResp as TxResultByAddress;
     }
 );
+
+function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {
+    return value !== null && value !== undefined;
+}
 
 const txSlice = createSlice({
     name: 'txresult',

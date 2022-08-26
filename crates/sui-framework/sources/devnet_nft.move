@@ -7,7 +7,7 @@
 /// `wallet example-nft --name <Name> --description <Description> --url <URL>`
 module sui::devnet_nft {
     use sui::url::{Self, Url};
-    use sui::utf8;
+    use std::string;
     use sui::object::{Self, ID, UID};
     use sui::event;
     use sui::transfer;
@@ -17,9 +17,9 @@ module sui::devnet_nft {
     struct DevNetNFT has key, store {
         id: UID,
         /// Name for the token
-        name: utf8::String,
+        name: string::String,
         /// Description of the token
-        description: utf8::String,
+        description: string::String,
         /// URL for the token
         url: Url,
         // TODO: allow custom attributes
@@ -31,7 +31,7 @@ module sui::devnet_nft {
         // The creator of the NFT
         creator: address,
         // The name of the NFT
-        name: utf8::String,
+        name: string::String,
     }
 
     /// Create a new devnet_nft
@@ -43,8 +43,8 @@ module sui::devnet_nft {
     ) {
         let nft = DevNetNFT {
             id: object::new(ctx),
-            name: utf8::string_unsafe(name),
-            description: utf8::string_unsafe(description),
+            name: string::utf8(name),
+            description: string::utf8(description),
             url: url::new_unsafe_from_bytes(url)
         };
         let sender = tx_context::sender(ctx);
@@ -62,7 +62,7 @@ module sui::devnet_nft {
         new_description: vector<u8>,
         _: &mut TxContext
     ) {
-        nft.description = utf8::string_unsafe(new_description)
+        nft.description = string::utf8(new_description)
     }
 
     /// Permanently delete `nft`
@@ -72,12 +72,12 @@ module sui::devnet_nft {
     }
 
     /// Get the NFT's `name`
-    public fun name(nft: &DevNetNFT): &utf8::String {
+    public fun name(nft: &DevNetNFT): &string::String {
         &nft.name
     }
 
     /// Get the NFT's `description`
-    public fun description(nft: &DevNetNFT): &utf8::String {
+    public fun description(nft: &DevNetNFT): &string::String {
         &nft.description
     }
 
@@ -92,7 +92,7 @@ module sui::devnet_nftTests {
     use sui::devnet_nft::{Self, DevNetNFT};
     use sui::test_scenario;
     use sui::transfer;
-    use sui::utf8;
+    use std::string;
 
     #[test]
     fun mint_transfer_update() {
@@ -114,7 +114,7 @@ module sui::devnet_nftTests {
         {
             let nft = test_scenario::take_owned<DevNetNFT>(&mut scenario);
             devnet_nft::update_description(&mut nft, b"a new description", test_scenario::ctx(&mut scenario)) ;
-            assert!(*utf8::bytes(devnet_nft::description(&nft)) == b"a new description", 0);
+            assert!(*string::bytes(devnet_nft::description(&nft)) == b"a new description", 0);
             test_scenario::return_owned(&mut scenario, nft);
         };
         // burn it

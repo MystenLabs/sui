@@ -3,6 +3,8 @@
 
 import { useEffect } from 'react';
 
+const COOKIE_NAME = 'sui_explorer_cookie_consent';
+
 async function loadAndEnableAnalytics() {
     if (process.env.NODE_ENV === 'production') {
         await import('./analytics');
@@ -19,7 +21,7 @@ export function CookiesConsent() {
                 revision: 0,
                 autorun: true,
                 current_lang: 'en',
-                cookie_name: 'sui_io_cookie',
+                cookie_name: COOKIE_NAME,
                 gui_options: {
                     consent_modal: {
                         layout: 'box',

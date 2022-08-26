@@ -20,7 +20,7 @@ use std::sync::Arc;
 use tokio::sync::oneshot;
 use tokio::time::{sleep, timeout, Duration, Instant};
 
-use super::{NodeSyncHandle, NodeSyncState};
+use super::{NodeSyncHandle, NodeSyncState, SyncResult};
 
 use tap::TapFallible;
 use tracing::{debug, info, trace, warn};
@@ -145,7 +145,7 @@ trait SyncHandler {
         peer: AuthorityName,
         seq: TxSequenceNumber,
         digests: ExecutionDigests,
-    ) -> SuiResult<BoxFuture<'static, SuiResult>>;
+    ) -> SuiResult<BoxFuture<'static, SyncResult>>;
 }
 
 #[async_trait]
@@ -155,7 +155,7 @@ impl SyncHandler for NodeSyncHandle {
         peer: AuthorityName,
         _seq: TxSequenceNumber,
         digests: ExecutionDigests,
-    ) -> SuiResult<BoxFuture<'static, SuiResult>> {
+    ) -> SuiResult<BoxFuture<'static, SyncResult>> {
         self.handle_sync_digest(peer, digests).await
     }
 }
@@ -311,6 +311,7 @@ mod test {
     use crate::{
         authority_active::gossip::GossipMetrics,
         authority_client::NetworkAuthorityClient,
+        node_sync::SyncStatus,
         test_utils::{spawn_test_authorities, test_authority_aggregator},
     };
     use std::sync::{Arc, Mutex};
@@ -371,7 +372,7 @@ mod test {
             peer: AuthorityName,
             seq: TxSequenceNumber,
             digests: ExecutionDigests,
-        ) -> SuiResult<BoxFuture<'static, SuiResult>> {
+        ) -> SuiResult<BoxFuture<'static, SyncResult>> {
             debug!(?peer, ?digests, "handle_digest");
             if let Some(after) = *self.break_after.lock().unwrap() {
                 if seq > after {
@@ -381,7 +382,9 @@ mod test {
                     return Err(SuiError::GenericAuthorityError { error: "".into() });
                 }
             }
-            Ok(Box::pin(async move { Ok::<(), SuiError>(()) }))
+            Ok(Box::pin(async move {
+                Ok::<SyncStatus, SuiError>(SyncStatus::CertExecuted)
+            }))
         }
     }
 

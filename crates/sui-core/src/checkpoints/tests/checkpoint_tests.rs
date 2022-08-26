@@ -224,13 +224,13 @@ fn make_checkpoint_db() {
     assert_eq!(cps.tables.checkpoint_contents.iter().count(), 1);
     assert_eq!(cps.tables.extra_transactions.iter().count(), 2); // t3 & t6
 
-    let (_cp_seq, tx_seq) = cps
+    let cp_seq = cps
         .tables
         .transactions_to_checkpoint
         .get(&t4)
         .unwrap()
         .unwrap();
-    assert_eq!(tx_seq, 4);
+    assert_eq!(cp_seq, 0);
 }
 
 #[test]
@@ -531,7 +531,7 @@ fn latest_proposal() {
     .collect();
     // We only need f+1 to make a cert. 2 is sufficient.
     let cert = CertifiedCheckpointSummary::aggregate(signed, &committee).unwrap();
-    cps1.promote_signed_checkpoint_to_cert(&cert, &committee, &CheckpointMetrics::new_for_tests())
+    cps1.promote_signed_checkpoint_to_cert(&cert, &committee)
         .unwrap();
 
     let response = cps1.handle_proposal(false).expect("no errors");
@@ -576,9 +576,29 @@ fn latest_proposal() {
 }
 
 #[test]
+fn update_processed_transactions_already_in_checkpoint() {
+    let (_committee, _keys, mut stores) = random_ckpoint_store_num(1);
+    let (_, mut cps) = stores.pop().unwrap();
+
+    let t1 = ExecutionDigests::random();
+    let t2 = ExecutionDigests::random();
+    let t3 = ExecutionDigests::random();
+
+    let checkpoint = CheckpointContents::new([t1, t2].into_iter());
+    cps.update_new_checkpoint_inner(0, &checkpoint, cps.tables.checkpoints.batch())
+        .unwrap();
+    cps.update_processed_transactions(&[(2, t2), (3, t3)])
+        .unwrap();
+
+    assert_eq!(
+        vec![(t3, 3)],
+        cps.tables.extra_transactions.iter().collect::<Vec<_>>()
+    );
+}
+
+#[test]
 fn set_get_checkpoint() {
     let (committee, _keys, mut stores) = random_ckpoint_store();
-    let metrics = CheckpointMetrics::new_for_tests();
     let (_, mut cps1) = stores.pop().unwrap();
     let (_, mut cps2) = stores.pop().unwrap();
     let (_, mut cps3) = stores.pop().unwrap();
@@ -702,7 +722,7 @@ fn set_get_checkpoint() {
         CertifiedCheckpointSummary::aggregate(signed_checkpoint, &committee).unwrap();
 
     // Send the certificate to a party that has the data
-    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee, &metrics)
+    cps1.promote_signed_checkpoint_to_cert(&checkpoint_cert, &committee)
         .unwrap();
 
     // Now we have a certified checkpoint
@@ -725,7 +745,6 @@ fn set_get_checkpoint() {
         &contents,
         &committee,
         TestCausalOrderPendCertNoop,
-        &metrics,
     );
     assert!(response_ckp.is_err());
 
@@ -736,7 +755,6 @@ fn set_get_checkpoint() {
         &contents,
         &committee,
         TestCausalOrderPendCertNoop,
-        &metrics,
     )
     .unwrap();
 
@@ -828,12 +846,8 @@ fn checkpoint_integration() {
                 })
                 .collect();
             let cert = CertifiedCheckpointSummary::aggregate(signatures, &committee).unwrap();
-            cps.promote_signed_checkpoint_to_cert(
-                &cert,
-                &committee,
-                &CheckpointMetrics::new_for_tests(),
-            )
-            .unwrap();
+            cps.promote_signed_checkpoint_to_cert(&cert, &committee)
+                .unwrap();
 
             // Loop invariant to ensure termination or error
             assert_eq!(cps.get_locals().next_checkpoint, old_checkpoint + 1);
@@ -888,8 +902,17 @@ async fn test_batch_to_checkpointing() {
     let (committee, _, authority_key) =
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
 
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     let authority_state = Arc::new(
-        AuthorityState::new_for_testing(committee.clone(), &authority_key, None, None, None).await,
+        AuthorityState::new_for_testing(
+            committee.clone(),
+            &authority_key,
+            None,
+            None,
+            None,
+            tx_reconfigure_consensus,
+        )
+        .await,
     );
 
     let inner_state = authority_state.clone();
@@ -975,6 +998,7 @@ async fn test_batch_to_checkpointing_init_crash() {
     // Scope to ensure all variables are dropped
     {
         // TODO: May need to set checkpoint store to be None.
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
         let authority_state = Arc::new(
             AuthorityState::new_for_testing(
                 committee.clone(),
@@ -982,6 +1006,7 @@ async fn test_batch_to_checkpointing_init_crash() {
                 Some(path.clone()),
                 None,
                 None,
+                tx_reconfigure_consensus,
             )
             .await,
         );
@@ -1047,9 +1072,17 @@ async fn test_batch_to_checkpointing_init_crash() {
 
     // Scope to ensure all variables are dropped
     {
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
         let authority_state = Arc::new(
-            AuthorityState::new_for_testing(committee, &authority_key, Some(path), None, None)
-                .await,
+            AuthorityState::new_for_testing(
+                committee,
+                &authority_key,
+                Some(path),
+                None,
+                None,
+                tx_reconfigure_consensus,
+            )
+            .await,
         );
 
         // Init feeds the transactions in
@@ -1551,6 +1584,7 @@ pub async fn checkpoint_tests_setup(
 
     // Make all authorities and their services.
     for k in &keys {
+        let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
         let authority = Arc::new(
             AuthorityState::new_for_testing(
                 committee.clone(),
@@ -1558,6 +1592,7 @@ pub async fn checkpoint_tests_setup(
                 None,
                 None,
                 Some(Box::new(sender.clone())),
+                tx_reconfigure_consensus,
             )
             .await,
         );
@@ -1657,7 +1692,6 @@ async fn checkpoint_messaging_flow_bug() {
 #[tokio::test(flavor = "current_thread", start_paused = true)]
 async fn checkpoint_messaging_flow() {
     let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
-    let metrics = CheckpointMetrics::new_for_tests();
 
     // Check that the system is running.
     let t = setup.transactions.pop().unwrap();
@@ -1794,13 +1828,12 @@ async fn checkpoint_messaging_flow() {
                     &contents,
                     &setup.committee,
                     TestCausalOrderPendCertNoop,
-                    &metrics,
                 )
                 .unwrap();
         } else {
             auth.checkpoint
                 .lock()
-                .promote_signed_checkpoint_to_cert(&checkpoint_cert, &setup.committee, &metrics)
+                .promote_signed_checkpoint_to_cert(&checkpoint_cert, &setup.committee)
                 .unwrap();
         }
     }

@@ -14,10 +14,12 @@ use crate::{
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use chrono::prelude::*;
+use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use narwhal_config::Committee as ConsensusCommittee;
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
@@ -58,6 +60,7 @@ use sui_types::{
 };
 use tap::TapFallible;
 use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::mpsc::Sender;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
@@ -323,6 +326,9 @@ pub struct AuthorityState {
 
     // Cache the latest checkpoint number to avoid expensive locking to access checkpoint store
     latest_checkpoint_num: AtomicU64,
+
+    /// A channel to tell consensus to reconfigure.
+    tx_reconfigure_consensus: Sender<(ConsensusKeyPair, ConsensusCommittee)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -731,7 +737,7 @@ impl AuthorityState {
             effects.effects.all_mutated(),
             cert.signed_data
                 .data
-                .move_calls()?
+                .move_calls()
                 .iter()
                 .map(|mc| (mc.package.0, mc.module.clone(), mc.function.clone())),
             seq,
@@ -851,7 +857,8 @@ impl AuthorityState {
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
         let ref_and_digest = match request.request_kind {
-            ObjectInfoRequestKind::PastObjectInfo(seq) => {
+            ObjectInfoRequestKind::PastObjectInfo(seq)
+            | ObjectInfoRequestKind::PastObjectInfoDebug(seq, _) => {
                 // Get the Transaction Digest that created the object
                 self.get_parent_iterator(request.object_id, Some(seq))
                     .await?
@@ -902,6 +909,26 @@ impl AuthorityState {
                         Some(ObjectResponse {
                             object,
                             lock,
+                            layout,
+                        })
+                    }
+                    Err(e) => return Err(e),
+                    _ => None,
+                }
+            }
+            ObjectInfoRequestKind::PastObjectInfoDebug(seq, request_layout) => {
+                match self.database.get_object_by_key(&request.object_id, seq) {
+                    Ok(Some(object)) => {
+                        let layout = match request_layout {
+                            Some(format) => {
+                                object.get_layout(format, self.module_cache.as_ref())?
+                            }
+                            None => None,
+                        };
+
+                        Some(ObjectResponse {
+                            object,
+                            lock: None,
                             layout,
                         })
                     }
@@ -1036,6 +1063,7 @@ impl AuthorityState {
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
+        tx_reconfigure_consensus: Sender<(ConsensusKeyPair, ConsensusCommittee)>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1086,6 +1114,7 @@ impl AuthorityState {
             consensus_guardrail: AtomicUsize::new(0),
             metrics: Arc::new(AuthorityMetrics::new(prometheus_registry)),
             latest_checkpoint_num: AtomicU64::new(0),
+            tx_reconfigure_consensus,
         };
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
@@ -1143,6 +1172,7 @@ impl AuthorityState {
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
         consensus_sender: Option<Box<dyn ConsensusSender>>,
+        tx_reconfigure_consensus: Sender<(ConsensusKeyPair, ConsensusCommittee)>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -1191,6 +1221,7 @@ impl AuthorityState {
             Some(Arc::new(Mutex::new(checkpoints))),
             genesis,
             &prometheus::Registry::new(),
+            tx_reconfigure_consensus,
         )
         .await;
 
@@ -1755,9 +1786,21 @@ impl ExecutionState for AuthorityState {
                     // to persist the consensus index. If the validator crashes, this transaction
                     // may be resent to the checkpoint logic that will simply ignore it.
 
-                    // Cache the next checkpoint number if it changes
+                    // Cache the next checkpoint number if it changes.
                     self.latest_checkpoint_num
                         .store(checkpoint.next_checkpoint(), Ordering::Relaxed);
+
+                    // TODO: At this point we should know whether we want to change epoch. If we do,
+                    // we should have (i) the new committee and (ii) the new keypair of this authority.
+                    // We then call:
+                    // ```
+                    //  self
+                    //      .tx_reconfigure_consensus
+                    //      .send((new_keypair, new_committee))
+                    //      .await
+                    //      .expect("Failed to reconfigure consensus");
+                    // ```
+                    let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
                 }
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment

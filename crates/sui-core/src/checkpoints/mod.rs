@@ -36,7 +36,6 @@ use typed_store::{
 };
 use typed_store_macros::DBMapUtils;
 
-use crate::authority_active::checkpoint_driver::CheckpointMetrics;
 use crate::checkpoints::causal_order_effects::CausalOrder;
 use crate::{
     authority::StableSyncAuthoritySigner,
@@ -95,8 +94,7 @@ pub struct CheckpointStoreTables {
     /// The list of all transaction/effects that are checkpointed mapping to the checkpoint
     /// sequence number they were assigned to.
     #[default_options_override_fn = "transactions_to_checkpoint_table_default_config"]
-    pub transactions_to_checkpoint:
-        DBMap<ExecutionDigests, (CheckpointSequenceNumber, TxSequenceNumber)>,
+    pub transactions_to_checkpoint: DBMap<ExecutionDigests, CheckpointSequenceNumber>,
 
     /// The mapping from checkpoint to transaction/effects contained within the checkpoint.
     /// The checkpoint content should be causally ordered and is consistent among
@@ -740,7 +738,6 @@ impl CheckpointStore {
         &mut self,
         checkpoint: &CertifiedCheckpointSummary,
         committee: &Committee,
-        metrics: &CheckpointMetrics,
     ) -> SuiResult {
         checkpoint.verify(committee, None)?;
         debug_assert!(matches!(
@@ -751,7 +748,6 @@ impl CheckpointStore {
         self.tables
             .checkpoints
             .insert(seq, &AuthenticatedCheckpoint::Certified(checkpoint.clone()))?;
-        metrics.checkpoint_sequence_number.set(*seq as i64);
         self.clear_proposal(*seq + 1)?;
         Ok(())
     }
@@ -765,10 +761,9 @@ impl CheckpointStore {
         contents: &CheckpointContents,
         committee: &Committee,
         effects_store: impl CausalOrder + PendCertificateForExecution,
-        metrics: &CheckpointMetrics,
     ) -> SuiResult {
         self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
-        self.process_synced_checkpoint_certificate(checkpoint, contents, committee, metrics)
+        self.process_synced_checkpoint_certificate(checkpoint, contents, committee)
     }
 
     /// Unlike process_new_checkpoint_certificate this does not verify that transactions are executed
@@ -778,7 +773,6 @@ impl CheckpointStore {
         checkpoint: &CertifiedCheckpointSummary,
         contents: &CheckpointContents,
         committee: &Committee,
-        metrics: &CheckpointMetrics,
     ) -> SuiResult {
         let seq = checkpoint.summary.sequence_number();
         debug_assert!(self.tables.checkpoints.get(seq)?.is_none());
@@ -789,7 +783,6 @@ impl CheckpointStore {
             &AuthenticatedCheckpoint::Certified(checkpoint.clone()),
             contents,
         )?;
-        metrics.checkpoint_sequence_number.set(*seq as i64);
         self.clear_proposal(*seq + 1)?;
         Ok(())
     }
@@ -981,14 +974,7 @@ impl CheckpointStore {
 
         // Now write the checkpoint data to the database
 
-        let transactions_to_checkpoint: Vec<_> = transactions
-            .iter()
-            .zip(transactions_with_seq.iter())
-            .filter_map(|(tx, opt)| {
-                // If iseq is missing here then batch service will update this index in update_processed_transactions
-                opt.as_ref().map(|iseq| (*tx, (seq, *iseq)))
-            })
-            .collect();
+        let transactions_to_checkpoint: Vec<_> = transactions.iter().map(|tx| (*tx, seq)).collect();
 
         let batch = batch.insert_batch(
             &self.tables.transactions_to_checkpoint,
@@ -1013,9 +999,22 @@ impl CheckpointStore {
         transactions: &[(TxSequenceNumber, ExecutionDigests)],
     ) -> Result<(), SuiError> {
         let batch = self.tables.extra_transactions.batch();
+        let already_in_checkpoint = self
+            .tables
+            .transactions_to_checkpoint
+            .multi_get(transactions.iter().map(|(_seq, digest)| *digest))?;
         let batch = batch.insert_batch(
             &self.tables.extra_transactions,
-            transactions.iter().map(|(seq, digest)| (digest, seq)),
+            transactions
+                .iter()
+                .zip(already_in_checkpoint.iter())
+                .filter_map(|((seq, digest), cpk)| {
+                    if cpk.is_some() {
+                        None
+                    } else {
+                        Some((digest, seq))
+                    }
+                }),
         )?;
 
         // Write to the database.

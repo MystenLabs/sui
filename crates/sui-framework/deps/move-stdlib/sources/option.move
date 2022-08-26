@@ -3,7 +3,6 @@
 
 /// This module defines the Option type and its methods to represent and handle an optional value.
 module std::option {
-    use std::errors;
     use std::vector;
 
     /// Abstraction of a value that may or may not be present. Implemented with a vector of size
@@ -19,10 +18,10 @@ module std::option {
 
     /// The `Option` is in an invalid state for the operation attempted.
     /// The `Option` is `Some` while it should be `None`.
-    const EOPTION_IS_SET: u64 = 0;
+    const EOPTION_IS_SET: u64 = 0x40000;
     /// The `Option` is in an invalid state for the operation attempted.
     /// The `Option` is `None` while it should be `Some`.
-    const EOPTION_NOT_SET: u64 = 1;
+    const EOPTION_NOT_SET: u64 = 0x40001;
 
     /// Return an empty `Option`
     public fun none<Element>(): Option<Element> {
@@ -87,7 +86,7 @@ module std::option {
     /// Return an immutable reference to the value inside `t`
     /// Aborts if `t` does not hold a value
     public fun borrow<Element>(t: &Option<Element>): &Element {
-        assert!(is_some(t), errors::invalid_argument(EOPTION_NOT_SET));
+        assert!(is_some(t), EOPTION_NOT_SET);
         vector::borrow(&t.vec, 0)
     }
     spec borrow {
@@ -130,11 +129,11 @@ module std::option {
     public fun fill<Element>(t: &mut Option<Element>, e: Element) {
         let vec_ref = &mut t.vec;
         if (vector::is_empty(vec_ref)) vector::push_back(vec_ref, e)
-        else abort errors::invalid_argument(EOPTION_IS_SET)
+        else abort EOPTION_IS_SET
     }
     spec fill {
         pragma opaque;
-        aborts_if is_some(t) with errors::INVALID_ARGUMENT;
+        aborts_if is_some(t) with EOPTION_IS_SET;
         ensures is_some(t);
         ensures borrow(t) == e;
     }
@@ -142,7 +141,7 @@ module std::option {
     /// Convert a `some` option to a `none` by removing and returning the value stored inside `t`
     /// Aborts if `t` does not hold a value
     public fun extract<Element>(t: &mut Option<Element>): Element {
-        assert!(is_some(t), errors::invalid_argument(EOPTION_NOT_SET));
+        assert!(is_some(t), EOPTION_NOT_SET);
         vector::pop_back(&mut t.vec)
     }
     spec extract {
@@ -155,7 +154,7 @@ module std::option {
     /// Return a mutable reference to the value inside `t`
     /// Aborts if `t` does not hold a value
     public fun borrow_mut<Element>(t: &mut Option<Element>): &mut Element {
-        assert!(is_some(t), errors::invalid_argument(EOPTION_NOT_SET));
+        assert!(is_some(t), EOPTION_NOT_SET);
         vector::borrow_mut(&mut t.vec, 0)
     }
     spec borrow_mut {
@@ -167,7 +166,7 @@ module std::option {
     /// Swap the old value inside `t` with `e` and return the old value
     /// Aborts if `t` does not hold a value
     public fun swap<Element>(t: &mut Option<Element>, e: Element): Element {
-        assert!(is_some(t), errors::invalid_argument(EOPTION_NOT_SET));
+        assert!(is_some(t), EOPTION_NOT_SET);
         let vec_ref = &mut t.vec;
         let old_value = vector::pop_back(vec_ref);
         vector::push_back(vec_ref, e);
@@ -212,7 +211,7 @@ module std::option {
     /// Unpack `t` and return its contents
     /// Aborts if `t` does not hold a value
     public fun destroy_some<Element>(t: Option<Element>): Element {
-        assert!(is_some(&t), errors::invalid_argument(EOPTION_NOT_SET));
+        assert!(is_some(&t), EOPTION_NOT_SET);
         let Option { vec } = t;
         let elem = vector::pop_back(&mut vec);
         vector::destroy_empty(vec);
@@ -227,13 +226,13 @@ module std::option {
     /// Unpack `t`
     /// Aborts if `t` holds a value
     public fun destroy_none<Element>(t: Option<Element>) {
-        assert!(is_none(&t), errors::invalid_argument(EOPTION_IS_SET));
+        assert!(is_none(&t), EOPTION_IS_SET);
         let Option { vec } = t;
         vector::destroy_empty(vec)
     }
     spec destroy_none {
         pragma opaque;
-        aborts_if is_some(t) with errors::INVALID_ARGUMENT;
+        aborts_if is_some(t) with EOPTION_IS_SET;
     }
 
     /// Convert `t` into a vector of length 1 if it is `Some`,
@@ -258,6 +257,6 @@ module std::option {
 
     spec schema AbortsIfNone<Element> {
         t: Option<Element>;
-        aborts_if is_none(t) with errors::INVALID_ARGUMENT;
+        aborts_if is_none(t) with EOPTION_NOT_SET;
     }
 }

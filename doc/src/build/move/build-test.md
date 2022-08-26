@@ -17,6 +17,8 @@ Build Successful
 Artifacts path: "./build"
 ```
 
+If the build fails, you can use the verbose error messaging in output to troubleshoot and resolve root issues.
+
 Now that we have designed our asset and its accessor functions, let us
 test the code we have written.
 
@@ -65,7 +67,7 @@ file:
 
         // create a sword
         let sword = Sword {
-            info: object::new(&mut ctx),
+            id: object::new(&mut ctx),
             magic: 42,
             strength: 7,
         };
@@ -103,7 +105,7 @@ error[E06001]: unused value without 'drop'
 27 │           let sword = Sword {
    │               ----- The local variable 'sword' still contains a value. The value does not have the 'drop' ability and must be consumed before the function returns
    │ ╭─────────────────────'
-28 │ │             info: object::new(&mut ctx),
+28 │ │             id: object::new(&mut ctx),
 29 │ │             magic: 42,
 30 │ │             strength: 7,
 31 │ │         };
@@ -226,7 +228,7 @@ sword creation and transfer and put them into the `m1.move` file:
         use sui::tx_context;
         // create a sword
         let sword = Sword {
-            info: object::new(ctx),
+            id: object::new(ctx),
             magic: magic,
             strength: strength,
         };
