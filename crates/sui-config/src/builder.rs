@@ -5,7 +5,7 @@ use crate::{
     genesis,
     genesis_config::{GenesisConfig, ValidatorGenesisInfo},
     utils, ConsensusConfig, NetworkConfig, NodeConfig, ValidatorInfo, AUTHORITIES_DB_NAME,
-    CONSENSUS_DB_NAME, DEFAULT_GAS_PRICE, DEFAULT_STAKE,
+    CONSENSUS_DB_NAME,
 };
 use rand::rngs::OsRng;
 use std::{
@@ -21,22 +21,29 @@ use sui_types::{
     },
 };
 
+pub enum CommitteeConfig {
+    Size(NonZeroUsize),
+    Validators(Vec<ValidatorGenesisInfo>),
+}
+
 pub struct ConfigBuilder<R = OsRng> {
-    rng: R,
+    rng: Option<R>,
     config_directory: PathBuf,
     randomize_ports: bool,
-    committee_size: NonZeroUsize,
+    committee: Option<CommitteeConfig>,
     initial_accounts_config: Option<GenesisConfig>,
+    with_swarm: bool,
 }
 
 impl ConfigBuilder {
     pub fn new<P: AsRef<Path>>(config_directory: P) -> Self {
         Self {
-            rng: OsRng,
+            rng: Some(OsRng),
             config_directory: config_directory.as_ref().into(),
             randomize_ports: true,
-            committee_size: NonZeroUsize::new(1).unwrap(),
+            committee: Some(CommitteeConfig::Size(NonZeroUsize::new(1).unwrap())),
             initial_accounts_config: None,
+            with_swarm: false,
         }
     }
 }
@@ -47,8 +54,23 @@ impl<R> ConfigBuilder<R> {
         self
     }
 
+    pub fn with_swarm(mut self) -> Self {
+        self.with_swarm = true;
+        self
+    }
+
+    pub fn committee(mut self, committee: CommitteeConfig) -> Self {
+        self.committee = Some(committee);
+        self
+    }
+
     pub fn committee_size(mut self, committee_size: NonZeroUsize) -> Self {
-        self.committee_size = committee_size;
+        self.committee = Some(CommitteeConfig::Size(committee_size));
+        self
+    }
+
+    pub fn with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> Self {
+        self.committee = Some(CommitteeConfig::Validators(validators));
         self
     }
 
@@ -59,11 +81,12 @@ impl<R> ConfigBuilder<R> {
 
     pub fn rng<N: ::rand::RngCore + ::rand::CryptoRng>(self, rng: N) -> ConfigBuilder<N> {
         ConfigBuilder {
-            rng,
+            rng: Some(rng),
             config_directory: self.config_directory,
             randomize_ports: self.randomize_ports,
-            committee_size: self.committee_size,
+            committee: self.committee,
             initial_accounts_config: self.initial_accounts_config,
+            with_swarm: self.with_swarm,
         }
     }
 }
@@ -71,45 +94,111 @@ impl<R> ConfigBuilder<R> {
 impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
     //TODO right now we always randomize ports, we may want to have a default port configuration
     pub fn build(mut self) -> NetworkConfig {
-        let validators = (0..self.committee_size.get())
-            .map(|_| {
-                (
-                    get_key_pair_from_rng(&mut self.rng).1,
-                    get_key_pair_from_rng::<AccountKeyPair, _>(&mut self.rng)
-                        .1
-                        .into(),
-                    get_key_pair_from_rng::<AccountKeyPair, _>(&mut self.rng)
-                        .1
-                        .into(),
-                )
-            })
-            .map(
-                |(key_pair, account_key_pair, network_key_pair): (
-                    AuthorityKeyPair,
-                    SuiKeyPair,
-                    SuiKeyPair,
-                )| {
-                    ValidatorGenesisInfo {
-                        key_pair,
-                        account_key_pair,
-                        network_key_pair,
-                        network_address: utils::new_network_address(),
-                        stake: DEFAULT_STAKE,
-                        gas_price: DEFAULT_GAS_PRICE,
-                        narwhal_primary_to_primary: utils::new_network_address(),
-                        narwhal_worker_to_primary: utils::new_network_address(),
-                        narwhal_primary_to_worker: utils::new_network_address(),
-                        narwhal_worker_to_worker: utils::new_network_address(),
-                        narwhal_consensus_address: utils::new_network_address(),
-                    }
-                },
-            )
-            .collect::<Vec<_>>();
+        let committee = self.committee.take().unwrap();
 
-        self.build_with_validators(validators)
+        let mut rng = self.rng.take().unwrap();
+
+        let validators = match committee {
+            CommitteeConfig::Size(size) => (0..size.get())
+                .map(|i| {
+                    (
+                        i,
+                        (
+                            get_key_pair_from_rng(&mut rng).1,
+                            get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
+                                .1
+                                .into(),
+                            get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
+                                .1
+                                .into(),
+                        ),
+                    )
+                })
+                .map(
+                    |(i, (key_pair, account_key_pair, network_key_pair)): (
+                        _,
+                        (AuthorityKeyPair, SuiKeyPair, SuiKeyPair),
+                    )| {
+                        self.build_validator(i, key_pair, account_key_pair, network_key_pair)
+                    },
+                )
+                .collect::<Vec<_>>(),
+            CommitteeConfig::Validators(v) => v,
+        };
+
+        self.build_with_validators(rng, validators)
     }
 
-    pub fn build_with_validators(mut self, validators: Vec<ValidatorGenesisInfo>) -> NetworkConfig {
+    fn build_validator(
+        &self,
+        index: usize,
+        key_pair: AuthorityKeyPair,
+        account_key_pair: SuiKeyPair,
+        network_key_pair: SuiKeyPair,
+    ) -> ValidatorGenesisInfo {
+        #[cfg(madsim)]
+        return self.build_validator_for_simulator(
+            index,
+            key_pair,
+            account_key_pair,
+            network_key_pair,
+        );
+
+        #[cfg(not(madsim))]
+        return Self::build_validator_for_localhost(
+            index,
+            key_pair,
+            account_key_pair,
+            network_key_pair,
+        );
+    }
+
+    #[cfg(madsim)]
+    fn build_validator_for_simulator(
+        &self,
+        index: usize,
+        key_pair: AuthorityKeyPair,
+        account_key_pair: SuiKeyPair,
+        network_key_pair: SuiKeyPair,
+    ) -> ValidatorGenesisInfo {
+        let ip = if !self.with_swarm {
+            let ip_addr = madsim::runtime::NodeHandle::current()
+                .ip()
+                .expect("expected to be called within a simulator node");
+            format!("{}", ip_addr)
+        } else {
+            let low_octet = index + 1;
+
+            // we will probably never run this many validators in a sim
+            if low_octet > 255 {
+                todo!("smarter IP formatting required");
+            }
+
+            format!("10.10.0.{}", low_octet)
+        };
+
+        ValidatorGenesisInfo::from_base_ip(key_pair, account_key_pair, network_key_pair, ip, index)
+    }
+
+    #[cfg(not(madsim))]
+    fn build_validator_for_localhost(
+        _index: usize,
+        key_pair: AuthorityKeyPair,
+        account_key_pair: SuiKeyPair,
+        network_key_pair: SuiKeyPair,
+    ) -> ValidatorGenesisInfo {
+        ValidatorGenesisInfo::from_localhost_for_testing(
+            key_pair,
+            account_key_pair,
+            network_key_pair,
+        )
+    }
+
+    fn build_with_validators(
+        self,
+        mut rng: R,
+        validators: Vec<ValidatorGenesisInfo>,
+    ) -> NetworkConfig {
         let validator_set = validators
             .iter()
             .enumerate()
@@ -149,9 +238,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         let initial_accounts_config = self
             .initial_accounts_config
             .unwrap_or_else(GenesisConfig::for_local_testing);
-        let (account_keys, objects) = initial_accounts_config
-            .generate_accounts(&mut self.rng)
-            .unwrap();
+        let (account_keys, objects) = initial_accounts_config.generate_accounts(&mut rng).unwrap();
 
         let genesis = {
             let mut builder = genesis::Builder::new().add_objects(objects);
