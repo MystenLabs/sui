@@ -42,7 +42,8 @@
         "react-ga4": "^1.4.1",
         "react-router-dom": "^6.2.1",
         "topojson-client": "^3.1.0",
-        "vanilla-cookieconsent": "^2.8.0"
+        "vanilla-cookieconsent": "^2.8.0",
+        "vite-tsconfig-paths": "^3.5.0"
     },
     "devDependencies": {
         "@testing-library/dom": "^8.17.1",

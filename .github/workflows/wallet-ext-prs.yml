@@ -30,8 +30,6 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build SDK
-        run: pnpm --filter @mysten/sui.js build
       - name: Lint
         working-directory: ${{env.working-directory}}
         run: pnpm lint

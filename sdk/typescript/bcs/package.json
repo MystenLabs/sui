@@ -17,7 +17,7 @@
   "scripts": {
     "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
-    "prepare": "pnpm build",
+    "prepublishOnly": "pnpm build",
     "test": "vitest"
   },
   "repository": {

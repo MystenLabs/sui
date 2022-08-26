@@ -9,7 +9,7 @@
     "src"
   ],
   "engines": {
-    "node": ">=10"
+    "node": ">=16"
   },
   "type": "module",
   "main": "./dist/index.cjs",
@@ -27,7 +27,7 @@
     "doc": "typedoc",
     "test": "vitest",
     "lint": "eslint './{src,test}/**.{ts,js}'",
-    "prepare": "pnpm build",
+    "prepublishOnly": "pnpm build",
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
