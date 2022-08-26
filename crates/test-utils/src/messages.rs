@@ -5,6 +5,7 @@ use crate::objects::{test_gas_objects, test_gas_objects_with_owners, test_shared
 use crate::{test_account_keys, test_committee, test_validator_keys};
 use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
+use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
 use std::path::PathBuf;
 use sui::client_commands::WalletContext;
@@ -312,6 +313,19 @@ pub fn move_transaction(
     arguments: Vec<CallArg>,
 ) -> Transaction {
     // The key pair of the sender of the transaction.
+
+    move_transaction_with_type_tags(gas_object, module, function, package_ref, &[], arguments)
+}
+
+/// Make a transaction calling a specific move module & function, with specific type tags
+pub fn move_transaction_with_type_tags(
+    gas_object: Object,
+    module: &'static str,
+    function: &'static str,
+    package_ref: ObjectRef,
+    type_args: &[TypeTag],
+    arguments: Vec<CallArg>,
+) -> Transaction {
     let (sender, keypair) = test_account_keys().pop().unwrap();
 
     // Make the transaction.
@@ -320,7 +334,7 @@ pub fn move_transaction(
         package_ref,
         ident_str!(module).to_owned(),
         ident_str!(function).to_owned(),
-        /* type_args */ vec![],
+        type_args.to_vec(),
         gas_object.compute_object_reference(),
         arguments,
         MAX_GAS,

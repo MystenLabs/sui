@@ -1,0 +1,53 @@
+---
+source: crates/sui-cost/tests/empirical_transaction_cost.rs
+expression: common_costs
+---
+Publish:
+  computation_cost: 521
+  storage_cost: 83
+  storage_rebate: 0
+MergeCoin:
+  computation_cost: 463
+  storage_cost: 32
+  storage_rebate: 0
+? SplitCoin: 0
+: computation_cost: 446
+  storage_cost: 32
+  storage_rebate: 0
+? SplitCoin: 1
+: computation_cost: 488
+  storage_cost: 48
+  storage_rebate: 0
+? SplitCoin: 2
+: computation_cost: 531
+  storage_cost: 64
+  storage_rebate: 0
+? SplitCoin: 3
+: computation_cost: 574
+  storage_cost: 80
+  storage_rebate: 0
+TransferWholeCoin:
+  computation_cost: 41
+  storage_cost: 32
+  storage_rebate: 0
+TransferWholeSuiCoin:
+  computation_cost: 38
+  storage_cost: 32
+  storage_rebate: 0
+TransferPortionSuiCoin:
+  computation_cost: 45
+  storage_cost: 48
+  storage_rebate: 0
+SharedCounterCreate:
+  computation_cost: 109
+  storage_cost: 31
+  storage_rebate: 0
+SharedCounterAssertValue:
+  computation_cost: 198
+  storage_cost: 31
+  storage_rebate: 15
+SharedCounterIncrement:
+  computation_cost: 197
+  storage_cost: 31
+  storage_rebate: 15
+

@@ -9,8 +9,8 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
     RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse,
-    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
-    SuiTransactionResponse, SuiTypeTag, TransactionBytes,
+    SuiGasCostSummary, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
+    SuiObjectInfo, SuiTransactionResponse, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
@@ -479,4 +479,19 @@ pub trait QuorumDriverApi {
         /// The request type
         request_type: ExecuteTransactionRequestType,
     ) -> RpcResult<SuiExecuteTransactionResponse>;
+}
+
+#[open_rpc(
+    namespace = "sui",
+    tag = "Estimator API to estimate gas quantities for a transactions."
+)]
+#[rpc(server, client, namespace = "sui")]
+pub trait EstimatorApi {
+    /// Execute the transaction and wait for results if desired
+    #[method(name = "estimateTransactionComputationCost")]
+    async fn estimate_transaction_computation_cost(
+        &self,
+        /// transaction data bytes, as base-64 encoded string
+        tx_bytes: Base64,
+    ) -> RpcResult<SuiGasCostSummary>;
 }

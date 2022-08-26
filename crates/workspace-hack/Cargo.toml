@@ -483,7 +483,7 @@ strip-ansi-escapes = { version = "0.1", default-features = false }
 strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-features = false }
 strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
 structopt = { version = "0.3" }
-strum = { version = "0.24", features = ["std"] }
+strum = { version = "0.24", features = ["derive", "std", "strum_macros"] }
 subtle = { version = "2", default-features = false, features = ["i128", "std"] }
 subtle-ng = { version = "2", default-features = false, features = ["std"] }
 sync_wrapper = { version = "0.1", default-features = false }
@@ -1141,7 +1141,7 @@ strsim-93f6ce9d446188ac = { package = "strsim", version = "0.10", default-featur
 strsim-c38e5c1d305a1b54 = { package = "strsim", version = "0.8", default-features = false }
 structopt = { version = "0.3" }
 structopt-derive = { version = "0.4", default-features = false }
-strum = { version = "0.24", features = ["std"] }
+strum = { version = "0.24", features = ["derive", "std", "strum_macros"] }
 strum_macros = { version = "0.24", default-features = false }
 subprocess = { version = "0.2", default-features = false }
 subtle = { version = "2", default-features = false, features = ["i128", "std"] }

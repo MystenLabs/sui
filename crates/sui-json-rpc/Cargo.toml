@@ -29,4 +29,5 @@ sui-open-rpc = { path = "../sui-open-rpc" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-cost = { path = "../sui-cost" }
 workspace-hack = { path = "../workspace-hack" }
