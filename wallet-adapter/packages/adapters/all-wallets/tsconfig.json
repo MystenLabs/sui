@@ -5,5 +5,5 @@
     "outDir": "dist",
     "rootDir": "src"
   },
-  "references": [{ "path": "../mock-adapter" }, { "path": "../sui-wallet" }]
+  "references": [{ "path": "../mock-wallet" }, { "path": "../sui-wallet" }]
 }

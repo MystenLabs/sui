@@ -16,7 +16,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
-    "build:types": "tsc --declaration --emitDeclarationOnly"
+    "build:types": "tsc --declaration --emitDeclarationOnly",
+    "prepublishOnly": "pnpm build"
   },
   "dependencies": {
     "@mysten/wallet-adapter-mock-wallet": "workspace:*",
