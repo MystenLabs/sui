@@ -42,6 +42,8 @@ pub enum TestCallArg {
     Object(ObjectID),
     U64(u64),
     Address(SuiAddress),
+    PrimVec(Vec<u64>),
+    ObjVec(Vec<ObjectID>),
 }
 
 impl TestCallArg {
@@ -60,6 +62,18 @@ impl TestCallArg {
             Self::U64(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
             Self::Address(addr) => {
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(addr)).unwrap())
+            }
+            Self::PrimVec(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
+            Self::ObjVec(vec) => {
+                let mut refs = vec![];
+                for object_id in vec {
+                    let object = state.get_object(&object_id).await.unwrap().unwrap();
+                    debug_assert!(!object.is_shared());
+                    refs.push(ObjectArg::ImmOrOwnedObject(
+                        object.compute_object_reference(),
+                    ));
+                }
+                CallArg::ObjVec(refs)
             }
         }
     }

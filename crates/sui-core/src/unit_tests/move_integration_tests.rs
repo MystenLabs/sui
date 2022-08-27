@@ -445,6 +445,124 @@ async fn test_object_owning_another_object() {
     assert_eq!(effects.deleted.len(), 2);
 }
 
+#[tokio::test]
+async fn test_entry_point_vector() {
+    let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
+    let gas = ObjectID::random();
+    let authority = init_state_with_ids(vec![(sender, gas)]).await;
+
+    let package = build_and_publish_test_package(
+        &authority,
+        &sender,
+        &sender_key,
+        &gas,
+        "entry_point_vector",
+    )
+    .await;
+
+    // just a test call with vector of 2 primitive values and check its length in the entry function
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "prim_vec_len",
+        vec![],
+        vec![TestCallArg::PrimVec(vec![7, 42])],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // call a function with an empty vector
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "obj_vec_empty",
+        vec![],
+        vec![TestCallArg::ObjVec(vec![])],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // mint 2 objects
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint",
+        vec![],
+        vec![TestCallArg::U64(7)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id_1, _, _) = effects.created[0].0;
+
+    // mint 2 objects
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint",
+        vec![],
+        vec![TestCallArg::U64(42)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id_2, _, _) = effects.created[0].0;
+
+    // call a function with a vector containing two objects
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "obj_vec_destroy",
+        vec![],
+        vec![TestCallArg::ObjVec(vec![obj_id_1, obj_id_2])],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+}
+
 pub async fn build_and_try_publish_test_package(
     authority: &AuthorityState,
     sender: &SuiAddress,

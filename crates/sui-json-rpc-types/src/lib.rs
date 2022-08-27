@@ -1410,6 +1410,22 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                         CallArg::Object(ObjectArg::SharedObject(id)) => {
                             SuiJsonValue::new(Value::String(id.to_hex_literal()))
                         }
+                        CallArg::ObjVec(vec) => {
+                            SuiJsonValue::new(Value::Array(
+                                vec.iter()
+                                    .filter_map(|obj_arg| match obj_arg {
+                                        ObjectArg::ImmOrOwnedObject((id, _, _)) => {
+                                            Some(Value::String(id.to_hex_literal()))
+                                        }
+                                        ObjectArg::SharedObject(_) => {
+                                            // ObjVec is guaranteed to never contain shared objects
+                                            debug_assert!(false);
+                                            None
+                                        }
+                                    })
+                                    .collect(),
+                            ))
+                        }
                     })
                     .collect::<Result<Vec<_>, _>>()?,
             }),

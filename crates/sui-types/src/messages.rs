@@ -51,7 +51,8 @@ pub enum CallArg {
     Pure(Vec<u8>),
     // an object
     Object(ObjectArg),
-    // TODO support more than one object (object vector of some sort)
+    // a vector of objects
+    ObjVec(Vec<ObjectArg>),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -138,6 +139,8 @@ impl SingleTransactionKind {
                 Either::Left(arguments.iter().filter_map(|arg| match arg {
                     CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
                     CallArg::Object(ObjectArg::SharedObject(id)) => Some(id),
+                    // ObjVec is guaranteed not to contain shared objects
+                    CallArg::ObjVec(_) => None,
                 }))
             }
             _ => Either::Right(std::iter::empty()),
@@ -167,12 +170,27 @@ impl SingleTransactionKind {
                 .filter_map(|arg| match arg {
                     CallArg::Pure(_) => None,
                     CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
-                        Some(InputObjectKind::ImmOrOwnedMoveObject(*object_ref))
+                        Some(vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)])
                     }
                     CallArg::Object(ObjectArg::SharedObject(id)) => {
-                        Some(InputObjectKind::SharedMoveObject(*id))
+                        Some(vec![InputObjectKind::SharedMoveObject(*id)])
                     }
+                    CallArg::ObjVec(vec) => Some(
+                        vec.iter()
+                            .filter_map(|obj_arg| match obj_arg {
+                                ObjectArg::ImmOrOwnedObject(object_ref) => {
+                                    Some(InputObjectKind::ImmOrOwnedMoveObject(*object_ref))
+                                }
+                                ObjectArg::SharedObject(_) => {
+                                    // ObjVec is guaranteed to never contain shared objects
+                                    debug_assert!(false);
+                                    None
+                                }
+                            })
+                            .collect(),
+                    ),
                 })
+                .flatten()
                 .chain([InputObjectKind::MovePackage(package.0)])
                 .collect(),
             Self::Publish(MoveModulePublish { modules }) => {
