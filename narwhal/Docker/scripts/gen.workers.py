@@ -32,8 +32,8 @@ def main():
     for i, k in enumerate(keys):
         workers = {}
         port = starting_port
-        for i in range(args.nw):
-            workers[i] = {
+        for j in range(args.nw):
+            workers[j] = {
                 "primary_to_worker": "/dns/worker_{:02d}/tcp/{}/http".format(i, port),
                 "transactions": "/dns/worker_{:02d}/tcp/{}/http".format(i, port+1),
                 "worker_to_worker": "/dns/worker_{:02d}/tcp/{}/http".format(i, port+2)
