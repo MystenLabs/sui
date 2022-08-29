@@ -6,7 +6,7 @@ use sha3::{Digest, Sha3_256};
 use tempfile::TempDir;
 
 use sui_sdk::crypto::KeystoreType;
-use sui_types::crypto::SuiSignatureInner;
+use sui_types::crypto::{SignatureScheme, SuiSignatureInner};
 use sui_types::{
     base_types::{SuiAddress, SUI_ADDRESS_LENGTH},
     crypto::Ed25519SuiSignature,
@@ -17,14 +17,14 @@ fn mnemonic_test() {
     let keystore_path = temp_dir.path().join("sui.keystore");
     let mut keystore = KeystoreType::File(keystore_path).init().unwrap();
 
-    let (address, phrase, flag) = keystore.generate_new_key("ed25519".to_string()).unwrap();
+    let (address, phrase, scheme) = keystore.generate_new_key(SignatureScheme::ED25519).unwrap();
 
     let keystore_path_2 = temp_dir.path().join("sui2.keystore");
     let mut keystore2 = KeystoreType::File(keystore_path_2).init().unwrap();
     let imported_address = keystore2
-        .import_from_mnemonic(&phrase, "ed25519".to_string())
+        .import_from_mnemonic(&phrase, SignatureScheme::ED25519)
         .unwrap();
-    assert_eq!(flag, Ed25519SuiSignature::SCHEME.flag());
+    assert_eq!(scheme.flag(), Ed25519SuiSignature::SCHEME.flag());
     assert_eq!(address, imported_address);
 }
 
@@ -40,7 +40,7 @@ fn sui_wallet_address_mnemonic_test() -> Result<(), anyhow::Error> {
     let mut keystore = KeystoreType::File(keystore_path).init().unwrap();
 
     keystore
-        .import_from_mnemonic(phrase, "ed25519".to_string())
+        .import_from_mnemonic(phrase, SignatureScheme::ED25519)
         .unwrap();
 
     let pubkey = keystore.keys()[0].clone();
