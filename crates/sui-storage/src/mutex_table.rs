@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use tokio::sync::{Mutex, RwLock};
 use tokio::task::JoinHandle;
-use tracing::{error, info};
+use tracing::info;
 
 type InnerLockTable<K> = HashMap<K, Arc<tokio::sync::Mutex<()>>>;
 // MutexTable supports mutual exclusion on keys such as TransactionDigest or ObjectDigest
@@ -88,8 +88,15 @@ impl<K: Hash + std::cmp::Eq + Send + Sync + 'static> MutexTable<K> {
                 continue;
             }
             map.unwrap().retain(|_k, v| {
-                let mutex_guard = v.try_lock();
-                mutex_guard.is_err()
+                // MutexMap::(try_|)acquire_locks will lock the map and call Arc::clone on the entry
+                // This check ensures that we only drop entry from the map if this is the only mutex copy
+                // This check is also likely sufficient e.g. you don't even need try_lock below, but keeping it just in case
+                if Arc::strong_count(v) == 1 {
+                    let mutex_guard = v.try_lock();
+                    mutex_guard.is_err()
+                } else {
+                    true
+                }
             });
         }
     }
@@ -125,45 +132,50 @@ impl<K: Hash + std::cmp::Eq + Send + Sync + 'static> MutexTable<K> {
 
     pub async fn acquire_lock(&self, k: K) -> LockGuard {
         let lock_idx = self.get_lock_idx(&k);
-        let map = self.lock_table[lock_idx].read().await;
-        if let Some(element) = map.get(&k) {
-            LockGuard(element.clone().lock_owned().await)
+        let element = {
+            let map = self.lock_table[lock_idx].read().await;
+            map.get(&k).cloned()
+        };
+        if let Some(element) = element {
+            LockGuard(element.lock_owned().await)
         } else {
             // element doesn't exist
-            drop(map);
-            let mut map = self.lock_table[lock_idx].write().await;
-            let element = map.entry(k).or_insert_with(|| Arc::new(Mutex::new(())));
-            LockGuard(element.clone().lock_owned().await)
+            let element = {
+                let mut map = self.lock_table[lock_idx].write().await;
+                map.entry(k)
+                    .or_insert_with(|| Arc::new(Mutex::new(())))
+                    .clone()
+            };
+            LockGuard(element.lock_owned().await)
         }
     }
 
     pub fn try_acquire_lock(&self, k: K) -> Result<LockGuard, TryAcquireLockError> {
         let lock_idx = self.get_lock_idx(&k);
-        let res = self.lock_table[lock_idx].try_read();
-        if res.is_err() {
-            return Err(TryAcquireLockError::LockTableLocked);
-        }
-        let map = res.unwrap();
-        if let Some(element) = map.get(&k) {
-            let lock = element.clone().try_lock_owned();
-            if lock.is_err() {
-                return Err(TryAcquireLockError::LockEntryLocked);
-            }
-            Ok(LockGuard(lock.unwrap()))
+        let element = {
+            let map = self.lock_table[lock_idx]
+                .try_read()
+                .map_err(|_| TryAcquireLockError::LockTableLocked)?;
+            map.get(&k).cloned()
+        };
+        if let Some(element) = element {
+            let lock = element.try_lock_owned();
+            Ok(LockGuard(
+                lock.map_err(|_| TryAcquireLockError::LockEntryLocked)?,
+            ))
         } else {
             // element doesn't exist
-            drop(map);
-            let res = self.lock_table[lock_idx].try_write();
-            if res.is_err() {
-                return Err(TryAcquireLockError::LockTableLocked);
-            }
-            let mut map = res.unwrap();
-            let element = map.entry(k).or_insert_with(|| Arc::new(Mutex::new(())));
-            let lock = element.clone().try_lock_owned();
-            lock.map(LockGuard).map_err(|e| {
-                error!("Failed to acquire lock after creation: {:?}", e);
-                TryAcquireLockError::LockEntryLocked
-            })
+            let element = {
+                let mut map = self.lock_table[lock_idx]
+                    .try_write()
+                    .map_err(|_| TryAcquireLockError::LockTableLocked)?;
+                map.entry(k)
+                    .or_insert_with(|| Arc::new(Mutex::new(())))
+                    .clone()
+            };
+            let lock = element.try_lock_owned();
+            lock.map(LockGuard)
+                .map_err(|_| TryAcquireLockError::LockEntryLocked)
         }
     }
 }
@@ -172,6 +184,41 @@ impl<K: Hash> Drop for MutexTable<K> {
     fn drop(&mut self) {
         self.stop.store(true, Ordering::SeqCst);
     }
+}
+
+#[tokio::test]
+// Tests that mutex table provides parallelism on the individual mutex level,
+// e.g. that locks for different entries do not block entire bucket if it needs to wait on individual lock
+async fn test_mutex_table_concurrent_in_same_bucket() {
+    use tokio::time::{sleep, timeout};
+    let mutex_table = Arc::new(MutexTable::<String>::new(1, 128));
+    let john = mutex_table.try_acquire_lock("john".to_string());
+    john.unwrap();
+    {
+        let mutex_table = mutex_table.clone();
+        tokio::spawn(async move {
+            mutex_table.acquire_lock("john".to_string()).await;
+        });
+    }
+    sleep(Duration::from_millis(50)).await;
+    let jane = mutex_table.try_acquire_lock("jane".to_string());
+    jane.unwrap();
+
+    let mutex_table = Arc::new(MutexTable::<String>::new(1, 128));
+    let _john = mutex_table.acquire_lock("john".to_string()).await;
+    {
+        let mutex_table = mutex_table.clone();
+        tokio::spawn(async move {
+            mutex_table.acquire_lock("john".to_string()).await;
+        });
+    }
+    sleep(Duration::from_millis(50)).await;
+    let jane = timeout(
+        Duration::from_secs(1),
+        mutex_table.acquire_lock("jane".to_string()),
+    )
+    .await;
+    jane.unwrap();
 }
 
 #[tokio::test]
