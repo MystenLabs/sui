@@ -22,7 +22,7 @@ Note that the `latest` tag for the [published SDK](https://www.npmjs.com/package
 npm install @mysten/sui.js@experimental
 ```
 
-Refer to the [JSON RPC doc](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md) for instructions about how to start a local network and local RPC server
+Refer to the [JSON RPC](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md) topic for instructions about how to start a local network and local RPC server.
 
 ## Building Locally
 
