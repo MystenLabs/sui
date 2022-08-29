@@ -26,7 +26,7 @@ Refer to the [JSON RPC](https://github.com/MystenLabs/sui/blob/main/doc/src/buil
 
 ## Building Locally
 
-To get started you need to install [pnpm](https://pnpm.io/), then run the following command.
+To get started you need to install [pnpm](https://pnpm.io/), then run the following command:
 
 ```bash
 # Install all dependencies
