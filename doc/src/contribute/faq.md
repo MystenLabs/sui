@@ -85,7 +85,7 @@ For developers:
 
 1. [Install Sui](https://docs.sui.io/build/install).
 2. Spin up a [Sui Fullnode](../build/fullnode.md).
-3. Experiment with the [Sui CLI client](../contribute/cli-client.md).
+3. Experiment with the [Sui CLI client](../build/cli-client.md).
 4. Join the [Move](https://discord.gg/8prNjUqyFj) and [Sui](https://discord.gg/CVcnUzKYCB) developer channels in Discord.
 5. [Start building](https://docs.sui.io/build)!
 
@@ -140,7 +140,7 @@ We accepted applications for validators to participate in Wave 1 of the Incentiv
 
 We have a public [Sui Devnet](../build/devnet.md) with nodes operated by Mysten Labs. And you can now run a networked [Sui Fullnode](../build/fullnode.md).
 
-You may also run a local, non-networked Sui node for development using the [Sui CLI client](../contribute/cli-client.md). You can interact with the nodes with either the [Sui Wallet CLI](../contribute/cli-client.md#command-line-mode) or over the [Sui RPC API](../build/json-rpc.md).
+You may also run a local, non-networked Sui node for development using the [Sui CLI client](../build/cli-client.md). You can interact with the nodes with either the [Sui Wallet CLI](../build/cli-client.md#command-line-mode) or over the [Sui RPC API](../build/json-rpc.md).
 
 We have a Testnet that will soon allow others to operate Sui nodes; see our [roadmap](https://github.com/MystenLabs/sui/blob/main/ROADMAP.md#roadmap).
 
