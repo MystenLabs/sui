@@ -183,12 +183,13 @@ In the previous section, we learned how to publish a Move package; and in this s
 
 Let’s assume that the placeholder for the address of the player to receive a sword is <PLAYER_ADDRESS>. If you don’t know any address other than your own, you can create one using the following `client` command and use it whenever you see the <PLAYER_ADDRESS> placeholder:
 ```shell
-$ sui client new-address
+$ sui client new-address ed25519
 ```
+New address creation requires key scheme flag `{secp256k1 | ed25519}`. 
 
 Which yields output resembling:
 ```shell
-Created new keypair for address : 2D32ED71381BEF7F3D8C57B48DF82123593672AA
+Created new keypair for address with flag 0: [0x19de019c19fc800a6aeba4eb4133f6db91ca7c2c]
 ```
 
 In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/m1.move#L44) in the `M1` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/m1.move#L4) of the package we previously published.

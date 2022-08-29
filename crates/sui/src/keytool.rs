@@ -24,7 +24,7 @@ mod keytool_tests;
 #[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum KeyToolCommand {
-    /// Generate a new keypair with optional keypair scheme flag, default using ed25519. Output file to current dir (to generate keypair to sui.keystore, use `sui client new-address`)
+    /// Generate a new keypair with keypair scheme flag {ed25519 | secp256k1}. Output file to current dir (to generate keypair to sui.keystore, use `sui client new-address`)
     Generate {
         key_scheme: String,
     },
@@ -44,7 +44,7 @@ pub enum KeyToolCommand {
         #[clap(long)]
         data: String,
     },
-    /// Import mnemonic phrase and generate keypair based on key scheme, default using ed25519.
+    /// Import mnemonic phrase and generate keypair based on key scheme flag {ed25519 | secp256k1}.
     Import {
         mnemonic_phrase: String,
         key_scheme: String,

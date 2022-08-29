@@ -11,8 +11,9 @@ This directory contains examples of interacting with a Move language smart contr
    1. [Connect to Sui Devnet](https://github.com/MystenLabs/sui/blob/main/doc/src/build/devnet.md).
    1. [Make sure you have two addresses with gas](https://github.com/MystenLabs/sui/blob/main/doc/src/build/cli-client.md#adding-accounts-to-the-client) by using the `new-address` command to create new addresses:
       ```shell
-      sui client new-address
+      sui client new-address ed25519
       ```
+      New address can be created with key scheme flag `{secp256k1 | ed25519}`. 
       You can skip this step if you are going to play with a friend. :)
    1. [Request Sui tokens](https://github.com/MystenLabs/sui/blob/main/doc/src/build/install.md#sui-tokens) for all addresses that will be used to join the game.
 
