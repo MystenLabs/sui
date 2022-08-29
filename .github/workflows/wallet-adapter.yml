@@ -1,4 +1,4 @@
-name: Explorer Client PR checks
+name: Wallet Adapter PR Checks
 on: pull_request
 jobs:
   diff:
