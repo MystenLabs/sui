@@ -12,20 +12,10 @@ use sui_verifier::verifier as sui_bytecode_verifier;
 const SUI_PACKAGE_NAME: &str = "Sui";
 const MOVE_STDLIB_PACKAGE_NAME: &str = "MoveStdlib";
 
-pub fn move_stdlib_module_denylist() -> Vec<String> {
-    vec![
-        #[cfg(not(test))]
-        "debug".to_string(),
-    ]
-}
-
 pub fn build_move_stdlib_modules(lib_dir: &Path) -> SuiResult<Vec<CompiledModule>> {
     let build_config = BuildConfig::default();
     let pkg = build_move_package_with_deps(lib_dir, build_config)?;
-    let modules: Vec<CompiledModule> = filter_package_modules(&pkg)?
-        .into_iter()
-        .filter(|m| !move_stdlib_module_denylist().contains(&m.self_id().name().to_string()))
-        .collect();
+    let modules: Vec<CompiledModule> = filter_package_modules(&pkg)?;
     verify_modules(&modules)?;
     Ok(modules)
 }
