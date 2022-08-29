@@ -404,8 +404,8 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
 
             println!("Do you want to generate a secp256k1 keypair instead? [y/N] No will select Ed25519 by default. ");
             let key_scheme = match read_line()?.trim() {
-                "y" => Some(String::from("secp256k1")),
-                _ => None,
+                "y" => String::from("secp256k1"),
+                _ => String::from("ed25519"),
             };
             let (new_address, phrase, flag) = keystore.init()?.generate_new_key(key_scheme)?;
             println!("Generated new keypair for address with flag {flag} [{new_address}]");

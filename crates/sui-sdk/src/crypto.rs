@@ -156,12 +156,12 @@ impl SuiKeystore {
 
     pub fn generate_new_key(
         &mut self,
-        key_scheme: Option<String>,
+        key_scheme: String,
     ) -> Result<(SuiAddress, String, u8), anyhow::Error> {
         let mnemonic = Mnemonic::generate(12)?;
         let seed = mnemonic.to_seed("");
         let mut rng = RngWrapper(ReadRng::new(&seed));
-        match random_key_pair_by_type_from_rng(key_scheme, &mut rng) {
+        match random_key_pair_by_type_from_rng(key_scheme.as_str(), &mut rng) {
             Ok((address, kp)) => {
                 let flag = kp.public().flag();
                 self.0.add_key(kp)?;
@@ -186,11 +186,11 @@ impl SuiKeystore {
     pub fn import_from_mnemonic(
         &mut self,
         phrase: &str,
-        key_scheme: Option<String>,
+        key_scheme: String,
     ) -> Result<SuiAddress, anyhow::Error> {
         let seed = &Mnemonic::from_str(phrase).unwrap().to_seed("");
         let mut rng = RngWrapper(ReadRng::new(seed));
-        match random_key_pair_by_type_from_rng(key_scheme, &mut rng) {
+        match random_key_pair_by_type_from_rng(key_scheme.as_str(), &mut rng) {
             Ok((address, kp)) => {
                 self.0.add_key(kp)?;
                 Ok(address)

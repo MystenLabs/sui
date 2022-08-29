@@ -26,7 +26,7 @@ mod keytool_tests;
 pub enum KeyToolCommand {
     /// Generate a new keypair with optional keypair scheme flag, default using ed25519. Output file to current dir (to generate keypair to sui.keystore, use `sui client new-address`)
     Generate {
-        key_scheme: Option<String>,
+        key_scheme: String,
     },
     Show {
         file: PathBuf,
@@ -47,7 +47,7 @@ pub enum KeyToolCommand {
     /// Import mnemonic phrase and generate keypair based on key scheme, default using ed25519.
     Import {
         mnemonic_phrase: String,
-        key_scheme: Option<String>,
+        key_scheme: String,
     },
     /// This is a temporary helper function to ensure that testnet genesis does not break while
     /// we transition towards BLS signatures.
@@ -60,15 +60,12 @@ impl KeyToolCommand {
     pub fn execute(self, keystore: &mut SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate { key_scheme } => {
-                let k = key_scheme.clone();
-                match random_key_pair_by_type(key_scheme) {
+                let k = key_scheme.as_str();
+                match random_key_pair_by_type(k) {
                     Ok((address, keypair)) => {
                         let file_name = format!("{address}.key");
                         write_keypair_to_file(&keypair, &file_name)?;
-                        println!(
-                            "{:?} key generated and saved to '{file_name}'",
-                            k.unwrap_or_else(|| "ed25519".to_string())
-                        )
+                        println!("{k} key generated and saved to '{file_name}'")
                     }
                     Err(e) => {
                         println!("Failed to generate keypair: {:?}", e)

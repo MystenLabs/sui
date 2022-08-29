@@ -439,18 +439,18 @@ where
 
 /// Wrapper function to return SuiKeypair based on key scheme string
 pub fn random_key_pair_by_type(
-    key_scheme: Option<String>,
+    key_scheme: &str,
 ) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error> {
-    match key_scheme.as_deref() {
-        Some("secp256k1") => {
+    match key_scheme {
+        "secp256k1" => {
             let (addr, key_pair): (_, Secp256k1KeyPair) = get_key_pair();
             Ok((addr, SuiKeyPair::Secp256k1SuiKeyPair(key_pair)))
         }
-        Some("ed25519") | None => {
+        "ed25519" => {
             let (addr, key_pair): (_, Ed25519KeyPair) = get_key_pair();
             Ok((addr, SuiKeyPair::Ed25519SuiKeyPair(key_pair)))
         }
-        Some(_) => Err(anyhow!("Unrecognized key scheme")),
+        _ => Err(anyhow!("Unrecognized key scheme")),
     }
 }
 
@@ -474,22 +474,22 @@ where
 
 /// Wrapper function to return SuiKeypair based on key scheme string with seedable rng.
 pub fn random_key_pair_by_type_from_rng<R>(
-    key_scheme: Option<String>,
+    key_scheme: &str,
     csprng: &mut R,
 ) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error>
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    match key_scheme.as_deref() {
-        Some("secp256k1") => {
+    match key_scheme {
+        "secp256k1" => {
             let (addr, key_pair): (_, Secp256k1KeyPair) = get_key_pair_from_rng(csprng);
             Ok((addr, SuiKeyPair::Secp256k1SuiKeyPair(key_pair)))
         }
-        Some("ed25519") | None => {
+        "ed25519" => {
             let (addr, key_pair): (_, Ed25519KeyPair) = get_key_pair_from_rng(csprng);
             Ok((addr, SuiKeyPair::Ed25519SuiKeyPair(key_pair)))
         }
-        Some(_) => Err(anyhow!("Unrecognized key scheme")),
+        _ => Err(anyhow!("Unrecognized key scheme")),
     }
 }
 

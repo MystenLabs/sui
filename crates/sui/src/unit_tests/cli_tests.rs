@@ -765,9 +765,11 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     context.config.active_address = None;
 
     // Create a new address
-    let os = SuiClientCommands::NewAddress { key_scheme: None }
-        .execute(&mut context)
-        .await?;
+    let os = SuiClientCommands::NewAddress {
+        key_scheme: "ed25519".to_string(),
+    }
+    .execute(&mut context)
+    .await?;
     let new_addr = if let SuiClientCommandResult::NewAddress((a, _, _)) = os {
         a
     } else {
@@ -817,7 +819,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
     );
 
     SuiClientCommands::NewAddress {
-        key_scheme: Some("secp256k1".to_string()),
+        key_scheme: "secp256k1".to_string(),
     }
     .execute(&mut context)
     .await?;
@@ -835,26 +837,11 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
 
     // random key scheme errors out
     assert!(SuiClientCommands::NewAddress {
-        key_scheme: Some("random".to_string()),
+        key_scheme: "random".to_string(),
     }
     .execute(&mut context)
     .await
     .is_err());
-
-    SuiClientCommands::NewAddress { key_scheme: None }
-        .execute(&mut context)
-        .await?;
-
-    // None key scheme defaults to Ed25519
-    assert_eq!(
-        context
-            .keystore
-            .keys()
-            .iter()
-            .filter(|k| k.flag() == Ed25519SuiSignature::SCHEME.flag())
-            .count(),
-        6
-    );
     Ok(())
 }
 

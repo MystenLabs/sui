@@ -188,9 +188,9 @@ pub enum SuiClientCommands {
     #[clap(name = "addresses")]
     Addresses,
 
-    /// Generate new address and keypair, with optional keypair scheme {ed25519 | secp256k1}, default to ed25519.
+    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1}.
     #[clap(name = "new-address")]
-    NewAddress { key_scheme: Option<String> },
+    NewAddress { key_scheme: String },
 
     /// Obtain all objects owned by the address.
     #[clap(name = "objects")]
