@@ -13,7 +13,10 @@ In the [Basics](https://github.com/MystenLabs/sui/tree/main/sui_programmability/
 
 ## Crypto
 
-In the [Cryptography](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/math) example, employ a simple contract to perform verification and ecrecover using a [Secp256k1](https://crates.io/crates/secp256k1/) curve and hash with keccak256 and producing an event with data as a result.
+In the [Cryptography](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/math) example, employ a simple contract to:
+  * Hash a piece of data using keccak256 and output an object with hashed data.
+  * Recover a [Secp256k1](https://crates.io/crates/secp256k1/) signature to its public key and output an object with the public key.
+  * Verify a Secp256k1 signature and produce an event indicating whether it is verified.
 
 ## DeFi
 
