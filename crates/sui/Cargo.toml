@@ -71,6 +71,7 @@ rand = "0.8.5"
 move-package = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 sui-core = { path = "../sui-core" }
 sui-node = { path = "../sui-node" }
+sui-macros = { path = "../sui-macros" }
 
 [package.metadata.cargo-udeps.ignore]
 normal = ["jemallocator", "jemalloc-ctl"]
