@@ -11,6 +11,13 @@ Here is a rundown of existing examples in the Sui repository.
 
 In the [Basics](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/basics) example, explore object creation, update, and exchange.
 
+## Crypto
+
+In the [Cryptography](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/math) example, employ a simple contract to:
+  * Hash a piece of data using keccak256 and output an object with hashed data.
+  * Recover a [Secp256k1](https://crates.io/crates/secp256k1/) signature to its public key and output an object with the public key.
+  * Verify a Secp256k1 signature and produce an event indicating whether it is verified.
+
 ## DeFi
 
 In the [DeFi](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/defi) example, find an atomic swap leveraging an escrow agent that is trusted for liveness, but not safety.
