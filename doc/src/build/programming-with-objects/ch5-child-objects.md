@@ -160,7 +160,6 @@ There are two ways to transfer a child object:
 #### transfer
 First of all, let's look at how to transfer a child object to an address. Recall the `transfer` function as defined in the [transfer module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/transfer.move):
 ```rust
-```rust
 public fun transfer<T: key>(obj: T, recipient: address)
 ```
 `transfer` transfers an object, in this case a child object, to an address.
@@ -210,6 +209,6 @@ After we unpacked the `Parent` object we are able to extract the parent's `id` (
 
 ### Delete Parent Objects
 
-While any child object can be deleted by by unpacking the child and deleting the `UID`, a parent object can be deleted only if it no longer has any child objects. In other words, in order to delete a parent object, you must first delete all of its children. The reason for this is to prevent accidentally locking out the child objects. As described above, the parent object is necessary to auethenticate the child object and use it in an `entry` function. If the parent object was deleted while it still had children, those children would be unusable.
+While any child object can be deleted by by unpacking the child and deleting the `UID`, a parent object can be deleted only if it no longer has any child objects. In other words, in order to delete a parent object, you must first delete all of its children. The reason for this is to prevent accidentally locking out the child objects. As described above, the parent object is necessary to authenticate the child object and use it in an `entry` function. If the parent object was deleted while it still had children, those children would be unusable.
 
 To make this check possible, each parent object has a child object count that is managed by the Sui Move runtime. This count is updated when a child is added or removed. This means that the parent object will be modified (and have its version incremented) when a child is added or removed. Because of this modification, it would be impossible to add or remove children from immutable objects. As such, `transfer::freeze_object` requires that the object being made immutable does not have any children, i.e. it is not a parent object.
