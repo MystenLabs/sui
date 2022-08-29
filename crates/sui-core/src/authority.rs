@@ -1211,8 +1211,8 @@ impl AuthorityState {
             &genesis_committee,
             None,
         ));
-
-        let state = AuthorityState::new(
+        // add the object_basics module
+        AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
@@ -1224,10 +1224,7 @@ impl AuthorityState {
             &prometheus::Registry::new(),
             tx_reconfigure_consensus,
         )
-        .await;
-
-        // add the object_basics module
-        state
+        .await
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -1834,7 +1831,7 @@ impl ExecutionState for AuthorityState {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Error)]
+#[derive(Eq, PartialEq, Clone, Debug, Error)]
 pub enum NarwhalHandlerError {
     /// Local node error after which it is not safe to continue consuming narwhal stream
     #[error("Local node error {}", 0)]
