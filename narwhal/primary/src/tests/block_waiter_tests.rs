@@ -4,6 +4,7 @@ use crate::{
     block_synchronizer::{handler, handler::MockHandler},
     block_waiter::{
         BatchResult, BlockError, BlockErrorKind, BlockResult, GetBlockResponse, GetBlocksResponse,
+        BATCH_RETRIEVE_TIMEOUT,
     },
     BlockCommand, BlockWaiter, PrimaryWorkerMessage,
 };
@@ -536,7 +537,8 @@ async fn test_batch_timeout() {
         .unwrap();
 
     // THEN we should expect to get back the result
-    let timer = sleep(Duration::from_millis(5_000));
+    // TODO: make sure we can run this test in less than the actual timeout range
+    let timer = sleep(BATCH_RETRIEVE_TIMEOUT + Duration::from_secs(2));
     tokio::pin!(timer);
 
     tokio::select! {

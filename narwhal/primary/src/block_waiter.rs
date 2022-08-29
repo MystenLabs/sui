@@ -30,7 +30,12 @@ use types::{
 };
 use Result::*;
 
-const BATCH_RETRIEVE_TIMEOUT: Duration = Duration::from_secs(1);
+//TODO [860]: customize the configuration of the block waiter to allow distinct
+// settings for NW block waiter settings when deployed in different contexts.
+// Indeed, this is used for NW + external consensus in the validator API (where
+// latency is key) as well as NW + internal consensus, in the Executor
+// (see #738, there reliability is key).
+const BATCH_RETRIEVE_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[cfg(test)]
 #[path = "tests/block_waiter_tests.rs"]
