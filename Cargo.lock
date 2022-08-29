@@ -7207,6 +7207,7 @@ dependencies = [
  "sui-framework",
  "sui-json",
  "sui-json-rpc-types",
+ "sui-macros",
  "sui-node",
  "sui-quorum-driver",
  "sui-sdk",
@@ -7629,6 +7630,17 @@ dependencies = [
  "sui-types",
  "tracing",
  "workspace-hack 0.1.0",
+]
+
+[[package]]
+name = "sui-macros"
+version = "0.7.0"
+dependencies = [
+ "darling 0.14.1",
+ "madsim-macros",
+ "proc-macro2 1.0.42",
+ "quote 1.0.21",
+ "syn 1.0.99",
 ]
 
 [[package]]
