@@ -11,7 +11,7 @@ Here is our recommended workflow to interact with Sui:
 1. [Install](../build/install.md) all of the *required tools*.
 1. Interact with the Sui network:
    * Simply [connect](../build/devnet.md) to the Sui Devnet network to begin working with Sui immediately.
-   * Optionally, [create](../build/client.md#genesis) and [start](../build/client.md#starting-the-network) a *local Sui network* to contribute to the blockchain.
+   * Optionally, [create](../build/cli-client.md#genesis) and [start](../build/cli-client.md#starting-the-network) a *local Sui network* to contribute to the blockchain.
 1. [Create](../build/move/index.md) *smart contracts* with Move:
    1. [Write](../build/move/write-package.md) a package.
    1. [Build and test](../build/move/build-test.md) a package.
