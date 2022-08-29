@@ -12,7 +12,6 @@ use move_core_types::{
     gas_algebra::{GasQuantity, InternalGas, InternalGasPerByte, NumBytes, UnitDiv},
     vm_status::StatusCode,
 };
-use move_vm_test_utils::gas_schedule::{GasStatus, GasUnit, INITIAL_COST_SCHEDULE};
 use once_cell::sync::Lazy;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,6 +19,7 @@ use std::{
     convert::TryFrom,
     ops::{Add, Deref, Mul},
 };
+use sui_cost_tables::tables::{GasStatus, GasUnit, INITIAL_COST_SCHEDULE};
 
 pub type GasUnits = GasQuantity<GasUnit>;
 pub enum GasPriceUnit {}

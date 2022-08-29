@@ -7086,6 +7086,23 @@ dependencies = [
  "anyhow",
  "bcs",
  "insta",
+ "serde 1.0.143",
+ "strum",
+ "strum_macros",
+ "sui-config",
+ "sui-types",
+ "test-utils",
+ "tokio",
+ "toml",
+ "workspace-hack 0.1.0",
+]
+
+[[package]]
+name = "sui-cost-tables"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "bcs",
  "move-binary-format",
  "move-core-types",
  "move-vm-test-utils",
@@ -7094,9 +7111,6 @@ dependencies = [
  "serde 1.0.143",
  "strum",
  "strum_macros",
- "sui-config",
- "sui-types",
- "test-utils",
  "tokio",
  "toml",
  "workspace-hack 0.1.0",
@@ -7570,7 +7584,6 @@ dependencies = [
  "move-core-types",
  "move-disassembler",
  "move-ir-types",
- "move-vm-test-utils",
  "move-vm-types",
  "name-variant",
  "once_cell",
@@ -7589,6 +7602,7 @@ dependencies = [
  "static_assertions",
  "strum",
  "strum_macros",
+ "sui-cost-tables",
  "thiserror",
  "tonic",
  "tracing",
