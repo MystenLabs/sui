@@ -1,5 +1,9 @@
 name: Detect Changes in Pnpm Workspace
 description: Defines variables indicating the parts of the pnpm workspace have changed
+inputs:
+  baseSha:
+    description: "The base git SHA that will be used to perform the diff"
+    required: true
 outputs:
   isExplorerClient:
     description: True when there are changes to files related to explorer client
@@ -21,10 +25,10 @@ runs:
         version: 7
     - name: Pnpm list
       shell: bash
-      run: pnpm list --filter "...[origin/main]" --depth -1 --json > changes.json
+      run: pnpm list --filter "...[${{ inputs.baseSha }}]" --depth -1 --json > changes.json
     - id: changes
       shell: bash
       run: |
         echo "::set-output name=explorer::$(jq 'any(.[]; .name == "sui-explorer")' changes.json)"
         echo "::set-output name=sdk::$(jq 'any(.[]; .name == "@mysten/sui.js")' changes.json)"
-        echo "::set-output name=walletAdapter::$(jq 'any(.[]; .name == "sui-wallet-adapter")' changes.json)"
+        echo "::set-output name=walletAdapter::$(jq 'any(.[]; .name | startswith("@mysten/wallet-adapter"))' changes.json)"

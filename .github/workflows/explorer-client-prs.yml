@@ -10,6 +10,8 @@ jobs:
       - name: Detect Changes
         uses: "./.github/actions/pnpm-diffs"
         id: diff
+        with:
+          baseSha: ${{ github.event.pull_request.base.sha }}
   client_checks:
     name: Lint, Test & Build
     needs: diff
