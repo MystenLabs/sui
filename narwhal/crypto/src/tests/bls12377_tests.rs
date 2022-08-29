@@ -4,10 +4,10 @@ use crate::bls12377::{
     BLS12377AggregateSignature, BLS12377KeyPair, BLS12377PrivateKey, BLS12377PublicKey,
     BLS12377PublicKeyBytes, BLS12377Signature,
 };
-use fastcrypto::traits::{
-    AggregateAuthenticator, EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey,
+use fastcrypto::{
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, KeyPair, ToFromBytes, VerifyingKey},
+    Hash, SignatureService,
 };
-use fastcrypto::{Hash, SignatureService};
 
 use crate::bls12377::CELO_BLS_PRIVATE_KEY_LENGTH;
 use rand::{rngs::StdRng, SeedableRng as _};

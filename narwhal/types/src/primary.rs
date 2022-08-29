@@ -8,8 +8,7 @@ use crate::{
 use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
 use config::{Committee, Epoch, SharedWorkerCache, WorkerId, WorkerInfo};
-use crypto::PublicKey;
-use crypto::Signature;
+use crypto::{PublicKey, Signature};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{

@@ -21,8 +21,7 @@ use crate::{
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
-use crypto::PublicKey;
-use crypto::Signature;
+use crypto::{PublicKey, Signature};
 use fastcrypto::{
     traits::{EncodeDecodeBase64, Signer},
     SignatureService,

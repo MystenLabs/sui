@@ -2,13 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use dashmap::DashMap;
 use fastcrypto::Hash;
-use std::sync::Arc;
-use std::{collections::VecDeque, iter};
-use store::rocks::DBMap;
-use store::rocks::TypedStoreError::RocksDBError;
-use store::Map;
-use tokio::sync::oneshot;
-use tokio::sync::oneshot::Sender;
+use std::{collections::VecDeque, iter, sync::Arc};
+use store::{
+    rocks::{DBMap, TypedStoreError::RocksDBError},
+    Map,
+};
+use tokio::sync::{oneshot, oneshot::Sender};
 use tracing::warn;
 use types::{Certificate, CertificateDigest, Round, StoreResult};
 
@@ -318,13 +317,15 @@ mod test {
     use crate::certificate_store::{CertificateStore, CertificateToken};
     use fastcrypto::Hash;
     use futures::future::join_all;
-    use std::collections::{BTreeSet, HashSet};
-    use std::time::Instant;
-    use store::reopen;
-    use store::rocks::open_cf;
-    use store::rocks::DBMap;
-    use test_utils::temp_dir;
-    use test_utils::{certificate, committee, fixture_headers_round};
+    use std::{
+        collections::{BTreeSet, HashSet},
+        time::Instant,
+    };
+    use store::{
+        reopen,
+        rocks::{open_cf, DBMap},
+    };
+    use test_utils::{certificate, committee, fixture_headers_round, temp_dir};
     use types::{Certificate, CertificateDigest, Round};
 
     fn new_store(path: std::path::PathBuf) -> CertificateStore {

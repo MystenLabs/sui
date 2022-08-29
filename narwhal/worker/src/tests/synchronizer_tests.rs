@@ -5,9 +5,8 @@ use super::*;
 use arc_swap::ArcSwap;
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
-use test_utils::committee;
 use test_utils::{
-    batch, batch_digest, batches, keys, open_batch_store, pure_committee_from_keys,
+    batch, batch_digest, batches, committee, keys, open_batch_store, pure_committee_from_keys,
     resolve_name_committee_and_worker_cache, serialize_batch_message,
     shared_worker_cache_from_keys, WorkerToWorkerMockServer,
 };

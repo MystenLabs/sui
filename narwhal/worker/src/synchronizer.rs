@@ -7,23 +7,21 @@ use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
 use network::{LuckyNetwork, UnreliableNetwork, WorkerNetwork};
 use primary::PrimaryWorkerMessage;
-use std::collections::HashSet;
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 use store::{Store, StoreError};
-use tap::TapFallible;
-use tap::TapOptional;
+use tap::{TapFallible, TapOptional};
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
     time::{sleep, Duration, Instant},
 };
 use tracing::{debug, error, trace, warn};
-use types::error::DagError;
 use types::{
+    error::DagError,
     metered_channel::{Receiver, Sender},
     BatchDigest, ReconfigureNotification, Round, SerializedBatchMessage, WorkerMessage,
     WorkerPrimaryError, WorkerPrimaryMessage,

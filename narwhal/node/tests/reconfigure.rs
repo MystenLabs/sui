@@ -4,11 +4,8 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters, SharedWorkerCache};
 use consensus::ConsensusOutput;
-use crypto::KeyPair;
-use crypto::PublicKey;
-use executor::{
-    ExecutionIndices, ExecutionState, ExecutionStateError, SingleExecutionState, SingleExecutor,
-};
+use crypto::{KeyPair, PublicKey};
+use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
 use network::{PrimaryToWorkerNetwork, ReliableNetwork, UnreliableNetwork, WorkerToPrimaryNetwork};
@@ -49,18 +46,8 @@ impl SimpleExecutionState {
 
 #[async_trait::async_trait]
 impl ExecutionState for SimpleExecutionState {
-    type Error = SimpleExecutionError;
-
-    fn ask_consensus_write_lock(&self) -> bool {
-        true
-    }
-
-    fn release_consensus_write_lock(&self) {}
-}
-
-#[async_trait::async_trait]
-impl SingleExecutionState for SimpleExecutionState {
     type Transaction = u64;
+    type Error = SimpleExecutionError;
     type Outcome = u64;
 
     async fn handle_consensus_transaction(
@@ -97,13 +84,19 @@ impl SingleExecutionState for SimpleExecutionState {
         Ok(epoch)
     }
 
+    fn ask_consensus_write_lock(&self) -> bool {
+        true
+    }
+
+    fn release_consensus_write_lock(&self) {}
+
     async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
         Ok(ExecutionIndices::default())
     }
 }
 
 /// A simple/dumb execution error.
-#[derive(Debug, Clone, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum SimpleExecutionError {
     #[error("Something went wrong in the authority")]
     ServerError,
@@ -200,9 +193,10 @@ async fn restart() {
                 &committee,
                 worker_cache,
                 /* base_store_path */ test_utils::temp_dir(),
-                SingleExecutor::new(execution_state, tx_output),
+                execution_state,
                 parameters,
                 rx_node_reconfigure,
+                tx_output,
                 &Registry::new(),
             )
             .await;
@@ -322,7 +316,8 @@ async fn epoch_change() {
             &store,
             parameters.clone(),
             /* consensus */ true,
-            SingleExecutor::new(execution_state.clone(), tx_output),
+            execution_state.clone(),
+            tx_output,
             &Registry::new(),
         )
         .await

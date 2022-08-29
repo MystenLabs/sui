@@ -52,6 +52,7 @@ async fn test_internal_consensus_output() {
 
         assert!(result.0.is_ok());
 
+        // deserialise transaction
         let output_transaction = bincode::deserialize::<String>(&result.1).unwrap();
 
         // we always remove the first transaction and check with the one

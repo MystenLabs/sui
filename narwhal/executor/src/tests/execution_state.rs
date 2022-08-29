@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::{ExecutionIndices, ExecutionState, ExecutionStateError, SingleExecutionState};
+use crate::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use async_trait::async_trait;
 use consensus::ConsensusOutput;
 
@@ -14,14 +14,14 @@ use store::{
 use thiserror::Error;
 
 /// A malformed transaction.
-pub const MALFORMED_TRANSACTION: <TestState as SingleExecutionState>::Transaction = 400;
+pub const MALFORMED_TRANSACTION: <TestState as ExecutionState>::Transaction = 400;
 
 /// A special transaction that makes the executor engine crash.
-pub const KILLER_TRANSACTION: <TestState as SingleExecutionState>::Transaction = 500;
+pub const KILLER_TRANSACTION: <TestState as ExecutionState>::Transaction = 500;
 
 /// A dumb execution state for testing.
 pub struct TestState {
-    indices_store: Store<u64, ExecutionIndices>,
+    store: Store<u64, ExecutionIndices>,
 }
 
 impl std::fmt::Debug for TestState {
@@ -38,18 +38,8 @@ impl Default for TestState {
 
 #[async_trait]
 impl ExecutionState for TestState {
-    type Error = TestStateError;
-
-    fn ask_consensus_write_lock(&self) -> bool {
-        true
-    }
-
-    fn release_consensus_write_lock(&self) {}
-}
-
-#[async_trait]
-impl SingleExecutionState for TestState {
     type Transaction = u64;
+    type Error = TestStateError;
     type Outcome = Vec<u8>;
 
     async fn handle_consensus_transaction(
@@ -63,16 +53,22 @@ impl SingleExecutionState for TestState {
         } else if transaction == KILLER_TRANSACTION {
             Err(Self::Error::ServerError)
         } else {
-            self.indices_store
+            self.store
                 .write(Self::INDICES_ADDRESS, execution_indices)
                 .await;
             Ok(Vec::default())
         }
     }
 
+    fn ask_consensus_write_lock(&self) -> bool {
+        true
+    }
+
+    fn release_consensus_write_lock(&self) {}
+
     async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
         let indices = self
-            .indices_store
+            .store
             .read(Self::INDICES_ADDRESS)
             .await
             .unwrap()
@@ -87,21 +83,21 @@ impl TestState {
 
     /// Create a new test state.
     pub fn new(store_path: &Path) -> Self {
-        const INDICES_CF: &str = "test_state_indices";
-        let rocksdb = open_cf(store_path, None, &[INDICES_CF]).unwrap();
-        let indices_map = reopen!(&rocksdb, INDICES_CF;<u64, ExecutionIndices>);
+        const STATE_CF: &str = "test_state";
+        let rocksdb = open_cf(store_path, None, &[STATE_CF]).unwrap();
+        let map = reopen!(&rocksdb, STATE_CF;<u64, ExecutionIndices>);
         Self {
-            indices_store: Store::new(indices_map),
+            store: Store::new(map),
         }
     }
 
-    /// Load the execution indices.
+    /// Load the execution indices; ie. the state.
     pub async fn get_execution_indices(&self) -> ExecutionIndices {
         self.load_execution_indices().await.unwrap()
     }
 }
 
-#[derive(Debug, Error, Clone)]
+#[derive(Debug, Error)]
 pub enum TestStateError {
     #[error("Something went wrong in the authority")]
     ServerError,

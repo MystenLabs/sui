@@ -23,11 +23,12 @@ async fn execute_transactions() {
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
-    let _core_handle = Core::spawn(
+    let _core_handle = Core::<TestState>::spawn(
         store.clone(),
-        SingleExecutor::new(execution_state.clone(), tx_output),
+        execution_state.clone(),
         rx_reconfigure,
         /* rx_subscriber */ rx_executor,
+        tx_output,
     );
 
     // Feed certificates to the mock sequencer and add the transaction data to storage (as if
@@ -69,19 +70,20 @@ async fn execute_empty_certificate() {
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
-    let _core_handle = Core::spawn(
+    let _core_handle = Core::<TestState>::spawn(
         store.clone(),
-        SingleExecutor::new(execution_state.clone(), tx_output),
+        execution_state.clone(),
         rx_reconfigure,
         /* rx_subscriber */ rx_executor,
+        tx_output,
     );
 
     // Feed empty certificates to the executor.
     let empty_certificates = 2;
-    for i in 0..empty_certificates {
+    for _ in 0..empty_certificates {
         let message = ConsensusOutput {
             certificate: Certificate::default(),
-            consensus_index: i,
+            consensus_index: SequenceNumber::default(),
         };
         tx_executor.send(message).await.unwrap();
     }
@@ -124,11 +126,12 @@ async fn execute_malformed_transactions() {
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
-    let _core_handle = Core::spawn(
+    let _core_handle = Core::<TestState>::spawn(
         store.clone(),
-        SingleExecutor::new(execution_state.clone(), tx_output),
+        execution_state.clone(),
         rx_reconfigure,
         /* rx_subscriber */ rx_executor,
+        tx_output,
     );
 
     // Feed a malformed transaction to the mock sequencer
@@ -185,18 +188,19 @@ async fn internal_error_execution() {
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
-    let _core_hanlde = Core::spawn(
+    let _core_hanlde = Core::<TestState>::spawn(
         store.clone(),
-        SingleExecutor::new(execution_state.clone(), tx_output),
+        execution_state.clone(),
         rx_reconfigure,
         /* rx_subscriber */ rx_executor,
+        tx_output,
     );
 
     // Feed a 'killer' transaction to the executor. This is a special test transaction that
     // crashes the test executor engine.
-    let tx00 = 10u64;
-    let tx01 = 11u64;
-    let tx10 = 12u64;
+    let tx00 = 10;
+    let tx01 = 11;
+    let tx10 = 12;
     let tx11 = KILLER_TRANSACTION;
 
     let (digest_0, batch_0) = test_batch(vec![tx00, tx01]);
@@ -236,11 +240,12 @@ async fn crash_recovery() {
     // Spawn the executor.
     let store = test_store();
     let execution_state = Arc::new(TestState::default());
-    let _core_handle = Core::spawn(
+    let _core_handle = Core::<TestState>::spawn(
         store.clone(),
-        SingleExecutor::new(execution_state.clone(), tx_output),
+        execution_state.clone(),
         rx_reconfigure,
         /* rx_subscriber */ rx_executor,
+        tx_output,
     );
 
     // Feed two certificates with good transactions to the executor.
@@ -290,11 +295,12 @@ async fn crash_recovery() {
     let (tx_output, mut rx_output) = channel(10);
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(reconfigure_notification);
 
-    let _core_handle = Core::spawn(
+    let _core_handle = Core::<TestState>::spawn(
         store.clone(),
-        SingleExecutor::new(execution_state.clone(), tx_output),
+        execution_state.clone(),
         rx_reconfigure,
         /* rx_subscriber */ rx_executor,
+        tx_output,
     );
 
     // Feed two certificates with good transactions to the executor.
