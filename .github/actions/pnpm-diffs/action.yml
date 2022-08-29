@@ -26,6 +26,9 @@ runs:
     - name: Pnpm list
       shell: bash
       run: pnpm list --filter "...[${{ inputs.baseSha }}]" --depth -1 --json > changes.json
+    - name: Debug
+      shell: bash
+      run: cat ./changes.json
     - id: changes
       shell: bash
       run: |
