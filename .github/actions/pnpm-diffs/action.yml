@@ -8,7 +8,7 @@ outputs:
     description: True when there are changes to files related to TypeScript SDK
     value: "${{ steps.changes.outputs.sdk }}"
   isWalletAdapter:
-    description: True when there are changes to files related to TypeScript SDK
+    description: True when there are changes to files related to wallet adapter
     value: "${{ steps.changes.outputs.walletAdapter }}"
 runs:
   using: composite
