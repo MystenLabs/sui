@@ -1,0 +1,33 @@
+name: Detect Changes in Pnpm Workspace
+description: Defines variables indicating the parts of the pnpm workspace have changed
+outputs:
+  isExplorerClient:
+    description: True when there are changes to files related to explorer client
+    value: "${{ steps.changes.outputs.explorer }}"
+  isTypeScriptSDK:
+    description: True when there are changes to files related to TypeScript SDK
+    value: "${{ steps.changes.outputs.sdk }}"
+  isWalletAdapter:
+    description: True when there are changes to files related to wallet adapter
+    value: "${{ steps.changes.outputs.walletAdapter }}"
+runs:
+  using: composite
+  steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+    - uses: pnpm/action-setup@v2.2.2
+      with:
+        version: 7
+    - name: Pnpm list
+      shell: bash
+      run: pnpm list --filter "...[origin/main]" --depth -1 --json > changes.json
+    - name: Print changes for easy debugging
+      shell: bash
+      run: cat ./changes.json
+    - id: changes
+      shell: bash
+      run: |
+        echo "::set-output name=explorer::$(jq 'any(.[]; .name == "sui-explorer")' changes.json)"
+        echo "::set-output name=sdk::$(jq 'any(.[]; .name == "@mysten/sui.js")' changes.json)"
+        echo "::set-output name=walletAdapter::$(jq 'any(.[]; .name | startswith("@mysten/wallet-adapter"))' changes.json)"
