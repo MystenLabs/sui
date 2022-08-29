@@ -43,6 +43,7 @@ typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
 move-disassembler = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-ir-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
@@ -57,4 +58,3 @@ workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 bincode = "1.3.3"
-

@@ -19,7 +19,6 @@ use move_binary_format::normalized::{
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::parser::{parse_struct_tag, parse_type_tag};
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::ser::Error;
@@ -27,6 +26,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 use tracing::warn;
 
 use sui_json::SuiJsonValue;
@@ -477,7 +477,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
     fn try_into(self) -> Result<Object, Self::Error> {
         let data = match self.data {
             SuiRawData::MoveObject(o) => {
-                let struct_tag = parse_struct_tag(o.type_())?;
+                let struct_tag = parse_sui_struct_tag(o.type_())?;
                 Data::Move(unsafe {
                     MoveObject::new_from_execution(
                         struct_tag,
@@ -2091,7 +2091,7 @@ pub struct SuiTypeTag(String);
 impl TryInto<TypeTag> for SuiTypeTag {
     type Error = anyhow::Error;
     fn try_into(self) -> Result<TypeTag, Self::Error> {
-        parse_type_tag(&self.0)
+        parse_sui_type_tag(&self.0)
     }
 }
 
@@ -2155,8 +2155,8 @@ impl TryInto<EventFilter> for SuiEventFilter {
             Package(id) => EventFilter::Package(id),
             Module(module) => EventFilter::Module(Identifier::new(module)?),
             MoveEventType(event_type) => {
-                // parse_struct_tag converts StructTag string e.g. `0x2::devnet_nft::MintNFTEvent` to StructTag object
-                EventFilter::MoveEventType(parse_struct_tag(&event_type)?)
+                // parse_sui_struct_tag converts StructTag string e.g. `0x2::devnet_nft::MintNFTEvent` to StructTag object
+                EventFilter::MoveEventType(parse_sui_struct_tag(&event_type)?)
             }
             MoveEventField { path, value } => EventFilter::MoveEventField { path, value },
             SenderAddress(address) => EventFilter::SenderAddress(address),
