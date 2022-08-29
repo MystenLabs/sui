@@ -48,7 +48,7 @@ pub fn estimate_computational_costs_for_transaction(
             SingleTransactionKind::Call(_) => unsupported_tx_kind,
             SingleTransactionKind::ChangeEpoch(_) => unsupported_tx_kind,
         },
-        TransactionKind::Batch(_) => return Err(anyhow!("Batch TXes not supported for estimator")),
+        TransactionKind::Batch(_) => Err(anyhow!("Batch TXes not supported for estimator")),
     }
 }
 

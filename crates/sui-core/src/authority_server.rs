@@ -190,7 +190,7 @@ impl ValidatorService {
         tokio::spawn(async move {
             narwhal_node::restarter::NodeRestarter::watch(
                 consensus_keypair,
-                &(&*consensus_committee).clone(),
+                &*consensus_committee,
                 consensus_storage_base_path,
                 consensus_execution_state,
                 consensus_parameters,
