@@ -126,7 +126,10 @@ enum ContainerJoinHandle {
     Thread(thread::JoinHandle<()>),
 
     #[cfg(madsim)]
-    SimulatorNode(madsim::task::NodeId, madsim::task::JoinHandle<()>),
+    SimulatorNode(
+        sui_simulator::task::NodeId,
+        sui_simulator::task::JoinHandle<()>,
+    ),
 }
 
 /// When dropped, stop and wait for the node running in this Container to completely shutdown.
@@ -151,7 +154,7 @@ impl Drop for Container {
             ContainerJoinHandle::SimulatorNode(node_id, join_handle) => {
                 tracing::info!("shutting down {}", node_id);
                 join_handle.abort();
-                madsim::runtime::Handle::current().kill(node_id);
+                sui_simulator::runtime::Handle::current().kill(node_id);
             }
         }
 
@@ -177,7 +180,7 @@ impl Container {
         let (startup_sender, startup_reciever) = tokio::sync::oneshot::channel();
         let (cancel_sender, cancel_reciever) = tokio::sync::oneshot::channel();
 
-        let handle = madsim::runtime::Handle::current();
+        let handle = sui_simulator::runtime::Handle::current();
         let builder = handle.create_node();
 
         let socket_addr =

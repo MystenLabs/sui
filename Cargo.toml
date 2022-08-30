@@ -23,6 +23,7 @@ members = [
     "crates/sui-open-rpc-macros",
     "crates/sui-quorum-driver",
     "crates/sui-sdk",
+    "crates/sui-simulator",
     "crates/sui-storage",
     "crates/sui-swarm",
     "crates/sui-telemetry",

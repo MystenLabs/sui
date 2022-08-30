@@ -1,0 +1,10 @@
+[package]
+name = "sui-simulator"
+version = "0.7.0"
+authors = ["Mysten Labs <build@mystenlabs.com>"]
+license = "Apache-2.0"
+publish = false
+edition = "2021"
+
+[target.'cfg(madsim)'.dependencies]
+madsim = { path = "../../../madsim-fork/madsim" }

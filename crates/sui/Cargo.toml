@@ -26,6 +26,7 @@ sui-framework = { path = "../sui-framework" }
 sui-config = { path = "../sui-config" }
 sui-types = { path = "../sui-types" }
 sui-json = { path = "../sui-json" }
+sui-simulator = { path = "../sui-simulator" }
 sui-swarm = { path = "../sui-swarm" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 sui-sdk = { path = "../sui-sdk" }

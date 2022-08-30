@@ -301,6 +301,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "async-task"
+version = "4.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a40729d2133846d9ed0ea60a8b9541bccddab49cd30f0715a1da672fe9a2524"
+
+[[package]]
 name = "async-trait"
 version = "0.1.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1861,6 +1867,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1435fa1053d8b2fbbe9be7e97eca7f33d37b28409959813daefc1446a14247f1"
 
 [[package]]
+name = "downcast-rs"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9ea835d29036a4087793836fa931b08837ad5e957da9e23886b29586fb9b6650"
+
+[[package]]
 name = "dyn-clone"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2057,7 +2069,7 @@ dependencies = [
  "storage",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=9deac015fbf66e24b6da9699630e06750eaa094a)",
@@ -2557,7 +2569,7 @@ dependencies = [
  "indexmap",
  "slab",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
 ]
 
@@ -3091,7 +3103,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-rustls",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "webpki-roots",
 ]
@@ -3231,7 +3243,7 @@ dependencies = [
  "soketto",
  "tokio",
  "tokio-stream",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "tracing-futures",
 ]
@@ -3420,6 +3432,40 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c84e6fe5655adc6ce00787cf7dcaf8dc4f998a0565d23eafc207a8b08ca3349a"
 dependencies = [
  "hashbrown 0.11.2",
+]
+
+[[package]]
+name = "madsim"
+version = "0.2.0-alpha.3"
+dependencies = [
+ "ahash",
+ "async-task",
+ "bincode",
+ "bytes",
+ "downcast-rs",
+ "env_logger",
+ "futures",
+ "lazy_static 1.4.0",
+ "libc",
+ "madsim-macros",
+ "naive-timer",
+ "rand 0.8.5",
+ "real_tokio",
+ "serde 1.0.144",
+ "tokio-util 0.7.3",
+ "toml",
+ "tracing",
+ "tracing-subscriber 0.3.15",
+]
+
+[[package]]
+name = "madsim-macros"
+version = "0.2.0-alpha.3"
+dependencies = [
+ "darling 0.14.1",
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
 ]
 
 [[package]]
@@ -4333,6 +4379,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "naive-timer"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "034a0ad7deebf0c2abcf2435950a6666c3c15ea9d8fad0c0f48efa8a7f843fed"
+
+[[package]]
 name = "name-variant"
 version = "1.0.0"
 source = "git+https://github.com/MystenLabs/mysten-infra?rev=d96230a9272c322a7eefac49708aadfff1eed77e#d96230a9272c322a7eefac49708aadfff1eed77e"
@@ -4398,7 +4450,7 @@ dependencies = [
  "serde 1.0.144",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic",
  "tracing",
  "types",
@@ -4489,7 +4541,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-stream",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "tracing-log",
  "tracing-subscriber 0.3.15",
@@ -5264,7 +5316,7 @@ dependencies = [
  "tap",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic",
  "tower",
  "tracing",
@@ -5771,6 +5823,22 @@ dependencies = [
  "proc-macro2 1.0.43",
  "quote 1.0.21",
  "syn 1.0.99",
+]
+
+[[package]]
+name = "real_tokio"
+version = "1.20.1"
+dependencies = [
+ "autocfg 1.1.0",
+ "bytes",
+ "libc",
+ "memchr",
+ "mio 0.8.4",
+ "once_cell",
+ "pin-project-lite",
+ "socket2",
+ "tokio-macros 1.8.0",
+ "winapi",
 ]
 
 [[package]]
@@ -6829,7 +6897,7 @@ dependencies = [
  "futures",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=9deac015fbf66e24b6da9699630e06750eaa094a)",
@@ -6984,6 +7052,7 @@ dependencies = [
  "sui-node",
  "sui-quorum-driver",
  "sui-sdk",
+ "sui-simulator",
  "sui-swarm",
  "sui-types",
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=d96230a9272c322a7eefac49708aadfff1eed77e)",
@@ -7124,6 +7193,7 @@ dependencies = [
  "sha3 0.10.2",
  "sui-adapter",
  "sui-framework",
+ "sui-simulator",
  "sui-types",
  "tempfile",
  "tracing",
@@ -7411,7 +7481,7 @@ version = "0.7.0"
 dependencies = [
  "darling 0.14.1",
  "madsim-macros",
- "proc-macro2 1.0.42",
+ "proc-macro2 1.0.43",
  "quote 1.0.21",
  "syn 1.0.99",
 ]
@@ -7545,6 +7615,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "sui-simulator"
+version = "0.7.0"
+dependencies = [
+ "madsim",
+]
+
+[[package]]
 name = "sui-storage"
 version = "0.1.0"
 dependencies = [
@@ -7588,6 +7665,7 @@ dependencies = [
  "rand 0.8.5",
  "sui-config",
  "sui-node",
+ "sui-simulator",
  "sui-types",
  "tap",
  "telemetry-subscribers 0.1.0 (git+https://github.com/MystenLabs/mysten-infra?rev=d96230a9272c322a7eefac49708aadfff1eed77e)",
@@ -8167,7 +8245,7 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "socket2",
- "tokio-macros",
+ "tokio-macros 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "winapi",
 ]
@@ -8180,6 +8258,15 @@ checksum = "30b74022ada614a1b4834de765f9bb43877f910cc8ce4be40e89042c9223a8bf"
 dependencies = [
  "pin-project-lite",
  "tokio",
+]
+
+[[package]]
+name = "tokio-macros"
+version = "1.8.0"
+dependencies = [
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
 ]
 
 [[package]]
@@ -8234,7 +8321,23 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.7.3"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-io",
+ "futures-sink",
+ "futures-util",
+ "hashbrown",
+ "pin-project-lite",
+ "real_tokio",
+ "slab",
+ "tracing",
 ]
 
 [[package]]
@@ -8312,7 +8415,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-stream",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower",
  "tower-layer",
  "tower-service",
@@ -8387,7 +8490,7 @@ dependencies = [
  "rand 0.8.5",
  "slab",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower-layer",
  "tower-service",
  "tracing",
@@ -8709,7 +8812,7 @@ dependencies = [
  "signature",
  "thiserror",
  "tokio",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
@@ -9284,7 +9387,7 @@ dependencies = [
  "tap",
  "tokio",
  "tokio-stream",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tonic",
  "tower",
  "tracing",
@@ -9898,11 +10001,11 @@ dependencies = [
  "tinyvec_macros",
  "tokio",
  "tokio-io-timeout",
- "tokio-macros",
+ "tokio-macros 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-retry",
  "tokio-rustls",
  "tokio-stream",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml",
  "toml_edit 0.13.4",
  "toml_edit 0.14.4",
@@ -10338,10 +10441,10 @@ dependencies = [
  "tinyvec_macros",
  "tokio",
  "tokio-io-timeout",
- "tokio-macros",
+ "tokio-macros 1.8.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio-rustls",
  "tokio-stream",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "toml",
  "tonic",
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",

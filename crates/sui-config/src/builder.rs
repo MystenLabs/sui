@@ -162,7 +162,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         network_key_pair: SuiKeyPair,
     ) -> ValidatorGenesisInfo {
         let ip = if !self.with_swarm {
-            let ip_addr = madsim::runtime::NodeHandle::current()
+            let ip_addr = sui_simulator::runtime::NodeHandle::current()
                 .ip()
                 .expect("expected to be called within a simulator node");
             format!("{}", ip_addr)
