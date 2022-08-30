@@ -16,7 +16,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 
 The following list includes the recent updates to Sui and the documentation:
 
-* You must now specify the key scheme type as an argument (`secp256k1` or `ed25519`)  when running either the `sui keytool generate` or `sui client new-address` commands, as shown in [Adding accounts to the client](../contribute/cli-client.md#adding-accounts-to-the-client) and [Make a Move call](../build/devnet.md#make-a-move-call).
+* You must now specify the key scheme type as an argument (`secp256k1` or `ed25519`)  when running either the `sui keytool generate` or `sui client new-address` commands, as shown in [Adding accounts to the client](../contribute/cli-client.md#adding-accounts-to-the-client) and preparing to [Make a Move call](../build/devnet.md#make-a-move-call) in Devnet.
 * Follow the [Cryptography (math)](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/math) example for a simple contract that hashes a piece of data using keccak256, recovers a [Secp256k1](https://crates.io/crates/secp256k1/) signature to its public key, and verifies a Secp256k1 signature, producing an event with the results.
 * [Bullshark](https://arxiv.org/abs/2201.05677) has replaced Tusk as the consensus component of the [Narwhal](https://github.com/MystenLabs/narwhal)-based [Sui consensus engine](../learn/architecture/consensus.md) for reduced latency and support for fairness with slower validators.
 * Sui now supports [shared objects](../build/objects.md#shared) that anyone can read or write to. For an example of creating and accessing a shared object, see [Shared Object](https://examples.sui.io/basics/shared-object.html#shared-object) on https://examples.sui.io/.
