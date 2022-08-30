@@ -6,7 +6,7 @@ This is a brief introduction to [Narwhal, Tusk](https://github.com/MystenLabs/na
 
 The dual name highlights that the systems split the responsibilities of:
 - ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
-- agreeing on a specific ordering of this data = [Bullshark](https://arxiv.org/abs/2201.05677) or [Tusk ]
+- agreeing on a specific ordering of this data = [Bullshark](https://arxiv.org/abs/2201.05677) or [Tusk](https://github.com/MystenLabs/narwhal)
 
 In August 2022, Bullshark replaced the Tusk component of the consensus protocol as the default for reduced latency and support for fairness (where even slow validators can contribute). See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
 
