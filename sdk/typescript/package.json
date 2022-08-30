@@ -26,14 +26,14 @@
     "build:types": "tsc --build",
     "doc": "typedoc",
     "test": "vitest",
-    "lint": "tsdx lint",
+    "lint": "eslint './{src,test}/**.{ts,js}'",
     "prepare": "pnpm build",
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
   "husky": {
     "hooks": {
-      "pre-commit": "tsdx lint"
+      "pre-commit": "pnpm lint"
     }
   },
   "prettier": {
@@ -62,14 +62,19 @@
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/bn.js": "^5.1.0",
     "@types/lossless-json": "^1.0.1",
+    "eslint": "^8.23.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-plugin-prettier": "^4.2.1",
     "husky": "^7.0.4",
     "mockttp": "^2.7.0",
+    "prettier": "^2.7.1",
     "size-limit": "^7.0.8",
     "ts-auto-guard": "^2.4.1",
     "ts-node": "^10.9.1",
     "tslib": "^2.3.1",
     "tsup": "^6.2.2",
-    "typedoc": "^0.22.17",
+    "typedoc": "^0.23.11",
     "typescript": "^4.8.2",
     "vitest": "^0.22.1"
   },
