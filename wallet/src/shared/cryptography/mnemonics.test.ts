@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Base64DataBuffer, Ed25519Keypair } from '@mysten/sui.js';
+import { describe, it, expect } from 'vitest';
 
 import {
     generateMnemonicsAndKeypair,

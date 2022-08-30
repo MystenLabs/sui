@@ -3,7 +3,7 @@
 
 module.exports = {
     plugins: ['header'],
-    extends: ['react-app', 'react-app/jest', 'prettier'],
+    extends: ['react-app', 'prettier'],
     rules: {
         'react/jsx-no-bind': ['error'],
         'import/order': [
