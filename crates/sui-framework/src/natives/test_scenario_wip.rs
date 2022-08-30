@@ -124,14 +124,14 @@ pub fn end_transaction(
     // handle deletions
     for id in &deleted {
         for addr_inventory in inventories.address_inventories.values_mut() {
-            for (_, s) in addr_inventory {
+            for s in addr_inventory.values_mut() {
                 s.remove(id);
             }
         }
-        for (_, s) in &mut inventories.shared_inventory {
+        for s in &mut inventories.shared_inventory.values_mut() {
             s.remove(id);
         }
-        for (_, s) in &mut inventories.immutable_inventory {
+        for s in &mut inventories.immutable_inventory.values_mut() {
             s.remove(id);
         }
     }

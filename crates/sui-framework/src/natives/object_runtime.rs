@@ -42,7 +42,7 @@ pub struct RuntimeResults {
     pub user_events: Vec<(StructTag, Vec<u8>)>,
 }
 
-#[derive(Tid)]
+#[derive(Tid, Default)]
 pub struct ObjectRuntime {
     pub(crate) test_inventories: TestInventories,
     // will eventually need a reference to the state view to access child objects
