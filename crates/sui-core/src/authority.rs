@@ -1724,7 +1724,6 @@ impl AuthorityState {
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self.database.get_latest_parent_entry(object_id)
     }
-}
 
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
         // Ensure the input is a shared object certificate. Remember that Byzantine authorities
