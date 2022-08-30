@@ -2,7 +2,7 @@ name: Wallet Extension PR checks
 on: pull_request
 jobs:
   diff:
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ubuntu-latest]
     outputs:
       isWalletExt: ${{ steps.diff.outputs.isWalletExt }}
     steps:
@@ -14,14 +14,10 @@ jobs:
     name: Lint, Test & Build
     needs: diff
     if: needs.diff.outputs.isWalletExt == 'true'
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ubuntu-latest]
     env:
       working-directory: ./wallet
     steps:
-      - name: Get number of CPU cores
-        uses: SimenB/github-actions-cpu-cores@v1
-        id: cpu-cores
-      - run: echo "${{ steps.cpu-cores.outputs.count }}"
       - name: Checkout
         uses: actions/checkout@v3
       - uses: pnpm/action-setup@v2.2.2
