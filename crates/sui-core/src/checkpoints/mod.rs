@@ -392,7 +392,7 @@ impl CheckpointStore {
         debug!(
             "Number of transactions in checkpoint {:?}: {:?}",
             checkpoint_sequence_number,
-            contents.transactions.len()
+            contents.size()
         );
 
         // Make a DB batch
@@ -724,7 +724,7 @@ impl CheckpointStore {
         committee: &Committee,
         effects_store: impl CausalOrder + PendCertificateForExecution,
     ) -> SuiResult {
-        self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
+        self.check_checkpoint_transactions(contents.iter(), &effects_store)?;
         self.process_synced_checkpoint_certificate(checkpoint, contents, committee)
     }
 

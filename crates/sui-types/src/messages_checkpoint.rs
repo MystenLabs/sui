@@ -175,7 +175,7 @@ impl CheckpointSummary {
         previous_digest: Option<CheckpointDigest>,
     ) -> CheckpointSummary {
         let mut waypoint = Box::new(Waypoint::default());
-        transactions.transactions.iter().for_each(|tx| {
+        transactions.iter().for_each(|tx| {
             waypoint.insert(tx);
         });
 
@@ -283,7 +283,7 @@ impl SignedCheckpointSummary {
             let content_digest = contents.digest();
             fp_ensure!(
                 content_digest == self.summary.content_digest,
-                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, received content digest {:?}, received {} transactions", self.summary, content_digest, contents.transactions.len())}
+                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, received content digest {:?}, received {} transactions", self.summary, content_digest, contents.size())}
             );
         }
 
@@ -371,7 +371,7 @@ impl CertifiedCheckpointSummary {
             let content_digest = contents.digest();
             fp_ensure!(
                 content_digest == self.summary.content_digest,
-                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, content digest = {:?}, transactions {}", self.summary, content_digest, contents.transactions.len())}
+                SuiError::GenericAuthorityError{error:format!("Checkpoint contents digest mismatch: summary={:?}, content digest = {:?}, transactions {}", self.summary, content_digest, contents.size())}
             );
         }
 
@@ -412,7 +412,7 @@ impl CheckpointProposalContents {
 /// the same order for each checkpoint content.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct CheckpointContents {
-    pub transactions: Vec<ExecutionDigests>,
+    transactions: Vec<ExecutionDigests>,
 }
 
 impl CheckpointContents {
@@ -427,6 +427,10 @@ impl CheckpointContents {
 
     pub fn iter(&self) -> Iter<'_, ExecutionDigests> {
         self.transactions.iter()
+    }
+
+    pub fn size(&self) -> usize {
+        self.transactions.len()
     }
 
     pub fn digest(&self) -> CheckpointContentsDigest {

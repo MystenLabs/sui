@@ -589,17 +589,17 @@ fn test_user_signature_committed_in_checkpoints() {
     let checkpoint_summary_a = CheckpointSummary::new(
         0,
         1,
-        &CheckpointContents {
-            transactions: vec![execution_digest_a],
-        },
+        &CheckpointContents::new_with_causally_ordered_transactions(
+            [execution_digest_a].into_iter(),
+        ),
         None,
     );
     let checkpoint_summary_b = CheckpointSummary::new(
         0,
         1,
-        &CheckpointContents {
-            transactions: vec![execution_digest_b],
-        },
+        &CheckpointContents::new_with_causally_ordered_transactions(
+            [execution_digest_b].into_iter(),
+        ),
         None,
     );
 

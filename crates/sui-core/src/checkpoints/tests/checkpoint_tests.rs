@@ -1421,7 +1421,7 @@ fn test_fragment_full_flow() {
         .expect("No errors on response");
     // Ensure the reconstruction worked
     if let CheckpointResponse::AuthenticatedCheckpoint { contents, .. } = response {
-        assert_eq!(contents.unwrap().transactions.len(), 2);
+        assert_eq!(contents.unwrap().size(), 2);
     } else {
         panic!("Unexpected response");
     }
@@ -1800,7 +1800,7 @@ async fn checkpoint_messaging_flow() {
     }
 
     let contents = checkpoint_contents.unwrap();
-    assert_eq!(contents.transactions.len(), 1);
+    assert_eq!(contents.size(), 1);
 
     // Construct a certificate
     // We need at least f+1 signatures
