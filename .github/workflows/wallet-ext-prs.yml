@@ -8,7 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes
-        uses: "./.github/actions/diffs"
+        uses: "./.github/actions/pnpm-diffs"
         id: diff
   run_checks:
     name: Lint, Test & Build

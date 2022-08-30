@@ -86,6 +86,7 @@
           "id": {
             "id": "0x1f45933e11d09fa15e65ba6735ce4205c3deec24"
           },
+
           "sword": {
             "type": "0xeaa96afeecd3cf700ca68d6cad4af93f05b59bcd::hero::Sword",
             "fields": {

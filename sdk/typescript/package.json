@@ -59,6 +59,7 @@
     }
   ],
   "devDependencies": {
+    "@mysten/sui-open-rpc": "workspace:*",
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/bn.js": "^5.1.0",
     "@types/lossless-json": "^1.0.1",
