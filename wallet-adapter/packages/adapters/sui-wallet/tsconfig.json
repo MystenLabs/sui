@@ -1,9 +1,12 @@
 {
-  "extends": "../../../tsconfig.json",
+  "extends": "../../../tsconfig.base.json",
   "include": ["src"],
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "src"
   },
-  "references": [{ "path": "../base-adapter" }]
+  "references": [
+    { "path": "../base-adapter" },
+    { "path": "../../../../sdk/typescript" }
+  ]
 }

@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { describe, it, expect } from 'vitest';
 import { bcs, fromB64 } from './../src/index';
 import { BN } from 'bn.js';
 

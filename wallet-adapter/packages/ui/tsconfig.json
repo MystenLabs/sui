@@ -1,9 +1,12 @@
 {
-  "extends": "../../tsconfig.json",
+  "extends": "../../tsconfig.base.json",
   "include": ["src"],
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": "src"
   },
-  "references": [{ "path": "../react-providers" }]
+  "references": [
+    { "path": "../react-providers" },
+    { "path": "../../../sdk/typescript" }
+  ]
 }

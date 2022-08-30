@@ -1,8 +1,9 @@
 {
+  "name": "@mysten/sui.js",
+  "author": "Mysten Labs <build@mystenlabs.com>",
+  "description": "Sui TypeScript API(Work in Progress)",
   "version": "0.8.0",
   "license": "Apache-2.0",
-  "main": "dist/index.js",
-  "typings": "dist/index.d.ts",
   "files": [
     "dist",
     "src"
@@ -10,19 +11,29 @@
   "engines": {
     "node": ">=10"
   },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
   "scripts": {
-    "start": "node ./type_guards.mjs; tsdx watch",
-    "build": "node ./type_guards.mjs; tsdx build",
+    "build": "node ./type_guards.mjs && pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "build:types": "tsc --build",
     "doc": "typedoc",
-    "test": "tsdx test",
-    "lint": "tsdx lint",
-    "prepare": "tsdx build",
+    "test": "vitest",
+    "lint": "eslint './{src,test}/**.{ts,js}'",
+    "prepare": "pnpm build",
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
   "husky": {
     "hooks": {
-      "pre-commit": "tsdx lint"
+      "pre-commit": "pnpm lint"
     }
   },
   "prettier": {
@@ -31,16 +42,12 @@
     "singleQuote": true,
     "trailingComma": "es5"
   },
-  "name": "@mysten/sui.js",
-  "author": "Mysten Labs <build@mystenlabs.com>",
-  "description": "Sui TypeScript API(Work in Progress)",
   "bugs": {
     "url": "https://github.com/MystenLabs/sui/issues/new"
   },
   "publishConfig": {
     "access": "public"
   },
-  "module": "dist/sui.js.esm.js",
   "size-limit": [
     {
       "path": "dist/sui.js.cjs.production.min.js",
@@ -54,18 +61,22 @@
   "devDependencies": {
     "@size-limit/preset-small-lib": "^7.0.8",
     "@types/bn.js": "^5.1.0",
-    "@types/jest": "^27.5.2",
     "@types/lossless-json": "^1.0.1",
+    "eslint": "^8.23.0",
+    "eslint-config-prettier": "^8.5.0",
+    "eslint-config-react-app": "^7.0.1",
+    "eslint-plugin-prettier": "^4.2.1",
     "husky": "^7.0.4",
     "mockttp": "^2.7.0",
+    "prettier": "^2.7.1",
     "size-limit": "^7.0.8",
     "ts-auto-guard": "^2.4.1",
     "ts-node": "^10.9.1",
-    "tsconfig": "^7.0.0",
-    "tsdx": "^0.14.1",
     "tslib": "^2.3.1",
-    "typedoc": "^0.22.17",
-    "typescript": "^4.6.3"
+    "tsup": "^6.2.2",
+    "typedoc": "^0.23.11",
+    "typescript": "^4.8.2",
+    "vitest": "^0.22.1"
   },
   "dependencies": {
     "@mysten/bcs": "^0.2.0",
