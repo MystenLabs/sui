@@ -85,6 +85,22 @@ function Search() {
         };
     }, [handleKeyPress]);
 
+    // Whenever input changes, the result is updated with data fetched from the network
+
+    useEffect(() => {
+        if (!input) {
+            setResult(null);
+        } else {
+            Promise.all(
+                SEARCH_CATEGORIES.map((category) =>
+                    navigateWithCategory(input.trim(), category, network)
+                )
+            ).then((res) => {
+                setResult(res.filter((el) => el));
+            });
+        }
+    }, [input, network]);
+
     const handleSubmit = useCallback(
         (e: React.FormEvent<HTMLFormElement>) => {
             e.preventDefault();
@@ -122,23 +138,8 @@ function Search() {
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
             setInput(e.currentTarget.value);
-            if (!e.currentTarget.value) {
-                setResult(null);
-            } else {
-                Promise.all(
-                    SEARCH_CATEGORIES.map((category) =>
-                        navigateWithCategory(
-                            e.currentTarget.value.trim(),
-                            category,
-                            network
-                        )
-                    )
-                ).then((res) => {
-                    setResult(res.filter((el) => el));
-                });
-            }
         },
-        [network]
+        []
     );
 
     return (
