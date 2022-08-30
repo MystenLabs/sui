@@ -582,7 +582,8 @@ fn update_processed_transactions_already_in_checkpoint() {
     let t2 = ExecutionDigests::random();
     let t3 = ExecutionDigests::random();
 
-    let checkpoint = CheckpointContents::new([t1, t2].into_iter());
+    let checkpoint =
+        CheckpointContents::new_with_causally_ordered_transactions([t1, t2].into_iter());
     cps.update_new_checkpoint_inner(0, &checkpoint, cps.tables.checkpoints.batch())
         .unwrap();
     cps.update_processed_transactions(&[(2, t2), (3, t3)])

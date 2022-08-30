@@ -813,7 +813,6 @@ where
         return None;
     }
 
-<<<<<<< HEAD
     // We have ran out of authorities?
     if available_authorities.is_empty() {
         // We have created as many fragments as possible, so exit.
@@ -829,11 +828,11 @@ where
         .await
     {
         Ok(response) => {
-            if let AuthorityCheckpointInfo::CheckpointProposal {
+            if let CheckpointResponse::CheckpointProposal {
                 proposal,
                 prev_cert,
                 proposal_contents,
-            } = &response.info
+            } = response
             {
                 // Check if there is a latest checkpoint
                 if let Some(prev) = prev_cert {
@@ -863,7 +862,7 @@ where
 
                 let other_proposal = CheckpointProposal::new_from_signed_proposal_summary(
                     proposal.as_ref().unwrap().clone(),
-                    proposal_contents.unwrap(),
+                    proposal_contents.as_ref().unwrap().clone(),
                 );
 
                 let fragment = my_proposal.fragment_with(&other_proposal);
