@@ -33,5 +33,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "composite": true
-  }
+  },
+  "references": [{ "path": "./bcs" }]
 }

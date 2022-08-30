@@ -8,7 +8,9 @@
     "outDir": "dist",
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "composite": true,
+    "emitDeclarationOnly": true
   },
   "include": ["src"]
 }
