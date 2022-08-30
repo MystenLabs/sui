@@ -16,15 +16,10 @@ function SearchResults({
     setResultIndex: (index: number) => void;
     optionClick: (el: ResultType) => () => void;
 }) {
-    const convertLabel = (category: string) => {
-        switch (category) {
-            case 'objects':
-                return 'Object';
-            case 'transactions':
-                return 'transaction';
-            case 'addresses':
-                return 'address';
-        }
+    const categoryLabels = {
+        objects: 'object',
+        transactions: 'transaction',
+        addresses: 'address',
     };
 
     if (!result) return <></>;
@@ -35,7 +30,7 @@ function SearchResults({
             )}
             {result.map((el, index) => (
                 <dl key={index}>
-                    <dt>{convertLabel(el.category)}</dt>
+                    <dt>{categoryLabels[el.category]}</dt>
                     <dd
                         className={
                             index === resultIndex ? styles.selectedoption : ''

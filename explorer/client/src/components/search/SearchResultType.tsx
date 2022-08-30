@@ -3,6 +3,6 @@
 
 export type ResultType = {
     input: string;
-    category: string;
+    category: 'objects' | 'transactions' | 'addresses';
     result: object | null;
 };
