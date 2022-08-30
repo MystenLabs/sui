@@ -7,6 +7,7 @@
     "importHelpers": true,
     // output .d.ts declaration files for consumers
     "declaration": true,
+    "emitDeclarationOnly": true,
     // output .js.map sourcemap files for consumers
     "sourceMap": true,
     // match output dir to input dir. e.g. dist/index instead of dist/src/index
@@ -31,5 +32,6 @@
     // error out if import and file system have a casing mismatch. Recommended by TS
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
+    "composite": true
   }
 }

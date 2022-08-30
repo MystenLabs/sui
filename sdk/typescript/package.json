@@ -23,7 +23,7 @@
   },
   "scripts": {
     "build": "node ./type_guards.mjs && pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
-    "build:types": "tsc --declaration --emitDeclarationOnly",
+    "build:types": "tsc --build",
     "doc": "typedoc",
     "test": "vitest",
     "lint": "tsdx lint",
@@ -70,7 +70,7 @@
     "tslib": "^2.3.1",
     "tsup": "^6.2.2",
     "typedoc": "^0.22.17",
-    "typescript": "^4.6.3",
+    "typescript": "^4.8.2",
     "vitest": "^0.22.1"
   },
   "dependencies": {
