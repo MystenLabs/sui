@@ -7,9 +7,6 @@ outputs:
   isRust:
     description: True when changes happened to the rust code
     value: "${{ steps.diff.outputs.isRust }}"
-  isTypescriptSDK:
-    description: True when there are changes to files related to TypeScript SDK
-    value: "${{ steps.diff.outputs.isTypescriptSDK }}"
 runs:
   using: composite
   steps:
@@ -24,10 +21,6 @@ runs:
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
-        isTypescriptSDK:
-          - 'sdk/typescript/**'
-          - 'crates/sui-open-rpc/samples/**'
-          - '.github/workflows/ts-sdk.yml'
         isDoc:
           - 'doc/**'
           - '*.md'
