@@ -527,7 +527,15 @@ impl SuiClientCommands {
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
                     .reference
                     .object_id;
+<<<<<<< HEAD
                 let object_read = context.client.read_api().get_parsed_object(nft_id).await?;
+=======
+                let object_read = context
+                    .gateway
+                    .read_api()
+                    .get_parsed_object(nft_id, None)
+                    .await?;
+>>>>>>> cd3df4333 (fetch past objects)
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
         });
@@ -619,7 +627,7 @@ impl WalletContext {
             let response = self
                 .client
                 .read_api()
-                .get_parsed_object(oref.object_id)
+                .get_parsed_object(oref.object_id, None)
                 .await?;
             match response {
                 GetObjectDataResponse::Exists(o) => {
@@ -675,7 +683,10 @@ impl WalletContext {
     }
 
     /// A backward-compatible migration of transaction execution from gateway to fullnode
-    async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<SuiTransactionResponse> {
+    pub async fn execute_transaction(
+        &self,
+        tx: Transaction,
+    ) -> anyhow::Result<SuiTransactionResponse> {
         let tx_digest = *tx.digest();
         if self.client.is_gateway() {
             self.client.quorum_driver().execute_transaction(tx).await

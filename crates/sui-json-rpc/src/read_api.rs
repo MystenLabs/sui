@@ -20,6 +20,7 @@ use sui_json_rpc_types::{
     SuiTransactionResponse,
 };
 use sui_open_rpc::Module;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
@@ -74,10 +75,14 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        seq_num: Option<SequenceNumber>,
+    ) -> RpcResult<GetObjectDataResponse> {
         Ok(self
             .state
-            .get_object_read(&object_id)
+            .get_object_read(&object_id, seq_num)
             .await
             .map_err(|e| anyhow!("{e}"))?
             .try_into()?)
@@ -192,7 +197,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
     ) -> RpcResult<Vec<MoveFunctionArgType>> {
         let object_read = self
             .state
-            .get_object_read(&package)
+            .get_object_read(&package, None)
             .await
             .map_err(|e| anyhow!("{e}"))?;
 
@@ -307,7 +312,7 @@ pub async fn get_move_modules_by_package(
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
     let object_read = fullnode_api
         .state
-        .get_object_read(&package)
+        .get_object_read(&package, None)
         .await
         .map_err(|e| anyhow!("{e}"))?;
 

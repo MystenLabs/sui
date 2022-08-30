@@ -640,6 +640,14 @@ pub enum ObjectRead {
     NotExists(ObjectID),
     Exists(ObjectRef, Object, Option<MoveStructLayout>),
     Deleted(ObjectRef),
+    /// The object exists but not found in this node (could be pruned)
+    ExistsButPastNotFound(ObjectID, SequenceNumber),
+    /// The required sequence number is higher than the latest
+    SequenceNumberTooHigh {
+        object_id: ObjectID,
+        asked_seq_num: SequenceNumber,
+        latest_seq_num: SequenceNumber,
+    },
 }
 
 impl ObjectRead {
@@ -650,6 +658,19 @@ impl ObjectRead {
             Self::Deleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::Exists(_, o, _) => Ok(o),
+            Self::ExistsButPastNotFound(id, seq_num) => Err(SuiError::PastObjectNotFound {
+                object_id: id,
+                seq_num,
+            }),
+            Self::SequenceNumberTooHigh {
+                object_id,
+                asked_seq_num,
+                latest_seq_num,
+            } => Err(SuiError::ObjectSequenceNumberTooHigh {
+                object_id,
+                asked_seq_num,
+                latest_seq_num,
+            }),
         }
     }
 }
@@ -673,6 +694,20 @@ impl Display for ObjectRead {
             }
             Self::Exists(oref, _, _) => {
                 write!(f, "ObjectRead::Exists ({:?})", oref)
+            }
+            Self::ExistsButPastNotFound(object_id, seq_num) => {
+                write!(
+                    f,
+                    "ObjectRead::ExistsButPastNotFound ({:?}, asked sequence number {:?})",
+                    object_id, seq_num
+                )
+            }
+            Self::SequenceNumberTooHigh {
+                object_id,
+                asked_seq_num,
+                latest_seq_num,
+            } => {
+                write!(f, "ObjectRead::SequenceNumberTooHigh ({:?}, asked sequence number {:?}, latest sequence number {:?})", object_id, asked_seq_num, latest_seq_num)
             }
         }
     }

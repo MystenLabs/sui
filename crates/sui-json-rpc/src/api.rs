@@ -13,7 +13,7 @@ use sui_json_rpc_types::{
     SuiObjectInfo, SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;

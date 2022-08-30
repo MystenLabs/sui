@@ -35,6 +35,7 @@ use sui_json_rpc_types::{
 pub use sui_types as types;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::messages::Transaction;
+use types::base_types::SequenceNumber;
 use types::messages::ExecuteTransactionRequestType;
 
 use crate::transaction_builder::TransactionBuilder;
@@ -230,6 +231,7 @@ impl ReadApi {
     ) -> anyhow::Result<GetObjectDataResponse> {
         Ok(match &*self.api {
             SuiClientApi::Rpc(c) => c.http.get_object(object_id).await?,
+            // Gateway does not support reading past objects
             SuiClientApi::Embedded(c) => c.get_object(object_id).await?,
         })
     }

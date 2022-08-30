@@ -153,7 +153,7 @@ async fn create_response_sample() -> Result<
     let coin = context
         .client
         .read_api()
-        .get_parsed_object(coins.first().unwrap().object_id)
+        .get_parsed_object(coins.first().unwrap().object_id, None)
         .await?;
 
     let example_move_function_arg_types = create_move_function_arg_type_response()?;
@@ -236,6 +236,7 @@ async fn create_package_object_response(
                     .to_publish_response()?
                     .package
                     .object_id,
+                None,
             )
             .await?;
         Ok((object, response))
@@ -339,7 +340,7 @@ async fn create_hero_response(
             let object = context
                 .client
                 .read_api()
-                .get_parsed_object(hero.reference.object_id)
+                .get_parsed_object(hero.reference.object_id, None)
                 .await?;
             Ok((package_id, object))
         } else {
@@ -450,7 +451,7 @@ async fn get_nft_response(
         let object = context
             .client
             .read_api()
-            .get_parsed_object(effects.created.first().unwrap().reference.object_id)
+            .get_parsed_object(effects.created.first().unwrap().reference.object_id, None)
             .await?;
         let tx = SuiTransactionResponse {
             certificate,

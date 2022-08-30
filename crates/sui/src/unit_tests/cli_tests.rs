@@ -899,7 +899,7 @@ async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiPars
     let response = context
         .client
         .read_api()
-        .get_parsed_object(id)
+        .get_parsed_object(id, None)
         .await
         .unwrap();
     if let GetObjectDataResponse::Exists(o) = response {

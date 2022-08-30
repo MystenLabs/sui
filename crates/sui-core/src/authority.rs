@@ -1363,10 +1363,37 @@ impl AuthorityState {
         self.database.get_sui_system_state_object()
     }
 
-    pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
-        match self.database.get_latest_parent_entry(*object_id)? {
-            None => Ok(ObjectRead::NotExists(*object_id)),
-            Some((obj_ref, _)) => {
+    pub async fn get_object_read(
+        &self,
+        object_id: &ObjectID,
+        seq_num: Option<SequenceNumber>,
+    ) -> Result<ObjectRead, SuiError> {
+        // Firstly we see if the object ever exists by getting its latest data
+        match (self.database.get_latest_parent_entry(*object_id)?, seq_num) {
+            (None, _) => Ok(ObjectRead::NotExists(*object_id)),
+            (Some((obj_ref, _)), Some(seq_num)) if seq_num > obj_ref.1 => {
+                Ok(ObjectRead::SequenceNumberTooHigh {
+                    object_id: *object_id,
+                    asked_seq_num: seq_num,
+                    latest_seq_num: obj_ref.1,
+                })
+            }
+            (Some((obj_ref, _)), Some(seq_num)) if seq_num < obj_ref.1 => {
+                // Read past objects
+                match self.database.get_object_by_key(object_id, seq_num)? {
+                    None => Ok(ObjectRead::ExistsButPastNotFound(*object_id, seq_num)),
+                    Some(object) => {
+                        let layout = object.get_layout(
+                            ObjectFormatOptions::default(),
+                            self.module_cache.as_ref(),
+                        )?;
+                        let obj_ref = object.compute_object_reference();
+                        Ok(ObjectRead::Exists(obj_ref, object, layout))
+                    }
+                }
+            }
+            // seq_num not provided or equal to the latest seq number this node knows
+            (Some((obj_ref, _)), _) => {
                 if obj_ref.2.is_alive() {
                     match self.database.get_object_by_key(object_id, obj_ref.1)? {
                         None => {

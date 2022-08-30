@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use signature::Signature;
+use sui_types::base_types::SequenceNumber;
 use tracing::debug;
 
 use crate::api::{
@@ -137,7 +138,12 @@ impl RpcReadApiServer for GatewayReadApiImpl {
         Ok(self.client.get_objects_owned_by_object(object_id).await?)
     }
 
-    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
+    async fn get_object(
+        &self,
+        object_id: ObjectID,
+        _seq_num: Option<SequenceNumber>,
+    ) -> RpcResult<GetObjectDataResponse> {
+        // Gateway does not support read past objects
         Ok(self.client.get_object(object_id).await?)
     }
 

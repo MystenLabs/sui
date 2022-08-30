@@ -951,6 +951,12 @@ pub enum SuiObjectRead<T: SuiData> {
     Exists(SuiObject<T>),
     NotExists(ObjectID),
     Deleted(SuiObjectRef),
+    ExistsButPastNotFound(ObjectID, SequenceNumber),
+    SequenceNumberTooHigh {
+        object_id: ObjectID,
+        asked_seq_num: SequenceNumber,
+        latest_seq_num: SequenceNumber,
+    },
 }
 
 impl<T: SuiData> SuiObjectRead<T> {
@@ -963,6 +969,19 @@ impl<T: SuiData> SuiObjectRead<T> {
             }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
             Self::Exists(o) => Ok(o),
+            Self::ExistsButPastNotFound(id, seq_num) => Err(SuiError::PastObjectNotFound {
+                object_id: *id,
+                seq_num: *seq_num,
+            }),
+            Self::SequenceNumberTooHigh {
+                object_id,
+                asked_seq_num,
+                latest_seq_num,
+            } => Err(SuiError::ObjectSequenceNumberTooHigh {
+                object_id: *object_id,
+                asked_seq_num: *asked_seq_num,
+                latest_seq_num: *latest_seq_num,
+            }),
         }
     }
 
@@ -975,6 +994,19 @@ impl<T: SuiData> SuiObjectRead<T> {
             }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::Exists(o) => Ok(o),
+            Self::ExistsButPastNotFound(id, seq_num) => Err(SuiError::PastObjectNotFound {
+                object_id: id,
+                seq_num,
+            }),
+            Self::SequenceNumberTooHigh {
+                object_id,
+                asked_seq_num,
+                latest_seq_num,
+            } => Err(SuiError::ObjectSequenceNumberTooHigh {
+                object_id,
+                asked_seq_num,
+                latest_seq_num,
+            }),
         }
     }
 }
@@ -989,6 +1021,18 @@ impl<T: SuiData> TryFrom<ObjectRead> for SuiObjectRead<T> {
                 Ok(SuiObjectRead::Exists(SuiObject::try_from(o, layout)?))
             }
             ObjectRead::Deleted(oref) => Ok(SuiObjectRead::Deleted(oref.into())),
+            ObjectRead::ExistsButPastNotFound(id, seq_num) => {
+                Ok(SuiObjectRead::ExistsButPastNotFound(id, seq_num))
+            }
+            ObjectRead::SequenceNumberTooHigh {
+                object_id,
+                asked_seq_num,
+                latest_seq_num,
+            } => Ok(SuiObjectRead::SequenceNumberTooHigh {
+                object_id,
+                asked_seq_num,
+                latest_seq_num,
+            }),
         }
     }
 }

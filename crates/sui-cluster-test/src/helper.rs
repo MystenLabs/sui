@@ -82,6 +82,10 @@ impl ObjectChecker {
         println!("getting object {object_id}, info :: {object_info:?}");
 
         match object_info {
+            GetRawObjectDataResponse::SequenceNumberTooHigh { .. }
+            | GetRawObjectDataResponse::ExistsButPastNotFound(_, _) => {
+                panic!("Unexpected response: {:?}", object_info)
+            }
             GetRawObjectDataResponse::NotExists(_) => {
                 panic!("Node can't find gas object {}", object_id)
             }
