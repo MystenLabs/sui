@@ -14,7 +14,7 @@ import { DefaultRpcClient as rpc, type Network } from './DefaultRpcClient';
 const getDataOnTx = async (input: string, network: Network | string) => {
     if (!isValidTransactionDigest(input)) return null;
 
-    return rpc(network)
+    return await rpc(network)
         .getTransactionWithEffects(input)
         .then((data) => ({
             input: input,
@@ -29,7 +29,8 @@ const getDataOnTx = async (input: string, network: Network | string) => {
 
 const getDataOnAddress = async (input: string, network: Network | string) => {
     if (!isValidSuiAddress(input) && !isGenesisLibAddress(input)) return null;
-    return rpc(network)
+
+    return await rpc(network)
         .getObjectsOwnedByAddress(input)
         .then((data) => {
             if (data.length <= 0) throw new Error('No objects for Address');
@@ -48,7 +49,8 @@ const getDataOnAddress = async (input: string, network: Network | string) => {
 
 const getDataOnObject = async (input: string, network: Network | string) => {
     if (!isValidSuiAddress(input) && !isGenesisLibAddress(input)) return null;
-    return rpc(network)
+
+    return await rpc(network)
         .getObject(input)
         .then((data) => {
             if (data.status !== 'Exists') {
