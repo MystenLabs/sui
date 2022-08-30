@@ -16,16 +16,13 @@
 // 1. Run `cargo insta test --review` under `./sui-config`.
 // 2. Review, accept or reject changes.
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::PathBuf;
-
 use fastcrypto::traits::KeyPair;
 use insta::assert_yaml_snapshot;
 use multiaddr::Multiaddr;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use sui_config::ValidatorInfo;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
-use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -98,8 +95,16 @@ fn populated_genesis_snapshot_matches() {
     // Serialized `genesis` is not static and cannot be snapshot tested.
 }
 
+// This test could run in the simulator using the #[sui_test], but that's unnecessary, we can
+// simply run it only during normal tests. (The config builder assumes that it is running inside a
+// simulator node in the simulator, so this test would panic if run in a simulator build).
+#[cfg(not(madsim))]
 #[test]
 fn network_config_snapshot_matches() {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::path::PathBuf;
+    use sui_config::NetworkConfig;
+
     let temp_dir = tempfile::tempdir().unwrap();
     let committee_size = 7;
     let rng = StdRng::from_seed([0; 32]);
