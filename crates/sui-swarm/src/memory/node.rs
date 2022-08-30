@@ -154,7 +154,7 @@ impl Drop for Container {
             ContainerJoinHandle::SimulatorNode(node_id, join_handle) => {
                 tracing::info!("shutting down {}", node_id);
                 join_handle.abort();
-                sui_simulator::runtime::Handle::current().kill(node_id);
+                sui_simulator::runtime::Handle::try_current().map(|h| h.kill(node_id));
             }
         }
 
