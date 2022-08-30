@@ -42,8 +42,13 @@ function Search() {
 
     const handleKeyPress = useCallback(
         (event: KeyboardEvent): void => {
+            // If event already done, then do nothing
+            if (event.defaultPrevented) {
+                return;
+            }
+
             // Press Down Key or Tab
-            if (event.keyCode === 40 || event.keyCode === 9) {
+            if (['ArrowDown', 'Down', 'Tab'].includes(event.key)) {
                 event.preventDefault();
                 setResultIndex((prevIndex) =>
                     result?.length && prevIndex < result.length - 1
@@ -53,7 +58,7 @@ function Search() {
             }
 
             // Press Up Key
-            if (event.keyCode === 38) {
+            if (['ArrowUp', 'Up'].includes(event.key)) {
                 event.preventDefault();
                 setResultIndex((prevIndex) =>
                     prevIndex > 0
