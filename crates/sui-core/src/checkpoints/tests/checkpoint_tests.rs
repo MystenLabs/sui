@@ -903,7 +903,6 @@ async fn test_batch_to_checkpointing() {
         init_state_parameters_from_rng(&mut StdRng::from_seed(seed));
 
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-    let (tx_consensus_to_sui, _rx_consensus_to_sui) = tokio::sync::mpsc::channel(1_000);
     let authority_state = Arc::new(
         AuthorityState::new_for_testing(
             committee.clone(),
@@ -912,7 +911,6 @@ async fn test_batch_to_checkpointing() {
             None,
             None,
             tx_reconfigure_consensus,
-            tx_consensus_to_sui,
         )
         .await,
     );
@@ -1001,7 +999,6 @@ async fn test_batch_to_checkpointing_init_crash() {
     {
         // TODO: May need to set checkpoint store to be None.
         let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-        let (tx_consensus_to_sui, _rx_consensus_to_sui) = tokio::sync::mpsc::channel(1_000);
         let authority_state = Arc::new(
             AuthorityState::new_for_testing(
                 committee.clone(),
@@ -1010,7 +1007,6 @@ async fn test_batch_to_checkpointing_init_crash() {
                 None,
                 None,
                 tx_reconfigure_consensus,
-                tx_consensus_to_sui,
             )
             .await,
         );
@@ -1077,7 +1073,6 @@ async fn test_batch_to_checkpointing_init_crash() {
     // Scope to ensure all variables are dropped
     {
         let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-        let (tx_consensus_to_sui, _rx_consensus_to_sui) = tokio::sync::mpsc::channel(1_000);
         let authority_state = Arc::new(
             AuthorityState::new_for_testing(
                 committee,
@@ -1086,7 +1081,6 @@ async fn test_batch_to_checkpointing_init_crash() {
                 None,
                 None,
                 tx_reconfigure_consensus,
-                tx_consensus_to_sui,
             )
             .await,
         );
@@ -1584,7 +1578,6 @@ pub async fn checkpoint_tests_setup(
     // Make all authorities and their services.
     for k in &keys {
         let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-        let (tx_consensus_to_sui, _rx_consensus_to_sui) = tokio::sync::mpsc::channel(1_000);
         let authority = Arc::new(
             AuthorityState::new_for_testing(
                 committee.clone(),
@@ -1593,7 +1586,6 @@ pub async fn checkpoint_tests_setup(
                 None,
                 Some(Box::new(sender.clone())),
                 tx_reconfigure_consensus,
-                tx_consensus_to_sui,
             )
             .await,
         );

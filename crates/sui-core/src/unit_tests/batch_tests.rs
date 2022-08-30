@@ -59,7 +59,6 @@ pub(crate) async fn init_state(
     let epoch_path = dir.join(format!("DB_{:?}", ObjectID::random()));
     fs::create_dir(&epoch_path).unwrap();
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-    let (tx_consensus_to_sui, _rx_consensus_to_sui) = tokio::sync::mpsc::channel(1_000);
     let epoch_store = Arc::new(EpochStore::new(epoch_path, &committee, None));
     AuthorityState::new(
         authority_key.public().into(),
@@ -72,7 +71,6 @@ pub(crate) async fn init_state(
         &sui_config::genesis::Genesis::get_default_genesis(),
         &prometheus::Registry::new(),
         tx_reconfigure_consensus,
-        tx_consensus_to_sui,
     )
     .await
 }
@@ -811,7 +809,6 @@ async fn test_safe_batch_stream() {
     // Byzantine cases:
     let (_, authority_key): (_, AuthorityKeyPair) = get_key_pair();
     let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
-    let (tx_consensus_to_sui, _rx_consensus_to_sui) = tokio::sync::mpsc::channel(1_000);
     let state_b = AuthorityState::new_for_testing(
         committee.clone(),
         &authority_key,
@@ -819,7 +816,6 @@ async fn test_safe_batch_stream() {
         None,
         None,
         tx_reconfigure_consensus,
-        tx_consensus_to_sui,
     )
     .await;
     let epoch_store = state_b.epoch_store().clone();
