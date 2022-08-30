@@ -182,6 +182,7 @@ impl ValidatorService {
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
         let consensus_keypair = config.protocol_key_pair().copy();
         let consensus_committee = config.genesis()?.narwhal_committee().load();
+        let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
         let consensus_execution_state = state.clone();
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
@@ -191,6 +192,7 @@ impl ValidatorService {
             narwhal_node::restarter::NodeRestarter::watch(
                 consensus_keypair,
                 &*consensus_committee,
+                consensus_worker_cache,
                 consensus_storage_base_path,
                 consensus_execution_state,
                 consensus_parameters,

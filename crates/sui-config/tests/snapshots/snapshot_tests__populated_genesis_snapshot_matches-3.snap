@@ -8,10 +8,4 @@ authorities:
     primary:
       primary_to_primary: ""
       worker_to_primary: ""
-    workers:
-      0:
-        transactions: ""
-        worker_to_worker: ""
-        primary_to_worker: ""
 epoch: 0
-
