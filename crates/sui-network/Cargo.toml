@@ -12,7 +12,7 @@ tonic = "0.7"
 
 sui-types = { path = "../sui-types" }
 
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445" }
 workspace-hack = { path = "../workspace-hack"}
 
 [build-dependencies]
