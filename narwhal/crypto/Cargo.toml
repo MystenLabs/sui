@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 ark-bls12-377 = { version = "0.3.0", features = ["std"], optional = true }
-base64ct = { version = "1.5.1", features = ["alloc"] }
+base64ct = { version = "1.5.2", features = ["alloc"] }
 ed25519-consensus = { version = "2.0.1", features = ["serde"] }
 eyre = "0.6.8"
 hex = "0.4.3"
