@@ -147,8 +147,8 @@
             "external": true
           },
           {
-            "name": "Use Move VSCode Plugin",
-            "url": "https://sui.io/resources-sui/announcing-enhanced-move-vs-code-plugin",
+            "name": "Use Move VS Code Plugin",
+            "url": "https://sui.io/resources-move/announcing-enhanced-move-vs-code-plugin/",
             "external": true
           }
         ]
