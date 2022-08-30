@@ -13,7 +13,6 @@
     "moduleResolution": "node",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
     "jsx": "react-jsx",
     "baseUrl": ".",
     "paths": {
@@ -29,7 +28,8 @@
       "@mysten/wallet-adapter-mock-wallet": [
         "./packages/adapters/integrations/mock-wallet/src"
       ]
-    }
+    },
+    "composite": true
   },
   "include": ["packages", "src"]
 }

@@ -2,9 +2,8 @@
   "extends": "../../tsconfig.json",
   "include": ["src"],
   "compilerOptions": {
-    "outDir": "./lib",
-    "noEmit": false,
-    "module": "commonjs",
-    "declaration": true,
-  }
+    "outDir": "dist",
+    "rootDir": "src",
+  },
+  "references": [{ "path": "../react-providers" }]
 }
