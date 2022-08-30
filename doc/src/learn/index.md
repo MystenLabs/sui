@@ -45,7 +45,7 @@ The links in the section point to information to help you start working with Sui
 Go to the [Move Quick Start](../build/move/index.md) for information about installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
 
 ### Start the Sui network with Sui CLI client
-See the [Sui CLI client Quick Start](../contribute/cli-client.md) for information about installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
+See the [Sui CLI client Quick Start](../build/cli-client.md) for information about installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
 
 ### Take the end-to-end tutorial
 Proceed to the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.
@@ -64,7 +64,7 @@ Navigate and search this site however you see fit. If you're new to Sui, we reco
 **Build** - includes information about how to:
 * [Install Sui](../build/install.md)
 * [Create smart contracts with Move](../build/move/index.md)
-* [Set up and configure a local Sui network](../contribute/cli-client.md)
+* [Set up and configure a local Sui network](../build/cli-client.md)
 * [Start a local JSON-RPC Gateway server](../build/json-rpc.md#start-local-rpc-server)
 
 **Explore** - includes more in-depth information about:

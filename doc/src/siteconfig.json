@@ -161,8 +161,8 @@
             "url": "/build/move"
           },
           {
-            "name": "Start Sui Network",
-            "url": "/contribute/cli-client"
+            "name": "Connect to Devnet",
+            "url": "/build/devnet"
           },
           {
             "name": "Program Sui Objects",
