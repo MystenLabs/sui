@@ -9,4 +9,3 @@ xclippy = [
     "-Wclippy::disallowed_methods",
 ]
 xlint = "run --package x --bin x -- lint"
-
