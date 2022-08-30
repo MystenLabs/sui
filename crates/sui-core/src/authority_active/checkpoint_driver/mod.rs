@@ -18,9 +18,9 @@ use sui_types::{
     error::{SuiError, SuiResult},
     messages::{CertifiedTransaction, TransactionInfoRequest},
     messages_checkpoint::{
-        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
-        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointProposal,
-        CheckpointRequest, CheckpointResponse, CheckpointSequenceNumber, SignedCheckpointSummary,
+        AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest,
+        CheckpointFragment, CheckpointProposal, CheckpointRequest, CheckpointResponse,
+        CheckpointSequenceNumber, SignedCheckpointSummary,
     },
 };
 use tokio::time::Instant;
@@ -454,10 +454,8 @@ where
             },
             |mut state, name, weight, result| {
                 Box::pin(async move {
-                    if let Ok(CheckpointResponse {
-                        info: AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint),
-                        ..
-                    }) = result
+                    if let Ok(CheckpointResponse::AuthenticatedCheckpoint { checkpoint, .. }) =
+                        result
                     {
                         state.responses.push((name, checkpoint));
                         state.good_weight += weight;
@@ -830,10 +828,11 @@ where
         .await
     {
         Ok(response) => {
-            if let AuthorityCheckpointInfo::CheckpointProposal {
+            if let CheckpointResponse::CheckpointProposal {
                 proposal,
                 prev_cert,
-            } = &response.info
+                proposal_contents,
+            } = response
             {
                 // Check if there is a latest checkpoint
                 if let Some(prev) = prev_cert {
@@ -849,7 +848,7 @@ where
                 }
 
                 // For some reason the proposal is empty?
-                if proposal.is_none() || response.detail.is_none() {
+                if proposal.is_none() || proposal_contents.is_none() {
                     return None;
                 }
 
@@ -863,7 +862,7 @@ where
 
                 let other_proposal = CheckpointProposal::new_from_signed_proposal_summary(
                     proposal.as_ref().unwrap().clone(),
-                    response.detail.unwrap(),
+                    proposal_contents.as_ref().unwrap().clone(),
                 );
 
                 let fragment = my_proposal.fragment_with(&other_proposal);

@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::{collections::HashSet, path::Path, sync::Arc};
 use sui_storage::default_db_options;
-use sui_types::messages_checkpoint::CheckpointProposal;
+use sui_types::messages_checkpoint::{CheckpointProposal, CheckpointProposalContents};
 use sui_types::{
     base_types::{AuthorityName, ExecutionDigests},
     batch::TxSequenceNumber,
@@ -22,9 +22,9 @@ use sui_types::{
     error::{SuiError, SuiResult},
     fp_ensure,
     messages_checkpoint::{
-        AuthenticatedCheckpoint, AuthorityCheckpointInfo, CertifiedCheckpointSummary,
-        CheckpointContents, CheckpointDigest, CheckpointFragment, CheckpointResponse,
-        CheckpointSequenceNumber, CheckpointSummary, SignedCheckpointSummary,
+        AuthenticatedCheckpoint, CertifiedCheckpointSummary, CheckpointContents, CheckpointDigest,
+        CheckpointFragment, CheckpointResponse, CheckpointSequenceNumber, CheckpointSummary,
+        SignedCheckpointSummary,
     },
 };
 use tracing::{debug, error, info};
@@ -207,7 +207,7 @@ impl CheckpointStore {
                 .iter()
                 .filter(|(_, seq)| seq < locals.proposal_next_transaction.as_ref().unwrap())
                 .map(|(digest, _)| digest);
-            let transactions = CheckpointContents::new(transactions);
+            let transactions = CheckpointProposalContents::new(transactions);
             let proposal = CheckpointProposal::new(
                 epoch,
                 checkpoint_sequence,
@@ -313,12 +313,10 @@ impl CheckpointStore {
             _ => None,
         };
 
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::CheckpointProposal {
-                proposal: signed_proposal,
-                prev_cert,
-            },
-            detail: contents,
+        Ok(CheckpointResponse::CheckpointProposal {
+            proposal: signed_proposal,
+            prev_cert,
+            proposal_contents: contents,
         })
     }
 
@@ -338,9 +336,9 @@ impl CheckpointStore {
                 .get(&c.summary().sequence_number)?,
             _ => None,
         };
-        Ok(CheckpointResponse {
-            info: AuthorityCheckpointInfo::AuthenticatedCheckpoint(checkpoint),
-            detail: contents,
+        Ok(CheckpointResponse::AuthenticatedCheckpoint {
+            checkpoint,
+            contents,
         })
     }
 
@@ -357,9 +355,11 @@ impl CheckpointStore {
         let previous_digest = self.get_prev_checkpoint_digest(sequence_number)?;
 
         // Create a causal order of all transactions in the checkpoint.
-        let ordered_contents = CheckpointContents {
-            transactions: effects_store.get_complete_causal_order(transactions, self)?,
-        };
+        let ordered_contents = CheckpointContents::new_with_causally_ordered_transactions(
+            effects_store
+                .get_complete_causal_order(transactions, self)?
+                .into_iter(),
+        );
 
         let summary =
             CheckpointSummary::new(epoch, sequence_number, &ordered_contents, previous_digest);
@@ -392,7 +392,7 @@ impl CheckpointStore {
         debug!(
             "Number of transactions in checkpoint {:?}: {:?}",
             checkpoint_sequence_number,
-            contents.transactions.len()
+            contents.size()
         );
 
         // Make a DB batch
@@ -724,7 +724,7 @@ impl CheckpointStore {
         committee: &Committee,
         effects_store: impl CausalOrder + PendCertificateForExecution,
     ) -> SuiResult {
-        self.check_checkpoint_transactions(contents.transactions.iter(), &effects_store)?;
+        self.check_checkpoint_transactions(contents.iter(), &effects_store)?;
         self.process_synced_checkpoint_certificate(checkpoint, contents, committee)
     }
 
@@ -827,7 +827,7 @@ impl CheckpointStore {
             0
         };
 
-        let transactions = CheckpointContents::new(self.tables.extra_transactions.keys());
+        let transactions = CheckpointProposalContents::new(self.tables.extra_transactions.keys());
         let size = transactions.transactions.len();
         info!(cp_seq=?checkpoint_sequence, ?size, "A new checkpoint proposal is created");
         debug!(
