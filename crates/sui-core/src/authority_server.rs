@@ -314,9 +314,7 @@ impl ValidatorService {
                 .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
             consensus_adapter
-                .submit(&ConsensusTransaction::UserTransaction(Box::new(
-                    certificate.clone(),
-                )))
+                .submit(&state.name, &certificate)
                 .await
                 .map_err(|e| tonic::Status::internal(e.to_string()))?;
         }
