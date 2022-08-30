@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { JsonRpcClient } from '../../src/rpc/client';
 import {
   mockRpcResponse,
@@ -56,7 +57,7 @@ describe('JSON-RPC Client', () => {
   });
 
   it('requestWithType should succeed if skipDataValidation if true', async () => {
-    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await requestAndValidate(OBJECT_WITH_WRONG_SCHEMA, true);
     expect(warn).toBeCalledWith(
       'The response returned from RPC server does not match the TypeScript definition.' +
