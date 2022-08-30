@@ -15,7 +15,7 @@ pub fn sui_test(args: TokenStream, item: TokenStream) -> TokenStream {
 
     let header = if cfg!(madsim) {
         quote! {
-            #[::madsim::sim_test(#(#args)*)]
+            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
         }
     } else {
         quote! {
@@ -44,7 +44,7 @@ pub fn sim_test(args: TokenStream, item: TokenStream) -> TokenStream {
 
     let result = if cfg!(madsim) {
         quote! {
-            #[::madsim::test(#(#args)*)]
+            #[::sui_simulator::sim_test(crate = "sui_simulator", #(#args)*)]
             #input
         }
     } else {
