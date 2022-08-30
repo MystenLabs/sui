@@ -17,6 +17,7 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 The following list includes the recent updates to Sui and the documentation:
 
 * You must now specify the key scheme type as an argument (`secp256k1` or `ed25519`)  when running either the `sui keytool generate` or `sui client new-address` commands, as shown in [Adding accounts to the client](../contribute/cli-client.md#adding-accounts-to-the-client) and [Make a Move call](../build/devnet.md#make-a-move-call).
+* Follow the [Cryptography (math)](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/math) example for a simple contract that hashes a piece of data using keccak256, recovers a [Secp256k1](https://crates.io/crates/secp256k1/) signature to its public key, and verifies a Secp256k1 signature, producing an event with the results.
 * [Bullshark](https://arxiv.org/abs/2201.05677) has replaced Tusk as the consensus component of the [Narwhal](https://github.com/MystenLabs/narwhal)-based [Sui consensus engine](../learn/architecture/consensus.md) for reduced latency and support for fairness with slower validators.
 * Sui now supports [shared objects](../build/objects.md#shared) that anyone can read or write to. For an example of creating and accessing a shared object, see [Shared Object](https://examples.sui.io/basics/shared-object.html#shared-object) on https://examples.sui.io/.
 * [Sui version 0.7.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.7.0) is now live in Devnet with numerous fixes and enhancements, including new designs for the [Sui Wallet Browser Extension](../explore/wallet-browser.md) and [Sui Explorer](https://explorer.devnet.sui.io/).
@@ -42,7 +43,7 @@ The links in the section point to information to help you start working with Sui
 Go to the [Move Quick Start](../build/move/index.md) for information about installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
 
 ### Start the Sui network with Sui CLI client
-See the [Sui CLI client Quick Start](../contribute/cli-client.md) for information about installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
+See the [Sui CLI client Quick Start](../build/cli-client.md) for information about installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
 
 ### Take the end-to-end tutorial
 Proceed to the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.
@@ -61,7 +62,7 @@ Navigate and search this site however you see fit. If you're new to Sui, we reco
 **Build** - includes information about how to:
 * [Install Sui](../build/install.md)
 * [Create smart contracts with Move](../build/move/index.md)
-* [Set up and configure a local Sui network](../contribute/cli-client.md)
+* [Set up and configure a local Sui network](../build/cli-client.md)
 * [Start a local JSON-RPC Gateway server](../build/json-rpc.md#start-local-rpc-server)
 
 **Explore** - includes more in-depth information about:

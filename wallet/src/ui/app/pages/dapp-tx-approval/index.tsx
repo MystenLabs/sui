@@ -107,13 +107,13 @@ export function DappTxApprovalPage() {
     );
 
     useEffect(() => {
-        if (txRequest?.type === 'move-call' && !txRequest.metadata) {
+        if (txRequest?.tx?.type === 'move-call' && !txRequest.metadata) {
             dispatch(
                 loadTransactionResponseMetadata({
                     txRequestID: txRequest.id,
-                    objectId: txRequest.tx.packageObjectId,
-                    moduleName: txRequest.tx.module,
-                    functionName: txRequest.tx.function,
+                    objectId: txRequest.tx.data.packageObjectId,
+                    moduleName: txRequest.tx.data.module,
+                    functionName: txRequest.tx.data.function,
                 })
             );
         }
@@ -121,17 +121,17 @@ export function DappTxApprovalPage() {
 
     const [tab, setTab] = useState<TabType | null>(null);
     const metadata = useMemo(() => {
-        if (txRequest?.type !== 'move-call' || !txRequest?.metadata) {
+        if (txRequest?.tx?.type !== 'move-call' || !txRequest?.metadata) {
             return null;
         }
-
+        const txData = txRequest.tx.data;
         const transfer: MetadataGroup = { name: 'Transfer', children: [] };
         const modify: MetadataGroup = { name: 'Modify', children: [] };
         const read: MetadataGroup = { name: 'Read', children: [] };
 
         txRequest.metadata.parameters.forEach((param, index) => {
             if (typeof param !== 'object') return;
-            const id = txRequest.tx.arguments[index] as string;
+            const id = txData.arguments[index] as string;
             const unwrappedType = unwrapTypeReference(param);
             if (!unwrappedType) return;
 
@@ -191,18 +191,24 @@ export function DappTxApprovalPage() {
 
     const valuesContent = useMemo(
         () =>
-            txRequest?.type === 'move-call'
+            txRequest?.tx?.type === 'move-call'
                 ? [
                       { label: 'Transaction Type', content: 'MoveCall' },
-                      { label: 'Function', content: txRequest.tx.function },
-                      { label: 'Gas Fees', content: txRequest.tx.gasBudget },
+                      {
+                          label: 'Function',
+                          content: txRequest.tx.data.function,
+                      },
+                      {
+                          label: 'Gas Fees',
+                          content: txRequest.tx.data.gasBudget,
+                      },
                   ]
                 : [
                       {
                           label: 'Transaction Type',
                           content: 'SerializedMoveCall',
                       },
-                      { label: 'Contents', content: txRequest?.txBytes },
+                      { label: 'Contents', content: txRequest?.tx?.data },
                   ],
         [txRequest]
     );
