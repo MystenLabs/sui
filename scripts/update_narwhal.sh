@@ -74,7 +74,11 @@ check_cargo_hakari
 # Debug prints
 CURRENT_NW=$(current_nw_revision)
 LATEST_NW=$(latest_nw_revision)
-echo "About to replace $CURRENT_NW with $LATEST_NW as the Narwhal pointer in Sui"
+if [[ "$CURRENT_NW" != "$LATEST_NW" ]]; then
+	echo "About to replace $CURRENT_NW with $LATEST_NW as the Narwhal pointer in Sui"
+else
+	exit 0
+fi
 
 # Edit the source & run hakari
 find ./ -iname "*.toml"  -execdir sed -i '' -re "s/$CURRENT_NW/$LATEST_NW/" '{}' \;
