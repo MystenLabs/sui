@@ -13,7 +13,7 @@ camino = "1.1.1"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde_with = "1.14.0"
-serde_yaml = "0.8.26"
+serde_yaml = "0.9.10"
 rand = "0.8.5"
 dirs = "4.0.0"
 multiaddr = "0.14.0"
