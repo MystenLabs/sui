@@ -456,66 +456,30 @@ impl<'b> GasMeter for GasStatus<'b> {
 
     fn charge_borrow_global(
         &mut self,
-        is_mut: bool,
-        is_generic: bool,
+        _is_mut: bool,
+        _is_generic: bool,
         _ty: impl TypeView,
-        is_success: bool,
+        _is_success: bool,
     ) -> PartialVMResult<()> {
-        use Opcodes::*;
-
-        if is_success {
-            let op = match (is_mut, is_generic) {
-                (false, false) => IMM_BORROW_GLOBAL,
-                (false, true) => IMM_BORROW_GLOBAL_GENERIC,
-                (true, false) => MUT_BORROW_GLOBAL,
-                (true, true) => MUT_BORROW_GLOBAL_GENERIC,
-            };
-
-            self.charge_instr_with_size(op, REFERENCE_SIZE)?;
-        }
-
-        Ok(())
+        Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE))
     }
 
     fn charge_exists(
         &mut self,
-        is_generic: bool,
+        _is_generic: bool,
         _ty: impl TypeView,
-        // TODO(Gas): see if we can get rid of this param
-        exists: bool,
+        _exists: bool,
     ) -> PartialVMResult<()> {
-        use Opcodes::*;
-
-        let op = if is_generic { EXISTS_GENERIC } else { EXISTS };
-        self.charge_instr_with_size(
-            op,
-            if exists {
-                REFERENCE_SIZE
-            } else {
-                MIN_EXISTS_DATA_SIZE
-            },
-        )
+        Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE))
     }
 
     fn charge_move_from(
         &mut self,
-        is_generic: bool,
+        _is_generic: bool,
         _ty: impl TypeView,
-        val: Option<impl ValueView>,
+        _val: Option<impl ValueView>,
     ) -> PartialVMResult<()> {
-        use Opcodes::*;
-
-        if let Some(val) = val {
-            let op = if is_generic {
-                MOVE_FROM_GENERIC
-            } else {
-                MOVE_FROM
-            };
-
-            self.charge_instr_with_size(op, val.legacy_abstract_memory_size())?;
-        }
-
-        Ok(())
+        Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE))
     }
 
     fn charge_move_to(
