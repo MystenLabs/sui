@@ -161,7 +161,7 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  /*
+  /**
     call only upon reconnecting to a node over websocket.
     calling multiple times on the same connection will result
     in multiple message handlers firing each time
@@ -180,7 +180,7 @@ export class JsonRpcProvider extends Provider {
           const filter = sub.filter;
           if(!filter || !onMessage)
             return Promise.resolve(null);
-          /*
+          /**
             re-subscribe to the same filter & replace the subscription id.
             we skip calling sui_unsubscribeEvent for the old sub id, because:
               * we assume this is being called after a reconnection
@@ -577,7 +577,7 @@ export class JsonRpcProvider extends Provider {
         [id],
         30000
       ) as boolean;
-      /*
+      /**
         if the connection closes before unsubscribe is called,
         the remote node will remove us from its subscribers list without notification,
         leading to removedOnNode being false. but if we still had a record of it locally,
