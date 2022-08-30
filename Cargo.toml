@@ -47,3 +47,11 @@ strip = 'debuginfo'
 # Do not strip any debug info.  This helps the widest set of profiling tools
 debug = true
 strip = 'none'
+
+[profile.simulator]
+inherits = "test"
+debug = true
+debug-assertions = true
+overflow-checks = true
+# opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
+opt-level = 1
