@@ -40,12 +40,11 @@ import { Client as WsRpcClient} from 'rpc-websockets';
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
-const httpRegex = new RegExp('^http');
-const portRegex = new RegExp(':[0-9]{1,5}$');
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
-  let wsUrl = httpUrl.replace(httpRegex, 'ws');
-  wsUrl = wsUrl.replace(portRegex, '');
-  return `${wsUrl}:${port ?? 9001}`;    // 9001 is full node websocket
+  const url = new URL(httpUrl);
+  url.protocol = url.protocol.replace('http', 'ws');
+  url.port = (port ?? 9001).toString();
+  return url.toString();
 };
 
 enum ConnectionState {
