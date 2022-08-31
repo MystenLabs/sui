@@ -1,26 +1,26 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::env;
+use std::net::SocketAddr;
+use std::time::Instant;
+
+pub use jsonrpsee::http_server;
+use jsonrpsee::types::Params;
+pub use jsonrpsee::ws_server;
+use jsonrpsee_core::middleware::{Headers, HttpMiddleware, MethodKind, WsMiddleware};
 use jsonrpsee_core::server::access_control::AccessControlBuilder;
 use jsonrpsee_core::server::rpc_module::RpcModule;
-
-use crate::http_server::{HttpServerBuilder, HttpServerHandle};
-use crate::ws_server::{WsServerBuilder, WsServerHandle};
-
-use jsonrpsee::types::Params;
-use jsonrpsee_core::middleware::{Headers, HttpMiddleware, MethodKind, WsMiddleware};
 use prometheus::{
     register_histogram_vec_with_registry, register_int_counter_vec_with_registry, HistogramVec,
     IntCounterVec,
 };
-use std::env;
-use std::net::SocketAddr;
-use std::time::Instant;
-use sui_open_rpc::{Module, Project};
 use tracing::info;
 
-pub use jsonrpsee::http_server;
-pub use jsonrpsee::ws_server;
+use sui_open_rpc::{Module, Project};
+
+use crate::http_server::{HttpServerBuilder, HttpServerHandle};
+use crate::ws_server::{WsServerBuilder, WsServerHandle};
 
 pub mod api;
 pub mod bcs_api;
@@ -37,8 +37,8 @@ pub enum ServerBuilder<M = ()> {
 }
 
 pub enum ServerHandle {
-    HttpHandler(HttpServerHandle),
-    WsHandle(WsServerHandle),
+    HttpHandler(HttpServerHandle, SocketAddr),
+    WsHandle(WsServerHandle, SocketAddr),
 }
 
 #[derive(Clone)]
@@ -50,15 +50,21 @@ pub enum ApiMetrics {
 impl ServerHandle {
     pub fn into_http_server_handle(self) -> Option<HttpServerHandle> {
         match self {
-            ServerHandle::HttpHandler(handle) => Some(handle),
+            ServerHandle::HttpHandler(handle, _) => Some(handle),
             _ => None,
         }
     }
 
     pub fn into_ws_server_handle(self) -> Option<WsServerHandle> {
         match self {
-            ServerHandle::WsHandle(handle) => Some(handle),
+            ServerHandle::WsHandle(handle, _) => Some(handle),
             _ => None,
+        }
+    }
+
+    pub fn local_addr(&self) -> &SocketAddr {
+        match self {
+            ServerHandle::HttpHandler(_, addr) | ServerHandle::WsHandle(_, addr) => addr,
         }
     }
 }
@@ -125,9 +131,31 @@ impl JsonRpcServerBuilder {
         })
     }
 
+    pub fn new_without_metrics_for_testing(use_websocket: bool) -> anyhow::Result<Self> {
+        let server_builder = if use_websocket {
+            ServerBuilder::WsBuilder(
+                WsServerBuilder::default()
+                    .set_middleware(ApiMetrics::WebsocketMetrics(WebsocketMetrics {})),
+            )
+        } else {
+            ServerBuilder::HttpBuilder(
+                HttpServerBuilder::default()
+                    .set_middleware(ApiMetrics::WebsocketMetrics(WebsocketMetrics {})),
+            )
+        };
+
+        let module = RpcModule::new(());
+
+        Ok(Self {
+            module,
+            server_builder,
+            rpc_doc: sui_rpc_doc(),
+        })
+    }
+
     pub fn register_module<T: SuiRpcModule>(&mut self, module: T) -> Result<(), anyhow::Error> {
         self.rpc_doc.add_module(T::rpc_doc_module());
-        self.module.merge(module.rpc()).map_err(Into::into)
+        Ok(self.module.merge(module.rpc())?)
     }
 
     pub async fn start(
@@ -137,20 +165,21 @@ impl JsonRpcServerBuilder {
         self.module
             .register_method("rpc.discover", move |_, _| Ok(self.rpc_doc.clone()))?;
         let methods_names = self.module.method_names().collect::<Vec<_>>();
-        let (handle, addr, server_name) = match self.server_builder {
+        let (handle, server_name) = match self.server_builder {
             ServerBuilder::HttpBuilder(http_builder) => {
                 let server = http_builder.build(listen_address).await?;
                 let addr = server.local_addr()?;
                 let handle = server.start(self.module)?;
-                (ServerHandle::HttpHandler(handle), addr, "JSON-RPC")
+                (ServerHandle::HttpHandler(handle, addr), "JSON-RPC")
             }
             ServerBuilder::WsBuilder(ws_builder) => {
                 let server = ws_builder.build(listen_address).await?;
                 let addr = server.local_addr()?;
                 let handle = server.start(self.module)?;
-                (ServerHandle::WsHandle(handle), addr, "Websocket")
+                (ServerHandle::WsHandle(handle, addr), "Websocket")
             }
         };
+        let addr = handle.local_addr();
         info!(local_addr =? addr, "Sui {server_name} server listening on {addr}");
         info!("Available {server_name} methods : {:?}", methods_names);
 

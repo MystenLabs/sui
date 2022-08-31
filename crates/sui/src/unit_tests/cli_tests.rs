@@ -79,7 +79,7 @@ async fn test_genesis() -> Result<(), anyhow::Error> {
     let wallet_conf =
         PersistedConfig::<SuiClientConfig>::read(&working_dir.join(SUI_CLIENT_CONFIG))?;
 
-    if let ClientType::Embedded(config) = &wallet_conf.gateway {
+    if let ClientType::Embedded(config) = &wallet_conf.client_type {
         assert_eq!(4, config.validator_set.len());
         assert_eq!(working_dir.join("client_db"), config.db_folder_path);
     } else {
@@ -112,7 +112,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
 
     let wallet_config = SuiClientConfig {
         keystore: KeystoreType::File(working_dir.join(SUI_KEYSTORE_FILENAME)),
-        gateway: ClientType::Embedded(GatewayConfig {
+        client_type: ClientType::Embedded(GatewayConfig {
             db_folder_path: working_dir.join("client_db"),
             validator_set: vec![ValidatorInfo {
                 name: "0".into(),
@@ -132,7 +132,6 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             ..Default::default()
         }),
         active_address: None,
-        fullnode: None,
     };
     let wallet_conf_path = working_dir.join(SUI_CLIENT_CONFIG);
     let wallet_config = wallet_config.persisted(&wallet_conf_path);
@@ -169,7 +168,7 @@ async fn test_objects_command() -> Result<(), anyhow::Error> {
     .print(true);
 
     let _object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -256,7 +255,7 @@ async fn test_object_info_get_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -278,7 +277,7 @@ async fn test_gas_command() -> Result<(), anyhow::Error> {
     let recipient = context.keystore.addresses().get(1).cloned().unwrap();
 
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -324,7 +323,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
 
     // publish the object basics package
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address1)
         .await?;
@@ -365,7 +364,7 @@ async fn test_move_call_args_linter_command() -> Result<(), anyhow::Error> {
     tokio::time::sleep(Duration::from_millis(2000)).await;
 
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address1)
         .await?;
@@ -494,7 +493,7 @@ async fn test_package_publish_command() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -559,7 +558,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     let recipient = context.keystore.addresses().get(1).cloned().unwrap();
 
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -650,7 +649,7 @@ async fn test_native_transfer() -> Result<(), anyhow::Error> {
     .print(true);
 
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -729,7 +728,7 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
 
     // Check that we indeed fetched for addr1
     let mut actual_objs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(addr1)
         .await
@@ -742,8 +741,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     let addr2 = context.keystore.addresses().get(1).cloned().unwrap();
     let resp = SuiClientCommands::Switch {
         address: Some(addr2),
-        gateway: None,
-        fullnode: None,
+        rpc: None,
+        ws: None,
     }
     .execute(&mut context)
     .await?;
@@ -755,8 +754,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
                 address: Some(addr2),
-                gateway: None,
-                fullnode: None,
+                rpc: None,
+                ws: None
             })
         )
     );
@@ -780,8 +779,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     // Switch the address
     let resp = SuiClientCommands::Switch {
         address: Some(new_addr),
-        gateway: None,
-        fullnode: None,
+        rpc: None,
+        ws: None,
     }
     .execute(&mut context)
     .await?;
@@ -792,8 +791,8 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
                 address: Some(new_addr),
-                gateway: None,
-                fullnode: None,
+                rpc: None,
+                ws: None
             })
         )
     );
@@ -873,8 +872,8 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
     let addr2 = context.keystore.addresses().get(1).cloned().unwrap();
     let resp = SuiClientCommands::Switch {
         address: Some(addr2),
-        gateway: None,
-        fullnode: None,
+        rpc: None,
+        ws: None,
     }
     .execute(&mut context)
     .await?;
@@ -884,8 +883,8 @@ async fn test_active_address_command() -> Result<(), anyhow::Error> {
             "{}",
             SuiClientCommandResult::Switch(SwitchResponse {
                 address: Some(addr2),
-                gateway: None,
-                fullnode: None
+                rpc: None,
+                ws: None
             })
         )
     );
@@ -898,7 +897,7 @@ fn get_gas_value(o: &SuiParsedObject) -> u64 {
 
 async fn get_object(id: ObjectID, context: &mut WalletContext) -> Option<SuiParsedObject> {
     let response = context
-        .gateway
+        .client
         .read_api()
         .get_parsed_object(id)
         .await
@@ -916,7 +915,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
 
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -958,7 +957,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
     .execute(&mut context)
     .await?;
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -999,7 +998,7 @@ async fn test_merge_coin() -> Result<(), anyhow::Error> {
 async fn test_split_coin() -> Result<(), anyhow::Error> {
     let (_network, mut context, address) = setup_network_and_wallet().await?;
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -1040,7 +1039,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .print(true);
 
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
@@ -1086,7 +1085,7 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     .print(true);
 
     let object_refs = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;

@@ -1,21 +1,22 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::anyhow;
-use async_recursion::async_recursion;
-use clap::Parser;
-use clap::Subcommand;
-use serde::Deserialize;
 use std::io::{stdin, stdout, Write};
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
-use sui_json_rpc_types::SuiData;
-use sui_sdk::crypto::KeystoreType;
+
+use anyhow::anyhow;
+use async_recursion::async_recursion;
+use clap::Parser;
+use clap::Subcommand;
+use serde::Deserialize;
+
 use sui_sdk::{
-    crypto::SuiKeystore,
+    crypto::{KeystoreType, SuiKeystore},
     json::SuiJsonValue,
+    rpc_types::SuiData,
     types::{
         base_types::{ObjectID, SuiAddress},
         crypto::Signature,
@@ -69,10 +70,12 @@ impl TicTacToe {
         let player_o = player_o.unwrap_or_else(|| self.keystore.addresses()[1]);
 
         // Force a sync of signer's state in gateway.
-        self.client
-            .wallet_sync_api()
-            .sync_account_state(player_x)
-            .await?;
+        if self.client.is_gateway() {
+            self.client
+                .wallet_sync_api()
+                .sync_account_state(player_x)
+                .await?;
+        }
 
         // Create a move call transaction using the TransactionBuilder API.
         let create_game_call = self

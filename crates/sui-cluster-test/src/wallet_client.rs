@@ -52,7 +52,7 @@ impl WalletClient {
     }
 
     pub fn get_gateway(&self) -> &SuiClient {
-        &self.wallet_context.gateway
+        &self.wallet_context.client
     }
 
     pub fn get_fullnode(&self) -> &SuiClient {

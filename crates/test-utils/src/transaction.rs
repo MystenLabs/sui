@@ -79,7 +79,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
             .collect();
 
         let data = context
-            .gateway
+            .client
             .transaction_builder()
             .publish(sender, all_module_bytes, None, 50000)
             .await
@@ -90,7 +90,7 @@ pub async fn publish_basics_package(context: &WalletContext, sender: SuiAddress)
     };
 
     let resp = context
-        .gateway
+        .client
         .quorum_driver()
         .execute_transaction(transaction)
         .await
@@ -116,7 +116,7 @@ pub async fn submit_move_transaction(
     debug!(?package_ref, ?arguments, "move_transaction");
 
     let data = context
-        .gateway
+        .client
         .transaction_builder()
         .move_call(
             sender,
@@ -135,7 +135,7 @@ pub async fn submit_move_transaction(
     let tx = Transaction::new(data, signature);
 
     context
-        .gateway
+        .client
         .quorum_driver()
         .execute_transaction(tx)
         .await

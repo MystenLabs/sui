@@ -1,19 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::{SuiClientCommands, WalletContext};
-use crate::config::SuiClientConfig;
-use crate::console::start_console;
-use crate::genesis_ceremony::{run, Ceremony};
-use crate::keytool::KeyToolCommand;
-use crate::sui_move::{self, execute_move_command};
-use anyhow::{anyhow, bail};
-use clap::*;
-use move_package::BuildConfig;
 use std::io::{stderr, stdout, Write};
 use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::{fs, io};
+
+use anyhow::{anyhow, bail};
+use clap::*;
+use move_package::BuildConfig;
+use tracing::info;
+
 use sui_config::gateway::GatewayConfig;
 use sui_config::{builder::ConfigBuilder, NetworkConfig, SUI_DEV_NET_URL, SUI_KEYSTORE_FILENAME};
 use sui_config::{genesis_config::GenesisConfig, SUI_GENESIS_FILENAME};
@@ -25,7 +22,13 @@ use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
 use sui_swarm::memory::Swarm;
 use sui_types::crypto::{KeypairTraits, SignatureScheme, SuiKeyPair};
-use tracing::info;
+
+use crate::client_commands::{SuiClientCommands, WalletContext};
+use crate::config::SuiClientConfig;
+use crate::console::start_console;
+use crate::genesis_ceremony::{run, Ceremony};
+use crate::keytool::KeyToolCommand;
+use crate::sui_move::{self, execute_move_command};
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Parser)]
@@ -282,9 +285,8 @@ impl SuiCommand {
 
                 let wallet_config = SuiClientConfig {
                     keystore: KeystoreType::File(keystore_path),
-                    gateway: ClientType::Embedded(wallet_gateway_config),
+                    client_type: ClientType::Embedded(wallet_gateway_config),
                     active_address,
-                    fullnode: None,
                 };
 
                 wallet_config.save(&client_path)?;
@@ -321,19 +323,24 @@ impl SuiCommand {
                 start_console(context, &mut stdout(), &mut stderr()).await
             }
             SuiCommand::Client { config, cmd, json } => {
-                let config = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
-                prompt_if_no_config(&config).await?;
-                let mut context = WalletContext::new(&config).await?;
+                let config_path = config.unwrap_or(sui_config_dir()?.join(SUI_CLIENT_CONFIG));
+                prompt_if_no_config(&config_path).await?;
+
+                // Server switch need to happen before context creation, or else it might fail due to previously misconfigured url.
+                if let Some(SuiClientCommands::Switch { rpc, ws, .. }) = &cmd {
+                    let config: SuiClientConfig = PersistedConfig::read(&config_path)?;
+                    let mut config = config.persisted(&config_path);
+                    SuiClientCommands::switch_server(&mut config, rpc, ws)?;
+                    // This will init the client to check if the urls are correct and reachable
+                    config.client_type.init().await?;
+                    config.save()?;
+                }
+
+                let mut context = WalletContext::new(&config_path).await?;
 
                 if let Some(cmd) = cmd {
                     // Do not sync if command is a gateway switch, as the current gateway might be unreachable and causes sync to panic.
-                    if !matches!(
-                        cmd,
-                        SuiClientCommands::Switch {
-                            gateway: Some(_),
-                            ..
-                        }
-                    ) {
+                    if !matches!(cmd, SuiClientCommands::Switch { rpc: Some(_), .. }) {
                         sync_accounts(&mut context).await?;
                     }
                     cmd.execute(&mut context).await?.print(!json);
@@ -413,9 +420,8 @@ async fn prompt_if_no_config(wallet_conf_path: &Path) -> Result<(), anyhow::Erro
             println!("Secret Recovery Phrase : [{phrase}]");
             SuiClientConfig {
                 keystore,
-                gateway: client,
+                client_type: client,
                 active_address: Some(new_address),
-                fullnode: None,
             }
             .persisted(wallet_conf_path)
             .save()?;

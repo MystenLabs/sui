@@ -232,7 +232,7 @@ impl SimpleFaucet {
         amount: u64,
     ) -> Result<TransactionData, anyhow::Error> {
         self.wallet
-            .gateway
+            .client
             .transaction_builder()
             .transfer_sui(signer, coin_id, budget, recipient, Some(amount))
             .await
@@ -264,7 +264,7 @@ impl SimpleFaucet {
         let tx = Transaction::new(data, signature);
         info!(tx_digest = ?tx.digest(), ?recipient, ?coin_id, ?uuid, "Broadcasting transfer obj txn");
         let response = context
-            .gateway
+            .client
             .quorum_driver()
             .execute_transaction(tx)
             .await?;
