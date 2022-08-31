@@ -30,15 +30,22 @@ function Search() {
     const [result, setResult] = useState<ResultType[] | null>(null);
     const [resultIndex, setResultIndex] = useState(0);
 
+    const [resultOpen, setResultOpen] = useState(false);
+
     const handleClickOutside = (event: MouseEvent): void => {
         if (
             wrapperref.current &&
             !wrapperref.current.contains(event.target as Node)
         ) {
-            setResult(null);
-            setInput('');
+            setResultOpen(false);
         }
     };
+
+    const handleFocus = useCallback(() => {
+        if (!resultOpen) {
+            setResultOpen(true);
+        }
+    }, [resultOpen]);
 
     const handleKeyPress = useCallback(
         (event: KeyboardEvent): void => {
@@ -155,6 +162,7 @@ function Search() {
                     placeholder="Search by Addresses / Objects / Transactions"
                     value={input}
                     onChange={handleTextChange}
+                    onFocus={handleFocus}
                     autoFocus
                     type="text"
                     autoComplete="off"
@@ -165,6 +173,7 @@ function Search() {
                     placeholder="Search Anything"
                     value={input}
                     onChange={handleTextChange}
+                    onFocus={handleFocus}
                     autoFocus
                     type="text"
                     autoComplete="off"
@@ -177,12 +186,14 @@ function Search() {
                     <SearchIcon className={styles.searchicon} />
                 </button>
             </form>
-            <SearchResults
-                result={result}
-                resultIndex={resultIndex}
-                setResultIndex={setResultIndex}
-                optionClick={handleOptionClick}
-            />
+            {resultOpen && (
+                <SearchResults
+                    result={result}
+                    resultIndex={resultIndex}
+                    setResultIndex={setResultIndex}
+                    optionClick={handleOptionClick}
+                />
+            )}
         </div>
     );
 }
