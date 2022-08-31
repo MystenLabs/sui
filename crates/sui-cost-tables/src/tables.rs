@@ -461,7 +461,9 @@ impl<'b> GasMeter for GasStatus<'b> {
         _ty: impl TypeView,
         _is_success: bool,
     ) -> PartialVMResult<()> {
-        Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE))
+        Err(PartialVMError::new(
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        ))
     }
 
     fn charge_exists(
@@ -470,7 +472,9 @@ impl<'b> GasMeter for GasStatus<'b> {
         _ty: impl TypeView,
         _exists: bool,
     ) -> PartialVMResult<()> {
-        Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE))
+        Err(PartialVMError::new(
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        ))
     }
 
     fn charge_move_from(
@@ -479,7 +483,9 @@ impl<'b> GasMeter for GasStatus<'b> {
         _ty: impl TypeView,
         _val: Option<impl ValueView>,
     ) -> PartialVMResult<()> {
-        Err(PartialVMError::new(StatusCode::UNKNOWN_OPCODE))
+        Err(PartialVMError::new(
+            StatusCode::UNKNOWN_INVARIANT_VIOLATION_ERROR,
+        ))
     }
 
     fn charge_move_to(
