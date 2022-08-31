@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData, SubscriptionEvent, EventType, MoveEventField, SubscriptionId, SuiEventEnvelope, SuiEventFilter } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, SubscriptionEvent, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventType, SuiEventFilter, SuiEventEnvelope, SubscriptionId, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
 import { BN } from "bn.js";
 import { Buffer } from "buffer";
 import { Base64DataBuffer } from "./serialization/base64";
@@ -696,12 +696,13 @@ export function isMoveEventField(obj: any, _argumentName?: string): obj is MoveE
 
 export function isEventType(obj: any, _argumentName?: string): obj is EventType {
     return (
-        (obj === "TransferToAddress" ||
-            obj === "TransferToObject" ||
-            obj === "FreezeObject" ||
-            obj === "ShareObject" ||
-            obj === "DeleteObjectID" ||
-            obj === "User")
+        (obj === "MoveEvent" ||
+            obj === "Publish" ||
+            obj === "TransferObject" ||
+            obj === "DeleteObject" ||
+            obj === "NewObject" ||
+            obj === "EpochChange" ||
+            obj === "Checkpoint")
     )
 }
 
@@ -812,8 +813,8 @@ export function isSuiChangeEpoch(obj: any, _argumentName?: string): obj is SuiCh
 
 export function isTransactionKindName(obj: any, _argumentName?: string): obj is TransactionKindName {
     return (
-        (obj === "TransferObject" ||
-            obj === "Publish" ||
+        (obj === "Publish" ||
+            obj === "TransferObject" ||
             obj === "Call" ||
             obj === "TransferSui" ||
             obj === "ChangeEpoch")

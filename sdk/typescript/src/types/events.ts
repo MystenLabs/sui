@@ -60,14 +60,14 @@ export type MoveEventField = {
     value: SuiJsonValue
 }
 
-// mirrors sui_framework::EventType
 export type EventType =
-    | "TransferToAddress"
-    | "TransferToObject"
-    | "FreezeObject"
-    | "ShareObject"
-    | "DeleteObjectID"
-    | "User";
+    | "MoveEvent"
+    | "Publish"
+    | "TransferObject"
+    | "DeleteObject"
+    | "NewObject"
+    | "EpochChange"
+    | "Checkpoint";
 
 // mirrors sui_json_rpc_types::SuiEventFilter
 export type SuiEventFilter =
