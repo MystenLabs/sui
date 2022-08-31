@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import mockTransactionData from '@mysten/sui-open-rpc/samples/transactions.json';
 
-import { isSuiTransactionResponse } from '../../src/index.guard';
+import { isSuiTransactionResponse } from '../../src/types/index.guard';
 
 describe('Test Transaction Definition', () => {
   it('Test against different transaction definitions', () => {

@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isTransactionBytes } from '../../index.guard';
+import { isTransactionBytes } from '../../types/index.guard';
 import { JsonRpcClient } from '../../rpc/client';
 import { Base64DataBuffer } from '../../serialization/base64';
 import { SuiAddress } from '../../types';
