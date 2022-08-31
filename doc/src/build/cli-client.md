@@ -410,13 +410,14 @@ not enough, there are two ways to add accounts to the Sui CLI client if needed.
 To create a new account, execute the `new-address` command:
 
 ```shell
-$ sui client new-address
+$ sui client new-address ed25519
 ```
+New address creation requires key scheme flag `{secp256k1 | ed25519}`. 
 
 The output shows a confirmation after the account has been created:
 
 ```
-Created new keypair for address : 0xc72cf3adcc4d11c03079cef2c8992aea5268677a
+Created new keypair for address with flag 0: [0xc72cf3adcc4d11c03079cef2c8992aea5268677a]
 ```
 
 ### Add existing accounts to `client.yaml` manually

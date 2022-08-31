@@ -273,6 +273,12 @@ impl PublicKey {
             PublicKey::Secp256k1KeyPair(_) => Secp256k1SuiSignature::SCHEME.flag(),
         }
     }
+    pub fn scheme(&self) -> SignatureScheme {
+        match self {
+            PublicKey::Ed25519KeyPair(_) => Ed25519SuiSignature::SCHEME,
+            PublicKey::Secp256k1KeyPair(_) => Secp256k1SuiSignature::SCHEME,
+        }
+    }
 }
 
 //
@@ -439,18 +445,18 @@ where
 
 /// Wrapper function to return SuiKeypair based on key scheme string
 pub fn random_key_pair_by_type(
-    key_scheme: Option<String>,
+    key_scheme: SignatureScheme,
 ) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error> {
-    match key_scheme.as_deref() {
-        Some("secp256k1") => {
+    match key_scheme.to_string().as_ref() {
+        "secp256k1" => {
             let (addr, key_pair): (_, Secp256k1KeyPair) = get_key_pair();
             Ok((addr, SuiKeyPair::Secp256k1SuiKeyPair(key_pair)))
         }
-        Some("ed25519") | None => {
+        "ed25519" => {
             let (addr, key_pair): (_, Ed25519KeyPair) = get_key_pair();
             Ok((addr, SuiKeyPair::Ed25519SuiKeyPair(key_pair)))
         }
-        Some(_) => Err(anyhow!("Unrecognized key scheme")),
+        _ => Err(anyhow!("Unrecognized key scheme")),
     }
 }
 
@@ -474,22 +480,21 @@ where
 
 /// Wrapper function to return SuiKeypair based on key scheme string with seedable rng.
 pub fn random_key_pair_by_type_from_rng<R>(
-    key_scheme: Option<String>,
+    key_scheme: SignatureScheme,
     csprng: &mut R,
 ) -> Result<(SuiAddress, SuiKeyPair), anyhow::Error>
 where
     R: rand::CryptoRng + rand::RngCore,
 {
-    match key_scheme.as_deref() {
-        Some("secp256k1") => {
+    match key_scheme {
+        SignatureScheme::Secp256k1 => {
             let (addr, key_pair): (_, Secp256k1KeyPair) = get_key_pair_from_rng(csprng);
             Ok((addr, SuiKeyPair::Secp256k1SuiKeyPair(key_pair)))
         }
-        Some("ed25519") | None => {
+        SignatureScheme::ED25519 => {
             let (addr, key_pair): (_, Ed25519KeyPair) = get_key_pair_from_rng(csprng);
             Ok((addr, SuiKeyPair::Ed25519SuiKeyPair(key_pair)))
         }
-        Some(_) => Err(anyhow!("Unrecognized key scheme")),
     }
 }
 
@@ -1330,6 +1335,41 @@ impl SignatureScheme {
         match self {
             SignatureScheme::ED25519 => 0x00,
             SignatureScheme::Secp256k1 => 0x01,
+        }
+    }
+
+    pub fn from_flag(flag: &str) -> Result<SignatureScheme, SuiError> {
+        let byte_int = flag
+            .parse::<u8>()
+            .map_err(|_| SuiError::KeyConversionError("Invalid key scheme".to_string()))?;
+        match byte_int {
+            0x00 => Ok(SignatureScheme::ED25519),
+            0x01 => Ok(SignatureScheme::Secp256k1),
+            _ => Err(SuiError::KeyConversionError(
+                "Invalid key scheme".to_string(),
+            )),
+        }
+    }
+}
+
+impl FromStr for SignatureScheme {
+    type Err = SuiError;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "ed25519" => Ok(SignatureScheme::ED25519),
+            "secp256k1" => Ok(SignatureScheme::Secp256k1),
+            _ => Err(SuiError::KeyConversionError(
+                "Invalid key scheme".to_string(),
+            )),
+        }
+    }
+}
+
+impl ToString for SignatureScheme {
+    fn to_string(&self) -> String {
+        match self {
+            SignatureScheme::ED25519 => "ed25519".to_string(),
+            SignatureScheme::Secp256k1 => "secp256k1".to_string(),
         }
     }
 }
