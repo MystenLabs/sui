@@ -56,7 +56,7 @@ export type SuiMoveNormalizedModule = {
   friends: SuiMoveModuleId[];
   structs: Record<string, SuiMoveNormalizedStruct>;
   exposed_functions: Record<string, SuiMoveNormalizedFunction>;
-}
+};
 
 export type SuiMoveModuleId = {
   address: string;
@@ -67,17 +67,17 @@ export type SuiMoveNormalizedStruct = {
   abilities: SuiMoveAbilitySet;
   type_parameters: SuiMoveStructTypeParameter[];
   fields: SuiMoveNormalizedField[];
-}
+};
 
 export type SuiMoveStructTypeParameter = {
   constraints: SuiMoveAbilitySet;
   is_phantom: boolean;
-}
+};
 
 export type SuiMoveNormalizedField = {
   name: string;
   type_: SuiMoveNormalizedType;
-}
+};
 
 export type SuiMoveNormalizedFunction = {
   visibility: SuiMoveVisibility;
@@ -87,30 +87,28 @@ export type SuiMoveNormalizedFunction = {
   return_: SuiMoveNormalizedType[];
 };
 
-export type SuiMoveVisibility = 
-  | "Private"
-  | "Public"
-  | "Friend";
+export type SuiMoveVisibility = 'Private' | 'Public' | 'Friend';
 
 export type SuiMoveTypeParameterIndex = number;
 
 export type SuiMoveAbilitySet = {
-  abilities: string[],
+  abilities: string[];
 };
 
-export type SuiMoveNormalizedType = (
+export type SuiMoveNormalizedType =
   | string
-  | {TypeParameter: SuiMoveTypeParameterIndex}
-  | {Reference: SuiMoveNormalizedType}
-  | {MutableReference: SuiMoveNormalizedType}
-  | {Vector: SuiMoveNormalizedType}
-  | {Struct: {
-    address: string,
-    module: string,
-    name: string,
-    type_arguments: SuiMoveNormalizedType[],
-  }}
-);
+  | { TypeParameter: SuiMoveTypeParameterIndex }
+  | { Reference: SuiMoveNormalizedType }
+  | { MutableReference: SuiMoveNormalizedType }
+  | { Vector: SuiMoveNormalizedType }
+  | {
+      Struct: {
+        address: string;
+        module: string;
+        name: string;
+        type_arguments: SuiMoveNormalizedType[];
+      };
+    };
 
 export type SuiObject = {
   /** The meat of the object */

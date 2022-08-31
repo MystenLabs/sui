@@ -21,4 +21,4 @@ export * from './signers/raw-signer';
 export * from './signers/signer-with-provider';
 
 export * from './types';
-export * from './index.guard';
+export * from './types/index.guard';

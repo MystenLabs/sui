@@ -13,7 +13,7 @@ import {
   isSuiMoveNormalizedModule,
   isSuiMoveNormalizedFunction,
   isSuiMoveNormalizedStruct,
-} from '../index.guard';
+} from '../types/index.guard';
 import {
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
