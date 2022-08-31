@@ -171,9 +171,9 @@ export class JsonRpcProvider extends Provider {
       return;
 
     try {
-      let newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
+      const newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
 
-      let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
+      const newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
         Array.from(this.activeSubscriptions.values())
         .map(async sub => {
           const onMessage = sub.onMessage;
