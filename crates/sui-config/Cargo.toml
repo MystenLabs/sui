@@ -26,7 +26,7 @@ move-binary-format = { git = "https://github.com/move-language/move", rev = "70b
 move-package = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
-narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "57ef1b03d8997f5b54a7cae6d147e2ada1529312", package = "config" }
+narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "c045e2da531f84962ac0b80c33a884f1dd751094", package = "config" }
 
 
 sui-framework = { path = "../sui-framework" }
