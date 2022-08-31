@@ -21,7 +21,10 @@
         "stylelint:fix": "pnpm stylelint:check --fix",
         "lint": "pnpm eslint:check && pnpm prettier:check && pnpm stylelint:check",
         "lint:fix": "pnpm eslint:fix && pnpm prettier:fix && pnpm stylelint:fix",
-        "preview": "vite preview"
+        "preview": "vite preview",
+        "storybook": "start-storybook --port 6007",
+        "build-storybook": "build-storybook",
+        "preview-storybook": "http-server storybook-static --port 6007 --silent"
     },
     "dependencies": {
         "@mysten/sui.js": "workspace:*",
@@ -45,6 +48,12 @@
         "vanilla-cookieconsent": "^2.8.0"
     },
     "devDependencies": {
+        "@storybook/addon-a11y": "^6.5.10",
+        "@storybook/addon-docs": "^6.5.10",
+        "@storybook/addon-essentials": "^6.5.10",
+        "@storybook/builder-vite": "^0.2.2",
+        "@storybook/react": "^6.5.10",
+        "@storybook/test-runner": "^0.7.0",
         "@testing-library/dom": "^8.17.1",
         "@testing-library/jest-dom": "^5.16.2",
         "@testing-library/react": "^13.3.0",
