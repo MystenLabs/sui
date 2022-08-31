@@ -153,7 +153,7 @@ pub const MIN_EXISTS_DATA_SIZE: AbstractMemorySize = AbstractMemorySize::new(100
 /// The cost tables, keyed by the serialized form of the bytecode instruction.  We use the
 /// serialized form as opposed to the instruction enum itself as the key since this will be the
 /// on-chain representation of bytecode instructions in the future.
-#[derive(Clone, Debug, Serialize, PartialEq, Deserialize)]
+#[derive(Clone, Debug, Serialize, PartialEq, Eq, Deserialize)]
 pub struct CostTable {
     pub instruction_table: Vec<GasCost>,
 }
