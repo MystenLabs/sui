@@ -83,7 +83,7 @@ export type SuiEventFilter =
     | { "Or" : [SuiEventFilter, SuiEventFilter] };
 
 export type SuiEventEnvelope = {
-    timestamp: bigint | number,
+    timestamp: number,
     txDigest: TransactionDigest,
     event: SuiEvent
 }
