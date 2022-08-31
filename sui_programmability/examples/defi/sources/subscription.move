@@ -1,14 +1,37 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-/// Module implementing generic Subscription with limited number of uses.
+/// This example introduces a `Subscription` type - a `Capability`-like object
+/// with a limited number of uses. Once all of them are used, the subscription can
+/// be renewed or destroyed.
 ///
-/// This specific example shows how this model can be used within the AMM
-/// context to charge developers who make use of multiple shared objects
-/// which is expected to slow down all pools used.
+/// Design of this module implies that an application will implement the subscription
+/// interface using a `Witness` pattern, while some features are given by default
+/// and do not require implementation.
 ///
-/// The module itself makes use of HotPotato and Witness-based interface
-/// which can be implemented by other applications based on their needs.
+///
+/// The problem that illustrates usage of this module might be common in Sui. To
+/// get to it, we need to provide some background:
+///
+/// - Shared object transactions in Sui require consensus; and for each shared
+/// object there's a sequence of transactions which use / reference it.
+///
+/// - Mixing multiple shared objects within the same transaction potentially leads
+/// to all objects being slowed down depending on how loaded they are.
+///
+/// - The only way to effectively use multiple shared objects is to be able to call
+/// a function in Move which makes use of them. And these actions require `public`
+/// function visibility.
+///
+/// Case in this example is a mocked up liquidity pool implementation with two
+/// functions: `swap` - available only directly because of the `entry` visibility
+/// and a `dev_swap` - doing the same thing but can be used on chain (ie for
+/// cross-chain swaps), and can be used in a function with other shared objects.
+///
+/// The former is free because this functionality is meant to be available to
+/// everyone. While the latter gives additional profits to the liquidity pool by
+/// charging extensive (and potentially slowing) usage.
+/// 
 module defi::dev_pass {
     use sui::tx_context::{TxContext};
     use sui::object::{Self, UID};
@@ -17,7 +40,7 @@ module defi::dev_pass {
     /// For when Subscription object no longer has uses.
     const ENoUses: u64 = 0;
 
-    /// Owned object from which SingleUses are spawn
+    /// Owned object from which SingleUses are spawn.
     struct Subscription<phantom T> has key {
         id: UID,
         uses: u64
@@ -38,7 +61,7 @@ module defi::dev_pass {
         SingleUse {}
     }
 
-    /// Burn a subscription without checking for number of uses. Allows storage refunds
+    /// Burn a subscription without checking for number of uses. Allows Sui storage refunds
     /// when subscription is no longer needed.
     entry public fun destroy<T>(s: Subscription<T>) {
         let Subscription { id, uses: _ } = s;
@@ -48,6 +71,8 @@ module defi::dev_pass {
     // ======== Implementable Functions ========
 
     /// Function to issue new `Subscription` with a specified number of uses.
+    /// Implementable by an external module with a witness parameter T. Number of
+    /// uses is determined by the actual implementation.
     public fun issue_subscription<T: drop>(_w: T, uses: u64, ctx: &mut TxContext): Subscription<T> {
         Subscription {
             id: object::new(ctx),
@@ -56,16 +81,22 @@ module defi::dev_pass {
     }
 
     /// Increase number of uses in the subscription.
+    /// Implementable by an external module with a witness parameter T.
     public fun add_uses<T: drop>(_w: T, s: &mut Subscription<T>, uses: u64) {
         s.uses = s.uses + uses;
     }
 
     /// Confirm a use of a pass. Verified by the module that implements "Subscription API".
+    /// Implementable by an external module with a witness parameter T. Confirmation is only
+    /// available if the third party implements it and recognizes the use.
     public fun confirm_use<T: drop>(_w: T, pass: SingleUse<T>) {
         let SingleUse { } = pass;
     }
 
     /// Allow applications customize transferability of the `Subscription`.
+    /// Implementable by an external module with a witness parameter T. Module can define whether
+    /// a `Subscription` can be transferred to another account or not. Omitting this implementation
+    /// will mean that the `Subscription` can not be transferred.
     public fun transfer<T: drop>(_w: T, s: Subscription<T>, to: address) {
         transfer::transfer(s, to)
     }
