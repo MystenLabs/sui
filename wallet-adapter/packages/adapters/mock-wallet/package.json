@@ -4,7 +4,6 @@
   "description": "",
   "license": "Apache-2.0",
   "author": "Mysten Labs <build@mystenlabs.com>",
-  "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",

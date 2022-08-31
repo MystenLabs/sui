@@ -60,3 +60,4 @@ jobs:
           install: false
           start: pnpm dev:static
           working-directory: ./explorer/client
+          spec: cypress/e2e/static/*
