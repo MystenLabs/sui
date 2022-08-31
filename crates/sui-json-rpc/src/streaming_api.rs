@@ -16,7 +16,9 @@ use sui_core::transaction_streamer::TransactionStreamer;
 use sui_json_rpc_types::SuiCertifiedTransaction;
 use sui_json_rpc_types::SuiTransactionEffects;
 use sui_json_rpc_types::SuiTransactionFilter;
+use sui_json_rpc_types::SuiTransactionResponse;
 use sui_open_rpc::Module;
+use sui_types::filter::TransactionFilter;
 use tracing::warn;
 
 pub struct TransactionStreamingApiImpl {
@@ -37,27 +39,32 @@ impl TransactionStreamingApiImpl {
 impl TransactionStreamingApiServer for TransactionStreamingApiImpl {
     fn subscribe_transaction(
         &self,
-        mut sink: SubscriptionSink,
+        sink: SubscriptionSink,
         filter: SuiTransactionFilter,
     ) -> SubscriptionResult {
-        let filter = match filter.try_into() {
-            Ok(filter) => filter,
-            Err(e) => {
-                let e = jsonrpsee_core::Error::from(e);
-                warn!(error = ?e, "Rejecting subscription request.");
-                return Ok(sink.reject(e)?);
-            }
-        };
+        let filter: TransactionFilter = filter.into();
 
         let state = self.state.clone();
         let stream = self.transaction_streamer.subscribe(filter);
-        let stream = stream.map(move |(tx_cert, signed_effects)| {
-            SuiCertifiedTransaction::try_from(tx_cert).and_then(|tx_cert| {
-                SuiTransactionEffects::try_from(signed_effects.effects, state.module_cache.as_ref())
-                    .map(|effects| (tx_cert, effects))
-            })
+        let stream = stream.then(move |(tx_cert, signed_effects)| {
+            let state_clone = state.clone();
+            async move {
+                let sui_tx_cert = SuiCertifiedTransaction::try_from(tx_cert)?;
+                let sui_tx_effects = SuiTransactionEffects::try_from(
+                    signed_effects.effects,
+                    state_clone.module_cache.as_ref(),
+                )?;
+                let digest = sui_tx_cert.transaction_digest;
+                let ts = state_clone.get_timestamp_ms(&digest).await.unwrap_or(None);
+                Ok::<SuiTransactionResponse, anyhow::Error>(SuiTransactionResponse {
+                    certificate: sui_tx_cert,
+                    effects: sui_tx_effects,
+                    timestamp_ms: ts,
+                    parsed_data: None,
+                })
+            }
         });
-        spawn_subscription(sink, stream);
+        spawn_subscription(sink, Box::pin(stream));
 
         Ok(())
     }

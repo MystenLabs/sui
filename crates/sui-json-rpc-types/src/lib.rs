@@ -2132,14 +2132,12 @@ pub enum SuiTransactionFilter {
     Any,
 }
 
-impl TryInto<TransactionFilter> for SuiTransactionFilter {
-    type Error = anyhow::Error;
-
-    fn try_into(self) -> Result<TransactionFilter, anyhow::Error> {
+impl From<SuiTransactionFilter> for TransactionFilter {
+    fn from(filter: SuiTransactionFilter) -> Self {
         use SuiTransactionFilter::*;
-        Ok(match self {
+        match filter {
             Any => TransactionFilter::Any,
-        })
+        }
     }
 }
 

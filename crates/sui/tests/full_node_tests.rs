@@ -27,9 +27,8 @@ use tracing::info;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
 use sui_config::utils::get_available_port;
 use sui_json_rpc_types::{
-    SuiCertifiedTransaction, SuiEvent, SuiEventEnvelope, SuiEventFilter,
-    SuiExecuteTransactionResponse, SuiMoveStruct, SuiMoveValue, SuiObjectRead,
-    SuiTransactionEffects, SuiTransactionFilter,
+    SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveStruct,
+    SuiMoveValue, SuiObjectRead, SuiTransactionFilter, SuiTransactionResponse,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
@@ -510,7 +509,7 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
     let (node, ws_client) = set_up_subscription(&swarm).await?;
 
-    let mut sub: Subscription<(SuiCertifiedTransaction, SuiTransactionEffects)> = ws_client
+    let mut sub: Subscription<SuiTransactionResponse> = ws_client
         .subscribe(
             "sui_subscribeTransaction",
             rpc_params![SuiTransactionFilter::Any],
@@ -528,8 +527,8 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
     // Wait for streaming
     for digest in digests.iter().take(3) {
         match timeout(Duration::from_secs(3), sub.next()).await {
-            Ok(Some(Ok((tx_cert, _tx_effects)))) => {
-                assert_eq!(&tx_cert.transaction_digest, digest);
+            Ok(Some(Ok(resp))) => {
+                assert_eq!(&resp.certificate.transaction_digest, digest);
             }
             other => panic!(
                 "Failed to get Ok item from transaction streaming, but {:?}",
@@ -645,7 +644,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
     let (node, jsonrpc_client) = set_up_jsonrpc(&swarm, None).await?;
-    let (transfered_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
+    let (transferred_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
