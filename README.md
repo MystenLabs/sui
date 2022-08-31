@@ -8,7 +8,7 @@
 
 * To learn how to use Sui, take our [end-to-end tutorial](doc/src/explore/tutorials.md).
 * To jump right into building smart contract applications on top of Sui, start at the [Move Smart Contract Quick Start](doc/src/build/move/index.md).
-* To experiment with the Sui CLI client, check out [Sui CLI client Quick Start](doc/src/contribute/cli-client.md).
+* To experiment with the Sui CLI client, check out [Sui CLI client Quick Start](doc/src/build/cli-client.md).
 * To understand what's possible by browsing Move code built on top of Sui, review the [examples](doc/src/explore/examples.md).
 * To start coding against Sui's JSON-RPC APIs, start at [JSON-RPC API Quick Start](doc/src/build/json-rpc.md).
 * To learn what distinguishes Sui from other blockchain systems, see [How Sui Differs?](doc/src/learn/sui-compared.md).

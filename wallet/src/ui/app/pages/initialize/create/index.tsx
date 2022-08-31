@@ -7,7 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import Button from '_app/shared/button';
 import ExternalLink from '_components/external-link';
 import Icon, { SuiIcons } from '_components/icon';
-import { ToS_LINK } from '_shared/constants';
+import { PRIVACY_POLICY_LINK, ToS_LINK } from '_shared/constants';
 import Loading from '_src/ui/app/components/loading';
 import { useAppDispatch, useAppSelector } from '_src/ui/app/hooks';
 import { createMnemonic } from '_src/ui/app/redux/slices/account';
@@ -49,10 +49,18 @@ const CreatePage = () => {
                         />
                         <span className={st.checkBox}></span>
                         <span className={st.checkboxLabel}>
-                            I have read and agree to the{' '}
+                            I agree to the{' '}
                             <ExternalLink href={ToS_LINK} showIcon={false}>
                                 Terms of Service
+                            </ExternalLink>{' '}
+                            and acknowledge the{' '}
+                            <ExternalLink
+                                href={PRIVACY_POLICY_LINK}
+                                showIcon={false}
+                            >
+                                Privacy Policy
                             </ExternalLink>
+                            .
                         </span>
                     </label>
                     <div>

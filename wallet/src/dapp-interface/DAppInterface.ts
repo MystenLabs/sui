@@ -90,17 +90,25 @@ export class DAppInterface {
         return mapToPromise(
             this.send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
                 type: 'execute-transaction-request',
-                transaction,
+                transaction: {
+                    type: 'move-call',
+                    data: transaction,
+                },
             }),
             (response) => response.result
         );
     }
 
-    public executeSerializedMoveCall(transactionBytes: Uint8Array) {
+    public executeSerializedMoveCall(tx: string | Uint8Array) {
+        const data =
+            typeof tx === 'string' ? tx : Buffer.from(tx).toString('base64');
         return mapToPromise(
             this.send<ExecuteTransactionRequest, ExecuteTransactionResponse>({
                 type: 'execute-transaction-request',
-                transactionBytes,
+                transaction: {
+                    type: 'serialized-move-call',
+                    data,
+                },
             }),
             (response) => response.result
         );

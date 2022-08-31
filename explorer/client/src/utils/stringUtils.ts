@@ -40,7 +40,7 @@ export function transformURL(url: string) {
 export function truncate(fullStr: string, strLen: number, separator?: string) {
     if (fullStr.length <= strLen) return fullStr;
 
-    separator = separator || '...';
+    separator = separator || '\u{2026}';
 
     const sepLen = separator.length,
         charsToShow = strLen - sepLen,

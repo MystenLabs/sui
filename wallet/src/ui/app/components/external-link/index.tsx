@@ -30,7 +30,8 @@ function ExternalLink({
             rel="noreferrer"
             title={title}
         >
-            {children} {showIcon ? <Icon icon="link-45deg" /> : null}
+            {children}
+            {showIcon ? <Icon icon="link-45deg" /> : null}
         </a>
     );
 }

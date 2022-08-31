@@ -69,7 +69,7 @@ function TxForIDView({ showData }: { showData: TxnData[] | undefined }) {
                 transactionId: [
                     {
                         url: data.txId,
-                        name: truncate(data.txId, 26, '...'),
+                        name: truncate(data.txId, 26),
                         category: 'transactions',
                         isLink: true,
                         copy: false,

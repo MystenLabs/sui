@@ -225,7 +225,7 @@ sword creation and transfer and put them into the `m1.move` file:
 ``` rust
     public entry fun sword_create(magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
         use sui::transfer;
-        use sui::tx_context;
+
         // create a sword
         let sword = Sword {
             id: object::new(ctx),
