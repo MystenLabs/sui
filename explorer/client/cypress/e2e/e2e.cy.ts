@@ -261,5 +261,4 @@ describe('End-to-end Tests', () => {
             cy.get('[data-testid=tx] td').should('have.length.greaterThan', 0);
         });
     });
-
 });
