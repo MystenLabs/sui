@@ -118,9 +118,10 @@ impl<K: Hash + std::cmp::Eq + Send + Sync + 'static> MutexTable<K> {
     pub async fn acquire_locks<I>(&self, object_iter: I) -> Vec<LockGuard>
     where
         I: Iterator<Item = K>,
+        K: Ord,
     {
         let mut objects: Vec<K> = object_iter.into_iter().collect();
-        objects.sort_by_key(|a| self.get_lock_idx(a));
+        objects.sort_unstable();
         objects.dedup();
 
         let mut guards = Vec::with_capacity(objects.len());
