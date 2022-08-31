@@ -192,7 +192,7 @@ export class JsonRpcProvider extends Provider {
       );
 
       newSubsArr.forEach(entry => {
-        if(entry === null) return;
+        if (entry === null) return;
         const filter = entry.filter;
         const onMessage = entry.onMessage;
         newSubs.set(entry.id, { filter, onMessage });
