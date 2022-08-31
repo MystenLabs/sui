@@ -12,14 +12,6 @@ Dependencies are managed using [`pnpm`](https://pnpm.io/). You can start by inst
 $ pnpm install
 ```
 
-Currently the Wallet depends on an unreleased version of `sui.js`, the TypeScript SDK for Sui. Therefore, you need to build the SDK first:
-
-```bash
-$ pnpm --filter @mysten/sui.js... build
-```
-
-> **Note:** If you are updating the SDK and Explorer at the same time, you need to re-build the SDK whenever you makes changes for it to be reflected in the Explorer.
-
 ## Build in watch mode (dev)
 
 To build the extension and watch for changes run:

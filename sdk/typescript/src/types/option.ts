@@ -9,7 +9,7 @@ export type Option<T> = T | {
 }
 
 export function getOption<T>(option: Option<T>): T | undefined {
-    if (typeof option === 'object' && 'type' in option && option.type.startsWith('0x1::option::Option<')) {
+    if (typeof option === 'object' && option !== null && 'type' in option && option.type.startsWith('0x1::option::Option<')) {
         return undefined;
     }
     return option as T;

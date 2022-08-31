@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{authority_store_tables::AuthorityStoreTables, *};
-use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -713,11 +712,18 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // We can't write this until after sequencing succeeds (which happens in
         // batch_update_objects), as effects_exists is used as a check in many places
         // for "did the tx finish".
-        self.tables.effects.insert(transaction_digest, effects)?;
+        let batch = self.tables.effects.batch();
+        let batch = batch.insert_batch(
+            &self.tables.effects,
+            [(transaction_digest, effects)].into_iter(),
+        )?;
 
         // Writing to executed_sequence must be done *after* writing to effects, so that we never
         // broadcast a sequenced transaction (via the batch system) for which no effects can be
         // retrieved.
+        //
+        // Currently we write both effects and executed_sequence in the same batch to avoid
+        // consistency issues between the two (see #4395 for more details).
         //
         // Note that this write may be done repeatedly when retrying a tx. The
         // sequence_transaction call in batch_update_objects assigns a sequence number to
@@ -729,10 +735,16 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             ?effects_digest,
             "storing sequence number to executed_sequence"
         );
-        self.tables.executed_sequence.insert(
-            &assigned_seq,
-            &ExecutionDigests::new(*transaction_digest, *effects_digest),
+        let batch = batch.insert_batch(
+            &self.tables.executed_sequence,
+            [(
+                assigned_seq,
+                ExecutionDigests::new(*transaction_digest, *effects_digest),
+            )]
+            .into_iter(),
         )?;
+
+        batch.write()?;
 
         Ok(())
     }
@@ -1162,16 +1174,15 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     pub fn transactions_in_seq_range(
         &self,
-        start: GatewayTxSeqNumber,
-        end: GatewayTxSeqNumber,
-    ) -> SuiResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        start: u64,
+        end: u64,
+    ) -> SuiResult<Vec<(u64, ExecutionDigests)>> {
         Ok(self
             .tables
             .executed_sequence
             .iter()
             .skip_to(&start)?
             .take_while(|(seq, _tx)| *seq < end)
-            .map(|(seq, exec)| (seq, exec.transaction))
             .collect())
     }
 

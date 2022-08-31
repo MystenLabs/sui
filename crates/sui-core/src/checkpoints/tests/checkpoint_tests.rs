@@ -202,7 +202,9 @@ fn make_checkpoint_db() {
     assert!(cps
         .update_new_checkpoint(
             0,
-            &CheckpointContents::new([t1, t2, t4, t5].into_iter()),
+            &CheckpointContents::new_with_causally_ordered_transactions(
+                [t1, t2, t4, t5].into_iter()
+            ),
             PendCertificateForExecutionNoop
         )
         .is_err());
@@ -213,7 +215,7 @@ fn make_checkpoint_db() {
 
     cps.update_new_checkpoint(
         0,
-        &CheckpointContents::new([t1, t2, t4, t5].into_iter()),
+        &CheckpointContents::new_with_causally_ordered_transactions([t1, t2, t4, t5].into_iter()),
         PendCertificateForExecutionNoop,
     )
     .unwrap();
@@ -275,7 +277,7 @@ fn make_proposals() {
     assert!(cps1
         .update_new_checkpoint(
             0,
-            &CheckpointContents::new(ckp_items.iter().cloned()),
+            &CheckpointContents::new_with_causally_ordered_transactions(ckp_items.iter().cloned()),
             PendCertificateForExecutionNoop
         )
         .is_err());
@@ -294,25 +296,25 @@ fn make_proposals() {
 
     cps1.update_new_checkpoint(
         0,
-        &CheckpointContents::new(ckp_items.iter().cloned()),
+        &CheckpointContents::new_with_causally_ordered_transactions(ckp_items.iter().cloned()),
         PendCertificateForExecutionNoop,
     )
     .unwrap();
     cps2.update_new_checkpoint(
         0,
-        &CheckpointContents::new(ckp_items.iter().cloned()),
+        &CheckpointContents::new_with_causally_ordered_transactions(ckp_items.iter().cloned()),
         PendCertificateForExecutionNoop,
     )
     .unwrap();
     cps3.update_new_checkpoint(
         0,
-        &CheckpointContents::new(ckp_items.iter().cloned()),
+        &CheckpointContents::new_with_causally_ordered_transactions(ckp_items.iter().cloned()),
         PendCertificateForExecutionNoop,
     )
     .unwrap();
     cps4.update_new_checkpoint(
         0,
-        &CheckpointContents::new(ckp_items.iter().cloned()),
+        &CheckpointContents::new_with_causally_ordered_transactions(ckp_items.iter().cloned()),
         PendCertificateForExecutionNoop,
     )
     .unwrap();
@@ -412,12 +414,12 @@ fn latest_proposal() {
     // No checkpoint no proposal
 
     let response = cps1.handle_proposal(false).expect("no errors");
-    assert!(response.detail.is_none());
     assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::CheckpointProposal {
+        response,
+        CheckpointResponse::CheckpointProposal {
             proposal: None,
             prev_cert: None,
+            proposal_contents: None,
         }
     ));
 
@@ -435,48 +437,46 @@ fn latest_proposal() {
 
     // Check the latest checkpoint with no detail
     let response = cps1.handle_proposal(false).expect("no errors");
-    assert!(response.detail.is_none());
-    assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::CheckpointProposal { .. }
-    ));
-    if let AuthorityCheckpointInfo::CheckpointProposal {
+    if let CheckpointResponse::CheckpointProposal {
         proposal,
         prev_cert,
-    } = response.info
+        proposal_contents,
+    } = response
     {
         assert!(proposal.is_some());
         assert!(prev_cert.is_none());
+        assert!(proposal_contents.is_none());
 
         let current_proposal = proposal.unwrap();
         current_proposal
             .verify(&committee, None)
             .expect("no signature error");
         assert_eq!(current_proposal.summary.sequence_number, 0);
+    } else {
+        panic!("Unexpected response");
     }
 
     // --- TEST 2 ---
 
     // Check the latest checkpoint with detail
     let response = cps1.handle_proposal(true).expect("no errors");
-    assert!(response.detail.is_some());
-    assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::CheckpointProposal { .. }
-    ));
-    if let AuthorityCheckpointInfo::CheckpointProposal {
+    if let CheckpointResponse::CheckpointProposal {
         proposal,
         prev_cert,
-    } = response.info
+        proposal_contents,
+    } = response
     {
         assert!(proposal.is_some());
         assert!(prev_cert.is_none());
+        assert!(proposal_contents.is_some());
 
         let current_proposal = proposal.unwrap();
         current_proposal
-            .verify(&committee, response.detail.as_ref())
+            .verify(&committee, proposal_contents.as_ref())
             .expect("no signature error");
         assert_eq!(current_proposal.summary.sequence_number, 0);
+    } else {
+        panic!("Unexpected response");
     }
 
     // ---
@@ -535,13 +535,12 @@ fn latest_proposal() {
         .unwrap();
 
     let response = cps1.handle_proposal(false).expect("no errors");
-    assert!(response.detail.is_none());
-    // The proposal should have been cleared now.
     assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::CheckpointProposal {
+        response,
+        CheckpointResponse::CheckpointProposal {
             proposal: None,
             prev_cert: None,
+            proposal_contents: None,
         }
     ));
 
@@ -555,14 +554,11 @@ fn latest_proposal() {
 
     // Get the full proposal with previous proposal
     let response = cps1.handle_proposal(true).expect("no errors");
-    assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::CheckpointProposal { .. }
-    ));
-    if let AuthorityCheckpointInfo::CheckpointProposal {
+    if let CheckpointResponse::CheckpointProposal {
         proposal,
         prev_cert,
-    } = response.info
+        ..
+    } = response
     {
         assert!(proposal.is_some());
         assert!(matches!(prev_cert, Some(_)));
@@ -572,6 +568,8 @@ fn latest_proposal() {
             .verify(&committee, None)
             .expect("no signature error");
         assert_eq!(current_proposal.summary.sequence_number, 1);
+    } else {
+        panic!("Unexpected response");
     }
 }
 
@@ -584,7 +582,8 @@ fn update_processed_transactions_already_in_checkpoint() {
     let t2 = ExecutionDigests::random();
     let t3 = ExecutionDigests::random();
 
-    let checkpoint = CheckpointContents::new([t1, t2].into_iter());
+    let checkpoint =
+        CheckpointContents::new_with_causally_ordered_transactions([t1, t2].into_iter());
     cps.update_new_checkpoint_inner(0, &checkpoint, cps.tables.checkpoints.batch())
         .unwrap();
     cps.update_processed_transactions(&[(2, t2), (3, t3)])
@@ -636,20 +635,12 @@ fn set_get_checkpoint() {
         .handle_authenticated_checkpoint(&Some(0), true)
         .unwrap();
     assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::AuthenticatedCheckpoint(None)
+        response,
+        CheckpointResponse::AuthenticatedCheckpoint {
+            checkpoint: None,
+            contents: None,
+        }
     ));
-    assert!(response.detail.is_none());
-
-    // There is no previous checkpoint
-    let response = cps1
-        .handle_authenticated_checkpoint(&Some(0), true)
-        .unwrap();
-    assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::AuthenticatedCheckpoint(None)
-    ));
-    assert!(response.detail.is_none());
 
     // ---
 
@@ -688,28 +679,25 @@ fn set_get_checkpoint() {
     let response = cps1
         .handle_authenticated_checkpoint(&Some(0), true)
         .unwrap();
-    assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(AuthenticatedCheckpoint::Signed(..)))
-    ));
-    if let AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(
-        AuthenticatedCheckpoint::Signed(signed),
-    )) = response.info
+
+    if let CheckpointResponse::AuthenticatedCheckpoint {
+        checkpoint: Some(AuthenticatedCheckpoint::Signed(signed)),
+        contents,
+    } = response
     {
-        signed.verify(&committee, response.detail.as_ref()).unwrap();
+        signed.verify(&committee, contents.as_ref()).unwrap();
+    } else {
+        panic!("Unexpected response");
     }
 
     // Make a certificate
     let mut signed_checkpoint: Vec<SignedCheckpointSummary> = Vec::new();
     for x in [&mut cps1, &mut cps2, &mut cps3] {
-        match x
-            .handle_authenticated_checkpoint(&Some(0), true)
-            .unwrap()
-            .info
-        {
-            AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(
-                AuthenticatedCheckpoint::Signed(signed),
-            )) => signed_checkpoint.push(signed),
+        match x.handle_authenticated_checkpoint(&Some(0), true).unwrap() {
+            CheckpointResponse::AuthenticatedCheckpoint {
+                checkpoint: Some(AuthenticatedCheckpoint::Signed(signed)),
+                ..
+            } => signed_checkpoint.push(signed),
             _ => unreachable!(),
         };
     }
@@ -730,16 +718,18 @@ fn set_get_checkpoint() {
         .handle_authenticated_checkpoint(&Some(0), true)
         .unwrap();
     assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(AuthenticatedCheckpoint::Certified(
+        response,
+        CheckpointResponse::AuthenticatedCheckpoint {
+            checkpoint: Some(AuthenticatedCheckpoint::Certified(..)),
             ..
-        )))
+        }
     ));
 
     // --- TEST 3 ---
 
     // Setting with contents succeeds BUT has not processed transactions
-    let contents = CheckpointContents::new(ckp_items.into_iter());
+    let contents =
+        CheckpointContents::new_with_causally_ordered_transactions(ckp_items.into_iter());
     let response_ckp = cps4.process_new_checkpoint_certificate(
         &checkpoint_cert,
         &contents,
@@ -763,10 +753,11 @@ fn set_get_checkpoint() {
         .handle_authenticated_checkpoint(&Some(0), true)
         .unwrap();
     assert!(matches!(
-        response.info,
-        AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(AuthenticatedCheckpoint::Certified(
+        response,
+        CheckpointResponse::AuthenticatedCheckpoint {
+            checkpoint: Some(AuthenticatedCheckpoint::Certified(..)),
             ..
-        )))
+        }
     ));
 }
 
@@ -1429,7 +1420,11 @@ fn test_fragment_full_flow() {
         .handle_authenticated_checkpoint(&Some(0), true)
         .expect("No errors on response");
     // Ensure the reconstruction worked
-    assert_eq!(response.detail.unwrap().transactions.len(), 2);
+    if let CheckpointResponse::AuthenticatedCheckpoint { contents, .. } = response {
+        assert_eq!(contents.unwrap().size(), 2);
+    } else {
+        panic!("Unexpected response");
+    }
 
     // TEST 3 -- feed the framents to the node 6 which cannot decode the
     // sequence of fragments.
@@ -1720,18 +1715,23 @@ async fn checkpoint_messaging_flow() {
             .expect("No issues");
 
         assert!(matches!(
-            response.info,
-            AuthorityCheckpointInfo::CheckpointProposal { .. }
+            response,
+            CheckpointResponse::CheckpointProposal { .. }
         ));
 
-        if let AuthorityCheckpointInfo::CheckpointProposal { proposal, .. } = &response.info {
+        if let CheckpointResponse::CheckpointProposal {
+            proposal,
+            proposal_contents,
+            ..
+        } = response
+        {
             assert!(proposal.is_some());
 
             proposals.push((
                 *auth,
                 CheckpointProposal::new_from_signed_proposal_summary(
-                    proposal.as_ref().unwrap().clone(),
-                    response.detail.unwrap(),
+                    proposal.unwrap(),
+                    proposal_contents.unwrap(),
                 ),
             ));
         }
@@ -1777,7 +1777,7 @@ async fn checkpoint_messaging_flow() {
 
     // Step 3 - get the signed checkpoint
     let mut signed_checkpoint = Vec::new();
-    let mut contents = None;
+    let mut checkpoint_contents = None;
     let mut failed_authorities = HashSet::new();
     for (auth, client) in &setup.aggregator.authority_clients {
         let response = client
@@ -1785,12 +1785,13 @@ async fn checkpoint_messaging_flow() {
             .await
             .expect("No issues");
 
-        match &response.info {
-            AuthorityCheckpointInfo::AuthenticatedCheckpoint(Some(
-                AuthenticatedCheckpoint::Signed(checkpoint),
-            )) => {
-                signed_checkpoint.push(checkpoint.clone());
-                contents = response.detail.clone();
+        match response {
+            CheckpointResponse::AuthenticatedCheckpoint {
+                checkpoint: Some(AuthenticatedCheckpoint::Signed(checkpoint)),
+                contents,
+            } => {
+                signed_checkpoint.push(checkpoint);
+                checkpoint_contents = contents;
             }
             _ => {
                 failed_authorities.insert(*auth);
@@ -1798,8 +1799,8 @@ async fn checkpoint_messaging_flow() {
         }
     }
 
-    let contents = contents.unwrap();
-    assert_eq!(contents.transactions.len(), 1);
+    let contents = checkpoint_contents.unwrap();
+    assert_eq!(contents.size(), 1);
 
     // Construct a certificate
     // We need at least f+1 signatures

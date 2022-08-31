@@ -50,7 +50,11 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> QueryHelpers<S> {
             }
             .into()
         );
-        let res = database.transactions_in_seq_range(start, end)?;
+        let res = database
+            .transactions_in_seq_range(start, end)?
+            .into_iter()
+            .map(|(seq, digests)| (seq, digests.transaction))
+            .collect();
         debug!(?start, ?end, ?res, "Fetched transactions");
         Ok(res)
     }

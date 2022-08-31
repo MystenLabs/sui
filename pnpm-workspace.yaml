@@ -1,5 +1,6 @@
 packages:
-  - 'wallet-adapter/**'
-  - 'sdk/**'
-  - 'explorer/**'
-  - 'wallet/**'
+  - "wallet-adapter/**"
+  - "sdk/**"
+  - "explorer/**"
+  - "wallet/**"
+  - "crates/sui-open-rpc"

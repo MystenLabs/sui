@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import mockTransactionData from '../../../../crates/sui-open-rpc/samples/transactions.json';
+import { describe, it, expect } from 'vitest';
+import mockTransactionData from '@mysten/sui-open-rpc/samples/transactions.json';
 
 import { isSuiTransactionResponse } from '../../src/index.guard';
 

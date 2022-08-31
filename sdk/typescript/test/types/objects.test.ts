@@ -1,7 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import mockObjectData from '../../../../crates/sui-open-rpc/samples/objects.json';
+import { describe, it, expect } from 'vitest';
+import mockObjectData from '@mysten/sui-open-rpc/samples/objects.json';
 
 import { isGetObjectDataResponse } from '../../src/index.guard';
 
