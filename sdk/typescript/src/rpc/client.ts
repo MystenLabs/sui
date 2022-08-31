@@ -111,39 +111,6 @@ export class JsonRpcClient {
     throw new Error(`Unexpected RPC Response: ${response}`);
   }
 
-  async requestCallbackWithType<TResult, TCallbackResult>(
-    method: string,
-    args: Array<any>,
-    _callback: (data: TCallbackResult) => any,
-    isResultT: (val: any) => val is TResult,
-    _isCallbackT: (val: any) => val is TCallbackResult
-  ): Promise<TResult> {
-    const response = await this.request(method, args);
-    if (isErrorResponse(response)) {
-      throw new Error(`RPC Error: ${response.error.message}`);
-    } else if (isValidResponse(response)) {
-      if (isResultT(response.result)) return response.result;
-        throw new Error(
-          `RPC Error: result not of expected type. Result received was: ${JSON.stringify(
-            response.result
-          )}`
-        );
-    }
-    throw new Error(`Unexpected RPC Response: ${response}`);
-  }
-
-  async request(method: string, args: Array<any>): Promise<any> {
-    return new Promise((resolve, reject) => {
-      this.rpcClient.request(method, args, (err: any, response: any) => {
-        if (err) {
-          reject(err);
-          return;
-        }
-        resolve(response);
-      });
-    });
-  }
-
   async batchRequestWithType<T>(
     requests: RpcParams[],
     isT: (val: any) => val is T,
