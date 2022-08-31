@@ -41,7 +41,7 @@ sui-node = { path = "../sui-node" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 
 move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
-narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "e994f67cacc2a42dd5d73fe3a64b9b490da72c3d", package = "node" }
+narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "57ef1b03d8997f5b54a7cae6d147e2ada1529312", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 test-utils = { path = "../test-utils" }
 
