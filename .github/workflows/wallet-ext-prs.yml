@@ -49,14 +49,18 @@ jobs:
           path: wallet/web-ext-artifacts/*
           if-no-files-found: error
           retention-days: 7
-      - name: Generate Download URL
+      - name: Get Suite ID
+        id: suite
+        run: |
+          echo "::set-output name=id::$(curl -s https://api.github.com/repos/mystenlabs/sui/actions/runs/${{ github.run_id }} | jq '.check_suite_id')"
+      - name: Get Artifact ID
         id: artifact
         run: |
-          echo "::set-output name=id::$(curl -s https://api.github.com/repos/mystenlabs/sui/actions/runs/2967316763/artifacts | jq '.artifacts[]  | select(.name == "wallet-extension") .id')"
+          echo "::set-output name=id::$(curl -s https://api.github.com/repos/mystenlabs/sui/actions/runs/${{ github.run_id }}/artifacts | jq '.artifacts[]  | select(.name == "wallet-extension") .id')"
       - name: Comment PR
         uses: thollander/actions-comment-pull-request@v1
         with:
           comment_includes: "💳 Wallet Extension"
           message: |
-            💳 Wallet Extension has been built, you can download the packaged extension here: https://github.com/MystenLabs/sui/suites/${{ github.run_id }}/artifacts/${{ steps.artifact.outputs.id }}
+            💳 Wallet Extension has been built, you can download the packaged extension here: https://github.com/MystenLabs/sui/suites/${{ steps.suite.outputs.id }}/artifacts/${{ steps.artifact.outputs.id }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
