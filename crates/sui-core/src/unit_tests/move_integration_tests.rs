@@ -4,9 +4,11 @@
 
 use super::*;
 use crate::authority::authority_tests::{
-    call_move, init_state_with_ids, send_and_confirm_transaction, TestCallArg,
+    call_move, call_move_with_shared, init_state_with_ids, send_and_confirm_transaction,
+    TestCallArg,
 };
 
+use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair, Signature},
@@ -15,8 +17,8 @@ use sui_types::{
     object::OBJECT_START_VERSION,
 };
 
-use std::env;
 use std::path::PathBuf;
+use std::{env, str::FromStr};
 
 const MAX_GAS: u64 = 10000;
 
@@ -500,28 +502,7 @@ async fn test_entry_point_vector() {
         effects.status
     );
 
-    // mint 2 objects
-    let effects = call_move(
-        &authority,
-        &gas,
-        &sender,
-        &sender_key,
-        &package,
-        "entry_point_vector",
-        "mint",
-        vec![],
-        vec![TestCallArg::U64(7)],
-    )
-    .await
-    .unwrap();
-    assert!(
-        matches!(effects.status, ExecutionStatus::Success { .. }),
-        "{:?}",
-        effects.status
-    );
-    let (obj_id_1, _, _) = effects.created[0].0;
-
-    // mint 2 objects
+    // mint an owned object
     let effects = call_move(
         &authority,
         &gas,
@@ -540,9 +521,8 @@ async fn test_entry_point_vector() {
         "{:?}",
         effects.status
     );
-    let (obj_id_2, _, _) = effects.created[0].0;
-
-    // call a function with a vector containing two objects
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing one owned object
     let effects = call_move(
         &authority,
         &gas,
@@ -552,7 +532,228 @@ async fn test_entry_point_vector() {
         "entry_point_vector",
         "obj_vec_destroy",
         vec![],
-        vec![TestCallArg::ObjVec(vec![obj_id_1, obj_id_2])],
+        vec![TestCallArg::ObjVec(vec![obj_id])],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // mint an shared object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_shared",
+        vec![],
+        vec![TestCallArg::U64(42)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (shared_obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing one shared object
+    let effects = call_move_with_shared(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "obj_vec_destroy",
+        vec![],
+        vec![TestCallArg::ObjVec(vec![shared_obj_id])],
+        true, // shared object in arguments
+    )
+    .await
+    .unwrap();
+    // should fail as we do not support shared objects in vectors
+    assert!(
+        matches!(effects.status, ExecutionStatus::Failure { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // mint an owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint",
+        vec![],
+        vec![TestCallArg::U64(42)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // argument
+    let result = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "same_objects",
+        vec![],
+        vec![
+            TestCallArg::Object(obj_id),
+            TestCallArg::ObjVec(vec![obj_id]),
+        ],
+    )
+    .await;
+    // should fail as we have the same object passed in vector and as a separate by-value argument
+    assert!(
+        matches!(
+            result.clone().err().unwrap(),
+            SuiError::DuplicateObjectRefInput { .. }
+        ),
+        "{:?}",
+        result
+    );
+
+    // mint an owned object
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint",
+        vec![],
+        vec![TestCallArg::U64(42)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (obj_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // a reference argument
+    let result = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "same_objects_ref",
+        vec![],
+        vec![
+            TestCallArg::Object(obj_id),
+            TestCallArg::ObjVec(vec![obj_id]),
+        ],
+    )
+    .await;
+    assert!(
+        matches!(
+            result.clone().err().unwrap(),
+            SuiError::DuplicateObjectRefInput { .. }
+        ),
+        "{:?}",
+        result
+    );
+
+    // mint a parent object and a child object and make sure that parent stored in the vector
+    // authenticates the child passed by-value
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint",
+        vec![],
+        vec![TestCallArg::U64(42)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (parent_id, _, _) = effects.created[0].0;
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "mint_child",
+        vec![],
+        vec![TestCallArg::U64(42), TestCallArg::Object(parent_id)],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+    let (child_id, _, _) = effects.created[0].0;
+    // call a function with a vector containing the same owned object as another one passed as
+    // a reference argument
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "child_access",
+        vec![],
+        vec![
+            TestCallArg::Object(child_id),
+            TestCallArg::ObjVec(vec![parent_id]),
+        ],
+    )
+    .await
+    .unwrap();
+    assert!(
+        matches!(effects.status, ExecutionStatus::Success { .. }),
+        "{:?}",
+        effects.status
+    );
+
+    // call a function with an empty vector whose type is generic
+    let type_tag =
+        TypeTag::from_str(format!("{}::entry_point_vector::Obj", package.0).as_str()).unwrap();
+    let effects = call_move(
+        &authority,
+        &gas,
+        &sender,
+        &sender_key,
+        &package,
+        "entry_point_vector",
+        "type_param_vec_empty",
+        vec![type_tag],
+        vec![TestCallArg::ObjVec(vec![])],
     )
     .await
     .unwrap();

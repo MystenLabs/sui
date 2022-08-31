@@ -135,14 +135,26 @@ impl SingleTransactionKind {
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
         match &self {
-            Self::Call(MoveCall { arguments, .. }) => {
-                Either::Left(arguments.iter().filter_map(|arg| match arg {
-                    CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
-                    CallArg::Object(ObjectArg::SharedObject(id)) => Some(id),
-                    // ObjVec is guaranteed not to contain shared objects
-                    CallArg::ObjVec(_) => None,
-                }))
-            }
+            Self::Call(MoveCall { arguments, .. }) => Either::Left(
+                arguments
+                    .iter()
+                    .filter_map(|arg| match arg {
+                        CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+                        CallArg::Object(ObjectArg::SharedObject(id)) => Some(vec![id]),
+                        CallArg::ObjVec(vec) => Some(
+                            vec.iter()
+                                .filter_map(|obj_arg| {
+                                    if let ObjectArg::SharedObject(id) = obj_arg {
+                                        Some(id)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect(),
+                        ),
+                    })
+                    .flatten(),
+            ),
             _ => Either::Right(std::iter::empty()),
         }
     }
@@ -181,10 +193,8 @@ impl SingleTransactionKind {
                                 ObjectArg::ImmOrOwnedObject(object_ref) => {
                                     Some(InputObjectKind::ImmOrOwnedMoveObject(*object_ref))
                                 }
-                                ObjectArg::SharedObject(_) => {
-                                    // ObjVec is guaranteed to never contain shared objects
-                                    debug_assert!(false);
-                                    None
+                                ObjectArg::SharedObject(id) => {
+                                    Some(InputObjectKind::SharedMoveObject(*id))
                                 }
                             })
                             .collect(),

@@ -87,13 +87,9 @@ pub fn execute<
                 Some(
                     vec.iter()
                         .filter_map(|obj_arg| match obj_arg {
-                            ObjectArg::ImmOrOwnedObject((id, _, _)) => {
+                            ObjectArg::ImmOrOwnedObject((id, _, _))
+                            | ObjectArg::SharedObject(id) => {
                                 Some((*id, state_view.read_object(id)?))
-                            }
-                            ObjectArg::SharedObject(_) => {
-                                // ObjVec is guaranteed to never contain shared objects
-                                debug_assert!(false);
-                                None
                             }
                         })
                         .collect(),
@@ -1049,21 +1045,7 @@ pub fn resolve_and_type_check(
                             ObjectArg::ImmOrOwnedObject(ref_) => {
                                 InputObjectKind::ImmOrOwnedMoveObject(ref_)
                             }
-                            ObjectArg::SharedObject(_) => {
-                                let msg = format!(
-                                    "Shared object part of the vector argument at index {}.\
-                                     Only owned objects are allowed",
-                                    idx,
-                                );
-
-                                return Err(ExecutionError::new_with_source(
-                                    ExecutionErrorKind::entry_argument_error(
-                                        idx,
-                                        EntryArgumentErrorKind::UnsupportedPureArg,
-                                    ),
-                                    msg,
-                                ));
-                            }
+                            ObjectArg::SharedObject(id) => InputObjectKind::SharedMoveObject(id),
                         };
                         let (o, arg_type, param_type) = serialize_object(
                             object_kind,
@@ -1105,6 +1087,8 @@ pub fn resolve_and_type_check(
     })
 }
 
+/// Serialize object with ID encoded in object_kind and also verify if various object properties are
+/// correct.
 fn serialize_object<'a>(
     object_kind: InputObjectKind,
     idx: LocalIndex,
@@ -1199,6 +1183,8 @@ fn serialize_object<'a>(
     ))
 }
 
+/// Get "inner" type of an object passed as argument (e.g., an inner type of a reference or of a
+/// vector) and also verify if various object properties are correct.
 fn inner_param_type<'a>(
     object: &Object,
     object_id: ObjectID,
@@ -1227,15 +1213,17 @@ fn inner_param_type<'a>(
             mutable_ref_objects.insert(idx as LocalIndex, object_id);
             Ok(&**inner_t)
         }
-        SignatureToken::Vector(inner_t) => inner_param_type(
-            object,
-            object_id,
-            idx,
-            inner_t,
-            arg_type,
-            mutable_ref_objects,
-            by_value_objects,
-        ),
+        SignatureToken::Vector(inner_t) => {
+            return inner_param_type(
+                object,
+                object_id,
+                idx,
+                inner_t,
+                arg_type,
+                mutable_ref_objects,
+                by_value_objects,
+            );
+        }
         t @ SignatureToken::Struct(_)
         | t @ SignatureToken::StructInstantiation(_, _)
         | t @ SignatureToken::TypeParameter(_) => {

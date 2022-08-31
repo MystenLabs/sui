@@ -187,6 +187,9 @@ fn verify_param_type(
     }
 
     if is_object(view, function_type_args, param)? {
+        return Ok(());
+    }
+    if is_object_vector(view, function_type_args, param)? {
         Ok(())
     } else {
         Err(format!(
@@ -259,9 +262,21 @@ pub fn is_object(
 ) -> Result<bool, String> {
     use SignatureToken as S;
     match t {
-        S::Reference(inner) | S::MutableReference(inner) | S::Vector(inner) => {
+        S::Reference(inner) | S::MutableReference(inner) => {
             is_object(view, function_type_args, inner)
         }
+        _ => is_object_struct(view, function_type_args, t),
+    }
+}
+
+pub fn is_object_vector(
+    view: &BinaryIndexedView,
+    function_type_args: &[AbilitySet],
+    t: &SignatureToken,
+) -> Result<bool, String> {
+    use SignatureToken as S;
+    match t {
+        S::Vector(inner) => is_object_struct(view, function_type_args, inner),
         _ => is_object_struct(view, function_type_args, t),
     }
 }

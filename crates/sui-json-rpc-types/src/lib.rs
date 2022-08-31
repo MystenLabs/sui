@@ -1404,28 +1404,20 @@ impl TryFrom<SingleTransactionKind> for SuiTransactionKind {
                     .into_iter()
                     .map(|arg| match arg {
                         CallArg::Pure(p) => SuiJsonValue::from_bcs_bytes(&p),
-                        CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _))) => {
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
+                        | CallArg::Object(ObjectArg::SharedObject(id)) => {
                             SuiJsonValue::new(Value::String(id.to_hex_literal()))
                         }
-                        CallArg::Object(ObjectArg::SharedObject(id)) => {
-                            SuiJsonValue::new(Value::String(id.to_hex_literal()))
-                        }
-                        CallArg::ObjVec(vec) => {
-                            SuiJsonValue::new(Value::Array(
-                                vec.iter()
-                                    .filter_map(|obj_arg| match obj_arg {
-                                        ObjectArg::ImmOrOwnedObject((id, _, _)) => {
-                                            Some(Value::String(id.to_hex_literal()))
-                                        }
-                                        ObjectArg::SharedObject(_) => {
-                                            // ObjVec is guaranteed to never contain shared objects
-                                            debug_assert!(false);
-                                            None
-                                        }
-                                    })
-                                    .collect(),
-                            ))
-                        }
+                        CallArg::ObjVec(vec) => SuiJsonValue::new(Value::Array(
+                            vec.iter()
+                                .map(|obj_arg| match obj_arg {
+                                    ObjectArg::ImmOrOwnedObject((id, _, _))
+                                    | ObjectArg::SharedObject(id) => {
+                                        Value::String(id.to_hex_literal())
+                                    }
+                                })
+                                .collect(),
+                        )),
                     })
                     .collect::<Result<Vec<_>, _>>()?,
             }),
