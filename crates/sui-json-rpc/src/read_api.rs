@@ -21,8 +21,10 @@ use sui_json_rpc_types::{
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::messages::{Transaction, TransactionData},
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
+use sui_types::sui_serde::Base64;
 
 // An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
 // Fullnodes.
@@ -128,6 +130,16 @@ impl SuiRpcModule for ReadApi {
 
 #[async_trait]
 impl RpcFullNodeReadApiServer for FullNodeApi {
+    async fn call_transaction(&self, tx_bytes: Base64) -> RpcResult<SuiTransactionEffects> {
+        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
+        let fake_signature = Base64::from_bytes(vec![]);
+        let txn = Transaction::new(data, signature);
+        let txn_digest = *txn.digest();
+
+        let res = self.state.call_transaction(transaction, transaction_digest).await?;
+        Ok(res)
+    } 
+
     async fn get_normalized_move_modules_by_package(
         &self,
         package: ObjectID,

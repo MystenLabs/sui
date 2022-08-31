@@ -673,6 +673,17 @@ impl WalletContext {
         ))
     }
 
+    // async fn call_transaction(&self, tx: Transaction) -> anyhow::Result<SuiTransactionEffects> {
+    //     let tx_digest = *tx.digest();
+    //     match &self.fullnode {
+    //         None => return Err(anyhow!("To be implemented")),
+    //         Some(client) => {
+    //             let effects = client.full_node_api().call_transaction(tx).await?;
+    //             let sui_effects = SuiTransactionEffects::try_from(effects, resolver);
+    //         }
+    //     }
+    // }
+
     /// A backward-compatible migration of transaction execution from gateway to fullnode
     async fn execute_transaction(&self, tx: Transaction) -> anyhow::Result<SuiTransactionResponse> {
         let tx_digest = *tx.digest();

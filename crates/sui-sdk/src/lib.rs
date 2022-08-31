@@ -184,6 +184,14 @@ impl ReadApi {
 pub struct FullNodeApi(Arc<SuiClientApi>);
 
 impl FullNodeApi {
+    pub async fn call_transaction(
+        &self,
+        _tx: sui_types::messages::Transaction,
+    ) -> anyhow::Result<rpc_types::SuiTransactionEffects> {
+        // TODOggao: implement this
+        Err(anyhow!("To be implemented"))
+    }
+
     pub async fn get_transactions_by_input_object(
         &self,
         object: ObjectID,

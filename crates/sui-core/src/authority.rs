@@ -40,7 +40,7 @@ use std::{
 use sui_adapter::adapter;
 use sui_adapter::temporary_store::InnerTemporaryStore;
 use sui_config::genesis::Genesis;
-use sui_json_rpc_types::SuiEventEnvelope;
+use sui_json_rpc_types::{SuiEventEnvelope, SuiTransactionEffects};
 use sui_storage::{
     event_store::{EventStore, EventStoreType, StoredEvent},
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
@@ -705,6 +705,45 @@ impl AuthorityState {
         let signed_effects = effects.to_sign_effects(self.epoch(), &self.name, &*self.secret);
 
         Ok((inner_temp_store, signed_effects))
+    }
+
+    
+    pub async fn call_transaction(&self, transaction: &Transaction, transaction_digest: TransactionDigest) -> Result<SuiTransactionEffects, anyhow::Error> {
+        transaction.verify()?;
+        
+        let (gas_status, input_objects) =
+            transaction_input_checker::check_transaction_input(&self.database, transaction).await?;
+
+        let shared_object_refs = input_objects.filter_shared_objects();
+        if !shared_object_refs.is_empty() {
+            // If the transaction contains shared objects, we need to ensure they have been scheduled
+            // for processing by the consensus protocol.
+            // There is no need to go through consensus for system transactions that can
+            // only be executed at a time when consensus is turned off.
+            // TODO: Add some assert here to make sure consensus is indeed off with is_system_tx.
+            self.check_shared_locks(&transaction_digest, &shared_object_refs)
+                .await?;
+        }
+        let transaction_dependencies = input_objects.transaction_dependencies();
+        let temporary_store =
+            TemporaryStore::new(self.database.clone(), input_objects, transaction_digest);
+        
+
+        let (_inner_temp_store, effects, _execution_error) =
+        execution_engine::execute_transaction_to_effects(
+            shared_object_refs,
+            temporary_store,
+            transaction.signed_data.data.clone(),
+            transaction_digest,
+            transaction_dependencies,
+            &self.move_vm,
+            &self._native_functions,
+            gas_status,
+            self.epoch(),
+        );
+
+        let sui_tx_effects = SuiTransactionEffects::try_from(effects, self.module_cache.as_ref());
+        sui_tx_effects
     }
 
     pub async fn check_tx_already_executed(
