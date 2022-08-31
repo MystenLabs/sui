@@ -54,8 +54,6 @@ use sui_macros::*;
 
 #[sui_test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
-    telemetry_subscribers::init_for_testing();
-
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
@@ -85,8 +83,6 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
 
 #[sui_test]
 async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
-    telemetry_subscribers::init_for_testing();
-
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
@@ -290,8 +286,6 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
 // Test for syncing a node to an authority that already has many txes.
 #[sui_test]
 async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
-    telemetry_subscribers::init_for_testing();
-
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
     let (_, _, _, _) = transfer_coin(&mut context).await?;
     let (_, _, _, _) = transfer_coin(&mut context).await?;
@@ -319,8 +313,6 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
 
 #[sui_test]
 async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
-    telemetry_subscribers::init_for_testing();
-
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
