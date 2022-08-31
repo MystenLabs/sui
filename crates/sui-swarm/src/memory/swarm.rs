@@ -175,19 +175,28 @@ pub struct Swarm {
     fullnodes: HashMap<SuiAddress, Node>,
 }
 
+impl Drop for Swarm {
+    fn drop(&mut self) {
+        self.nodes_iter_mut().for_each(|node| node.stop());
+    }
+}
+
 impl Swarm {
     /// Return a new Builder
     pub fn builder() -> SwarmBuilder {
         SwarmBuilder::new()
     }
 
+    fn nodes_iter_mut(&mut self) -> impl Iterator<Item = &mut Node> {
+        self.validators
+            .values_mut()
+            .chain(self.fullnodes.values_mut())
+    }
+
     /// Start all of the Validators associated with this Swarm
     pub async fn launch(&mut self) -> Result<()> {
-        let nodes_iter = self
-            .validators
-            .values_mut()
-            .chain(self.fullnodes.values_mut());
-        let start_handles = nodes_iter
+        let start_handles = self
+            .nodes_iter_mut()
             .map(|node| node.spawn())
             .collect::<Result<Vec<_>>>()?;
 
