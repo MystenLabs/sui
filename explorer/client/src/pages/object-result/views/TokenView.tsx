@@ -139,6 +139,7 @@ function TokenView({ data }: { data: DataType }) {
                                             viewedData.owner !== 'Shared'
                                         }
                                         isCopyButton={false}
+                                        objectId={viewedData.id}
                                     />
                                 </td>
                             </tr>

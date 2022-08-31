@@ -19,6 +19,7 @@ function Longtext({
     alttext = '',
     isCopyButton = true,
     showIconButton = false,
+    objectId = '',
 }: {
     text: string;
     category:
@@ -32,6 +33,7 @@ function Longtext({
     alttext?: string;
     isCopyButton?: boolean;
     showIconButton?: boolean;
+    objectId?: string;
 }) {
     const [isCopyIcon, setCopyIcon] = useState(true);
     const navigate = useNavigate();
@@ -45,15 +47,16 @@ function Longtext({
 
     const navigateToOwner = useCallback(
         (input: string) => () =>
-            navigateWithCategory(input, 'owner', network).then((resp: any) =>
-                navigate(
-                    `../${resp.category}/${encodeURIComponent(resp.input)}`,
-                    {
-                        state: resp.result,
-                    }
-                )
+            navigateWithCategory(input, 'owner', network, objectId).then(
+                (resp: any) =>
+                    navigate(
+                        `../${resp.category}/${encodeURIComponent(resp.input)}`,
+                        {
+                            state: resp.result,
+                        }
+                    )
             ),
-        [network, navigate]
+        [network, navigate, objectId]
     );
 
     let icon;
