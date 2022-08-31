@@ -13,7 +13,7 @@
 }
 
 .results dd {
-    @apply mx-[8px] px-[6px] py-[9px] font-mono hover:bg-[#6FBCF01A] rounded-[3px] cursor-pointer break-all text-[9px] sm:text-[12px];
+    @apply mx-[8px] px-[6px] py-[9px] font-mono hover:bg-[#6FBCF01A] rounded-[4px] cursor-pointer break-all text-[9px] sm:text-[12px];
 }
 
 .noresults {
