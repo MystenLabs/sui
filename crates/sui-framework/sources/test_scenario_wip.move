@@ -3,9 +3,10 @@
 
 #[test_only]
 module sui::test_scenario_wip {
+    use std::option::{Self, Option};
     use sui::object::{Self, ID, UID};
     use sui::tx_context::{Self, TxContext};
-    use std::option::{Self, Option};
+    use sui::vec_map::VecMap;
 
     /// Asserted transaction result was a success, but it was not
     const ETransactionNotSuccessful: u64 = 0;
@@ -57,6 +58,7 @@ module sui::test_scenario_wip {
     ///     SomeObject::some_function(obj)
     /// }
     /// ... // more txes
+    /// test_scenario::assert_success(test_scenario::end(scenario));
     /// ```
     struct Scenario {
         txn_number: u64,
@@ -70,9 +72,21 @@ module sui::test_scenario_wip {
     }
 
     struct TransactionEffects has drop {
+        /// The objects created this transaction
         created: vector<ID>,
+        /// The objects written/modified this transaction
         written: vector<ID>,
+        /// The objects deleted this transaction
         deleted: vector<ID>,
+        /// The objects transferred to an account this transaction
+        transferred_to_account: VecMap<ID, /* owner */ address>,
+        /// The objects transferred to an object this transaction
+        transferred_to_object: VecMap<ID, /* owner */ ID>,
+        /// The objects shared this transaction
+        shared: vector<ID>,
+        /// The objects frozen this transaction
+        frozen: vector<ID>,
+        /// The number of user events emmitted this transaction
         num_user_events: u64,
     }
 
@@ -89,10 +103,8 @@ module sui::test_scenario_wip {
     /// inventory. In other words, in order to access an object with one of the various "take"
     /// functions below, e.g. `take_from_address_by_id`, the transaction must first be ended via
     /// `next_tx`.
-    /// All shared and immutable objects must be returned before the next transaction
     /// Returns the results from the previous transaction
     public fun next_tx(scenario: &mut Scenario, sender: &address): TransactionResult {
-        assert!(all_shared_and_immutable_returned(), EObjectsNotReturned);
         // create a seed for new transaction digest to ensure that this tx has a different
         // digest (and consequently, different object ID's) than the previous tx
         scenario.txn_number = scenario.txn_number + 1;
@@ -109,8 +121,16 @@ module sui::test_scenario_wip {
         next_tx(scenario, sender)
     }
 
-    // internal function that ends the transaction, realizing changes
-    native fun end_transaction(): TransactionResult;
+    /// Ends the test scenario
+    /// Will abort if not all shared and immutable objects were returned
+    /// Ideally, all account owned objects should be returned too, but this check is not possible
+    /// to implement as the objects may have been wrapped (instead of being returned)
+    /// Returns the results from the final transaction
+    public fun end(scenario: Scenario): TransactionResult {
+        let Scenario { txn_number: _, ctx: _ } = scenario;
+        assert!(all_shared_and_immutable_returned(), EObjectsNotReturned);
+        end_transaction()
+    }
 
     /// Returns the effects from the transaction
     /// Errors if the transaction failed when generating these effects. For example, a circular
@@ -152,13 +172,54 @@ module sui::test_scenario_wip {
         scenario.txn_number
     }
 
+    /// Accessor for `created` field of `TransactionEffects`
+    public fun created(effects: &TransactionEffects): vector<ID> {
+        effects.created
+    }
+
+    /// Accessor for `written` field of `TransactionEffects`
+    public fun written(effects: &TransactionEffects): vector<ID> {
+        effects.written
+    }
+
+    /// Accessor for `deleted` field of `TransactionEffects`
+    public fun deleted(effects: &TransactionEffects): vector<ID> {
+        effects.deleted
+    }
+
+    /// Accessor for `transferred_to_account` field of `TransactionEffects`
+    public fun transferred_to_account(effects: &TransactionEffects): VecMap<ID, address> {
+        effects.transferred_to_account
+    }
+
+    /// Accessor for `transferred_to_object` field of `TransactionEffects`
+    public fun transferred_to_object(effects: &TransactionEffects): VecMap<ID, ID> {
+        effects.transferred_to_object
+    }
+
+    /// Accessor for `shared` field of `TransactionEffects`
+    public fun shared(effects: &TransactionEffects): vector<ID> {
+        effects.shared
+    }
+
+    /// Accessor for `frozen` field of `TransactionEffects`
+    public fun frozen(effects: &TransactionEffects): vector<ID> {
+        effects.frozen
+    }
+
+
+    /// Accessor for `num_user_events` field of `TransactionEffects`
+    public fun num_user_events(effects: &TransactionEffects): u64 {
+        effects.num_user_events
+    }
+
     // == from address ==
 
     /// Remove the object of type `T` with ID `id` from the inventory of the `account`
     /// An object is in the address's inventory if:
     /// - The object was transferred to the `account` in a previous transaction
     /// - If the object was previously removed, it was subsequently replaced via a call to
-    ///   `retorn_to_address`.
+    ///   `return_to_address`.
     /// Aborts if there is no object of type `T` in the inventory with ID `id`
     public native fun take_from_address_by_id<T: key>(account: address, id: ID): T;
 
@@ -290,6 +351,12 @@ module sui::test_scenario_wip {
 
     /// Returns true if there are no shared or immutable objects not yet returned
     public native fun all_shared_and_immutable_returned(): bool;
+
+    // == internal ==
+
+    // internal function that ends the transaction, realizing changes
+    native fun end_transaction(): TransactionResult;
+
 
     // TODO: Add API's for inspecting user events, printing the user's inventory, ...
 
