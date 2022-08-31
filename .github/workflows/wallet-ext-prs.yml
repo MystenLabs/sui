@@ -46,5 +46,5 @@ jobs:
         if: always()
         with:
           name: wallet-extension
-          path: wallet/web-ext-artifacts/
+          path: wallet/web-ext-artifacts/*
           retention-days: 7
