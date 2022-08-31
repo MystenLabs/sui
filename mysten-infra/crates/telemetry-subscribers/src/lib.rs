@@ -17,6 +17,7 @@
 //! - `json` - Bunyan formatter - JSON log output, optional
 //! - `tokio-console` - [Tokio-console](https://github.com/tokio-rs/console) subscriber, optional
 
+use span_latency_prom::PrometheusSpanLatencyLayer;
 use std::{
     env,
     io::{stderr, Write},
@@ -34,12 +35,14 @@ use tracing_subscriber::{
 
 use crossterm::tty::IsTty;
 
+pub mod span_latency_prom;
+
 /// Alias for a type-erased error type.
 pub type BoxError = Box<dyn std::error::Error + Send + Sync + 'static>;
 
 /// Configuration for different logging/tracing options
 /// ===
-/// - json_log_output: Output JSON logs to stdout only.  No other options will work.
+/// - json_log_output: Output JSON logs to stdout only.
 /// - log_file: If defined, write output to a file starting with this name, ex app.log
 /// - log_level: error/warn/info/debug/trace, defaults to info
 /// - service_name:
@@ -49,8 +52,9 @@ pub struct TelemetryConfig {
     pub service_name: String,
 
     pub enable_tracing: bool,
+    /// Enables Tokio Console debugging on port 6669
     pub tokio_console: bool,
-    /// Output JSON logs.  Tracing and Tokio Console are not available if this is enabled.
+    /// Output JSON logs.
     pub json_log_output: bool,
     /// Write chrome trace output, which can be loaded from chrome://tracing
     pub chrome_trace_output: bool,
@@ -62,6 +66,8 @@ pub struct TelemetryConfig {
     pub panic_hook: bool,
     /// Crash on panic
     pub crash_on_panic: bool,
+    /// Optional Prometheus registry - if present, all enabled span latencies are measured
+    pub prom_registry: Option<prometheus::Registry>,
 }
 
 #[must_use]
@@ -151,6 +157,7 @@ impl TelemetryConfig {
             log_string: None,
             panic_hook: true,
             crash_on_panic: false,
+            prom_registry: None,
         }
     }
 
@@ -161,6 +168,11 @@ impl TelemetryConfig {
 
     pub fn with_log_file(mut self, filename: &str) -> Self {
         self.log_file = Some(filename.to_owned());
+        self
+    }
+
+    pub fn with_prom_registry(mut self, registry: &prometheus::Registry) -> Self {
+        self.prom_registry = Some(registry.clone());
         self
     }
 
@@ -218,6 +230,12 @@ impl TelemetryConfig {
         } else {
             None
         };
+
+        if let Some(registry) = config.prom_registry {
+            let span_lat_layer = PrometheusSpanLatencyLayer::try_new(&registry, 15)
+                .expect("Could not initialize span latency layer");
+            layers.push(span_lat_layer.boxed());
+        }
 
         #[cfg(feature = "jaeger")]
         if config.enable_tracing {
@@ -305,21 +323,43 @@ pub fn init_for_testing() {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tracing::{debug, info, warn};
+    use prometheus::proto::MetricType;
+    use std::time::Duration;
+    use tracing::{debug, info, info_span, warn};
 
     #[test]
     #[should_panic]
     fn test_telemetry_init() {
-        let _guard = TelemetryConfig::new("my_app").init();
+        let registry = prometheus::Registry::new();
+        let config = TelemetryConfig::new("my_app").with_prom_registry(&registry);
+        let _guard = config.init();
 
         info!(a = 1, "This will be INFO.");
-        debug!(a = 2, "This will be DEBUG.");
-        warn!(a = 3, "This will be WARNING.");
+        info_span!("yo span yo").in_scope(|| {
+            debug!(a = 2, "This will be DEBUG.");
+            std::thread::sleep(Duration::from_millis(100));
+            warn!(a = 3, "This will be WARNING.");
+        });
+
+        let metrics = registry.gather();
+        // There should be 1 metricFamily and 1 metric
+        assert_eq!(metrics.len(), 1);
+        assert_eq!(metrics[0].get_name(), "tracing_span_latencies");
+        assert_eq!(metrics[0].get_field_type(), MetricType::HISTOGRAM);
+        let inner = metrics[0].get_metric();
+        assert_eq!(inner.len(), 1);
+        let labels = inner[0].get_label();
+        assert_eq!(labels.len(), 1);
+        assert_eq!(labels[0].get_name(), "span_name");
+        assert_eq!(labels[0].get_value(), "yo span yo");
+
         panic!("This should cause error logs to be printed out!");
     }
 
-    // Both the following tests should be able to "race" to initialize logging without causing a
-    // panic
+    /*
+    Both the following tests should be able to "race" to initialize logging without causing a
+    panic
+    */
     #[test]
     fn testing_logger_1() {
         init_for_testing();
