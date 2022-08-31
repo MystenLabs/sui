@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{authority_store_tables::AuthorityStoreTables, *};
-use crate::gateway_state::GatewayTxSeqNumber;
 use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
@@ -1175,16 +1174,15 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
 
     pub fn transactions_in_seq_range(
         &self,
-        start: GatewayTxSeqNumber,
-        end: GatewayTxSeqNumber,
-    ) -> SuiResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
+        start: u64,
+        end: u64,
+    ) -> SuiResult<Vec<(u64, ExecutionDigests)>> {
         Ok(self
             .tables
             .executed_sequence
             .iter()
             .skip_to(&start)?
             .take_while(|(seq, _tx)| *seq < end)
-            .map(|(seq, exec)| (seq, exec.transaction))
             .collect())
     }
 
