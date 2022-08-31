@@ -4,7 +4,8 @@
 import nacl from 'tweetnacl';
 import { Base64DataBuffer } from '../serialization/base64';
 import { Keypair } from './keypair';
-import { PublicKey } from './publickey';
+import { Ed25519PublicKey } from './ed25519-publickey';
+import { SignatureScheme } from './publickey';
 
 /**
  * Ed25519 Keypair data
@@ -21,10 +22,10 @@ export class Ed25519Keypair implements Keypair {
   private keypair: Ed25519KeypairData;
 
   /**
-   * Create a new keypair instance.
+   * Create a new Ed25519 keypair instance.
    * Generate random keypair if no {@link Ed25519Keypair} is provided.
    *
-   * @param keypair ed25519 keypair
+   * @param keypair Ed25519 keypair
    */
   constructor(keypair?: Ed25519KeypairData) {
     if (keypair) {
@@ -33,16 +34,23 @@ export class Ed25519Keypair implements Keypair {
       this.keypair = nacl.sign.keyPair();
     }
   }
+  
+  /**
+   * Get the key scheme of the keypair ED25519
+   */
+  getKeyScheme(): SignatureScheme {
+    return 'ED25519';
+  }
 
   /**
-   * Generate a new random keypair
+   * Generate a new random Ed25519 keypair
    */
   static generate(): Ed25519Keypair {
     return new Ed25519Keypair(nacl.sign.keyPair());
   }
 
   /**
-   * Create a keypair from a raw secret key byte array.
+   * Create a Ed25519 keypair from a raw secret key byte array.
    *
    * This method should only be used to recreate a keypair from a previously
    * generated secret key. Generating keypairs from a random seed should be done
@@ -70,7 +78,7 @@ export class Ed25519Keypair implements Keypair {
   }
 
   /**
-   * Generate a keypair from a 32 byte seed.
+   * Generate a Ed25519 keypair from a 32 byte seed.
    *
    * @param seed seed byte array
    */
@@ -79,14 +87,14 @@ export class Ed25519Keypair implements Keypair {
   }
 
   /**
-   * The public key for this keypair
+   * The public key for this Ed25519 keypair
    */
-  getPublicKey(): PublicKey {
-    return new PublicKey(this.keypair.publicKey);
+  getPublicKey(): Ed25519PublicKey {
+    return new Ed25519PublicKey(this.keypair.publicKey);
   }
 
   /**
-   * Return the signature for the provided data.
+   * Return the signature for the provided data using Ed25519.
    */
   signData(data: Base64DataBuffer): Base64DataBuffer {
     return new Base64DataBuffer(

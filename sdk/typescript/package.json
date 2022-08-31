@@ -80,6 +80,8 @@
   },
   "dependencies": {
     "@mysten/bcs": "workspace:*",
+    "@noble/hashes": "^1.1.2",
+    "@noble/secp256k1": "^1.6.3",
     "bn.js": "^5.2.0",
     "buffer": "^6.0.3",
     "cross-fetch": "^3.1.5",
