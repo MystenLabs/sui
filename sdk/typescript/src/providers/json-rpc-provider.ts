@@ -144,9 +144,7 @@ export class JsonRpcProvider extends Provider {
         this.refreshSubscriptions();
         resolve();
       });
-      this.wsClient.once('error', (err) => {
-        reject(err);
-      });
+      this.wsClient.once('error', reject);
     });
   }
 
