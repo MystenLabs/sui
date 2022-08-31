@@ -100,7 +100,7 @@ impl<YUnit, XUnit> LinearEquation<YUnit, XUnit> {
             ))
         } else if y > self.max {
             Err(anyhow!(
-                "Value {} is below maximum allowed {}",
+                "Value {} is above maximum allowed {}",
                 u64::from(y),
                 u64::from(self.max)
             ))
