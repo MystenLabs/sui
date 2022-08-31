@@ -26,7 +26,7 @@ serde_with = "1.14.0"
 signature = "1.6.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
-base64ct = { version = "1.5.1", features = ["std", "alloc"] }
+base64ct = { version = "1.5.2", features = ["std", "alloc"] }
 zeroize = "1.5.7"
 hkdf = "0.12.3"
 digest = "0.10.3"
@@ -50,7 +50,7 @@ move-ir-types = { git = "https://github.com/move-language/move", rev = "70b34a66
 move-vm-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "e994f67cacc2a42dd5d73fe3a64b9b490da72c3d", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "57ef1b03d8997f5b54a7cae6d147e2ada1529312", package = "executor" }
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b", features = ["copy_key"] }
 

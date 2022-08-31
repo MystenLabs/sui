@@ -13,6 +13,7 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use bincode::Error;
 use chrono::prelude::*;
 use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
@@ -1814,6 +1815,10 @@ impl ExecutionState for AuthorityState {
                 Ok(Vec::default())
             }
         }
+    }
+
+    fn deserialize(bytes: &[u8]) -> Result<Self::Transaction, Error> {
+        bincode::deserialize(bytes)
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
