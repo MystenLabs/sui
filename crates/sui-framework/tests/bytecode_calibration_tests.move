@@ -814,6 +814,96 @@ module sui::bytecode_calibration_tests {
             trials = trials - 1;
         }
     }
+
+    #[test]
+    public entry fun test_calibrate_cast_u8() {
+        let trials: u64 = NUM_TRIALS;
+        let val = 1u64;
+
+        while (trials > 0) {
+            let _ = (val as u8);
+            val = val * 1;
+            trials = trials - 1;
+        }
+    }
+    #[test]
+    public entry fun test_calibrate_cast_u8__baseline() {
+        let trials: u64 = NUM_TRIALS;
+        let val = 1u64;
+
+        while (trials > 0) {
+            let _ = val;
+            val = val * 1;
+            trials = trials - 1;
+        }
+    }
+
+    #[test]
+    public entry fun test_calibrate_cast_u64() {
+        let trials: u64 = NUM_TRIALS;
+        let val = 1u8;
+
+        while (trials > 0) {
+            let _ = (val as u64);
+            val = val * 1;
+            trials = trials - 1;
+        }
+    }
+
+    #[test]
+    public entry fun test_calibrate_cast_u64__baseline() {
+        let trials: u64 = NUM_TRIALS;
+        let val = 1u8;
+
+        while (trials > 0) {
+            let _ = val;
+            val = val * 1;
+            trials = trials - 1;
+        }
+    }
+
+    #[test]
+    public entry fun test_calibrate_cast_u128() {
+        let trials: u64 = NUM_TRIALS;
+        let val = 1u8;
+
+        while (trials > 0) {
+            let _ = (val as u128);
+            val = val * 1;
+            trials = trials - 1;
+        }
+    }
+
+    #[test]
+    public entry fun test_calibrate_cast_u128__baseline() {
+        let trials: u64 = NUM_TRIALS;
+        let val = 1u8;
+
+        while (trials > 0) {
+            let _ = val;
+            val = val * 1;
+            trials = trials - 1;
+        }
+    }
+
+    #[test]
+    public entry fun test_calibrate_vec_unpack() {
+        let trials: u64 = NUM_TRIALS;
+        while (trials > 0) {
+            let hash: vector<u8> = x"";
+            vector::destroy_empty(hash);
+            trials = trials - 1;
+        }
+    }
+
+    #[test]
+    public entry fun test_calibrate_vec_unpack__baseline() {
+        let trials: u64 = NUM_TRIALS;
+        while (trials > 0) {
+            let _hash: vector<u8> = x"";
+            trials = trials - 1;
+        }
+    }
 }
 
 // TODO:
@@ -823,5 +913,4 @@ module sui::bytecode_calibration_tests {
 // MutBorrowGlobal, MutBorrowGlobalGeneric, ImmBorrowGlobal, ImmBorrowGlobalGeneric, Exists, ExistsGeneric, MoveFrom, MoveFromGeneric, 
 // MoveTo, MoveToGeneric
 
-// Not supported in Move yet:
-// VecUnpack
+
