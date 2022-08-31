@@ -158,7 +158,7 @@ static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
     storage_per_byte_cost: StorageCostPerByte::new(OBJ_DATA_COST_REFUNDABLE),
 });
 
-pub static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| u64::from(to_external(*MAXIMUM_TX_GAS)));
+pub static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| u64::from(to_external(MAXIMUM_TX_GAS)));
 
 pub static MIN_GAS_BUDGET: Lazy<u64> =
     Lazy::new(|| to_external(*INIT_SUI_COST_TABLE.min_transaction_cost).into());

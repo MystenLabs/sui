@@ -5,7 +5,6 @@
 // NOTE: all values in this file are subject to change
 
 use move_core_types::gas_algebra::{Byte, InternalGas, InternalGasPerByte, InternalGasUnit};
-use once_cell::sync::Lazy;
 
 use crate::units_types::LinearEquation;
 
@@ -59,15 +58,14 @@ pub const PACKAGE_PUBLISH_COST_FIXED: u64 = 1_000;
 // This is charged per byte of the package
 pub const PACKAGE_PUBLISH_COST_PER_BYTE: u64 = 80;
 
-pub static MAXIMUM_TX_GAS: Lazy<InternalGas> = Lazy::new(|| InternalGas::new(MAX_TX_GAS));
+pub const MAXIMUM_TX_GAS: InternalGas = InternalGas::new(MAX_TX_GAS);
 
-pub static PUBLISH_COST_EQUATION: Lazy<LinearEquation<InternalGasUnit, Byte>> =
-    Lazy::new(publish_cost_equation);
+pub const PUBLISH_COST_EQUATION: LinearEquation<InternalGasUnit, Byte> = publish_cost_equation();
 
-pub static TRANSACTION_ACCEPTANCE_COST_EQUATION: Lazy<LinearEquation<InternalGasUnit, Byte>> =
-    Lazy::new(transaction_acceptance_cost_equation);
+pub const TRANSACTION_ACCEPTANCE_COST_EQUATION: LinearEquation<InternalGasUnit, Byte> =
+    transaction_acceptance_cost_equation();
 
-fn publish_cost_equation() -> LinearEquation<InternalGasUnit, Byte> {
+const fn publish_cost_equation() -> LinearEquation<InternalGasUnit, Byte> {
     let offset = InternalGas::new(PACKAGE_PUBLISH_COST_FIXED);
     let slope = InternalGasPerByte::new(PACKAGE_PUBLISH_COST_PER_BYTE);
 
@@ -79,7 +77,7 @@ fn publish_cost_equation() -> LinearEquation<InternalGasUnit, Byte> {
     )
 }
 
-fn transaction_acceptance_cost_equation() -> LinearEquation<InternalGasUnit, Byte> {
+const fn transaction_acceptance_cost_equation() -> LinearEquation<InternalGasUnit, Byte> {
     let offset = InternalGas::new(BASE_TX_COST_FIXED);
     let slope = InternalGasPerByte::new(BASE_TX_COST_PER_BYTE);
 

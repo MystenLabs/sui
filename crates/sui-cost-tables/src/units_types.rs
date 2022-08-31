@@ -75,7 +75,7 @@ pub struct LinearEquation<YUnit, XUnit> {
 }
 
 impl<YUnit, XUnit> LinearEquation<YUnit, XUnit> {
-    pub fn new(
+    pub const fn new(
         slope: GasQuantity<UnitDiv<YUnit, XUnit>>,
         offset: GasQuantity<YUnit>,
         min: GasQuantity<YUnit>,
