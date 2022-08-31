@@ -139,7 +139,7 @@ export class JsonRpcProvider extends Provider {
     this.wsConnectionState = ConnectionState.Connecting;
 
     return new Promise<void>((resolve, reject) => {
-      this.wsTimeout = setTimeout(() => reject('timeout'), 15000) as any as number;
+      this.wsTimeout = setTimeout(() => reject(new Error('timeout')), 15000) as any as number;
       this.wsClient.once('open', () => {
         this.refreshSubscriptions();
         resolve();
