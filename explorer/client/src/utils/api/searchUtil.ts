@@ -90,10 +90,10 @@ export const navigateWithCategory = async (
             // and a given Object can share its ID with another Address
 
             if (!objectId) {
-                // If no Object ID provided, raise an error and then try for address and then object result
+                // If no Object ID provided, raise an error and then try for object and then address result
                 console.error('Object ID was not provided');
-                const addResult = await getDataOnAddress(input, network);
-                return addResult ? addResult : getDataOnObject(input, network);
+                const objResult = await getDataOnObject(input, network);
+                return objResult ? objResult : getDataOnAddress(input, network);
             }
 
             // Otherwise...
@@ -109,6 +109,7 @@ export const navigateWithCategory = async (
                     .length > 0
             )
                 return addResult;
+
             // If the owner is not an Address, then it is an Object
             return await getDataOnObject(input, network);
 
