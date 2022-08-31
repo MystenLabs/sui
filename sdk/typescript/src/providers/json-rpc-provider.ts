@@ -61,13 +61,13 @@ type JsonRpcMethodMessage<T> = {
 
 type FilterSubHandler = {
   id: SubscriptionId,
-  onMessage: (event: SuiEventEnvelope) => any,
+  onMessage: (event: SuiEventEnvelope) => void,
   filter: SuiEventFilter
 };
 
 type SubscriptionData = {
   filter: SuiEventFilter,
-  onMessage: (event: SuiEventEnvelope) => any
+  onMessage: (event: SuiEventEnvelope) => void
 }
 
 export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
