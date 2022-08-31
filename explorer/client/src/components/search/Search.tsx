@@ -97,7 +97,7 @@ function Search() {
     useEffect(() => {
         if (!input) {
             setResult(null);
-        } else {
+        } else if (navigateWithCategory) {
             Promise.all(
                 SEARCH_CATEGORIES.map((category) =>
                     navigateWithCategory(input, category, network)

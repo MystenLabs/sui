@@ -17,7 +17,7 @@ const expectErrorResult = () => {
 
 const searchText = (text: string) => {
     // TODO: Ideally this should just call `submit` but the search isn't a form yet:
-    cy.get('#searchText').type(text).get('#searchBtn').click();
+    cy.get('#searchText').type(`${text}{enter}`);
 };
 
 describe('End-to-end Tests', () => {
@@ -40,10 +40,10 @@ describe('End-to-end Tests', () => {
     });
 
     describe('Wrong Search', () => {
-        it('leads to error page', () => {
+        it('is blocked', () => {
             cy.visit('/');
             searchText('apples');
-            expectErrorResult();
+            expectHome();
         });
     });
 
@@ -261,4 +261,5 @@ describe('End-to-end Tests', () => {
             cy.get('[data-testid=tx] td').should('have.length.greaterThan', 0);
         });
     });
+
 });
