@@ -76,7 +76,8 @@ export class JsonRpcProvider extends Provider {
   protected wsClient: WsRpcClient;
   protected wsConnectionState: ConnectionState = ConnectionState.NotConnected;
   protected wsEndpoint: string;
-  protected wsTimeout: number = 0;
+  protected wsTimeout: number | null = null;
+  protected wsSetup: boolean = false;
 
   protected activeSubscriptions: Map<SubscriptionId, SubscriptionData> = new Map();
 
@@ -100,19 +101,19 @@ export class JsonRpcProvider extends Provider {
     super();
 
     this.client = new JsonRpcClient(endpoint);
-
+    // setup socket object so that it's defined in the constructor, but don't connect
     this.wsEndpoint = getWebsocketUrl(endpoint);
-
     const socketOptions = { reconnect_interval: 3000, autoconnect: false };
     this.wsClient = new WsRpcClient(this.wsEndpoint, socketOptions);
-    this.setupSocket();
   }
 
   private setupSocket() {
+    if(this.wsSetup) return;
+
     this.wsClient.on('open', () => {
-      if(this.wsTimeout != 0) {
+      if(this.wsTimeout) {
         clearTimeout(this.wsTimeout);
-        this.wsTimeout = 0;
+        this.wsTimeout = null;
       }
       this.wsConnectionState = ConnectionState.Connected;
       // underlying websocket is private, but we need it
@@ -126,12 +127,14 @@ export class JsonRpcProvider extends Provider {
     });
 
     this.wsClient.on('error', console.error);
+    this.wsSetup = true;
   }
 
   private async connect(): Promise<void> {
     if (this.wsConnectionState === ConnectionState.Connected)
       return Promise.resolve();
 
+    this.setupSocket();
     this.wsClient.connect();
     this.wsConnectionState = ConnectionState.Connecting;
 
