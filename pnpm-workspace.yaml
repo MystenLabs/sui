@@ -3,4 +3,3 @@ packages:
   - "sdk/**"
   - "explorer/**"
   - "wallet/**"
-  - "crates/sui-open-rpc"
