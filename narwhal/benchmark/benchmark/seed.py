@@ -41,7 +41,7 @@ class SeedData:
         transactions_address_port = starting_data_port
         for _ in range(nodes):
             for worker_id in range(workers):
-                transactions_address = f'http://127.0.0.1:{transactions_address_port}/'
+                transactions_address = f'http://0.0.0.0:{transactions_address_port}/'
                 transactions_address_port += 1
                 Print.info(transactions_address)
 
@@ -55,7 +55,7 @@ class SeedData:
             sleep(0.5)  # Removing the store may take time.
 
             # Recompile the latest code.
-            cmd = CommandMaker.compile().split()
+            cmd = CommandMaker.compile(mem_profiling=self.mem_profile)
             subprocess.run(cmd, check=True, cwd=PathMaker.node_crate_path())
 
             # Create alias for the client and nodes binary.

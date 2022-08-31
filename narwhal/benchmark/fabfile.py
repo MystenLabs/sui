@@ -109,6 +109,7 @@ def seed(ctx, starting_data_port):
         'rate': 50_000,
         'tx_size': 512,
         'duration': 20,
+        'mem_profiling': False
     }
     try:
         SeedData(bench_params).run(int(starting_data_port))
