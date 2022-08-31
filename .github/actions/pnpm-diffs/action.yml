@@ -7,6 +7,9 @@ outputs:
   isTypeScriptSDK:
     description: True when there are changes to files related to TypeScript SDK
     value: "${{ steps.changes.outputs.sdk }}"
+  isWalletExt:
+    description: True when there are changes to files related to Wallet Extension
+    value: "${{ steps.changes.outputs.wallet }}"
   isWalletAdapter:
     description: True when there are changes to files related to wallet adapter
     value: "${{ steps.changes.outputs.walletAdapter }}"
@@ -30,4 +33,5 @@ runs:
       run: |
         echo "::set-output name=explorer::$(jq 'any(.[]; .name == "sui-explorer")' changes.json)"
         echo "::set-output name=sdk::$(jq 'any(.[]; .name == "@mysten/sui.js")' changes.json)"
+        echo "::set-output name=wallet::$(jq 'any(.[]; .name == "sui-wallet")' changes.json)"
         echo "::set-output name=walletAdapter::$(jq 'any(.[]; .name | startswith("@mysten/wallet-adapter"))' changes.json)"
