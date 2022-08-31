@@ -9,7 +9,7 @@
     "src"
   ],
   "engines": {
-    "node": ">=10"
+    "node": ">=16"
   },
   "type": "module",
   "main": "./dist/index.cjs",
@@ -27,7 +27,7 @@
     "doc": "typedoc",
     "test": "vitest",
     "lint": "eslint './{src,test}/**.{ts,js}'",
-    "prepare": "pnpm build",
+    "prepublishOnly": "pnpm build",
     "size": "size-limit",
     "analyze": "size-limit --why"
   },
@@ -79,7 +79,7 @@
     "vitest": "^0.22.1"
   },
   "dependencies": {
-    "@mysten/bcs": "^0.2.0",
+    "@mysten/bcs": "workspace:*",
     "bn.js": "^5.2.0",
     "buffer": "^6.0.3",
     "cross-fetch": "^3.1.5",

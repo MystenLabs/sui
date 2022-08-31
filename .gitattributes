@@ -9,3 +9,4 @@ sui_core/tests/staged/sui.yaml text eol=lf
 
 # These files is auto generated
 sdk/typescript/src/index.guard.ts linguist-generated=true
+sdk/typescript/src/rpc/client.guard.ts linguist-generated=true
