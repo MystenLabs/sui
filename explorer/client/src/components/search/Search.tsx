@@ -100,7 +100,7 @@ function Search() {
         } else {
             Promise.all(
                 SEARCH_CATEGORIES.map((category) =>
-                    navigateWithCategory(input.trim(), category, network)
+                    navigateWithCategory(input, category, network)
                 )
             ).then((res) => {
                 setResult(res.filter((el) => el));
@@ -144,7 +144,7 @@ function Search() {
 
     const handleTextChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) => {
-            setInput(e.currentTarget.value);
+            setInput(e.currentTarget.value.trim());
         },
         []
     );
