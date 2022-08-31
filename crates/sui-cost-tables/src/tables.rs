@@ -169,7 +169,7 @@ impl CostTable {
 /// The  `GasCost` tracks:
 /// - instruction cost: how much time/computational power is needed to perform the instruction
 /// - memory cost: how much memory is required for the instruction, and storage overhead
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GasCost {
     pub instruction_gas: u64,
     pub memory_gas: u64,
@@ -715,7 +715,7 @@ pub fn zero_cost_schedule() -> CostTable {
 
 pub fn legacy_bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
     use Bytecode::*;
-    return vec![
+    vec![
         (MoveTo(StructDefinitionIndex::new(0)), GasCost::new(13, 1)),
         (
             MoveToGeneric(StructDefInstantiationIndex::new(0)),
@@ -826,7 +826,7 @@ pub fn legacy_bytecode_instruction_costs() -> Vec<(Bytecode, GasCost)> {
         (VecPopBack(SignatureIndex::new(0)), GasCost::new(227, 1)),
         (VecUnpack(SignatureIndex::new(0), 0), GasCost::new(572, 1)),
         (VecSwap(SignatureIndex::new(0)), GasCost::new(1436, 1)),
-    ];
+    ]
 }
 
 pub static INITIAL_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(|| {
