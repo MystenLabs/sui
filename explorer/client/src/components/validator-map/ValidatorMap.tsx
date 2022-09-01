@@ -6,7 +6,6 @@ import { ParentSizeModern } from '@visx/responsive';
 import { TooltipWithBounds, useTooltip } from '@visx/tooltip';
 import React, { useCallback, useMemo } from 'react';
 
-import { ReactComponent as ForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import { WorldMap } from './WorldMap';
 import { type NodeLocation } from './types';
 
@@ -121,14 +120,6 @@ export default function ValidatorMap() {
                         <div className={styles.stat}>{countryCount}</div>
                     </div>
                 </div>
-
-                <a
-                    href="https://bit.ly/sui_validator"
-                    className={styles.button}
-                >
-                    <span>Become a Validator</span>
-                    <ForwardArrowDark />
-                </a>
             </div>
 
             <div className={styles.mapcontainer}>
