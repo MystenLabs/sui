@@ -7183,14 +7183,9 @@ dependencies = [
  "bcs",
  "move-binary-format",
  "move-core-types",
- "move-vm-test-utils",
  "move-vm-types",
  "once_cell",
  "serde 1.0.144",
- "strum",
- "strum_macros",
- "tokio",
- "toml",
  "workspace-hack 0.1.0",
 ]
 
