@@ -88,7 +88,7 @@ impl<YUnit, XUnit> LinearEquation<YUnit, XUnit> {
             max,
         }
     }
-    #[inline(always)]
+    #[inline]
     pub fn calculate(&self, x: GasQuantity<XUnit>) -> anyhow::Result<GasQuantity<YUnit>> {
         let y = self.offset + self.slope.mul(x);
 
