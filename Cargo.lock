@@ -3553,40 +3553,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "madsim"
-version = "0.2.0-alpha.3"
-dependencies = [
- "ahash",
- "async-task",
- "bincode",
- "bytes",
- "downcast-rs",
- "env_logger",
- "futures",
- "lazy_static 1.4.0",
- "libc",
- "madsim-macros",
- "naive-timer",
- "rand 0.8.5",
- "real_tokio",
- "serde 1.0.144",
- "tokio-util 0.7.3",
- "toml",
- "tracing",
- "tracing-subscriber 0.3.15",
-]
-
-[[package]]
-name = "madsim-macros"
-version = "0.2.0-alpha.3"
-dependencies = [
- "darling 0.14.1",
- "proc-macro2 1.0.43",
- "quote 1.0.21",
- "syn 1.0.99",
-]
-
-[[package]]
 name = "match_opt"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4404,6 +4370,42 @@ dependencies = [
  "once_cell",
  "serde 1.0.144",
  "smallvec",
+]
+
+[[package]]
+name = "msim"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=dfbc3210c78674284b57d076f2c6a1ff1c17355e#dfbc3210c78674284b57d076f2c6a1ff1c17355e"
+dependencies = [
+ "ahash",
+ "async-task",
+ "bincode",
+ "bytes",
+ "downcast-rs",
+ "env_logger",
+ "futures",
+ "lazy_static 1.4.0",
+ "libc",
+ "msim-macros",
+ "naive-timer",
+ "rand 0.8.5",
+ "real_tokio",
+ "serde 1.0.144",
+ "tokio-util 0.7.3 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8ca4c94029ac1b7c8342720820e6100e9f31a372)",
+ "toml",
+ "tracing",
+ "tracing-subscriber 0.3.15",
+]
+
+[[package]]
+name = "msim-macros"
+version = "0.1.0"
+source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=dfbc3210c78674284b57d076f2c6a1ff1c17355e#dfbc3210c78674284b57d076f2c6a1ff1c17355e"
+dependencies = [
+ "darling 0.14.1",
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
 ]
 
 [[package]]
@@ -6036,16 +6038,20 @@ dependencies = [
 [[package]]
 name = "real_tokio"
 version = "1.20.1"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8ca4c94029ac1b7c8342720820e6100e9f31a372#8ca4c94029ac1b7c8342720820e6100e9f31a372"
 dependencies = [
  "autocfg 1.1.0",
  "bytes",
  "libc",
  "memchr",
  "mio 0.8.4",
+ "num_cpus",
  "once_cell",
+ "parking_lot 0.12.1",
  "pin-project-lite",
+ "signal-hook-registry",
  "socket2",
- "tokio-macros 1.8.0",
+ "tokio-macros 1.8.0 (git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8ca4c94029ac1b7c8342720820e6100e9f31a372)",
  "winapi",
 ]
 
@@ -7707,7 +7713,7 @@ name = "sui-macros"
 version = "0.7.0"
 dependencies = [
  "darling 0.14.1",
- "madsim-macros",
+ "msim-macros",
  "proc-macro2 1.0.43",
  "quote 1.0.21",
  "syn 1.0.99",
@@ -7845,7 +7851,7 @@ dependencies = [
 name = "sui-simulator"
 version = "0.7.0"
 dependencies = [
- "madsim",
+ "msim",
 ]
 
 [[package]]
@@ -8499,6 +8505,8 @@ dependencies = [
 [[package]]
 name = "tokio-macros"
 version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9724f9a975fb987ef7a3cd9be0350edcbe130698af5b8f7a631e23d42d052484"
 dependencies = [
  "proc-macro2 1.0.43",
  "quote 1.0.21",
@@ -8508,8 +8516,7 @@ dependencies = [
 [[package]]
 name = "tokio-macros"
 version = "1.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9724f9a975fb987ef7a3cd9be0350edcbe130698af5b8f7a631e23d42d052484"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8ca4c94029ac1b7c8342720820e6100e9f31a372#8ca4c94029ac1b7c8342720820e6100e9f31a372"
 dependencies = [
  "proc-macro2 1.0.43",
  "quote 1.0.21",
@@ -8563,6 +8570,22 @@ dependencies = [
 [[package]]
 name = "tokio-util"
 version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cc463cd8deddc3770d20f9852143d50bf6094e640b485cb2e189a2099085ff45"
+dependencies = [
+ "bytes",
+ "futures-core",
+ "futures-io",
+ "futures-sink",
+ "pin-project-lite",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "tokio-util"
+version = "0.7.3"
+source = "git+https://github.com/mystenmark/tokio-madsim-fork.git?rev=8ca4c94029ac1b7c8342720820e6100e9f31a372#8ca4c94029ac1b7c8342720820e6100e9f31a372"
 dependencies = [
  "bytes",
  "futures-core",
@@ -8573,21 +8596,6 @@ dependencies = [
  "pin-project-lite",
  "real_tokio",
  "slab",
- "tracing",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc463cd8deddc3770d20f9852143d50bf6094e640b485cb2e189a2099085ff45"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-io",
- "futures-sink",
- "pin-project-lite",
- "tokio",
  "tracing",
 ]
 
