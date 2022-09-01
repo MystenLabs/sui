@@ -15,6 +15,7 @@ use crate::{
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bincode::Error;
+use byteorder::{BigEndian, ReadBytesExt};
 use chrono::prelude::*;
 use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
@@ -1828,7 +1829,21 @@ impl ExecutionState for AuthorityState {
     }
 
     fn deserialize(bytes: &[u8]) -> Result<Self::Transaction, Error> {
-        bincode::deserialize(bytes)
+        let len = bytes.len();
+        if len <= 8 {
+            Err(Error::new(bincode::ErrorKind::Custom(
+                "Message length must be at least 8".to_string(),
+            )))
+        } else {
+            // Last 8 bytes encode a u64 tracking id.
+            // The implementation of serialization is in consensus_adapter.rs.
+            let tracking_id = (&bytes[(len - 8)..]).read_u64::<BigEndian>();
+            debug!(
+                ?tracking_id,
+                "Deserializing consensus transaction to be sent back to Sui"
+            );
+            bincode::deserialize(&bytes[..(len - 8)])
+        }
     }
 
     fn ask_consensus_write_lock(&self) -> bool {

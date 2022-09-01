@@ -7102,6 +7102,7 @@ dependencies = [
  "async-trait",
  "bcs",
  "bincode",
+ "byteorder",
  "bytes",
  "chrono",
  "clap 3.2.17",
