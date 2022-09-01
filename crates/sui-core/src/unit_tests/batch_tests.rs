@@ -277,7 +277,7 @@ async fn test_batch_manager_out_of_order() {
     _join.await.expect("No errors in task").expect("ok");
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_batch_manager_drop_out_of_order() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();

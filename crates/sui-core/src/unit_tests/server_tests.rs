@@ -90,7 +90,7 @@ async fn test_simple_request() {
     client.handle_object_info_request(req).await.unwrap();
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_subscription() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);
@@ -286,7 +286,7 @@ async fn test_subscription() {
     state.batch_notifier.close();
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_subscription_safe_client() {
     let sender = dbg_addr(1);
     let object_id = dbg_object_id(1);

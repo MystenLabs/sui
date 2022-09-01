@@ -10,7 +10,7 @@ use crate::authority_aggregator::AuthorityAggregator;
 use std::time::Duration;
 use tokio::task::JoinHandle;
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 pub async fn test_gossip_plain() {
     let action_sequence = vec![
         BatchAction::EmitUpdateItem(),
@@ -40,7 +40,7 @@ pub async fn test_gossip_plain() {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 pub async fn test_gossip_error() {
     let action_sequence = vec![BatchAction::EmitError(), BatchAction::EmitUpdateItem()];
 
@@ -66,7 +66,7 @@ pub async fn test_gossip_error() {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 pub async fn test_gossip_after_revert() {
     telemetry_subscribers::init_for_testing();
 

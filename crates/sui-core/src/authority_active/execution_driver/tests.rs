@@ -20,7 +20,7 @@ use crate::test_utils::wait_for_tx;
 
 use tracing::info;
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn pending_exec_storage_notify() {
     use telemetry_subscribers::init_for_testing;
     init_for_testing();
@@ -103,7 +103,7 @@ async fn pending_exec_storage_notify() {
     assert_eq!(num_certs, certs_back.len());
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn pending_exec_full() {
     // use telemetry_subscribers::init_for_testing;
     // init_for_testing();

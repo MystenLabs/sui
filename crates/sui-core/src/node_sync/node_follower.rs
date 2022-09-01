@@ -412,7 +412,7 @@ mod test {
         Arc::new(NodeSyncStore::open_tables_read_write(db_path, None, None))
     }
 
-    #[tokio::test(flavor = "current_thread", start_paused = true)]
+    #[tokio::test(flavor = "current_thread")]
     async fn test_follower() {
         telemetry_subscribers::init_for_testing();
 

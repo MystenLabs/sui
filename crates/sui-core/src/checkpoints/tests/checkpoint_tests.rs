@@ -974,7 +974,7 @@ async fn test_batch_to_checkpointing() {
     _join.await.expect("No errors in task").expect("ok");
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_batch_to_checkpointing_init_crash() {
     // Create a random directory to store the DB
     let dir = env::temp_dir();
@@ -1661,7 +1661,7 @@ pub async fn checkpoint_tests_setup(
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn checkpoint_messaging_flow_bug() {
     let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
 
@@ -1674,7 +1674,7 @@ async fn checkpoint_messaging_flow_bug() {
         .expect("All ok.");
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn checkpoint_messaging_flow() {
     let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
 
@@ -1830,7 +1830,7 @@ async fn checkpoint_messaging_flow() {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_no_more_fragments() {
     let mut setup = checkpoint_tests_setup(5, Duration::from_millis(500), true).await;
 

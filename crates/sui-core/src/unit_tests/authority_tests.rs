@@ -1044,7 +1044,7 @@ impl<F: Future> Future for LimitedPoll<F> {
     }
 }
 
-#[tokio::test(flavor = "current_thread", start_paused = true)]
+#[tokio::test(flavor = "current_thread")]
 async fn test_handle_certificate_interrupted_retry() {
     telemetry_subscribers::init_for_testing();
 
