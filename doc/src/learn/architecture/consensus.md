@@ -1,20 +1,23 @@
 ---
-title: Narwhal and Tusk, Sui's Consensus Engine
+title: Narwhal, Bullshark, and Tusk, Sui's Consensus Engine
 ---
 
-This is a brief introduction to [Narwhal and Bullshark](https://github.com/MystenLabs/narwhal), the high-throughput mempool and consensus offered by Mysten Labs. Sui runs consensus as needed to periodically checkpoint its state. And for those transactions that require a total ordering, Narwhal/Bullshark is the consensus engine of Sui.
+This is a brief introduction to [Narwhal, Tusk](https://github.com/MystenLabs/narwhal), and [Bullshark](https://arxiv.org/abs/2201.05677), the high-throughput mempool and consensus offered by Mysten Labs. Sui runs consensus as needed to periodically checkpoint its state. And for those transactions that require a total ordering, Narwhal and either Bullshark or Tusk comprise the Sui Consensus Engine.
 
 The dual name highlights that the systems split the responsibilities of:
-- ensuring the availability of data submitted to consensus ([Narwhal](https://arxiv.org/abs/2105.11827))
-- agreeing on a specific ordering of this data ([Bullshark](https://arxiv.org/abs/2201.05677))
+- ensuring the availability of data submitted to consensus = [Narwhal](https://arxiv.org/abs/2105.11827)
+- agreeing on a specific ordering of this data = [Bullshark](https://arxiv.org/abs/2201.05677) or [Tusk](https://github.com/MystenLabs/narwhal)
 
-> **Note:** Bullshark has replaced the Tusk component of the consensus protocol for reduced latency and support for fairness (where even slow validators can contribute). See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
+In August 2022, Bullshark replaced the Tusk component of the consensus protocol as the default for reduced latency and support for fairness (where even slow validators can contribute). See [DAG Meets BFT - The Next Generation of BFT Consensus](https://decentralizedthoughts.github.io/2022-06-28-DAG-meets-BFT/) for a comparison of the protocols.
 
-This is done in two layered modules, so Narwhal can also be used coupled with an external consensus algorithm, such as HotStuff, Istanbul BFT, or Tendermint. Narwhal is undergoing integration in the [Celo](https://www.youtube.com/watch?v=Lwheo3jhAZM) and [Sommelier](https://www.prnewswire.com/news-releases/sommelier-partners-with-mysten-labs-to-make-the-cosmos-blockchain-the-fastest-on-the-planet-301381122.html) blockchain.
+Still, you may easily use Tusk instead of Bullshark by reverting the change shown in:
+https://github.com/MystenLabs/narwhal/blob/85c226f2824010ff695d0bc5789a24cad2bce289/node/src/lib.rs#L266
 
-Narwhal and Bullshark represent the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reaches throughputs more than 125,000 transactions per second with a two-second latency for a deployment of 50 parties, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
+Consensus is accomplished in two layered modules, so Narwhal can also be used coupled with an external consensus algorithm, such as HotStuff, Istanbul BFT, or Tendermint. Narwhal is undergoing integration in the [Celo](https://www.youtube.com/watch?v=Lwheo3jhAZM) and [Sommelier](https://www.prnewswire.com/news-releases/sommelier-partners-with-mysten-labs-to-make-the-cosmos-blockchain-the-fastest-on-the-planet-301381122.html) blockchain.
 
-The Narwhal/Bullshark approach can offer dramatic scalability benefits in the following cases:
+The Sui Consensus Engine represents the latest variant of decades of work on multi-proposer, high-throughput consensus algorithms that reaches throughputs more than 125,000 transactions per second with a two-second latency for a deployment of 50 parties, with production cryptography, permanent storage, and a scaled-out primary-worker architecture.
+
+The Sui Consensus Engine approach can offer dramatic scalability benefits in the following cases:
 - a blockchain that has experimented with larger and larger blocks and has measured runaway latencies before the execution phase,
 - a blockchain with fast execution (e.g. focused on transactions, or with an UTXO data model), but which mempool and consensus do not keep up,
 
@@ -25,7 +28,7 @@ The Narwhal mempool offers:
 * a structured graph data structure for traversing this information
 * a scaled architecture, splitting the disk I/O and networking requirements across several [workers](https://github.com/MystenLabs/narwhal/tree/main/worker)
 
-The [Bullshark consensus](https://github.com/MystenLabs/narwhal/tree/main/consensus) offers a zero-message overhead consensus algorithm, leveraging graph traversals.
+The [consensus](https://github.com/MystenLabs/narwhal/tree/main/consensus) component offers a zero-message overhead consensus algorithm, leveraging graph traversals.
 
 ## Architecture
 
@@ -75,7 +78,7 @@ flowchart TB
 * The certificates prove the data availability of each collection, or block, at each round.
 * Their contents constitute a DAG that can be traversed identically at each honest node.
 
-While the Bullshark consensus selects a specific DAG traversal among several a posteriori, both Bullshark and external consensus algorithms can add more sophistication to their selection of blocks / collections to reflect priority concerns.
+While the Bullshark or Tusk consensus selects a specific DAG traversal among several a posteriori, both they and external consensus algorithms can add more sophistication to their selection of blocks / collections to reflect priority concerns.
 
 ## Dependencies
 
@@ -83,7 +86,7 @@ Narwhal is implemented using [Tokio](https://github.com/tokio-rs/tokio), [RocksD
 
 ## Configuration
 
-To conduct a fresh deployment of Narwhal and Bullshark, follow the instructions at [Running Benchmarks](https://github.com/mystenlabs/narwhal/tree/main/benchmark).
+To conduct a fresh deployment of Sui Consensus Engine, follow the instructions at [Running Benchmarks](https://github.com/mystenlabs/narwhal/tree/main/benchmark).
 
 ## Further reading
 
