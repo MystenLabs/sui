@@ -346,7 +346,7 @@ opentelemetry-semantic-conventions = { version = "0.9", default-features = false
 ordered-float-dff4ba8e3ae991db = { package = "ordered-float", version = "1", features = ["std"] }
 ordered-float-f595c2ba2a3f28df = { package = "ordered-float", version = "2", features = ["std"] }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
-ouroboros = { version = "0.15", default-features = false }
+ouroboros = { version = "0.9", default-features = false }
 owo-colors = { version = "3", default-features = false }
 parking_lot-93f6ce9d446188ac = { package = "parking_lot", version = "0.10" }
 parking_lot-a6292c17cd707f01 = { package = "parking_lot", version = "0.11" }
@@ -962,7 +962,7 @@ opentelemetry-semantic-conventions = { version = "0.9", default-features = false
 ordered-float-dff4ba8e3ae991db = { package = "ordered-float", version = "1", features = ["std"] }
 ordered-float-f595c2ba2a3f28df = { package = "ordered-float", version = "2", features = ["std"] }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
-ouroboros = { version = "0.15", default-features = false }
+ouroboros = { version = "0.9", default-features = false }
 ouroboros_macro = { version = "0.9", default-features = false }
 owo-colors = { version = "3", default-features = false }
 parking_lot-93f6ce9d446188ac = { package = "parking_lot", version = "0.10" }
