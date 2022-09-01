@@ -1,5 +1,5 @@
 .results {
-    @apply bg-white absolute z-50 left-0 w-full sm:w-[70%] sm:left-auto sm:max-w-[500px] px-[0.2vw] rounded-[6px];
+    @apply  absolute z-50 left-0 w-full sm:w-[70%] sm:left-auto sm:max-w-[500px] px-[0.2vw] rounded-[6px] list-none;
 
     /* The below is extracted from Figma */
     /* stylelint-disable */
@@ -8,12 +8,16 @@
     /* stylelint-enable */
 }
 
-.results dt {
+.result {
+  @apply relative bg-white;
+}
+
+.result dt {
     @apply text-sui-grey-75 uppercase font-semibold text-[12px] leading-[12px] ml-[14px] mb-[6px];
 }
 
-.results dd {
-    @apply mx-[8px] px-[6px] py-[9px] font-mono hover:bg-[#6FBCF01A] rounded-[4px] cursor-pointer break-all text-[9px] sm:text-[12px];
+.result dd {
+    @apply mx-[8px] px-[6px] py-[9px] font-mono rounded-[4px] cursor-pointer break-all text-[9px] sm:text-[12px];
 }
 
 .noresults {

@@ -1,22 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Combobox } from '@headlessui/react';
+
 import { type ResultType } from './SearchResultType';
-import {Combobox} from '@headlessui/react';
 
 import styles from './SearchResults.module.css';
 
-function SearchResults({
-    result,
-    resultIndex,
-    setResultIndex,
-    optionClick,
-}: {
-    result: ResultType[] | null;
-    resultIndex: number;
-    setResultIndex: (index: number) => void;
-    optionClick: (el: ResultType) => () => void;
-}) {
+function SearchResults({ result }: { result: ResultType[] | null }) {
     const categoryLabels = {
         objects: 'object',
         transactions: 'transaction',
@@ -25,27 +16,28 @@ function SearchResults({
 
     if (!result) return <></>;
     return (
-        <Combobox.Options className={styles.results}>
+        <Combobox.Options as="div" className={styles.results}>
+
             {result.length === 0 && (
-              <Combobox.Option>
-                <p className={styles.noresults}>No Results</p>
-              </Combobox.Option>
+                <p className={styles.noresults}>
+                    No Results
+                </p>
             )}
+
             {result.map((el, index) => (
-              <Combobox.Option>
-                <dl key={index}>
-                    <dt>{categoryLabels[el.category]}</dt>
-                    <dd
-                        className={
-                            index === resultIndex ? styles.selectedoption : ''
-                        }
-                        onClick={optionClick(el)}
-                    >
-                        {el.input}
-                    </dd>
-                </dl>
-              </Combobox.Option>
+                <Combobox.Option as="dl" 
+                 key={index} value={el.input}
+                 className={({active}) => 
+                   `${styles.result} ${
+                     active ? styles.selectedoption : ''
+                   }`
+                 }
+            >
+                        <dt>{categoryLabels[el.category]}</dt>
+                        <dd>{el.input}</dd>
+                </Combobox.Option>
             ))}
+
         </Combobox.Options>
     );
 }
