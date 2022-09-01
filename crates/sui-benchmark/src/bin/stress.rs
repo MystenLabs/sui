@@ -5,37 +5,37 @@ use clap::*;
 use futures::future::join_all;
 use futures::future::try_join_all;
 use prometheus::Registry;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+use strum_macros::EnumString;
 use sui_benchmark::benchmark::follow;
+use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
+use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
+use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
 use sui_benchmark::workloads::workload::get_latest;
+use sui_benchmark::workloads::workload::CombinationWorkload;
+use sui_benchmark::workloads::workload::Payload;
+use sui_benchmark::workloads::workload::Workload;
 use sui_benchmark::workloads::workload::WorkloadType;
 use sui_config::gateway::GatewayConfig;
 use sui_config::Config;
 use sui_config::PersistedConfig;
 use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::gateway_state::GatewayState;
 use sui_core::safe_client::SafeClientMetrics;
 use sui_node::metrics;
 use sui_node::SuiNode;
+use sui_sdk::crypto::FileBasedKeystore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AccountKeyPair;
-
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use strum_macros::EnumString;
-use sui_benchmark::drivers::bench_driver::BenchDriver;
-use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
-use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
-use sui_benchmark::workloads::workload::CombinationWorkload;
-use sui_benchmark::workloads::workload::Payload;
-use sui_benchmark::workloads::workload::Workload;
-use sui_core::epoch::epoch_store::EpochStore;
-use sui_sdk::crypto::FileBasedKeystore;
 use sui_types::crypto::EncodeDecodeBase64;
+use sui_types::crypto::SuiKeyPair;
 
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use test_utils::authority::spawn_test_authorities;
@@ -314,10 +314,16 @@ async fn main() -> Result<()> {
             })
             .map(|x| x.encode_base64())
             .unwrap();
+        // TODO(joyqvq): This is a hack to decode base64 keypair with added flag, ok for now since it is for benchmark use.
+        // Rework to get the typed keypair directly from above.
+        let ed25519_keypair = match SuiKeyPair::decode_base64(&keypair).unwrap() {
+            SuiKeyPair::Ed25519SuiKeyPair(x) => x,
+            _ => panic!("Unexpected keypair type"),
+        };
         (
             primary_gas_id,
             primary_gas_account,
-            Arc::new(keypair.parse().map_err(|e| anyhow!("{:#?}", e))?),
+            Arc::new(ed25519_keypair),
             config,
         )
     };
