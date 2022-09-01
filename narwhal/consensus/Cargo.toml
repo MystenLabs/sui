@@ -36,7 +36,7 @@ indexmap = { version = "1.9.1", features = ["serde"] }
 test_utils = { path = "../test_utils" }
 
 [target.'cfg(unix)'.dev-dependencies]
-pprof = { version = "0.10.0", features = ["criterion", "flamegraph"]}
+pprof = { version = "0.10.1", features = ["criterion", "flamegraph"]}
 
 [features]
 default = ["rand"]
