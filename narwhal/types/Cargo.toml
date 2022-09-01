@@ -13,7 +13,7 @@ blake2 = "0.9"
 bytes = "1.2.1"
 dashmap = "5.4.0"
 derive_builder = "0.11.2"
-futures = "0.3.23"
+futures = "0.3.24"
 indexmap = { version = "1.9.1", features = ["serde"] }
 prometheus = "0.13.1"
 proptest = "1.0.0"

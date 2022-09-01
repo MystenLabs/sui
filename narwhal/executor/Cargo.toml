@@ -13,7 +13,7 @@ bytes = "1.2.1"
 config = { path = "../config" }
 consensus = { path = "../consensus" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b" }
-futures = "0.3.23"
+futures = "0.3.24"
 multiaddr = "0.14.0"
 primary = { path = "../primary" }
 serde = { version = "1.0.144", features = ["derive"] }

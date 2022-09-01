@@ -13,7 +13,7 @@ bytes = "1.2.1"
 cfg-if = "1.0.0"
 clap = "2.34"
 dhat = { version = "0.3.0", optional = true }
-futures = "0.3.23"
+futures = "0.3.24"
 multiaddr = "0.14.0"
 mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 rand = "0.8.5"
