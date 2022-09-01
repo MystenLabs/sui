@@ -14,14 +14,16 @@ use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
 use crypto::KeyPair;
 use executor::{SerializedTransaction, SubscriberResult};
 use eyre::Context;
-use fastcrypto::{generate_production_keypair, traits::KeyPair as _};
+use fastcrypto::{ed25519::Ed25519KeyPair, generate_production_keypair, traits::KeyPair as _};
 use futures::future::join_all;
 use node::{
     execution_state::SimpleExecutionState,
     metrics::{primary_metrics_registry, start_prometheus_server, worker_metrics_registry},
     Node, NodeStorage,
 };
+use prometheus::Registry;
 use std::sync::Arc;
+use telemetry_subscribers::TelemetryGuards;
 use tokio::sync::mpsc::{channel, Receiver};
 use tracing::info;
 #[cfg(feature = "benchmark")]
@@ -83,60 +85,105 @@ async fn main() -> Result<(), eyre::Report> {
         _ => "trace",
     };
 
-    // In benchmarks, transactions are not deserializable => many errors at the debug level
-    // Moreover, we need RFC 3339 timestamps to parse properly => we use a custom subscriber.
-    cfg_if::cfg_if! {
-        if #[cfg(feature = "benchmark")] {
-            let custom_directive = "executor::core=info";
-            let filter = EnvFilter::builder()
-                .with_default_directive(LevelFilter::INFO.into())
-                .parse(format!(
-                    "{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},{custom_directive}"
-                ))?;
-
-            let env_filter = EnvFilter::try_from_default_env().unwrap_or(filter);
-
-            let timer = tracing_subscriber::fmt::time::UtcTime::rfc_3339();
-            let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder()
-                .with_env_filter(env_filter)
-                .with_timer(timer).with_ansi(false);
-            let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
-            set_global_default(subscriber).expect("Failed to set subscriber");
-        } else {
-
-            let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
-
-            let _guard = telemetry_subscribers::TelemetryConfig::new("narwhal")
-                // load env variables
-                .with_env()
-                // load special log filter
-                .with_log_level(&log_filter)
-                .init();
-        }
-    }
-
     match matches.subcommand() {
         ("generate_keys", Some(sub_matches)) => {
+            let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
             let kp = generate_production_keypair::<KeyPair>();
             config::Export::export(&kp, sub_matches.value_of("filename").unwrap())
                 .context("Failed to generate key pair")?
         }
-        ("run", Some(sub_matches)) => run(sub_matches).await?,
+        ("run", Some(sub_matches)) => {
+            let key_file = sub_matches.value_of("keys").unwrap();
+            let keypair = KeyPair::import(key_file).context("Failed to load the node's keypair")?;
+            let registry = match sub_matches.subcommand() {
+                ("primary", _) => primary_metrics_registry(keypair.public().clone()),
+                ("worker", Some(worker_matches)) => {
+                    let id = worker_matches
+                        .value_of("id")
+                        .unwrap()
+                        .parse::<WorkerId>()
+                        .context("The worker id must be a positive integer")?;
+
+                    worker_metrics_registry(id, keypair.public().clone())
+                }
+                _ => unreachable!(),
+            };
+
+            // In benchmarks, transactions are not deserializable => many errors at the debug level
+            // Moreover, we need RFC 3339 timestamps to parse properly => we use a custom subscriber.
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "benchmark")] {
+                    setup_benchmark_telemetry(tracing_level, network_tracing_level)?;
+                } else {
+                    let _guard = setup_telemetry(tracing_level, network_tracing_level, Some(&registry));
+                }
+            }
+            run(sub_matches, keypair, registry).await?
+        }
         _ => unreachable!(),
     }
     Ok(())
 }
 
+fn setup_telemetry(
+    tracing_level: &str,
+    network_tracing_level: &str,
+    prom_registry: Option<&prometheus::Registry>,
+) -> TelemetryGuards {
+    let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
+
+    let config = telemetry_subscribers::TelemetryConfig::new("narwhal")
+        // load env variables
+        .with_env()
+        // load special log filter
+        .with_log_level(&log_filter);
+
+    let config = if let Some(reg) = prom_registry {
+        config.with_prom_registry(reg)
+    } else {
+        config
+    };
+
+    let (guard, _handle) = config.init();
+    guard
+}
+
+#[cfg(feature = "benchmark")]
+fn setup_benchmark_telemetry(
+    tracing_level: &str,
+    network_tracing_level: &str,
+) -> Result<(), eyre::Report> {
+    let custom_directive = "executor::core=info";
+    let filter = EnvFilter::builder()
+        .with_default_directive(LevelFilter::INFO.into())
+        .parse(format!(
+            "{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level},{custom_directive}"
+        ))?;
+
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or(filter);
+
+    let timer = tracing_subscriber::fmt::time::UtcTime::rfc_3339();
+    let subscriber_builder = tracing_subscriber::fmt::Subscriber::builder()
+        .with_env_filter(env_filter)
+        .with_timer(timer)
+        .with_ansi(false);
+    let subscriber = subscriber_builder.with_writer(std::io::stderr).finish();
+    set_global_default(subscriber).expect("Failed to set subscriber");
+    Ok(())
+}
+
 // Runs either a worker or a primary.
-async fn run(matches: &ArgMatches<'_>) -> Result<(), eyre::Report> {
-    let key_file = matches.value_of("keys").unwrap();
+async fn run(
+    matches: &ArgMatches<'_>,
+    keypair: Ed25519KeyPair,
+    registry: Registry,
+) -> Result<(), eyre::Report> {
     let committee_file = matches.value_of("committee").unwrap();
     let workers_file = matches.value_of("workers").unwrap();
     let parameters_file = matches.value_of("parameters");
     let store_path = matches.value_of("store").unwrap();
 
     // Read the committee, workers and node's keypair from file.
-    let keypair = KeyPair::import(key_file).context("Failed to load the node's keypair")?;
     let committee = Arc::new(ArcSwap::from_pointee(
         Committee::import(committee_file).context("Failed to load the committee information")?,
     ));
@@ -159,14 +206,10 @@ async fn run(matches: &ArgMatches<'_>) -> Result<(), eyre::Report> {
     let (tx_transaction_confirmation, rx_transaction_confirmation) =
         channel(Node::CHANNEL_CAPACITY);
 
-    let registry;
-
     // Check whether to run a primary, a worker, or an entire authority.
     let node_handles = match matches.subcommand() {
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
-            registry = primary_metrics_registry(keypair.public().clone());
-
             Node::spawn_primary(
                 keypair,
                 committee,
@@ -188,8 +231,6 @@ async fn run(matches: &ArgMatches<'_>) -> Result<(), eyre::Report> {
                 .unwrap()
                 .parse::<WorkerId>()
                 .context("The worker id must be a positive integer")?;
-
-            registry = worker_metrics_registry(id, keypair.public().clone());
 
             Node::spawn_workers(
                 /* name */
