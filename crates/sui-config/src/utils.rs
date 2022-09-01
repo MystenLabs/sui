@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[cfg(not(madsim))]
+#[cfg(not(msim))]
 mod inner {
     use std::net::{TcpListener, TcpStream};
 
@@ -41,7 +41,7 @@ mod inner {
     }
 }
 
-#[cfg(madsim)]
+#[cfg(msim)]
 mod inner {
     pub fn get_available_port() -> u16 {
         use std::cell::Cell;

@@ -12,7 +12,7 @@ use sui_types::base_types::SuiAddress;
 use tap::TapFallible;
 use tracing::{error, trace};
 
-#[cfg(madsim)]
+#[cfg(msim)]
 use std::net::{IpAddr, SocketAddr};
 
 /// A handle to an in-memory Sui Node.
@@ -126,7 +126,7 @@ enum ContainerJoinHandle {
     #[allow(dead_code)]
     Thread(thread::JoinHandle<()>),
 
-    #[cfg(madsim)]
+    #[cfg(msim)]
     SimulatorNode(
         sui_simulator::task::NodeId,
         sui_simulator::task::JoinHandle<()>,
@@ -151,7 +151,7 @@ impl Drop for Container {
                 thread.join().unwrap();
             }
 
-            #[cfg(madsim)]
+            #[cfg(msim)]
             ContainerJoinHandle::SimulatorNode(node_id, join_handle) => {
                 tracing::info!("shutting down {}", node_id);
                 join_handle.abort();
@@ -169,14 +169,14 @@ impl Container {
         config: NodeConfig,
         _runtime: RuntimeType,
     ) -> (tokio::sync::oneshot::Receiver<()>, Self) {
-        #[cfg(madsim)]
+        #[cfg(msim)]
         return Self::spawn_simulator_nodes(config);
 
-        #[cfg(not(madsim))]
+        #[cfg(not(msim))]
         return Self::spawn_threads(config, _runtime);
     }
 
-    #[cfg(madsim)]
+    #[cfg(msim)]
     fn spawn_simulator_nodes(config: NodeConfig) -> (tokio::sync::oneshot::Receiver<()>, Self) {
         let (startup_sender, startup_reciever) = tokio::sync::oneshot::channel();
         let (cancel_sender, cancel_reciever) = tokio::sync::oneshot::channel();
@@ -218,7 +218,7 @@ impl Container {
         )
     }
 
-    #[cfg(not(madsim))]
+    #[cfg(not(msim))]
     fn spawn_threads(
         config: NodeConfig,
         runtime: RuntimeType,

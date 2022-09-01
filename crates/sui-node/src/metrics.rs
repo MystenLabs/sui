@@ -18,7 +18,7 @@ const METRICS_ROUTE: &str = "/metrics";
 pub fn start_prometheus_server(addr: SocketAddr) -> Registry {
     let registry = Registry::new();
 
-    if cfg!(madsim) {
+    if cfg!(msim) {
         // prometheus uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
         // can't yet run it in the simulator.
         warn!("not starting prometheus server in simulator");

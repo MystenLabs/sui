@@ -136,7 +136,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         account_key_pair: SuiKeyPair,
         network_key_pair: SuiKeyPair,
     ) -> ValidatorGenesisInfo {
-        #[cfg(madsim)]
+        #[cfg(msim)]
         return self.build_validator_for_simulator(
             index,
             key_pair,
@@ -144,7 +144,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             network_key_pair,
         );
 
-        #[cfg(not(madsim))]
+        #[cfg(not(msim))]
         return Self::build_validator_for_localhost(
             index,
             key_pair,
@@ -153,7 +153,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         );
     }
 
-    #[cfg(madsim)]
+    #[cfg(msim)]
     fn build_validator_for_simulator(
         &self,
         index: usize,
@@ -180,7 +180,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         ValidatorGenesisInfo::from_base_ip(key_pair, account_key_pair, network_key_pair, ip, index)
     }
 
-    #[cfg(not(madsim))]
+    #[cfg(not(msim))]
     fn build_validator_for_localhost(
         _index: usize,
         key_pair: AuthorityKeyPair,
