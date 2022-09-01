@@ -77,6 +77,13 @@ impl RpcExampleProvider {
             self.get_transactions_from_address(),
             self.get_transactions_in_range(),
             self.get_transactions_to_address(),
+            self.get_events_by_transaction(),
+            self.get_events_by_object(),
+            self.get_events_by_sender(),
+            self.get_events_by_recipient(),
+            self.get_events_by_move_event_struct_name(),
+            self.get_events_by_transaction_module(),
+            self.get_events_by_timerange(),
         ]
         .into_iter()
         .map(|example| (example.function_name, example.examples))
@@ -160,7 +167,7 @@ impl RpcExampleProvider {
     }
 
     fn execute_transaction_example(&mut self) -> Examples {
-        let (data, signature, result, _) = self.get_transfer_data_response();
+        let (data, signature, _, _, result, _) = self.get_transfer_data_response();
         let tx_bytes = TransactionBytes::from_data(data).unwrap();
 
         Examples::new(
@@ -316,7 +323,7 @@ impl RpcExampleProvider {
     }
 
     fn get_transaction(&mut self) -> Examples {
-        let (_, _, result, _) = self.get_transfer_data_response();
+        let (_, _, _, _, result, _) = self.get_transfer_data_response();
         Examples::new(
             "sui_getTransaction",
             vec![ExamplePairing::new(
@@ -424,16 +431,17 @@ impl RpcExampleProvider {
 
     fn get_transfer_data_response(
         &mut self,
-    ) -> (TransactionData, Signature, SuiTransactionResponse, Vec<SuiEventEnvelope>) {
+    ) -> (TransactionData, Signature, SuiAddress, ObjectID, SuiTransactionResponse, Vec<SuiEventEnvelope>) {
         let (signer, kp): (_, AccountKeyPair) = get_key_pair_from_rng(&mut self.rng);
         let recipient = SuiAddress::from(ObjectID::new(self.rng.gen()));
+        let obj_id = ObjectID::new(self.rng.gen());
         let gas_ref = (
             ObjectID::new(self.rng.gen()),
             SequenceNumber::from_u64(2),
             ObjectDigest::new(self.rng.gen()),
         );
         let object_ref = (
-            ObjectID::new(self.rng.gen()),
+            obj_id,
             SequenceNumber::from_u64(2),
             ObjectDigest::new(self.rng.gen()),
         );
@@ -503,12 +511,12 @@ impl RpcExampleProvider {
             parsed_data: None,
         };
 
-        (data, signature, result, events)
+        (data, signature, recipient, obj_id, result, events)
     }
 
 
     fn get_events_by_transaction(&mut self) -> Examples {
-        let (_, _, result, events) = self.get_transfer_data_response();
+        let (_, _, _, _, result, events) = self.get_transfer_data_response();
         Examples::new(
             "sui_getEventsByTransaction",
             vec![ExamplePairing::new(
@@ -525,5 +533,176 @@ impl RpcExampleProvider {
             )],
         )
     }
+
+    fn get_events_by_sender(&mut self) -> Examples {
+        let ts = std::time::Instant::now().elapsed().as_secs();
+        let (tx_data, _, _, _, _, events) = self.get_transfer_data_response();
+        Examples::new(
+            "sui_getEventsBySender",
+            vec![ExamplePairing::new(
+                "Return the Events associated with the given sender",
+                vec![(
+                    "sender",
+                    json!(tx_data.signer()),
+                ),(
+                    "count",
+                    json!(2),
+                ),(
+                    "start_time",
+                    json!(ts),
+                ),(
+                    "end_time",
+                    json!(ts+10),
+                )
+                ],
+                json!(events),
+            )],
+        )
+    }
+
+    fn get_events_by_recipient(&mut self) -> Examples {
+        let ts = std::time::Instant::now().elapsed().as_secs();
+        let (_, _, recipient, _, _, events) = self.get_transfer_data_response();
+        Examples::new(
+            "sui_getEventsByRecipient",
+            vec![ExamplePairing::new(
+                "Return the Events associated with the given recipient",
+                vec![(
+                    "recipient",
+                    json!(Owner::AddressOwner(recipient)),
+                ),(
+                    "count",
+                    json!(2),
+                ),(
+                    "start_time",
+                    json!(ts),
+                ),(
+                    "end_time",
+                    json!(ts+10),
+                )
+                ],
+                json!(events),
+            )],
+        )
+    }
+
+    fn get_events_by_object(&mut self) -> Examples {
+        let ts = std::time::Instant::now().elapsed().as_secs();
+        let (_, _, _, obj_id, _, events) = self.get_transfer_data_response();
+        Examples::new(
+            "sui_getEventsByObject",
+            vec![ExamplePairing::new(
+                "Return the Events associated with the given object",
+                vec![(
+                    "object",
+                    json!(obj_id),
+                ),(
+                    "count",
+                    json!(2),
+                ),(
+                    "start_time",
+                    json!(ts),
+                ),(
+                    "end_time",
+                    json!(ts+10),
+                )
+                ],
+                json!(events),
+            )],
+        )
+    }
+
+    fn get_events_by_timerange(&mut self) -> Examples {
+        let ts = std::time::Instant::now().elapsed().as_secs();
+        let (_, _, _, _, _, events) = self.get_transfer_data_response();
+        Examples::new(
+            "sui_getEventsByTimeRange",
+            vec![ExamplePairing::new(
+                "Return the Events emitted in [start_time, end_time) interval",
+                vec![(
+                    "count",
+                    json!(2),
+                ),(
+                    "start_time",
+                    json!(ts),
+                ),(
+                    "end_time",
+                    json!(ts+10),
+                )
+                ],
+                json!(events),
+            )],
+        )
+    }
+
+    fn get_events_by_move_event_struct_name(&mut self) -> Examples {
+        let ts = std::time::Instant::now().elapsed().as_secs();
+        let (data, signature, _, _, _, _) = self.get_transfer_data_response();
+        let tx = Transaction::new(data, signature);
+
+        let event = SuiEventEnvelope {
+            timestamp: ts,
+            tx_digest: Some(*tx.digest()),
+            event: SuiEvent::MoveEvent { 
+                package_id: ObjectID::from_hex_literal("0x2").unwrap(), 
+                transaction_module: String::from("devnet_nft"),
+                sender: SuiAddress::from_str("0x9421e7ad826ba13aca8ae41316644f06759b4506").unwrap(), 
+                type_: String::from("0x2::devnet_nft::MintNFTEvent"), 
+                fields: None, 
+                bcs: vec![],
+            },
+        };
+        Examples::new(
+            "sui_getEventsByMoveEventStructName",
+            vec![ExamplePairing::new(
+                "Return the Events with the given move event struct name",
+                vec![(
+                    "move_event_struct_name",
+                    json!("0x2::devnet_nft::MintNFTEvent"),
+                ),(
+                    "count",
+                    json!(5),
+                ),(
+                    "start_time",
+                    json!(ts),
+                ),(
+                    "end_time",
+                    json!(ts+10),
+                )
+                ],
+                json!(vec![event]),
+            )],
+        )
+    }
+
+    fn get_events_by_transaction_module(&mut self) -> Examples {
+        let ts = std::time::Instant::now().elapsed().as_secs();
+        let (_, _, _, _, _, events) = self.get_transfer_data_response();
+        Examples::new(
+            "sui_getEventsByModule",
+            vec![ExamplePairing::new(
+                "Return the Events emitted in a specified Move module",
+                vec![(
+                    "package",
+                    json!(ObjectID::from_hex_literal("0x2").unwrap()),
+                ),(
+                    "module",
+                    json!("devnet_nft"),
+                ),(
+                    "count",
+                    json!(5),
+                ),(
+                    "start_time",
+                    json!(ts),
+                ),(
+                    "end_time",
+                    json!(ts+10),
+                )
+                ],
+                json!(events),
+            )],
+        )
+    }
+
 
 }
