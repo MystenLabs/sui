@@ -69,8 +69,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
-      - name: Run test validator in the background
-        run: cargo run --bin sui-test-validator &
       - uses: pnpm/action-setup@v2.2.2
         with:
           version: 7
@@ -87,8 +85,7 @@ jobs:
         uses: cypress-io/github-action@v4
         with:
           install: false
-          start: pnpm dev:local
-          working-directory: ./explorer/client
+          start: pnpm dlx concurrently 'cargo run --bin sui-test-validator' 'CI=true pnpm --filter sui-explorer dev:local'
           spec: cypress/e2e/localnet/*
           # Wait on faucet:
           wait-on: 'http://localhost:9123'
