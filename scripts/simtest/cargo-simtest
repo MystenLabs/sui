@@ -43,11 +43,12 @@ fi
 
 cargo nextest run \
   --cargo-profile simulator \
-  --config 'build.rustflags = ["--cfg", "madsim"]' \
-  --config 'patch.crates-io.tokio.path = "/Users/mlogan/dev/madsim-fork/madsim-tokio"' \
-  --config 'patch.crates-io.hyper.path = "/Users/mlogan/dev/madsim-fork/hyper-madsim-fork"' \
+  --config 'build.rustflags = ["--cfg", "msim"]' \
+  --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-simulator.git"' \
+  --config 'patch.crates-io.tokio.rev = "79b3531002494a549b6c19cd9a037a1af5bd964e"' \
+  --config 'patch.crates-io.hyper.git = "https://github.com/mystenmark/hyper-madsim-fork.git"' \
+  --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"' \
   "$@"
-
 
 STATUS=$?
 
