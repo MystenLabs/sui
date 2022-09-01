@@ -3,6 +3,10 @@
     "title": "QUICK LINKS",
     "items": [
       {
+        "label": "Fullnode",
+        "link": "build/fullnode"
+      },
+      {
         "label": "Devnet",
         "link": "build/devnet"
       },
