@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 arc-swap = "1.5.1"
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b" }
-dashmap = "5.3.4"
+dashmap = "5.4.0"
 either = "1.8.0"
 itertools = "0.10.3"
 once_cell = "1.13.1"

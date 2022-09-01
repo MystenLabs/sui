@@ -7,7 +7,7 @@ authors = ["Mysten Labs <build@mystenlabs.com>"]
 publish = false
 
 [dependencies]
-dashmap = "5.3.4"
+dashmap = "5.4.0"
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b", package = "fastcrypto" }
 futures = "0.3.23"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
