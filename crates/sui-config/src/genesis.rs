@@ -75,7 +75,7 @@ impl Genesis {
                     .try_into()
                     .expect("Can't get narwhal public key");
                 let primary = narwhal_config::PrimaryAddresses {
-                    primary_to_primary: validator.narwhal_primary_to_primary.clone(),
+                    public_to_primary: validator.narwhal_public_to_primary.clone(),
                     worker_to_primary: validator.narwhal_worker_to_primary.clone(),
                 };
                 let authority = narwhal_config::Authority {
@@ -106,7 +106,7 @@ impl Genesis {
                     narwhal_config::WorkerInfo {
                         primary_to_worker: validator.narwhal_primary_to_worker.clone(),
                         transactions: validator.narwhal_consensus_address.clone(),
-                        worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                        public_to_worker: validator.narwhal_public_to_worker.clone(),
                     },
                 )]
                 .into_iter()
@@ -629,10 +629,10 @@ mod test {
             delegation: 0,
             gas_price: 1,
             network_address: utils::new_network_address(),
-            narwhal_primary_to_primary: utils::new_network_address(),
+            narwhal_public_to_primary: utils::new_network_address(),
             narwhal_worker_to_primary: utils::new_network_address(),
             narwhal_primary_to_worker: utils::new_network_address(),
-            narwhal_worker_to_worker: utils::new_network_address(),
+            narwhal_public_to_worker: utils::new_network_address(),
             narwhal_consensus_address: utils::new_network_address(),
         };
         let pop = generate_proof_of_possession(&key, account_key.public().into());

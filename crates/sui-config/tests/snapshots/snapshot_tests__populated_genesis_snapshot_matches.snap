@@ -10,9 +10,9 @@ expression: genesis.validator_set()
   delegation: 0
   gas-price: 1
   network-address: ""
-  narwhal-primary-to-primary: ""
+  narwhal-public-to-primary: ""
   narwhal-worker-to-primary: ""
   narwhal-primary-to-worker: ""
-  narwhal-worker-to-worker: ""
+  narwhal-public-to-worker: ""
   narwhal-consensus-address: ""
 

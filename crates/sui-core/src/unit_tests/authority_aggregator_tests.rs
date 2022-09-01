@@ -61,10 +61,10 @@ pub async fn init_local_authorities(
             delegation: 0,
             gas_price: 1,
             network_address: sui_config::utils::new_network_address(),
-            narwhal_primary_to_primary: sui_config::utils::new_network_address(),
+            narwhal_public_to_primary: sui_config::utils::new_network_address(),
             narwhal_worker_to_primary: sui_config::utils::new_network_address(),
             narwhal_primary_to_worker: sui_config::utils::new_network_address(),
-            narwhal_worker_to_worker: sui_config::utils::new_network_address(),
+            narwhal_public_to_worker: sui_config::utils::new_network_address(),
             narwhal_consensus_address: sui_config::utils::new_network_address(),
         };
         let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());

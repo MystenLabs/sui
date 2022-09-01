@@ -78,10 +78,10 @@ fn populated_genesis_snapshot_matches() {
         delegation: 0,
         gas_price: 1,
         network_address: Multiaddr::empty(),
-        narwhal_primary_to_primary: Multiaddr::empty(),
+        narwhal_public_to_primary: Multiaddr::empty(),
         narwhal_worker_to_primary: Multiaddr::empty(),
         narwhal_primary_to_worker: Multiaddr::empty(),
-        narwhal_worker_to_worker: Multiaddr::empty(),
+        narwhal_public_to_worker: Multiaddr::empty(),
         narwhal_consensus_address: Multiaddr::empty(),
     };
     let pop = generate_proof_of_possession(&key, account_key.public().into());

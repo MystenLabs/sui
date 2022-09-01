@@ -184,12 +184,12 @@ pub struct ValidatorInfo {
     pub delegation: StakeUnit,
     pub gas_price: u64,
     pub network_address: Multiaddr,
-    pub narwhal_primary_to_primary: Multiaddr,
+    pub narwhal_public_to_primary: Multiaddr,
 
     //TODO remove all of these as they shouldn't be needed to be encoded in genesis
     pub narwhal_worker_to_primary: Multiaddr,
     pub narwhal_primary_to_worker: Multiaddr,
-    pub narwhal_worker_to_worker: Multiaddr,
+    pub narwhal_public_to_worker: Multiaddr,
     pub narwhal_consensus_address: Multiaddr,
 }
 

@@ -2,21 +2,22 @@
 
 This document lays out the step-by-step process for orchestrating a Sui Genesis Ceremony.
 
-## Prerequisites 
+## Prerequisites
 
 Each validator participating in the ceremony will need the following:
 
 - Ed25519 Public key
 - Sui network address // WAN
-- Narwhal_primary_to_primary network address // WAN
+- Narwhal_public_to_primary network address // WAN
 - Narwhal_worker_to_primary network address // LAN
 - Narwhal_primary_to_worker network address // LAN
-- Narwhal_worker_to_worker network address // WAN
+- Narwhal_public_to_worker network address // WAN
 - Narwhal_consensus_address network address // LAN
 
 Note:
+
 - Network addresses should be Multiaddrs in the form of `/dns/{dns name}/tcp/{port}/http` and
-only the addresses marked WAN need to be publicly accessible by the wider internet.
+  only the addresses marked WAN need to be publicly accessible by the wider internet.
 - An Ed25519 key can be created using `sui keytool generate`
 
 ## Ceremony
@@ -31,7 +32,7 @@ The MC (Master of Ceremony) will create a new git repository and initialize the 
 
 ```
 $ git init genesis && cd genesis
-$ sui genesis-ceremony 
+$ sui genesis-ceremony
 $ git add .
 $ git commit -m "init genesis"
 $ git push
@@ -47,10 +48,10 @@ $ sui genesis-ceremony add-validator \
     --name <human-readable validator name> \
     --key-file <path to key file> \
     --network-address <multiaddr> \
-    --narwhal-primary-to-primary <multiaddr> \
+    --narwhal-public-to-primary <multiaddr> \
     --narwhal-worker-to-primary <multiaddr> \
     --narwhal-primary-to-worker <multiaddr> \
-    --narwhal-worker-to-worker <multiaddr> \
+    --narwhal-public-to-worker <multiaddr> \
     --narwhal-consensus-address <multiaddr>
 
 $ git add .

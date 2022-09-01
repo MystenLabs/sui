@@ -6,6 +6,6 @@ authorities:
   ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=:
     stake: 1
     primary:
-      primary_to_primary: ""
+      public_to_primary: ""
       worker_to_primary: ""
 epoch: 0

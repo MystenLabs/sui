@@ -123,10 +123,10 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
                 delegation: 1,
                 gas_price: 1,
                 network_address: sui_config::utils::new_network_address(),
-                narwhal_primary_to_primary: sui_config::utils::new_network_address(),
+                narwhal_public_to_primary: sui_config::utils::new_network_address(),
                 narwhal_worker_to_primary: sui_config::utils::new_network_address(),
                 narwhal_primary_to_worker: sui_config::utils::new_network_address(),
-                narwhal_worker_to_worker: sui_config::utils::new_network_address(),
+                narwhal_public_to_worker: sui_config::utils::new_network_address(),
                 narwhal_consensus_address: sui_config::utils::new_network_address(),
             }],
             ..Default::default()
