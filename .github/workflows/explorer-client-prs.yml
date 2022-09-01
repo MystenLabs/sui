@@ -89,4 +89,6 @@ jobs:
           start: pnpm dlx concurrently 'cargo run --bin sui-test-validator' 'CI=true pnpm --filter sui-explorer dev:local'
           spec: cypress/e2e/localnet/*
           # Wait on faucet:
-          wait-on: 'http://localhost:9123'
+          wait-on: 'http://localhost:3000, http://localhost:9123'
+          # wait for 2 minutes for the server to respond
+          wait-on-timeout: 120
