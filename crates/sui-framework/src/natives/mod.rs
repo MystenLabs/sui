@@ -26,6 +26,11 @@ pub fn all_natives(
 ) -> NativeFunctionTable {
     let sui_natives: &[(&str, &str, NativeFunction)] = &[
         ("crypto", "ecrecover", make_native!(crypto::ecrecover)),
+        (
+            "crypto",
+            "ecrecover_eth_address",
+            make_native!(crypto::ecrecover_eth_address),
+        ),
         ("crypto", "keccak256", make_native!(crypto::keccak256)),
         (
             "crypto",

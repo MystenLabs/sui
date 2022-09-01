@@ -18,6 +18,11 @@ module sui::crypto {
     /// applied to Secp256k1 signatures.
     public native fun ecrecover(signature: vector<u8>, hashed_msg: vector<u8>): vector<u8>;
 
+    /// Similar to ecrecover. Instead recovering to public key, recovers straight to an ethereum address if the 
+    /// signature is valid, otherwise throw error. An ethereum address is the last 20 bytes of the Keccak-256 
+    /// hash of the public key and adding 0x to the beginning.
+    public native fun ecrecover_eth_address(signature: vector<u8>, hashed_msg: vector<u8>): vector<u8>;
+
     /// @param data: arbitrary bytes data to hash
     /// Hash the input bytes using keccak256 and returns 32 bytes.
     public native fun keccak256(data: vector<u8>): vector<u8>;

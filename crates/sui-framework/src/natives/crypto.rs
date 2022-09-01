@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::{legacy_emit_cost, legacy_empty_cost};
 use curve25519_dalek_ng::scalar::Scalar;
 use fastcrypto::{
     bls12381::{BLS12381PublicKey, BLS12381Signature},
@@ -16,8 +17,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-
-use crate::{legacy_emit_cost, legacy_empty_cost};
+use sui_types::error::SuiError;
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
@@ -41,15 +41,57 @@ pub fn ecrecover(
     let signature = pop_arg!(args, Vec<u8>);
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
+    match recover_pubkey(signature, hashed_msg) {
+        Ok(pubkey) => Ok(NativeResult::ok(
+            cost,
+            smallvec![Value::vector_u8(pubkey.as_bytes().to_vec())],
+        )),
+        Err(SuiError::InvalidSignature { error: _ }) => {
+            Ok(NativeResult::err(cost, INVALID_SIGNATURE))
+        }
+        Err(_) => Ok(NativeResult::err(cost, FAIL_TO_RECOVER_PUBKEY)),
+    }
+}
+
+fn recover_pubkey(signature: Vec<u8>, hashed_msg: Vec<u8>) -> Result<Secp256k1PublicKey, SuiError> {
     match <Secp256k1Signature as ToFromBytes>::from_bytes(&signature) {
         Ok(signature) => match signature.recover(&hashed_msg) {
-            Ok(pubkey) => Ok(NativeResult::ok(
-                cost,
-                smallvec![Value::vector_u8(pubkey.as_bytes().to_vec())],
-            )),
-            Err(_) => Ok(NativeResult::err(cost, FAIL_TO_RECOVER_PUBKEY)),
+            Ok(pubkey) => Ok(pubkey),
+            Err(e) => Err(SuiError::KeyConversionError(e.to_string())),
         },
-        Err(_) => Ok(NativeResult::err(cost, INVALID_SIGNATURE)),
+        Err(e) => Err(SuiError::InvalidSignature {
+            error: e.to_string(),
+        }),
+    }
+}
+
+/// Ecrecover to eth address directly.
+/// Native implemention of ecrecover in public Move API, see crypto.move for specifications.
+pub fn ecrecover_eth_address(
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 2);
+
+    let hashed_msg = pop_arg!(args, Vec<u8>);
+    let mut signature = pop_arg!(args, Vec<u8>);
+
+    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
+    let cost = legacy_empty_cost();
+
+    normalized(&mut signature);
+    match recover_pubkey(signature, hashed_msg) {
+        Ok(pubkey) => {
+            let mut address = [0u8; 20];
+            address.copy_from_slice(&hash(&pubkey.pubkey.serialize_uncompressed()[1..])[12..]);
+            Ok(NativeResult::ok(cost, smallvec![Value::vector_u8(address)]))
+        }
+        Err(SuiError::InvalidSignature { error: _ }) => {
+            Ok(NativeResult::err(cost, INVALID_SIGNATURE))
+        }
+        Err(_) => Ok(NativeResult::err(cost, FAIL_TO_RECOVER_PUBKEY)),
     }
 }
 
@@ -67,14 +109,27 @@ pub fn keccak256(
     let msg = pop_arg!(args, Vec<u8>);
     Ok(NativeResult::ok(
         cost,
-        smallvec![Value::vector_u8(
-            <sha3::Keccak256 as sha3::digest::Digest>::digest(msg)
-                .as_slice()
-                .to_vec()
-        )],
+        smallvec![Value::vector_u8(hash(&msg))],
     ))
 }
 
+fn hash(msg: &[u8]) -> Vec<u8> {
+    <sha3::Keccak256 as sha3::digest::Digest>::digest(msg)
+        .as_slice()
+        .to_vec()
+}
+
+// Normalize v to 0 or 1 from EIP-155 compliant Ethereum signature.
+fn normalized(signature: &mut [u8]) {
+    signature[64] = match signature[64] {
+        0 => 0,
+        1 => 1,
+        27 => 0,
+        28 => 1,
+        v if v >= 35 => ((v - 1) % 2) as _,
+        _ => 4,
+    }
+}
 /// Native implemention of secp256k1_verify in public Move API, see crypto.move for specifications.
 pub fn secp256k1_verify(
     _context: &mut NativeContext,
