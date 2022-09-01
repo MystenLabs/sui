@@ -367,7 +367,7 @@ pub async fn build_http_servers(
         return Ok((None, None));
     }
 
-    if cfg!(madsim) {
+    if cfg!(msim) {
         // jsonrpsee uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
         // can't yet run it in the simulator.
         warn!("disabling http servers in simulator");

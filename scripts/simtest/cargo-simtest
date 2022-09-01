@@ -35,10 +35,10 @@ cleanup () {
 
 trap cleanup SIGINT
 
-if [ -z "$MADSIM_TEST_SEED" ]; then
-  export MADSIM_TEST_SEED=1
+if [ -z "$MSIM_TEST_SEED" ]; then
+  export MSIM_TEST_SEED=1
 else
-  echo "Using MADSIM_TEST_SEED=$MADSIM_TEST_SEED from the environment"
+  echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED from the environment"
 fi
 
 cargo nextest run \

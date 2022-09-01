@@ -15,5 +15,5 @@ proc-macro2 = "1"
 quote = "1"
 syn = "1"
 
-[target.'cfg(madsim)'.dependencies]
-madsim-macros = { path = "../../../madsim-fork/madsim-macros" }
+[target.'cfg(msim)'.dependencies]
+msim-macros = { path = "../../../msim-fork/msim-macros" }

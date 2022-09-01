@@ -98,7 +98,7 @@ fn populated_genesis_snapshot_matches() {
 // This test could run in the simulator using the #[sui_test], but that's unnecessary, we can
 // simply run it only during normal tests. (The config builder assumes that it is running inside a
 // simulator node in the simulator, so this test would panic if run in a simulator build).
-#[cfg(not(madsim))]
+#[cfg(not(msim))]
 #[test]
 fn network_config_snapshot_matches() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};

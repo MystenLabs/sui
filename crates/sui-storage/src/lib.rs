@@ -50,7 +50,7 @@ pub fn default_db_options(
 // becomes a blocking call, which removes the non-determinism that would otherwise be caused by the
 // timing of the reply from the other thread.
 pub(crate) async fn exec_client_future<F: Future>(fut: F) -> <F as Future>::Output {
-    if cfg!(madsim) {
+    if cfg!(msim) {
         futures::executor::block_on(fut)
     } else {
         fut.await

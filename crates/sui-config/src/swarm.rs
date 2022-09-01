@@ -89,7 +89,7 @@ impl NetworkConfig {
         // the simulator.
         // TODO: In the simulator, we can run event store in a separate thread and make
         // blocking calls to it to fix this.
-        let enable_event_processing = !cfg!(madsim);
+        let enable_event_processing = !cfg!(msim);
 
         NodeConfig {
             protocol_key_pair,
