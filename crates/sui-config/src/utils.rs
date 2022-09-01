@@ -43,9 +43,9 @@ mod inner {
 
 #[cfg(msim)]
 mod inner {
-    pub fn get_available_port() -> u16 {
-        use std::cell::Cell;
+    use std::cell::Cell;
 
+    pub fn get_available_port() -> u16 {
         thread_local! {
             static PORT: Cell<u32> = Cell::new(32768);
         }
@@ -63,9 +63,12 @@ mod inner {
     }
 
     pub fn new_network_address() -> multiaddr::Multiaddr {
-        let ip_addr = sui_simulator::runtime::NodeHandle::current()
-            .ip()
-            .expect("expected to be called within a simulator node");
+        let ip_addr = sui_simulator::runtime::NodeHandle::try_current()
+            .map(|node| {
+                node.ip()
+                    .expect("expected to be called within a simulator node")
+            })
+            .unwrap_or_else(|| "127.0.0.1".parse().unwrap());
 
         format!("/ip4/{}/tcp/{}/http", ip_addr, get_available_port())
             .parse()
