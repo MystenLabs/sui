@@ -28,7 +28,7 @@ use sui::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletCont
 use sui_config::utils::get_available_port;
 use sui_json_rpc_types::{
     SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiMoveStruct,
-    SuiMoveValue, SuiObjectRead,
+    SuiMoveValue, SuiObjectRead, SuiTransactionFilter, SuiTransactionResponse,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
@@ -484,18 +484,73 @@ async fn set_up_subscription(swarm: &Swarm) -> Result<(SuiNode, Client), anyhow:
 }
 
 /// Call this function to set up a network and a fullnode and return a jsonrpc client.
-async fn set_up_jsonrpc(swarm: &Swarm) -> Result<(SuiNode, HttpClient), anyhow::Error> {
+/// The fullnode does not have websocket enabled.
+async fn set_up_jsonrpc(
+    swarm: &Swarm,
+    fullnode_db_path: Option<&str>,
+) -> Result<(SuiNode, HttpClient), anyhow::Error> {
     let port = get_available_port();
     let jsonrpc_server_url = format!("127.0.0.1:{}", port);
     let jsonrpc_addr: SocketAddr = jsonrpc_server_url.parse().unwrap();
 
-    let mut config = swarm.config().generate_fullnode_config();
+    let mut config = swarm
+        .config()
+        .generate_fullnode_config_with_custom_db_path(fullnode_db_path, false);
     config.json_rpc_address = jsonrpc_addr;
 
     let node = SuiNode::start(&config).await?;
 
     let client = HttpClientBuilder::default().build(&format!("http://{}", jsonrpc_server_url))?;
     Ok((node, client))
+}
+
+#[tokio::test]
+async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Error> {
+    let (swarm, mut context, _) = setup_network_and_wallet().await?;
+    let (node, ws_client) = set_up_subscription(&swarm).await?;
+
+    let mut sub: Subscription<SuiTransactionResponse> = ws_client
+        .subscribe(
+            "sui_subscribeTransaction",
+            rpc_params![SuiTransactionFilter::Any],
+            "sui_unsubscribeTransaction",
+        )
+        .await
+        .unwrap();
+    let mut digests = Vec::with_capacity(3);
+    for _i in 0..3 {
+        let (_, _, _, digest) = transfer_coin(&mut context).await?;
+        digests.push(digest);
+    }
+    wait_for_all_txes(digests.clone(), node.state().clone()).await;
+
+    // Wait for streaming
+    for digest in digests.iter().take(3) {
+        match timeout(Duration::from_secs(3), sub.next()).await {
+            Ok(Some(Ok(resp))) => {
+                assert_eq!(&resp.certificate.transaction_digest, digest);
+            }
+            other => panic!(
+                "Failed to get Ok item from transaction streaming, but {:?}",
+                other
+            ),
+        };
+    }
+
+    // No more
+    match timeout(Duration::from_secs(3), sub.next()).await {
+        Err(_) => (),
+        other => panic!(
+            "Expect to time out because no new txs are coming in. Got {:?}",
+            other
+        ),
+    }
+
+    // Node Config without websocket_address does not create a transaction streamer
+    let (node, _) = set_up_jsonrpc(&swarm, Some("another_folder")).await?;
+    assert!(node.state().transaction_streamer.is_none());
+
+    Ok(())
 }
 
 #[tokio::test]
@@ -588,7 +643,7 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 #[tokio::test]
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
-    let (node, jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
+    let (node, jsonrpc_client) = set_up_jsonrpc(&swarm, None).await?;
     let (transferred_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -726,7 +781,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 #[tokio::test]
 async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
-    let (node, _jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
+    let (node, _jsonrpc_client) = set_up_jsonrpc(&swarm, None).await?;
     let quorum_driver = node
         .quorum_driver()
         .expect("Fullnode should have quorum driver toggled on.");
@@ -835,7 +890,7 @@ async fn test_validator_node_has_no_quorum_driver() {
 #[tokio::test]
 async fn test_full_node_quorum_driver_rpc_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
-    let (_node, jsonrpc_client) = set_up_jsonrpc(&swarm).await?;
+    let (_node, jsonrpc_client) = set_up_jsonrpc(&swarm, None).await?;
 
     let mut txns = make_transactions_with_wallet_context(&mut context, 3).await;
     assert!(

@@ -802,6 +802,7 @@ impl PartialEq for SignedTransaction {
 }
 
 pub type CertifiedTransaction = TransactionEnvelope<AuthorityStrongQuorumSignInfo>;
+pub type TxCertAndSignedEffects = (CertifiedTransaction, SignedTransactionEffects);
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct AccountInfoRequest {

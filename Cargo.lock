@@ -7680,6 +7680,7 @@ dependencies = [
  "strum",
  "strum_macros",
  "sui-cost-tables",
+ "test-utils",
  "thiserror",
  "tonic",
  "tracing",

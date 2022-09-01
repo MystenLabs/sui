@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::api::EventReadApiServer;
 use crate::api::EventStreamingApiServer;
+use crate::streaming_api::spawn_subscription;
 use crate::SuiRpcModule;
 use async_trait::async_trait;
-use futures::{StreamExt, TryStream};
+use futures::StreamExt;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee::types::SubscriptionResult;
-use jsonrpsee_core::error::SubscriptionClosed;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use jsonrpsee_core::server::rpc_module::SubscriptionSink;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
-use serde::Serialize;
-use std::fmt::Display;
 use std::str::FromStr;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
@@ -65,30 +63,10 @@ impl EventStreamingApiServer for EventStreamingApiImpl {
                 event,
             })
         });
-        spawn_subscript(sink, stream);
+        spawn_subscription(sink, stream);
 
         Ok(())
     }
-}
-
-fn spawn_subscript<S, T, E>(mut sink: SubscriptionSink, rx: S)
-where
-    S: TryStream<Ok = T, Error = E> + Unpin + Send + 'static,
-    T: Serialize,
-    E: Display,
-{
-    tokio::spawn(async move {
-        match sink.pipe_from_try_stream(rx).await {
-            SubscriptionClosed::Success => {
-                sink.close(SubscriptionClosed::Success);
-            }
-            SubscriptionClosed::RemotePeerAborted => (),
-            SubscriptionClosed::Failed(err) => {
-                warn!(error = ?err, "Event subscription closed.");
-                sink.close(err);
-            }
-        };
-    });
 }
 
 impl SuiRpcModule for EventStreamingApiImpl {
