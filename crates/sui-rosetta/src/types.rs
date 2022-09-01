@@ -1,9 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
-
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::de::Error as DeError;
@@ -11,8 +8,9 @@ use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
 use serde_json::{json, Value};
 use serde_with::serde_as;
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
 use strum_macros::EnumIter;
-
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH};
 use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::Base64;
@@ -317,7 +315,7 @@ pub enum OperationType {
     // Readonly
     Publish,
     MoveCall,
-    EpochChange
+    EpochChange,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
