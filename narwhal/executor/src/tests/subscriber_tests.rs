@@ -14,6 +14,7 @@ async fn spawn_subscriber(
     rx_sequence: metered_channel::Receiver<ConsensusOutput>,
     tx_executor: metered_channel::Sender<ConsensusOutput>,
     tx_get_block_commands: metered_channel::Sender<BlockCommand>,
+    restored_consensus_output: Vec<ConsensusOutput>,
 ) -> (
     Store<BatchDigest, Batch>,
     watch::Sender<ReconfigureNotification>,
@@ -33,6 +34,7 @@ async fn spawn_subscriber(
         rx_sequence,
         tx_executor,
         Arc::new(executor_metrics),
+        restored_consensus_output,
     );
 
     (store, tx_reconfigure, subscriber_handle)
@@ -46,7 +48,7 @@ async fn handle_certificate_with_downloaded_batch() {
 
     // Spawn a subscriber.
     let (store, _tx_reconfigure, _) =
-        spawn_subscriber(rx_sequence, tx_executor, tx_get_block_command).await;
+        spawn_subscriber(rx_sequence, tx_executor, tx_get_block_command, vec![]).await;
 
     let total_certificates = 2;
     let certificates = test_u64_certificates(
@@ -108,7 +110,7 @@ async fn should_retry_when_failed_to_get_payload() {
 
     // Spawn a subscriber.
     let (store, _tx_reconfigure, _) =
-        spawn_subscriber(rx_sequence, tx_executor, tx_get_block_command).await;
+        spawn_subscriber(rx_sequence, tx_executor, tx_get_block_command, vec![]).await;
 
     // Create a certificate
     let total_certificates = 1;
@@ -181,7 +183,7 @@ async fn subscriber_should_crash_when_irrecoverable_error() {
 
     // Spawn a subscriber.
     let (_store, _tx_reconfigure, handle) =
-        spawn_subscriber(rx_sequence, tx_executor, tx_get_block_command).await;
+        spawn_subscriber(rx_sequence, tx_executor, tx_get_block_command, vec![]).await;
 
     // Create a certificate
     let total_certificates = 1;
@@ -210,6 +212,61 @@ async fn subscriber_should_crash_when_irrecoverable_error() {
         .await
         .expect_err("Expected an error, instead a successful response returned");
     assert!(err.is_panic());
+}
+
+#[tokio::test]
+async fn test_subscriber_with_restored_consensus_output() {
+    let (_tx_sequence, rx_sequence) = test_channel!(10);
+    let (tx_executor, mut rx_executor) = test_channel!(10);
+    let (tx_get_block_command, mut rx_get_block_command) = test_utils::test_get_block_commands!(1);
+
+    // Create restored consensus output
+    let total_certificates = 2;
+    let certificates = test_u64_certificates(
+        total_certificates,
+        /* batches_per_certificate */ 2,
+        /* transactions_per_batch */ 2,
+    );
+    let restored_consensus = certificates
+        .clone()
+        .into_iter()
+        .enumerate()
+        .map(|(i, (certificate, _))| ConsensusOutput {
+            certificate,
+            consensus_index: i as SequenceNumber,
+        })
+        .collect();
+
+    // Spawn a subscriber.
+    let (_store, _tx_reconfigure, _handle) = spawn_subscriber(
+        rx_sequence,
+        tx_executor,
+        tx_get_block_command,
+        restored_consensus,
+    )
+    .await;
+
+    for i in 0..total_certificates {
+        let request = rx_get_block_command.recv().await.unwrap();
+
+        let _batches = match request {
+            BlockCommand::GetBlock { id, sender } => {
+                let (_certificate, batches) = certificates.get(i).unwrap().to_owned();
+
+                // Mimic the block_waiter here and respond with the payload back
+                let ok = successful_block_response(id, batches.clone());
+
+                sender.send(ok).unwrap();
+
+                batches
+            }
+            _ => panic!("Unexpected command received"),
+        };
+
+        // Ensure restored messages are delivered.
+        let output = rx_executor.recv().await.unwrap();
+        assert_eq!(output.consensus_index, i as SequenceNumber);
+    }
 }
 
 // Helper method to create a successful (OK) get_block response.

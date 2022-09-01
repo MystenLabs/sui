@@ -25,13 +25,17 @@ use primary::BlockCommand;
 use prometheus::Registry;
 use serde::de::DeserializeOwned;
 use std::{fmt::Debug, sync::Arc};
+use storage::CertificateStore;
 use store::Store;
 use tokio::{
     sync::{mpsc::Sender, watch},
     task::JoinHandle,
 };
 use tracing::info;
-use types::{metered_channel, Batch, BatchDigest, ReconfigureNotification};
+use types::{
+    metered_channel, Batch, BatchDigest, CertificateDigest, ConsensusStore,
+    ReconfigureNotification, SequenceNumber,
+};
 
 /// Convenience type representing a serialized transaction.
 pub type SerializedTransaction = Vec<u8>;
@@ -97,6 +101,7 @@ impl Executor {
         tx_output: Sender<ExecutorOutput<State>>,
         tx_get_block_commands: metered_channel::Sender<BlockCommand>,
         registry: &Registry,
+        restored_consensus_output: Vec<ConsensusOutput>,
     ) -> SubscriberResult<Vec<JoinHandle<()>>>
     where
         State: ExecutionState + Send + Sync + 'static,
@@ -125,6 +130,7 @@ impl Executor {
             rx_consensus,
             tx_executor,
             arc_metrics,
+            restored_consensus_output,
         );
 
         // Spawn the executor's core.
@@ -141,4 +147,44 @@ impl Executor {
 
         Ok(vec![subscriber_handle, executor_handle])
     }
+}
+
+pub async fn get_restored_consensus_output<State>(
+    consensus_store: Arc<ConsensusStore>,
+    certificate_store: CertificateStore,
+    execution_state: Arc<State>,
+) -> Result<Vec<ConsensusOutput>, SubscriberError>
+where
+    State: ExecutionState + Send + Sync + 'static,
+    State::Error: Debug,
+{
+    let mut restored_consensus_output = Vec::new();
+    let consensus_next_index = consensus_store
+        .read_last_consensus_index()
+        .map_err(SubscriberError::StoreError)?;
+
+    let next_cert_index = execution_state
+        .load_execution_indices()
+        .await?
+        .next_certificate_index;
+
+    if next_cert_index < consensus_next_index {
+        let missing = consensus_store
+            .read_sequenced_certificates(&(next_cert_index..=consensus_next_index - 1))?
+            .iter()
+            .zip(next_cert_index..consensus_next_index)
+            .filter_map(|(c, seq)| c.map(|digest| (digest, seq)))
+            .collect::<Vec<(CertificateDigest, SequenceNumber)>>();
+
+        for (cert_digest, seq) in missing {
+            if let Some(cert) = certificate_store.read(cert_digest).unwrap() {
+                // Save the missing sequence / cert pair as ConsensusOutput to re-send to the executor.
+                restored_consensus_output.push(ConsensusOutput {
+                    certificate: cert,
+                    consensus_index: seq,
+                })
+            }
+        }
+    }
+    Ok(restored_consensus_output)
 }

@@ -18,6 +18,9 @@ pub struct ConsensusMetrics {
     /// The number of times the consensus state was restored from the consensus store
     /// following a node restart
     pub recovered_consensus_state: IntCounter,
+    /// The number of certificates from consensus that were restored and sent to the executor
+    /// following a node restart
+    pub recovered_consensus_output: IntCounter,
 }
 
 impl ConsensusMetrics {
@@ -50,6 +53,11 @@ impl ConsensusMetrics {
             recovered_consensus_state: register_int_counter_with_registry!(
                 "recovered_consensus_state",
                 "The number of times the consensus state was restored from the consensus store following a node restart",
+                registry
+            ).unwrap(),
+            recovered_consensus_output: register_int_counter_with_registry!(
+                "recovered_consensus_output", 
+                "The number of certificates from consensus that were restored and sent to the executor following a node restart",
                 registry
             ).unwrap(),
         }

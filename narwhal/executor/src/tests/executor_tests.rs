@@ -5,7 +5,6 @@ use crate::{
     execution_state::{TestState, KILLER_TRANSACTION, MALFORMED_TRANSACTION},
     fixtures::{test_batch, test_certificate, test_store, test_u64_certificates},
 };
-
 use std::sync::Arc;
 use test_utils::committee;
 use tokio::sync::mpsc::channel;

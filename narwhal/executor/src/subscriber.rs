@@ -60,6 +60,7 @@ impl Subscriber {
         rx_consensus: metered_channel::Receiver<ConsensusOutput>,
         tx_executor: metered_channel::Sender<ConsensusOutput>,
         metrics: Arc<ExecutorMetrics>,
+        restored_consensus_output: Vec<ConsensusOutput>,
     ) -> JoinHandle<()> {
         let get_block_retry_policy = ExponentialBackoff {
             initial_interval: Duration::from_millis(500),
@@ -80,14 +81,17 @@ impl Subscriber {
                 get_block_retry_policy,
                 metrics,
             }
-            .run()
+            .run(restored_consensus_output)
             .await
             .expect("Failed to run subscriber")
         })
     }
 
     /// Main loop connecting to the consensus to listen to sequence messages.
-    async fn run(&mut self) -> SubscriberResult<()> {
+    async fn run(
+        &mut self,
+        restored_consensus_output: Vec<ConsensusOutput>,
+    ) -> SubscriberResult<()> {
         // It's important to have the futures in ordered fashion as we want
         // to guarantee that will deliver to the executor the certificates
         // in the same order we received from rx_consensus. So it doesn't
@@ -96,6 +100,18 @@ impl Subscriber {
         // fetched, no later certificate will be delivered.
         let mut waiting =
             BoundedFuturesOrdered::with_capacity(Self::MAX_PENDING_CONSENSUS_MESSAGES);
+
+        // First handle any consensus output messages that were restored due to a restart.
+        // This needs to happen before we start listening on rx_consensus and receive messages sequenced after these.
+        for message in restored_consensus_output {
+            let future = Self::wait_on_payload(
+                self.get_block_retry_policy.clone(),
+                self.store.clone(),
+                self.tx_get_block_commands.clone(),
+                message,
+            );
+            waiting.push(future).await;
+        }
 
         // Listen to sequenced consensus message and process them.
         loop {

@@ -5,11 +5,16 @@ use consensus::{
     bullshark::Bullshark,
     dag::Dag,
     metrics::{ChannelMetrics, ConsensusMetrics},
-    Consensus,
+    Consensus, ConsensusOutput,
 };
+
 use crypto::{KeyPair, PublicKey};
-use executor::{ExecutionState, Executor, ExecutorOutput, SerializedTransaction, SubscriberResult};
+use executor::{
+    get_restored_consensus_output, ExecutionState, Executor, ExecutorOutput, SerializedTransaction,
+    SubscriberResult,
+};
 use fastcrypto::traits::{KeyPair as _, VerifyingKey};
+use itertools::Itertools;
 use primary::{BlockCommand, NetworkModel, PayloadToken, Primary, PrimaryChannelMetrics};
 use prometheus::{IntGauge, Registry};
 use std::{fmt::Debug, sync::Arc};
@@ -23,7 +28,7 @@ use tokio::{
     sync::{mpsc::Sender, watch},
     task::JoinHandle,
 };
-use tracing::debug;
+use tracing::{debug, info};
 use types::{
     metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header,
     HeaderDigest, ReconfigureNotification, Round, SequenceNumber, SerializedBatchMessage,
@@ -292,6 +297,28 @@ impl Node {
         let (tx_sequence, rx_sequence) =
             metered_channel::channel(Self::CHANNEL_CAPACITY, &channel_metrics.tx_sequence);
 
+        // Check for any certs that have been sent by consensus but were not processed by the executor.
+        let restored_consensus_output = get_restored_consensus_output(
+            store.consensus_store.clone(),
+            store.certificate_store.clone(),
+            execution_state.clone(),
+        )
+        .await?
+        .into_iter()
+        .sorted_by(|a, b| a.consensus_index.cmp(&b.consensus_index))
+        .collect::<Vec<ConsensusOutput>>();
+
+        let len_restored = restored_consensus_output.len() as u64;
+        if len_restored > 0 {
+            info!(
+                "Consensus output on its way to the executor was restored for {} certificates",
+                len_restored
+            );
+        }
+        consensus_metrics
+            .recovered_consensus_output
+            .inc_by(len_restored);
+
         // Spawn the consensus core who only sequences transactions.
         let ordering_engine = Bullshark::new(
             (**committee.load()).clone(),
@@ -321,6 +348,7 @@ impl Node {
             /* tx_output */ tx_confirmation,
             tx_get_block_commands,
             registry,
+            restored_consensus_output,
         )
         .await?;
 
