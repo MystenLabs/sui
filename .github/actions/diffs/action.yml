@@ -7,15 +7,6 @@ outputs:
   isRust:
     description: True when changes happened to the rust code
     value: "${{ steps.diff.outputs.isRust }}"
-  isExplorerClient:
-    description: True when there are changes to files related to explorer client
-    value: "${{ steps.diff.outputs.isExplorerClient }}"
-  isTypescriptSDK:
-    description: True when there are changes to files related to TypeScript SDK
-    value: "${{ steps.diff.outputs.isTypescriptSDK }}"
-  isWalletExt:
-    description: True when there are changes to files related to Wallet Extension
-    value: "${{ steps.diff.outputs.isWalletExt }}"
 runs:
   using: composite
   steps:
@@ -30,17 +21,7 @@ runs:
           - '.github/workflows/bench.yml'
           - '.github/workflows/codecov.yml'
           - '.github/workflows/rust.yml'
-        isExplorerClient:
-          - 'explorer/client/**'
-          - '.github/workflows/explorer-client-prs.yml'
-        isTypescriptSDK:
-          - 'sdk/typescript/**'
-          - 'crates/sui-open-rpc/samples/**'
-          - '.github/workflows/ts-sdk.yml'
         isDoc:
           - 'doc/**'
           - '*.md'
           - '.github/workflows/docs.yml'
-        isWalletExt:
-          - 'wallet/**'
-          - '.github/workflows/wallet-ext-prs.yml'

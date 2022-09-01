@@ -25,7 +25,7 @@ use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
 use sui_types::crypto::{
     AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature, KeypairTraits, Secp256k1SuiSignature,
-    SuiKeyPair, SuiSignatureInner,
+    SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
@@ -765,9 +765,11 @@ async fn test_switch_command() -> Result<(), anyhow::Error> {
     context.config.active_address = None;
 
     // Create a new address
-    let os = SuiClientCommands::NewAddress { key_scheme: None }
-        .execute(&mut context)
-        .await?;
+    let os = SuiClientCommands::NewAddress {
+        key_scheme: SignatureScheme::ED25519,
+    }
+    .execute(&mut context)
+    .await?;
     let new_addr = if let SuiClientCommandResult::NewAddress((a, _, _)) = os {
         a
     } else {
@@ -817,7 +819,7 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
     );
 
     SuiClientCommands::NewAddress {
-        key_scheme: Some("secp256k1".to_string()),
+        key_scheme: SignatureScheme::Secp256k1,
     }
     .execute(&mut context)
     .await?;
@@ -833,28 +835,6 @@ async fn test_new_address_command_by_flag() -> Result<(), anyhow::Error> {
         1
     );
 
-    // random key scheme errors out
-    assert!(SuiClientCommands::NewAddress {
-        key_scheme: Some("random".to_string()),
-    }
-    .execute(&mut context)
-    .await
-    .is_err());
-
-    SuiClientCommands::NewAddress { key_scheme: None }
-        .execute(&mut context)
-        .await?;
-
-    // None key scheme defaults to Ed25519
-    assert_eq!(
-        context
-            .keystore
-            .keys()
-            .iter()
-            .filter(|k| k.flag() == Ed25519SuiSignature::SCHEME.flag())
-            .count(),
-        6
-    );
     Ok(())
 }
 
@@ -1140,5 +1120,23 @@ async fn test_split_coin() -> Result<(), anyhow::Error> {
     assert_eq!(get_gas_value(&g.updated_coin) + 1000 + 10, orig_value);
     assert!((get_gas_value(&g.new_coins[0]) == 1000) || (get_gas_value(&g.new_coins[0]) == 10));
     assert!((get_gas_value(&g.new_coins[1]) == 1000) || (get_gas_value(&g.new_coins[1]) == 10));
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_signature_flag() -> Result<(), anyhow::Error> {
+    let res = SignatureScheme::from_flag("0");
+    assert!(res.is_ok());
+    assert_eq!(res.unwrap().flag(), SignatureScheme::ED25519.flag());
+
+    let res = SignatureScheme::from_flag("1");
+    assert!(res.is_ok());
+    assert_eq!(res.unwrap().flag(), SignatureScheme::Secp256k1.flag());
+
+    let res = SignatureScheme::from_flag("2");
+    assert!(res.is_err());
+
+    let res = SignatureScheme::from_flag("something");
+    assert!(res.is_err());
     Ok(())
 }

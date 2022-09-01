@@ -1,5 +1,5 @@
 packages:
-  - 'wallet-adapter/**'
-  - 'sdk/**'
-  - 'explorer/**'
-  - 'wallet/**'
+  - "wallet-adapter/**"
+  - "sdk/**"
+  - "explorer/**"
+  - "wallet/**"

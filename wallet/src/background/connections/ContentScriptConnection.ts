@@ -101,7 +101,6 @@ export class ContentScriptConnection extends Connection {
                 try {
                     const result = await Transactions.executeTransaction(
                         payload.transaction,
-                        payload.transactionBytes,
                         this
                     );
                     this.send(

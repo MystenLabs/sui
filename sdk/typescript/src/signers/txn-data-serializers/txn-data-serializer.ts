@@ -83,7 +83,7 @@ export interface PublishTransaction {
    *
    * Each module should be represented as a sequence of bytes.
    */
-  compiledModules: Iterable<string> | Iterable<Iterable<number>>;
+  compiledModules: ArrayLike<string> | ArrayLike<ArrayLike<number>>;
   gasPayment?: ObjectId;
   gasBudget: number;
 }

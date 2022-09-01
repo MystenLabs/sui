@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use anyhow::bail;
 use anyhow::Result;
 use futures::TryFutureExt;
 use parking_lot::Mutex;
@@ -14,6 +15,7 @@ use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
 use sui_core::safe_client::SafeClientMetrics;
+use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_active::{gossip::GossipMetrics, ActiveAuthority},
@@ -24,6 +26,7 @@ use sui_core::{
     checkpoints::CheckpointStore,
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
+use sui_json_rpc::streaming_api::TransactionStreamingApiImpl;
 use sui_network::api::ValidatorServer;
 use sui_quorum_driver::QuorumDriverMetrics;
 use sui_quorum_driver::{QuorumDriver, QuorumDriverHandler};
@@ -125,6 +128,11 @@ impl SuiNode {
         };
 
         let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
+
+        let transaction_streamer = config
+            .websocket_address
+            .map(|_| Arc::new(TransactionStreamer::new()));
+
         let state = Arc::new(
             AuthorityState::new(
                 config.protocol_public_key(),
@@ -133,6 +141,7 @@ impl SuiNode {
                 epoch_store.clone(),
                 index_store.clone(),
                 event_store,
+                transaction_streamer,
                 Some(checkpoint_store),
                 genesis,
                 &prometheus_registry,
@@ -378,11 +387,20 @@ pub async fn build_node_server(
         .into_http_server_handle()
         .expect("Expect a http server handle");
 
-    // TODO: we will change the conditions soon when we introduce txn subs
-    let ws_server_handle = match (config.websocket_address, state.event_handler.clone()) {
-        (Some(ws_addr), Some(event_handler)) => {
+    let ws_server_handle = match config.websocket_address {
+        Some(ws_addr) => {
             let mut server = JsonRpcServerBuilder::new(true, prometheus_registry)?;
-            server.register_module(EventStreamingApiImpl::new(state.clone(), event_handler))?;
+            if let Some(tx_streamer) = state.transaction_streamer.clone() {
+                server.register_module(TransactionStreamingApiImpl::new(
+                    state.clone(),
+                    tx_streamer,
+                ))?;
+            } else {
+                bail!("Expect State to have Some TransactionStreamer when websocket_address is present in node config");
+            }
+            if let Some(event_handler) = state.event_handler.clone() {
+                server.register_module(EventStreamingApiImpl::new(state.clone(), event_handler))?;
+            }
             Some(
                 server
                     .start(ws_addr)
@@ -391,7 +409,7 @@ pub async fn build_node_server(
                     .expect("Expect a websocket server handle"),
             )
         }
-        _ => None,
+        None => None,
     };
     Ok((Some(rpc_server_handle), ws_server_handle))
 }

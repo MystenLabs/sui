@@ -23,7 +23,7 @@ use rand::rngs::adapter::ReadRng;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
     get_key_pair_from_rng, random_key_pair_by_type_from_rng, EncodeDecodeBase64, PublicKey,
-    Signature, SuiKeyPair,
+    Signature, SignatureScheme, SuiKeyPair,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -156,16 +156,16 @@ impl SuiKeystore {
 
     pub fn generate_new_key(
         &mut self,
-        key_scheme: Option<String>,
-    ) -> Result<(SuiAddress, String, u8), anyhow::Error> {
+        key_scheme: SignatureScheme,
+    ) -> Result<(SuiAddress, String, SignatureScheme), anyhow::Error> {
         let mnemonic = Mnemonic::generate(12)?;
         let seed = mnemonic.to_seed("");
         let mut rng = RngWrapper(ReadRng::new(&seed));
         match random_key_pair_by_type_from_rng(key_scheme, &mut rng) {
             Ok((address, kp)) => {
-                let flag = kp.public().flag();
+                let k = kp.public();
                 self.0.add_key(kp)?;
-                Ok((address, mnemonic.to_string(), flag))
+                Ok((address, mnemonic.to_string(), k.scheme()))
             }
             Err(e) => Err(anyhow!("error generating key {:?}", e)),
         }
@@ -186,7 +186,7 @@ impl SuiKeystore {
     pub fn import_from_mnemonic(
         &mut self,
         phrase: &str,
-        key_scheme: Option<String>,
+        key_scheme: SignatureScheme,
     ) -> Result<SuiAddress, anyhow::Error> {
         let seed = &Mnemonic::from_str(phrase).unwrap().to_seed("");
         let mut rng = RngWrapper(ReadRng::new(seed));

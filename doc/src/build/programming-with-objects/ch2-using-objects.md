@@ -174,7 +174,7 @@ $ export RECIPIENT=0x1416f3d5af469905b0580b9af843ec82d02efd30
 ```
 Now let's transfer the object to this address:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "transfer" --args \"0x$OBJECT\" \"0x$RECIPIENT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "transfer" --args \"$OBJECT\" \"$RECIPIENT\"
 ```
 Now let's see what objects the `RECIPIENT` owns:
 ```
@@ -184,7 +184,7 @@ We should be able to see that one of the objects in the list is the new `ColorOb
 
 Let's also try to delete this object:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "delete" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "delete" --args \"$OBJECT\"
 ```
 Oops. It will error out and complain that the address is unable to lock the object, which is a valid error because we have already transferred the object away from the original owner.
 
@@ -194,7 +194,7 @@ $ sui client switch --address $RECIPIENT
 ```
 And try the deletion again:
 ```
-$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "delete" --args \"0x$OBJECT\"
+$ sui client call --gas-budget 1000 --package $PACKAGE --module "color_object" --function "delete" --args \"$OBJECT\"
 ```
 In the output, you will see in the `Transaction Effects` section a list of deleted objects.
 This shows that the object was successfully deleted. If we run this again:

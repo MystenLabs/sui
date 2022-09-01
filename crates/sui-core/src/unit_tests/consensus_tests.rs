@@ -153,6 +153,7 @@ async fn submit_transaction_to_consensus() {
     let expected_transaction = certificate.clone().to_transaction();
 
     let committee = state.clone_committee();
+    let name = state.name;
     let state_guard = Arc::new(state);
     let metrics = ConsensusAdapterMetrics::new_test();
 
@@ -204,9 +205,8 @@ async fn submit_transaction_to_consensus() {
 
     // Submit the transaction and ensure the submitter reports success to the caller. Note
     // that consensus may drop some transactions (so we may need to resubmit them).
-    let consensus_transaction = ConsensusTransaction::UserTransaction(Box::new(certificate));
     loop {
-        match submitter.submit(&consensus_transaction).await {
+        match submitter.submit(&name, &certificate).await {
             Ok(_) => break,
             Err(SuiError::ConsensusConnectionBroken(..)) => (),
             Err(e) => panic!("Unexpected error message: {e}"),

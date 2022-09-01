@@ -10,9 +10,12 @@ use crate::{
     execution_engine,
     query_helpers::QueryHelpers,
     transaction_input_checker,
+    transaction_streamer::TransactionStreamer,
 };
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use bincode::Error;
+use byteorder::{BigEndian, ReadBytesExt};
 use chrono::prelude::*;
 use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
@@ -305,6 +308,7 @@ pub struct AuthorityState {
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     pub event_handler: Option<Arc<EventHandler>>,
+    pub transaction_streamer: Option<Arc<TransactionStreamer>>,
 
     /// The checkpoint store
     pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -774,6 +778,11 @@ impl AuthorityState {
             }
         }
 
+        // Stream transaction
+        if let Some(transaction_streamer) = &self.transaction_streamer {
+            transaction_streamer.enqueue((cert, effects.clone())).await;
+        }
+
         // Emit events
         if let Some(event_handler) = &self.event_handler {
             let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);
@@ -1061,6 +1070,7 @@ impl AuthorityState {
         epoch_store: Arc<EpochStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
+        transaction_streamer: Option<Arc<TransactionStreamer>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
@@ -1105,6 +1115,7 @@ impl AuthorityState {
             // this is because they largely deal with different types of MoveStructs
             module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone()))),
             event_handler,
+            transaction_streamer,
             checkpoints,
             epoch_store,
             batch_channels: tx,
@@ -1217,6 +1228,7 @@ impl AuthorityState {
             secret.clone(),
             store,
             epochs,
+            None,
             None,
             None,
             Some(Arc::new(Mutex::new(checkpoints))),
@@ -1813,6 +1825,24 @@ impl ExecutionState for AuthorityState {
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
                 Ok(Vec::default())
             }
+        }
+    }
+
+    fn deserialize(bytes: &[u8]) -> Result<Self::Transaction, Error> {
+        let len = bytes.len();
+        if len <= 8 {
+            Err(Error::new(bincode::ErrorKind::Custom(
+                "Message length must be at least 8".to_string(),
+            )))
+        } else {
+            // Last 8 bytes encode a u64 tracking id.
+            // The implementation of serialization is in consensus_adapter.rs.
+            let tracking_id = (&bytes[(len - 8)..]).read_u64::<BigEndian>();
+            debug!(
+                ?tracking_id,
+                "Deserializing consensus transaction to be sent back to Sui"
+            );
+            bincode::deserialize(&bytes[..(len - 8)])
         }
     }
 

@@ -1,12 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/* eslint-disable */
+
 /*
  * Generated type guards for "client.ts".
  * WARNING: Do not manually change this file.
  */
 import { HttpHeaders, RpcParams, ValidResponse, ErrorResponse } from "./client";
-import { isTransactionDigest } from "../index.guard";
 
 export function isHttpHeaders(obj: any, _argumentName?: string): obj is HttpHeaders {
     return (
@@ -21,7 +22,7 @@ export function isRpcParams(obj: any, _argumentName?: string): obj is RpcParams 
         (obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-        isTransactionDigest(obj.method) as boolean &&
+        typeof obj.method === "string" &&
         Array.isArray(obj.args)
     )
 }
@@ -32,7 +33,7 @@ export function isValidResponse(obj: any, _argumentName?: string): obj is ValidR
             typeof obj === "object" ||
             typeof obj === "function") &&
         obj.jsonrpc === "2.0" &&
-        isTransactionDigest(obj.id) as boolean
+        typeof obj.id === "string"
     )
 }
 
@@ -42,10 +43,10 @@ export function isErrorResponse(obj: any, _argumentName?: string): obj is ErrorR
             typeof obj === "object" ||
             typeof obj === "function") &&
         obj.jsonrpc === "2.0" &&
-        isTransactionDigest(obj.id) as boolean &&
+        typeof obj.id === "string" &&
         (obj.error !== null &&
             typeof obj.error === "object" ||
             typeof obj.error === "function") &&
-        isTransactionDigest(obj.error.message) as boolean
+        typeof obj.error.message === "string"
     )
 }

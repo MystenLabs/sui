@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { SignatureScheme } from '../cryptography/publickey';
-import { isSuiObjectRef } from '../index.guard';
+import { isSuiObjectRef } from '../types/index.guard';
 import {
   GetObjectDataResponse,
   SuiObjectInfo,

@@ -67,6 +67,9 @@ impl Genesis {
             .validator_set
             .iter()
             .map(|validator| {
+                // Strong requirement here for narwhal and sui to be on the same version of fastcrypto
+                // for AuthorityPublicBytes to cast to type alias PublicKey defined in narwhal to
+                // construct narwhal Committee struct.
                 let name = validator
                     .protocol_key()
                     .try_into()
@@ -75,6 +78,29 @@ impl Genesis {
                     primary_to_primary: validator.narwhal_primary_to_primary.clone(),
                     worker_to_primary: validator.narwhal_worker_to_primary.clone(),
                 };
+                let authority = narwhal_config::Authority {
+                    stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer
+                    primary,
+                };
+
+                (name, authority)
+            })
+            .collect();
+        std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(narwhal_config::Committee {
+            authorities: narwhal_committee,
+            epoch: self.epoch() as narwhal_config::Epoch,
+        }))
+    }
+
+    pub fn narwhal_worker_cache(&self) -> narwhal_config::SharedWorkerCache {
+        let workers = self
+            .validator_set
+            .iter()
+            .map(|validator| {
+                let name = validator
+                    .protocol_key()
+                    .try_into()
+                    .expect("Can't get narwhal public key");
                 let workers = [(
                     0, // worker_id
                     narwhal_config::WorkerInfo {
@@ -85,19 +111,16 @@ impl Genesis {
                 )]
                 .into_iter()
                 .collect();
-                let authority = narwhal_config::Authority {
-                    stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer
-                    primary,
-                    workers,
-                };
+                let worker_index = narwhal_config::WorkerIndex(workers);
 
-                (name, authority)
+                (name, worker_index)
             })
             .collect();
-        std::sync::Arc::new(arc_swap::ArcSwap::from_pointee(narwhal_config::Committee {
-            authorities: narwhal_committee,
+        narwhal_config::WorkerCache {
+            workers,
             epoch: self.epoch() as narwhal_config::Epoch,
-        }))
+        }
+        .into()
     }
 
     pub fn sui_system_object(&self) -> SuiSystemState {

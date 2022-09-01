@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import nacl from 'tweetnacl';
+import { describe, it, expect } from 'vitest';
 import { Base64DataBuffer, Ed25519Keypair, RawSigner } from '../../src';
 
 describe('RawSigner', () => {

@@ -118,7 +118,7 @@
       },
       {
         "label": "Optional - Run Locally with CLI",
-        "fileName": "contribute/cli-client"
+        "fileName": "build/cli-client"
       },
       {
         "label": "Create Smart Contracts with Move",

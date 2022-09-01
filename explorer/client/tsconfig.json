@@ -14,7 +14,12 @@
         "resolveJsonModule": true,
         "isolatedModules": true,
         "noEmit": true,
-        "jsx": "react-jsx"
+        "jsx": "react-jsx",
+        "baseUrl": ".",
+        "paths": {
+            "@mysten/sui.js": ["../../sdk/typescript/src/"],
+            "@mysten/bcs": ["../../sdk/typescript/bcs/src/"]
+        }
     },
     "include": ["src"]
 }

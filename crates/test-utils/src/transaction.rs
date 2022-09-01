@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::get_client;
-use crate::messages::{create_publish_move_package_transaction, make_certificates};
+use crate::messages::{create_publish_move_package_transaction, make_tx_certs_and_signed_effects};
 use crate::test_account_keys;
 use futures::StreamExt;
 use move_package::BuildConfig;
@@ -194,7 +194,10 @@ pub async fn submit_single_owner_transaction(
     transaction: Transaction,
     configs: &[ValidatorInfo],
 ) -> TransactionEffects {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
+    let certificate = make_tx_certs_and_signed_effects(vec![transaction])
+        .0
+        .pop()
+        .unwrap();
 
     let mut responses = Vec::new();
     for config in configs {
@@ -215,7 +218,10 @@ pub async fn submit_shared_object_transaction(
     transaction: Transaction,
     configs: &[ValidatorInfo],
 ) -> SuiResult<TransactionEffects> {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
+    let certificate = make_tx_certs_and_signed_effects(vec![transaction])
+        .0
+        .pop()
+        .unwrap();
 
     let replies = loop {
         let futures: Vec<_> = configs

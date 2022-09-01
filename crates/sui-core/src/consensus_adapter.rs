@@ -35,6 +35,8 @@ use sui_types::{
 use tap::prelude::*;
 use tokio::time::Instant;
 
+use sui_types::base_types::AuthorityName;
+use sui_types::messages::CertifiedTransaction;
 use tokio::{
     sync::{
         mpsc::{Receiver, Sender},
@@ -89,7 +91,7 @@ impl ConsensusAdapterMetrics {
         Some(Arc::new(ConsensusAdapterMetrics {
             sequencing_certificate_attempt: register_int_counter_with_registry!(
                 "sequencing_certificate_attempt",
-                "Counts the number of certifiates the validator attempts to sequence.",
+                "Counts the number of certificates the validator attempts to sequence.",
                 registry,
             )
             .unwrap(),
@@ -243,21 +245,42 @@ impl ConsensusAdapter {
     }
 
     /// Check if this authority should submit the transaction to consensus.
-    fn should_submit(_certificate: &ConsensusTransaction) -> bool {
+    fn should_submit(_certificate: &CertifiedTransaction) -> bool {
         // TODO [issue #1647]: Right now every authority submits the transaction to consensus.
         true
+    }
+
+    fn serialize(authority: &AuthorityName, certificate: CertifiedTransaction) -> Vec<u8> {
+        let mut hasher = DefaultHasher::new();
+        certificate.digest().hash(&mut hasher);
+        authority.hash(&mut hasher);
+        let tracking_id = hasher.finish();
+        debug!(
+            ?tracking_id,
+            tx_digest=?certificate.digest(),
+            "Certified transaction consensus message serialized"
+        );
+        let message = ConsensusTransaction::UserTransaction(Box::new(certificate));
+        let mut bytes =
+            bincode::serialize(&message).expect("Serializing consensus transaction cannot fail");
+        bytes.extend(tracking_id.to_be_bytes());
+        bytes
     }
 
     /// Submit a transaction to consensus, wait for its processing, and notify the caller.
     // Use .inspect when its stable.
     #[allow(clippy::option_map_unit_fn)]
-    pub async fn submit(&self, certificate: &ConsensusTransaction) -> SuiResult {
+    pub async fn submit(
+        &self,
+        authority: &AuthorityName,
+        certificate: &CertifiedTransaction,
+    ) -> SuiResult {
         // Check the Sui certificate (submitted by the user).
         certificate.verify(&self.committee)?;
 
         // Serialize the certificate in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
-        let serialized = bincode::serialize(certificate).expect("Failed to serialize consensus tx");
+        let serialized = Self::serialize(authority, certificate.clone());
         let bytes = Bytes::from(serialized.clone());
 
         // Notify the consensus listener that we are expecting to process this certificate.
@@ -317,7 +340,7 @@ impl ConsensusAdapter {
         };
 
         // Adapt the timeout for the next submission based on the delay we have observed so
-        // far using a weighted average, implementing proportinal control targetting the observed latency.
+        // far using a weighted average, implementing proportional control targeting the observed latency.
         // Note that if we keep timing out the delay will keep increasing linearly as we constantly
         // add max_delay to the observe delay to set the
         // time-out.
@@ -387,7 +410,14 @@ impl ConsensusListener {
         serialized: &SerializedConsensusTransaction,
     ) -> ConsensusTransactionDigest {
         let mut hasher = DefaultHasher::new();
-        serialized.hash(&mut hasher);
+        let len = serialized.len();
+        if len > 8 {
+            (&serialized[..(len - 8)]).hash(&mut hasher);
+        } else {
+            // If somehow the length is <= 8 (which is invalid), we just don't care and hash
+            // the whole thing.
+            serialized.hash(&mut hasher);
+        }
         hasher.finish()
     }
 
@@ -571,6 +601,29 @@ impl CheckpointConsensusAdapter {
         (outcome, conensus_latency, deliver)
     }
 
+    fn serialize(fragment: CheckpointFragment) -> Vec<u8> {
+        let mut hasher = DefaultHasher::new();
+        let cp_seq = fragment.proposer_sequence_number();
+        let proposer = fragment.proposer.auth_signature.authority;
+        let other = fragment.other.auth_signature.authority;
+        cp_seq.hash(&mut hasher);
+        proposer.hash(&mut hasher);
+        other.hash(&mut hasher);
+        let tracking_id = hasher.finish();
+        debug!(
+            ?tracking_id,
+            ?cp_seq,
+            ?proposer,
+            ?other,
+            "Checkpoint fragment consensus message serialized"
+        );
+        let message = ConsensusTransaction::Checkpoint(Box::new(fragment));
+        let mut bytes =
+            bincode::serialize(&message).expect("Serializing consensus transaction cannot fail");
+        bytes.extend(tracking_id.to_be_bytes());
+        bytes
+    }
+
     /// Main loop receiving checkpoint fragments to reliably submit to consensus.
     // Use .inspect when its stable.
     #[allow(clippy::option_map_unit_fn)]
@@ -632,9 +685,7 @@ impl CheckpointConsensusAdapter {
                     }
 
                     // Add the fragment to the buffer.
-                    let transaction = ConsensusTransaction::Checkpoint(Box::new(fragment));
-                    let serialized = bincode::serialize(&transaction)
-                        .expect("Failed to serialize checkpoint fragment");
+                    let serialized = Self::serialize(fragment);
                     self.buffer.push_front((serialized, sequence_number));
                 },
 

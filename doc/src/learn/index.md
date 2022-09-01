@@ -17,14 +17,12 @@ For a deep dive into Sui technology, see the [Sui Smart Contracts Platform](http
 The following list includes the recent updates to Sui and the documentation:
 
 * [Bullshark](https://arxiv.org/abs/2201.05677) replaced Tusk as the default consensus component of the [Narwhal](https://github.com/MystenLabs/narwhal)-based [Sui consensus engine](../learn/architecture/consensus.md) for reduced latency and support for fairness with slower validators. Note, Tusk may still be used.
+* You must now specify the key scheme type as an argument (`secp256k1` or `ed25519`)  when running either the `sui keytool generate` or `sui client new-address` commands, as shown in [adding accounts to the client](../build/cli-client.md#adding-accounts-to-the-client).
+* [Sui version 0.8.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.8.0) is now live in Devnet with numerous fixes and enhancements, including new designs for [Sui Explorer](https://explorer.devnet.sui.io/) and [event query support](https://github.com/MystenLabs/sui/blob/main/crates/sui-json-rpc/src/event_api.rs#L122-L210) in fullnode.
+* Follow the [Cryptography (math)](https://github.com/MystenLabs/sui/tree/main/sui_programmability/examples/math) example for a simple contract that hashes a piece of data using keccak256, recovers a [Secp256k1](https://crates.io/crates/secp256k1/) signature to its public key, and verifies a Secp256k1 signature, producing an event with the results.
 * Sui now supports [shared objects](../build/objects.md#shared) that anyone can read or write to. For an example of creating and accessing a shared object, see [Shared Object](https://examples.sui.io/basics/shared-object.html#shared-object) on https://examples.sui.io/.
-* [Sui version 0.7.0](https://github.com/MystenLabs/sui/releases/tag/devnet-0.7.0) is now live in Devnet with numerous fixes and enhancements, including new designs for the [Sui Wallet Browser Extension](../explore/wallet-browser.md) and [Sui Explorer](https://explorer.devnet.sui.io/).
 * Interact with the Sui network using our new [Rust SDK](../build/rust-sdk.md), a collection of Rust language [JSON-RPC wrapper and crypto utilities](https://github.com/MystenLabs/sui/tree/main/crates/sui-sdk).
 * Sui now supports development using [Microsoft Windows 11, macOS, and Linux](../build/install.md#supported-oses). See [install Sui](../build/install.md#prerequisites) for the prerequisites of each operating system.
-* This site is now available in two versions in the menu at top left: the default and stable [Devnet](https://docs.sui.io/devnet/learn) branch and the [Latest build](https://docs.sui.io/learn) upstream `main` branch. Use the `devnet` version for app development on top of Sui. Use the Latest build `main` branch for  [contributing to the Sui blockchain](../contribute/index.md) itself. Always check and submit fixes to the `main` branch.
-* `sui::id` is now `sui::object` and `Info` is now `UID` (as of [#3624](https://github.com/MystenLabs/sui/pull/3624)). Use the [Object module](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) that has *replaced the former ID.move* (as of [#3241](https://github.com/MystenLabs/sui/pull/3241)).
-* Find a list of [single-writer apps](../learn/single-writer-apps.md) that would benefit from Sui's advantages in handling [simple transactions](../learn/how-sui-works.md#simple-transactions).
-* Install the [Sui Wallet Browser Extension](../explore/wallet-browser.md) to create NFTs, transfer coins, and carry out common transactions in a Chrome tab.
 
 See the Sui `doc/src` [history](https://github.com/MystenLabs/sui/commits/main/doc/src) for a complete changelog of updates to this site. 
 
@@ -45,7 +43,7 @@ The links in the section point to information to help you start working with Sui
 Go to the [Move Quick Start](../build/move/index.md) for information about installation, defining custom objects, object operations (create/destroy/update/transfer/freeze), publishing, and invoking your published code.
 
 ### Start the Sui network with Sui CLI client
-See the [Sui CLI client Quick Start](../contribute/cli-client.md) for information about installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
+See the [Sui CLI client Quick Start](../build/cli-client.md) for information about installation, querying the chain, client setup, sending transfer transactions, and viewing the effects.
 
 ### Take the end-to-end tutorial
 Proceed to the [Sui Tutorial](../explore/tutorials.md) for a summary view of setting up your environment, starting a Sui network, gathering accounts and gas, and publishing and playing a game in Sui.
@@ -64,7 +62,7 @@ Navigate and search this site however you see fit. If you're new to Sui, we reco
 **Build** - includes information about how to:
 * [Install Sui](../build/install.md)
 * [Create smart contracts with Move](../build/move/index.md)
-* [Set up and configure a local Sui network](../contribute/cli-client.md)
+* [Set up and configure a local Sui network](../build/cli-client.md)
 * [Start a local JSON-RPC Gateway server](../build/json-rpc.md#start-local-rpc-server)
 
 **Explore** - includes more in-depth information about:
