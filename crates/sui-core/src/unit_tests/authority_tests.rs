@@ -2184,7 +2184,7 @@ async fn shared_object() {
                 consensus_index: narwhal_types::SequenceNumber::default(),
             },
             /* last_consensus_index */ ExecutionIndices::default(),
-            ConsensusTransaction::UserTransaction(Box::new(certificate.clone())),
+            ConsensusTransaction::new_certificate_message(&authority.name, certificate.clone()),
         )
         .await
         .unwrap();
@@ -2266,7 +2266,7 @@ async fn test_consensus_message_processed() {
                     consensus_index: narwhal_types::SequenceNumber::default(),
                 },
                 /* last_consensus_index */ ExecutionIndices::default(),
-                ConsensusTransaction::UserTransaction(Box::new(cert.clone())),
+                ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
             )
             .await
             .unwrap();

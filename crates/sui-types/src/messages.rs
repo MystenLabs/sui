@@ -16,6 +16,7 @@ use crate::storage::DeleteKind;
 use crate::sui_serde::Base64;
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
+use byteorder::{BigEndian, ReadBytesExt};
 use itertools::Either;
 use move_binary_format::access::ModuleAccess;
 use move_binary_format::file_format::LocalIndex;
@@ -31,6 +32,7 @@ use serde::{Deserialize, Serialize};
 use serde_name::{DeserializeNameAdapter, SerializeNameAdapter};
 use serde_with::serde_as;
 use serde_with::Bytes;
+use std::collections::hash_map::DefaultHasher;
 use std::fmt::Write;
 use std::fmt::{Display, Formatter};
 use std::{
@@ -1814,16 +1816,60 @@ pub struct ConsensusSync {
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
-pub enum ConsensusTransaction {
+pub struct ConsensusTransaction {
+    /// Encodes an u64 unique tracking id to allow us trace a message between Sui and Narwhal.
+    /// Use an byte array instead of u64 to ensure stable serialization.
+    pub tracking_id: [u8; 8],
+    pub kind: ConsensusTransactionKind,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub enum ConsensusTransactionKind {
     UserTransaction(Box<CertifiedTransaction>),
     Checkpoint(Box<CheckpointFragment>),
 }
 
 impl ConsensusTransaction {
+    pub fn new_certificate_message(
+        authority: &AuthorityName,
+        certificate: CertifiedTransaction,
+    ) -> Self {
+        let mut hasher = DefaultHasher::new();
+        let tx_digest = certificate.digest();
+        tx_digest.hash(&mut hasher);
+        authority.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_be_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::UserTransaction(Box::new(certificate)),
+        }
+    }
+
+    pub fn new_checkpoint_message(fragment: CheckpointFragment) -> Self {
+        let mut hasher = DefaultHasher::new();
+        let cp_seq = fragment.proposer_sequence_number();
+        let proposer = fragment.proposer.auth_signature.authority;
+        let other = fragment.other.auth_signature.authority;
+        cp_seq.hash(&mut hasher);
+        proposer.hash(&mut hasher);
+        other.hash(&mut hasher);
+        let tracking_id = hasher.finish().to_be_bytes();
+        Self {
+            tracking_id,
+            kind: ConsensusTransactionKind::Checkpoint(Box::new(fragment)),
+        }
+    }
+
+    pub fn get_tracking_id(&self) -> u64 {
+        (&self.tracking_id[..])
+            .read_u64::<BigEndian>()
+            .unwrap_or_default()
+    }
+
     pub fn verify(&self, committee: &Committee) -> SuiResult<()> {
-        match self {
-            Self::UserTransaction(certificate) => certificate.verify(committee),
-            Self::Checkpoint(fragment) => fragment.verify(committee),
+        match &self.kind {
+            ConsensusTransactionKind::UserTransaction(certificate) => certificate.verify(committee),
+            ConsensusTransactionKind::Checkpoint(fragment) => fragment.verify(committee),
         }
     }
 }

@@ -15,7 +15,6 @@ use crate::{
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bincode::Error;
-use byteorder::{BigEndian, ReadBytesExt};
 use chrono::prelude::*;
 use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
@@ -1767,12 +1766,18 @@ impl ExecutionState for AuthorityState {
         transaction: Self::Transaction,
     ) -> Result<Self::Outcome, Self::Error> {
         self.metrics.total_consensus_txns.inc();
-        match transaction {
-            ConsensusTransaction::UserTransaction(certificate) => {
+        let tracking_id = transaction.get_tracking_id();
+        match transaction.kind {
+            ConsensusTransactionKind::UserTransaction(certificate) => {
                 self.verify_narwhal_transaction(&certificate)
                     .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
 
-                debug!(tx_digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
+                debug!(
+                    ?consensus_index,
+                    ?tracking_id,
+                    tx_digest = ?certificate.digest(),
+                    "handle_consensus_transaction UserTransaction",
+                );
 
                 self.database
                     .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
@@ -1784,9 +1789,15 @@ impl ExecutionState for AuthorityState {
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
                 Ok(Vec::default())
             }
-            ConsensusTransaction::Checkpoint(fragment) => {
-                let seq = consensus_index;
-                debug!(?seq, "handle_consensus_transaction Checkpoint");
+            ConsensusTransactionKind::Checkpoint(fragment) => {
+                let cp_seq = fragment.proposer_sequence_number();
+                debug!(
+                    ?consensus_index,
+                    ?cp_seq,
+                    "handle_consensus_transaction Checkpoint. Proposer: {}, Other: {}",
+                    fragment.proposer.authority(),
+                    fragment.other.authority(),
+                );
 
                 if let Some(checkpoint) = &self.checkpoints {
                     let committee = self.committee.load();
@@ -1796,7 +1807,7 @@ impl ExecutionState for AuthorityState {
 
                     let mut checkpoint = checkpoint.lock();
                     checkpoint
-                        .handle_internal_fragment(seq, *fragment, self.database.clone())
+                        .handle_internal_fragment(consensus_index, *fragment, self.database.clone())
                         .map_err(NarwhalHandlerError::NodeError)?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
@@ -1829,21 +1840,7 @@ impl ExecutionState for AuthorityState {
     }
 
     fn deserialize(bytes: &[u8]) -> Result<Self::Transaction, Error> {
-        let len = bytes.len();
-        if len <= 8 {
-            Err(Error::new(bincode::ErrorKind::Custom(
-                "Message length must be at least 8".to_string(),
-            )))
-        } else {
-            // Last 8 bytes encode a u64 tracking id.
-            // The implementation of serialization is in consensus_adapter.rs.
-            let tracking_id = (&bytes[(len - 8)..]).read_u64::<BigEndian>();
-            debug!(
-                ?tracking_id,
-                "Deserializing consensus transaction to be sent back to Sui"
-            );
-            bincode::deserialize(&bytes[..(len - 8)])
-        }
+        bincode::deserialize(bytes)
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
