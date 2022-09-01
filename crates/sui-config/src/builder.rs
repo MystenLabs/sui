@@ -162,9 +162,15 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         network_key_pair: SuiKeyPair,
     ) -> ValidatorGenesisInfo {
         let ip = if !self.with_swarm {
-            let ip_addr = sui_simulator::runtime::NodeHandle::current()
-                .ip()
-                .expect("expected to be called within a simulator node");
+            let ip_addr = sui_simulator::runtime::NodeHandle::try_current()
+                .map(|node| {
+                    node.ip()
+                        .expect("expected to be called within a simulator node")
+                })
+                // There are a few #[test]s that call this code not from within a simulator runtime,
+                // so we provide a fall back so that they can run.
+                .unwrap_or_else(|| "127.0.0.1".parse().unwrap());
+
             format!("{}", ip_addr)
         } else {
             let low_octet = index + 1;
