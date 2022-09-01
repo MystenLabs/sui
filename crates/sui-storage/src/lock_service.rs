@@ -31,7 +31,7 @@ use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
 
-use crate::default_db_options;
+use crate::{default_db_options, exec_client_future};
 
 /// Commands to send to the LockService (for mutating lock state)
 // TODO: use smallvec as an optimization
@@ -488,20 +488,23 @@ impl LockService {
         refs: Vec<ObjectRef>,
         tx_digest: TransactionDigest,
     ) -> SuiResult {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
-        // NOTE: below is blocking, switch to Tokio channels which are async?
-        self.inner
-            .sender()
-            .send(LockServiceCommands::Acquire {
-                refs,
-                tx_digest,
-                resp: os_sender,
-            })
-            .await
-            .expect("Could not send message to inner LockService");
-        os_receiver
-            .await
-            .expect("Response from lockservice was cancelled, should not happen!")
+        exec_client_future(async move {
+            let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+            // NOTE: below is blocking, switch to Tokio channels which are async?
+            self.inner
+                .sender()
+                .send(LockServiceCommands::Acquire {
+                    refs,
+                    tx_digest,
+                    resp: os_sender,
+                })
+                .await
+                .expect("Could not send message to inner LockService");
+            os_receiver
+                .await
+                .expect("Response from lockservice was cancelled, should not happen!")
+        })
+        .await
     }
 
     /// Initialize a lock to None (but exists) for a given list of ObjectRefs.
@@ -509,19 +512,22 @@ impl LockService {
     /// Otherwise, if the lock already exists and is locked to a transaction, then return TransactionLockExists
     /// Only the gateway could set is_force_reset to true.
     pub async fn initialize_locks(&self, refs: &[ObjectRef], is_force_reset: bool) -> SuiResult {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
-        self.inner
-            .sender()
-            .send(LockServiceCommands::Initialize {
-                refs: Vec::from(refs),
-                is_force_reset,
-                resp: os_sender,
-            })
-            .await
-            .expect("Could not send message to inner LockService");
-        os_receiver
-            .await
-            .expect("Response from lockservice was cancelled, should not happen!")
+        exec_client_future(async move {
+            let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+            self.inner
+                .sender()
+                .send(LockServiceCommands::Initialize {
+                    refs: Vec::from(refs),
+                    is_force_reset,
+                    resp: os_sender,
+                })
+                .await
+                .expect("Could not send message to inner LockService");
+            os_receiver
+                .await
+                .expect("Response from lockservice was cancelled, should not happen!")
+        })
+        .await
     }
 
     /// Returns the state of a single lock.
@@ -529,33 +535,39 @@ impl LockService {
     /// * Some(None) - lock exists and is initialized, but not locked to a particular transaction
     /// * Some(Some(tx_digest)) - lock exists and set to transaction
     pub async fn get_lock(&self, object: ObjectRef) -> SuiLockResult {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiLockResult>();
-        self.inner
-            .query_sender()
-            .send(LockServiceQueries::GetLock {
-                object,
-                resp: os_sender,
-            })
-            .await
-            .expect("Could not send message to inner LockService");
-        os_receiver
-            .await
-            .expect("Response from lockservice was cancelled, should not happen!")
+        exec_client_future(async move {
+            let (os_sender, os_receiver) = oneshot::channel::<SuiLockResult>();
+            self.inner
+                .query_sender()
+                .send(LockServiceQueries::GetLock {
+                    object,
+                    resp: os_sender,
+                })
+                .await
+                .expect("Could not send message to inner LockService");
+            os_receiver
+                .await
+                .expect("Response from lockservice was cancelled, should not happen!")
+        })
+        .await
     }
 
     pub async fn create_locks_for_genesis_objects(&self, objects: Vec<ObjectRef>) -> SuiResult {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
-        self.inner
-            .sender()
-            .send(LockServiceCommands::CreateLocksForGenesisObjects {
-                objects,
-                resp: os_sender,
-            })
-            .await
-            .expect("Could not send message to inner LockService");
-        os_receiver
-            .await
-            .expect("Response from lockservice was cancelled, should not happen!")
+        exec_client_future(async move {
+            let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+            self.inner
+                .sender()
+                .send(LockServiceCommands::CreateLocksForGenesisObjects {
+                    objects,
+                    resp: os_sender,
+                })
+                .await
+                .expect("Could not send message to inner LockService");
+            os_receiver
+                .await
+                .expect("Response from lockservice was cancelled, should not happen!")
+        })
+        .await
     }
 
     /// Attempts to sequence the given tx. Sequencing consists of:
@@ -576,38 +588,44 @@ impl LockService {
         inputs: Vec<ObjectRef>,
         outputs: Vec<ObjectRef>,
     ) -> SuiResult<TxSequenceNumber> {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiResult<TxSequenceNumber>>();
-        self.inner
-            .sender()
-            .send(LockServiceCommands::SequenceTransaction {
-                tx,
-                seq,
-                inputs,
-                outputs,
-                resp: os_sender,
-            })
-            .await
-            .expect("Could not send message to inner LockService");
-        os_receiver
-            .await
-            .expect("Response from lockservice was cancelled, should not happen!")
+        exec_client_future(async move {
+            let (os_sender, os_receiver) = oneshot::channel::<SuiResult<TxSequenceNumber>>();
+            self.inner
+                .sender()
+                .send(LockServiceCommands::SequenceTransaction {
+                    tx,
+                    seq,
+                    inputs,
+                    outputs,
+                    resp: os_sender,
+                })
+                .await
+                .expect("Could not send message to inner LockService");
+            os_receiver
+                .await
+                .expect("Response from lockservice was cancelled, should not happen!")
+        })
+        .await
     }
 
     /// Checks multiple object locks exist.
     /// Returns Err(TransactionLockDoesNotExist) if at least one object lock is not initialized.
     pub async fn locks_exist(&self, objects: Vec<ObjectRef>) -> SuiResult {
-        let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
-        self.inner
-            .query_sender()
-            .send(LockServiceQueries::CheckLocksExist {
-                objects,
-                resp: os_sender,
-            })
-            .await
-            .expect("Could not send message to inner LockService");
-        os_receiver
-            .await
-            .expect("Response from lockservice was cancelled, should not happen!")
+        exec_client_future(async move {
+            let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
+            self.inner
+                .query_sender()
+                .send(LockServiceQueries::CheckLocksExist {
+                    objects,
+                    resp: os_sender,
+                })
+                .await
+                .expect("Could not send message to inner LockService");
+            os_receiver
+                .await
+                .expect("Response from lockservice was cancelled, should not happen!")
+        })
+        .await
     }
 }
 
