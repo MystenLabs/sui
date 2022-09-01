@@ -86,7 +86,7 @@ Narwhal is implemented using [Tokio](https://github.com/tokio-rs/tokio), [RocksD
 
 ## Configuration
 
-To conduct a fresh deployment of Narwhal and either Bullshark or Tusk, follow the instructions at [Running Benchmarks](https://github.com/mystenlabs/narwhal/tree/main/benchmark).
+To conduct a fresh deployment of Sui Consensus Engine, follow the instructions at [Running Benchmarks](https://github.com/mystenlabs/narwhal/tree/main/benchmark).
 
 ## Further reading
 
