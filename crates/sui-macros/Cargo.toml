@@ -16,4 +16,4 @@ quote = "1"
 syn = "1"
 
 [target.'cfg(msim)'.dependencies]
-msim-macros = { path = "../../../msim-fork/msim-macros" }
+msim-macros = { git = "https://github.com/MystenLabs/mysten-simulator.git", rev = "79b3531002494a549b6c19cd9a037a1af5bd964e", package = "msim-macros" }
