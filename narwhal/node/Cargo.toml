@@ -19,7 +19,7 @@ mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev =
 rand = "0.8.5"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
-thiserror = "1.0.32"
+thiserror = "1.0.33"
 tokio = { version = "1.20.1", features = ["full"] }
 tokio-stream = "0.1.9"
 tokio-util = { version = "0.7.3", features = ["codec"] }

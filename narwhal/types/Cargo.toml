@@ -23,7 +23,7 @@ rand = "0.8.5"
 serde = { version = "1.0.144", features = ["derive"] }
 signature = "1.6.0"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
-thiserror = "1.0.32"
+thiserror = "1.0.33"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = { version = "0.7.2", features = ["tls"] }

@@ -25,7 +25,7 @@ prometheus = "0.13.1"
 prost = "0.10.4"
 rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.144", features = ["derive"] }
-thiserror = "1.0.32"
+thiserror = "1.0.33"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = "0.7.2"
@@ -55,7 +55,7 @@ node = { path = "../node" }
 telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "696fa25982acdc87ab64ec6a33cb111edc63a331" }
 tempfile = "3.3.0"
 test_utils = { path = "../test_utils" }
-thiserror = "1.0.32"
+thiserror = "1.0.33"
 tracing = "0.1.36"
 tracing-test = "0.2.3"
 worker = { path = "../worker" }
