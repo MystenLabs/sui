@@ -19,7 +19,14 @@ use std::{
     convert::TryFrom,
     ops::{Add, Deref, Mul},
 };
-use sui_cost_tables::tables::{GasStatus, GasUnit, INITIAL_COST_SCHEDULE};
+use sui_cost_tables::{
+    bytecode_tables::{GasStatus, INITIAL_COST_SCHEDULE},
+    non_execution_tables::{
+        BASE_TX_COST_FIXED, CONSENSUS_COST, MAXIMUM_TX_GAS, OBJ_ACCESS_COST_MUTATE_PER_BYTE,
+        OBJ_ACCESS_COST_READ_PER_BYTE, OBJ_DATA_COST_REFUNDABLE, PACKAGE_PUBLISH_COST_PER_BYTE,
+    },
+    units_types::GasUnit,
+};
 
 pub type GasUnits = GasQuantity<GasUnit>;
 pub enum GasPriceUnit {}
@@ -142,16 +149,16 @@ struct SuiCostTable {
 
 // TODO: The following numbers are arbitrary at this point.
 static INIT_SUI_COST_TABLE: Lazy<SuiCostTable> = Lazy::new(|| SuiCostTable {
-    min_transaction_cost: FixedCost::new(10000),
-    package_publish_per_byte_cost: ComputationCostPerByte::new(80),
-    object_read_per_byte_cost: ComputationCostPerByte::new(15),
-    object_mutation_per_byte_cost: ComputationCostPerByte::new(40),
-    consensus_cost: FixedCost::new(100000),
+    min_transaction_cost: FixedCost::new(BASE_TX_COST_FIXED),
+    package_publish_per_byte_cost: ComputationCostPerByte::new(PACKAGE_PUBLISH_COST_PER_BYTE),
+    object_read_per_byte_cost: ComputationCostPerByte::new(OBJ_ACCESS_COST_READ_PER_BYTE),
+    object_mutation_per_byte_cost: ComputationCostPerByte::new(OBJ_ACCESS_COST_MUTATE_PER_BYTE),
+    consensus_cost: FixedCost::new(CONSENSUS_COST),
 
-    storage_per_byte_cost: StorageCostPerByte::new(100),
+    storage_per_byte_cost: StorageCostPerByte::new(OBJ_DATA_COST_REFUNDABLE),
 });
 
-pub static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| to_external(InternalGas::new(u64::MAX)).into());
+pub static MAX_GAS_BUDGET: Lazy<u64> = Lazy::new(|| u64::from(to_external(MAXIMUM_TX_GAS)));
 
 pub static MIN_GAS_BUDGET: Lazy<u64> =
     Lazy::new(|| to_external(*INIT_SUI_COST_TABLE.min_transaction_cost).into());
