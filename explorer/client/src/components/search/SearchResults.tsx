@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { type ResultType } from './SearchResultType';
+import {Combobox} from '@headlessui/react';
 
 import styles from './SearchResults.module.css';
 
@@ -24,11 +25,14 @@ function SearchResults({
 
     if (!result) return <></>;
     return (
-        <div className={styles.results}>
+        <Combobox.Options className={styles.results}>
             {result.length === 0 && (
+              <Combobox.Option>
                 <p className={styles.noresults}>No Results</p>
+              </Combobox.Option>
             )}
             {result.map((el, index) => (
+              <Combobox.Option>
                 <dl key={index}>
                     <dt>{categoryLabels[el.category]}</dt>
                     <dd
@@ -40,8 +44,9 @@ function SearchResults({
                         {el.input}
                     </dd>
                 </dl>
+              </Combobox.Option>
             ))}
-        </div>
+        </Combobox.Options>
     );
 }
 

@@ -15,6 +15,7 @@ importers:
 
   explorer/client:
     specifiers:
+      '@headlessui/react': ^1.6.6
       '@mysten/sui.js': workspace:*
       '@sentry/react': ^7.6.0
       '@sentry/tracing': ^7.6.0
@@ -65,6 +66,7 @@ importers:
       vite-plugin-svgr: ^2.2.1
       vitest: ^0.22.1
     dependencies:
+      '@headlessui/react': 1.6.6_biqbaboplfbrettd7655fr4n2y
       '@mysten/sui.js': link:../../sdk/typescript
       '@sentry/react': 7.11.1_react@18.2.0
       '@sentry/tracing': 7.11.1
@@ -2524,6 +2526,17 @@ packages:
     dependencies:
       '@hapi/hoek': 9.3.0
     dev: true
+
+  /@headlessui/react/1.6.6_biqbaboplfbrettd7655fr4n2y:
+    resolution: {integrity: sha512-MFJtmj9Xh/hhBMhLccGbBoSk+sk61BlP6sJe4uQcVMtXZhCgGqd2GyIQzzmsdPdTEWGSF434CBi8mnhR6um46Q==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: ^16 || ^17 || ^18
+      react-dom: ^16 || ^17 || ^18
+    dependencies:
+      react: 18.2.0
+      react-dom: 18.2.0_react@18.2.0
+    dev: false
 
   /@httptoolkit/httpolyglot/2.0.1:
     resolution: {integrity: sha512-xhz5ilhpQfEeLTKJMQmlUbvuS7yeFrF5u0M5zUDNpBWu/QMHrnBRxIfqRSV8phJThOpo1DBXuBld6qF07UFk4g==}

@@ -18,6 +18,7 @@ import {
 } from '../../utils/searchUtil';
 import { type ResultType } from './SearchResultType';
 import SearchResults from './SearchResults';
+import { Combobox } from '@headlessui/react';
 
 import styles from './Search.module.css';
 
@@ -156,18 +157,21 @@ function Search() {
                 onSubmit={handleSubmit}
                 aria-label="search form"
             >
-                <input
+            <Combobox 
+                    value={input}
+      name="web search"
+            >
+                <Combobox.Input
                     className={styles.searchtextdesktop}
                     id="searchText"
                     placeholder="Search by Addresses / Objects / Transactions"
-                    value={input}
                     onChange={handleTextChange}
                     onFocus={handleFocus}
                     autoFocus
                     type="text"
                     autoComplete="off"
                 />
-                <input
+                <Combobox.Input
                     className={styles.searchtextmobile}
                     id="searchText"
                     placeholder="Search Anything"
@@ -178,6 +182,14 @@ function Search() {
                     type="text"
                     autoComplete="off"
                 />
+      <SearchResults
+                    result={result}
+                    resultIndex={resultIndex}
+                    setResultIndex={setResultIndex}
+                    optionClick={handleOptionClick}
+                />
+
+      </Combobox>
                 <button
                     id="searchBtn"
                     type="submit"
@@ -186,15 +198,7 @@ function Search() {
                     <SearchIcon className={styles.searchicon} />
                 </button>
             </form>
-            {resultOpen && (
-                <SearchResults
-                    result={result}
-                    resultIndex={resultIndex}
-                    setResultIndex={setResultIndex}
-                    optionClick={handleOptionClick}
-                />
-            )}
-        </div>
+                        </div>
     );
 }
 
