@@ -17,7 +17,7 @@ publish = false
 [dependencies]
 addr2line = { version = "0.17", default-features = false }
 adler = { version = "1", default-features = false }
-ahash = { version = "0.8", features = ["std"] }
+ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
@@ -591,7 +591,7 @@ zstd-sys = { version = "2", features = ["legacy", "zdict_builder"] }
 Inflector = { version = "0.11", default-features = false }
 addr2line = { version = "0.17", default-features = false }
 adler = { version = "1", default-features = false }
-ahash = { version = "0.8", features = ["std"] }
+ahash = { version = "0.7", features = ["std"] }
 aho-corasick = { version = "0.7", features = ["std"] }
 ansi_term = { version = "0.12", default-features = false }
 anyhow = { version = "1", features = ["backtrace", "std"] }
