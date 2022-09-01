@@ -13,6 +13,7 @@ pub mod node_sync_store;
 pub mod write_ahead_log;
 
 use rocksdb::Options;
+use std::future::Future;
 use typed_store::rocks::default_rocksdb_options;
 
 /// Given a provided `db_options`, add a few default options.
@@ -43,4 +44,15 @@ pub fn default_db_options(
     point_lookup.set_memtable_whole_key_filtering(true);
 
     (options, point_lookup)
+}
+
+// Used to exec futures that send data to/from other threads. In the simulator, this effectively
+// becomes a blocking call, which removes the non-determinism that would otherwise be caused by the
+// timing of the reply from the other thread.
+pub(crate) async fn exec_client_future<F: Future>(fut: F) -> <F as Future>::Output {
+    if cfg!(madsim) {
+        futures::executor::block_on(fut)
+    } else {
+        fut.await
+    }
 }
