@@ -53,13 +53,15 @@ const isMinimumSubscriptionMessage = (msg: any): msg is MinimumSubscriptionMessa
 export type WebsocketClientOptions = {
   connectTimeout: number,
   callTimeout: number,
-  reconnectInterval: number
+  reconnectInterval: number,
+  maxReconnects: number
 }
 
 export const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
   connectTimeout: 15000,
   callTimeout: 30000,
-  reconnectInterval: 3000
+  reconnectInterval: 3000,
+  maxReconnects: 5
 }
 
 const SUBSCRIBE_EVENT_METHOD = 'sui_subscribeEvent';
@@ -83,6 +85,7 @@ export class WebsocketClient {
 
     this.rpcClient = new WsRpcClient(this.endpoint, {
       reconnect_interval: this.options.reconnectInterval,
+      max_reconnects: this.options.maxReconnects,
       autoconnect: false
     });
   }
