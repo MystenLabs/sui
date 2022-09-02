@@ -35,6 +35,7 @@ importers:
       '@vitejs/plugin-react': ^2.0.1
       '@vitest/ui': ^0.22.1
       autoprefixer: ^10.4.2
+      axios: ^0.27.2
       bn.js: ^5.2.0
       classnames: ^2.3.1
       cypress: ^10.4.0
@@ -97,6 +98,7 @@ importers:
       '@vitejs/plugin-react': 2.0.1_vite@3.0.9
       '@vitest/ui': 0.22.1
       autoprefixer: 10.4.8_postcss@8.4.16
+      axios: 0.27.2
       cypress: 10.6.0
       eslint: 8.23.0
       eslint-config-prettier: 8.5.0_eslint@8.23.0
@@ -4766,6 +4768,15 @@ packages:
       - debug
     dev: true
 
+  /axios/0.27.2:
+    resolution: {integrity: sha512-t+yRIyySRTp/wua5xEr+z1q60QmLq8ABsS5O9Me1AsE5dfKqgnCFzwiCZZ/cGNd1lq4/7akDWMxdhVlucjmnOQ==}
+    dependencies:
+      follow-redirects: 1.15.1_debug@4.3.2
+      form-data: 4.0.0
+    transitivePeerDependencies:
+      - debug
+    dev: true
+
   /axobject-query/2.2.0:
     resolution: {integrity: sha512-Td525n+iPOOyUQIeBfcASuG6uJsDOITl7Mds5gFyerkWiX7qhUTdYUBlSgNMyVqtSJqwpt1kXGLdUt6SykLMRA==}
     dev: true
@@ -7656,6 +7667,15 @@ packages:
       combined-stream: 1.0.8
       mime-types: 2.1.35
     dev: false
+
+  /form-data/4.0.0:
+    resolution: {integrity: sha512-ETEklSGi5t0QMZuiXoA/Q6vcnxcLQP5vdugSpuAyi6SVGi2clPPp+xgEhuMaHC+zGgn31Kd235W35f7Hykkaww==}
+    engines: {node: '>= 6'}
+    dependencies:
+      asynckit: 0.4.0
+      combined-stream: 1.0.8
+      mime-types: 2.1.35
+    dev: true
 
   /formik/2.2.9_react@18.2.0:
     resolution: {integrity: sha512-LQLcISMmf1r5at4/gyJigGn0gOwFbeEAlji+N9InZF6LIMXnFNkO42sCI8Jt84YZggpD4cPWObAZaxpEFtSzNA==}

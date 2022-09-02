@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+Cypress.config('baseUrl', 'http://localhost:8080');
+
 // Standardized CSS Selectors
 const mainBodyCSS = 'main > section > div';
 const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num}) a`;

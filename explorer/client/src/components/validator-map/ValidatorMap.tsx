@@ -108,7 +108,7 @@ export default function ValidatorMap() {
     );
 
     return (
-        <div className={styles.card}>
+        <div data-testid="fullnode-map" className={styles.card}>
             <div className={styles.container}>
                 <div className={styles.contents}>
                     <div>
