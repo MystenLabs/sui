@@ -46,7 +46,7 @@ impl ClientStateAdaptor {
         match self {
             ClientStateAdaptor::Gateway(client) => client.get_raw_object(object_id).await,
             ClientStateAdaptor::FullNode(client) => client
-                .get_object_read(&object_id, None)
+                .get_object_read(&object_id)
                 .await
                 .map_err(|e| anyhow!("{e}"))?
                 .try_into(),

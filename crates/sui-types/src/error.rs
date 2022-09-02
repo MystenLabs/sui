@@ -275,19 +275,19 @@ pub enum SuiError {
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
     #[error(
-        "Could not find the referenced object {:?} at sequence number {:?}",
+        "Could not find the referenced object {:?} at version {:?}",
         object_id,
-        seq_num
+        version
     )]
     PastObjectNotFound {
         object_id: ObjectID,
-        seq_num: SequenceNumber,
+        version: SequenceNumber,
     },
-    #[error("Could not find the referenced object {:?} as the asked sequence number {:?} is higher than the latest {:?}", object_id, asked_seq_num, latest_seq_num)]
+    #[error("Could not find the referenced object {:?} as the asked version {:?} is higher than the latest {:?}", object_id, asked_version, latest_version)]
     ObjectSequenceNumberTooHigh {
         object_id: ObjectID,
-        asked_seq_num: SequenceNumber,
-        latest_seq_num: SequenceNumber,
+        asked_version: SequenceNumber,
+        latest_version: SequenceNumber,
     },
     #[error("Object deleted at reference {:?}.", object_ref)]
     ObjectDeleted { object_ref: ObjectRef },

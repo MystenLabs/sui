@@ -1,25 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::api::{
+    RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, WalletSyncApiServer,
+};
+use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use signature::Signature;
-use sui_types::base_types::SequenceNumber;
-use tracing::debug;
-
-use crate::api::{
-    RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, WalletSyncApiServer,
-};
-use crate::SuiRpcModule;
 use sui_core::gateway_state::{GatewayClient, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
+use sui_json_rpc_types::GetPastObjectDataResponse;
 use sui_json_rpc_types::{
     GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo, SuiTransactionResponse,
     SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
+use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::Base64;
 use sui_types::{
@@ -28,6 +27,7 @@ use sui_types::{
     crypto::SignableBytes,
     messages::{Transaction, TransactionData},
 };
+use tracing::debug;
 
 pub struct RpcGatewayImpl {
     client: GatewayClient,
@@ -138,13 +138,16 @@ impl RpcReadApiServer for GatewayReadApiImpl {
         Ok(self.client.get_objects_owned_by_object(object_id).await?)
     }
 
-    async fn get_object(
-        &self,
-        object_id: ObjectID,
-        _seq_num: Option<SequenceNumber>,
-    ) -> RpcResult<GetObjectDataResponse> {
-        // Gateway does not support read past objects
+    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
         Ok(self.client.get_object(object_id).await?)
+    }
+
+    async fn get_past_object_maybe(
+        &self,
+        _object_id: ObjectID,
+        _seq_num: SequenceNumber,
+    ) -> RpcResult<GetPastObjectDataResponse> {
+        unimplemented!("Gateway is being deprecated and does not support this api")
     }
 
     async fn get_recent_transactions(

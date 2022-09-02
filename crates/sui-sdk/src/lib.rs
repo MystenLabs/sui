@@ -15,7 +15,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 
-use rpc_types::SuiExecuteTransactionResponse;
+use rpc_types::{GetPastObjectDataResponse, SuiExecuteTransactionResponse};
 pub use sui_config::gateway;
 use sui_config::gateway::GatewayConfig;
 use sui_core::gateway_state::{GatewayClient, GatewayState};
@@ -233,6 +233,20 @@ impl ReadApi {
             SuiClientApi::Rpc(c) => c.http.get_object(object_id).await?,
             // Gateway does not support reading past objects
             SuiClientApi::Embedded(c) => c.get_object(object_id).await?,
+        })
+    }
+
+    pub async fn get_parsed_past_object_maybe(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> anyhow::Result<GetPastObjectDataResponse> {
+        Ok(match &*self.api {
+            SuiClientApi::Rpc(c, _) => c.get_past_object_maybe(object_id, version).await?,
+            // Gateway does not support get past object
+            SuiClientApi::Embedded(_) => {
+                unimplemented!("Gateway/embedded client does not support get past object")
+            }
         })
     }
 

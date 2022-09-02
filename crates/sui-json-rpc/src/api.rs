@@ -7,10 +7,11 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse,
-    SuiGasCostSummary, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectInfo, SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag, TransactionBytes,
+    GatewayTxSeqNumber, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
+    MoveFunctionArgType, RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter,
+    SuiExecuteTransactionResponse, SuiGasCostSummary, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionFilter,
+    SuiTransactionResponse, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
@@ -111,6 +112,19 @@ pub trait RpcReadApi {
         /// the ID of the queried object
         object_id: ObjectID,
     ) -> RpcResult<GetObjectDataResponse>;
+
+    /// Note there is no software-level guarantee/SLA that objects with past versions
+    /// can be retrieved with this API, even if the object and version exists/existed.
+    /// The result may vary across nodes depending on their pruning policies.
+    /// Return the object information for a specified version
+    #[method(name = "getPastObjectMaybe")]
+    async fn get_past_object_maybe(
+        &self,
+        /// the ID of the queried object
+        object_id: ObjectID,
+        /// the version of the queried object. If None, default to the latest known version
+        version: SequenceNumber,
+    ) -> RpcResult<GetPastObjectDataResponse>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Full Node API")]

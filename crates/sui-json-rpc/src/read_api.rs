@@ -15,9 +15,9 @@ use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects,
-    SuiTransactionResponse,
+    GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
+    SuiTransactionEffects, SuiTransactionResponse,
 };
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
@@ -75,14 +75,23 @@ impl RpcReadApiServer for ReadApi {
             .collect())
     }
 
-    async fn get_object(
-        &self,
-        object_id: ObjectID,
-        seq_num: Option<SequenceNumber>,
-    ) -> RpcResult<GetObjectDataResponse> {
+    async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
         Ok(self
             .state
-            .get_object_read(&object_id, seq_num)
+            .get_object_read(&object_id)
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .try_into()?)
+    }
+
+    async fn get_past_object_maybe(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> RpcResult<GetPastObjectDataResponse> {
+        Ok(self
+            .state
+            .get_past_object_read(&object_id, version)
             .await
             .map_err(|e| anyhow!("{e}"))?
             .try_into()?)
@@ -197,7 +206,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
     ) -> RpcResult<Vec<MoveFunctionArgType>> {
         let object_read = self
             .state
-            .get_object_read(&package, None)
+            .get_object_read(&package)
             .await
             .map_err(|e| anyhow!("{e}"))?;
 
@@ -312,7 +321,7 @@ pub async fn get_move_modules_by_package(
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
     let object_read = fullnode_api
         .state
-        .get_object_read(&package, None)
+        .get_object_read(&package)
         .await
         .map_err(|e| anyhow!("{e}"))?;
 

@@ -97,7 +97,7 @@ use sui_types::crypto::AuthorityKeyPair;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
-use sui_types::object::Owner;
+use sui_types::object::{Owner, PastObjectRead};
 use sui_types::sui_system_state::SuiSystemState;
 
 pub mod authority_notifier;
@@ -1363,37 +1363,10 @@ impl AuthorityState {
         self.database.get_sui_system_state_object()
     }
 
-    pub async fn get_object_read(
-        &self,
-        object_id: &ObjectID,
-        seq_num: Option<SequenceNumber>,
-    ) -> Result<ObjectRead, SuiError> {
-        // Firstly we see if the object ever exists by getting its latest data
-        match (self.database.get_latest_parent_entry(*object_id)?, seq_num) {
-            (None, _) => Ok(ObjectRead::NotExists(*object_id)),
-            (Some((obj_ref, _)), Some(seq_num)) if seq_num > obj_ref.1 => {
-                Ok(ObjectRead::SequenceNumberTooHigh {
-                    object_id: *object_id,
-                    asked_seq_num: seq_num,
-                    latest_seq_num: obj_ref.1,
-                })
-            }
-            (Some((obj_ref, _)), Some(seq_num)) if seq_num < obj_ref.1 => {
-                // Read past objects
-                match self.database.get_object_by_key(object_id, seq_num)? {
-                    None => Ok(ObjectRead::ExistsButPastNotFound(*object_id, seq_num)),
-                    Some(object) => {
-                        let layout = object.get_layout(
-                            ObjectFormatOptions::default(),
-                            self.module_cache.as_ref(),
-                        )?;
-                        let obj_ref = object.compute_object_reference();
-                        Ok(ObjectRead::Exists(obj_ref, object, layout))
-                    }
-                }
-            }
-            // seq_num not provided or equal to the latest seq number this node knows
-            (Some((obj_ref, _)), _) => {
+    pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+        match self.database.get_latest_parent_entry(*object_id)? {
+            None => Ok(ObjectRead::NotExists(*object_id)),
+            Some((obj_ref, _)) => {
                 if obj_ref.2.is_alive() {
                     match self.database.get_object_by_key(object_id, obj_ref.1)? {
                         None => {
@@ -1412,6 +1385,65 @@ impl AuthorityState {
                     }
                 } else {
                     Ok(ObjectRead::Deleted(obj_ref))
+                }
+            }
+        }
+    }
+
+    /// This function aims to serve rpc reads on past objects and
+    /// we don't expect it to be called for other purposes.
+    /// Depending on the object pruning policies that will be enforced in the
+    /// future there is no software-level guarantee/SLA to retrieve an object
+    /// with an old version even if it exists/existed.
+    pub async fn get_past_object_read(
+        &self,
+        object_id: &ObjectID,
+        version: SequenceNumber,
+    ) -> Result<PastObjectRead, SuiError> {
+        // Firstly we see if the object ever exists by getting its latest data
+        match self.database.get_latest_parent_entry(*object_id)? {
+            None => Ok(PastObjectRead::ObjectNotExists(*object_id)),
+            Some((obj_ref, _)) => {
+                if version > obj_ref.1 {
+                    return Ok(PastObjectRead::VersionTooHigh {
+                        object_id: *object_id,
+                        asked_version: version,
+                        latest_version: obj_ref.1,
+                    });
+                }
+                if version < obj_ref.1 {
+                    // Read past objects
+                    return Ok(match self.database.get_object_by_key(object_id, version)? {
+                        None => PastObjectRead::VersionNotFound(*object_id, version),
+                        Some(object) => {
+                            let layout = object.get_layout(
+                                ObjectFormatOptions::default(),
+                                self.module_cache.as_ref(),
+                            )?;
+                            let obj_ref = object.compute_object_reference();
+                            PastObjectRead::VersionFound(obj_ref, object, layout)
+                        }
+                    });
+                }
+                // version is equal to the latest seq number this node knows
+                if obj_ref.2.is_alive() {
+                    match self.database.get_object_by_key(object_id, obj_ref.1)? {
+                        None => {
+                            error!("Object with in parent_entry is missing from object store, datastore is inconsistent");
+                            Err(SuiError::ObjectNotFound {
+                                object_id: *object_id,
+                            })
+                        }
+                        Some(object) => {
+                            let layout = object.get_layout(
+                                ObjectFormatOptions::default(),
+                                self.module_cache.as_ref(),
+                            )?;
+                            Ok(PastObjectRead::VersionFound(obj_ref, object, layout))
+                        }
+                    }
+                } else {
+                    Ok(PastObjectRead::ObjectDeleted(obj_ref))
                 }
             }
         }

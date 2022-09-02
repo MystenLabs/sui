@@ -527,15 +527,7 @@ impl SuiClientCommands {
                     .ok_or_else(|| anyhow!("Failed to create NFT"))?
                     .reference
                     .object_id;
-<<<<<<< HEAD
                 let object_read = context.client.read_api().get_parsed_object(nft_id).await?;
-=======
-                let object_read = context
-                    .gateway
-                    .read_api()
-                    .get_parsed_object(nft_id, None)
-                    .await?;
->>>>>>> cd3df4333 (fetch past objects)
                 SuiClientCommandResult::CreateExampleNFT(object_read)
             }
         });
@@ -627,7 +619,7 @@ impl WalletContext {
             let response = self
                 .client
                 .read_api()
-                .get_parsed_object(oref.object_id, None)
+                .get_parsed_object(oref.object_id)
                 .await?;
             match response {
                 GetObjectDataResponse::Exists(o) => {

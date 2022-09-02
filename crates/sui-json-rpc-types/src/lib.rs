@@ -49,7 +49,9 @@ use sui_types::messages::{
 };
 use sui_types::messages_checkpoint::CheckpointSequenceNumber;
 use sui_types::move_package::{disassemble_modules, MovePackage};
-use sui_types::object::{Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner};
+use sui_types::object::{
+    Data, MoveObject, Object, ObjectFormatOptions, ObjectRead, Owner, PastObjectRead,
+};
 use sui_types::sui_serde::{Base64, Encoding};
 
 #[cfg(test)]
@@ -951,12 +953,6 @@ pub enum SuiObjectRead<T: SuiData> {
     Exists(SuiObject<T>),
     NotExists(ObjectID),
     Deleted(SuiObjectRef),
-    ExistsButPastNotFound(ObjectID, SequenceNumber),
-    SequenceNumberTooHigh {
-        object_id: ObjectID,
-        asked_seq_num: SequenceNumber,
-        latest_seq_num: SequenceNumber,
-    },
 }
 
 impl<T: SuiData> SuiObjectRead<T> {
@@ -969,19 +965,6 @@ impl<T: SuiData> SuiObjectRead<T> {
             }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
             Self::Exists(o) => Ok(o),
-            Self::ExistsButPastNotFound(id, seq_num) => Err(SuiError::PastObjectNotFound {
-                object_id: *id,
-                seq_num: *seq_num,
-            }),
-            Self::SequenceNumberTooHigh {
-                object_id,
-                asked_seq_num,
-                latest_seq_num,
-            } => Err(SuiError::ObjectSequenceNumberTooHigh {
-                object_id: *object_id,
-                asked_seq_num: *asked_seq_num,
-                latest_seq_num: *latest_seq_num,
-            }),
         }
     }
 
@@ -994,19 +977,6 @@ impl<T: SuiData> SuiObjectRead<T> {
             }),
             Self::NotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::Exists(o) => Ok(o),
-            Self::ExistsButPastNotFound(id, seq_num) => Err(SuiError::PastObjectNotFound {
-                object_id: id,
-                seq_num,
-            }),
-            Self::SequenceNumberTooHigh {
-                object_id,
-                asked_seq_num,
-                latest_seq_num,
-            } => Err(SuiError::ObjectSequenceNumberTooHigh {
-                object_id,
-                asked_seq_num,
-                latest_seq_num,
-            }),
         }
     }
 }
@@ -1021,17 +991,103 @@ impl<T: SuiData> TryFrom<ObjectRead> for SuiObjectRead<T> {
                 Ok(SuiObjectRead::Exists(SuiObject::try_from(o, layout)?))
             }
             ObjectRead::Deleted(oref) => Ok(SuiObjectRead::Deleted(oref.into())),
-            ObjectRead::ExistsButPastNotFound(id, seq_num) => {
-                Ok(SuiObjectRead::ExistsButPastNotFound(id, seq_num))
+        }
+    }
+}
+
+pub type GetPastObjectDataResponse = SuiPastObjectRead<SuiParsedData>;
+
+#[derive(Serialize, Deserialize, Debug, JsonSchema, Clone)]
+#[serde(tag = "status", content = "details", rename = "ObjectRead")]
+pub enum SuiPastObjectRead<T: SuiData> {
+    /// The object exists and is found with this version
+    VersionFound(SuiObject<T>),
+    /// The object does not exist
+    ObjectNotExists(ObjectID),
+    /// The object is found to be deleted with this version
+    ObjectDeleted(SuiObjectRef),
+    /// The object exists but not found with this version
+    VersionNotFound(ObjectID, SequenceNumber),
+    /// The asked object version is higher than the latest
+    VersionTooHigh {
+        object_id: ObjectID,
+        asked_version: SequenceNumber,
+        latest_version: SequenceNumber,
+    },
+}
+
+impl<T: SuiData> SuiPastObjectRead<T> {
+    /// Returns a reference to the object if there is any, otherwise an Err
+    pub fn object(&self) -> Result<&SuiObject<T>, SuiError> {
+        match &self {
+            Self::ObjectDeleted(oref) => Err(SuiError::ObjectDeleted {
+                object_ref: oref.to_object_ref(),
+            }),
+            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
+            Self::VersionFound(o) => Ok(o),
+            Self::VersionNotFound(id, seq_num) => Err(SuiError::PastObjectNotFound {
+                object_id: *id,
+                version: *seq_num,
+            }),
+            Self::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            } => Err(SuiError::ObjectSequenceNumberTooHigh {
+                object_id: *object_id,
+                asked_version: *asked_version,
+                latest_version: *latest_version,
+            }),
+        }
+    }
+
+    /// Returns the object value if there is any, otherwise an Err
+    pub fn into_object(self) -> Result<SuiObject<T>, SuiError> {
+        match self {
+            Self::ObjectDeleted(oref) => Err(SuiError::ObjectDeleted {
+                object_ref: oref.to_object_ref(),
+            }),
+            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
+            Self::VersionFound(o) => Ok(o),
+            Self::VersionNotFound(object_id, version) => {
+                Err(SuiError::PastObjectNotFound { object_id, version })
             }
-            ObjectRead::SequenceNumberTooHigh {
+            Self::VersionTooHigh {
                 object_id,
-                asked_seq_num,
-                latest_seq_num,
-            } => Ok(SuiObjectRead::SequenceNumberTooHigh {
+                asked_version,
+                latest_version,
+            } => Err(SuiError::ObjectSequenceNumberTooHigh {
                 object_id,
-                asked_seq_num,
-                latest_seq_num,
+                asked_version,
+                latest_version,
+            }),
+        }
+    }
+}
+
+impl<T: SuiData> TryFrom<PastObjectRead> for SuiPastObjectRead<T> {
+    type Error = anyhow::Error;
+
+    fn try_from(value: PastObjectRead) -> Result<Self, Self::Error> {
+        match value {
+            PastObjectRead::ObjectNotExists(id) => Ok(SuiPastObjectRead::ObjectNotExists(id)),
+            PastObjectRead::VersionFound(_, o, layout) => Ok(SuiPastObjectRead::VersionFound(
+                SuiObject::try_from(o, layout)?,
+            )),
+            PastObjectRead::ObjectDeleted(oref) => {
+                Ok(SuiPastObjectRead::ObjectDeleted(oref.into()))
+            }
+            PastObjectRead::VersionNotFound(id, seq_num) => {
+                Ok(SuiPastObjectRead::VersionNotFound(id, seq_num))
+            }
+            PastObjectRead::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            } => Ok(SuiPastObjectRead::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
             }),
         }
     }

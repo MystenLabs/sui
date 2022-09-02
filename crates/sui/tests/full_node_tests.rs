@@ -17,7 +17,7 @@ use move_core_types::value::MoveStructLayout;
 use sui_sdk::{ClientType, SuiClient};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::event::TransferType;
-use sui_types::object::{Object, ObjectRead, Owner};
+use sui_types::object::{Object, ObjectRead, Owner, PastObjectRead};
 use sui_types::sui_framework_address_concat_string;
 use test_utils::authority::test_and_configure_authority_configs;
 use test_utils::messages::{
@@ -34,8 +34,8 @@ use tokio::time::{sleep, Duration};
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::utils::get_available_port;
 use sui_json_rpc_types::{
-    SuiMoveValue, SuiObjectRead, SuiTransactionFilter, SuiTransactionResponse,
-    SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiExecutionStatus, SuiMoveStruct,
+    SuiEvent, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse, SuiExecutionStatus,
+    SuiMoveStruct, SuiMoveValue, SuiTransactionFilter, SuiTransactionResponse,
 };
 use sui_node::SuiNode;
 use sui_swarm::memory::Swarm;
@@ -97,10 +97,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     assert!(sync_store.get_effects(&digest).unwrap().is_none());
 
     // verify that the node has seen the transfer
-    let object_read = node
-        .state()
-        .get_object_read(&transferred_object, None)
-        .await?;
+    let object_read = node.state().get_object_read(&transferred_object).await?;
     let object = object_read.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
@@ -498,8 +495,10 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
         .await
         .unwrap();
     let mut digests = Vec::with_capacity(3);
+    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let receiver = context.keystore.addresses().get(1).cloned().unwrap();
     for _i in 0..3 {
-        let (_, _, _, digest) = transfer_coin(&mut context).await?;
+        let (_, digest) = transfer_coin(&mut context, sender, receiver).await?;
         digests.push(digest);
     }
     wait_for_all_txes(digests.clone(), node.state().clone()).await;
@@ -527,7 +526,7 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
     }
 
     // Node Config without websocket_address does not create a transaction streamer
-    let (node, _) = set_up_jsonrpc(&swarm, Some("another_folder")).await?;
+    let (node, _, _) = set_up_jsonrpc(&swarm, Some("another_folder")).await?;
     assert!(node.state().transaction_streamer.is_none());
 
     Ok(())
@@ -624,7 +623,8 @@ async fn test_full_node_sub_and_query_move_event_ok() -> Result<(), anyhow::Erro
 async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _address) = setup_network_and_wallet().await?;
     let (node, jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
-    let (transferred_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
+    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let receiver = context.keystore.addresses().get(1).cloned().unwrap();
     let (transferred_object, digest) = transfer_coin(&mut context, sender, receiver).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
@@ -964,11 +964,31 @@ async fn get_obj_read_from_node(
     object_id: ObjectID,
     seq_num: Option<SequenceNumber>,
 ) -> Result<(ObjectRef, Object, Option<MoveStructLayout>), anyhow::Error> {
-    let object_read = node.state().get_object_read(&object_id, seq_num).await?;
-    match object_read {
-        ObjectRead::Exists(obj_ref, object, layout) => Ok((obj_ref, object, layout)),
-        _ => {
-            anyhow::bail!("Can't find object {object_id:?} on fullnode.")
+    match seq_num {
+        None => {
+            let object_read = node.state().get_object_read(&object_id).await?;
+            match object_read {
+                ObjectRead::Exists(obj_ref, object, layout) => Ok((obj_ref, object, layout)),
+                _ => {
+                    anyhow::bail!("Can't find object {object_id:?} on fullnode.")
+                }
+            }
+        }
+        Some(seq_num) => {
+            let object_read = node
+                .state()
+                .get_past_object_read(&object_id, seq_num)
+                .await?;
+            match object_read {
+                PastObjectRead::VersionFound(obj_ref, object, layout) => {
+                    Ok((obj_ref, object, layout))
+                }
+                _ => {
+                    anyhow::bail!(
+                        "Can't find object {object_id:?} with seq {seq_num:?} on fullnode."
+                    )
+                }
+            }
         }
     }
 }
@@ -979,7 +999,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
-    let (node, _jsonrpc_client, _sui_client) = set_up_jsonrpc(&swarm).await?;
+    let (node, _jsonrpc_client, _sui_client) = set_up_jsonrpc(&swarm, None).await?;
 
     // Create the object
     let (sender, object_id, _) = create_devnet_nft(&mut context).await?;
@@ -1014,17 +1034,17 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     assert_eq!(resp.effects.status, SuiExecutionStatus::Success);
 
     // Now test get_object_read
-    let object_ref_v3 = match node.state().get_object_read(&object_id, None).await? {
+    let object_ref_v3 = match node.state().get_object_read(&object_id).await? {
         ObjectRead::Deleted(obj_ref) => obj_ref,
         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
     };
 
     let obj_ref_v3 = match node
         .state()
-        .get_object_read(&object_id, Some(SequenceNumber::from_u64(3)))
+        .get_past_object_read(&object_id, SequenceNumber::from_u64(3))
         .await?
     {
-        ObjectRead::Deleted(obj_ref) => obj_ref,
+        PastObjectRead::ObjectDeleted(obj_ref) => obj_ref,
         other => anyhow::bail!("Expect object {object_id:?} deleted but got {other:?}."),
     };
     assert_eq!(object_ref_v3, obj_ref_v3);
@@ -1042,17 +1062,17 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
 
     match node
         .state()
-        .get_object_read(&object_id, Some(SequenceNumber::from_u64(4)))
+        .get_past_object_read(&object_id, SequenceNumber::from_u64(4))
         .await?
     {
-        ObjectRead::SequenceNumberTooHigh {
+        PastObjectRead::VersionTooHigh {
             object_id: obj_id,
-            asked_seq_num,
-            latest_seq_num,
+            asked_version,
+            latest_version,
         } => {
             assert_eq!(obj_id, object_id);
-            assert_eq!(asked_seq_num, SequenceNumber::from_u64(4));
-            assert_eq!(latest_seq_num, SequenceNumber::from_u64(3));
+            assert_eq!(asked_version, SequenceNumber::from_u64(4));
+            assert_eq!(latest_version, SequenceNumber::from_u64(3));
         }
         other => anyhow::bail!(
             "Expect SequenceNumberTooHigh for object {object_id:?} but got {other:?}."

@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::get_client;
 use crate::messages::{
-    make_tx_certs_and_signed_effects,
     create_publish_move_package_transaction, get_account_and_gas_coins,
-    get_gas_object_with_wallet_context, make_certificates, MAX_GAS,
+    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects, MAX_GAS,
 };
 use crate::test_account_keys;
 use futures::StreamExt;
