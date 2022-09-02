@@ -12,7 +12,7 @@ use sui_types::gas::GasCostSummary;
 use sui_types::messages::SingleTransactionKind;
 use sui_types::messages::TransactionKind;
 
-pub const ESTIMATE_FILE: &str = "data/estimate.toml";
+pub const ESTIMATE_FILE: &str = "tests/snapshots/empirical_transaction_cost__good_snapshot.snap";
 #[derive(
     Debug, Eq, PartialEq, Hash, Serialize, Deserialize, Ord, PartialOrd, Clone, Display, EnumString,
 )]
@@ -54,9 +54,18 @@ pub fn estimate_computational_costs_for_transaction(
 
 pub fn read_estimate_file(
 ) -> Result<BTreeMap<CommonTransactionCosts, GasCostSummary>, anyhow::Error> {
-    let toml_str = fs::read_to_string(&ESTIMATE_FILE).unwrap();
+    let json_str = fs::read_to_string(&ESTIMATE_FILE).unwrap();
 
-    let cost_map: BTreeMap<String, GasCostSummary> = toml::from_str(&toml_str).unwrap();
+    // Remove the metadata: first 4 lines form snapshot tests
+    let json_str = json_str
+        .split('\n')
+        .skip(4)
+        .map(|q| q.to_string())
+        .collect::<Vec<String>>()
+        .join("\n");
+
+    let cost_map: BTreeMap<String, GasCostSummary> = serde_json::from_str(&json_str).unwrap();
+
     let cost_map: BTreeMap<CommonTransactionCosts, GasCostSummary> = cost_map
         .iter()
         .map(|(k, v)| (CommonTransactionCosts::from_str(k).unwrap(), v.clone()))
