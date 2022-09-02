@@ -123,7 +123,7 @@ export class WebsocketClient {
           // cast to bypass type validation of 'result'
           (sub.onMessage as (m: any) => void)(params.result);
       }
-      if (isSubscriptionEvent(params)) {
+      else if (isSubscriptionEvent(params)) {
         // call any registered handler for the message's subscription
         const sub = this.activeSubscriptions.get(params.subscription);
         if (sub)
