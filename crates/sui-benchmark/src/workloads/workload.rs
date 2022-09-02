@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use async_trait::async_trait;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt};
 use sui_core::{
     authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
 };
@@ -178,6 +178,15 @@ impl Payload for CombinationPayload {
 pub enum WorkloadType {
     SharedCounter,
     TransferObject,
+}
+
+impl fmt::Display for WorkloadType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            WorkloadType::SharedCounter => write!(f, "shared_counter"),
+            WorkloadType::TransferObject => write!(f, "transfer_object"),
+        }
+    }
 }
 
 #[async_trait]
