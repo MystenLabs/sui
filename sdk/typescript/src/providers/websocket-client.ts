@@ -40,6 +40,16 @@ type SubscriptionData = {
   onMessage: (event: SuiEventEnvelope) => void
 }
 
+type MinimumSubscriptionMessage = {
+  subscription: SubscriptionId,
+  result: object
+}
+
+// even with validation off, we need these properties at minimum in a sub message
+const isMinimumSubscriptionMessage = (msg: any): msg is MinimumSubscriptionMessage =>
+  ('subscription' in msg && typeof msg['subscription'] === 'number')
+  && ('result' in msg && typeof msg['result'] === 'object')
+
 export type WebsocketClientOptions = {
   connectTimeout: number,
   callTimeout: number,
@@ -105,11 +115,19 @@ export class WebsocketClient {
     const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
 
     const params = msg.params;
-    if(msg.method === SUBSCRIBE_EVENT_METHOD && isSubscriptionEvent(params)) {
-      // call any registered handler for the message's subscription
-      const sub = this.activeSubscriptions.get(params.subscription);
-      if (sub)
-        sub.onMessage(params.result);
+    if (msg.method === SUBSCRIBE_EVENT_METHOD) {
+        if (this.skipValidation && isMinimumSubscriptionMessage(params)) {
+            const sub = this.activeSubscriptions.get(params.subscription);
+            if (sub)
+              // cast to bypass type validation of 'result'
+              (sub.onMessage as (m: any) => void)(params.result);
+        }
+        if (isSubscriptionEvent(params)) {
+          // call any registered handler for the message's subscription
+          const sub = this.activeSubscriptions.get(params.subscription);
+          if (sub)
+            sub.onMessage(params.result);
+      }
     }
   }
 
@@ -135,7 +153,7 @@ export class WebsocketClient {
     });
   }
 
-    /**
+  /**
     call only upon reconnecting to a node over websocket.
     calling multiple times on the same connection will result
     in multiple message handlers firing each time
