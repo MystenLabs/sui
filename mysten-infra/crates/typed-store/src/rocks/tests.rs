@@ -83,6 +83,29 @@ fn test_get() {
 }
 
 #[test]
+fn test_get_raw() {
+    let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
+
+    db.insert(&123456789, &"123456789".to_string())
+        .expect("Failed to insert");
+
+    let val_bytes = db
+        .get_raw_bytes(&123456789)
+        .expect("Failed to get_raw_bytes")
+        .unwrap();
+
+    assert_eq!(
+        bincode::serialize(&"123456789".to_string()).unwrap(),
+        val_bytes
+    );
+    assert_eq!(
+        None,
+        db.get_raw_bytes(&000000000)
+            .expect("Failed to get_raw_bytes")
+    );
+}
+
+#[test]
 fn test_multi_get() {
     let db = DBMap::open(temp_dir(), None, None).expect("Failed to open storage");
 
