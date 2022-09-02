@@ -546,18 +546,7 @@ pub async fn send_and_confirm_transaction_with_shared(
         .unwrap();
 
     if with_shared {
-        authority
-            .handle_consensus_transaction(
-                // TODO [2533]: use this once integrating Narwhal reconfiguration
-                &narwhal_consensus::ConsensusOutput {
-                    certificate: narwhal_types::Certificate::default(),
-                    consensus_index: narwhal_types::SequenceNumber::default(),
-                },
-                /* last_consensus_index */ ExecutionIndices::default(),
-                ConsensusTransaction::UserTransaction(Box::new(certificate.clone())),
-            )
-            .await
-            .unwrap();
+        send_consensus(authority, &certificate).await;
     }
 
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
@@ -2073,6 +2062,22 @@ fn init_certified_transaction(
         .unwrap()
 }
 
+#[cfg(test)]
+async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction) {
+    authority
+        .handle_consensus_transaction(
+            // TODO [2533]: use this once integrating Narwhal reconfiguration
+            &narwhal_consensus::ConsensusOutput {
+                certificate: narwhal_types::Certificate::default(),
+                consensus_index: narwhal_types::SequenceNumber::default(),
+            },
+            /* last_consensus_index */ ExecutionIndices::default(),
+            ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
+        )
+        .await
+        .unwrap();
+}
+
 pub async fn call_move(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
@@ -2245,18 +2250,7 @@ async fn shared_object() {
     assert!(matches!(result, Err(SuiError::ObjectErrors { .. })));
 
     // Sequence the certificate to assign a sequence number to the shared object.
-    authority
-        .handle_consensus_transaction(
-            // TODO [2533]: use this once integrating Narwhal reconfiguration
-            &narwhal_consensus::ConsensusOutput {
-                certificate: narwhal_types::Certificate::default(),
-                consensus_index: narwhal_types::SequenceNumber::default(),
-            },
-            /* last_consensus_index */ ExecutionIndices::default(),
-            ConsensusTransaction::new_certificate_message(&authority.name, certificate.clone()),
-        )
-        .await
-        .unwrap();
+    send_consensus(&authority, &certificate).await;
 
     let shared_object_version = authority
         .db()
@@ -2325,21 +2319,6 @@ async fn test_consensus_message_processed() {
         Some((committee.clone(), sec2)),
     )
     .await;
-
-    async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction) {
-        authority
-            .handle_consensus_transaction(
-                // TODO [2533]: use this once integrating Narwhal reconfiguration
-                &narwhal_consensus::ConsensusOutput {
-                    certificate: narwhal_types::Certificate::default(),
-                    consensus_index: narwhal_types::SequenceNumber::default(),
-                },
-                /* last_consensus_index */ ExecutionIndices::default(),
-                ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
-            )
-            .await
-            .unwrap();
-    }
 
     async fn handle_cert(
         authority: &AuthorityState,
