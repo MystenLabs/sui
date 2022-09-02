@@ -307,6 +307,16 @@ where
     }
 
     #[instrument(level = "trace", skip_all, err)]
+    fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, TypedStoreError> {
+        let key_buf = be_fix_int_ser(key)?;
+        let res = self.rocksdb.get_pinned_cf(&self.cf(), &key_buf)?;
+        match res {
+            Some(data) => Ok(Some(data.to_vec())),
+            None => Ok(None),
+        }
+    }
+
+    #[instrument(level = "trace", skip_all, err)]
     fn insert(&self, key: &K, value: &V) -> Result<(), TypedStoreError> {
         let key_buf = be_fix_int_ser(key)?;
         let value_buf = bincode::serialize(value)?;

@@ -40,6 +40,7 @@ pub enum StoreCommand<Key, Value> {
     Delete(Key),
     DeleteAll(Vec<Key>, oneshot::Sender<StoreResult<()>>),
     Read(Key, oneshot::Sender<StoreResult<Option<Value>>>),
+    ReadRawBytes(Key, oneshot::Sender<StoreResult<Option<Vec<u8>>>>),
     ReadAll(Vec<Key>, oneshot::Sender<StoreResult<Vec<Option<Value>>>>),
     NotifyRead(Key, oneshot::Sender<StoreResult<Option<Value>>>),
     Iter(
@@ -140,6 +141,10 @@ where
 
                         let _ = sender.send(response);
                     }
+                    StoreCommand::ReadRawBytes(key, sender) => {
+                        let response = keyed_db.get_raw_bytes(&key);
+                        let _ = sender.send(response);
+                    }
                 }
             }
         });
@@ -205,6 +210,21 @@ where
         receiver
             .await
             .expect("Failed to receive reply to RemoveAll command from store")
+    }
+
+    /// Returns the read value in raw bincode bytes
+    pub async fn read_raw_bytes(&self, key: Key) -> StoreResult<Option<Vec<u8>>> {
+        let (sender, receiver) = oneshot::channel();
+        if let Err(e) = self
+            .channel
+            .send(StoreCommand::ReadRawBytes(key, sender))
+            .await
+        {
+            panic!("Failed to send ReadRawBytes command to store: {e}");
+        }
+        receiver
+            .await
+            .expect("Failed to receive reply to ReadRawBytes command from store")
     }
 
     pub async fn read(&self, key: Key) -> StoreResult<Option<Value>> {
