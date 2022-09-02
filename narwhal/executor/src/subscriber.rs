@@ -17,7 +17,7 @@ use tokio::{
 use tracing::error;
 use types::{
     bounded_future_queue::BoundedFuturesOrdered, metered_channel, Batch, BatchDigest,
-    ReconfigureNotification,
+    CertificateDigest, ReconfigureNotification,
 };
 
 #[cfg(test)]
@@ -29,7 +29,7 @@ pub mod subscriber_tests;
 /// forward the certificates to the Executor Core.
 pub struct Subscriber {
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
-    store: Store<BatchDigest, Batch>,
+    store: Store<(CertificateDigest, BatchDigest), Batch>,
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// A channel to receive consensus messages.
@@ -54,7 +54,7 @@ impl Subscriber {
     /// Spawn a new subscriber in a new tokio task.
     #[must_use]
     pub fn spawn(
-        store: Store<BatchDigest, Batch>,
+        store: Store<(CertificateDigest, BatchDigest), Batch>,
         tx_get_block_commands: metered_channel::Sender<BlockCommand>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_consensus: metered_channel::Receiver<ConsensusOutput>,
@@ -158,13 +158,13 @@ impl Subscriber {
     /// fetched the payload.
     async fn wait_on_payload(
         back_off_policy: ExponentialBackoff,
-        store: Store<BatchDigest, Batch>,
+        store: Store<(CertificateDigest, BatchDigest), Batch>,
         tx_get_block_commands: metered_channel::Sender<BlockCommand>,
         deliver: ConsensusOutput,
     ) -> SubscriberResult<ConsensusOutput> {
         let get_block = move || {
             let message = deliver.clone();
-            let id = message.certificate.digest();
+            let certificate_id = message.certificate.digest();
             let tx_get_block = tx_get_block_commands.clone();
             let batch_store = store.clone();
 
@@ -172,18 +172,27 @@ impl Subscriber {
                 let (sender, receiver) = oneshot::channel();
 
                 tx_get_block
-                    .send(BlockCommand::GetBlock { id, sender })
+                    .send(BlockCommand::GetBlock {
+                        id: certificate_id,
+                        sender,
+                    })
                     .await
-                    .map_err(|err| Error::permanent(PayloadRetrieveError(id, err.to_string())))?;
+                    .map_err(|err| {
+                        Error::permanent(PayloadRetrieveError(certificate_id, err.to_string()))
+                    })?;
 
-                match receiver
-                    .await
-                    .map_err(|err| Error::permanent(PayloadRetrieveError(id, err.to_string())))?
-                {
+                match receiver.await.map_err(|err| {
+                    Error::permanent(PayloadRetrieveError(certificate_id, err.to_string()))
+                })? {
                     Ok(block) => {
                         // we successfully received the payload. Now let's add to store
                         batch_store
-                            .write_all(block.batches.into_iter().map(|b| (b.id, b.transactions)))
+                            .write_all(
+                                block
+                                    .batches
+                                    .into_iter()
+                                    .map(|b| ((certificate_id, b.id), b.transactions)),
+                            )
                             .await
                             .map_err(|err| Error::permanent(SubscriberError::from(err)))?;
 
@@ -193,7 +202,10 @@ impl Subscriber {
                         // whatever the error might be at this point we don't
                         // have many options apart from retrying.
                         error!("Error while retrieving block via block waiter: {}", err);
-                        Err(Error::transient(PayloadRetrieveError(id, err.to_string())))
+                        Err(Error::transient(PayloadRetrieveError(
+                            certificate_id,
+                            err.to_string(),
+                        )))
                     }
                 }
             }

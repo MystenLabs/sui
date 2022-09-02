@@ -16,7 +16,7 @@ async fn spawn_subscriber(
     tx_get_block_commands: metered_channel::Sender<BlockCommand>,
     restored_consensus_output: Vec<ConsensusOutput>,
 ) -> (
-    Store<BatchDigest, Batch>,
+    Store<(CertificateDigest, BatchDigest), Batch>,
     watch::Sender<ReconfigureNotification>,
     JoinHandle<()>,
 ) {
@@ -67,7 +67,7 @@ async fn handle_certificate_with_downloaded_batch() {
     for i in 0..total_certificates {
         let request = rx_get_block_command.recv().await.unwrap();
 
-        let batches = match request {
+        let (certificate_id, batches) = match request {
             BlockCommand::GetBlock { id, sender } => {
                 let (certificate, batches) = certificates.get(i).unwrap().to_owned();
 
@@ -82,7 +82,7 @@ async fn handle_certificate_with_downloaded_batch() {
 
                 sender.send(ok).unwrap();
 
-                batches
+                (id, batches)
             }
             _ => panic!("Unexpected command received"),
         };
@@ -93,7 +93,7 @@ async fn handle_certificate_with_downloaded_batch() {
         // Ensure all the batches have been written in storage
         for (batch_id, batch) in batches {
             let stored_batch = store
-                .read(batch_id)
+                .read((certificate_id, batch_id))
                 .await
                 .expect("Error while retrieving batch")
                 .unwrap();
@@ -167,7 +167,7 @@ async fn should_retry_when_failed_to_get_payload() {
     // Ensure all the batches have been written in storage
     for (batch_id, batch) in batches {
         let stored_batch = store
-            .read(batch_id)
+            .read((certificate_id, batch_id))
             .await
             .expect("Error while retrieving batch")
             .unwrap();

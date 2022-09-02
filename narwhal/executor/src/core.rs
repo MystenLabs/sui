@@ -7,14 +7,18 @@ use crate::{
     ExecutionState, ExecutorOutput, SerializedTransaction,
 };
 use consensus::ConsensusOutput;
+use fastcrypto::Hash;
 use std::{fmt::Debug, sync::Arc};
+use store::rocks::TypedStoreError;
 use store::Store;
 use tokio::{
     sync::{mpsc::Sender, watch},
     task::JoinHandle,
 };
 use tracing::debug;
-use types::{metered_channel, Batch, BatchDigest, ReconfigureNotification, SequenceNumber};
+use types::{
+    metered_channel, Batch, BatchDigest, CertificateDigest, ReconfigureNotification, SequenceNumber,
+};
 
 #[cfg(test)]
 #[path = "tests/executor_tests.rs"]
@@ -26,7 +30,7 @@ pub mod executor_tests;
 /// not processes twice the same transaction (despite crash-recovery).
 pub struct Core<State: ExecutionState> {
     /// The temporary storage holding all transactions' data (that may be too big to hold in memory).
-    store: Store<BatchDigest, Batch>,
+    store: Store<(CertificateDigest, BatchDigest), Batch>,
     /// The (global) state to perform execution.
     execution_state: Arc<State>,
     /// Receive reconfiguration updates.
@@ -54,7 +58,7 @@ where
     /// Spawn a new executor in a dedicated tokio task.
     #[must_use]
     pub fn spawn(
-        store: Store<BatchDigest, Batch>,
+        store: Store<(CertificateDigest, BatchDigest), Batch>,
         execution_state: Arc<State>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_subscriber: metered_channel::Receiver<ConsensusOutput>,
@@ -89,7 +93,7 @@ where
                     self.execute_certificate(&message).await?;
 
                     // Cleanup the temporary persistent storage.
-                    // TODO [issue #191]: Security cleanup the store.
+                    self.cleanup_store(&message).await.map_err(SubscriberError::from)?;
                 },
 
                 // Check whether the committee changed.
@@ -104,6 +108,24 @@ where
         }
     }
 
+    /// Cleans up the temporary batch store for the batches stored
+    /// for the specified certificate. We are storing the batches per
+    /// certificate as bathes of same id can be referenced by multiple
+    /// certificates.
+    async fn cleanup_store(&self, message: &ConsensusOutput) -> Result<(), TypedStoreError> {
+        let certificate_id = message.certificate.digest();
+
+        let to_delete_keys = message
+            .certificate
+            .header
+            .payload
+            .iter()
+            .map(|(digest, _)| (certificate_id, *digest))
+            .collect::<Vec<_>>();
+
+        self.store.remove_all(to_delete_keys).await
+    }
+
     /// Execute a single certificate.
     async fn execute_certificate(&mut self, message: &ConsensusOutput) -> SubscriberResult<()> {
         // Skip the certificate if it contains no transactions.
@@ -113,6 +135,7 @@ where
         }
 
         // Execute every batch in the certificate.
+        let certificate_id = message.certificate.digest();
         let total_batches = message.certificate.header.payload.len();
         for (index, digest) in message.certificate.header.payload.keys().enumerate() {
             // Skip batches that we already executed (after crash-recovery).
@@ -120,7 +143,8 @@ where
                 .execution_indices
                 .check_next_batch_index(index as SequenceNumber)
             {
-                self.execute_batch(message, *digest, total_batches).await?;
+                self.execute_batch(message, certificate_id, *digest, total_batches)
+                    .await?;
             }
         }
         Ok(())
@@ -130,11 +154,12 @@ where
     async fn execute_batch(
         &mut self,
         consensus_output: &ConsensusOutput,
+        certificate_id: CertificateDigest,
         batch_digest: BatchDigest,
         total_batches: usize,
     ) -> SubscriberResult<()> {
         // The store should now hold all transaction data referenced by the input certificate.
-        let transactions = match self.store.read(batch_digest).await? {
+        let transactions = match self.store.read((certificate_id, batch_digest)).await? {
             Some(x) => x.0,
             None => {
                 // If two certificates contain the exact same batch (eg. by the actions of a Byzantine

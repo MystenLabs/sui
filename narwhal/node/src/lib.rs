@@ -46,7 +46,7 @@ pub struct NodeStorage {
     pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
     pub batch_store: Store<BatchDigest, SerializedBatchMessage>,
     pub consensus_store: Arc<ConsensusStore>,
-    pub temp_batch_store: Store<BatchDigest, Batch>,
+    pub temp_batch_store: Store<(CertificateDigest, BatchDigest), Batch>,
 }
 
 impl NodeStorage {
@@ -95,7 +95,7 @@ impl NodeStorage {
             Self::BATCHES_CF;<BatchDigest, SerializedBatchMessage>,
             Self::LAST_COMMITTED_CF;<PublicKey, Round>,
             Self::SEQUENCE_CF;<SequenceNumber, CertificateDigest>,
-            Self::TEMP_BATCH_CF;<BatchDigest, Batch>
+            Self::TEMP_BATCH_CF;<(CertificateDigest, BatchDigest), Batch>
         );
 
         let header_store = Store::new(header_map);

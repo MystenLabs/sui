@@ -17,6 +17,7 @@ mod metrics;
 
 pub use errors::{ExecutionStateError, SubscriberError, SubscriberResult};
 pub use state::ExecutionIndices;
+use tracing::info;
 
 use crate::{core::Core, metrics::ExecutorMetrics, subscriber::Subscriber};
 use async_trait::async_trait;
@@ -31,7 +32,6 @@ use tokio::{
     sync::{mpsc::Sender, watch},
     task::JoinHandle,
 };
-use tracing::info;
 use types::{
     metered_channel, Batch, BatchDigest, CertificateDigest, ConsensusStore,
     ReconfigureNotification, SequenceNumber,
@@ -94,7 +94,7 @@ pub struct Executor;
 impl Executor {
     /// Spawn a new client subscriber.
     pub async fn spawn<State>(
-        store: Store<BatchDigest, Batch>,
+        store: Store<(CertificateDigest, BatchDigest), Batch>,
         execution_state: Arc<State>,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         rx_consensus: metered_channel::Receiver<ConsensusOutput>,

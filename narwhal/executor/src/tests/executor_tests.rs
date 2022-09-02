@@ -36,9 +36,9 @@ async fn execute_transactions() {
         /* certificates */ 2, /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
     );
-    for (certificate, batches) in certificates {
+    for (certificate, batches) in certificates.clone() {
         for (digest, batch) in batches {
-            store.write(digest, batch).await;
+            store.write((certificate.digest(), digest), batch).await;
         }
         let message = ConsensusOutput {
             certificate,
@@ -55,6 +55,9 @@ async fn execute_transactions() {
         next_transaction_index: 0,
     };
     assert_eq!(execution_state.get_execution_indices().await, expected);
+
+    // Ensure the storage has been cleaned up
+    assert_storage_cleaned_up(store, certificates).await;
 }
 
 #[tokio::test]
@@ -94,7 +97,7 @@ async fn execute_empty_certificate() {
     );
     for (certificate, batches) in certificates {
         for (digest, batch) in batches {
-            store.write(digest, batch).await;
+            store.write((certificate.digest(), digest), batch).await;
         }
         let message = ConsensusOutput {
             certificate,
@@ -138,10 +141,9 @@ async fn execute_malformed_transactions() {
     let tx1 = 10;
     let (digest, batch) = test_batch(vec![tx0, tx1]);
 
-    store.write(digest, batch).await;
-
     let payload = [(digest, 0)].iter().cloned().collect();
     let certificate = test_certificate(payload);
+    store.write((certificate.digest(), digest), batch).await;
 
     let message = ConsensusOutput {
         certificate,
@@ -154,9 +156,9 @@ async fn execute_malformed_transactions() {
         /* certificates */ 2, /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
     );
-    for (certificate, batches) in certificates {
+    for (certificate, batches) in certificates.clone() {
         for (digest, batch) in batches {
-            store.write(digest, batch).await;
+            store.write((certificate.digest(), digest), batch).await;
         }
         let message = ConsensusOutput {
             certificate,
@@ -173,6 +175,9 @@ async fn execute_malformed_transactions() {
         next_transaction_index: 0,
     };
     assert_eq!(execution_state.get_execution_indices().await, expected);
+
+    // Ensure the storage has been cleaned up
+    assert_storage_cleaned_up(store, certificates).await;
 }
 
 #[tokio::test]
@@ -205,11 +210,12 @@ async fn internal_error_execution() {
     let (digest_0, batch_0) = test_batch(vec![tx00, tx01]);
     let (digest_1, batch_1) = test_batch(vec![tx10, tx11]);
 
-    store.write(digest_0, batch_0).await;
-    store.write(digest_1, batch_1).await;
-
     let payload = [(digest_0, 0), (digest_1, 1)].iter().cloned().collect();
     let certificate = test_certificate(payload);
+    let certificate_id = certificate.digest();
+
+    store.write((certificate_id, digest_0), batch_0).await;
+    store.write((certificate_id, digest_1), batch_1).await;
 
     let message = ConsensusOutput {
         certificate,
@@ -225,6 +231,18 @@ async fn internal_error_execution() {
         next_transaction_index: 1,
     };
     assert_eq!(execution_state.get_execution_indices().await, expected);
+
+    // We don't expect storage to get cleaned up in this case
+    assert!(store
+        .read((certificate_id, digest_0))
+        .await
+        .unwrap()
+        .is_some());
+    assert!(store
+        .read((certificate_id, digest_1))
+        .await
+        .unwrap()
+        .is_some());
 }
 
 #[tokio::test]
@@ -254,7 +272,7 @@ async fn crash_recovery() {
     );
     for (certificate, batches) in certificates {
         for (digest, batch) in batches {
-            store.write(digest, batch).await;
+            store.write((certificate.digest(), digest), batch).await;
         }
         let message = ConsensusOutput {
             certificate,
@@ -269,10 +287,10 @@ async fn crash_recovery() {
     let tx1 = KILLER_TRANSACTION;
     let (digest, batch) = test_batch(vec![tx0, tx1]);
 
-    store.write(digest, batch).await;
-
     let payload = [(digest, 0)].iter().cloned().collect();
     let certificate = test_certificate(payload);
+
+    store.write((certificate.digest(), digest), batch).await;
 
     let message = ConsensusOutput {
         certificate,
@@ -307,9 +325,9 @@ async fn crash_recovery() {
         /* certificates */ 2, /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
     );
-    for (certificate, batches) in certificates {
+    for (certificate, batches) in certificates.clone() {
         for (digest, batch) in batches {
-            store.write(digest, batch).await;
+            store.write((certificate.digest(), digest), batch).await;
         }
         let message = ConsensusOutput {
             certificate,
@@ -326,4 +344,30 @@ async fn crash_recovery() {
         next_transaction_index: 0,
     };
     assert_eq!(execution_state.get_execution_indices().await, expected);
+
+    // Ensure the storage has been cleaned up
+    assert_storage_cleaned_up(store, certificates).await;
+}
+
+async fn assert_storage_cleaned_up(
+    store: Store<(CertificateDigest, BatchDigest), Batch>,
+    certificates: Vec<(Certificate, Vec<(BatchDigest, Batch)>)>,
+) {
+    // Ensure the storage has been cleaned up
+    for (certificate, batches) in certificates {
+        let result = store
+            .read_all(
+                batches
+                    .into_iter()
+                    .map(|(id, _)| (certificate.digest(), id))
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .unwrap();
+
+        assert!(
+            result.iter().all(Option::is_none),
+            "Expected to not found any batches still stored for this certificate"
+        );
+    }
 }

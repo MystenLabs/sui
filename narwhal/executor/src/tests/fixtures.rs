@@ -12,7 +12,7 @@ use store::{
     Store,
 };
 use test_utils::committee;
-use types::{Batch, BatchDigest, Certificate, Header};
+use types::{Batch, BatchDigest, Certificate, CertificateDigest, Header};
 
 /// A test batch containing specific transactions.
 pub fn test_batch<T: Serialize>(transactions: Vec<T>) -> (BatchDigest, Batch) {
@@ -40,11 +40,12 @@ pub fn test_certificate(payload: IndexMap<BatchDigest, WorkerId>) -> Certificate
 }
 
 /// Make a test storage to hold transaction data.
-pub fn test_store() -> Store<BatchDigest, Batch> {
+pub fn test_store() -> Store<(CertificateDigest, BatchDigest), Batch> {
     let store_path = tempfile::tempdir().unwrap();
     const TEMP_BATCHES_CF: &str = "temp_batches";
     let rocksdb = open_cf(store_path, None, &[TEMP_BATCHES_CF]).unwrap();
-    let temp_batch_map = reopen!(&rocksdb, TEMP_BATCHES_CF;<BatchDigest, Batch>);
+    let temp_batch_map =
+        reopen!(&rocksdb, TEMP_BATCHES_CF;<(CertificateDigest, BatchDigest), Batch>);
     Store::new(temp_batch_map)
 }
 
