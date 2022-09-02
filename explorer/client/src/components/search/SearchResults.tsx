@@ -16,9 +16,7 @@ function SearchResults({ result }: { result: ResultType[] | null }) {
     };
 
     const optionClassName = useCallback((active: boolean) => {
-        return `${styles.result} ${
-            active ? styles.selectedoption : styles.notselectedoption
-        }`;
+        return active ? styles.selectedoption : styles.notselectedoption;
     }, []);
 
     if (!result) return <></>;
@@ -29,7 +27,12 @@ function SearchResults({ result }: { result: ResultType[] | null }) {
             )}
 
             {result.map((el, index) => (
-                <Combobox.Option as="div" key={index} value={el}>
+                <Combobox.Option
+                    as="div"
+                    key={index}
+                    value={el}
+                    className={styles.result}
+                >
                     {({ active }) => (
                         <dl>
                             <dt>{categoryLabels[el.category]}</dt>
