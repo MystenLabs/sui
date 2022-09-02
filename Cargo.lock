@@ -9526,6 +9526,7 @@ dependencies = [
  "lazy_static 0.2.11",
  "lazy_static 1.4.0",
  "lazycell",
+ "leb128",
  "lexical-core",
  "libc",
  "libloading",
