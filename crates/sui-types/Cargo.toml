@@ -9,6 +9,7 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
+byteorder = "1.4.3"
 itertools = "0.10.3"
 once_cell = "1.13.1"
 rand = "0.8.5"

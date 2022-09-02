@@ -13,7 +13,8 @@ use sui_types::{
     crypto::Signature,
     gas_coin::GasCoin,
     messages::{
-        CallArg, CertifiedTransaction, ObjectArg, SignatureAggregator, Transaction, TransactionData,
+        CallArg, CertifiedTransaction, ConsensusTransactionKind, ObjectArg, SignatureAggregator,
+        Transaction, TransactionData,
     },
     object::{MoveObject, Object, Owner, OBJECT_START_VERSION},
 };
@@ -98,8 +99,8 @@ async fn listen_to_sequenced_transaction() {
     let state = init_state_with_objects(objects).await;
 
     // Make a sample (serialized) consensus transaction.
-    let certificate = Box::new(test_certificates(&state).await.pop().unwrap());
-    let message = ConsensusTransaction::UserTransaction(certificate.clone());
+    let certificate = test_certificates(&state).await.pop().unwrap();
+    let message = ConsensusTransaction::new_certificate_message(&state.name, certificate.clone());
     let serialized = bincode::serialize(&message).unwrap();
 
     // Set the shared object locks.
@@ -111,7 +112,7 @@ async fn listen_to_sequenced_transaction() {
                 consensus_index: narwhal_types::SequenceNumber::default(),
             },
             ExecutionIndices::default(),
-            ConsensusTransaction::UserTransaction(certificate),
+            ConsensusTransaction::new_certificate_message(&state.name, certificate),
         )
         .await
         .unwrap();
@@ -176,10 +177,10 @@ async fn submit_transaction_to_consensus() {
                 ConsensusListenerMessage::New(serialized, replier) => (serialized, replier),
             };
 
-            let message =
+            let message: ConsensusTransaction =
                 bincode::deserialize(&serialized).expect("Failed to deserialize consensus tx");
-            let certificate = match message {
-                ConsensusTransaction::UserTransaction(certificate) => certificate,
+            let certificate = match message.kind {
+                ConsensusTransactionKind::UserTransaction(certificate) => certificate,
                 _ => panic!("Unexpected message {message:?}"),
             };
 
@@ -192,7 +193,7 @@ async fn submit_transaction_to_consensus() {
                         consensus_index: narwhal_types::SequenceNumber::default(),
                     },
                     ExecutionIndices::default(),
-                    ConsensusTransaction::UserTransaction(certificate.clone()),
+                    ConsensusTransaction::new_certificate_message(&name, *certificate),
                 )
                 .await
                 .unwrap();
@@ -215,9 +216,9 @@ async fn submit_transaction_to_consensus() {
 
     // Ensure the consensus node got the transaction.
     let bytes = handle.recv().await.unwrap().transaction;
-    let message = bincode::deserialize(&bytes).unwrap();
-    match message {
-        ConsensusTransaction::UserTransaction(x) => {
+    let message: ConsensusTransaction = bincode::deserialize(&bytes).unwrap();
+    match message.kind {
+        ConsensusTransactionKind::UserTransaction(x) => {
             assert_eq!(x.to_transaction(), expected_transaction)
         }
         _ => panic!("Unexpected message {message:?}"),
