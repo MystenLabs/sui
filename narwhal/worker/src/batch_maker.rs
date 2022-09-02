@@ -2,6 +2,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::metrics::WorkerMetrics;
+#[cfg(feature = "benchmark")]
+use byteorder::{BigEndian, ReadBytesExt};
 use config::Committee;
 #[cfg(feature = "benchmark")]
 use std::convert::TryInto;
@@ -123,16 +125,6 @@ impl BatchMaker {
     async fn seal(&mut self, timeout: bool) {
         let size = self.current_batch_size;
 
-        // Look for sample txs (they all start with 0) and gather their txs id (the next 8 bytes).
-        #[cfg(feature = "benchmark")]
-        let tx_ids: Vec<_> = self
-            .current_batch
-            .0
-            .iter()
-            .filter(|tx| tx[0] == 0u8 && tx.len() > 8)
-            .filter_map(|tx| tx[1..9].try_into().ok())
-            .collect();
-
         // Serialize the batch.
         self.current_batch_size = 0;
         let batch: Batch = Batch(self.current_batch.0.drain(..).collect());
@@ -145,6 +137,14 @@ impl BatchMaker {
 
             // NOTE: This is one extra hash that is only needed to print the following log entries.
             if let Ok(digest) = types::serialized_batch_digest(&serialized) {
+                // Look for sample txs (they all start with 0) and gather their txs id (the next 8 bytes).
+                let tx_ids: Vec<_> = batch
+                    .0
+                    .iter()
+                    .filter(|tx| tx[0] == 0u8 && tx.len() > 8)
+                    .filter_map(|tx| tx[1..9].try_into().ok())
+                    .collect();
+
                 for id in tx_ids {
                     // NOTE: This log entry is used to compute performance.
                     tracing::info!(
@@ -153,6 +153,27 @@ impl BatchMaker {
                         u64::from_be_bytes(id)
                     );
                 }
+
+                // The first 8 bytes of each transaction message is reserved for an identifier
+                // that's useful for debugging and tracking the lifetime of messages between
+                // Narwhal and clients.
+                let tracking_ids: Vec<_> = batch
+                    .0
+                    .iter()
+                    .map(|tx| {
+                        let len = tx.len();
+                        if len >= 8 {
+                            (&tx[0..8]).read_u64::<BigEndian>().unwrap_or_default()
+                        } else {
+                            0
+                        }
+                    })
+                    .collect();
+                tracing::debug!(
+                    "Tracking IDs of transactions in the Batch {:?}: {:?}",
+                    digest,
+                    tracking_ids
+                );
 
                 // NOTE: This log entry is used to compute performance.
                 tracing::info!("Batch {:?} contains {} B", digest, size);
