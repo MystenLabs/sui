@@ -7167,14 +7167,17 @@ dependencies = [
  "anyhow",
  "bcs",
  "insta",
+ "move-cli",
+ "move-disassembler",
+ "move-package",
  "serde 1.0.144",
+ "serde_json",
  "strum",
  "strum_macros",
  "sui-config",
  "sui-types",
  "test-utils",
  "tokio",
- "toml",
  "workspace-hack 0.1.0",
 ]
 

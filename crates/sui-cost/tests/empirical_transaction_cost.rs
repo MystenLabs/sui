@@ -1,11 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use insta::assert_yaml_snapshot;
-use std::fs;
+use insta::assert_json_snapshot;
 use std::{collections::BTreeMap, path::PathBuf};
 use sui_config::ValidatorInfo;
-use sui_cost::estimator::ESTIMATE_FILE;
 use sui_cost::estimator::{
     estimate_computational_costs_for_transaction, read_estimate_file, CommonTransactionCosts,
 };
@@ -43,16 +41,17 @@ const TEST_DATA_DIR: &str = "tests/data/";
 
 #[tokio::test]
 async fn test_good_snapshot() -> Result<(), anyhow::Error> {
-    let common_costs = run_common_tx_costs().await?;
-    assert_yaml_snapshot!(common_costs);
+    let common_costs: BTreeMap<String, GasCostSummary> = run_common_tx_costs()
+        .await?
+        .iter()
+        .map(|q| (q.0.to_string(), q.1.clone()))
+        .collect();
+    assert_json_snapshot!(common_costs);
     Ok(())
 }
 
 #[tokio::test]
 async fn check_estimates() {
-    // Generate the estimates to file
-    generate_estimates().await.unwrap();
-
     // Read the estimates
     let cost_map = read_estimate_file().unwrap();
 
@@ -96,26 +95,9 @@ async fn check_estimates() {
     );
 }
 
-async fn generate_estimates() -> Result<(), anyhow::Error> {
-    let common_costs: BTreeMap<_, _> = run_common_tx_costs()
-        .await?
-        .iter()
-        .map(|(k, v)| (format!("{k}"), v.clone()))
-        .collect();
-
-    let out_string = toml::to_string(&common_costs).unwrap();
-
-    fs::write(ESTIMATE_FILE, out_string).expect("Could not write estimator to file!");
-    Ok(())
-}
-
 pub async fn run_common_tx_costs(
 ) -> Result<BTreeMap<CommonTransactionCosts, GasCostSummary>, anyhow::Error> {
-    Ok(run_counter_costs().await)
-}
-
-pub async fn run_counter_costs() -> BTreeMap<CommonTransactionCosts, GasCostSummary> {
-    run_cost_test().await.into_iter().collect()
+    Ok(run_cost_test().await)
 }
 
 async fn run_cost_test() -> BTreeMap<CommonTransactionCosts, GasCostSummary> {
