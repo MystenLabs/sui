@@ -9,7 +9,11 @@ use move_core_types::{
 };
 use serde::{Deserialize, Serialize};
 
-use crate::balance::{Balance, Supply};
+use crate::{
+    balance::{Balance, Supply},
+    error::{ExecutionError, ExecutionErrorKind},
+    object::{Data, Object},
+};
 use crate::{base_types::ObjectID, id::UID, SUI_FRAMEWORK_ADDRESS};
 use schemars::JsonSchema;
 
@@ -40,6 +44,39 @@ impl Coin {
             name: COIN_STRUCT_NAME.to_owned(),
             module: COIN_MODULE_NAME.to_owned(),
             type_params: vec![TypeTag::Struct(type_param)],
+        }
+    }
+
+    /// Is this other StructTag representing a Coin?
+    pub fn is_coin(other: &StructTag) -> bool {
+        other.module.as_ident_str() == COIN_MODULE_NAME
+            && other.name.as_ident_str() == COIN_STRUCT_NAME
+    }
+
+    /// Create a coin from BCS bytes
+    pub fn from_bcs_bytes(content: &[u8]) -> Result<Self, ExecutionError> {
+        bcs::from_bytes(content).map_err(|err| {
+            ExecutionError::new_with_source(
+                ExecutionErrorKind::InvalidCoinObject,
+                format!("Unable to deserialize coin object: {:?}", err),
+            )
+        })
+    }
+
+    /// If the given object is a Coin, deserialize its contents and extract the balance Ok(Some(u64)).
+    /// If it's not a Coin, return Ok(None).
+    /// The cost is 2 comparisons if not a coin, and deserialization if its a Coin.
+    pub fn extract_balance_if_coin(object: &Object) -> Result<Option<u64>, ExecutionError> {
+        match &object.data {
+            Data::Move(move_obj) => {
+                if !Self::is_coin(&move_obj.type_) {
+                    return Ok(None);
+                }
+
+                let coin = Self::from_bcs_bytes(move_obj.contents())?;
+                Ok(Some(coin.value()))
+            }
+            _ => Ok(None), // package
         }
     }
 

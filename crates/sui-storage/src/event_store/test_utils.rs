@@ -127,6 +127,7 @@ pub fn new_test_transfer_event(
             object_id: object_id.unwrap_or_else(ObjectID::random),
             version: object_version.into(),
             type_,
+            amount: Some(10),
         },
         None,
     )

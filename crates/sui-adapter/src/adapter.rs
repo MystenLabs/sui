@@ -26,6 +26,7 @@ use move_vm_runtime::{native_functions::NativeFunctionTable, session::Serialized
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
+    coin::Coin,
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
     event::{Event, TransferType},
@@ -798,6 +799,13 @@ fn handle_transfer<
             _ => None,
         };
         if let Some(type_) = transfer_type {
+            // Check for the transfer amount if the object is a Coin
+            let amount = if Coin::is_coin(&move_obj.type_) {
+                let coin = Coin::from_bcs_bytes(move_obj.contents())?;
+                Some(coin.value())
+            } else {
+                None
+            };
             state_view.log_event(Event::TransferObject {
                 package_id: ObjectID::from(*module_id.address()),
                 transaction_module: Identifier::from(module_id.name()),
@@ -806,6 +814,7 @@ fn handle_transfer<
                 object_id: obj_id,
                 version: old_obj_ver,
                 type_,
+                amount,
             })
         }
     } else {

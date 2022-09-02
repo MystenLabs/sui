@@ -11,6 +11,7 @@ use crate::authority::TemporaryStore;
 use move_core_types::language_storage::ModuleId;
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
 use sui_adapter::adapter;
+use sui_types::coin::Coin;
 use sui_types::committee::EpochId;
 use sui_types::error::ExecutionError;
 use sui_types::gas::GasCostSummary;
@@ -260,6 +261,8 @@ fn transfer_object<S>(
 ) -> Result<(), ExecutionError> {
     object.ensure_public_transfer_eligible()?;
     object.transfer_and_increment_version(recipient);
+    // This will extract the transfer amount if the object is a Coin of some kind
+    let amount = Coin::extract_balance_if_coin(&object)?;
     temporary_store.log_event(Event::TransferObject {
         package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
         transaction_module: Identifier::from(ident_str!("native")),
@@ -268,6 +271,7 @@ fn transfer_object<S>(
         object_id: object.id(),
         version: object.version(),
         type_: TransferType::Coin,
+        amount,
     });
     temporary_store.write_object(object);
     Ok(())
@@ -290,7 +294,7 @@ fn transfer_sui<S>(
     #[cfg(debug_assertions)]
     let version = object.version();
 
-    if let Some(amount) = amount {
+    let transferred = if let Some(amount) = amount {
         // Deduct the amount from the gas coin and update it.
         let mut gas_coin = GasCoin::try_from(&object)
             .expect("gas object is transferred, so already checked to be a SUI coin");
@@ -319,13 +323,24 @@ fn transfer_sui<S>(
         // This is necessary for the temporary store to know this new object is not unwrapped.
         let newly_generated_ids = tx_ctx.recreate_all_ids();
         temporary_store.set_create_object_ids(newly_generated_ids);
+        Some(amount)
     } else {
         // If amount is not specified, we simply transfer the entire coin object.
         // We don't want to increment the version number yet because latter gas charge will do it.
         object.transfer_without_version_change(recipient);
-    }
+        Coin::extract_balance_if_coin(&object)?
+    };
 
-    // TODO: Emit a new event type for this.
+    temporary_store.log_event(Event::TransferObject {
+        package_id: ObjectID::from(SUI_FRAMEWORK_ADDRESS),
+        transaction_module: Identifier::from(ident_str!("native")),
+        sender: tx_ctx.sender(),
+        recipient: Owner::AddressOwner(recipient),
+        object_id: object.id(),
+        version: object.version(),
+        type_: TransferType::Coin, // Should this be a separate type, like SuiCoin?
+        amount: transferred,
+    });
 
     #[cfg(debug_assertions)]
     assert_eq!(object.version(), version);

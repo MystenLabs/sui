@@ -991,6 +991,7 @@ pub enum ExecutionFailureStatus {
     InvalidTransferObject,
     InvalidTransferSui,
     InvalidTransferSuiInsufficientBalance,
+    InvalidCoinObject,
 
     //
     // MoveCall errors
@@ -1114,6 +1115,9 @@ impl std::fmt::Display for ExecutionFailureStatus {
                 "Invalid Transfer Object Transaction. \
                 Possibly not address-owned or possibly does not have public transfer."
             ),
+            ExecutionFailureStatus::InvalidCoinObject => {
+                write!(f, "Invalid coin::Coin object bytes.")
+            }
             ExecutionFailureStatus::InvalidTransferSui => write!(
                 f,
                 "Invalid Transfer SUI. \

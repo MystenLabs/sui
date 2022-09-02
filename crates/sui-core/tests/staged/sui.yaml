@@ -136,35 +136,37 @@ ExecutionFailureStatus:
     8:
       InvalidTransferSuiInsufficientBalance: UNIT
     9:
-      NonEntryFunctionInvoked: UNIT
+      InvalidCoinObject: UNIT
     10:
-      EntryTypeArityMismatch: UNIT
+      NonEntryFunctionInvoked: UNIT
     11:
+      EntryTypeArityMismatch: UNIT
+    12:
       EntryArgumentError:
         NEWTYPE:
           TYPENAME: EntryArgumentError
-    12:
+    13:
       CircularObjectOwnership:
         NEWTYPE:
           TYPENAME: CircularObjectOwnership
-    13:
+    14:
       MissingObjectOwner:
         NEWTYPE:
           TYPENAME: MissingObjectOwner
-    14:
+    15:
       InvalidSharedChildUse:
         NEWTYPE:
           TYPENAME: InvalidSharedChildUse
-    15:
+    16:
       InvalidSharedByValue:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
-    16:
+    17:
       TooManyChildObjects:
         STRUCT:
           - object:
               TYPENAME: ObjectID
-    17:
+    18:
       InvalidParentDeletion:
         STRUCT:
           - parent:
@@ -172,29 +174,29 @@ ExecutionFailureStatus:
           - kind:
               OPTION:
                 TYPENAME: DeleteKind
-    18:
+    19:
       InvalidParentFreezing:
         STRUCT:
           - parent:
               TYPENAME: ObjectID
-    19:
-      PublishErrorEmptyPackage: UNIT
     20:
-      PublishErrorNonZeroAddress: UNIT
+      PublishErrorEmptyPackage: UNIT
     21:
-      PublishErrorDuplicateModule: UNIT
+      PublishErrorNonZeroAddress: UNIT
     22:
-      SuiMoveVerificationError: UNIT
+      PublishErrorDuplicateModule: UNIT
     23:
-      MovePrimitiveRuntimeError: UNIT
+      SuiMoveVerificationError: UNIT
     24:
+      MovePrimitiveRuntimeError: UNIT
+    25:
       MoveAbort:
         TUPLE:
           - TYPENAME: ModuleId
           - U64
-    25:
-      VMVerificationOrDeserializationError: UNIT
     26:
+      VMVerificationOrDeserializationError: UNIT
+    27:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:

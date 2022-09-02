@@ -250,6 +250,9 @@ impl SqlEventStore {
             if let Some(object_version) = event.event.object_version().map(|ov| ov.value()) {
                 fields.insert(OBJECT_VERSION_KEY, object_version as u64);
             }
+            if let Some(amount) = event.event.amount() {
+                fields.insert(AMOUNT_KEY, amount);
+            }
             json!(fields).to_string()
         }
     }
@@ -648,6 +651,7 @@ mod tests {
             queried.move_event_contents.as_deref(),
             orig.event.move_event_contents()
         );
+        assert_eq!(queried.amount().unwrap(), orig.event.amount());
         let move_event_name = orig.event.move_event_name();
         assert_eq!(queried.move_event_name.as_ref(), move_event_name.as_ref());
     }
@@ -829,7 +833,7 @@ mod tests {
 
         test_queried_event_vs_test_envelope(&transfer_event, target_event, 1);
 
-        assert_eq!(transfer_event.fields.len(), 2);
+        assert_eq!(transfer_event.fields.len(), 3); // type, obj ver, amount
 
         Ok(())
     }
@@ -893,7 +897,7 @@ mod tests {
             .await?;
         assert_eq!(queried_events.len(), 1);
         test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4], 1);
-        assert_eq!(queried_events[0].fields.len(), 2);
+        assert_eq!(queried_events[0].fields.len(), 3);
 
         // Query with wrong time range, return 0 events
         let queried_events = db

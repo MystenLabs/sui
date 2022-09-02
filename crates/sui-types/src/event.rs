@@ -128,6 +128,7 @@ pub enum Event {
         object_id: ObjectID,
         version: SequenceNumber,
         type_: TransferType,
+        amount: Option<u64>,
     },
     /// Delete object
     DeleteObject {
@@ -322,6 +323,16 @@ impl Event {
     pub fn object_version(&self) -> Option<&SequenceNumber> {
         if let Event::TransferObject { version, .. } = self {
             Some(version)
+        } else {
+            None
+        }
+    }
+
+    /// Extracts the amount from a SuiEvent::TransferObject
+    /// Note that None is returned if it is not a TransferObject, or there is no amount
+    pub fn amount(&self) -> Option<u64> {
+        if let Event::TransferObject { amount, .. } = self {
+            *amount
         } else {
             None
         }
