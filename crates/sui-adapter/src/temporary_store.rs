@@ -28,6 +28,43 @@ pub struct InnerTemporaryStore {
     pub deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
 }
 
+impl InnerTemporaryStore {
+    /// Return the written object value with the given ID (if any)
+    pub fn get_written_object(&self, id: &ObjectID) -> Option<&Object> {
+        self.written.get(id).map(|o| &o.1)
+    }
+
+    /// Return the set of object ID's created during the current tx
+    pub fn created(&self) -> Vec<ObjectID> {
+        self.written
+            .values()
+            .filter_map(|(obj_ref, _, w)| {
+                if *w == WriteKind::Create {
+                    Some(obj_ref.0)
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    /// Get the written objects owned by `address`
+    pub fn get_written_objects_owned_by(&self, address: &SuiAddress) -> Vec<ObjectID> {
+        self.written
+            .values()
+            .filter_map(|(_, o, _)| {
+                if o.get_single_owner()
+                    .map_or(false, |owner| &owner == address)
+                {
+                    Some(o.id())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+}
+
 pub struct TemporaryStore<S> {
     // The backing store for retrieving Move packages onchain.
     // When executing a Move call, the dependent packages are not going to be
@@ -299,7 +336,7 @@ impl<S> TemporaryStore<S> {
 
     pub fn write_object(&mut self, mut object: Object, kind: WriteKind) {
         // there should be no write after delete
-        debug_assert!(self.deleted.get(&object.id()) == None);
+        debug_assert!(self.deleted.get(&object.id()).is_none());
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(existing_object) = self.read_object(&object.id()) {
@@ -318,7 +355,7 @@ impl<S> TemporaryStore<S> {
 
     pub fn delete_object(&mut self, id: &ObjectID, version: SequenceNumber, kind: DeleteKind) {
         // there should be no deletion after write
-        debug_assert!(self._written.get(id) == None);
+        debug_assert!(self._written.get(id).is_none());
         // Check it is not read-only
         #[cfg(test)] // Movevm should ensure this
         if let Some(object) = self.read_object(id) {
@@ -345,7 +382,7 @@ impl<S> Storage for TemporaryStore<S> {
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object> {
         // there should be no read after delete
-        debug_assert!(self.deleted.get(id) == None);
+        debug_assert!(self.deleted.get(id).is_none());
         self._written
             .get(id)
             .map(|(obj, _kind)| obj)
@@ -434,4 +471,20 @@ impl<S: ParentSync> ParentSync for TemporaryStore<S> {
     fn get_latest_parent_entry_ref(&self, object_id: ObjectID) -> SuiResult<Option<ObjectRef>> {
         self.store.get_latest_parent_entry_ref(object_id)
     }
+}
+
+/// Create an empty `TemporaryStore` with no backing storage for module resolution.
+/// For testing purposes only.
+pub fn empty_for_testing() -> TemporaryStore<()> {
+    TemporaryStore::new(
+        (),
+        InputObjects::new(Vec::new()),
+        TransactionDigest::genesis(),
+    )
+}
+
+/// Create a `TemporaryStore` with the given inputs and no backing storage for module resolution.
+/// For testing purposes only.
+pub fn with_input_objects_for_testing(input_objects: InputObjects) -> TemporaryStore<()> {
+    TemporaryStore::new((), input_objects, TransactionDigest::genesis())
 }

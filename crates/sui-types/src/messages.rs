@@ -96,6 +96,18 @@ pub struct TransferSui {
     pub amount: Option<u64>,
 }
 
+/// Pay each recipient the corresponding amount using the input coins
+#[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
+pub struct Pay {
+    /// The coins to be used for payment
+    pub coins: Vec<ObjectRef>,
+    /// The addresses that will receive payment
+    pub recipients: Vec<SuiAddress>,
+    /// The amounts each recipient will receive.
+    /// Must be the same length as recipients
+    pub amounts: Vec<u64>,
+}
+
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
 pub struct ChangeEpoch {
     /// The next (to become) epoch ID.
@@ -116,6 +128,8 @@ pub enum SingleTransactionKind {
     Call(MoveCall),
     /// Initiate a SUI coin transfer between addresses
     TransferSui(TransferSui),
+    /// Pay multiple recipients using multiple input coins
+    Pay(Pay),
     /// A system transaction that will update epoch information on-chain.
     /// It will only ever be executed once in an epoch.
     /// The argument is the next epoch number, which is critical
@@ -224,6 +238,10 @@ impl SingleTransactionKind {
             Self::TransferSui(_) => {
                 vec![]
             }
+            Self::Pay(Pay { coins, .. }) => coins
+                .iter()
+                .map(|o| InputObjectKind::ImmOrOwnedMoveObject(*o))
+                .collect(),
             Self::ChangeEpoch(_) => {
                 vec![InputObjectKind::SharedMoveObject(
                     SUI_SYSTEM_STATE_OBJECT_ID,
@@ -255,7 +273,7 @@ impl Display for SingleTransactionKind {
                 let (object_id, seq, digest) = t.object_ref;
                 writeln!(writer, "Object ID : {}", &object_id)?;
                 writeln!(writer, "Sequence Number : {:?}", seq)?;
-                writeln!(writer, "Object Digest : {}", encode_bytes_hex(&digest.0))?;
+                writeln!(writer, "Object Digest : {}", encode_bytes_hex(digest.0))?;
             }
             Self::TransferSui(t) => {
                 writeln!(writer, "Transaction Kind : Transfer SUI")?;
@@ -264,6 +282,23 @@ impl Display for SingleTransactionKind {
                     writeln!(writer, "Amount: {}", amount)?;
                 } else {
                     writeln!(writer, "Amount: Full Balance")?;
+                }
+            }
+            Self::Pay(p) => {
+                writeln!(writer, "Transaction Kind : Pay")?;
+                writeln!(writer, "Coins:")?;
+                for (object_id, seq, digest) in &p.coins {
+                    writeln!(writer, "Object ID : {}", &object_id)?;
+                    writeln!(writer, "Sequence Number : {:?}", seq)?;
+                    writeln!(writer, "Object Digest : {}", encode_bytes_hex(digest.0))?;
+                }
+                writeln!(writer, "Recipients:")?;
+                for recipient in &p.recipients {
+                    writeln!(writer, "{}", recipient)?;
+                }
+                writeln!(writer, "Amounts:")?;
+                for amount in &p.amounts {
+                    writeln!(writer, "{}", amount)?
                 }
             }
             Self::Publish(_p) => {
@@ -346,11 +381,12 @@ impl TransactionKind {
                 );
                 // Check that all transaction kinds can be in a batch.
                 let valid = self.single_transactions().all(|s| match s {
-                    SingleTransactionKind::Call(_) => true,
-                    SingleTransactionKind::TransferObject(_) => true,
-                    SingleTransactionKind::TransferSui(_) => false,
-                    SingleTransactionKind::ChangeEpoch(_) => false,
-                    SingleTransactionKind::Publish(_) => false,
+                    SingleTransactionKind::Call(_)
+                    | SingleTransactionKind::TransferObject(_)
+                    | SingleTransactionKind::Pay(_) => true,
+                    SingleTransactionKind::TransferSui(_)
+                    | SingleTransactionKind::ChangeEpoch(_)
+                    | SingleTransactionKind::Publish(_) => false,
                 });
                 fp_ensure!(
                     valid,
@@ -359,7 +395,14 @@ impl TransactionKind {
                     }
                 );
             }
-            Self::Single(_) => (),
+            Self::Single(s) => match s {
+                SingleTransactionKind::Pay(_)
+                | SingleTransactionKind::Call(_)
+                | SingleTransactionKind::Publish(_)
+                | SingleTransactionKind::TransferObject(_)
+                | SingleTransactionKind::TransferSui(_)
+                | SingleTransactionKind::ChangeEpoch(_) => (),
+            },
         }
         Ok(())
     }
@@ -1029,6 +1072,18 @@ pub enum ExecutionFailureStatus {
     InvalidCoinObject,
 
     //
+    // Pay errors
+    //
+    /// Supplied 0 input coins
+    EmptyInputCoins,
+    /// Supplied an empty list of recipient addresses for the payment
+    EmptyRecipients,
+    /// Supplied a different number of recipient addresses and recipient amounts
+    RecipientsAmountsArityMismatch,
+    /// Not enough funds to perform the requested payment
+    InsufficientBalance,
+
+    //
     // MoveCall errors
     //
     NonEntryFunctionInvoked,
@@ -1132,6 +1187,16 @@ impl ExecutionFailureStatus {
 impl std::fmt::Display for ExecutionFailureStatus {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            ExecutionFailureStatus::EmptyInputCoins => {
+                write!(f, "Expected a non-empty list of input Coin objects")
+            }
+            ExecutionFailureStatus::EmptyRecipients => {
+                write!(f, "Expected a non-empty list of recipient addresses")
+            }
+            ExecutionFailureStatus::InsufficientBalance => write!(
+                f,
+                "Value of input coins is insufficient to cover outgoing amounts"
+            ),
             ExecutionFailureStatus::InsufficientGas => write!(f, "Insufficient Gas."),
             ExecutionFailureStatus::InvalidGasObject => {
                 write!(
@@ -1184,6 +1249,10 @@ impl std::fmt::Display for ExecutionFailureStatus {
             ExecutionFailureStatus::InvalidSharedByValue(data) => {
                 write!(f, "Invalid Shared Object By-Value Usage. {data}.")
             }
+            ExecutionFailureStatus::RecipientsAmountsArityMismatch => write!(
+                f,
+                "Expected recipient and amounts lists to be the same length"
+            ),
             ExecutionFailureStatus::TooManyChildObjects { object } => {
                 write!(
                     f,
@@ -1716,6 +1785,17 @@ impl InputObjects {
             .into_iter()
             .map(|(_, object)| (object.id(), object))
             .collect()
+    }
+}
+
+impl From<Vec<Object>> for InputObjects {
+    fn from(objects: Vec<Object>) -> Self {
+        Self::new(
+            objects
+                .into_iter()
+                .map(|o| (o.input_object_kind(), o))
+                .collect(),
+        )
     }
 }
 

@@ -19,6 +19,7 @@ use serde_with::Bytes;
 use crate::crypto::sha3_hash;
 use crate::error::{ExecutionError, ExecutionErrorKind};
 use crate::error::{SuiError, SuiResult};
+use crate::messages::InputObjectKind;
 use crate::move_package::MovePackage;
 use crate::{
     base_types::{
@@ -94,6 +95,10 @@ impl MoveObject {
 
     pub fn new_gas_coin(version: SequenceNumber, contents: Vec<u8>) -> Self {
         unsafe { Self::new_from_execution(GasCoin::type_(), true, version, None, contents) }
+    }
+
+    pub fn new_coin(coin_type: StructTag, version: SequenceNumber, contents: Vec<u8>) -> Self {
+        unsafe { Self::new_from_execution(coin_type, true, version, None, contents) }
     }
 
     pub fn has_public_transfer(&self) -> bool {
@@ -478,6 +483,15 @@ impl Object {
         ObjectDigest::new(sha3_hash(self))
     }
 
+    pub fn input_object_kind(&self) -> InputObjectKind {
+        match &self.owner {
+            Owner::Shared => InputObjectKind::SharedMoveObject(self.id()),
+            Owner::ObjectOwner(_) | Owner::AddressOwner(_) | Owner::Immutable => {
+                InputObjectKind::ImmOrOwnedMoveObject(self.compute_object_reference())
+            }
+        }
+    }
+
     /// Approximate size of the object in bytes. This is used for gas metering.
     /// This will be slgihtly different from the serialized size, but
     /// we also don't want to serialize the object just to get the size.
@@ -584,6 +598,18 @@ impl Object {
 
     pub fn with_owner_for_testing(owner: SuiAddress) -> Self {
         Self::with_id_owner_for_testing(ObjectID::random(), owner)
+    }
+
+    /// Generate a new gas coin worth `value` wiht a random object ID and owner
+    /// For testing purposes only
+    pub fn new_gas_coin_for_testing(value: u64, owner: SuiAddress) -> Self {
+        let content = GasCoin::new(ObjectID::random(), value);
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
+        Object::new_move(
+            obj,
+            Owner::AddressOwner(owner),
+            TransactionDigest::genesis(),
+        )
     }
 
     /// Get a `MoveStructLayout` for `self`.
