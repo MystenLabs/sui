@@ -40,47 +40,64 @@ type SubscriptionData = {
   onMessage: (event: SuiEventEnvelope) => void
 }
 
-export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
+export type WebsocketClientOptions = {
+  connectTimeout: number,
+  callTimeout: number,
+  reconnectInterval: number
+}
+
+const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
+  connectTimeout: 15000,
+  callTimeout: 30000,
+  reconnectInterval: 3000
+}
+
+const SUBSCRIBE_EVENT_METHOD = 'sui_subscribeEvent';
+const UNSUBSCRIBE_EVENT_METHOD = 'sui_unsubscribeEvent';
 
 export class WebsocketClient {
-  protected wsClient: WsRpcClient;
-  protected wsConnectionState: ConnectionState = ConnectionState.NotConnected;
-  protected wsEndpoint: string;
-  protected wsTimeout: number | null = null;
-  protected wsSetup: boolean = false;
+  protected rpcClient: WsRpcClient;
+  protected connectionState: ConnectionState = ConnectionState.NotConnected;
+  protected connectionTimeout: number | null = null;
+  protected isSetup: boolean = false;
 
   protected activeSubscriptions: Map<SubscriptionId, SubscriptionData> = new Map();
+
+  public options: WebsocketClientOptions
 
   constructor(
     public endpoint: string,
     public skipValidation: boolean,
+    options?: WebsocketClientOptions
   ) {
-    this.wsEndpoint = endpoint
-    const socketOptions = { reconnect_interval: 3000, autoconnect: false };
-    this.wsClient = new WsRpcClient(this.wsEndpoint, socketOptions);
+    this.options = options ? options : DEFAULT_CLIENT_OPTIONS;
+    this.rpcClient = new WsRpcClient(this.endpoint, {
+      reconnect_interval: this.options.reconnectInterval,
+      autoconnect: false
+    });
   }
 
   private setupSocket() {
-    if(this.wsSetup) return;
+    if(this.isSetup) return;
 
-    this.wsClient.on('open', () => {
-      if(this.wsTimeout) {
-        clearTimeout(this.wsTimeout);
-        this.wsTimeout = null;
+    this.rpcClient.on('open', () => {
+      if(this.connectionTimeout) {
+        clearTimeout(this.connectionTimeout);
+        this.connectionTimeout = null;
       }
-      this.wsConnectionState = ConnectionState.Connected;
+      this.connectionState = ConnectionState.Connected;
       // underlying websocket is private, but we need it
       // to access messages sent by the node
-      (this.wsClient as any).socket
+      (this.rpcClient as any).socket
         .on('message', this.onSocketMessage.bind(this));
     });
 
-    this.wsClient.on('close', () => {
-      this.wsConnectionState = ConnectionState.NotConnected;
+    this.rpcClient.on('close', () => {
+      this.connectionState = ConnectionState.NotConnected;
     });
 
-    this.wsClient.on('error', console.error);
-    this.wsSetup = true;
+    this.rpcClient.on('error', console.error);
+    this.isSetup = true;
   }
 
   // called for every message received from the node over websocket
@@ -88,7 +105,7 @@ export class WebsocketClient {
     const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
 
     const params = msg.params;
-    if(msg.method === 'sui_subscribeEvent' && isSubscriptionEvent(params)) {
+    if(msg.method === SUBSCRIBE_EVENT_METHOD && isSubscriptionEvent(params)) {
       // call any registered handler for the message's subscription
       const sub = this.activeSubscriptions.get(params.subscription);
       if (sub)
@@ -97,20 +114,24 @@ export class WebsocketClient {
   }
 
   private async connect(): Promise<void> {
-    if (this.wsConnectionState === ConnectionState.Connected)
+    if (this.connectionState === ConnectionState.Connected)
       return Promise.resolve();
 
     this.setupSocket();
-    this.wsClient.connect();
-    this.wsConnectionState = ConnectionState.Connecting;
+    this.rpcClient.connect();
+    this.connectionState = ConnectionState.Connecting;
 
     return new Promise<void>((resolve, reject) => {
-      this.wsTimeout = setTimeout(() => reject(new Error('timeout')), 15000) as any as number;
-      this.wsClient.once('open', () => {
+      this.connectionTimeout = setTimeout(
+        () => reject(new Error('timeout')),
+        this.options.connectTimeout
+      ) as any as number;
+
+      this.rpcClient.once('open', () => {
         this.refreshSubscriptions();
         resolve();
       });
-      this.wsClient.once('error', reject);
+      this.rpcClient.once('error', reject);
     });
   }
 
@@ -163,13 +184,13 @@ export class WebsocketClient {
   ): Promise<SubscriptionId> {
     try {
       // lazily connect to websocket to avoid spamming node with connections
-      if (this.wsConnectionState != ConnectionState.Connected)
+      if (this.connectionState != ConnectionState.Connected)
         await this.connect();
 
-      let subId = await this.wsClient.call(
-        'sui_subscribeEvent',
+      let subId = await this.rpcClient.call(
+        SUBSCRIBE_EVENT_METHOD,
         [filter],
-        30000
+        this.options.callTimeout
       ) as SubscriptionId;
 
       this.activeSubscriptions.set(subId, { filter, onMessage });
@@ -183,13 +204,13 @@ export class WebsocketClient {
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
     try {
-      if (this.wsConnectionState != ConnectionState.Connected)
+      if (this.connectionState != ConnectionState.Connected)
         await this.connect();
 
-      let removedOnNode = await this.wsClient.call(
-        'sui_unsubscribeEvent',
+      let removedOnNode = await this.rpcClient.call(
+        UNSUBSCRIBE_EVENT_METHOD,
         [id],
-        30000
+        this.options.callTimeout
       ) as boolean;
       /**
         if the connection closes before unsubscribe is called,
