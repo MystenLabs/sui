@@ -42,7 +42,7 @@ const isAny = (_val: any): _val is any => true;
 
 export class JsonRpcProvider extends Provider {
   protected client: JsonRpcClient;
-  protected wsProvider: WebsocketClient;
+  protected wsClient: WebsocketClient;
   /**
    * Establish a connection to a Sui RPC endpoint
    *
@@ -62,7 +62,7 @@ export class JsonRpcProvider extends Provider {
     super();
 
     this.client = new JsonRpcClient(endpoint);
-    this.wsProvider = new WebsocketClient(getWebsocketUrl(endpoint), skipDataValidation)
+    this.wsClient = new WebsocketClient(getWebsocketUrl(endpoint), skipDataValidation)
   }
 
   // Move info
@@ -408,10 +408,10 @@ export class JsonRpcProvider extends Provider {
     filter: SuiEventFilter,
     onMessage: (event: SuiEventEnvelope) => void
   ): Promise<SubscriptionId> {
-    return this.wsProvider.subscribeEvent(filter, onMessage);
+    return this.wsClient.subscribeEvent(filter, onMessage);
   }
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
-    return this.wsProvider.unsubscribeEvent(id);
+    return this.wsClient.unsubscribeEvent(id);
   }
 }
