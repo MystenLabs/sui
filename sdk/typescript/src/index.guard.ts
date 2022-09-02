@@ -5,7 +5,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, SubscriptionEvent, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventType, SuiEventFilter, SuiEventEnvelope, SubscriptionId, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
+import { Ed25519KeypairData, Keypair, PublicKeyInitData, PublicKeyData, SignatureScheme, TransferObjectTransaction, TransferSuiTransaction, MergeCoinTransaction, SplitCoinTransaction, MoveCallTransaction, PublishTransaction, TxnDataSerializer, SignaturePubkeyPair, Signer, TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventType, SuiEventFilter, SuiEventEnvelope, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
 import { BN } from "bn.js";
 import { Buffer } from "buffer";
 import { Base64DataBuffer } from "./serialization/base64";
@@ -58,16 +58,6 @@ export function isSignatureScheme(obj: any, _argumentName?: string): obj is Sign
     return (
         (obj === "ED25519" ||
             obj === "Secp256k1")
-    )
-}
-
-export function isSubscriptionEvent(obj: any, _argumentName?: string): obj is SubscriptionEvent {
-    return (
-        (obj !== null &&
-            typeof obj === "object" ||
-            typeof obj === "function") &&
-        isSuiMoveTypeParameterIndex(obj.subscription) as boolean &&
-        isSuiEventEnvelope(obj.result) as boolean
     )
 }
 
@@ -775,6 +765,16 @@ export function isSuiEventEnvelope(obj: any, _argumentName?: string): obj is Sui
 export function isSubscriptionId(obj: any, _argumentName?: string): obj is SubscriptionId {
     return (
         typeof obj === "number"
+    )
+}
+
+export function isSubscriptionEvent(obj: any, _argumentName?: string): obj is SubscriptionEvent {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isSuiMoveTypeParameterIndex(obj.subscription) as boolean &&
+        isSuiEventEnvelope(obj.result) as boolean
     )
 }
 

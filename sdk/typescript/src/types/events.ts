@@ -83,9 +83,11 @@ export type SuiEventFilter =
     | { "Or" : [SuiEventFilter, SuiEventFilter] };
 
 export type SuiEventEnvelope = {
-    timestamp: number,
+    timestamp:  number,
     txDigest: TransactionDigest,
     event: SuiEvent
 }
 
 export type SubscriptionId = number;
+
+export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
