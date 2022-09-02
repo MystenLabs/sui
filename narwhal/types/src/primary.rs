@@ -1,6 +1,7 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::serde::NarwhalBitmap;
 use crate::{
     error::{DagError, DagResult},
     CertificateDigestProto,
@@ -8,18 +9,20 @@ use crate::{
 use blake2::{digest::Update, VarBlake2b};
 use bytes::Bytes;
 use config::{Committee, Epoch, SharedWorkerCache, WorkerId, WorkerInfo};
-use crypto::{PublicKey, Signature};
+use crypto::{AggregateSignature, PublicKey, Signature};
 use dag::node_dag::Affiliated;
 use derive_builder::Builder;
 use fastcrypto::{
-    traits::{EncodeDecodeBase64, Signer, VerifyingKey},
+    traits::{AggregateAuthenticator, EncodeDecodeBase64, Signer, VerifyingKey},
     Digest, Hash, SignatureService, Verifier, DIGEST_LEN,
 };
 use indexmap::IndexMap;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
+use serde_with::serde_as;
+use std::collections::VecDeque;
 use std::{
-    collections::{BTreeMap, BTreeSet, HashSet},
+    collections::{BTreeMap, BTreeSet},
     fmt,
     fmt::Formatter,
 };
@@ -358,10 +361,13 @@ impl PartialEq for Vote {
     }
 }
 
+#[serde_as]
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Certificate {
     pub header: Header,
-    pub votes: Vec<(PublicKey, <PublicKey as VerifyingKey>::Sig)>,
+    aggregated_signature: AggregateSignature,
+    #[serde_as(as = "NarwhalBitmap")]
+    signed_authorities: roaring::RoaringBitmap,
 }
 
 impl Certificate {
@@ -378,6 +384,79 @@ impl Certificate {
                 ..Self::default()
             })
             .collect()
+    }
+
+    pub fn new(
+        committee: &Committee,
+        header: Header,
+        votes: Vec<(PublicKey, Signature)>,
+    ) -> DagResult<Certificate> {
+        Self::new_unsafe(committee, header, votes, true)
+    }
+
+    pub fn new_unsigned(
+        committee: &Committee,
+        header: Header,
+        votes: Vec<(PublicKey, Signature)>,
+    ) -> DagResult<Certificate> {
+        Self::new_unsafe(committee, header, votes, false)
+    }
+
+    fn new_unsafe(
+        committee: &Committee,
+        header: Header,
+        votes: Vec<(PublicKey, Signature)>,
+        check_stake: bool,
+    ) -> DagResult<Certificate> {
+        let mut votes = votes;
+        votes.sort_by_key(|(pk, _)| pk.clone());
+        let mut votes: VecDeque<_> = votes.into_iter().collect();
+
+        let mut weight = 0;
+        let keys = committee.keys();
+        let mut sigs = Vec::new();
+
+        let filtered_votes = keys
+            .iter()
+            .enumerate()
+            .filter(|(_, &pk)| {
+                if !votes.is_empty() && pk == &votes.front().unwrap().0 {
+                    sigs.push(votes.pop_front().unwrap());
+                    weight += &committee.stake(pk);
+                    // If there are repeats, also remove them
+                    while !votes.is_empty() && votes.front().unwrap() == sigs.last().unwrap() {
+                        votes.pop_front().unwrap();
+                    }
+                    return true;
+                }
+                false
+            })
+            .map(|(index, _)| index as u32);
+
+        let signed_authorities= roaring::RoaringBitmap::from_sorted_iter(filtered_votes)
+            .map_err(|_| DagError::InvalidBitmap("Failed to convert votes into a bitmap of authority keys. Something is likely very wrong...".to_string()))?;
+
+        // Ensure that all authorities in the set of votes are known
+        ensure!(
+            votes.is_empty(),
+            DagError::UnknownAuthority(votes.front().unwrap().0.encode_base64())
+        );
+
+        // Ensure that the authorities have enough weight
+        ensure!(
+            !check_stake || weight >= committee.quorum_threshold(),
+            DagError::CertificateRequiresQuorum
+        );
+
+        let aggregated_signature =
+            AggregateSignature::aggregate(sigs.into_iter().map(|(_, sig)| sig).collect())
+                .map_err(DagError::InvalidSignature)?;
+
+        Ok(Certificate {
+            header,
+            aggregated_signature,
+            signed_authorities,
+        })
     }
 
     pub fn verify(&self, committee: &Committee, worker_cache: SharedWorkerCache) -> DagResult<()> {
@@ -400,30 +479,36 @@ impl Certificate {
 
         // Ensure the certificate has a quorum.
         let mut weight = 0;
-        let mut used = HashSet::new();
-        for (name, _) in self.votes.iter() {
-            ensure!(
-                !used.contains(name),
-                DagError::AuthorityReuse(name.encode_base64())
-            );
-            let voting_rights = committee.stake(name);
-            ensure!(
-                voting_rights > 0,
-                DagError::UnknownAuthority(name.encode_base64())
-            );
-            used.insert(name.clone());
-            weight += voting_rights;
-        }
+
+        let auth_indexes = self.signed_authorities.iter().collect::<Vec<_>>();
+        let mut auth_iter = 0;
+        let pks: Vec<_> = committee
+            .authorities()
+            .enumerate()
+            .filter(|(i, (_, auth))| match auth_indexes.get(auth_iter) {
+                Some(index) if *index == *i as u32 => {
+                    weight += auth.stake;
+                    auth_iter += 1;
+                    true
+                }
+                _ => false,
+            })
+            .map(|(_, (pk, _))| pk.clone())
+            .collect();
+
         ensure!(
             weight >= committee.quorum_threshold(),
             DagError::CertificateRequiresQuorum
         );
-        let (pks, sigs): (Vec<PublicKey>, Vec<Signature>) = self.votes.iter().cloned().unzip();
+
         // Verify the signatures
         let certificate_digest: Digest = Digest::from(self.digest());
-        PublicKey::verify_batch_empty_fail(certificate_digest.as_ref(), &pks, &sigs)
+        self.aggregated_signature
+            .verify(&pks[..], certificate_digest.as_ref())
             .map_err(|_| signature::Error::new())
-            .map_err(DagError::from)
+            .map_err(DagError::from)?;
+
+        Ok(())
     }
 
     pub fn round(&self) -> Round {
@@ -438,12 +523,19 @@ impl Certificate {
         self.header.author.clone()
     }
 }
+
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct CertificateDigest([u8; DIGEST_LEN]);
 
 impl CertificateDigest {
     pub fn new(digest: [u8; DIGEST_LEN]) -> CertificateDigest {
         CertificateDigest(digest)
+    }
+}
+
+impl AsRef<[u8]> for CertificateDigest {
+    fn as_ref(&self) -> &[u8] {
+        &self.0
     }
 }
 

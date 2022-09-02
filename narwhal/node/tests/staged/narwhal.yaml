@@ -17,11 +17,9 @@ Certificate:
   STRUCT:
     - header:
         TYPENAME: Header
-    - votes:
-        SEQ:
-          TUPLE:
-            - TYPENAME: Ed25519PublicKey
-            - TYPENAME: Ed25519Signature
+    - aggregated_signature:
+        TYPENAME: Ed25519AggregateSignature
+    - signed_authorities: BYTES
 CertificateDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -36,6 +34,9 @@ Committee:
           VALUE:
             TYPENAME: Authority
     - epoch: U64
+Ed25519AggregateSignature:
+  NEWTYPESTRUCT:
+    SEQ: BYTES
 Ed25519PublicKey:
   NEWTYPESTRUCT: STR
 Ed25519Signature:
@@ -156,3 +157,4 @@ WorkerPrimaryMessage:
       Reconfigure:
         NEWTYPE:
           TYPENAME: ReconfigureNotification
+

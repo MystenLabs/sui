@@ -73,10 +73,12 @@ fn get_registry() -> Result<Registry> {
         signature: kp.sign(Digest::from(header_digest).as_ref()),
         ..header
     };
-    let certificate = Certificate {
-        header: header.clone(),
-        votes: vec![(pk.clone(), signature.clone())],
-    };
+    let pk = keys[0].public().clone();
+    let certificate = Certificate::new_unsigned(&committee, header.clone(), vec![]).unwrap();
+    let signature = keys[0].sign(certificate.digest().as_ref());
+    let certificate =
+        Certificate::new_unsigned(&committee, header.clone(), vec![(pk.clone(), signature)])
+            .unwrap();
 
     tracer.trace_value(&mut samples, &header)?;
     tracer.trace_value(&mut samples, &certificate)?;
@@ -100,7 +102,7 @@ fn get_registry() -> Result<Registry> {
     let cleanup = PrimaryWorkerMessage::Cleanup(1u64);
     let request_batch = PrimaryWorkerMessage::RequestBatch(BatchDigest([0u8; 32]));
     let delete_batch = PrimaryWorkerMessage::DeleteBatches(vec![BatchDigest([0u8; 32])]);
-    let sync = PrimaryWorkerMessage::Synchronize(vec![BatchDigest([0u8; 32])], pk.clone());
+    let sync = PrimaryWorkerMessage::Synchronize(vec![BatchDigest([0u8; 32])], pk);
     let epoch_change =
         PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee.clone()));
     let update_committee =

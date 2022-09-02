@@ -20,7 +20,9 @@ proptest = "1.0.0"
 proptest-derive = "0.3.0"
 prost = "0.10.4"
 rand = "0.8.5"
+roaring = "0.9.0"
 serde = { version = "1.0.144", features = ["derive"] }
+serde_with = "2.0.0"
 signature = "1.6.0"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
 thiserror = "1.0.33"

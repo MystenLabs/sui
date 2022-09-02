@@ -48,6 +48,9 @@ pub enum DagError {
     #[error("Channel {0} has closed unexpectedly")]
     ClosedChannel(String),
 
+    #[error("Invalid Authorities Bitmap: {0}")]
+    InvalidBitmap(String),
+
     #[error("Invalid signature")]
     InvalidSignature(#[from] signature::Error),
 

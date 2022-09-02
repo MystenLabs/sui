@@ -10,8 +10,7 @@ use types::Certificate;
 
 #[tokio::test]
 async fn deliver_certificate_using_dag() {
-    let mut keys = keys(None);
-    let kp = keys.pop().unwrap();
+    let kp = keys(None).pop().unwrap();
     let name = kp.public().clone();
 
     // Make the current committee.
@@ -43,7 +42,7 @@ async fn deliver_certificate_using_dag() {
         .collect::<BTreeSet<_>>();
 
     let (mut certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &[kp]);
+        make_optimal_signed_certificates(1..=4, &genesis, &keys(None)[..3]);
 
     // insert the certificates in the DAG
     for certificate in certificates.clone() {
@@ -63,8 +62,7 @@ async fn deliver_certificate_using_dag() {
 
 #[tokio::test]
 async fn deliver_certificate_using_store() {
-    let mut keys = keys(None);
-    let kp = keys.pop().unwrap();
+    let kp = keys(None).pop().unwrap();
     let name = kp.public().clone();
 
     // Make the current committee.
@@ -92,7 +90,7 @@ async fn deliver_certificate_using_store() {
         .collect::<BTreeSet<_>>();
 
     let (mut certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &[kp]);
+        make_optimal_signed_certificates(1..=4, &genesis, &keys(None)[..3]);
 
     // insert the certificates in the DAG
     for certificate in certificates.clone() {
@@ -112,8 +110,7 @@ async fn deliver_certificate_using_store() {
 
 #[tokio::test]
 async fn deliver_certificate_not_found_parents() {
-    let mut keys = keys(None);
-    let kp = keys.pop().unwrap();
+    let kp = keys(None).pop().unwrap();
     let name = kp.public().clone();
 
     // Make the current committee.
@@ -141,7 +138,7 @@ async fn deliver_certificate_not_found_parents() {
         .collect::<BTreeSet<_>>();
 
     let (mut certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &[kp]);
+        make_optimal_signed_certificates(1..=4, &genesis, &keys(None)[..3]);
 
     // take the last one (top) and test for parents
     let test_certificate = certificates.pop_back().unwrap();

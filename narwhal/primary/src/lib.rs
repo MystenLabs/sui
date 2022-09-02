@@ -29,6 +29,10 @@ mod utils;
 mod common;
 mod metrics;
 
+#[cfg(test)]
+#[path = "tests/certificate_tests.rs"]
+mod certificate_tests;
+
 pub use crate::{
     block_remover::{BlockRemover, BlockRemoverCommand, DeleteBatchMessage},
     block_synchronizer::{

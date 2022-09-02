@@ -25,6 +25,7 @@ use fastcrypto::ed25519;
 
 pub type PublicKey = ed25519::Ed25519PublicKey;
 pub type Signature = ed25519::Ed25519Signature;
+pub type AggregateSignature = ed25519::Ed25519AggregateSignature;
 pub type PrivateKey = ed25519::Ed25519PrivateKey;
 pub type KeyPair = ed25519::Ed25519KeyPair;
 

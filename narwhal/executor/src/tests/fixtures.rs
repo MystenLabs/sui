@@ -11,6 +11,7 @@ use store::{
     rocks::{open_cf, DBMap},
     Store,
 };
+use test_utils::committee;
 use types::{Batch, BatchDigest, Certificate, Header};
 
 /// A test batch containing specific transactions.
@@ -27,13 +28,15 @@ pub fn test_batch<T: Serialize>(transactions: Vec<T>) -> (BatchDigest, Batch) {
 
 /// A test certificate with a specific payload.
 pub fn test_certificate(payload: IndexMap<BatchDigest, WorkerId>) -> Certificate {
-    Certificate {
-        header: Header {
+    Certificate::new_unsigned(
+        &committee(None),
+        Header {
             payload,
             ..Header::default()
         },
-        ..Certificate::default()
-    }
+        Vec::new(),
+    )
+    .unwrap()
 }
 
 /// Make a test storage to hold transaction data.

@@ -44,12 +44,14 @@ impl VotesAggregator {
 
         self.votes.push((author.clone(), vote.signature));
         self.weight += committee.stake(&author);
+
         if self.weight >= committee.quorum_threshold() {
             self.weight = 0; // Ensures quorum is only reached once.
-            return Ok(Some(Certificate {
-                header: header.clone(),
-                votes: self.votes.clone(),
-            }));
+            return Ok(Some(Certificate::new(
+                committee,
+                header.clone(),
+                self.votes.clone(),
+            )?));
         }
         Ok(None)
     }

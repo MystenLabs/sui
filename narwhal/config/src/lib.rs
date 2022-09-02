@@ -485,6 +485,10 @@ impl Committee {
         self.authorities.keys().clone().collect::<Vec<&PublicKey>>()
     }
 
+    pub fn authorities(&self) -> impl Iterator<Item = (&PublicKey, &Authority)> {
+        self.authorities.iter()
+    }
+
     /// Returns the number of authorities.
     pub fn size(&self) -> usize {
         self.authorities.len()
