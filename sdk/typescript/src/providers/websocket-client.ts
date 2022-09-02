@@ -45,9 +45,9 @@ type MinimumSubscriptionMessage = {
   result: object
 }
 
-// even with validation off, we need these properties at minimum in a sub message
 const isMinimumSubscriptionMessage = (msg: any): msg is MinimumSubscriptionMessage =>
-  ('subscription' in msg && typeof msg['subscription'] === 'number')
+  msg
+  && ('subscription' in msg && typeof msg['subscription'] === 'number')
   && ('result' in msg && typeof msg['result'] === 'object')
 
 export type WebsocketClientOptions = {
@@ -116,17 +116,18 @@ export class WebsocketClient {
 
     const params = msg.params;
     if (msg.method === SUBSCRIBE_EVENT_METHOD) {
-        if (this.skipValidation && isMinimumSubscriptionMessage(params)) {
-            const sub = this.activeSubscriptions.get(params.subscription);
-            if (sub)
-              // cast to bypass type validation of 'result'
-              (sub.onMessage as (m: any) => void)(params.result);
-        }
-        if (isSubscriptionEvent(params)) {
-          // call any registered handler for the message's subscription
-          const sub = this.activeSubscriptions.get(params.subscription);
-          if (sub)
-            sub.onMessage(params.result);
+      // even with validation off, we must ensure a few properties at minimum in a message
+      if (this.skipValidation && isMinimumSubscriptionMessage(params)) {
+        const sub = this.activeSubscriptions.get(params.subscription);
+        if (sub)
+          // cast to bypass type validation of 'result'
+          (sub.onMessage as (m: any) => void)(params.result);
+      }
+      if (isSubscriptionEvent(params)) {
+        // call any registered handler for the message's subscription
+        const sub = this.activeSubscriptions.get(params.subscription);
+        if (sub)
+          sub.onMessage(params.result);
       }
     }
   }
