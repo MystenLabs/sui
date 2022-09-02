@@ -16,7 +16,7 @@ export async function createLocalnetTasks() {
             const address = keypair.getPublicKey().toSuiAddress();
             addressToKeypair.set(address, keypair);
             const res = await axios.post<{ ok: boolean }>(
-                'http://localhost:9123/faucet',
+                'http://127.0.0.1:9123/faucet',
                 { recipient: address }
             );
             if (!res.data.ok) {
