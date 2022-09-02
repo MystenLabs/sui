@@ -51,19 +51,31 @@ function Search() {
         [setQuery]
     );
 
+    const navigateToPage = useCallback(
+        (selected: ResultType | null) => {
+            if (selected) {
+                navigate(
+                    `../${selected.category}/${encodeURIComponent(
+                        selected.input
+                    )}`,
+                    {
+                        state: selected.result,
+                    }
+                );
+                setQuery('');
+                setSelectedResult(null);
+            }
+        },
+        [navigate]
+    );
+
     const handleSubmit = useCallback(() => {
-        if (selectedResult) {
-            navigate(
-                `../${selectedResult.category}/${encodeURIComponent(
-                    selectedResult.input
-                )}`,
-                {
-                    state: selectedResult.result,
-                }
-            );
-            setResultList([]);
-        }
-    }, [navigate, selectedResult]);
+        navigateToPage(selectedResult);
+    }, [selectedResult, navigateToPage]);
+
+    useEffect(() => {
+        navigateToPage(selectedResult);
+    }, [selectedResult, navigateToPage]);
 
     return (
         <div className={styles.form}>
