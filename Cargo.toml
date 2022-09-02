@@ -47,3 +47,6 @@ strip = 'debuginfo'
 # Do not strip any debug info.  This helps the widest set of profiling tools
 debug = true
 strip = 'none'
+
+[patch.crates-io]
+tonic-build = { git = "https://github.com/hyperium/tonic.git", rev = "de2e4ac077c076736dc451f3415ea7da1a61a560" }

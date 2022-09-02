@@ -15,13 +15,11 @@ futures = "0.3.23"
 tempfile = "3.3.0"
 tonic-health = "0.6.0"
 tap = "1.0.1"
-
 sui-config = { path = "../sui-config" }
 sui-node = { path = "../sui-node" }
 sui-types = { path = "../sui-types" }
-
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445" }
-workspace-hack = { path = "../workspace-hack"}
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
+workspace-hack = { path = "../workspace-hack" }
 
 [dev-dependencies]
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }

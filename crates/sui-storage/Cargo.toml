@@ -19,19 +19,20 @@ tokio = { version = "1.20.1", features = ["full", "tracing"] }
 tokio-stream = "^0.1"
 rocksdb = "0.19.0"
 tracing = "0.1.36"
-sqlx = { version = "0.6", features = [ "runtime-tokio-rustls", "sqlite" ] }
+sqlx = { version = "0.6", features = ["runtime-tokio-rustls", "sqlite"] }
 strum = "^0.24"
 strum_macros = "^0.24"
 anyhow = "1.0.58"
 tempfile = "3.3.0"
 tap = "1.0.1"
-
 sui-types = { path = "../sui-types" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"}
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"} 
-move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
+move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = [
+    "address20"
+] }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack = { path = "../workspace-hack" }
 eyre = "0.6.8"
 
 [dev-dependencies]
@@ -39,7 +40,7 @@ anyhow = "1.0.58"
 tempfile = "3.3.0"
 num_cpus = "1.13.1"
 pretty_assertions = "1.2.0"
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
 
 [[bench]]
 name = "write_ahead_log"

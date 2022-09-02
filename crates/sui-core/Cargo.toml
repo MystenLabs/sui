@@ -31,7 +31,6 @@ tokio-retry = "0.3"
 scopeguard = "1.1"
 once_cell = "1.13.1"
 tap = "1.0"
-
 sui-adapter = { path = "../sui-adapter" }
 sui-framework = { path = "../sui-framework" }
 sui-network = { path = "../sui-network" }
@@ -40,24 +39,22 @@ sui-storage = { path = "../sui-storage" }
 sui-config = { path = "../sui-config" }
 sui-json = { path = "../sui-json" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
-
 move-binary-format = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
-move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = [
+    "address20"
+] }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
-
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"}
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"}
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445" }
-
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
 narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "f00e1ca7bb9f35b33fbe3748a3f865c35f5e7f06", package = "config" }
 narwhal-consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "f00e1ca7bb9f35b33fbe3748a3f865c35f5e7f06", package = "consensus" }
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "f00e1ca7bb9f35b33fbe3748a3f865c35f5e7f06", package = "executor" }
 narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "f00e1ca7bb9f35b33fbe3748a3f865c35f5e7f06", package = "types" }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "f00e1ca7bb9f35b33fbe3748a3f865c35f5e7f06", package = "node" }
-
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b"}
-workspace-hack = { path = "../workspace-hack"}
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b" }
+workspace-hack = { path = "../workspace-hack" }
 thiserror = "1.0.32"
 eyre = "0.6.8"
 
@@ -65,12 +62,10 @@ eyre = "0.6.8"
 clap = { version = "3.2.17", features = ["derive"] }
 rand = "0.8.5"
 move-package = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
-
 serde-reflection = "0.3.6"
 serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445" }
-
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
 test-fuzz = "3.0.2"
 test-utils = { path = "../test-utils" }
 

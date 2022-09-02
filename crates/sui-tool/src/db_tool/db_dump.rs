@@ -8,12 +8,15 @@ use rocksdb::MultiThreaded;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use strum_macros::EnumString;
-use sui_core::authority::authority_store_tables::AuthorityStoreTables;
-use sui_core::checkpoints::CheckpointStoreTables;
-use sui_storage::default_db_options;
-use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
+use sui_core::{
+    authority::authority_store_tables::AuthorityStoreTablesReadOnly,
+    checkpoints::CheckpointStoreTablesReadOnly,
+};
+use sui_storage::{
+    default_db_options, indexes::IndexStoreReadOnly, lock_service::LockServiceImplReadOnly,
+    node_sync_store::NodeSyncStoreReadOnly,
+};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-use typed_store::traits::DBMapTableUtil;
 
 #[derive(EnumString, Parser, Debug)]
 pub enum StoreName {
@@ -58,27 +61,30 @@ pub fn dump_table(
 ) -> anyhow::Result<BTreeMap<String, String>> {
     match store_name {
         StoreName::Validator => {
-            AuthorityStoreTables::<AuthoritySignInfo>::open_tables_read_only(db_path, None, None)
-                .dump(table_name, page_size, page_number)
+            AuthorityStoreTablesReadOnly::<AuthoritySignInfo>::open_tables_read_only(
+                db_path, None, None,
+            )
+            .dump(table_name, page_size, page_number)
         }
-        StoreName::Gateway => AuthorityStoreTables::<EmptySignInfo>::open_tables_read_only(
+        StoreName::Gateway => AuthorityStoreTablesReadOnly::<EmptySignInfo>::open_tables_read_only(
             db_path, None, None,
         )
         .dump(table_name, page_size, page_number),
-        StoreName::Index => IndexStore::open_tables_read_only(db_path, None, None).dump(
+        StoreName::Index => IndexStoreReadOnly::open_tables_read_only(db_path, None, None).dump(
             table_name,
             page_size,
             page_number,
         ),
-        StoreName::LocksService => LockServiceImpl::open_tables_read_only(db_path, None, None)
+        StoreName::LocksService => LockServiceImplReadOnly::open_tables_read_only(
+            db_path, None, None,
+        )
+        .dump(table_name, page_size, page_number),
+        StoreName::NodeSync => NodeSyncStoreReadOnly::open_tables_read_only(db_path, None, None)
             .dump(table_name, page_size, page_number),
-        StoreName::NodeSync => NodeSyncStore::open_tables_read_only(db_path, None, None).dump(
-            table_name,
-            page_size,
-            page_number,
-        ),
-        StoreName::Checkpoints => CheckpointStoreTables::open_tables_read_only(db_path, None, None)
-            .dump(table_name, page_size, page_number),
+        StoreName::Checkpoints => CheckpointStoreTablesReadOnly::open_tables_read_only(
+            db_path, None, None,
+        )
+        .dump(table_name, page_size, page_number),
         StoreName::Wal => Err(eyre!(
             "Dumping WAL not yet supported. It requires kmowing the value type"
         )),
