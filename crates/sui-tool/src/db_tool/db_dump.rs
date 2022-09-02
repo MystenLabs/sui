@@ -96,7 +96,6 @@ pub fn dump_table(
 mod test {
     use sui_core::authority::authority_store_tables::AuthorityStoreTables;
     use sui_types::crypto::AuthoritySignInfo;
-    use typed_store::traits::DBMapTableUtil;
 
     use crate::db_tool::db_dump::{dump_table, list_tables, StoreName};
 
