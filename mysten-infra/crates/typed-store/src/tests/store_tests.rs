@@ -36,6 +36,25 @@ async fn read_write_value() {
 }
 
 #[tokio::test]
+async fn read_raw_write_value() {
+    // Create new store.
+    let db = rocks::DBMap::<Vec<u8>, String>::open(temp_dir(), None, None).unwrap();
+    let store = Store::new(db);
+
+    // Write value to the store.
+    let key = vec![0u8, 1u8, 2u8, 3u8];
+    let value = "123456".to_string();
+    store.write(key.clone(), value.clone()).await;
+
+    // Read value.
+    let result = store.read_raw_bytes(key).await;
+    assert!(result.is_ok());
+    let read_value = result.unwrap();
+    assert!(read_value.is_some());
+    assert_eq!(read_value, Some(bincode::serialize(&value).unwrap()));
+}
+
+#[tokio::test]
 async fn read_unknown_key() {
     // Create new store.
     let db = rocks::DBMap::<Vec<u8>, Vec<u8>>::open(temp_dir(), None, None).unwrap();

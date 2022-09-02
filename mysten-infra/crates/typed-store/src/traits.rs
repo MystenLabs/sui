@@ -19,6 +19,9 @@ where
     /// Returns the value for the given key from the map, if it exists.
     fn get(&self, key: &K) -> Result<Option<V>, Self::Error>;
 
+    /// Returns the raw value (bincode serialized bytes) for the given key from the map, if it exists.
+    fn get_raw_bytes(&self, key: &K) -> Result<Option<Vec<u8>>, Self::Error>;
+
     /// Returns the value for the given key from the map, if it exists
     /// or the given default value if it does not.
     fn get_or_insert<F: FnOnce() -> V>(&self, key: &K, default: F) -> Result<V, Self::Error> {
