@@ -1,5 +1,5 @@
 .results {
-    @apply  absolute z-50 left-0 w-full sm:w-[70%] sm:left-auto sm:max-w-[500px] px-[0.2vw] rounded-[6px] list-none;
+    @apply bg-white  absolute top-[3rem]  z-50 left-0 w-full sm:w-[70%] sm:left-auto sm:max-w-[500px] px-[0.2vw] rounded-[6px] list-none;
 
     /* The below is extracted from Figma */
     /* stylelint-disable */
@@ -9,7 +9,7 @@
 }
 
 .result {
-  @apply relative bg-white;
+    @apply relative z-50;
 }
 
 .result dt {
@@ -26,4 +26,8 @@
 
 .selectedoption {
     @apply bg-[#6FBCF01A];
+}
+
+.notselectedoption {
+    @apply bg-white;
 }

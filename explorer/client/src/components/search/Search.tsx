@@ -2,13 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
-import React, {
-    useState,
-    useCallback,
-    useContext,
-    useRef,
-    useEffect,
-} from 'react';
+import React, { useState, useCallback, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ReactComponent as SearchIcon } from '../../assets/search.svg';
@@ -24,7 +18,6 @@ import styles from './Search.module.css';
 
 function Search() {
     const navigate = useNavigate();
-    const wrapperref = useRef<HTMLDivElement>(null);
     const [network] = useContext(NetworkContext);
     const [query, setQuery] = useState('');
     const [selectedResult, setSelectedResult] = useState<ResultType | null>(
@@ -51,14 +44,6 @@ function Search() {
         }
     }, [query, network]);
 
-    // Whenever the list of results changes, we change the selected result
-
-    useEffect(() => {
-        resultList.length >= 1
-            ? setSelectedResult(resultList[0])
-            : setSelectedResult(null);
-    }, [resultList]);
-
     // Handle query change
     const handleQueryChange = useCallback(
         (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -66,63 +51,49 @@ function Search() {
         [setQuery]
     );
 
-    const handleSubmit = useCallback(
-        (e: React.FormEvent<HTMLFormElement>) => {
-            e.preventDefault();
-
-            if (selectedResult) {
-                navigate(
-                    `../${selectedResult.category}/${encodeURIComponent(
-                        selectedResult.input
-                    )}`,
-                    {
-                        state: selectedResult.result,
-                    }
-                );
-                setResultList([]);
-            }
-        },
-        [navigate, selectedResult]
-    );
+    const handleSubmit = useCallback(() => {
+        if (selectedResult) {
+            navigate(
+                `../${selectedResult.category}/${encodeURIComponent(
+                    selectedResult.input
+                )}`,
+                {
+                    state: selectedResult.result,
+                }
+            );
+            setResultList([]);
+        }
+    }, [navigate, selectedResult]);
 
     return (
-        <div ref={wrapperref}>
-            <form
-                className={styles.form}
-                onSubmit={handleSubmit}
-                aria-label="search form"
+        <div className={styles.form}>
+            <Combobox value={selectedResult} onChange={setSelectedResult}>
+                <Combobox.Input
+                    className={styles.searchtextdesktop}
+                    id="searchText"
+                    placeholder="Search by Addresses / Objects / Transactions"
+                    onChange={handleQueryChange}
+                    autoFocus
+                    type="text"
+                    autoComplete="off"
+                />
+                <Combobox.Input
+                    className={styles.searchtextmobile}
+                    id="searchText"
+                    placeholder="Search Anything"
+                    autoComplete="off"
+                    onChange={handleQueryChange}
+                />
+                <SearchResults result={resultList} />
+            </Combobox>
+            <button
+                id="searchBtn"
+                type="submit"
+                className={styles.searchbtn}
+                onClick={handleSubmit}
             >
-                <Combobox
-                    value={selectedResult}
-                    name="web search"
-                    onChange={setSelectedResult}
-                >
-                    <Combobox.Input
-                        className={styles.searchtextdesktop}
-                        id="searchText"
-                        placeholder="Search by Addresses / Objects / Transactions"
-                        onChange={handleQueryChange}
-                        autoFocus
-                        type="text"
-                        autoComplete="off"
-                    />
-                    <Combobox.Input
-                        className={styles.searchtextmobile}
-                        id="searchText"
-                        placeholder="Search Anything"
-                        autoComplete="off"
-                        onChange={handleQueryChange}
-                    />
-                    <SearchResults result={resultList} />
-                </Combobox>
-                <button
-                    id="searchBtn"
-                    type="submit"
-                    className={styles.searchbtn}
-                >
-                    <SearchIcon className={styles.searchicon} />
-                </button>
-            </form>
+                <SearchIcon className={styles.searchicon} />
+            </button>
         </div>
     );
 }

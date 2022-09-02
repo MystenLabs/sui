@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Combobox } from '@headlessui/react';
+import { useCallback } from 'react';
 
 import { type ResultType } from './SearchResultType';
 
@@ -14,30 +15,31 @@ function SearchResults({ result }: { result: ResultType[] | null }) {
         addresses: 'address',
     };
 
+    const optionClassName = useCallback((active: boolean) => {
+        return `${styles.result} ${
+            active ? styles.selectedoption : styles.notselectedoption
+        }`;
+    }, []);
+
     if (!result) return <></>;
     return (
         <Combobox.Options as="div" className={styles.results}>
-
             {result.length === 0 && (
-                <p className={styles.noresults}>
-                    No Results
-                </p>
+                <p className={styles.noresults}>No Results</p>
             )}
 
             {result.map((el, index) => (
-                <Combobox.Option as="dl" 
-                 key={index} value={el.input}
-                 className={({active}) => 
-                   `${styles.result} ${
-                     active ? styles.selectedoption : ''
-                   }`
-                 }
-            >
-                        <dt>{categoryLabels[el.category]}</dt>
-                        <dd>{el.input}</dd>
+                <Combobox.Option as="div" key={index} value={el}>
+                    {({ active }) => (
+                        <dl>
+                            <dt>{categoryLabels[el.category]}</dt>
+                            <dd className={optionClassName(active)}>
+                                {el.input}
+                            </dd>
+                        </dl>
+                    )}
                 </Combobox.Option>
             ))}
-
         </Combobox.Options>
     );
 }
