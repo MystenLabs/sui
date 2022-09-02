@@ -90,8 +90,8 @@ function Search() {
                     placeholder="Search by Addresses / Objects / Transactions"
                     onChange={handleQueryChange}
                     autoFocus
-                    type="text"
                     autoComplete="off"
+                    key={selectedResult?.input}
                 />
                 <Combobox.Input
                     className={styles.searchtextmobile}
@@ -99,6 +99,7 @@ function Search() {
                     placeholder="Search Anything"
                     autoComplete="off"
                     onChange={handleQueryChange}
+                    key={selectedResult?.input}
                 />
                 <SearchResults result={resultList} />
             </Combobox>
