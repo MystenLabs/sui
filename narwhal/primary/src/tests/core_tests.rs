@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::common::create_db_stores;
+use anemo::{types::PeerInfo, PeerId};
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{
@@ -13,11 +14,14 @@ use types::{CertificateDigest, Header, Vote};
 
 #[tokio::test]
 async fn process_header() {
+    telemetry_subscribers::init_for_testing();
+
     let mut keys = keys(None);
     let committee = pure_committee_from_keys(&keys);
     let worker_cache = shared_worker_cache_from_keys(&keys);
-    let _ = keys.pop().unwrap(); // Skip the header' author.
+    let listener_key = keys.pop().unwrap(); // Skip the header' author.
     let kp = keys.pop().unwrap();
+    let network_key = kp.copy().private().0.to_bytes();
     let name = kp.public().clone();
     let mut signature_service = SignatureService::new(kp);
 
@@ -44,7 +48,7 @@ async fn process_header() {
         .primary(&header().author)
         .unwrap()
         .primary_to_primary;
-    let mut handle = PrimaryToPrimaryMockServer::spawn(address);
+    let (mut handle, _network) = PrimaryToPrimaryMockServer::spawn(listener_key, address.clone());
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -58,6 +62,23 @@ async fn process_header() {
     );
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+
+    let address = network::multiaddr_to_address(&address).unwrap();
+    let peer_info = PeerInfo {
+        peer_id: PeerId(header().author.0.to_bytes()),
+        affinity: anemo::types::PeerAffinity::High,
+        address: vec![address],
+    };
+    network.known_peers().insert(peer_info);
 
     // Spawn the core.
     let _core_handle = Core::spawn(
@@ -78,7 +99,7 @@ async fn process_header() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
     );
 
     // Send a header to the core.
@@ -88,8 +109,7 @@ async fn process_header() {
         .unwrap();
 
     // Ensure the listener correctly received the vote.
-    let received = handle.recv().await.unwrap();
-    match received.deserialize().unwrap() {
+    match handle.recv().await.unwrap() {
         PrimaryMessage::Vote(x) => assert_eq!(x, expected),
         x => panic!("Unexpected message: {:?}", x),
     }
@@ -113,6 +133,7 @@ async fn process_header_missing_parent() {
     let committee = pure_committee_from_keys(&k);
     let worker_cache = shared_worker_cache_from_keys(&k);
     let kp = k.pop().unwrap();
+    let network_key = kp.copy().private().0.to_bytes();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -143,6 +164,15 @@ async fn process_header_missing_parent() {
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+
     // Spawn the core.
     let _core_handle = Core::spawn(
         name.clone(),
@@ -162,7 +192,7 @@ async fn process_header_missing_parent() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
     );
 
     // Send a header to the core.
@@ -193,6 +223,7 @@ async fn process_header_missing_payload() {
     let committee = pure_committee_from_keys(&k);
     let worker_cache = shared_worker_cache_from_keys(&k);
     let kp = k.pop().unwrap();
+    let network_key = kp.copy().private().0.to_bytes();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -223,6 +254,15 @@ async fn process_header_missing_payload() {
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+
     // Spawn the core.
     let _core_handle = Core::spawn(
         name.clone(),
@@ -242,7 +282,7 @@ async fn process_header_missing_payload() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
     );
 
     // Send a header that another node has created to the core.
@@ -283,6 +323,7 @@ async fn process_votes() {
     let committee = pure_committee_from_keys(&k);
     let worker_cache = shared_worker_cache_from_keys(&k);
     let kp = k.pop().unwrap();
+    let network_key = kp.copy().private().0.to_bytes();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -313,6 +354,25 @@ async fn process_votes() {
     );
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+
+    for (pubkey, addresses) in committee.others_primaries(&name) {
+        let peer_id = PeerId(pubkey.0.to_bytes());
+        let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
+        let peer_info = PeerInfo {
+            peer_id,
+            affinity: anemo::types::PeerAffinity::High,
+            address: vec![address],
+        };
+        network.known_peers().insert(peer_info);
+    }
 
     // Spawn the core.
     let _core_handle = Core::spawn(
@@ -333,17 +393,19 @@ async fn process_votes() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
     );
 
     // Make the certificate we expect to receive.
     let expected = certificate(&Header::default());
 
     // Spawn all listeners to receive our newly formed certificate.
-    let mut handles: Vec<_> = committee
-        .others_primaries(&name)
+    let mut handles: Vec<_> = k
         .into_iter()
-        .map(|(_, address)| PrimaryToPrimaryMockServer::spawn(address.primary_to_primary))
+        .map(|kp| {
+            let address = committee.primary(kp.public()).unwrap().primary_to_primary;
+            PrimaryToPrimaryMockServer::spawn(kp, address)
+        })
         .collect();
 
     // Send a votes to the core.
@@ -355,9 +417,8 @@ async fn process_votes() {
     }
 
     // Ensure all listeners got the certificate.
-    for handle in handles.iter_mut() {
-        let received = handle.recv().await.unwrap();
-        match received.deserialize().unwrap() {
+    for (handle, _network) in handles.iter_mut() {
+        match handle.recv().await.unwrap() {
             PrimaryMessage::Certificate(x) => assert_eq!(x, expected),
             x => panic!("Unexpected message: {:?}", x),
         }
@@ -381,6 +442,7 @@ async fn process_certificates() {
     let committee = pure_committee_from_keys(&k);
     let worker_cache = shared_worker_cache_from_keys(&k);
     let kp = k.pop().unwrap();
+    let network_key = kp.copy().private().0.to_bytes();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -412,6 +474,14 @@ async fn process_certificates() {
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
     // Spawn the core.
     let _core_handle = Core::spawn(
         name,
@@ -431,7 +501,7 @@ async fn process_certificates() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
     );
 
     // Send enough certificates to the core.
@@ -487,6 +557,7 @@ async fn shutdown_core() {
     let worker_cache = shared_worker_cache_from_keys(&keys);
     let _ = keys.pop().unwrap(); // Skip the header' author.
     let kp = keys.pop().unwrap();
+    let network_key = kp.copy().private().0.to_bytes();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -516,6 +587,15 @@ async fn shutdown_core() {
         None,
     );
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+
     // Spawn the core.
     let handle = Core::spawn(
         name,
@@ -535,7 +615,7 @@ async fn shutdown_core() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         Arc::new(PrimaryMetrics::new(&Registry::new())),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
     );
 
     // Shutdown the core.
@@ -549,8 +629,9 @@ async fn reconfigure_core() {
     let mut keys_0 = keys(None);
     let committee = pure_committee_from_keys(&keys_0);
     let worker_cache = shared_worker_cache_from_keys(&keys_0);
-    let _ = keys_0.pop().unwrap(); // Skip the header' author.
+    let listener_key = keys_0.pop().unwrap(); // Skip the header' author.
     let kp = keys_0.pop().unwrap();
+    let network_key = kp.copy().private().0.to_bytes();
     let name = kp.public().clone();
     let mut signature_service = SignatureService::new(kp);
 
@@ -584,7 +665,7 @@ async fn reconfigure_core() {
         .primary(&header.author)
         .unwrap()
         .primary_to_primary;
-    let mut handle = PrimaryToPrimaryMockServer::spawn(address);
+    let (mut handle, _network) = PrimaryToPrimaryMockServer::spawn(listener_key, address.clone());
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -596,6 +677,22 @@ async fn reconfigure_core() {
         /* tx_certificate_waiter */ tx_sync_certificates,
         None,
     );
+
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+    let address = network::multiaddr_to_address(&address).unwrap();
+    let peer_info = PeerInfo {
+        peer_id: PeerId(header.author.0.to_bytes()),
+        affinity: anemo::types::PeerAffinity::High,
+        address: vec![address],
+    };
+    network.known_peers().insert(peer_info);
 
     // Spawn the core.
     let _core_handle = Core::spawn(
@@ -616,7 +713,7 @@ async fn reconfigure_core() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         Arc::new(PrimaryMetrics::new(&Registry::new())),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
     );
 
     // Change committee
@@ -628,8 +725,7 @@ async fn reconfigure_core() {
     tx_primary_messages.send(message).await.unwrap();
 
     // Ensure the listener correctly received the vote.
-    let received = handle.recv().await.unwrap();
-    match received.deserialize().unwrap() {
+    match handle.recv().await.unwrap() {
         PrimaryMessage::Vote(x) => assert_eq!(x, expected),
         x => panic!("Unexpected message: {:?}", x),
     }

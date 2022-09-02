@@ -162,12 +162,6 @@ service Configuration {
     rpc GetPrimaryAddress(Empty) returns (GetPrimaryAddressResponse);
 }
 
-// The primary-to-primary interface
-service PrimaryToPrimary {
-    // Sends a message
-    rpc SendMessage(BincodeEncodedPayload) returns (Empty) {}
-}
-
 // The worker-to-worker interface
 service WorkerToWorker {
     // Sends a worker message

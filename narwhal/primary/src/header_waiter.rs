@@ -8,7 +8,9 @@ use crate::{
 use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use futures::future::{try_join_all, BoxFuture};
-use network::{LuckyNetwork, PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNetwork};
+use network::{
+    LuckyNetwork2, PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2,
+};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::HashMap,
@@ -273,12 +275,8 @@ impl HeaderWaiter {
                                 });
                             }
                             if !requires_sync.is_empty() {
-                                let address = self.committee
-                                    .primary(&author)
-                                    .expect("Author of valid header not in the committee")
-                                    .primary_to_primary;
                                 let message = PrimaryMessage::CertificatesRequest(requires_sync, self.name.clone());
-                                self.primary_network.unreliable_send(address, &message).await;
+                                self.primary_network.unreliable_send(author.clone(), &message).await;
                             }
                         }
                     }
@@ -319,7 +317,7 @@ impl HeaderWaiter {
                         let addresses = self.committee
                             .others_primaries(&self.name)
                             .into_iter()
-                            .map(|(_, x)| x.primary_to_primary)
+                            .map(|(pubkey, _x)| pubkey)
                             .collect();
                         let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());
                         self.primary_network.lucky_broadcast(addresses, &message, self.sync_retry_nodes).await;

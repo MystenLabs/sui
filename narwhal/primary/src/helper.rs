@@ -4,8 +4,7 @@
 use crate::{primary::PrimaryMessage, PayloadToken};
 use config::{Committee, WorkerId};
 use crypto::PublicKey;
-use fastcrypto::traits::EncodeDecodeBase64;
-use network::{PrimaryNetwork, UnreliableNetwork};
+use network::{PrimaryNetwork, UnreliableNetwork2};
 use storage::CertificateStore;
 use store::{Store, StoreError};
 use thiserror::Error;
@@ -21,9 +20,6 @@ mod helper_tests;
 
 #[derive(Debug, Error)]
 enum HelperError {
-    #[error("Received message from unknown authority {0}")]
-    UnknownAuthority(String),
-
     #[error("Storage failure: {0}")]
     StoreError(#[from] StoreError),
 
@@ -146,14 +142,6 @@ impl Helper {
         digests: Vec<CertificateDigest>,
         origin: PublicKey,
     ) -> Result<(), HelperError> {
-        // get the requestor's address.
-        let address = match self.committee.primary(&origin) {
-            Ok(x) => x.primary_to_primary,
-            Err(_) => {
-                return Err(HelperError::UnknownAuthority(origin.encode_base64()));
-            }
-        };
-
         let mut result: Vec<(CertificateDigest, bool)> = Vec::new();
 
         let certificates = match self.certificate_store.read_all(digests.to_owned()) {
@@ -169,7 +157,7 @@ impl Helper {
                     from: self.name.clone(),
                 };
                 self.primary_network
-                    .unreliable_send(address, &message)
+                    .unreliable_send(origin.clone(), &message)
                     .await;
 
                 return Err(HelperError::StoreError(err));
@@ -207,7 +195,7 @@ impl Helper {
             from: self.name.clone(),
         };
         self.primary_network
-            .unreliable_send(address, &message)
+            .unreliable_send(origin.clone(), &message)
             .await;
 
         Ok(())
@@ -225,14 +213,6 @@ impl Helper {
                 "empty digests received - ignore request".to_string(),
             ));
         }
-
-        // get the requestor's address.
-        let address = match self.committee.primary(&origin) {
-            Ok(x) => x.primary_to_primary,
-            Err(_) => {
-                return Err(HelperError::UnknownAuthority(origin.encode_base64()));
-            }
-        };
 
         // TODO [issue #195]: Do some accounting to prevent bad nodes from monopolizing our resources.
         let certificates = match self.certificate_store.read_all(digests.to_owned()) {
@@ -264,14 +244,14 @@ impl Helper {
             };
 
             self.primary_network
-                .unreliable_send(address.clone(), &message)
+                .unreliable_send(origin.clone(), &message)
                 .await;
         } else {
             for certificate in certificates.into_iter().flatten() {
                 // TODO: Remove this deserialization-serialization in the critical path.
                 let message = PrimaryMessage::Certificate(certificate);
                 self.primary_network
-                    .unreliable_send(address.clone(), &message)
+                    .unreliable_send(origin.clone(), &message)
                     .await;
             }
         }

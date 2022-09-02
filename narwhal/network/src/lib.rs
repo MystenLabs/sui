@@ -20,7 +20,10 @@ pub use crate::{
     bounded_executor::BoundedExecutor,
     primary::{PrimaryNetwork, PrimaryToWorkerNetwork},
     retry::RetryConfig,
-    traits::{LuckyNetwork, ReliableNetwork, UnreliableNetwork},
+    traits::{
+        Lucky, LuckyNetwork, LuckyNetwork2, ReliableNetwork, ReliableNetwork2, UnreliableNetwork,
+        UnreliableNetwork2,
+    },
     worker::{WorkerNetwork, WorkerToPrimaryNetwork},
 };
 
@@ -58,3 +61,24 @@ impl<T> std::future::Future for CancelOnDropHandler<T> {
 // The exact number here probably isn't important, the key things is that it should be finite so
 // that we don't create unbounded numbers of tasks.
 pub const MAX_TASK_CONCURRENCY: usize = 500;
+
+pub fn multiaddr_to_address(
+    multiaddr: &multiaddr::Multiaddr,
+) -> anyhow::Result<anemo::types::Address> {
+    use multiaddr::Protocol;
+    let mut iter = multiaddr.iter();
+
+    match (iter.next(), iter.next()) {
+        (Some(Protocol::Ip4(ipaddr)), Some(Protocol::Tcp(port) | Protocol::Udp(port))) => {
+            Ok((ipaddr, port).into())
+        }
+        (Some(Protocol::Ip6(ipaddr)), Some(Protocol::Tcp(port) | Protocol::Udp(port))) => {
+            Ok((ipaddr, port).into())
+        }
+        (Some(Protocol::Dns(hostname)), Some(Protocol::Tcp(port) | Protocol::Udp(port))) => {
+            Ok((hostname.as_ref(), port).into())
+        }
+
+        _ => Err(anyhow::anyhow!("invalid address")),
+    }
+}

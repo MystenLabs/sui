@@ -10,7 +10,7 @@ use crate::{
     grpc_server::ConsensusAPIGrpc,
     header_waiter::HeaderWaiter,
     helper::Helper,
-    metrics::{initialise_metrics, PrimaryEndpointMetrics, PrimaryMetrics},
+    metrics::{initialise_metrics, PrimaryMetrics},
     payload_receiver::PayloadReceiver,
     proposer::Proposer,
     state_handler::StateHandler,
@@ -18,12 +18,14 @@ use crate::{
     BlockCommand, BlockRemover, CertificatesResponse, DeleteBatchMessage,
     PayloadAvailabilityResponse,
 };
+
+use anemo::{types::PeerInfo, PeerId};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
-use crypto::{PublicKey, Signature};
+use crypto::{KeyPair, PublicKey};
 use fastcrypto::{
-    traits::{EncodeDecodeBase64, Signer},
+    traits::{EncodeDecodeBase64, KeyPair as _},
     SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
@@ -63,9 +65,9 @@ impl Primary {
 
     // Spawns the primary and returns the JoinHandles of its tasks, as well as a metered receiver for the Consensus.
     #[allow(clippy::too_many_arguments)]
-    pub fn spawn<Signatory: Signer<Signature> + Send + 'static>(
+    pub fn spawn(
         name: PublicKey,
-        signer: Signatory,
+        signer: KeyPair,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
@@ -89,7 +91,8 @@ impl Primary {
         let metrics = initialise_metrics(registry);
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
         let mut primary_channel_metrics = metrics.primary_channel_metrics.unwrap();
-        let primary_endpoint_metrics = metrics.primary_endpoint_metrics.unwrap();
+        // TODO Re-hookup metrics once the network migration is complete.
+        let _primary_endpoint_metrics = metrics.primary_endpoint_metrics.unwrap();
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
         let network_metrics = Arc::new(metrics.network_metrics.unwrap());
 
@@ -184,23 +187,37 @@ impl Primary {
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Primary::INADDR_ANY)))
             .unwrap();
-        let primary_receiver_handle = PrimaryReceiverHandler {
+        let primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
             tx_primary_messages: tx_primary_messages.clone(),
             tx_helper_requests,
             tx_payload_availability_responses,
             tx_certificate_responses,
-        }
-        .spawn(
-            address.clone(),
-            parameters.max_concurrent_requests,
-            tx_reconfigure.subscribe(),
-            primary_endpoint_metrics,
-        );
+        });
+
+        let addr = network::multiaddr_to_address(&address).unwrap();
+
+        let routes = anemo::Router::new().add_rpc_service(primary_service);
+        let network = anemo::Network::bind(addr)
+            .server_name("narwhal")
+            .private_key(signer.copy().private().0.to_bytes())
+            .start(routes)
+            .unwrap();
         info!(
             "Primary {} listening to primary messages on {}",
             name.encode_base64(),
             address
         );
+
+        for (pubkey, addresses) in committee.load().others_primaries(&name) {
+            let peer_id = PeerId(pubkey.0.to_bytes());
+            let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
+            let peer_info = PeerInfo {
+                peer_id,
+                affinity: anemo::types::PeerAffinity::High,
+                address: vec![address],
+            };
+            network.known_peers().insert(peer_info);
+        }
 
         // Spawn the network receiver listening to messages from our workers.
         let address = committee
@@ -242,10 +259,7 @@ impl Primary {
         let signature_service = SignatureService::new(signer);
 
         // The `Core` receives and handles headers, votes, and certificates from the other primaries.
-        let core_primary_network = PrimaryNetwork::new(Metrics::new(
-            network_metrics.clone(),
-            "primary_core".to_string(),
-        ));
+        let core_primary_network = PrimaryNetwork::new(network.clone());
         let core_handle = Core::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -324,10 +338,7 @@ impl Primary {
 
         // Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
-        let block_synchronizer_network = PrimaryNetwork::new(Metrics::new(
-            network_metrics.clone(),
-            "block_synchronizer_handler".to_string(),
-        ));
+        let block_synchronizer_network = PrimaryNetwork::new(network.clone());
         let block_synchronizer_handle = BlockSynchronizer::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -345,14 +356,9 @@ impl Primary {
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
         // batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and
         // re-schedule execution of the header once we have all missing data.
-        let header_waiter_primary_network = PrimaryNetwork::new(Metrics::new(
-            network_metrics.clone(),
-            "header_waiter".to_string(),
-        ));
-        let header_waiter_worker_network = PrimaryToWorkerNetwork::new(Metrics::new(
-            network_metrics.clone(),
-            "header_waiter".to_string(),
-        ));
+        let header_waiter_primary_network = PrimaryNetwork::new(network.clone());
+        let header_waiter_worker_network =
+            PrimaryToWorkerNetwork::new(Metrics::new(network_metrics, "header_waiter".to_string()));
         let header_waiter_handle = HeaderWaiter::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -402,8 +408,7 @@ impl Primary {
 
         // The `Helper` is dedicated to reply to certificates & payload availability requests
         // from other primaries.
-        let helper_primary_network =
-            PrimaryNetwork::new(Metrics::new(network_metrics, "primary_helper".to_string()));
+        let helper_primary_network = PrimaryNetwork::new(network);
         let helper_handle = Helper::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -455,7 +460,6 @@ impl Primary {
         );
 
         let mut handles = vec![
-            primary_receiver_handle,
             worker_receiver_handle,
             core_handle,
             payload_receiver_handle,
@@ -486,55 +490,13 @@ struct PrimaryReceiverHandler {
     tx_certificate_responses: Sender<CertificatesResponse>,
 }
 
-impl PrimaryReceiverHandler {
-    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
-        loop {
-            let result = rx_reconfigure.changed().await;
-            result.expect("Committee channel dropped");
-            let message = rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::Shutdown = message {
-                break;
-            }
-        }
-    }
-
-    #[must_use]
-    fn spawn(
-        self,
-        address: Multiaddr,
-        max_concurrent_requests: usize,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-        primary_endpoint_metrics: PrimaryEndpointMetrics,
-    ) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            let mut config = mysten_network::config::Config::new();
-            config.concurrency_limit_per_connection = Some(max_concurrent_requests);
-            info!("PrimaryReceiverHandler has started successfully.");
-            tokio::select! {
-                _result = config
-                    .server_builder_with_metrics(primary_endpoint_metrics)
-                    .add_service(PrimaryToPrimaryServer::new(self))
-                    .bind(&address)
-                    .await
-                    .unwrap()
-                    .serve() => (),
-
-                () = Self::wait_for_shutdown(rx_reconfigure) => ()
-            }
-        })
-    }
-}
-
 #[async_trait]
 impl PrimaryToPrimary for PrimaryReceiverHandler {
     async fn send_message(
         &self,
-        request: Request<BincodeEncodedPayload>,
-    ) -> Result<Response<Empty>, Status> {
-        let message: PrimaryMessage = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        request: anemo::Request<types::PrimaryMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
 
         match message {
             PrimaryMessage::CertificatesRequest(_, _) => self
@@ -577,9 +539,9 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 .await
                 .map_err(|_| DagError::ShuttingDown),
         }
-        .map_err(|e| Status::not_found(e.to_string()))?;
+        .unwrap();
 
-        Ok(Response::new(Empty {}))
+        Ok(anemo::Response::new(()))
     }
 }
 

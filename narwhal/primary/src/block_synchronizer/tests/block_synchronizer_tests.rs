@@ -9,12 +9,11 @@ use crate::{
     primary::PrimaryMessage,
     PrimaryWorkerMessage,
 };
-use bincode::deserialize;
+use anemo::{types::PeerInfo, PeerId};
 use config::BlockSynchronizerParameters;
 use fastcrypto::Hash;
 use futures::{future::try_join_all, stream::FuturesUnordered};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
-use serde::de::DeserializeOwned;
 use std::{
     collections::{HashMap, HashSet},
     time::Duration,
@@ -30,17 +29,21 @@ use tokio::{
 };
 use types::ReconfigureNotification;
 
-use fastcrypto::traits::KeyPair;
+use crypto::KeyPair;
+use fastcrypto::traits::KeyPair as _;
 use tracing::debug;
 use types::{Certificate, CertificateDigest};
 
 #[tokio::test]
 async fn test_successful_headers_synchronization() {
+    telemetry_subscribers::init_for_testing();
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
     let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+
+    let mut primary_keys = keys(None);
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -71,6 +74,28 @@ async fn test_successful_headers_synchronization() {
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    println!("New primary added: {:?}", own_address);
+    let kp = primary_keys.remove(2);
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(kp.private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
+    for (pubkey, addresses) in committee.others_primaries(&name) {
+        let peer_id = PeerId(pubkey.0.to_bytes());
+        let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
+        let peer_info = PeerInfo {
+            peer_id,
+            affinity: anemo::types::PeerAffinity::High,
+            address: vec![address],
+        };
+        network.known_peers().insert(peer_info);
+    }
+
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
         name.clone(),
@@ -80,7 +105,7 @@ async fn test_successful_headers_synchronization() {
         rx_commands,
         rx_certificate_responses,
         rx_payload_availability_responses,
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network.clone()),
         payload_store.clone(),
         certificate_store.clone(),
         BlockSynchronizerParameters::default(),
@@ -91,14 +116,26 @@ async fn test_successful_headers_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = committee
-        .others_primaries(&name)
+    let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = primary_keys
         .into_iter()
-        .map(|primary| {
-            println!("New primary added: {:?}", primary.1.primary_to_primary);
-            primary_listener::<PrimaryMessage>(1, primary.1.primary_to_primary)
+        .map(|kp| {
+            let address = committee.primary(kp.public()).unwrap().primary_to_primary;
+            println!("New primary added: {:?}", address);
+            primary_listener(1, kp, address)
         })
         .collect();
+
+    // Wait for connectivity
+    let (mut events, mut peers) = network.subscribe();
+    while peers.len() != 3 {
+        let event = events.recv().await.unwrap();
+        match event {
+            anemo::types::PeerEvent::NewPeer(peer_id) => peers.push(peer_id),
+            anemo::types::PeerEvent::LostPeer(_, _) => {
+                panic!("we shouldn't see any lost peer events")
+            }
+        }
+    }
 
     // WHEN
     tx_commands
@@ -199,6 +236,8 @@ async fn test_successful_payload_synchronization() {
     // AND the necessary keys
     let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
 
+    let mut primary_keys = keys(None);
+
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_commands) = test_utils::test_channel!(10);
@@ -229,6 +268,28 @@ async fn test_successful_payload_synchronization() {
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    println!("New primary added: {:?}", own_address);
+    let kp = primary_keys.remove(2);
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(kp.private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
+    for (pubkey, addresses) in committee.others_primaries(&name) {
+        let peer_id = PeerId(pubkey.0.to_bytes());
+        let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
+        let peer_info = PeerInfo {
+            peer_id,
+            affinity: anemo::types::PeerAffinity::High,
+            address: vec![address],
+        };
+        network.known_peers().insert(peer_info);
+    }
+
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
         name.clone(),
@@ -238,7 +299,7 @@ async fn test_successful_payload_synchronization() {
         rx_commands,
         rx_certificate_responses,
         rx_payload_availability_responses,
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network.clone()),
         payload_store.clone(),
         certificate_store.clone(),
         BlockSynchronizerParameters::default(),
@@ -249,12 +310,12 @@ async fn test_successful_payload_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let handlers_primaries: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = committee
-        .others_primaries(&name)
+    let handlers_primaries: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = primary_keys
         .into_iter()
-        .map(|primary| {
-            println!("New primary added: {:?}", primary.1.primary_to_primary);
-            primary_listener::<PrimaryMessage>(1, primary.1.primary_to_primary)
+        .map(|kp| {
+            let address = committee.primary(kp.public()).unwrap().primary_to_primary;
+            println!("New primary added: {:?}", address);
+            primary_listener(1, kp, address)
         })
         .collect();
 
@@ -277,6 +338,18 @@ async fn test_successful_payload_synchronization() {
             worker_listener::<PrimaryWorkerMessage>(-1, worker.1.primary_to_worker.clone())
         })
         .collect();
+
+    // Wait for connectivity
+    let (mut events, mut peers) = network.subscribe();
+    while peers.len() != 3 {
+        let event = events.recv().await.unwrap();
+        match event {
+            anemo::types::PeerEvent::NewPeer(peer_id) => peers.push(peer_id),
+            anemo::types::PeerEvent::LostPeer(_, _) => {
+                panic!("we shouldn't see any lost peer events")
+            }
+        }
+    }
 
     // WHEN
     tx_commands
@@ -421,6 +494,17 @@ async fn test_multiple_overlapping_requests() {
 
     let mut block_ids: Vec<CertificateDigest> = certificates.keys().copied().collect();
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    println!("New primary added: {:?}", own_address);
+    let kp = keys(None).remove(2);
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(kp.private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
     let mut block_synchronizer = BlockSynchronizer {
         name,
         committee: committee.clone(),
@@ -432,7 +516,7 @@ async fn test_multiple_overlapping_requests() {
         pending_requests: HashMap::new(),
         map_certificate_responses_senders: HashMap::new(),
         map_payload_availability_responses_senders: HashMap::new(),
-        primary_network: PrimaryNetwork::default(),
+        primary_network: PrimaryNetwork::new(network),
         worker_network: PrimaryToWorkerNetwork::default(),
         payload_store,
         certificate_store,
@@ -535,6 +619,17 @@ async fn test_timeout_while_waiting_for_certificates() {
         })
         .collect();
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    println!("New primary added: {:?}", own_address);
+    let kp = keys(None).remove(2);
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(kp.private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
         name.clone(),
@@ -544,7 +639,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         rx_commands,
         rx_certificate_responses,
         rx_payload_availability_responses,
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
         payload_store.clone(),
         certificate_store.clone(),
         BlockSynchronizerParameters::default(),
@@ -613,6 +708,17 @@ async fn test_reply_with_certificates_already_in_storage() {
     let (_, rx_certificate_responses) = test_utils::test_channel!(10);
     let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let kp = keys(None).remove(2);
+
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(kp.private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
     let synchronizer = BlockSynchronizer {
         name,
         committee: committee.clone(),
@@ -624,7 +730,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
-        primary_network: Default::default(),
+        primary_network: PrimaryNetwork::new(network),
         worker_network: Default::default(),
         certificate_store: certificate_store.clone(),
         payload_store,
@@ -705,6 +811,16 @@ async fn test_reply_with_payload_already_in_storage() {
     let (_, rx_certificate_responses) = test_utils::test_channel!(10);
     let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let kp = keys(None).remove(2);
+
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(kp.private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
     let synchronizer = BlockSynchronizer {
         name,
         committee: committee.clone(),
@@ -716,7 +832,7 @@ async fn test_reply_with_payload_already_in_storage() {
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
-        primary_network: Default::default(),
+        primary_network: PrimaryNetwork::new(network),
         worker_network: Default::default(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -805,6 +921,16 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     let (_, rx_certificate_responses) = test_utils::test_channel!(10);
     let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let kp = keys(None).remove(2);
+
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(kp.private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
     let synchronizer = BlockSynchronizer {
         name: name.clone(),
         committee: committee.clone(),
@@ -816,7 +942,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
-        primary_network: Default::default(),
+        primary_network: PrimaryNetwork::new(network),
         worker_network: Default::default(),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
@@ -889,15 +1015,13 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
 }
 
 #[must_use]
-pub fn primary_listener<T>(
+fn primary_listener(
     num_of_expected_responses: i32,
+    keypair: KeyPair,
     address: multiaddr::Multiaddr,
-) -> JoinHandle<Vec<T>>
-where
-    T: Send + DeserializeOwned + 'static,
-{
+) -> JoinHandle<Vec<PrimaryMessage>> {
     tokio::spawn(async move {
-        let mut recv = PrimaryToPrimaryMockServer::spawn(address);
+        let (mut recv, _network) = PrimaryToPrimaryMockServer::spawn(keypair, address);
         let mut responses = Vec::new();
 
         loop {
@@ -905,22 +1029,15 @@ where
                 .recv()
                 .await
                 .expect("Failed to receive network message");
-            match deserialize::<'_, T>(&message.payload) {
-                Ok(msg) => {
-                    responses.push(msg);
+            responses.push(message);
 
-                    // if -1 is given, then we don't count the number of messages
-                    // but we just rely to receive as many as possible until timeout
-                    // happens when waiting for requests.
-                    if num_of_expected_responses != -1
-                        && responses.len() as i32 == num_of_expected_responses
-                    {
-                        return responses;
-                    }
-                }
-                Err(err) => {
-                    panic!("Error occurred {err}");
-                }
+            // if -1 is given, then we don't count the number of messages
+            // but we just rely to receive as many as possible until timeout
+            // happens when waiting for requests.
+            if num_of_expected_responses != -1
+                && responses.len() as i32 == num_of_expected_responses
+            {
+                return responses;
             }
         }
     })

@@ -3,6 +3,8 @@
 mod narwhal {
     #![allow(clippy::derive_partial_eq_without_eq)]
     tonic::include_proto!("narwhal");
+
+    include!(concat!(env!("OUT_DIR"), "/narwhal.PrimaryToPrimary.rs"));
 }
 
 use std::{array::TryFromSliceError, ops::Deref};

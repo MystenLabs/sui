@@ -616,7 +616,7 @@ impl Affiliated for Certificate {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PrimaryMessage {
     Header(Header),
     Vote(Vote),

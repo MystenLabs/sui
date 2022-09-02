@@ -17,7 +17,7 @@ use futures::{
     stream::FuturesUnordered,
     FutureExt, StreamExt,
 };
-use network::{PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNetwork};
+use network::{PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2};
 use rand::{rngs::SmallRng, SeedableRng};
 use std::{
     collections::{HashMap, HashSet},
@@ -631,15 +631,15 @@ impl BlockSynchronizer {
     async fn broadcast_batch_request(&mut self, message: PrimaryMessage) -> Vec<PublicKey> {
         // Naively now just broadcast the request to all the primaries
 
-        let (primaries_names, primaries_addresses) = self
+        let primaries_names: Vec<_> = self
             .committee
             .others_primaries(&self.name)
             .into_iter()
-            .map(|(name, address)| (name, address.primary_to_primary))
-            .unzip();
+            .map(|(name, _address)| name)
+            .collect();
 
         self.primary_network
-            .unreliable_broadcast(primaries_addresses, &message)
+            .unreliable_broadcast(primaries_names.clone(), &message)
             .await;
 
         primaries_names

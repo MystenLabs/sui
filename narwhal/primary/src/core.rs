@@ -11,7 +11,7 @@ use async_recursion::async_recursion;
 use config::{Committee, Epoch, SharedWorkerCache};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{Hash as _, SignatureService};
-use network::{CancelOnDropHandler, MessageResult, PrimaryNetwork, ReliableNetwork};
+use network::{CancelOnDropHandler, PrimaryNetwork, ReliableNetwork2};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -82,7 +82,7 @@ pub struct Core {
     /// A network sender to send the batches to the other workers.
     network: PrimaryNetwork,
     /// Keeps the cancel handlers of the messages we sent.
-    cancel_handlers: HashMap<Round, Vec<CancelOnDropHandler<MessageResult>>>,
+    cancel_handlers: HashMap<Round, Vec<CancelOnDropHandler<anyhow::Result<anemo::Response<()>>>>>,
     /// Metrics handler
     metrics: Arc<PrimaryMetrics>,
 }
@@ -158,15 +158,15 @@ impl Core {
         self.votes_aggregator = VotesAggregator::new();
 
         // Broadcast the new header in a reliable manner.
-        let addresses = self
+        let peers = self
             .committee
             .others_primaries(&self.name)
             .into_iter()
-            .map(|(_, x)| x.primary_to_primary)
+            .map(|(pubkey, _)| pubkey)
             .collect();
 
         let message = PrimaryMessage::Header(header.clone());
-        let handlers = self.network.broadcast(addresses, &message).await;
+        let handlers = self.network.broadcast(peers, &message).await;
         self.cancel_handlers
             .entry(header.round)
             .or_insert_with(Vec::new)
@@ -285,14 +285,9 @@ impl Core {
                     error!("Failed to process our own vote: {}", e.to_string());
                 }
             } else {
-                let address = self
-                    .committee
-                    .primary(&header.author)
-                    .expect("Author of valid header is not in the committee")
-                    .primary_to_primary;
                 let handler = self
                     .network
-                    .send(address, &PrimaryMessage::Vote(vote))
+                    .send(header.author.clone(), &PrimaryMessage::Vote(vote))
                     .await;
                 self.cancel_handlers
                     .entry(header.round)
@@ -316,14 +311,14 @@ impl Core {
             debug!("Assembled {:?}", certificate);
 
             // Broadcast the certificate.
-            let addresses = self
+            let peers = self
                 .committee
                 .others_primaries(&self.name)
                 .into_iter()
-                .map(|(_, x)| x.primary_to_primary)
+                .map(|(pubkey, _)| pubkey)
                 .collect();
             let message = PrimaryMessage::Certificate(certificate.clone());
-            let handlers = self.network.broadcast(addresses, &message).await;
+            let handlers = self.network.broadcast(peers, &message).await;
             self.cancel_handlers
                 .entry(certificate.round())
                 .or_insert_with(Vec::new)

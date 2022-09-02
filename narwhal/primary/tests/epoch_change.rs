@@ -8,7 +8,7 @@ use network::{CancelOnDropHandler, ReliableNetwork, WorkerToPrimaryNetwork};
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
-use std::{collections::BTreeMap, sync::Arc};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use test_utils::{
     keys, make_authority, pure_committee_from_keys, shared_worker_cache_from_keys, temp_dir,
 };
@@ -302,6 +302,8 @@ async fn test_partial_committee_change() {
 /// The epoch changes but the stake distribution and network addresses stay the same.
 #[tokio::test]
 async fn test_restart_with_new_committee_change() {
+    telemetry_subscribers::init_for_testing();
+
     let parameters = Parameters {
         header_size: 32, // One batch digest
         ..Parameters::default()
@@ -385,6 +387,8 @@ async fn test_restart_with_new_committee_change() {
 
     // Wait for the committee to shutdown.
     join_all(handles).await;
+    // Provide a small amount of time for any background tasks to shutdown
+    tokio::time::sleep(Duration::from_secs(1)).await;
 
     // Move to the next epochs.
     for epoch in 1..=3 {
@@ -465,6 +469,8 @@ async fn test_restart_with_new_committee_change() {
 
         // Wait for the committee to shutdown.
         join_all(handles).await;
+        // Provide a small amount of time for any background tasks to shutdown
+        tokio::time::sleep(Duration::from_secs(1)).await;
     }
 }
 

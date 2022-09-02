@@ -7,11 +7,11 @@ use crate::{
     PrimaryWorkerMessage,
 };
 
-use fastcrypto::Hash;
+use fastcrypto::{traits::KeyPair, Hash};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
-use test_utils::{fixture_header_with_payload, resolve_name_committee_and_worker_cache};
+use test_utils::{fixture_header_with_payload, keys, resolve_name_committee_and_worker_cache};
 use tokio::{sync::watch, time::timeout};
 use types::{BatchDigest, ReconfigureNotification, Round};
 
@@ -28,6 +28,17 @@ async fn successfully_synchronize_batches() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let kp = keys(None).remove(2);
+
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(kp.private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
     let _header_waiter_handle = HeaderWaiter::spawn(
         name.clone(),
         committee.clone(),
@@ -42,7 +53,7 @@ async fn successfully_synchronize_batches() {
         rx_synchronizer,
         tx_core,
         metrics,
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
         PrimaryToWorkerNetwork::default(),
     );
 

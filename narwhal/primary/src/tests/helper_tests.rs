@@ -1,9 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{common::create_db_stores, helper::Helper, primary::PrimaryMessage, PayloadToken};
+use anemo::{types::PeerInfo, PeerId};
 use bincode::Options;
 use config::WorkerId;
-use fastcrypto::Hash;
+use fastcrypto::{traits::KeyPair, Hash};
 use itertools::Itertools;
 use network::PrimaryNetwork;
 use std::{
@@ -19,19 +20,42 @@ use test_utils::{
     CERTIFICATE_ID_BY_ROUND_CF, PAYLOAD_CF,
 };
 use tokio::{sync::watch, time::timeout};
-use tracing_test::traced_test;
 use types::{BatchDigest, Certificate, CertificateDigest, ReconfigureNotification, Round};
 
 #[tokio::test]
 async fn test_process_certificates_stream_mode() {
+    telemetry_subscribers::init_for_testing();
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let key = keys(None).pop().unwrap();
-    let (name, committee, _) = resolve_name_committee_and_worker_cache();
+    let mut primary_keys = keys(None);
+    let author_key = primary_keys.pop().unwrap();
+    let name = author_key.public().clone();
+    let (requestor_name, committee, _) = resolve_name_committee_and_worker_cache();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
+
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(author_key.copy().private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
+    let address = committee
+        .primary(&requestor_name)
+        .unwrap()
+        .primary_to_primary;
+    let address = network::multiaddr_to_address(&address).unwrap();
+    let peer_info = PeerInfo {
+        peer_id: PeerId(requestor_name.0.to_bytes()),
+        affinity: anemo::types::PeerAffinity::High,
+        address: vec![address],
+    };
+    network.known_peers().insert(peer_info);
 
     // AND a helper
     let _helper_handle = Helper::spawn(
@@ -41,7 +65,7 @@ async fn test_process_certificates_stream_mode() {
         payload_store.clone(),
         rx_reconfigure,
         rx_primaries,
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network.clone()),
     );
 
     // AND some mock certificates
@@ -49,7 +73,7 @@ async fn test_process_certificates_stream_mode() {
     for _ in 0..5 {
         let header = fixture_header_builder()
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(&key)
+            .build(&author_key)
             .unwrap();
 
         let certificate = certificate(&header);
@@ -62,25 +86,40 @@ async fn test_process_certificates_stream_mode() {
     }
 
     // AND spin up a mock node
-    let address = committee.primary(&name).unwrap();
-    let mut handler = PrimaryToPrimaryMockServer::spawn(address.primary_to_primary);
+    let address = committee
+        .primary(&requestor_name)
+        .unwrap()
+        .primary_to_primary;
+    let requestor_key = primary_keys.pop().unwrap();
+    let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
+
+    // Wait for connectivity
+    let (mut events, mut peers) = network.subscribe();
+    while peers.len() != 1 {
+        let event = events.recv().await.unwrap();
+        match event {
+            anemo::types::PeerEvent::NewPeer(peer_id) => peers.push(peer_id),
+            anemo::types::PeerEvent::LostPeer(_, _) => {
+                panic!("we shouldn't see any lost peer events")
+            }
+        }
+    }
 
     // WHEN requesting the certificates
     tx_primaries
         .send(PrimaryMessage::CertificatesRequest(
             certificates.keys().copied().collect(),
-            name,
+            requestor_name,
         ))
         .await
         .expect("Couldn't send message");
 
     let mut digests = HashSet::new();
     for _ in 0..certificates.len() {
-        let received = timeout(Duration::from_millis(4_000), handler.recv())
+        let message = timeout(Duration::from_millis(4_000), handler.recv())
             .await
             .unwrap()
             .unwrap();
-        let message: PrimaryMessage = received.deserialize().unwrap();
         let cert = match message {
             PrimaryMessage::Certificate(certificate) => certificate,
             msg => {
@@ -102,12 +141,35 @@ async fn test_process_certificates_stream_mode() {
 async fn test_process_certificates_batch_mode() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let key = keys(None).pop().unwrap();
-    let (name, committee, _) = resolve_name_committee_and_worker_cache();
+    let mut primary_keys = keys(None);
+    let author_key = primary_keys.pop().unwrap();
+    let name = author_key.public().clone();
+    let (requestor_name, committee, _) = resolve_name_committee_and_worker_cache();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
+
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(author_key.copy().private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
+    let address = committee
+        .primary(&requestor_name)
+        .unwrap()
+        .primary_to_primary;
+    let address = network::multiaddr_to_address(&address).unwrap();
+    let peer_info = PeerInfo {
+        peer_id: PeerId(requestor_name.0.to_bytes()),
+        affinity: anemo::types::PeerAffinity::High,
+        address: vec![address],
+    };
+    network.known_peers().insert(peer_info);
 
     // AND a helper
     let _helper_handle = Helper::spawn(
@@ -117,7 +179,7 @@ async fn test_process_certificates_batch_mode() {
         payload_store.clone(),
         rx_reconfigure,
         rx_primaries,
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network.clone()),
     );
 
     // AND some mock certificates
@@ -127,7 +189,7 @@ async fn test_process_certificates_batch_mode() {
     for i in 0..10 {
         let header = fixture_header_builder()
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(&key)
+            .build(&author_key)
             .unwrap();
 
         let certificate = certificate(&header);
@@ -147,23 +209,38 @@ async fn test_process_certificates_batch_mode() {
     }
 
     // AND spin up a mock node
-    let address = committee.primary(&name).unwrap();
-    let mut handler = PrimaryToPrimaryMockServer::spawn(address.primary_to_primary);
+    let address = committee
+        .primary(&requestor_name)
+        .unwrap()
+        .primary_to_primary;
+    let requestor_key = primary_keys.pop().unwrap();
+    let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
+
+    // Wait for connectivity
+    let (mut events, mut peers) = network.subscribe();
+    while peers.len() != 1 {
+        let event = events.recv().await.unwrap();
+        match event {
+            anemo::types::PeerEvent::NewPeer(peer_id) => peers.push(peer_id),
+            anemo::types::PeerEvent::LostPeer(_, _) => {
+                panic!("we shouldn't see any lost peer events")
+            }
+        }
+    }
 
     // WHEN requesting the certificates in batch mode
     tx_primaries
         .send(PrimaryMessage::CertificatesBatchRequest {
             certificate_ids: certificates.keys().copied().collect(),
-            requestor: name,
+            requestor: requestor_name,
         })
         .await
         .expect("Couldn't send message");
 
-    let received = timeout(Duration::from_millis(4_000), handler.recv())
+    let message = timeout(Duration::from_millis(4_000), handler.recv())
         .await
         .unwrap()
         .unwrap();
-    let message: PrimaryMessage = received.deserialize().unwrap();
     let result_certificates = match message {
         PrimaryMessage::CertificatesBatchResponse { certificates, .. } => certificates,
         msg => {
@@ -199,12 +276,35 @@ async fn test_process_certificates_batch_mode() {
 async fn test_process_payload_availability_success() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let key = keys(None).pop().unwrap();
-    let (name, committee, _) = resolve_name_committee_and_worker_cache();
+    let mut primary_keys = keys(None);
+    let author_key = primary_keys.pop().unwrap();
+    let name = author_key.public().clone();
+    let (requestor_name, committee, _) = resolve_name_committee_and_worker_cache();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
+
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(author_key.copy().private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
+    let address = committee
+        .primary(&requestor_name)
+        .unwrap()
+        .primary_to_primary;
+    let address = network::multiaddr_to_address(&address).unwrap();
+    let peer_info = PeerInfo {
+        peer_id: PeerId(requestor_name.0.to_bytes()),
+        affinity: anemo::types::PeerAffinity::High,
+        address: vec![address],
+    };
+    network.known_peers().insert(peer_info);
 
     // AND a helper
     let _helper_handle = Helper::spawn(
@@ -214,7 +314,7 @@ async fn test_process_payload_availability_success() {
         payload_store.clone(),
         rx_reconfigure,
         rx_primaries,
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network.clone()),
     );
 
     // AND some mock certificates
@@ -224,7 +324,7 @@ async fn test_process_payload_availability_success() {
     for i in 0..10 {
         let header = fixture_header_builder()
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(&key)
+            .build(&author_key)
             .unwrap();
 
         let certificate = certificate(&header);
@@ -248,23 +348,38 @@ async fn test_process_payload_availability_success() {
     }
 
     // AND spin up a mock node
-    let address = committee.primary(&name).unwrap();
-    let mut handler = PrimaryToPrimaryMockServer::spawn(address.primary_to_primary);
+    let address = committee
+        .primary(&requestor_name)
+        .unwrap()
+        .primary_to_primary;
+    let requestor_key = primary_keys.pop().unwrap();
+    let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
+
+    // Wait for connectivity
+    let (mut events, mut peers) = network.subscribe();
+    while peers.len() != 1 {
+        let event = events.recv().await.unwrap();
+        match event {
+            anemo::types::PeerEvent::NewPeer(peer_id) => peers.push(peer_id),
+            anemo::types::PeerEvent::LostPeer(_, _) => {
+                panic!("we shouldn't see any lost peer events")
+            }
+        }
+    }
 
     // WHEN requesting the payload availability for all the certificates
     tx_primaries
         .send(PrimaryMessage::PayloadAvailabilityRequest {
             certificate_ids: certificates.keys().copied().collect(),
-            requestor: name,
+            requestor: requestor_name,
         })
         .await
         .expect("Couldn't send message");
 
-    let received = timeout(Duration::from_millis(4_000), handler.recv())
+    let message = timeout(Duration::from_millis(4_000), handler.recv())
         .await
         .unwrap()
         .unwrap();
-    let message: PrimaryMessage = received.deserialize().unwrap();
     let payload_availability = match message {
         PrimaryMessage::PayloadAvailabilityResponse {
             payload_availability,
@@ -299,7 +414,6 @@ async fn test_process_payload_availability_success() {
 }
 
 #[tokio::test]
-#[traced_test]
 async fn test_process_payload_availability_when_failures() {
     // GIVEN
     // We initialise the test stores manually to allow us
@@ -320,12 +434,35 @@ async fn test_process_payload_availability_when_failures() {
     let payload_store: Store<(types::BatchDigest, WorkerId), PayloadToken> =
         Store::new(payload_map);
 
-    let key = keys(None).pop().unwrap();
-    let (name, committee, _) = resolve_name_committee_and_worker_cache();
+    let mut primary_keys = keys(None);
+    let author_key = primary_keys.pop().unwrap();
+    let name = author_key.public().clone();
+    let (requestor_name, committee, _) = resolve_name_committee_and_worker_cache();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
+
+    let own_address =
+        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
+            .unwrap();
+    let network = anemo::Network::bind(own_address)
+        .server_name("narwhal")
+        .private_key(author_key.copy().private().0.to_bytes())
+        .start(anemo::Router::new())
+        .unwrap();
+
+    let address = committee
+        .primary(&requestor_name)
+        .unwrap()
+        .primary_to_primary;
+    let address = network::multiaddr_to_address(&address).unwrap();
+    let peer_info = PeerInfo {
+        peer_id: PeerId(requestor_name.0.to_bytes()),
+        affinity: anemo::types::PeerAffinity::High,
+        address: vec![address],
+    };
+    network.known_peers().insert(peer_info);
 
     // AND a helper
     let _helper_handle = Helper::spawn(
@@ -335,7 +472,7 @@ async fn test_process_payload_availability_when_failures() {
         payload_store.clone(),
         rx_reconfigure,
         rx_primaries,
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network.clone()),
     );
 
     // AND some mock certificates
@@ -343,7 +480,7 @@ async fn test_process_payload_availability_when_failures() {
     for _ in 0..10 {
         let header = fixture_header_builder()
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(&key)
+            .build(&author_key)
             .unwrap();
 
         let certificate = certificate(&header);
@@ -375,23 +512,38 @@ async fn test_process_payload_availability_when_failures() {
     }
 
     // AND spin up a mock node
-    let address = committee.primary(&name).unwrap();
-    let mut handler = PrimaryToPrimaryMockServer::spawn(address.primary_to_primary);
+    let address = committee
+        .primary(&requestor_name)
+        .unwrap()
+        .primary_to_primary;
+    let requestor_key = primary_keys.pop().unwrap();
+    let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
+
+    // Wait for connectivity
+    let (mut events, mut peers) = network.subscribe();
+    while peers.len() != 1 {
+        let event = events.recv().await.unwrap();
+        match event {
+            anemo::types::PeerEvent::NewPeer(peer_id) => peers.push(peer_id),
+            anemo::types::PeerEvent::LostPeer(_, _) => {
+                panic!("we shouldn't see any lost peer events")
+            }
+        }
+    }
 
     // WHEN requesting the payload availability for all the certificates
     tx_primaries
         .send(PrimaryMessage::PayloadAvailabilityRequest {
             certificate_ids,
-            requestor: name,
+            requestor: requestor_name,
         })
         .await
         .expect("Couldn't send message");
 
-    let received = timeout(Duration::from_millis(4_000), handler.recv())
+    let message = timeout(Duration::from_millis(4_000), handler.recv())
         .await
         .unwrap()
         .unwrap();
-    let message: PrimaryMessage = received.deserialize().unwrap();
     let payload_availability = match message {
         PrimaryMessage::PayloadAvailabilityResponse {
             payload_availability,
@@ -412,7 +564,4 @@ async fn test_process_payload_availability_when_failures() {
             assert_eq!(found, 10, "All payloads should be unavailable");
         }
     }
-
-    // And ensure that log files include the error message
-    assert!(logs_contain("Storage failure"));
 }

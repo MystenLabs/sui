@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use async_trait::async_trait;
+use crypto::PublicKey;
 use multiaddr::Multiaddr;
 use rand::prelude::{SliceRandom, SmallRng};
 use serde::Serialize;
@@ -99,6 +100,83 @@ pub trait ReliableNetwork: BaseNetwork {
         let mut handlers = Vec::new();
         for address in addresses {
             let handle = self.send_message(address, message.clone()).await;
+            handlers.push(handle);
+        }
+        handlers
+    }
+}
+
+#[async_trait]
+pub trait UnreliableNetwork2<Message: Clone + Send + Sync> {
+    async fn unreliable_send(&mut self, peer: PublicKey, message: &Message) -> JoinHandle<()>;
+
+    /// Broadcasts a message to all `peers` passed as an argument.
+    /// The attempts to send individual messages are best effort and will not be retried.
+    async fn unreliable_broadcast(
+        &mut self,
+        peers: Vec<PublicKey>,
+        message: &Message,
+    ) -> Vec<JoinHandle<()>> {
+        let mut handlers = Vec::new();
+        for peer in peers {
+            let handle = { self.unreliable_send(peer, message).await };
+            handlers.push(handle);
+        }
+        handlers
+    }
+}
+
+pub trait Lucky {
+    fn rng(&mut self) -> &mut SmallRng;
+}
+
+#[async_trait]
+pub trait LuckyNetwork2<Message> {
+    /// Pick a few addresses at random (specified by `nodes`) and try (best-effort) to send the
+    /// message only to them. This is useful to pick nodes with whom to sync.
+    async fn lucky_broadcast(
+        &mut self,
+        mut peers: Vec<PublicKey>,
+        message: &Message,
+        num_nodes: usize,
+    ) -> Vec<JoinHandle<()>>;
+}
+
+#[async_trait]
+impl<T, M> LuckyNetwork2<M> for T
+where
+    M: Clone + Send + Sync,
+    T: UnreliableNetwork2<M> + Send,
+    T: Lucky,
+{
+    async fn lucky_broadcast(
+        &mut self,
+        mut peers: Vec<PublicKey>,
+        message: &M,
+        nodes: usize,
+    ) -> Vec<JoinHandle<()>> {
+        peers.shuffle(self.rng());
+        peers.truncate(nodes);
+        self.unreliable_broadcast(peers, message).await
+    }
+}
+
+#[async_trait]
+pub trait ReliableNetwork2<Message: Clone + Send + Sync> {
+    async fn send(
+        &mut self,
+        peer: PublicKey,
+        message: &Message,
+    ) -> CancelOnDropHandler<anyhow::Result<anemo::Response<()>>>;
+
+    async fn broadcast(
+        &mut self,
+        peers: Vec<PublicKey>,
+        message: &Message,
+    ) -> Vec<CancelOnDropHandler<anyhow::Result<anemo::Response<()>>>> {
+        let mut handlers = Vec::new();
+        for peer in peers {
+            let handle = self.send(peer, message).await;
             handlers.push(handle);
         }
         handlers

@@ -25,6 +25,7 @@ async fn process_certificate_missing_parents_in_reverse() {
     let committee = pure_committee_from_keys(&k);
     let worker_cache = shared_worker_cache_from_keys(&k);
     let kp = k.pop().unwrap();
+    let network_key = kp.copy().private().0.to_bytes();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -65,6 +66,12 @@ async fn process_certificate_missing_parents_in_reverse() {
         None,
     );
 
+    let network = anemo::Network::bind("localhost:0")
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let gc_depth: Round = 50;
 
@@ -83,7 +90,7 @@ async fn process_certificate_missing_parents_in_reverse() {
         rx_sync_headers,
         tx_headers_loopback,
         metrics.clone(),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network.clone()),
         PrimaryToWorkerNetwork::default(),
     );
 
@@ -118,7 +125,7 @@ async fn process_certificate_missing_parents_in_reverse() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
     );
 
     // Generate headers in successive rounds
@@ -172,6 +179,7 @@ async fn process_certificate_check_gc_fires() {
     let committee = pure_committee_from_keys(&k);
     let worker_cache = shared_worker_cache_from_keys(&k);
     let kp = k.pop().unwrap();
+    let network_key = kp.copy().private().0.to_bytes();
     let name = kp.public().clone();
     let signature_service = SignatureService::new(kp);
 
@@ -212,6 +220,12 @@ async fn process_certificate_check_gc_fires() {
         None,
     );
 
+    let network = anemo::Network::bind("localhost:0")
+        .server_name("narwhal")
+        .private_key(network_key)
+        .start(anemo::Router::new())
+        .unwrap();
+
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let gc_depth: Round = 50;
 
@@ -230,7 +244,7 @@ async fn process_certificate_check_gc_fires() {
         rx_sync_headers,
         tx_headers_loopback,
         metrics.clone(),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network.clone()),
         PrimaryToWorkerNetwork::default(),
     );
 
@@ -265,7 +279,7 @@ async fn process_certificate_check_gc_fires() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::default(),
+        PrimaryNetwork::new(network),
     );
 
     // Generate headers in successive rounds

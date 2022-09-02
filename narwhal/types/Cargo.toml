@@ -35,6 +35,7 @@ config = { path = "../config" }
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b" }
 crypto = { path = "../crypto"}
 dag = { path = "../dag" }
+anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "6278d0fa78147a49ff2cb9dd2e45e763886be0a0" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
@@ -47,6 +48,7 @@ test_utils = { path = "../test_utils" }
 prost-build = "0.10.4"
 rustversion = "1.0.9"
 tonic-build = { version = "0.7.2", features = [ "prost", "transport" ] }
+anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "6278d0fa78147a49ff2cb9dd2e45e763886be0a0" }
 
 [features]
 default = []
