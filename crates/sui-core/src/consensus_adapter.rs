@@ -250,23 +250,6 @@ impl ConsensusAdapter {
         true
     }
 
-    fn serialize(authority: &AuthorityName, certificate: CertifiedTransaction) -> Vec<u8> {
-        let mut hasher = DefaultHasher::new();
-        certificate.digest().hash(&mut hasher);
-        authority.hash(&mut hasher);
-        let tracking_id = hasher.finish();
-        debug!(
-            ?tracking_id,
-            tx_digest=?certificate.digest(),
-            "Certified transaction consensus message serialized"
-        );
-        let message = ConsensusTransaction::UserTransaction(Box::new(certificate));
-        let mut bytes =
-            bincode::serialize(&message).expect("Serializing consensus transaction cannot fail");
-        bytes.extend(tracking_id.to_be_bytes());
-        bytes
-    }
-
     /// Submit a transaction to consensus, wait for its processing, and notify the caller.
     // Use .inspect when its stable.
     #[allow(clippy::option_map_unit_fn)]
@@ -280,7 +263,17 @@ impl ConsensusAdapter {
 
         // Serialize the certificate in a way that is understandable to consensus (i.e., using
         // bincode) and it certificate to consensus.
-        let serialized = Self::serialize(authority, certificate.clone());
+        let transaction =
+            ConsensusTransaction::new_certificate_message(authority, certificate.clone());
+        let tracking_id = transaction.get_tracking_id();
+        let tx_digest = certificate.digest();
+        debug!(
+            ?tracking_id,
+            ?tx_digest,
+            "Certified transaction consensus message created"
+        );
+        let serialized = bincode::serialize(&transaction)
+            .expect("Serializing consensus transaction cannot fail");
         let bytes = Bytes::from(serialized.clone());
 
         // Notify the consensus listener that we are expecting to process this certificate.
@@ -412,7 +405,9 @@ impl ConsensusListener {
         let mut hasher = DefaultHasher::new();
         let len = serialized.len();
         if len > 8 {
-            (&serialized[..(len - 8)]).hash(&mut hasher);
+            // The first 8 bytes are the tracking id, and we don't want to hash that so that
+            // certificates submitted by different validators are considered the same message.
+            (&serialized[8..]).hash(&mut hasher);
         } else {
             // If somehow the length is <= 8 (which is invalid), we just don't care and hash
             // the whole thing.
@@ -601,29 +596,6 @@ impl CheckpointConsensusAdapter {
         (outcome, conensus_latency, deliver)
     }
 
-    fn serialize(fragment: CheckpointFragment) -> Vec<u8> {
-        let mut hasher = DefaultHasher::new();
-        let cp_seq = fragment.proposer_sequence_number();
-        let proposer = fragment.proposer.auth_signature.authority;
-        let other = fragment.other.auth_signature.authority;
-        cp_seq.hash(&mut hasher);
-        proposer.hash(&mut hasher);
-        other.hash(&mut hasher);
-        let tracking_id = hasher.finish();
-        debug!(
-            ?tracking_id,
-            ?cp_seq,
-            ?proposer,
-            ?other,
-            "Checkpoint fragment consensus message serialized"
-        );
-        let message = ConsensusTransaction::Checkpoint(Box::new(fragment));
-        let mut bytes =
-            bincode::serialize(&message).expect("Serializing consensus transaction cannot fail");
-        bytes.extend(tracking_id.to_be_bytes());
-        bytes
-    }
-
     /// Main loop receiving checkpoint fragments to reliably submit to consensus.
     // Use .inspect when its stable.
     #[allow(clippy::option_map_unit_fn)]
@@ -685,7 +657,19 @@ impl CheckpointConsensusAdapter {
                     }
 
                     // Add the fragment to the buffer.
-                    let serialized = Self::serialize(fragment);
+                    let cp_seq = *fragment.proposer_sequence_number();
+                    let proposer = fragment.proposer.auth_signature.authority;
+                    let other = fragment.other.auth_signature.authority;
+                    let transaction = ConsensusTransaction::new_checkpoint_message(fragment);
+                    let tracking_id = transaction.get_tracking_id();
+                    debug!(
+                        ?tracking_id,
+                        ?cp_seq,
+                        "Checkpoint fragment consensus message created. Proposer: {}, Other: {}",
+                        proposer,
+                        other,
+                    );
+                    let serialized = bincode::serialize(&transaction).expect("Serialize consensus transaction cannot fail");
                     self.buffer.push_front((serialized, sequence_number));
                 },
 

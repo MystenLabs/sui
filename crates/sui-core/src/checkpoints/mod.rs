@@ -512,14 +512,6 @@ impl CheckpointStore {
         fragment: CheckpointFragment,
         handle_pending_cert: impl PendCertificateForExecution,
     ) -> SuiResult {
-        let fragment_seq = fragment.proposer.summary.sequence_number;
-        debug!(
-            execution_index=?seq,
-            cp_seq=?fragment_seq,
-            "Fragment received from consensus. Proposer: {}, Other: {}",
-            fragment.proposer.authority(),
-            fragment.other.authority(),
-        );
         // Ensure we have not already processed this fragment.
         if let Some((last_seq, _)) = self.tables.fragments.iter().skip_to_last().next() {
             if seq <= last_seq {
