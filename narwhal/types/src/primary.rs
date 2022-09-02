@@ -281,6 +281,25 @@ impl Vote {
         Self { signature, ..vote }
     }
 
+    pub fn new_with_signer<S>(header: &Header, author: &PublicKey, signer: &S) -> Self
+    where
+        S: Signer<Signature>,
+    {
+        let vote = Self {
+            id: header.id,
+            round: header.round,
+            epoch: header.epoch,
+            origin: header.author.clone(),
+            author: author.clone(),
+            signature: Signature::default(),
+        };
+
+        let vote_digest: Digest = vote.digest().into();
+        let signature = signer.sign(vote_digest.as_ref());
+
+        Self { signature, ..vote }
+    }
+
     pub fn verify(&self, committee: &Committee) -> DagResult<()> {
         // Ensure the header is from the correct epoch.
         ensure!(
