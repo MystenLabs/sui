@@ -34,7 +34,7 @@ import {
   SubscriptionId,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
-import { getWebsocketUrl, WebsocketClient } from './websocket-client';
+import { getWebsocketUrl, WebsocketClient } from '../rpc/websocket-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
