@@ -565,40 +565,6 @@ pub async fn send_and_confirm_transaction_with_shared(
     authority.handle_certificate(certificate).await
 }
 
-pub async fn send_and_confirm_shared_transaction(
-    authority: &AuthorityState,
-    transaction: Transaction,
-) -> Result<TransactionInfoResponse, SuiError> {
-    // Make the initial request
-    let response = authority.handle_transaction(transaction.clone()).await?;
-    let vote = response.signed_transaction.unwrap();
-
-    // Collect signatures from a quorum of authorities
-    let committee = authority.committee.load();
-    let mut builder = SignatureAggregator::try_new(transaction, &committee).unwrap();
-    let certificate = builder
-        .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
-        .unwrap()
-        .unwrap();
-
-    authority
-        .handle_consensus_transaction(
-            // TODO [2533]: use this once integrating Narwhal reconfiguration
-            &narwhal_consensus::ConsensusOutput {
-                certificate: narwhal_types::Certificate::default(),
-                consensus_index: narwhal_types::SequenceNumber::default(),
-            },
-            /* last_consensus_index */ ExecutionIndices::default(),
-            ConsensusTransaction::UserTransaction(Box::new(certificate.clone())),
-        )
-        .await
-        .unwrap();
-
-    // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
-    // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
-    authority.handle_certificate(certificate).await
-}
-
 /// Create a `CompiledModule` that depends on `m`
 fn make_dependent_module(m: &CompiledModule) -> CompiledModule {
     let mut dependent_module = file_format::empty_module();

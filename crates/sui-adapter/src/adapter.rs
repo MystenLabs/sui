@@ -1213,17 +1213,15 @@ fn inner_param_type<'a>(
             mutable_ref_objects.insert(idx as LocalIndex, object_id);
             Ok(&**inner_t)
         }
-        SignatureToken::Vector(inner_t) => {
-            return inner_param_type(
-                object,
-                object_id,
-                idx,
-                inner_t,
-                arg_type,
-                mutable_ref_objects,
-                by_value_objects,
-            );
-        }
+        SignatureToken::Vector(inner_t) => inner_param_type(
+            object,
+            object_id,
+            idx,
+            inner_t,
+            arg_type,
+            mutable_ref_objects,
+            by_value_objects,
+        ),
         t @ SignatureToken::Struct(_)
         | t @ SignatureToken::StructInstantiation(_, _)
         | t @ SignatureToken::TypeParameter(_) => {
@@ -1246,15 +1244,13 @@ fn inner_param_type<'a>(
             by_value_objects.insert(object_id);
             Ok(t)
         }
-        t => {
-            return Err(ExecutionError::new_with_source(
-                ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
-                format!(
-                    "Found object argument {}, but function expects {:?}",
-                    arg_type, t
-                ),
-            ));
-        }
+        t => Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
+            format!(
+                "Found object argument {}, but function expects {:?}",
+                arg_type, t
+            ),
+        )),
     }
 }
 
