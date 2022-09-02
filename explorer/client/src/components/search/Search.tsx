@@ -69,9 +69,13 @@ function Search() {
         [navigate]
     );
 
-    const handleSubmit = useCallback(() => {
-        navigateToPage(selectedResult);
-    }, [selectedResult, navigateToPage]);
+    const handleClickSubmit = useCallback(() => {
+        if (selectedResult) {
+            navigateToPage(selectedResult);
+        } else {
+            navigateToPage(resultList[0]);
+        }
+    }, [selectedResult, navigateToPage, resultList]);
 
     useEffect(() => {
         navigateToPage(selectedResult);
@@ -102,7 +106,7 @@ function Search() {
                 id="searchBtn"
                 type="submit"
                 className={styles.searchbtn}
-                onClick={handleSubmit}
+                onClick={handleClickSubmit}
             >
                 <SearchIcon className={styles.searchicon} />
             </button>
