@@ -991,7 +991,7 @@ pub fn resolve_and_type_check(
         .map(|(idx, arg)| {
             let param_type = &parameters[idx];
             let idx = idx as LocalIndex;
-            let (object_arg, arg_type, param_type) = match arg {
+            let object_arg = match arg {
                 CallArg::Pure(arg) => {
                     if !is_primitive(view, type_args, param_type) {
                         let msg = format!(
@@ -1009,26 +1009,34 @@ pub fn resolve_and_type_check(
                     }
                     return Ok(arg);
                 }
-                CallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => serialize_object(
-                    InputObjectKind::ImmOrOwnedMoveObject(ref_),
-                    idx,
-                    param_type,
-                    objects,
-                    &mut object_data,
-                    &mut mutable_ref_objects,
-                    &mut by_value_objects,
-                    &mut object_type_map,
-                )?,
-                CallArg::Object(ObjectArg::SharedObject(id)) => serialize_object(
-                    InputObjectKind::SharedMoveObject(id),
-                    idx,
-                    param_type,
-                    objects,
-                    &mut object_data,
-                    &mut mutable_ref_objects,
-                    &mut by_value_objects,
-                    &mut object_type_map,
-                )?,
+                CallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
+                    let (o, arg_type, param_type) = serialize_object(
+                        InputObjectKind::ImmOrOwnedMoveObject(ref_),
+                        idx,
+                        param_type,
+                        objects,
+                        &mut object_data,
+                        &mut mutable_ref_objects,
+                        &mut by_value_objects,
+                        &mut object_type_map,
+                    )?;
+                    type_check_struct(view, type_args, idx, arg_type, param_type)?;
+                    o
+                }
+                CallArg::Object(ObjectArg::SharedObject(id)) => {
+                    let (o, arg_type, param_type) = serialize_object(
+                        InputObjectKind::SharedMoveObject(id),
+                        idx,
+                        param_type,
+                        objects,
+                        &mut object_data,
+                        &mut mutable_ref_objects,
+                        &mut by_value_objects,
+                        &mut object_type_map,
+                    )?;
+                    type_check_struct(view, type_args, idx, arg_type, param_type)?;
+                    o
+                }
                 CallArg::ObjVec(vec) => {
                     if vec.is_empty() {
                         // bcs representation of the empty vector
@@ -1038,8 +1046,6 @@ pub fn resolve_and_type_check(
                     // all (already serialized) object content data
                     let mut res = vec![];
                     leb128::write::unsigned(&mut res, vec.len() as u64).unwrap();
-                    let mut element_type = None;
-                    let mut inner_vec_type = None;
                     for arg in vec {
                         let object_kind = match arg {
                             ObjectArg::ImmOrOwnedObject(ref_) => {
@@ -1057,15 +1063,13 @@ pub fn resolve_and_type_check(
                             &mut by_value_objects,
                             &mut object_type_map,
                         )?;
+                        type_check_struct(view, type_args, idx, arg_type, param_type)?;
                         res.extend(o);
-                        element_type = Some(arg_type);
-                        inner_vec_type = Some(param_type);
                     }
-                    (res, element_type.unwrap(), inner_vec_type.unwrap())
+                    res
                 }
             };
 
-            type_check_struct(view, type_args, idx, arg_type, param_type)?;
             Ok(object_arg)
         })
         .collect::<Result<Vec<_>, _>>()?;

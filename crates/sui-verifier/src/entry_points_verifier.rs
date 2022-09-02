@@ -182,14 +182,10 @@ fn verify_param_type(
     function_type_args: &[AbilitySet],
     param: &SignatureToken,
 ) -> Result<(), String> {
-    if is_primitive(view, function_type_args, param) {
-        return Ok(());
-    }
-
-    if is_object(view, function_type_args, param)? {
-        return Ok(());
-    }
-    if is_object_vector(view, function_type_args, param)? {
+    if is_primitive(view, function_type_args, param)
+        || is_object(view, function_type_args, param)?
+        || is_object_vector(view, function_type_args, param)?
+    {
         Ok(())
     } else {
         Err(format!(
