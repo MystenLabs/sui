@@ -3922,6 +3922,39 @@
           }
         ]
       },
+      "Pay": {
+        "type": "object",
+        "required": [
+          "amounts",
+          "coins",
+          "recipients"
+        ],
+        "properties": {
+          "amounts": {
+            "description": "The amounts each recipient will receive. Must be the same length as amounts",
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0.0
+            }
+          },
+          "coins": {
+            "description": "The coins to be used for payment",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ObjectRef"
+            }
+          },
+          "recipients": {
+            "description": "The addresses that will receive payment",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SuiAddress"
+            }
+          }
+        }
+      },
       "RPCTransactionRequestParams": {
         "oneOf": [
           {
@@ -4620,6 +4653,19 @@
             "properties": {
               "TransferObject": {
                 "$ref": "#/components/schemas/TransferObject"
+              }
+            },
+            "additionalProperties": false
+          },
+          {
+            "description": "Pay one or more recipients from a set of input coins",
+            "type": "object",
+            "required": [
+              "Pay"
+            ],
+            "properties": {
+              "Pay": {
+                "$ref": "#/components/schemas/Pay"
               }
             },
             "additionalProperties": false

@@ -148,35 +148,43 @@ ExecutionFailureStatus:
     9:
       InvalidCoinObject: UNIT
     10:
-      NonEntryFunctionInvoked: UNIT
+      EmptyInputCoins: UNIT
     11:
-      EntryTypeArityMismatch: UNIT
+      EmptyRecipients: UNIT
     12:
+      RecipientsAmountsArityMismatch: UNIT
+    13:
+      InsufficientBalance: UNIT
+    14:
+      NonEntryFunctionInvoked: UNIT
+    15:
+      EntryTypeArityMismatch: UNIT
+    16:
       EntryArgumentError:
         NEWTYPE:
           TYPENAME: EntryArgumentError
-    13:
+    17:
       CircularObjectOwnership:
         NEWTYPE:
           TYPENAME: CircularObjectOwnership
-    14:
+    18:
       MissingObjectOwner:
         NEWTYPE:
           TYPENAME: MissingObjectOwner
-    15:
+    19:
       InvalidSharedChildUse:
         NEWTYPE:
           TYPENAME: InvalidSharedChildUse
-    16:
+    20:
       InvalidSharedByValue:
         NEWTYPE:
           TYPENAME: InvalidSharedByValue
-    17:
+    21:
       TooManyChildObjects:
         STRUCT:
           - object:
               TYPENAME: ObjectID
-    18:
+    22:
       InvalidParentDeletion:
         STRUCT:
           - parent:
@@ -184,29 +192,29 @@ ExecutionFailureStatus:
           - kind:
               OPTION:
                 TYPENAME: DeleteKind
-    19:
+    23:
       InvalidParentFreezing:
         STRUCT:
           - parent:
               TYPENAME: ObjectID
-    20:
-      PublishErrorEmptyPackage: UNIT
-    21:
-      PublishErrorNonZeroAddress: UNIT
-    22:
-      PublishErrorDuplicateModule: UNIT
-    23:
-      SuiMoveVerificationError: UNIT
     24:
-      MovePrimitiveRuntimeError: UNIT
+      PublishErrorEmptyPackage: UNIT
     25:
+      PublishErrorNonZeroAddress: UNIT
+    26:
+      PublishErrorDuplicateModule: UNIT
+    27:
+      SuiMoveVerificationError: UNIT
+    28:
+      MovePrimitiveRuntimeError: UNIT
+    29:
       MoveAbort:
         TUPLE:
           - TYPENAME: ModuleId
           - U64
-    26:
+    30:
       VMVerificationOrDeserializationError: UNIT
-    27:
+    31:
       VMInvariantViolation: UNIT
 ExecutionStatus:
   ENUM:
@@ -380,6 +388,19 @@ Owner:
       Shared: UNIT
     3:
       Immutable: UNIT
+Pay:
+  STRUCT:
+    - coins:
+        SEQ:
+          TUPLE:
+            - TYPENAME: ObjectID
+            - TYPENAME: SequenceNumber
+            - TYPENAME: ObjectDigest
+    - recipients:
+        SEQ:
+          TYPENAME: SuiAddress
+    - amounts:
+        SEQ: U64
 SequenceNumber:
   NEWTYPESTRUCT: U64
 SingleTransactionKind:
@@ -401,6 +422,10 @@ SingleTransactionKind:
         NEWTYPE:
           TYPENAME: TransferSui
     4:
+      Pay:
+        NEWTYPE:
+          TYPENAME: Pay
+    5:
       ChangeEpoch:
         NEWTYPE:
           TYPENAME: ChangeEpoch
