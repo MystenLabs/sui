@@ -34,7 +34,7 @@ import {
   SubscriptionId,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
-import { getWebsocketUrl, WebsocketClient } from '../rpc/websocket-client';
+import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
@@ -57,12 +57,13 @@ export class JsonRpcProvider extends Provider {
    */
   constructor(
     public endpoint: string,
-    public skipDataValidation: boolean = false
+    public skipDataValidation: boolean = false,
+    public socketOptions: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
   ) {
     super();
 
     this.client = new JsonRpcClient(endpoint);
-    this.wsClient = new WebsocketClient(getWebsocketUrl(endpoint), skipDataValidation)
+    this.wsClient = new WebsocketClient(endpoint, skipDataValidation, socketOptions);
   }
 
   // Move info

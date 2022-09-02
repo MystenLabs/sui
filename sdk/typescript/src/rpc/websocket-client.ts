@@ -56,7 +56,7 @@ export type WebsocketClientOptions = {
   reconnectInterval: number
 }
 
-const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
+export const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
   connectTimeout: 15000,
   callTimeout: 30000,
   reconnectInterval: 3000
@@ -73,14 +73,14 @@ export class WebsocketClient {
 
   protected eventSubscriptions: Map<SubscriptionId, SubscriptionData> = new Map();
 
-  public options: WebsocketClientOptions
-
   constructor(
     public endpoint: string,
     public skipValidation: boolean,
-    options?: WebsocketClientOptions
+    public options: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
   ) {
-    this.options = options ? options : DEFAULT_CLIENT_OPTIONS;
+    if (this.endpoint.startsWith('http'))
+      this.endpoint = getWebsocketUrl(this.endpoint);
+
     this.rpcClient = new WsRpcClient(this.endpoint, {
       reconnect_interval: this.options.reconnectInterval,
       autoconnect: false
