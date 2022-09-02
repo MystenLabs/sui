@@ -71,7 +71,7 @@ export class WebsocketClient {
   protected connectionTimeout: number | null = null;
   protected isSetup: boolean = false;
 
-  protected activeSubscriptions: Map<SubscriptionId, SubscriptionData> = new Map();
+  protected eventSubscriptions: Map<SubscriptionId, SubscriptionData> = new Map();
 
   public options: WebsocketClientOptions
 
@@ -118,14 +118,14 @@ export class WebsocketClient {
     if (msg.method === SUBSCRIBE_EVENT_METHOD) {
       // even with validation off, we must ensure a few properties at minimum in a message
       if (this.skipValidation && isMinimumSubscriptionMessage(params)) {
-        const sub = this.activeSubscriptions.get(params.subscription);
+        const sub = this.eventSubscriptions.get(params.subscription);
         if (sub)
           // cast to bypass type validation of 'result'
           (sub.onMessage as (m: any) => void)(params.result);
       }
       else if (isSubscriptionEvent(params)) {
         // call any registered handler for the message's subscription
-        const sub = this.activeSubscriptions.get(params.subscription);
+        const sub = this.eventSubscriptions.get(params.subscription);
         if (sub)
           sub.onMessage(params.result);
       }
@@ -160,14 +160,14 @@ export class WebsocketClient {
     in multiple message handlers firing each time
   */
   private async refreshSubscriptions() {
-    if(this.activeSubscriptions.size === 0)
+    if(this.eventSubscriptions.size === 0)
       return;
 
     try {
       let newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
 
       let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
-        Array.from(this.activeSubscriptions.values())
+        Array.from(this.eventSubscriptions.values())
         .map(async sub => {
           const onMessage = sub.onMessage;
           const filter = sub.filter;
@@ -191,7 +191,7 @@ export class WebsocketClient {
         newSubs.set(entry.id, { filter, onMessage });
       });
 
-      this.activeSubscriptions = newSubs;
+      this.eventSubscriptions = newSubs;
     } catch (err) {
       throw new Error(`error refreshing event subscriptions: ${err}`);
     }
@@ -212,7 +212,7 @@ export class WebsocketClient {
         this.options.callTimeout
       ) as SubscriptionId;
 
-      this.activeSubscriptions.set(subId, { filter, onMessage });
+      this.eventSubscriptions.set(subId, { filter, onMessage });
       return subId;
     } catch (err) {
       throw new Error(
@@ -237,7 +237,7 @@ export class WebsocketClient {
         leading to removedOnNode being false. but if we still had a record of it locally,
         we should still report that it was deleted successfully
       */
-      return this.activeSubscriptions.delete(id) || removedOnNode;
+      return this.eventSubscriptions.delete(id) || removedOnNode;
     } catch (err) {
       throw new Error(
         `Error unsubscribing from event: ${err}, subscription: ${id}}`
