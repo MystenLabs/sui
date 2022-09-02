@@ -5,6 +5,7 @@ use clap::*;
 use futures::future::join_all;
 use futures::future::try_join_all;
 use prometheus::Registry;
+use rand::seq::SliceRandom;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -76,6 +77,8 @@ struct Opts {
     /// with large enough gas i.e. u64::MAX
     #[clap(long, default_value = "", global = true)]
     pub primary_gas_id: String,
+    #[clap(long, default_value = "5000", global = true)]
+    pub primary_gas_objects: u64,
     /// Whether to run local or remote benchmark
     /// NOTE: For running remote benchmark we must have the following
     /// gateway_config_path, keypair_path and primary_gas_id
@@ -285,8 +288,10 @@ async fn main() -> Result<()> {
             AuthAggMetrics::new(&registry),
             SafeClientMetrics::new(&registry),
         );
-        let primary_gas_id = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
-        let primary_gas = get_latest(primary_gas_id, &aggregator)
+        let offset = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
+        let ids = ObjectID::in_range(offset, opts.primary_gas_objects)?;
+        let primary_gas_id = ids.choose(&mut rand::thread_rng()).unwrap();
+        let primary_gas = get_latest(*primary_gas_id, &aggregator)
             .await
             .ok_or_else(|| {
                 anyhow!(format!(
@@ -321,7 +326,7 @@ async fn main() -> Result<()> {
             _ => panic!("Unexpected keypair type"),
         };
         (
-            primary_gas_id,
+            *primary_gas_id,
             primary_gas_account,
             Arc::new(ed25519_keypair),
             config,
