@@ -189,12 +189,12 @@ impl SingleTransactionKind {
                     }
                     CallArg::ObjVec(vec) => Some(
                         vec.iter()
-                            .filter_map(|obj_arg| match obj_arg {
+                            .map(|obj_arg| match obj_arg {
                                 ObjectArg::ImmOrOwnedObject(object_ref) => {
-                                    Some(InputObjectKind::ImmOrOwnedMoveObject(*object_ref))
+                                    InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
                                 }
                                 ObjectArg::SharedObject(id) => {
-                                    Some(InputObjectKind::SharedMoveObject(*id))
+                                    InputObjectKind::SharedMoveObject(*id)
                                 }
                             })
                             .collect(),
