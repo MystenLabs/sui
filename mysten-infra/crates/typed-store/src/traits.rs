@@ -24,7 +24,12 @@ where
 
     /// Returns the value for the given key from the map, if it exists
     /// or the given default value if it does not.
-    fn get_or_insert<F: FnOnce() -> V>(&self, key: &K, default: F) -> Result<V, Self::Error> {
+    /// This method is not thread safe
+    fn get_or_insert_unsafe<F: FnOnce() -> V>(
+        &self,
+        key: &K,
+        default: F,
+    ) -> Result<V, Self::Error> {
         self.get(key).and_then(|optv| match optv {
             Some(v) => Ok(v),
             None => {
