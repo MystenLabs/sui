@@ -412,7 +412,7 @@ To create a new account, execute the `new-address` command:
 ```shell
 $ sui client new-address ed25519
 ```
-New address creation requires key scheme flag `{secp256k1 | ed25519}`. 
+New address creation requires key scheme flag `{ed25519 | secp256k1}`. 
 
 The output shows a confirmation after the account has been created:
 

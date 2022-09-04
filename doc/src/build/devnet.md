@@ -185,7 +185,7 @@ Let’s assume that the placeholder for the address of the player to receive a s
 ```shell
 $ sui client new-address ed25519
 ```
-New address creation requires key scheme flag `{secp256k1 | ed25519}`. 
+New address creation requires key scheme flag `{ed25519 | secp256k1}`. 
 
 Which yields output resembling:
 ```shell
