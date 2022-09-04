@@ -89,6 +89,8 @@ struct Opts {
     run_spec: RunSpec,
     #[clap(long, default_value = "9091", global = true)]
     pub server_metric_port: u16,
+    #[clap(long, default_value = "127.0.0.1", global = true)]
+    pub client_metric_host: String,
     #[clap(long, default_value = "8081", global = true)]
     pub client_metric_port: u16,
     /// Number of followers to run. This also  stresses the follower logic in validators
@@ -348,7 +350,7 @@ async fn main() -> Result<()> {
                 NetworkAuthorityClientMetrics::new_for_tests(),
             );
             let registry: Registry = metrics::start_prometheus_server(
-                format!("127.0.0.1:{}", opts.client_metric_port)
+                format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
                     .parse()
                     .unwrap(),
             );
