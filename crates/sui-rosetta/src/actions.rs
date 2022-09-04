@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::str::FromStr;
 
 use anyhow::anyhow;
 use serde_json::{json, Value};
 
-use sui_sdk::json::SuiJsonValue;
-use sui_sdk::rpc_types::{SuiChangeEpoch, SuiMoveCall, SuiTransactionData, SuiTransactionKind};
-use sui_sdk::SuiClient;
-use sui_types::base_types::{ObjectID, SuiAddress};
-use sui_types::messages::TransactionData;
-use sui_types::{coin, SUI_FRAMEWORK_OBJECT_ID};
+use sui_core::authority::AuthorityState;
+use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
+use sui_types::coin::{COIN_JOIN_FUNC_NAME, COIN_MODULE_NAME, COIN_SPLIT_VEC_FUNC_NAME};
+use sui_types::error::SuiError;
+use sui_types::messages::{
+    CallArg, ChangeEpoch, MoveCall, ObjectArg, SingleTransactionKind, TransactionData,
+};
+use sui_types::move_package::disassemble_modules;
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
 use crate::types::{
     AccountIdentifier, Amount, CoinAction, CoinChange, CoinIdentifier, Operation,
@@ -34,7 +36,7 @@ pub enum SuiAction {
     Transfer {
         budget: u64,
         coin: ObjectID,
-        gas: Option<ObjectID>,
+        gas: ObjectID,
         sender: SuiAddress,
         recipient: SuiAddress,
     },
@@ -43,19 +45,19 @@ pub enum SuiAction {
         budget: u64,
         primary_coin: ObjectID,
         coin_to_merge: ObjectID,
-        gas: Option<ObjectID>,
+        gas: ObjectID,
         sender: SuiAddress,
     },
     SplitCoin {
         budget: u64,
         coin_to_split: ObjectID,
-        split_amount: Vec<u64>,
-        gas: Option<ObjectID>,
+        split_amounts: Vec<u64>,
+        gas: ObjectID,
         sender: SuiAddress,
     },
     MoveCall {
         budget: u64,
-        gas: Option<ObjectID>,
+        gas: ObjectID,
         sender: SuiAddress,
         package: ObjectID,
         module: String,
@@ -64,15 +66,15 @@ pub enum SuiAction {
     },
     Publish {
         budget: u64,
-        gas: Option<ObjectID>,
+        gas: ObjectID,
         sender: SuiAddress,
         disassembled: BTreeMap<String, Value>,
     },
-    EpochChange(SuiChangeEpoch),
+    EpochChange(ChangeEpoch),
 }
 
 impl SuiAction {
-    pub async fn try_into_data(self, client: &SuiClient) -> Result<TransactionData, Error> {
+    pub async fn try_into_data(self, state: &AuthorityState) -> Result<TransactionData, Error> {
         Ok(match self {
             SuiAction::TransferSui {
                 budget,
@@ -81,22 +83,19 @@ impl SuiAction {
                 recipient,
                 amount,
             } => {
-                client
-                    .transaction_builder()
-                    .transfer_sui(sender, coin, budget, recipient, amount)
-                    .await?
+                let gas = get_object_ref(state, &coin).await?;
+                TransactionData::new_transfer_sui(recipient, sender, amount, gas, budget)
             }
             SuiAction::Transfer {
                 budget,
-                coin: object,
+                coin,
                 gas,
                 sender,
                 recipient,
             } => {
-                client
-                    .transaction_builder()
-                    .transfer_object(sender, object, gas, budget, recipient)
-                    .await?
+                let gas = get_object_ref(state, &gas).await?;
+                let coin = get_object_ref(state, &coin).await?;
+                TransactionData::new_transfer(recipient, coin, sender, gas, budget)
             }
             SuiAction::MergeCoin {
                 budget,
@@ -105,22 +104,50 @@ impl SuiAction {
                 gas,
                 sender,
             } => {
-                client
-                    .transaction_builder()
-                    .merge_coins(sender, primary_coin, coin_to_merge, gas, budget)
-                    .await?
+                let gas = get_object_ref(state, &gas).await?;
+                let primary_coin = state.get_object_read(&primary_coin).await?.into_object()?;
+                let coin_to_merge = get_object_ref(state, &coin_to_merge).await?;
+                let type_args = vec![primary_coin.get_move_template_type()?];
+                let primary_coin = primary_coin.compute_object_reference();
+
+                TransactionData::new_move_call(
+                    sender,
+                    state.get_framework_object_ref().await?,
+                    COIN_MODULE_NAME.to_owned(),
+                    COIN_JOIN_FUNC_NAME.to_owned(),
+                    type_args,
+                    gas,
+                    vec![
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(primary_coin)),
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_to_merge)),
+                    ],
+                    budget,
+                )
             }
             SuiAction::SplitCoin {
                 budget,
                 coin_to_split,
-                split_amount,
+                split_amounts,
                 gas,
                 sender,
             } => {
-                client
-                    .transaction_builder()
-                    .split_coin(sender, coin_to_split, split_amount, gas, budget)
-                    .await?
+                let gas = get_object_ref(state, &gas).await?;
+                let coin_to_split = state.get_object_read(&coin_to_split).await?.into_object()?;
+                let type_args = vec![coin_to_split.get_move_template_type()?];
+                let coin_to_split = coin_to_split.compute_object_reference();
+                TransactionData::new_move_call(
+                    sender,
+                    state.get_framework_object_ref().await?,
+                    COIN_MODULE_NAME.to_owned(),
+                    COIN_SPLIT_VEC_FUNC_NAME.to_owned(),
+                    type_args,
+                    gas,
+                    vec![
+                        CallArg::Object(ObjectArg::ImmOrOwnedObject(coin_to_split)),
+                        CallArg::Pure(bcs::to_bytes(&split_amounts)?),
+                    ],
+                    budget,
+                )
             }
             SuiAction::MoveCall { .. } | SuiAction::Publish { .. } | SuiAction::EpochChange(_) => {
                 return Err(Error::new_with_msg(
@@ -131,65 +158,83 @@ impl SuiAction {
         })
     }
 
-    pub fn try_from_data(data: &SuiTransactionData) -> Result<Vec<Self>, anyhow::Error> {
-        data.transactions
-            .iter()
+    pub fn try_from_data(data: &TransactionData) -> Result<Vec<Self>, anyhow::Error> {
+        let budget = data.gas_budget;
+        let (gas, _, _) = data.gas();
+        let sender = data.signer();
+        data.kind
+            .single_transactions()
             .map(|tx| {
                 Ok(match tx {
-                    SuiTransactionKind::TransferSui(tx) => SuiAction::TransferSui {
-                        budget: data.gas_budget,
-                        coin: data.gas_payment.object_id,
-                        sender: data.sender,
+                    SingleTransactionKind::TransferSui(tx) => SuiAction::TransferSui {
+                        budget,
+                        coin: gas,
+                        sender,
                         recipient: tx.recipient,
                         amount: tx.amount,
                     },
-                    SuiTransactionKind::TransferObject(tx) => SuiAction::Transfer {
-                        budget: data.gas_budget,
-                        coin: tx.object_ref.object_id,
-                        gas: Some(data.gas_payment.object_id),
-                        sender: data.sender,
+                    SingleTransactionKind::TransferObject(tx) => SuiAction::Transfer {
+                        budget,
+                        coin: tx.object_ref.0,
+                        gas,
+                        sender,
                         recipient: tx.recipient,
                     },
-                    SuiTransactionKind::Call(call) => parse_move_call(data, call)?,
-                    SuiTransactionKind::Publish(p) => SuiAction::Publish {
-                        budget: data.gas_budget,
-                        gas: Some(data.gas_payment.object_id),
-                        sender: data.sender,
-                        disassembled: p.disassembled.clone(),
+                    SingleTransactionKind::Call(call) => {
+                        parse_move_call(sender, gas, budget, call)?
+                    }
+                    SingleTransactionKind::Publish(p) => SuiAction::Publish {
+                        budget,
+                        gas,
+                        sender,
+                        disassembled: disassemble_modules(p.modules.iter())?,
                     },
-                    SuiTransactionKind::ChangeEpoch(c) => SuiAction::EpochChange(c.clone()),
+                    SingleTransactionKind::ChangeEpoch(c) => SuiAction::EpochChange(c.clone()),
                 })
             })
             .collect::<Result<_, _>>()
     }
 }
-
+async fn get_object_ref(state: &AuthorityState, id: &ObjectID) -> Result<ObjectRef, SuiError> {
+    Ok(state
+        .get_object_read(id)
+        .await?
+        .into_object()?
+        .compute_object_reference())
+}
 fn parse_move_call(
-    data: &SuiTransactionData,
-    call: &SuiMoveCall,
+    sender: SuiAddress,
+    gas: ObjectID,
+    budget: u64,
+    call: &MoveCall,
 ) -> Result<SuiAction, anyhow::Error> {
-    if call.package.object_id == SUI_FRAMEWORK_OBJECT_ID {
-        if call.function == coin::COIN_SPLIT_VEC_FUNC_NAME.to_string() {
+    if call.package.0 == SUI_FRAMEWORK_OBJECT_ID {
+        if call.function.as_ref() == COIN_SPLIT_VEC_FUNC_NAME {
             let coin_to_split = call
                 .arguments
                 .first()
                 .map(try_into_object_id)
                 .ok_or_else(|| anyhow!("Error parsing object from split coin move call."))??;
-            let split_amount = call
+            let split_amounts = call
                 .arguments
                 .last()
-                .and_then(|v| v.to_json_value().as_array().cloned())
-                .map(|v| v.iter().flat_map(|v| v.as_u64()).collect())
+                .and_then(|v| {
+                    if let CallArg::Pure(p) = v {
+                        bcs::from_bytes(p).ok()
+                    } else {
+                        None
+                    }
+                })
                 .ok_or_else(|| anyhow!("Error parsing amounts from split coin move call."))?;
 
             return Ok(SuiAction::SplitCoin {
-                budget: data.gas_budget,
+                budget,
                 coin_to_split,
-                split_amount,
-                gas: Some(data.gas_payment.object_id),
-                sender: data.sender,
+                split_amounts,
+                gas,
+                sender,
             });
-        } else if call.function == coin::COIN_JOIN_FUNC_NAME.to_string() {
+        } else if call.function.as_ref() == COIN_JOIN_FUNC_NAME {
             let coins = call
                 .arguments
                 .iter()
@@ -203,35 +248,33 @@ fn parse_move_call(
             })?;
 
             return Ok(SuiAction::MergeCoin {
-                budget: data.gas_budget,
+                budget,
                 primary_coin,
                 coin_to_merge,
-                gas: Some(data.gas_payment.object_id),
-                sender: data.sender,
+                gas,
+                sender,
             });
         }
     }
     Ok(SuiAction::MoveCall {
-        budget: data.gas_budget,
-        gas: Some(data.gas_payment.object_id),
-        sender: data.sender,
-        package: call.package.object_id,
-        module: call.module.clone(),
-        function: call.function.clone(),
-        arguments: call
-            .arguments
-            .iter()
-            .map(|arg| arg.to_json_value())
-            .collect(),
+        budget,
+        gas,
+        sender,
+        package: call.package.0,
+        module: call.module.to_string(),
+        function: call.function.to_string(),
+        arguments: vec![],
     })
 }
 
-fn try_into_object_id(value: &SuiJsonValue) -> Result<ObjectID, anyhow::Error> {
-    let value = value.to_json_value();
-    let s = value
-        .as_str()
-        .ok_or_else(|| anyhow!("Cannot parse value [{value:?}] as string."))?;
-    Ok(ObjectID::from_str(s)?)
+fn try_into_object_id(arg: &CallArg) -> Result<ObjectID, anyhow::Error> {
+    if let CallArg::Object(arg) = arg {
+        Ok(*match arg {
+            ObjectArg::ImmOrOwnedObject((o, ..)) | ObjectArg::SharedObject(o) => o,
+        })
+    } else {
+        Err(anyhow!("Arg [{arg:?}] is not an object."))
+    }
 }
 
 impl From<SuiAction> for Vec<Operation> {
@@ -263,7 +306,7 @@ impl From<SuiAction> for Vec<Operation> {
             SuiAction::SplitCoin {
                 budget,
                 coin_to_split,
-                split_amount,
+                split_amounts: split_amount,
                 gas,
                 sender,
             } => split_coin_operations(budget, coin_to_split, split_amount, gas, sender),
@@ -294,7 +337,7 @@ impl From<SuiAction> for Vec<Operation> {
                     coin_change: None,
                     metadata: Some(json!(disassembled)),
                 },
-                Operation::budget(1, budget, gas),
+                Operation::budget(1, budget, gas, sender),
             ],
             SuiAction::EpochChange(change) => vec![Operation {
                 operation_identifier: OperationIdentifier {
@@ -378,7 +421,7 @@ fn transfer_sui_operations(
 fn transfer_coin_operations(
     budget: u64,
     coin: ObjectID,
-    gas: Option<ObjectID>,
+    gas: ObjectID,
     sender: SuiAddress,
     recipient: SuiAddress,
 ) -> Vec<Operation> {
@@ -412,7 +455,7 @@ fn transfer_coin_operations(
             coin_change: None,
             metadata: None,
         },
-        Operation::budget(2, budget, gas),
+        Operation::budget(2, budget, gas, sender),
     ]
 }
 
@@ -420,7 +463,7 @@ fn split_coin_operations(
     budget: u64,
     coin_to_split: ObjectID,
     split_amount: Vec<u64>,
-    gas: Option<ObjectID>,
+    gas: ObjectID,
     sender: SuiAddress,
 ) -> Vec<Operation> {
     let mut ops = vec![Operation {
@@ -457,7 +500,7 @@ fn split_coin_operations(
             metadata: None,
         });
     }
-    ops.push(Operation::budget(ops.len() as u64, budget, gas));
+    ops.push(Operation::budget(ops.len() as u64, budget, gas, sender));
     ops
 }
 
@@ -465,7 +508,7 @@ fn merge_coin_operations(
     budget: u64,
     primary_coin: ObjectID,
     coin_to_merge: ObjectID,
-    gas: Option<ObjectID>,
+    gas: ObjectID,
     sender: SuiAddress,
 ) -> Vec<Operation> {
     let mut ops = vec![
@@ -506,13 +549,13 @@ fn merge_coin_operations(
             metadata: None,
         },
     ];
-    ops.push(Operation::budget(ops.len() as u64, budget, gas));
+    ops.push(Operation::budget(ops.len() as u64, budget, gas, sender));
     ops
 }
 
 fn move_call_operations(
     budget: u64,
-    gas: Option<ObjectID>,
+    gas: ObjectID,
     sender: SuiAddress,
     package: ObjectID,
     module: String,
@@ -538,7 +581,7 @@ fn move_call_operations(
                 "arguments": arguments,
             })),
         },
-        Operation::budget(1, budget, gas),
+        Operation::budget(1, budget, gas, sender),
     ]
 }
 
@@ -677,7 +720,7 @@ impl SuiActionBuilder {
                     .recipient
                     .ok_or_else(|| Error::missing_input("recipient"))?;
                 let coin = self.coin.ok_or_else(|| Error::missing_input("coin"))?;
-                let gas = self.gas;
+                let gas = self.gas.ok_or_else(|| Error::missing_input("gas"))?;
                 let budget = self
                     .gas_budget
                     .ok_or_else(|| Error::missing_input("gas_budget"))?;
@@ -697,7 +740,7 @@ impl SuiActionBuilder {
                 let coin_to_merge = self
                     .coin_to_merge
                     .ok_or_else(|| Error::missing_input("coin_to_merge"))?;
-                let gas = self.gas;
+                let gas = self.gas.ok_or_else(|| Error::missing_input("gas"))?;
                 let budget = self
                     .gas_budget
                     .ok_or_else(|| Error::missing_input("gas_budget"))?;
@@ -715,7 +758,7 @@ impl SuiActionBuilder {
                 let coin_to_split = self
                     .coin
                     .ok_or_else(|| Error::missing_input("coin_to_split"))?;
-                let gas = self.gas;
+                let gas = self.gas.ok_or_else(|| Error::missing_input("gas"))?;
                 let budget = self
                     .gas_budget
                     .ok_or_else(|| Error::missing_input("gas_budget"))?;
@@ -728,7 +771,7 @@ impl SuiActionBuilder {
                     coin_to_split,
                     gas,
                     sender,
-                    split_amount,
+                    split_amounts: split_amount,
                 })
             }
             _ => Err(Error::new_with_msg(

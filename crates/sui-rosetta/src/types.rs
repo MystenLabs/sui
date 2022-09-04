@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::{Display, Formatter};
+use std::str::FromStr;
+
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::de::Error as DeError;
@@ -8,11 +11,11 @@ use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
 use serde_json::{json, Value};
 use serde_with::serde_as;
-use std::fmt::{Display, Formatter};
-use std::str::FromStr;
 use strum_macros::EnumIter;
+
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH};
 use sui_types::crypto::SignatureScheme;
+use sui_types::messages::ExecutionStatus;
 use sui_types::sui_serde::Base64;
 use sui_types::sui_serde::Hex;
 use sui_types::sui_serde::Readable;
@@ -65,6 +68,8 @@ impl IntoResponse for AccountBalanceResponse {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BlockIdentifier {
     pub index: u64,
+    #[serde(skip)]
+    pub seq: u64,
     pub hash: BlockHash,
 }
 #[serde_as]
@@ -282,7 +287,7 @@ impl Operation {
             .flat_map(Vec::<Operation>::from)
             .collect::<Vec<_>>()
     }
-    pub fn budget(index: u64, budget: u64, gas: Option<ObjectID>) -> Self {
+    pub fn budget(index: u64, budget: u64, gas: ObjectID, sender: SuiAddress) -> Self {
         Self {
             operation_identifier: OperationIdentifier {
                 index,
@@ -291,12 +296,12 @@ impl Operation {
             related_operations: vec![],
             type_: OperationType::GasBudget,
             status: None,
-            account: None,
+            account: Some(AccountIdentifier { address: sender }),
             amount: Some(Amount {
                 value: budget.into(),
                 currency: SUI.clone(),
             }),
-            coin_change: gas.map(|gas| CoinChange {
+            coin_change: Some(CoinChange {
                 coin_identifier: CoinIdentifier { identifier: gas },
                 coin_action: CoinAction::CoinSpent,
             }),
@@ -566,15 +571,35 @@ pub struct Allow {
     pub transaction_hash_case: Option<Case>,
 }
 
-#[derive(Debug, EnumIter)]
+#[derive(EnumIter)]
 pub enum OperationStatus {
     Success,
+    Failure,
+}
+
+impl Display for OperationStatus {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OperationStatus::Success => write!(f, "SUCCESS"),
+            OperationStatus::Failure => write!(f, "FAILURE"),
+        }
+    }
 }
 
 impl OperationStatus {
     fn is_successful(&self) -> bool {
         match self {
             OperationStatus::Success => true,
+            OperationStatus::Failure => false,
+        }
+    }
+}
+
+impl From<ExecutionStatus> for OperationStatus {
+    fn from(es: ExecutionStatus) -> Self {
+        match es {
+            ExecutionStatus::Success => OperationStatus::Success,
+            ExecutionStatus::Failure { .. } => OperationStatus::Failure,
         }
     }
 }
@@ -584,7 +609,7 @@ impl Serialize for OperationStatus {
     where
         S: Serializer,
     {
-        json!({ "status" : format!("{self:?}").to_uppercase(), "successful" : self.is_successful() })
+        json!({ "status" : format!("{self}").to_uppercase(), "successful" : self.is_successful() })
             .serialize(serializer)
     }
 }

@@ -4,49 +4,38 @@
 use std::sync::Arc;
 
 use axum::{Extension, Json};
+use sui_core::authority::AuthorityState;
+use sui_types::base_types::SuiAddress;
+use sui_types::gas_coin::GasCoin;
+use sui_types::object::Owner;
 
 use crate::errors::Error;
 use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
     Amount, Coin, CoinIdentifier,
 };
-use crate::{ApiState, ErrorType};
-use sui_sdk::rpc_types::SuiData;
-use sui_sdk::types::base_types::SuiAddress;
-use sui_sdk::types::gas_coin::GasCoin;
-use sui_sdk::SuiClient;
+use crate::{ErrorType, ServerContext};
 
 pub async fn balance(
     Json(payload): Json<AccountBalanceRequest>,
-    Extension(state): Extension<Arc<ApiState>>,
+    Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<AccountBalanceResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
-    let gas_coins = get_gas_coins(
-        state.get_client(payload.network_identifier.network).await?,
-        payload.account_identifier.address,
-    )
-    .await?;
+    context.checks_network_identifier(&payload.network_identifier)?;
+    let gas_coins = get_gas_coins(&context.state, payload.account_identifier.address).await?;
     let amount: u64 = gas_coins.iter().map(|coin| coin.value()).sum();
 
     Ok(AccountBalanceResponse {
-        block_identifier: state
-            .blocks(payload.network_identifier.network)?
-            .current_block_identifier()
-            .await?,
+        block_identifier: context.blocks().current_block_identifier().await?,
         balances: vec![Amount::new(amount.into())],
     })
 }
 
 pub async fn coins(
     Json(payload): Json<AccountCoinsRequest>,
-    Extension(state): Extension<Arc<ApiState>>,
+    Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<AccountCoinsResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
-    let coins = get_gas_coins(
-        state.get_client(payload.network_identifier.network).await?,
-        payload.account_identifier.address,
-    )
-    .await?;
+    context.checks_network_identifier(&payload.network_identifier)?;
+    let coins = get_gas_coins(&context.state, payload.account_identifier.address).await?;
     let coins = coins
         .iter()
         .map(|coin| {
@@ -60,39 +49,24 @@ pub async fn coins(
         .collect::<Result<_, anyhow::Error>>()?;
 
     Ok(AccountCoinsResponse {
-        block_identifier: state
-            .blocks(payload.network_identifier.network)?
-            .current_block_identifier()
-            .await?,
+        block_identifier: context.blocks().current_block_identifier().await?,
         coins,
     })
 }
 
-async fn get_gas_coins(client: &SuiClient, address: SuiAddress) -> Result<Vec<GasCoin>, Error> {
-    let object_infos = client
-        .read_api()
-        .get_objects_owned_by_address(address)
-        .await
-        .unwrap();
+async fn get_gas_coins(state: &AuthorityState, address: SuiAddress) -> Result<Vec<GasCoin>, Error> {
+    let object_infos = state.get_owner_objects(Owner::AddressOwner(address))?;
     let coin_infos = object_infos
         .iter()
-        .filter(|o| o.type_ == GasCoin::type_().to_string());
+        .filter(|o| o.type_ == GasCoin::type_().to_string())
+        .map(|info| info.object_id)
+        .collect::<Vec<_>>();
 
-    let mut coins = Vec::new();
-    for coin in coin_infos {
-        let response = client.read_api().get_object(coin.object_id).await.unwrap();
-        let coin = response
-            .object()?
-            .data
-            .try_as_move()
-            .ok_or_else(|| {
-                Error::new_with_msg(
-                    ErrorType::DataError,
-                    format!("Object [{}] is not a Move object.", coin.object_id).as_str(),
-                )
-            })?
-            .deserialize()?;
-        coins.push(coin);
-    }
-    Ok(coins)
+    let objects = state.get_objects(&coin_infos).await?;
+    objects
+        .iter()
+        .flatten()
+        .map(GasCoin::try_from)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| Error::new_with_cause(ErrorType::InternalError, e))
 }

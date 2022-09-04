@@ -30,8 +30,14 @@ async-trait = "0.1.57"
 
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
 
-sui-sdk = { path = "../sui-sdk" }
 sui-types = { path = "../sui-types" }
+sui-core = { path = "../sui-core" }
+sui-quorum-driver = { path = "../sui-quorum-driver" }
+
+move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
+
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"}
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"}
 
 workspace-hack = { path = "../workspace-hack"}
 

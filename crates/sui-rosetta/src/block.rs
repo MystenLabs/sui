@@ -5,16 +5,16 @@ use axum::{Extension, Json};
 use crate::actions::SuiAction;
 use crate::types::{
     BlockRequest, BlockResponse, BlockTransactionRequest, BlockTransactionResponse, Operation,
-    Transaction, TransactionIdentifier,
+    OperationStatus, Transaction, TransactionIdentifier,
 };
-use crate::{ApiState, Error};
+use crate::{Error, ServerContext};
 
 pub async fn block(
     Json(payload): Json<BlockRequest>,
-    Extension(state): Extension<Arc<ApiState>>,
+    Extension(state): Extension<Arc<ServerContext>>,
 ) -> Result<BlockResponse, Error> {
     state.checks_network_identifier(&payload.network_identifier)?;
-    let blocks = state.blocks(payload.network_identifier.network)?;
+    let blocks = state.blocks();
 
     if let Some(index) = payload.block_identifier.index {
         blocks.get_block_by_index(index).await
@@ -27,24 +27,25 @@ pub async fn block(
 
 pub async fn transaction(
     Json(payload): Json<BlockTransactionRequest>,
-    Extension(state): Extension<Arc<ApiState>>,
+    Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<BlockTransactionResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
+    context.checks_network_identifier(&payload.network_identifier)?;
     let digest = payload.transaction_identifier.hash;
-    let transaction = state
-        .get_client(payload.network_identifier.network)
-        .await?
-        .read_api()
-        .get_transaction(digest)
-        .await?;
-
-    let data = transaction.certificate.data;
+    let (cert, effect) = context.state.get_transaction(digest).await?;
+    let hash = *cert.digest();
+    let data = cert.signed_data.data;
     let actions = SuiAction::try_from_data(&data)?;
+    let mut operations = Operation::from_actions(actions);
+
+    let status = OperationStatus::from(effect.status).to_string();
+
+    for mut operation in &mut operations {
+        operation.status = Some(status.clone())
+    }
+
     let transaction = Transaction {
-        transaction_identifier: TransactionIdentifier {
-            hash: transaction.certificate.transaction_digest,
-        },
-        operations: Operation::from_actions(actions),
+        transaction_identifier: TransactionIdentifier { hash },
+        operations,
         related_transactions: vec![],
         metadata: None,
     };

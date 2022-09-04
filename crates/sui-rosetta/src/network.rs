@@ -5,6 +5,12 @@ use std::sync::Arc;
 
 use axum::{Extension, Json};
 use serde_json::json;
+use strum::IntoEnumIterator;
+
+use sui_types::base_types::ObjectID;
+use sui_types::sui_serde::Hex;
+use sui_types::sui_system_state::SuiSystemState;
+use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 
 use crate::errors::Error;
 use crate::types::{
@@ -12,46 +18,37 @@ use crate::types::{
     NetworkStatusResponse, OperationStatus, OperationType, Peer, Version,
 };
 use crate::ErrorType::InternalError;
-use crate::{ApiState, ErrorType};
-use strum::IntoEnumIterator;
-use sui_sdk::rpc_types::SuiData;
-use sui_types::base_types::ObjectID;
-use sui_types::sui_serde::Hex;
-use sui_types::sui_system_state::SuiSystemState;
-use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
+use crate::{ErrorType, ServerContext};
 
 pub async fn list(
-    Extension(state): Extension<Arc<ApiState>>,
+    Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<NetworkListResponse, Error> {
     Ok(NetworkListResponse {
-        network_identifiers: state
-            .get_envs()
-            .into_iter()
-            .map(|env| NetworkIdentifier {
-                blockchain: "Sui".to_string(),
-                network: env,
-            })
-            .collect(),
+        network_identifiers: vec![NetworkIdentifier {
+            blockchain: "sui".to_string(),
+            network: context.env,
+        }],
     })
 }
 
 pub async fn status(
     Json(payload): Json<NetworkRequest>,
-    Extension(state): Extension<Arc<ApiState>>,
+    Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<NetworkStatusResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
-    let system_state = state
-        .get_client(payload.network_identifier.network)
-        .await?
-        .read_api()
-        .get_object(SUI_SYSTEM_STATE_OBJECT_ID)
+    context.checks_network_identifier(&payload.network_identifier)?;
+    let object = context
+        .state
+        .get_object_read(&SUI_SYSTEM_STATE_OBJECT_ID)
         .await?;
-    let system_state: SuiSystemState = system_state
-        .into_object()?
-        .data
-        .try_as_move()
-        .ok_or_else(|| Error::new(InternalError))?
-        .deserialize()?;
+
+    let system_state: SuiSystemState = bcs::from_bytes(
+        object
+            .into_object()?
+            .data
+            .try_as_move()
+            .ok_or_else(|| Error::new(InternalError))?
+            .contents(),
+    )?;
 
     let peers = system_state
         .validators
@@ -65,13 +62,13 @@ pub async fn status(
             })),
         })
         .collect();
-    let blocks = state.blocks(payload.network_identifier.network)?;
+    let blocks = context.blocks();
     let current_block = blocks.current_block().await?;
 
     Ok(NetworkStatusResponse {
         current_block_identifier: current_block.block.block_identifier,
         current_block_timestamp: current_block.block.timestamp,
-        genesis_block_identifier: blocks.genesis_block_identifier().await?,
+        genesis_block_identifier: blocks.genesis_block_identifier(),
         oldest_block_identifier: Some(blocks.oldest_block_identifier().await?),
         sync_status: None,
         peers,
@@ -80,7 +77,7 @@ pub async fn status(
 
 pub async fn options(
     Json(payload): Json<NetworkRequest>,
-    Extension(state): Extension<Arc<ApiState>>,
+    Extension(state): Extension<Arc<ServerContext>>,
 ) -> Result<NetworkOptionsResponse, Error> {
     state.checks_network_identifier(&payload.network_identifier)?;
 
@@ -98,8 +95,12 @@ pub async fn options(
             operation_types: vec![
                 OperationType::GasBudget,
                 OperationType::TransferSUI,
+                OperationType::TransferCoin,
                 OperationType::MergeCoins,
                 OperationType::SplitCoin,
+                OperationType::Publish,
+                OperationType::MoveCall,
+                OperationType::EpochChange,
             ],
             errors,
             historical_balance_lookup: false,

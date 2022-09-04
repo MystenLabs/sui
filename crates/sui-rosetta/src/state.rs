@@ -1,51 +1,86 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use itertools::Itertools;
 use sha3::{Digest, Sha3_256};
 use tokio::sync::RwLock;
 use tracing::{debug, error};
 
-use sui_sdk::SuiClient;
-use sui_types::base_types::TRANSACTION_DIGEST_LENGTH;
+use sui_core::authority::AuthorityState;
+use sui_core::authority_client::NetworkAuthorityClient;
+use sui_quorum_driver::QuorumDriver;
+use sui_types::base_types::{SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH};
 
 use crate::types::{Block, BlockHash, BlockIdentifier, BlockResponse, TransactionIdentifier};
-use crate::ErrorType::BlockNotFound;
-use crate::{
-    Error, ErrorType, NetworkIdentifier, SuiEnv, UnsupportedBlockchain, UnsupportedNetwork,
-};
+use crate::ErrorType::{BlockNotFound, InternalError};
+use crate::{Error, NetworkIdentifier, SuiEnv, UnsupportedBlockchain, UnsupportedNetwork};
 
-#[derive(Default)]
-pub struct ApiState {
-    clients: BTreeMap<SuiEnv, (Arc<SuiClient>, Box<dyn BlockProvider + Send + Sync>)>,
+pub struct ServerContext {
+    pub env: SuiEnv,
+    pub state: Arc<AuthorityState>,
+    pub quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
+    block_provider: Arc<dyn BlockProvider + Send + Sync>,
+    book_keeper: BookKeeper,
 }
 
-impl ApiState {
-    pub fn add_env(&mut self, env: SuiEnv, client: SuiClient) {
-        let client = Arc::new(client);
-        let block_fabricator = PseudoBlockProvider::spawn(env, client.clone());
-        self.clients
-            .insert(env, (client, Box::new(block_fabricator)));
+impl ServerContext {
+    pub fn new(
+        env: SuiEnv,
+        state: Arc<AuthorityState>,
+        quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
+        block_provider: Arc<dyn BlockProvider + Send + Sync>,
+        book_keeper: BookKeeper,
+    ) -> Self {
+        Self {
+            env,
+            state,
+            quorum_driver,
+            block_provider,
+            book_keeper,
+        }
+    }
+}
+
+pub struct BookKeeper {
+    pub state: Arc<AuthorityState>,
+    pub blocks: Arc<dyn BlockProvider + Send + Sync>,
+}
+
+impl BookKeeper {
+    pub async fn get_balance(&self, address: &SuiAddress, block_height: u64) -> Result<u64, Error> {
+        let current_block = self.blocks.current_block().await?;
+
+        Ok(0)
     }
 
-    pub async fn get_client(&self, env: SuiEnv) -> Result<&SuiClient, Error> {
-        let (client, _) = self
-            .clients
-            .get(&env)
-            .ok_or_else(|| Error::new(ErrorType::UnsupportedNetwork))?;
-        Ok(client)
+    async fn get_current_balance(&self, address: &SuiAddress) -> Result<u64, Error> {
+        let new_txs = self.get_uncheckpointed_tx().await?;
+        //let txs = self.get_balance_changing_txs(new_txs, address).await?;
+
+        Ok(0)
     }
 
-    pub fn get_envs(&self) -> Vec<SuiEnv> {
-        self.clients.keys().cloned().collect()
-    }
+    async fn get_uncheckpointed_tx(&self) -> Result<Vec<TransactionDigest>, Error> {
+        let all_tx = self.state.get_total_transaction_number()?;
+        let current_block = self.blocks.current_block().await?;
 
+        Ok(if current_block.block.block_identifier.seq < all_tx {
+            self.state
+                .get_transactions_in_range(current_block.block.block_identifier.index, all_tx)?
+                .into_iter()
+                .map(|(_, digest)| digest)
+                .collect()
+        } else {
+            vec![]
+        })
+    }
+}
+
+impl ServerContext {
     pub fn checks_network_identifier(
         &self,
         network_identifier: &NetworkIdentifier,
@@ -53,18 +88,18 @@ impl ApiState {
         if &network_identifier.blockchain != "sui" {
             return Err(Error::new(UnsupportedBlockchain));
         }
-        if !self.clients.keys().contains(&network_identifier.network) {
+        if self.env != network_identifier.network {
             return Err(Error::new(UnsupportedNetwork));
         }
         Ok(())
     }
 
-    pub fn blocks(&self, env: SuiEnv) -> Result<&(dyn BlockProvider + Sync + Send), Error> {
-        let (_, block_fabricator) = self
-            .clients
-            .get(&env)
-            .ok_or_else(|| Error::new(ErrorType::UnsupportedNetwork))?;
-        Ok(&**block_fabricator)
+    pub fn blocks(&self) -> &(dyn BlockProvider + Sync + Send) {
+        &*self.block_provider
+    }
+
+    pub fn book_keeper(&self) -> &BookKeeper {
+        &self.book_keeper
     }
 }
 #[async_trait]
@@ -72,7 +107,7 @@ pub trait BlockProvider {
     async fn get_block_by_index(&self, index: u64) -> Result<BlockResponse, Error>;
     async fn get_block_by_hash(&self, hash: BlockHash) -> Result<BlockResponse, Error>;
     async fn current_block(&self) -> Result<BlockResponse, Error>;
-    async fn genesis_block_identifier(&self) -> Result<BlockIdentifier, Error>;
+    fn genesis_block_identifier(&self) -> BlockIdentifier;
     async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error>;
 }
@@ -118,11 +153,12 @@ impl BlockProvider for PseudoBlockProvider {
             .cloned()
     }
 
-    async fn genesis_block_identifier(&self) -> Result<BlockIdentifier, Error> {
-        Ok(BlockIdentifier {
+    fn genesis_block_identifier(&self) -> BlockIdentifier {
+        BlockIdentifier {
             index: 0,
+            seq: 0,
             hash: BlockHash([0u8; TRANSACTION_DIGEST_LENGTH]),
-        })
+        }
     }
 
     async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error> {
@@ -145,9 +181,9 @@ impl BlockProvider for PseudoBlockProvider {
 }
 
 impl PseudoBlockProvider {
-    fn spawn(env: SuiEnv, client: Arc<SuiClient>) -> Self {
+    pub fn spawn(state: Arc<AuthorityState>) -> Self {
         let blocks = Self {
-            blocks: Arc::new(RwLock::new(Vec::new())),
+            blocks: Arc::new(RwLock::new(vec![genesis_block()])),
         };
 
         let block_interval = option_env!("SUI_BLOCK_INTERVAL")
@@ -159,8 +195,8 @@ impl PseudoBlockProvider {
         let f = blocks.clone();
         tokio::spawn(async move {
             loop {
-                if let Err(e) = f.create_next_block(client.clone()).await {
-                    error!("Error creating block for env [{env:?}], cause: {e:?}")
+                if let Err(e) = f.create_next_block(state.clone()).await {
+                    error!("Error creating block, cause: {e:?}")
                 }
                 tokio::time::sleep(block_interval).await;
             }
@@ -169,16 +205,12 @@ impl PseudoBlockProvider {
         blocks
     }
 
-    async fn create_next_block(&self, client: Arc<SuiClient>) -> Result<(), anyhow::Error> {
-        let current_block = self.current_block_identifier().await.ok();
-        let current_index = current_block.as_ref().map(|b| b.index).unwrap_or_default();
-        let total_tx = client.read_api().get_total_transaction_number().await?;
+    async fn create_next_block(&self, state: Arc<AuthorityState>) -> Result<(), Error> {
+        let current_block = self.current_block_identifier().await?;
+        let total_tx = state.get_total_transaction_number()?;
 
-        if current_index < total_tx {
-            let tx_digests = client
-                .read_api()
-                .get_transactions_in_range(current_index, total_tx)
-                .await?;
+        if current_block.seq < total_tx {
+            let tx_digests = state.get_transactions_in_range(current_block.seq, total_tx)?;
 
             // Create block hash using all transaction hashes
             let hasher = tx_digests
@@ -191,14 +223,9 @@ impl PseudoBlockProvider {
             let hash = BlockHash(hash.into());
 
             let block_identifier = BlockIdentifier {
-                index: total_tx,
+                index: current_block.index + 1,
+                seq: total_tx,
                 hash,
-            };
-
-            let parent_block_identifier = if let Some(parent) = current_block {
-                parent
-            } else {
-                block_identifier.clone()
             };
 
             let other_transactions = tx_digests
@@ -209,8 +236,12 @@ impl PseudoBlockProvider {
             let new_block = BlockResponse {
                 block: Block {
                     block_identifier,
-                    parent_block_identifier,
-                    timestamp: 0,
+                    parent_block_identifier: current_block,
+                    timestamp: SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .map_err(|e| Error::new_with_cause(InternalError, e))?
+                        .as_millis()
+                        .try_into()?,
                     transactions: vec![],
                     metadata: None,
                 },
@@ -222,5 +253,28 @@ impl PseudoBlockProvider {
         };
 
         Ok(())
+    }
+}
+
+fn genesis_block() -> BlockResponse {
+    let id = BlockIdentifier {
+        index: 0,
+        seq: 0,
+        hash: BlockHash([0u8; TRANSACTION_DIGEST_LENGTH]),
+    };
+    BlockResponse {
+        block: Block {
+            block_identifier: id.clone(),
+            parent_block_identifier: id,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_millis()
+                .try_into()
+                .unwrap(),
+            transactions: vec![],
+            metadata: None,
+        },
+        other_transactions: vec![],
     }
 }
