@@ -13,7 +13,7 @@
 module sui::collectible {
     use sui::tx_context::{TxContext};
     use std::option::{Self, Option};
-    use sui::object::{Self, UID};
+    use sui::object::{Self, ID, UID};
     use sui::transfer;
 
     /// For when owner tries to mint more than max_supply.
@@ -52,6 +52,9 @@ module sui::collectible {
 
     /// Implementable method giving a mutable reference to `data`.
     public fun info_mut<T: store + drop>(_w: T, self: &mut Collectible<T>): &mut T { &mut self.info }
+
+    /// Get ID for pointing to the `Collectible`.
+    public fun id<T: store + drop>(self: &Collectible<T>): ID { object::uid_to_inner(&self.id) }
 
     /// Get a mutable reference to UID for allowing `transfer_to_object_id` with `Collectible` type.
     ///
@@ -119,6 +122,231 @@ module sui::collectible {
     /// Implementable `transfer::share_object` function.
     public fun share_object<T: store + drop>(_w: T, nft: Collectible<T>) {
         transfer::share_object(nft)
+    }
+}
+
+#[test_only]
+/// Defines a `Tricky` Collectible standard which has few important properties:
+///
+/// - Can be traded on multiple marketplaces at the same time;
+/// - Considered owned while listed on a marketplace;
+/// - This standard provides ownership management while keeping metadata definition
+/// up to the implementers;
+///
+///
+/// The way it is implemented is the following:
+/// - Every Collectible<Tricky> is a shared object with the `owner` field which
+/// implements logical ownership.
+/// - As long as user is the owner he is free to change ownership to any other address
+/// - At any point owner can issue `TransferCap`s - objects granting permission to
+/// perform logical transfer of the `Collectible`
+/// - `TransferCap`s can be listed on marketplaces and have flexible set of abilities:
+/// `key` and `store` which make them compatible with most of the applications
+///
+/// Edge cases:
+/// - Each `TransferCap` is locked by number of transfers performed over the Collectible;
+/// meaning that if transfer has been performed, `TransferCap` can only be burned
+/// - Once the first `TransferCap` is issued, the object is locked and no longer
+/// considered "owned" by its owner
+/// - Owner can't use `TransferCap` to transfer to his address; to gain full access over
+/// the Collectible he has to burn all `TransferCap`s therefore unlocking the object
+/// - As soon as `TransferCap` used, all other `TransferCap`s are useless, and the owner
+/// should have been changed
+///
+/// TODO: extend this standard to support any metadata inside.
+module sui::tricky_collectible {
+    use sui::collectible::{Self, Collectible, CollectionManagerCap};
+    use sui::tx_context::{Self, TxContext};
+    use sui::object::{Self, UID, ID};
+    use std::option::{Option};
+
+    /// For when someone is trying to transfer a `Collectible` for which
+    /// at least one `TransferCap` is issued.
+    const ECollectibleLocked: u64 = 0;
+
+    /// For when someone tries to perform a transfer over someone else's object
+    const ENotOwner: u64 = 1;
+
+    /// For when multiple transfer caps were issued and one of them was already used.
+    const ETransferAlreadyPerformed: u64 = 2;
+
+    /// For when owner tries to use a `TransferCap`.
+    const EOwner: u64 = 3;
+
+    /// For when ID of the `TransferCap` does not match `Collectible.id`
+    const EIdMismatch: u64 = 4;
+
+
+    /// This is a standard for a `Collectible`. Instead of using owned transfer
+    /// functions, `Tricky` is based on logical ownership and using a shared
+    /// object instead.
+    ///
+    /// Unlike its owned buddies, Tricky has few advantages...
+    struct Tricky<T: store + drop> has store, drop {
+        /// Logical owner of the `Collectible`. Transfering
+        /// it is as simple as changing this field.
+        owner: address,
+        /// Number of TransferCaps issued for this `Collectible`. For
+        /// an object to be freely transferable, this number has to equal `0`.
+        transfer_caps_issued: u8,
+        /// Total number of transfers performed over this `Collectible`.
+        /// Necessary to determine whether a `TransferCap` is still relevant.
+        transfers: u64,
+        /// Inner field that stores `Collectible<Tricky>` metadata.
+        info: T
+    }
+
+    /// Issuable capability to perform a single transfer of the `Collectible`.
+    /// Can be issued more than once, and is active while number of transfers
+    /// matches the `collectible.info.transfers` field. After that loses its
+    /// ability to perform a transfer.
+    ///
+    /// Should be used to list a `Collectible` on different marketplaces or
+    /// other platforms. The first `TransferCap` used to perform a transfer
+    /// locks all others.
+    struct TransferCap<phantom T> has key, store {
+        id: UID,
+        /// ID of the `Collectible` for which `TransferCap` is issued.
+        target: ID,
+        /// Counter which has to match `Tricky.transfers`. Combination of
+        /// both: `target` and `issue` fields is required to perform a
+        /// transfer of the `Collectible<Tricky<T>>`.
+        issue: u64
+    }
+
+
+    /// Read `owner` field from `Collectible<Tricky<T>>`.
+    public fun owner<T: store + drop>(self: &Collectible<Tricky<T>>): address {
+        collectible::info(self).owner
+    }
+
+    /// Whether this Collectible is locked for transfers. Once at least
+    /// one `TransferCap` is issued, it remails locked until all of them
+    /// are returned or at least one of them is used to transfer the object.
+    public fun is_locked<T: store + drop>(self: &Collectible<Tricky<T>>): bool {
+        collectible::info(self).transfer_caps_issued == 0
+    }
+
+
+    /// Create `CollectionManagerCap` the same way we would do it for
+    /// any other `Collectible`s standard.
+    /// No check for OTW here -> it is meant to be built on top.
+    public fun create_collection<T: store + drop>(
+        w: T,
+        max_supply: Option<u64>,
+        ctx: &mut TxContext
+    ): CollectionManagerCap<Tricky<T>> {
+        collectible::create_collection(null(w), max_supply, ctx)
+    }
+
+    /// Mint new `Collectible<Tricky<T>>` and give logical ownership to
+    /// the `owner`; the `Collectible` itself is shared.
+    public fun mint_for<T: store + drop>(
+        w: T, // really hard to remove this buddy from here
+        cap: &mut CollectionManagerCap<Tricky<T>>,
+        info: T,
+        owner: address,
+        ctx: &mut TxContext
+    ) {
+        collectible::share_object(
+            null<T>(w),
+            collectible::mint(cap, Tricky<T> {
+                info,
+                owner,
+                transfer_caps_issued: 0,
+                transfers: 0,
+            }, ctx)
+        )
+    }
+
+    /// Transfer a `Collectible` by changing logical ownership. Can only
+    /// be performed if no `TransferCap`s were issued for this object and
+    /// if sender is an `owner` of the `Collectible`.
+    public fun transfer<T: store + drop>(
+        w: T,
+        c: &mut Collectible<Tricky<T>>,
+        to: address,
+        ctx: &mut TxContext
+    ) {
+        assert!(is_locked(c) == false, ECollectibleLocked);
+        assert!(owner(c) == tx_context::sender(ctx), ENotOwner);
+
+        let info_mut = collectible::info_mut(null(w), c);
+
+        info_mut.owner = to;
+        info_mut.transfers = info_mut.transfers + 1;
+    }
+
+    /// Issue a `TransferCap` therefore locking an object. Even if object is
+    /// locked, additional `TransferCap`s can be issued. Owner-only action.
+    public fun issue_transfer_cap<T: store + drop>(
+        w: T,
+        c: &mut Collectible<Tricky<T>>,
+        ctx: &mut TxContext
+    ): TransferCap<T> {
+        assert!(owner(c) == tx_context::sender(ctx), ENotOwner);
+
+        let info_mut = collectible::info_mut(null(w), c);
+        info_mut.transfer_caps_issued = info_mut.transfer_caps_issued + 1;
+
+        TransferCap {
+            id: object::new(ctx),
+            target: collectible::id(c),
+            issue: collectible::info(c).transfers
+        }
+    }
+
+    /// Burn `TransferCap` to decrease the number of actively issued Caps.
+    /// If the TransferCap is outdated, then don't update the issued number.
+    public fun burn_transfer_cap<T: store + drop>(
+        w: T,
+        c: &mut Collectible<Tricky<T>>,
+        cap: TransferCap<T>
+    ) {
+        assert!(collectible::id(c) == cap.target, EIdMismatch);
+
+        let info_mut = collectible::info_mut(null(w), c);
+
+        // If `TransferCap` matches the
+        if (info_mut.transfers == cap.issue) {
+            info_mut.transfer_caps_issued = info_mut.transfer_caps_issued - 1;
+        };
+
+        let TransferCap { id, target: _, issue: _ } = cap;
+        object::delete(id);
+    }
+
+    /// Use a `TransferCap` to change ownership of the object. Since
+    /// owner can actually use it to cheat on marketplaces by resetting
+    /// number, we restrict changing the owner field to the same one.
+    public fun use_transfer_cap<T: store + drop>(
+        w: T,
+        c: &mut Collectible<Tricky<T>>,
+        cap: TransferCap<T>,
+        owner: address,
+    ) {
+        assert!(owner(c) != owner, EOwner);
+        assert!(collectible::id(c) == object::uid_to_inner(&cap.id), EIdMismatch);
+
+        let info_mut = collectible::info_mut(null(w), c);
+
+        assert!(info_mut.transfers == cap.issue, ETransferAlreadyPerformed);
+
+        info_mut.transfers = info_mut.transfers + 1;
+        info_mut.owner = owner;
+
+        let TransferCap { id, target: _, issue: _ } = cap;
+        object::delete(id);
+    }
+
+    /// `Null` object for witness implementations.
+    fun null<T: store + drop>(w: T): Tricky<T> {
+        Tricky {
+            owner: @0x0,
+            transfer_caps_issued: 0,
+            transfers: 0,
+            info: w
+        }
     }
 }
 
@@ -200,7 +428,10 @@ module sui::default_collectible {
     }
 
     /// Transfer to object implementation for `Collectible<Default<T>>`
-    public entry fun transfer_to_object<T, S: key + store>(c: Collectible<Default<T>>, obj: &mut S) {
+    public entry fun transfer_to_object<T, S: key + store>(
+        c: Collectible<Default<T>>,
+        obj: &mut S
+    ) {
         collectible::transfer_to_object(null(), c, obj)
     }
 
