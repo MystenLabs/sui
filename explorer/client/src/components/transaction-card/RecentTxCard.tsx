@@ -20,13 +20,16 @@ import theme from '../../styles/theme.module.css';
 import {
     DefaultRpcClient as rpc,
     type Network,
-    getDataOnTxDigests,
 } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import Pagination from '../pagination/Pagination';
-import { type TxnData, genTableDataFromTxData } from './TxCardUtils';
+import {
+    type TxnData,
+    genTableDataFromTxData,
+    getDataOnTxDigests,
+} from './TxCardUtils';
 
 import styles from './RecentTxCard.module.css';
 

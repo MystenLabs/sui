@@ -5,17 +5,18 @@ import { type GetTxnDigestsResponse } from '@mysten/sui.js';
 import { useState, useEffect, useContext } from 'react';
 
 import { NetworkContext } from '../../context';
-import {
-    DefaultRpcClient as rpc,
-    getDataOnTxDigests,
-} from '../../utils/api/DefaultRpcClient';
+import { DefaultRpcClient as rpc } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
 import { deduplicate } from '../../utils/searchUtil';
 import { findTxfromID, findTxDatafromID } from '../../utils/static/searchUtil';
 import ErrorResult from '../error-result/ErrorResult';
 import PaginationLogic from '../pagination/PaginationLogic';
 import TableCard from '../table/TableCard';
-import { type TxnData, genTableDataFromTxData } from './TxCardUtils';
+import {
+    type TxnData,
+    genTableDataFromTxData,
+    getDataOnTxDigests,
+} from './TxCardUtils';
 
 const TRUNCATE_LENGTH = 14;
 const ITEMS_PER_PAGE = 20;
