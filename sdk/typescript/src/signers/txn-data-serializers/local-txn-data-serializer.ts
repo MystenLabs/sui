@@ -26,7 +26,7 @@ import {
 import { Provider } from '../../providers/provider';
 import { CallArgSerializer } from './call-arg-serializer';
 
-const TYPE_TAG = Array.from('TransactionData::').map(e => e.charCodeAt(0));
+const TYPE_TAG = Array.from('TransactionData::').map((e) => e.charCodeAt(0));
 
 export class LocalTxnDataSerializer implements TxnDataSerializer {
   /**
@@ -106,8 +106,6 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           ).serializeMoveCallArguments(t),
         },
       };
-
-      console.log('movecall', tx);
 
       return await this.constructTransactionData(
         tx,

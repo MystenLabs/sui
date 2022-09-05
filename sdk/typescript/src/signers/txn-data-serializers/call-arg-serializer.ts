@@ -34,20 +34,20 @@ export class CallArgSerializer {
     // Entry functions can have a mutable reference to an instance of the TxContext
     // struct defined in the TxContext module as the last parameter. The caller of
     // the function does not need to pass it in as an argument.
-    if (params.length > 0 && this.isTxContext(params[params.length - 1])) {
-      params.pop();
-    }
+    const hasTxContext = params.length > 0 && this.isTxContext(params.at(-1)!);
+    const userParams = hasTxContext
+      ? params.slice(0, params.length - 1)
+      : params;
 
-    if (params.length !== txn.arguments.length) {
+    if (userParams.length !== txn.arguments.length) {
       throw new Error(
-        `${MOVE_CALL_SER_ERROR} expect ${params.length} ` +
+        `${MOVE_CALL_SER_ERROR} expect ${userParams.length} ` +
           `arguments, received ${txn.arguments.length} arguments`
       );
     }
-
-    return await Promise.all(
-      params.map(
-        async (param, i) => await this.newCallArg(param, txn.arguments[i])
+    return Promise.all(
+      userParams.map(async (param, i) =>
+        this.newCallArg(param, txn.arguments[i])
       )
     );
   }
