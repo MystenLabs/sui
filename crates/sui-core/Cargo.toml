@@ -71,7 +71,7 @@ serde_yaml = "0.8.26"
 pretty_assertions = "1.2.1"
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445" }
 
-test-fuzz = "3.0.2"
+test-fuzz = "3.0.4"
 test-utils = { path = "../test-utils" }
 
 [[example]]
