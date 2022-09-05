@@ -22,6 +22,11 @@ export type SuiChangeEpoch = {
   computation_charge: number;
 };
 
+export type ExecuteTransactionRequestType =
+  | 'ImmediateReturn'
+  | 'WaitForTxCert'
+  | 'WaitForEffectsCert';
+
 export type TransactionKindName =
   | 'TransferObject'
   | 'Publish'
@@ -115,6 +120,25 @@ export type SuiTransactionResponse = {
   parsed_data: SuiParsedTransactionResponse | null;
 };
 
+// TODO: this is likely to go away after https://github.com/MystenLabs/sui/issues/4207
+export type SuiCertifiedTransactionEffects = {
+  effects: TransactionEffects;
+};
+
+export type SuiExecuteTransactionResponse =
+  | {
+      ImmediateReturn: {
+        tx_digest: string;
+      };
+    }
+  | { TxCert: { certificate: CertifiedTransaction } }
+  | {
+      EffectsCert: {
+        certificate: CertifiedTransaction;
+        effects: SuiCertifiedTransactionEffects;
+      };
+    };
+
 export type GatewayTxSeqNumber = number;
 
 export type GetTxnDigestsResponse = [GatewayTxSeqNumber, TransactionDigest][];
@@ -127,11 +151,7 @@ export type MoveCall = {
   arguments?: SuiJsonValue[];
 };
 
-export type SuiJsonValue =
-  | boolean
-  | number
-  | string
-  | Array<boolean | number | string>;
+export type SuiJsonValue = boolean | number | string | Array<SuiJsonValue>;
 
 export type EmptySignInfo = object;
 export type AuthorityName = string;
@@ -256,10 +276,10 @@ export function getTransactions(
   return data.data.transactions;
 }
 
-export function getTransferSuiAmount(
-  data: SuiTransactionKind
-): BN | null {
-  return ("TransferSui" in data && data.TransferSui.amount) ? new BN.BN(data.TransferSui.amount, 10) : null; 
+export function getTransferSuiAmount(data: SuiTransactionKind): BN | null {
+  return 'TransferSui' in data && data.TransferSui.amount
+    ? new BN.BN(data.TransferSui.amount, 10)
+    : null;
 }
 
 export function getTransactionKindName(
@@ -301,6 +321,12 @@ export function getTotalGasUsed(data: SuiTransactionResponse): number {
     gasSummary.storageCost -
     gasSummary.storageRebate
   );
+}
+
+export function getTransactionEffects(
+  data: SuiExecuteTransactionResponse
+): TransactionEffects | undefined {
+  return 'EffectsCert' in data ? data.EffectsCert.effects.effects : undefined;
 }
 
 /* --------------------------- TransactionResponse -------------------------- */
@@ -357,4 +383,17 @@ export function getNewlyCreatedCoinsAfterSplit(
   data: SuiTransactionResponse
 ): SuiObject[] | undefined {
   return getParsedSplitCoinResponse(data)?.newCoins;
+}
+
+/**
+ * Get the newly created coin refs after a split.
+ */
+export function getNewlyCreatedCoinRefsAfterSplit(
+  data: SuiTransactionResponse | SuiExecuteTransactionResponse
+): SuiObjectRef[] | undefined {
+  if ('EffectsCert' in data) {
+    const effects = data.EffectsCert.effects.effects;
+    return effects.created?.map((c) => c.reference);
+  }
+  return undefined;
 }

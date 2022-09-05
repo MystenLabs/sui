@@ -1,0 +1,169 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
+import { Provider } from '../../providers/provider';
+import {
+  extractMutableReference,
+  extractStructTag,
+  getObjectReference,
+  isSharedObject,
+  isValidSuiAddress,
+  normalizeSuiObjectId,
+  SuiJsonValue,
+  SuiMoveNormalizedType,
+} from '../../types';
+import { bcs, CallArg, ObjectArg } from '../../types/sui-bcs';
+import { MoveCallTransaction } from './txn-data-serializer';
+
+const MOVE_CALL_SER_ERROR = 'Move call argument serialization error:';
+
+const isTypeFunc = (type: string) => (t: any) => typeof t === type;
+
+export class CallArgSerializer {
+  constructor(private provider: Provider) {}
+
+  async serializeMoveCallArguments(
+    txn: MoveCallTransaction
+  ): Promise<CallArg[]> {
+    const normalized = await this.provider.getNormalizedMoveFunction(
+      normalizeSuiObjectId(txn.packageObjectId),
+      txn.module,
+      txn.function
+    );
+    const params = normalized.parameters;
+    // Entry functions can have a mutable reference to an instance of the TxContext
+    // struct defined in the TxContext module as the last parameter. The caller of
+    // the function does not need to pass it in as an argument.
+    const hasTxContext = params.length > 0 && this.isTxContext(params.at(-1)!);
+    const userParams = hasTxContext
+      ? params.slice(0, params.length - 1)
+      : params;
+
+    if (userParams.length !== txn.arguments.length) {
+      throw new Error(
+        `${MOVE_CALL_SER_ERROR} expect ${userParams.length} ` +
+          `arguments, received ${txn.arguments.length} arguments`
+      );
+    }
+    return Promise.all(
+      userParams.map(async (param, i) =>
+        this.newCallArg(param, txn.arguments[i])
+      )
+    );
+  }
+
+  async newObjectArg(objectId: string): Promise<ObjectArg> {
+    const object = await this.provider.getObject(objectId);
+    if (isSharedObject(object)) {
+      return { Shared: objectId };
+    }
+
+    return { ImmOrOwned: getObjectReference(object)! };
+  }
+
+  private async newCallArg(
+    expectedType: SuiMoveNormalizedType,
+    argVal: SuiJsonValue
+  ): Promise<CallArg> {
+    const structVal = extractStructTag(expectedType);
+    if (structVal != null) {
+      if (typeof argVal !== 'string') {
+        throw new Error(
+          `${MOVE_CALL_SER_ERROR} expect the argument to be an object id string, got ${argVal}`
+        );
+      }
+      return { Object: await this.newObjectArg(argVal) };
+    }
+
+    let serType = this.getPureSerializationType(expectedType, argVal);
+
+    return {
+      Pure: bcs.ser(serType, argVal).toBytes(),
+    };
+  }
+
+  /**
+   *
+   * @param argVal used to do additional data validation to make sure the argVal
+   * matches the normalized Move types. If `argVal === undefined`, the data validation
+   * will be skipped. This is useful in the case where `normalizedType` is a vector<T>
+   * and `argVal` is an empty array, the data validation for the inner types will be skipped.
+   */
+  private getPureSerializationType(
+    normalizedType: SuiMoveNormalizedType,
+    argVal: SuiJsonValue | undefined
+  ): string {
+    const allowedTypes = ['Address', 'Bool', 'U8', 'U32', 'U64', 'U128'];
+    if (
+      typeof normalizedType === 'string' &&
+      allowedTypes.includes(normalizedType)
+    ) {
+      if (normalizedType in ['U8', 'U32', 'U64', 'U128']) {
+        this.checkArgVal(isTypeFunc('number'), argVal, 'number');
+      } else if (normalizedType === 'Bool') {
+        this.checkArgVal(isTypeFunc('boolean'), argVal, 'boolean');
+      } else if (normalizedType === 'Address') {
+        this.checkArgVal(
+          (t: any) => typeof t === 'string' && isValidSuiAddress(t),
+          argVal,
+          'valid SUI address'
+        );
+      }
+      return normalizedType.toLowerCase();
+    } else if (typeof normalizedType === 'string') {
+      throw new Error(
+        `${MOVE_CALL_SER_ERROR} unknown pure normalized type ${normalizedType}`
+      );
+    }
+
+    if ('Vector' in normalizedType) {
+      if (typeof argVal === 'string' && normalizedType.Vector === 'U8') {
+        return 'string';
+      }
+
+      if (!Array.isArray(argVal)) {
+        throw new Error(
+          `Expect ${argVal} to be a array, received ${typeof argVal}`
+        );
+      }
+      const innerType = this.getPureSerializationType(
+        normalizedType.Vector,
+        // undefined when argVal is empty
+        argVal[0]
+      );
+      const res = `vector<${innerType}>`;
+      // TODO: can we get rid of this call and make it happen automatically?
+      bcs.registerVectorType(res, innerType);
+      return res;
+    }
+
+    // TODO: update this once we support vector of object ids
+    throw new Error(
+      `${MOVE_CALL_SER_ERROR} unknown normalized type ${normalizedType}`
+    );
+  }
+
+  private checkArgVal(
+    check: (t: any) => boolean,
+    argVal: SuiJsonValue | undefined,
+    expectedType: string
+  ) {
+    if (argVal === undefined) {
+      return;
+    }
+    if (!check(argVal)) {
+      throw new Error(
+        `Expect ${argVal} to be ${expectedType}, received ${typeof argVal}`
+      );
+    }
+  }
+
+  private isTxContext(param: SuiMoveNormalizedType): boolean {
+    const struct = extractMutableReference(param)?.Struct;
+    return (
+      struct?.address === '0x2' &&
+      struct?.module === 'tx_context' &&
+      struct?.name === 'TxContext'
+    );
+  }
+}

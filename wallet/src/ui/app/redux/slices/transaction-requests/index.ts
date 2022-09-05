@@ -112,6 +112,8 @@ const slice = createSlice({
             state,
             { payload }: PayloadAction<TransactionRequest[]>
         ) => {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             txRequestsAdapter.setAll(state, payload);
             state.initialized = true;
         },

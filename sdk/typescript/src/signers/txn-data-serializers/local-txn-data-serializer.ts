@@ -4,7 +4,6 @@
 import { Base64DataBuffer } from '../../serialization/base64';
 import {
   bcs,
-  CallArg,
   Coin,
   COIN_JOIN_FUNC_NAME,
   COIN_MODULE_NAME,
@@ -25,8 +24,9 @@ import {
   TxnDataSerializer,
 } from './txn-data-serializer';
 import { Provider } from '../../providers/provider';
+import { CallArgSerializer } from './call-arg-serializer';
 
-const TYPE_TAG = Array.from('TransactionData::').map(e => e.charCodeAt(0));
+const TYPE_TAG = Array.from('TransactionData::').map((e) => e.charCodeAt(0));
 
 export class LocalTxnDataSerializer implements TxnDataSerializer {
   /**
@@ -101,7 +101,9 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
           module: t.module,
           function: t.function,
           typeArguments: t.typeArguments as TypeTag[],
-          arguments: t.arguments as CallArg[],
+          arguments: await new CallArgSerializer(
+            this.provider
+          ).serializeMoveCallArguments(t),
         },
       };
 
@@ -124,34 +126,15 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     t: MergeCoinTransaction
   ): Promise<Base64DataBuffer> {
     try {
-      const coinToMergeRef = await this.provider.getObjectRef(t.coinToMerge);
-      const primaryCoinRef = await this.provider.getObjectRef(t.primaryCoin);
-      const pkg = await this.provider.getObjectRef(COIN_PACKAGE_ID);
-
-      const tx = {
-        Call: {
-          package: pkg!,
-          module: COIN_MODULE_NAME,
-          function: COIN_JOIN_FUNC_NAME,
-          typeArguments: [await this.getCoinStructTag(t.coinToMerge)],
-          arguments: [
-            {
-              Object: { ImmOrOwned: primaryCoinRef! },
-            },
-            {
-              Object: { ImmOrOwned: coinToMergeRef! },
-            },
-          ],
-        },
-      };
-
-      return await this.constructTransactionData(
-        tx,
-        // TODO: make `gasPayment` a required field in `MoveCallTransaction`
-        t.gasPayment!,
-        t.gasBudget,
-        signerAddress
-      );
+      return await this.newMoveCall(signerAddress, {
+        packageObjectId: COIN_PACKAGE_ID,
+        module: COIN_MODULE_NAME,
+        function: COIN_JOIN_FUNC_NAME,
+        typeArguments: [await this.getCoinStructTag(t.coinToMerge)],
+        arguments: [t.primaryCoin, t.coinToMerge],
+        gasPayment: t.gasPayment,
+        gasBudget: t.gasBudget,
+      });
     } catch (err) {
       throw new Error(
         `Error constructing a MergeCoin Transaction: ${err} args ${JSON.stringify(
@@ -166,33 +149,15 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
     t: SplitCoinTransaction
   ): Promise<Base64DataBuffer> {
     try {
-      const coinRef = await this.provider.getObjectRef(t.coinObjectId);
-      const pkg = await this.provider.getObjectRef(COIN_PACKAGE_ID);
-
-      const tx = {
-        Call: {
-          package: pkg!,
-          module: COIN_MODULE_NAME,
-          function: COIN_SPLIT_VEC_FUNC_NAME,
-          typeArguments: [await this.getCoinStructTag(t.coinObjectId)],
-          arguments: [
-            {
-              Object: { ImmOrOwned: coinRef! },
-            },
-            {
-              Pure: bcs.ser('vector<u64>', t.splitAmounts).toBytes(),
-            },
-          ],
-        },
-      };
-
-      return await this.constructTransactionData(
-        tx,
-        // TODO: make `gasPayment` a required field in `MoveCallTransaction`
-        t.gasPayment!,
-        t.gasBudget,
-        signerAddress
-      );
+      return await this.newMoveCall(signerAddress, {
+        packageObjectId: COIN_PACKAGE_ID,
+        module: COIN_MODULE_NAME,
+        function: COIN_SPLIT_VEC_FUNC_NAME,
+        typeArguments: [await this.getCoinStructTag(t.coinObjectId)],
+        arguments: [t.coinObjectId, t.splitAmounts],
+        gasPayment: t.gasPayment,
+        gasBudget: t.gasBudget,
+      });
     } catch (err) {
       throw new Error(
         `Error constructing a SplitCoin Transaction: ${err} args ${JSON.stringify(
@@ -221,7 +186,7 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       );
     } catch (err) {
       throw new Error(
-        `Error constructing a newPublishi transaction: ${err} with args ${JSON.stringify(
+        `Error constructing a newPublish transaction: ${err} with args ${JSON.stringify(
           t
         )}`
       );
@@ -257,6 +222,8 @@ export class LocalTxnDataSerializer implements TxnDataSerializer {
       gasBudget: gasBudget,
       sender: signerAddress,
     };
+
+    console.log('transactiondata', txData);
 
     return this.serializeTransactionData(txData);
   }
