@@ -7,7 +7,7 @@ import { ReactComponent as AddressIcon } from '../../assets/AddressIcon.svg';
 import ErrorResult from '../../components/error-result/ErrorResult';
 import Longtext from '../../components/longtext/Longtext';
 import OwnedObjects from '../../components/ownedobjects/OwnedObjects';
-import TxForID from '../../components/transactions-for-id/TxForID';
+import TxForID from '../../components/transaction-card/TxForID';
 import resultheaderstyle from '../../styles/resultheader.module.css';
 
 type DataType = {
