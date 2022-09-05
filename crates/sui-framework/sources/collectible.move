@@ -25,9 +25,11 @@ module sui::collectible {
     /// to use `T` as both a witness and a data type.
     struct Collectible<T: store + drop> has key {
         id: UID,
-        /// Incremental number in a collection. Useful for limited series
-        /// In arts it's called `Edition` (eg 7/100)
+        /// Incremental number in a collection.
         unique_number: u64,
+        /// Total number of items in collection. Improves
+        /// on-chain discovery (eg when Cap is wrapped).
+        edition: Option<u64>,
         /// Optional field for custom metadata.
         /// The same T is used for witness-ing transfer* methods.
         info: T,
@@ -40,6 +42,7 @@ module sui::collectible {
         total_supply: u64,
         max_supply: Option<u64>
     }
+
 
     /// Borrow `unique_number` field.
     public fun unique_number<T: store + drop>(self: &Collectible<T>): u64 { self.unique_number }
@@ -92,6 +95,7 @@ module sui::collectible {
         Collectible {
             info,
             id: object::new(ctx),
+            edition: *&cap.max_supply,
             unique_number: cap.total_supply,
         }
     }
@@ -114,7 +118,7 @@ module sui::collectible {
 
     /// Implementable `transfer::share_object` function.
     public fun share_object<T: store + drop>(_w: T, nft: Collectible<T>) {
-        transfer::share_object(nft);
+        transfer::share_object(nft)
     }
 }
 
