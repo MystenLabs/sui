@@ -304,7 +304,7 @@ impl SuiNode {
             .as_ref()
             .and_then(|q| config.rosetta_address.map(|addr| (addr, q)))
             .map(|(addr, q)| {
-                let rosetta = RosettaServer::new(state.clone(), q.clone_quorum_driver());
+                let rosetta = RosettaServer::new(state.clone(), q.clone_quorum_driver(), genesis);
                 rosetta.serve(addr)
             });
 

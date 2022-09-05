@@ -14,15 +14,15 @@ use sui_types::messages::{
 };
 use sui_types::sui_serde::Hex;
 
-use crate::actions::SuiAction;
 use crate::errors::Error;
+use crate::operations::Operation;
 use crate::types::{
     AccountIdentifier, ConstructionCombineRequest, ConstructionCombineResponse,
     ConstructionDeriveRequest, ConstructionDeriveResponse, ConstructionHashRequest,
     ConstructionMetadataRequest, ConstructionMetadataResponse, ConstructionParseRequest,
     ConstructionParseResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
     ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
-    Operation, SignatureType, SigningPayload, TransactionIdentifier, TransactionIdentifierResponse,
+    SignatureType, SigningPayload, TransactionIdentifier, TransactionIdentifierResponse,
 };
 use crate::ErrorType::{InternalError, MissingInput};
 use crate::ServerContext;
@@ -43,8 +43,7 @@ pub async fn payload(
     Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<ConstructionPayloadsResponse, Error> {
     context.checks_network_identifier(&payload.network_identifier)?;
-    let action: SuiAction = payload.operations.try_into()?;
-    let data = action.try_into_data(&context.state).await?;
+    let data = Operation::parse_operations(payload.operations, &context.state).await?;
 
     let signer = data.signer();
     let hex_bytes = payload
@@ -127,9 +126,7 @@ pub async fn preprocess(
     Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<ConstructionPreprocessResponse, Error> {
     context.checks_network_identifier(&payload.network_identifier)?;
-    let action: SuiAction = payload.operations.try_into()?;
-    let data = action.try_into_data(&context.state).await?;
-
+    let data = Operation::parse_operations(payload.operations, &context.state).await?;
     let signer = data.signer();
     Ok(ConstructionPreprocessResponse {
         options: None,
@@ -175,9 +172,7 @@ pub async fn parse(
         TransactionData::from_signable_bytes(&payload.transaction.to_vec()?)?
     };
     let address = data.signer();
-    let actions = SuiAction::try_from_data(&data)?;
-
-    let operations = Operation::from_actions(actions);
+    let operations = Operation::from_data_and_effect(&data, None)?;
 
     Ok(ConstructionParseResponse {
         operations,

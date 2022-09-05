@@ -7,6 +7,7 @@ use std::sync::Arc;
 use axum::routing::post;
 use axum::{Extension, Router};
 use once_cell::sync::Lazy;
+use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_quorum_driver::QuorumDriver;
@@ -19,11 +20,11 @@ use crate::types::{Currency, NetworkIdentifier, SuiEnv};
 use crate::ErrorType::{UnsupportedBlockchain, UnsupportedNetwork};
 
 mod account;
-mod actions;
 mod block;
 mod construction;
 mod errors;
 mod network;
+mod operations;
 mod state;
 mod types;
 
@@ -40,8 +41,9 @@ impl RosettaServer {
     pub fn new(
         state: Arc<AuthorityState>,
         quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
+        genesis: &Genesis,
     ) -> Self {
-        let blocks = Arc::new(PseudoBlockProvider::spawn(state.clone()));
+        let blocks = Arc::new(PseudoBlockProvider::spawn(state.clone(), genesis));
         Self {
             context: ServerContext::new(
                 SuiEnv::MainNet,

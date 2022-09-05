@@ -10,14 +10,23 @@ use sha3::{Digest, Sha3_256};
 use tokio::sync::RwLock;
 use tracing::{debug, error};
 
+use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_quorum_driver::QuorumDriver;
-use sui_types::base_types::{SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH};
+use sui_types::base_types::{
+    SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
+};
+use sui_types::gas_coin::GasCoin;
 
-use crate::types::{Block, BlockHash, BlockIdentifier, BlockResponse, TransactionIdentifier};
+use crate::operations::Operation;
+use crate::types::{
+    AccountIdentifier, Amount, Block, BlockHash, BlockIdentifier, BlockResponse, CoinAction,
+    CoinChange, CoinID, CoinIdentifier, OperationIdentifier, OperationStatus, OperationType,
+    SignedValue, Transaction, TransactionIdentifier,
+};
 use crate::ErrorType::{BlockNotFound, InternalError};
-use crate::{Error, NetworkIdentifier, SuiEnv, UnsupportedBlockchain, UnsupportedNetwork};
+use crate::{Error, NetworkIdentifier, SuiEnv, UnsupportedBlockchain, UnsupportedNetwork, SUI};
 
 pub struct ServerContext {
     pub env: SuiEnv,
@@ -181,9 +190,9 @@ impl BlockProvider for PseudoBlockProvider {
 }
 
 impl PseudoBlockProvider {
-    pub fn spawn(state: Arc<AuthorityState>) -> Self {
+    pub fn spawn(state: Arc<AuthorityState>, genesis: &Genesis) -> Self {
         let blocks = Self {
-            blocks: Arc::new(RwLock::new(vec![genesis_block()])),
+            blocks: Arc::new(RwLock::new(vec![genesis_block(genesis)])),
         };
 
         let block_interval = option_env!("SUI_BLOCK_INTERVAL")
@@ -256,12 +265,57 @@ impl PseudoBlockProvider {
     }
 }
 
-fn genesis_block() -> BlockResponse {
+fn genesis_block(genesis: &Genesis) -> BlockResponse {
     let id = BlockIdentifier {
         index: 0,
         seq: 0,
         hash: BlockHash([0u8; TRANSACTION_DIGEST_LENGTH]),
     };
+
+    let operations = genesis
+        .objects()
+        .iter()
+        .flat_map(|o| {
+            GasCoin::try_from(o)
+                .ok()
+                .and_then(|coin| o.owner.get_owner_address().ok().map(|addr| (addr, coin)))
+        })
+        .enumerate()
+        .map(|(index, (address, coin))| Operation {
+            operation_identifier: OperationIdentifier {
+                index: index.try_into().unwrap(),
+                network_index: None,
+            },
+            related_operations: vec![],
+            type_: OperationType::Genesis,
+            status: Some(OperationStatus::Success.to_string()),
+            account: Some(AccountIdentifier { address }),
+            amount: Some(Amount {
+                value: SignedValue::from(coin.value()),
+                currency: SUI.clone(),
+            }),
+            coin_change: Some(CoinChange {
+                coin_identifier: CoinIdentifier {
+                    identifier: CoinID {
+                        id: *coin.id(),
+                        version: Some(SequenceNumber::new()),
+                    },
+                },
+                coin_action: CoinAction::CoinCreated,
+            }),
+            metadata: None,
+        })
+        .collect();
+
+    let transaction = Transaction {
+        transaction_identifier: TransactionIdentifier {
+            hash: TransactionDigest::new([0; 32]),
+        },
+        operations,
+        related_transactions: vec![],
+        metadata: None,
+    };
+
     BlockResponse {
         block: Block {
             block_identifier: id.clone(),
@@ -272,7 +326,7 @@ fn genesis_block() -> BlockResponse {
                 .as_millis()
                 .try_into()
                 .unwrap(),
-            transactions: vec![],
+            transactions: vec![transaction],
             metadata: None,
         },
         other_transactions: vec![],

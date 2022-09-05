@@ -1,17 +1,17 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::genesis;
-use crate::Config;
+use std::collections::BTreeMap;
+use std::net::SocketAddr;
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+
 use anyhow::Result;
 use multiaddr::Multiaddr;
 use narwhal_config::Parameters as ConsensusParameters;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::BTreeMap;
-use std::net::SocketAddr;
-use std::path::{Path, PathBuf};
-use std::sync::Arc;
+
 use sui_types::base_types::SuiAddress;
 use sui_types::committee::StakeUnit;
 use sui_types::crypto::AccountKeyPair;
@@ -23,6 +23,9 @@ use sui_types::crypto::NetworkPublicKey;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::sui_serde::KeyPairBase64;
+
+use crate::genesis;
+use crate::Config;
 
 // Default max number of concurrent requests served
 pub const DEFAULT_GRPC_CONCURRENCY_LIMIT: usize = 20000000000;
@@ -52,7 +55,7 @@ pub struct NodeConfig {
     pub json_rpc_address: SocketAddr,
     #[serde(default = "default_websocket_address")]
     pub websocket_address: Option<SocketAddr>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub rosetta_address: Option<SocketAddr>,
 
     #[serde(default = "default_metrics_address")]
@@ -320,8 +323,9 @@ enum GenesisLocation {
 
 #[cfg(test)]
 mod tests {
-    use super::Genesis;
     use crate::{genesis, NodeConfig};
+
+    use super::Genesis;
 
     #[test]
     fn serialize_genesis_config_from_file() {

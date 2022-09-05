@@ -13,15 +13,17 @@ use serde_json::{json, Value};
 use serde_with::serde_as;
 use strum_macros::EnumIter;
 
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH};
+use sui_types::base_types::{
+    ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
+};
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::ExecutionStatus;
 use sui_types::sui_serde::Base64;
 use sui_types::sui_serde::Hex;
 use sui_types::sui_serde::Readable;
 
-use crate::actions::SuiAction;
 use crate::errors::Error;
+use crate::operations::Operation;
 use crate::{ErrorType, SUI};
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -95,6 +97,15 @@ impl From<u64> for SignedValue {
         Self {
             negative: false,
             value,
+        }
+    }
+}
+
+impl From<i64> for SignedValue {
+    fn from(value: i64) -> Self {
+        Self {
+            negative: value.is_negative(),
+            value: value.abs().try_into().unwrap(),
         }
     }
 }
@@ -186,7 +197,73 @@ pub struct Coin {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CoinIdentifier {
-    pub identifier: ObjectID,
+    pub identifier: CoinID,
+}
+
+#[derive(Clone)]
+pub struct CoinID {
+    pub id: ObjectID,
+    pub version: Option<SequenceNumber>,
+}
+
+impl Serialize for CoinID {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        if let Some(version) = self.version {
+            format!("{}:{}", self.id, version.value())
+        } else {
+            format!("{}", self.id)
+        }
+        .serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for CoinID {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        Ok(if let Some(i) = s.find(':') {
+            let (id, version) = s.split_at(i);
+            let version = version.trim_start_matches(':');
+            let id = ObjectID::from_hex_literal(id).map_err(D::Error::custom)?;
+            let version = Some(SequenceNumber::from_u64(
+                u64::from_str(version).map_err(D::Error::custom)?,
+            ));
+            Self { id, version }
+        } else {
+            let id = ObjectID::from_hex_literal(&s).map_err(D::Error::custom)?;
+            Self { id, version: None }
+        })
+    }
+}
+
+#[test]
+fn test_coin_id_serde() {
+    let id = ObjectID::random();
+    let coin_id = CoinID {
+        id,
+        version: Some(SequenceNumber::from_u64(10)),
+    };
+    let s = serde_json::to_string(&coin_id).unwrap();
+    assert_eq!(format!("\"{}:{}\"", id, 10), s);
+
+    let deserialized: CoinID = serde_json::from_str(&s).unwrap();
+
+    assert_eq!(id, deserialized.id);
+    assert_eq!(Some(SequenceNumber::from_u64(10)), deserialized.version)
+}
+
+impl From<ObjectRef> for CoinID {
+    fn from((id, version, _): ObjectRef) -> Self {
+        Self {
+            id,
+            version: Some(version),
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -261,58 +338,9 @@ pub struct ConstructionPayloadsRequest {
     pub public_keys: Vec<PublicKey>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
-pub struct Operation {
-    pub operation_identifier: OperationIdentifier,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub related_operations: Vec<OperationIdentifier>,
-    #[serde(rename = "type")]
-    pub type_: OperationType,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub status: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub account: Option<AccountIdentifier>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub amount: Option<Amount>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub coin_change: Option<CoinChange>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
-}
-
-impl Operation {
-    pub fn from_actions(actions: Vec<SuiAction>) -> Vec<Operation> {
-        actions
-            .into_iter()
-            .flat_map(Vec::<Operation>::from)
-            .collect::<Vec<_>>()
-    }
-    pub fn budget(index: u64, budget: u64, gas: ObjectID, sender: SuiAddress) -> Self {
-        Self {
-            operation_identifier: OperationIdentifier {
-                index,
-                network_index: None,
-            },
-            related_operations: vec![],
-            type_: OperationType::GasBudget,
-            status: None,
-            account: Some(AccountIdentifier { address: sender }),
-            amount: Some(Amount {
-                value: budget.into(),
-                currency: SUI.clone(),
-            }),
-            coin_change: Some(CoinChange {
-                coin_identifier: CoinIdentifier { identifier: gas },
-                coin_action: CoinAction::CoinSpent,
-            }),
-            metadata: None,
-        }
-    }
-}
-
-#[derive(Deserialize, Serialize, Copy, Clone, Debug)]
+#[derive(Deserialize, Serialize, Copy, Clone, Debug, EnumIter)]
 pub enum OperationType {
-    GasBudget,
+    Gas,
     TransferSUI,
     TransferCoin,
     MergeCoins,
@@ -321,6 +349,7 @@ pub enum OperationType {
     Publish,
     MoveCall,
     EpochChange,
+    Genesis,
 }
 
 #[derive(Deserialize, Serialize, Clone)]
@@ -595,8 +624,8 @@ impl OperationStatus {
     }
 }
 
-impl From<ExecutionStatus> for OperationStatus {
-    fn from(es: ExecutionStatus) -> Self {
+impl From<&ExecutionStatus> for OperationStatus {
+    fn from(es: &ExecutionStatus) -> Self {
         match es {
             ExecutionStatus::Success => OperationStatus::Success,
             ExecutionStatus::Failure { .. } => OperationStatus::Failure,

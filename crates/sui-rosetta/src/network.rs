@@ -92,16 +92,7 @@ pub async fn options(
         },
         allow: Allow {
             operation_statuses: OperationStatus::iter().collect(),
-            operation_types: vec![
-                OperationType::GasBudget,
-                OperationType::TransferSUI,
-                OperationType::TransferCoin,
-                OperationType::MergeCoins,
-                OperationType::SplitCoin,
-                OperationType::Publish,
-                OperationType::MoveCall,
-                OperationType::EpochChange,
-            ],
+            operation_types: OperationType::iter().collect(),
             errors,
             historical_balance_lookup: false,
             timestamp_start_index: None,

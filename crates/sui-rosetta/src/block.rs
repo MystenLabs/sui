@@ -1,11 +1,14 @@
+// Copyright (c) 2022, Mysten Labs, Inc.
+// SPDX-License-Identifier: Apache-2.0
+
 use std::sync::Arc;
 
 use axum::{Extension, Json};
 
-use crate::actions::SuiAction;
+use crate::operations::Operation;
 use crate::types::{
-    BlockRequest, BlockResponse, BlockTransactionRequest, BlockTransactionResponse, Operation,
-    OperationStatus, Transaction, TransactionIdentifier,
+    BlockRequest, BlockResponse, BlockTransactionRequest, BlockTransactionResponse, Transaction,
+    TransactionIdentifier,
 };
 use crate::{Error, ServerContext};
 
@@ -31,17 +34,10 @@ pub async fn transaction(
 ) -> Result<BlockTransactionResponse, Error> {
     context.checks_network_identifier(&payload.network_identifier)?;
     let digest = payload.transaction_identifier.hash;
-    let (cert, effect) = context.state.get_transaction(digest).await?;
+    let (cert, effects) = context.state.get_transaction(digest).await?;
     let hash = *cert.digest();
     let data = cert.signed_data.data;
-    let actions = SuiAction::try_from_data(&data)?;
-    let mut operations = Operation::from_actions(actions);
-
-    let status = OperationStatus::from(effect.status).to_string();
-
-    for mut operation in &mut operations {
-        operation.status = Some(status.clone())
-    }
+    let operations = Operation::from_data_and_effect(&data, Some(&effects))?;
 
     let transaction = Transaction {
         transaction_identifier: TransactionIdentifier { hash },
