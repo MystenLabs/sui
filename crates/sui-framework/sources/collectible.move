@@ -27,7 +27,7 @@ module sui::collectible {
         id: UID,
         /// Incremental number in a collection. Useful for limited series
         /// In arts it's called `Edition` (eg 7/100)
-        item_id: u64,
+        unique_number: u64,
         /// Optional field for custom metadata.
         /// The same T is used for witness-ing transfer* methods.
         info: T,
@@ -41,8 +41,8 @@ module sui::collectible {
         max_supply: Option<u64>
     }
 
-    /// Borrow `item_id` field.
-    public fun item_id<T: store + drop>(self: &Collectible<T>): u64 { self.item_id }
+    /// Borrow `unique_number` field.
+    public fun unique_number<T: store + drop>(self: &Collectible<T>): u64 { self.unique_number }
 
     /// Borrow `data` field.
     public fun info<T: store + drop>(self: &Collectible<T>): &T { &self.info }
@@ -92,7 +92,7 @@ module sui::collectible {
         Collectible {
             info,
             id: object::new(ctx),
-            item_id: cap.total_supply,
+            unique_number: cap.total_supply,
         }
     }
 
