@@ -19,7 +19,7 @@ serde_with = { version = "1.14.0", features = ["hex"] }
 tracing = "0.1.36"
 bcs = "0.1.3"
 clap = { version = "3.2.17", features = ["derive"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8" }
 
 sui-core = { path = "../sui-core" }
 sui-framework = { path = "../sui-framework" }
@@ -36,8 +36,8 @@ colored = "2.0.0"
 unescape = "0.1.0"
 shell-words = "1.1.0"
 rocksdb = "0.19.0"
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"}
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8"}
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8"}
 tempfile = "3.3.0"
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "842a611a0a58dd378a904d85f79b4edbbbc7b137", package = "executor" }
 
@@ -59,8 +59,8 @@ jemalloc-ctl = "^0.5"
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.23"
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"}
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "7ef7415a4e11cf68fa68ce9db884c46e704e0445"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8"}
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8"}
 jsonrpsee = { version = "0.15.1", features = ["full"] }
 
 test-utils = { path = "../test-utils" }
