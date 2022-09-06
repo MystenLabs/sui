@@ -1,6 +1,6 @@
 # Create a Coin
 
-Publishing a coin is Sui is almost as simple as publishing a new type. However it is a bit tricky as it requires using a Witness pattern.
+Publishing a coin is Sui is almost as simple as publishing a new type. However it is a bit tricky as it requires using a [One Time Witness](/basics/one-time-witness.md).
 
 ```move
 {{#include ../../examples/sources/samples/coin.move:4:}}
