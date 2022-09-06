@@ -2,9 +2,9 @@
 members = [
     "crates/component",
     "crates/mysten-network",
+    "crates/mysten-util-mem",
+    "crates/mysten-util-mem-derive",
     "crates/name-variant",
-    "crates/parity-util-mem",
-    "crates/parity-util-mem-derive",
     "crates/rccheck",
     "crates/telemetry-subscribers",
     "crates/typed-store",

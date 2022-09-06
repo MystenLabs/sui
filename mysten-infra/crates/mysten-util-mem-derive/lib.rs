@@ -12,7 +12,7 @@
 //! A crate for deriving the MallocSizeOf trait.
 //!
 //! This is a copy of Servo malloc_size_of_derive code, modified to work with
-//! our `parity_util_mem` library
+//! our `mysten_util_mem` library
 
 #![allow(clippy::all)]
 
@@ -51,12 +51,12 @@ fn malloc_size_of_derive(s: synstructure::Structure) -> proc_macro2::TokenStream
         } else if let syn::Type::Array(..) = binding.ast().ty {
             Some(quote! {
                 for item in #binding.iter() {
-                    sum += parity_util_mem::MallocSizeOf::size_of(item, ops);
+                    sum += mysten_util_mem::MallocSizeOf::size_of(item, ops);
                 }
             })
         } else {
             Some(quote! {
-                sum += parity_util_mem::MallocSizeOf::size_of(#binding, ops);
+                sum += mysten_util_mem::MallocSizeOf::size_of(#binding, ops);
             })
         }
     });
@@ -69,14 +69,14 @@ fn malloc_size_of_derive(s: synstructure::Structure) -> proc_macro2::TokenStream
         let ident = &param.ident;
         where_clause
             .predicates
-            .push(parse_quote!(#ident: parity_util_mem::MallocSizeOf));
+            .push(parse_quote!(#ident: mysten_util_mem::MallocSizeOf));
     }
 
     let tokens = quote! {
-        impl #impl_generics parity_util_mem::MallocSizeOf for #name #ty_generics #where_clause {
+        impl #impl_generics mysten_util_mem::MallocSizeOf for #name #ty_generics #where_clause {
             #[inline]
             #[allow(unused_variables, unused_mut, unreachable_code)]
-            fn size_of(&self, ops: &mut parity_util_mem::MallocSizeOfOps) -> usize {
+            fn size_of(&self, ops: &mut mysten_util_mem::MallocSizeOfOps) -> usize {
                 let mut sum = 0;
                 match *self {
                     #match_body
