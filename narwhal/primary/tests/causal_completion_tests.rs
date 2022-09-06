@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use bytes::Bytes;
 use std::time::Duration;
-use telemetry_subscribers::TelemetryGuards;
-use test_utils::cluster::Cluster;
+use test_utils::cluster::{setup_tracing, Cluster};
 use tracing::info;
 use types::{TransactionProto, TransactionsClient};
 
@@ -162,20 +161,4 @@ async fn test_read_causal_signed_certificates() {
         node_made_progress,
         "Node 0 didn't make progress - causal completion didn't succeed"
     );
-}
-
-fn setup_tracing() -> TelemetryGuards {
-    // Setup tracing
-    let tracing_level = "debug";
-    let network_tracing_level = "info";
-
-    let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
-
-    telemetry_subscribers::TelemetryConfig::new("narwhal")
-        // load env variables
-        .with_env()
-        // load special log filter
-        .with_log_level(&log_filter)
-        .init()
-        .0
 }

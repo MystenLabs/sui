@@ -1,8 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use std::time::Duration;
-use telemetry_subscribers::TelemetryGuards;
-use test_utils::cluster::Cluster;
+use test_utils::cluster::{setup_tracing, Cluster};
 
 use types::{PublicKeyProto, RoundsRequest};
 
@@ -244,20 +243,4 @@ async fn test_loss_of_liveness_with_recovery() {
         rounds_3.values().all(|v| v > round_2_max),
         "All the nodes should have advanced more from the previous round"
     );
-}
-
-fn setup_tracing() -> TelemetryGuards {
-    // Setup tracing
-    let tracing_level = "debug";
-    let network_tracing_level = "info";
-
-    let log_filter = format!("{tracing_level},h2={network_tracing_level},tower={network_tracing_level},hyper={network_tracing_level},tonic::transport={network_tracing_level}");
-
-    telemetry_subscribers::TelemetryConfig::new("narwhal")
-        // load env variables
-        .with_env()
-        // load special log filter
-        .with_log_level(&log_filter)
-        .init()
-        .0
 }

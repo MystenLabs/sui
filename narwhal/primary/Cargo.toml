@@ -57,8 +57,8 @@ itertools = "0.10.3"
 mockall = "0.11.2"
 node = { path = "../node" }
 proptest = "1.0.0"
-telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
 tempfile = "3.3.0"
+telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
 test_utils = { path = "../test_utils" }
 thiserror = "1.0.33"
 tracing = "0.1.36"

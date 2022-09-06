@@ -1,9 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use crate::serde::NarwhalBitmap;
 use crate::{
     error::{DagError, DagResult},
+    serde::NarwhalBitmap,
     CertificateDigestProto,
 };
 use blake2::{digest::Update, VarBlake2b};
@@ -20,9 +20,8 @@ use indexmap::IndexMap;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
-use std::collections::VecDeque;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
     fmt::Formatter,
 };

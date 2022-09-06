@@ -9,8 +9,7 @@ use crate::{
 use consensus::ConsensusOutput;
 use fastcrypto::Hash;
 use std::{fmt::Debug, sync::Arc};
-use store::rocks::TypedStoreError;
-use store::Store;
+use store::{rocks::TypedStoreError, Store};
 use tokio::{
     sync::{mpsc::Sender, watch},
     task::JoinHandle,

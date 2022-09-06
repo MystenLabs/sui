@@ -1,8 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use serde::de::{Deserializer, Error};
-use serde::ser::{Error as SerError, Serializer};
+use serde::{
+    de::{Deserializer, Error},
+    ser::{Error as SerError, Serializer},
+};
 use serde_with::{Bytes, DeserializeAs, SerializeAs};
 use std::fmt::Debug;
 
