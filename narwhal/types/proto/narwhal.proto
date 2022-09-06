@@ -166,8 +166,6 @@ service Configuration {
 service WorkerToWorker {
     // Sends a worker message
     rpc SendMessage(BincodeEncodedPayload) returns (Empty) {}
-    // requests a number of batches that the service then streams back to the client
-    rpc ClientBatchRequest(BincodeEncodedPayload) returns (stream BincodeEncodedPayload) {}
 }
 
 // The worker-to-primary interface

@@ -91,8 +91,6 @@ pub struct WorkerChannelMetrics {
     pub tx_client_processor: IntGauge,
     /// occupancy of the channel from the `worker::WorkerReceiverHandler` to the `worker::Helper` (carrying worker requests)
     pub tx_worker_helper: IntGauge,
-    /// occupancy of the channel from the `worker::WorkerReceiverHandler` to the `worker::Helper` (carrying client requests)
-    pub tx_client_helper: IntGauge,
 }
 
 impl WorkerChannelMetrics {
@@ -133,11 +131,6 @@ impl WorkerChannelMetrics {
                 "occupancy of the channel from the `worker::WorkerReceiverHandler` to the `worker::Helper` (carrying worker requests)",
                 registry
             ).unwrap(),
-            tx_client_helper: register_int_gauge_with_registry!(
-                "tx_client_helper",
-                "occupancy of the channel from the `worker::WorkerReceiverHandler` to the `worker::Helper` (carrying client requests)",
-                registry
-            ).unwrap()
         }
     }
 }

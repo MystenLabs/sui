@@ -6,10 +6,7 @@ use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use network::{UnreliableNetwork, WorkerNetwork};
 use store::Store;
-use tokio::{
-    sync::{mpsc, watch},
-    task::JoinHandle,
-};
+use tokio::{sync::watch, task::JoinHandle};
 use tracing::{error, trace, warn};
 use types::{
     metered_channel::Receiver, BatchDigest, ReconfigureNotification, SerializedBatchMessage,
@@ -33,8 +30,6 @@ pub struct Helper {
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input channel to receive batch requests from workers.
     rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
-    /// Input channel to receive batch requests from workers.
-    rx_client_request: Receiver<(Vec<BatchDigest>, mpsc::Sender<SerializedBatchMessage>)>,
     /// A network sender to send the batches to the other workers.
     network: WorkerNetwork,
 }
@@ -48,7 +43,6 @@ impl Helper {
         store: Store<BatchDigest, SerializedBatchMessage>,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_worker_request: Receiver<(Vec<BatchDigest>, PublicKey)>,
-        rx_client_request: Receiver<(Vec<BatchDigest>, mpsc::Sender<SerializedBatchMessage>)>,
         network: WorkerNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
@@ -59,7 +53,6 @@ impl Helper {
                 store,
                 rx_reconfigure,
                 rx_worker_request,
-                rx_client_request,
                 network,
             }
             .run()
@@ -95,21 +88,6 @@ impl Helper {
                         }
                     }
                 },
-
-                // Handle requests from clients.
-                Some((digests, replier)) = self.rx_client_request.recv() => {
-                    // Reply to the request (the best we can).
-                    for digest in digests {
-                        match self.store.read(digest).await {
-                            Ok(Some(data)) => replier
-                                .send(data)
-                                .await
-                                .expect("Failed to reply to network"),
-                            Ok(None) => (),
-                            Err(e) => error!("{e}"),
-                        }
-                    }
-                }
 
                 // Trigger reconfigure.
                 result = self.rx_reconfigure.changed() => {

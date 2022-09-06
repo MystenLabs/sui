@@ -7,28 +7,23 @@ use crate::{
     synchronizer::Synchronizer,
 };
 use async_trait::async_trait;
-use bytes::Bytes;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
 use crypto::{NetworkKeyPair, PublicKey};
-use futures::{Stream, StreamExt};
+use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
 use network::{metrics::WorkerNetworkMetrics, WorkerNetwork};
 use primary::PrimaryWorkerMessage;
-use std::{net::Ipv4Addr, pin::Pin, sync::Arc};
+use std::{net::Ipv4Addr, sync::Arc};
 use store::Store;
-use tokio::{
-    sync::{mpsc, watch},
-    task::JoinHandle,
-};
+use tokio::{sync::watch, task::JoinHandle};
 use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
     error::DagError,
     metered_channel::{channel, Sender},
-    BatchDigest, BincodeEncodedPayload, ClientBatchRequest, Empty, PrimaryToWorker,
-    PrimaryToWorkerServer, ReconfigureNotification, SerializedBatchMessage, Transaction,
-    TransactionProto, Transactions, TransactionsServer, WorkerPrimaryMessage, WorkerToWorker,
-    WorkerToWorkerServer,
+    BatchDigest, BincodeEncodedPayload, Empty, PrimaryToWorker, PrimaryToWorkerServer,
+    ReconfigureNotification, SerializedBatchMessage, Transaction, TransactionProto, Transactions,
+    TransactionsServer, WorkerPrimaryMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -293,8 +288,6 @@ impl Worker {
     ) -> Vec<JoinHandle<()>> {
         let (tx_worker_helper, rx_worker_helper) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_helper);
-        let (tx_client_helper, rx_client_helper) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_client_helper);
         let (tx_worker_processor, rx_worker_processor) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_processor);
 
@@ -310,7 +303,6 @@ impl Worker {
             .unwrap();
         let worker_handle = WorkerReceiverHandler {
             tx_worker_helper,
-            tx_client_helper,
             tx_processor: tx_worker_processor,
         }
         .spawn(
@@ -331,7 +323,6 @@ impl Worker {
             self.store.clone(),
             tx_reconfigure.subscribe(),
             /* rx_worker_request */ rx_worker_helper,
-            /* rx_client_request */ rx_client_helper,
             worker_network,
         );
 
@@ -434,7 +425,6 @@ impl Transactions for TxReceiverHandler {
 #[derive(Clone)]
 struct WorkerReceiverHandler {
     tx_worker_helper: Sender<(Vec<BatchDigest>, PublicKey)>,
-    tx_client_helper: Sender<(Vec<BatchDigest>, mpsc::Sender<SerializedBatchMessage>)>,
     tx_processor: Sender<SerializedBatchMessage>,
 }
 
@@ -501,41 +491,6 @@ impl WorkerToWorker for WorkerReceiverHandler {
         .map_err(|e| Status::not_found(e.to_string()))?;
 
         Ok(Response::new(Empty {}))
-    }
-
-    type ClientBatchRequestStream =
-        Pin<Box<dyn Stream<Item = Result<BincodeEncodedPayload, Status>> + Send>>;
-
-    async fn client_batch_request(
-        &self,
-        request: Request<BincodeEncodedPayload>,
-    ) -> Result<Response<Self::ClientBatchRequestStream>, Status> {
-        let missing = request
-            .into_inner()
-            .deserialize::<ClientBatchRequest>()
-            .map_err(|e| Status::invalid_argument(e.to_string()))?
-            .0;
-
-        // TODO [issue #7]: Do some accounting to prevent bad actors from use all our
-        // resources (in this case allocate a gigantic channel).
-        let (sender, receiver) = mpsc::channel(missing.len());
-
-        self.tx_client_helper
-            .send((missing, sender))
-            .await
-            .map_err(|_| DagError::ShuttingDown)
-            .map_err(|e| Status::not_found(e.to_string()))?;
-
-        let stream = tokio_stream::wrappers::ReceiverStream::new(receiver).map(|batch| {
-            let payload = BincodeEncodedPayload {
-                payload: Bytes::from(batch),
-            };
-            Ok(payload)
-        });
-
-        Ok(Response::new(
-            Box::pin(stream) as Self::ClientBatchRequestStream
-        ))
     }
 }
 
