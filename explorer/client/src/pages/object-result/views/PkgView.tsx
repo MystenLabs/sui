@@ -3,7 +3,7 @@
 import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import Tabs from '../../../components/tabs/Tabs';
-import TxForID from '../../../components/transactions-for-id/TxForID';
+import TxForID from '../../../components/transaction-card/TxForID';
 import { getOwnerStr } from '../../../utils/objectUtils';
 import { trimStdLibPrefix } from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
