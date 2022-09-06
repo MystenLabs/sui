@@ -1,6 +1,6 @@
 # One Time Witness
 
-One Time Witness (OTW) is a special instance of a type which is created only in the module initializer and is guaranteed to be unique and one. It is important for cases where we need to make sure that a witness-authorized action was performed only once (for example - [creating a new Coin](/samples/coin.md)). In Sui Move a type is considered an OTW if it has the following properties:
+One Time Witness (OTW) is a special instance of a type which is created only in the module initializer and is guaranteed to be unique and have only one instance. It is important for cases where we need to make sure that a witness-authorized action was performed only once (for example - [creating a new Coin](/samples/coin.md)). In Sui Move a type is considered an OTW if its definition has the following properties:
 
 - Named after the module but uppercased
 - Has only `drop` ability
