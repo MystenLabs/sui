@@ -275,7 +275,8 @@ async fn test_node_read_causal_signed_certificates() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
 
-    let (certificates, _next_parents) = make_optimal_signed_certificates(1..=4, &genesis, &k);
+    let (certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &k);
 
     collection_ids.extend(
         certificates

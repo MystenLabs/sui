@@ -1,9 +1,9 @@
 use arc_swap::ArcSwap;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Parameters, WorkerId};
+use config::{Committee, Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
-use crypto::{KeyPair, PublicKey};
+use crypto::PublicKey;
 use fastcrypto::{traits::KeyPair as _, Hash};
 use indexmap::IndexMap;
 use network::metrics::WorkerNetworkMetrics;
@@ -18,9 +18,8 @@ use std::{
 use storage::CertificateStore;
 use store::Store;
 use test_utils::{
-    certificate, committee, fixture_batch_with_transactions, fixture_header_builder, keys,
-    make_optimal_certificates, make_optimal_signed_certificates, pure_committee_from_keys,
-    shared_worker_cache_from_keys, temp_dir,
+    certificate, fixture_batch_with_transactions, make_optimal_certificates,
+    make_optimal_signed_certificates, temp_dir, AuthorityFixture, CommitteeFixture,
 };
 use tokio::sync::watch;
 use tonic::transport::Channel;
@@ -41,12 +40,14 @@ async fn test_get_collections() {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-    let keypair = k.pop().unwrap();
-    let name = keypair.public().clone();
-    let signer = keypair;
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+
+    let author = fixture.authorities().last().unwrap();
+
+    let name = author.public_key();
+    let signer = author.keypair().copy();
 
     // Make the data store.
     let store = NodeStorage::reopen(temp_dir());
@@ -55,16 +56,16 @@ async fn test_get_collections() {
     let mut header_ids = Vec::new();
     // Blocks/Collections
     let mut collection_ids = Vec::new();
-    let key = keys(None).pop().unwrap();
     let mut missing_block = CertificateDigest::new([0; 32]);
 
     // Generate headers
     for n in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(batch.clone(), worker_id)
-            .build(&key)
+            .build(author.keypair())
             .unwrap();
 
         let certificate = certificate(&header);
@@ -231,12 +232,14 @@ async fn test_remove_collections() {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-    let keypair = k.pop().unwrap();
-    let name = keypair.public().clone();
-    let signer = keypair;
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+
+    let author = fixture.authorities().last().unwrap();
+
+    let name = author.public_key();
+    let signer = author.keypair().copy();
 
     // Make the data store.
     let store = NodeStorage::reopen(temp_dir());
@@ -245,7 +248,6 @@ async fn test_remove_collections() {
     let mut header_ids = Vec::new();
     // Blocks/Collections
     let mut collection_ids = Vec::new();
-    let key = keys(None).pop().unwrap();
 
     // Make the Dag
     let (tx_new_certificates, rx_new_certificates) =
@@ -258,9 +260,10 @@ async fn test_remove_collections() {
     for n in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(batch.clone(), worker_id)
-            .build(&key)
+            .build(author.keypair())
             .unwrap();
 
         let certificate = certificate(&header);
@@ -432,10 +435,12 @@ async fn test_remove_collections() {
 
 #[tokio::test]
 async fn test_read_causal_signed_certificates() {
-    let mut k = keys(None);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
 
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
+    let authority_1 = fixture.authorities().next().unwrap();
+    let authority_2 = fixture.authorities().nth(1).unwrap();
 
     // Make the data store.
     let primary_store_1 = NodeStorage::reopen(temp_dir());
@@ -467,7 +472,12 @@ async fn test_read_causal_signed_certificates() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
 
-    let (certificates, _next_parents) = make_optimal_signed_certificates(1..=4, &genesis, &k);
+    let keys = fixture
+        .authorities()
+        .map(|a| a.keypair().copy())
+        .collect::<Vec<_>>();
+    let (certificates, _next_parents) =
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
     collection_ids.extend(
         certificates
@@ -504,7 +514,7 @@ async fn test_read_causal_signed_certificates() {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let keypair_1 = k.pop().unwrap();
+    let keypair_1 = authority_1.keypair().copy();
     let name_1 = keypair_1.public().clone();
 
     let (tx_get_block_commands_1, rx_get_block_commands_1) =
@@ -545,7 +555,7 @@ async fn test_read_causal_signed_certificates() {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let keypair_2 = k.pop().unwrap();
+    let keypair_2 = authority_2.keypair().copy();
     let name_2 = keypair_2.public().clone();
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -623,23 +633,26 @@ async fn test_read_causal_signed_certificates() {
 
 #[tokio::test]
 async fn test_read_causal_unsigned_certificates() {
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+
+    let authority_1 = fixture.authorities().next().unwrap();
+    let authority_2 = fixture.authorities().nth(1).unwrap();
 
     let primary_1_parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let keypair_1 = k.pop().unwrap();
-    let name_1 = keypair_1.public().clone();
+    let keypair_1 = authority_1.keypair().copy();
+    let name_1 = authority_1.public_key();
 
     let primary_2_parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let keypair_2 = k.pop().unwrap();
-    let name_2 = keypair_2.public().clone();
+    let keypair_2 = authority_2.keypair().copy();
+    let name_2 = authority_2.public_key();
 
     // Make the data store.
     let primary_store_1 = NodeStorage::reopen(temp_dir());
@@ -836,12 +849,12 @@ async fn test_read_causal_unsigned_certificates() {
 #[tokio::test]
 async fn test_get_collections_with_missing_certificates() {
     // GIVEN keys for two primary nodes
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
 
-    let keypair_1 = k.pop().unwrap();
-    let keypair_2 = k.pop().unwrap();
+    let authority_1 = fixture.authorities().next().unwrap();
+    let authority_2 = fixture.authorities().nth(1).unwrap();
 
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -854,7 +867,9 @@ async fn test_get_collections_with_missing_certificates() {
 
     // The certificate_1 will be stored in primary 1
     let (certificate_1, batch_1) = fixture_certificate(
-        &keypair_1,
+        authority_1,
+        &committee,
+        &fixture,
         store_primary_1.header_store.clone(),
         store_primary_1.certificate_store.clone(),
         store_primary_1.payload_store.clone(),
@@ -864,7 +879,9 @@ async fn test_get_collections_with_missing_certificates() {
 
     // The certificate_2 will be stored in primary 2
     let (certificate_2, batch_2) = fixture_certificate(
-        &keypair_2,
+        authority_2,
+        &committee,
+        &fixture,
         store_primary_2.header_store.clone(),
         store_primary_2.certificate_store.clone(),
         store_primary_2.payload_store.clone(),
@@ -872,8 +889,8 @@ async fn test_get_collections_with_missing_certificates() {
     )
     .await;
 
-    let name_1 = keypair_1.public().clone();
-    let name_2 = keypair_2.public().clone();
+    let name_1 = authority_1.public_key();
+    let name_2 = authority_2.public_key();
 
     let worker_id = 0;
 
@@ -897,7 +914,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     Primary::spawn(
         name_1.clone(),
-        keypair_1,
+        authority_1.keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),
@@ -949,7 +966,7 @@ async fn test_get_collections_with_missing_certificates() {
 
     Primary::spawn(
         name_2.clone(),
-        keypair_2,
+        authority_2.keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),
@@ -1043,7 +1060,9 @@ async fn test_get_collections_with_missing_certificates() {
 }
 
 async fn fixture_certificate(
-    key: &KeyPair,
+    authority: &AuthorityFixture,
+    committee: &Committee,
+    fixture: &CommitteeFixture,
     header_store: Store<HeaderDigest, Header>,
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
@@ -1059,22 +1078,13 @@ async fn fixture_certificate(
     let mut payload = IndexMap::new();
     payload.insert(batch_digest, worker_id);
 
-    let builder = types::HeaderBuilder::default();
-    let header = builder
-        .author(key.public().clone())
-        .round(1)
-        .epoch(0)
-        .parents(
-            Certificate::genesis(&committee(None))
-                .iter()
-                .map(|x| x.digest())
-                .collect(),
-        )
+    let header = authority
+        .header_builder(committee)
         .payload(payload)
-        .build(key)
+        .build(authority.keypair())
         .unwrap();
 
-    let certificate = certificate(&header);
+    let certificate = fixture.certificate(&header);
 
     // Write the certificate
     certificate_store.write(certificate.clone()).unwrap();
