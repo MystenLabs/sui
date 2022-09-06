@@ -1,31 +1,41 @@
-name: Documentation
+name: Tag
 
-on:
-  push:
-    branches: [ main, extensions ]
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-
+on: 
+  workflow_call:
+    inputs:
+      sui_commit:
+        description: 'Sui repo commit to tag'
+        type: string
+        required: true
+      tag_name:
+        description: 'Tag Name'
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      sui_commit:
+        description: 'Sui repo commit to tag'
+        type: string
+        required: true
+      tag_name:
+        description: 'Tag Name'
+        type: string
+        required: true
 
 jobs:
-  diff:
-    runs-on: [ubuntu-latest]
-    outputs:
-      isDoc: ${{ steps.diff.outputs.isDoc }}
-    steps:
-    - uses: actions/checkout@v3
-    - name: Detect Changes
-      uses: './.github/actions/diffs'
-      id: diff
+  tag:
+    name: Tag
+    runs-on: [self-hosted, self-hosted-arc]
 
-  spelling:
-    name: Lint documentation
-    needs: diff
-    if: needs.diff.outputs.isDoc == 'true'
-    runs-on: [ubuntu-latest]
     steps:
-    - uses: actions/checkout@v3
-    - name: Spell Check Docs
-      uses: crate-ci/typos@master
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Tag
+      uses: julbme/gh-action-manage-tag@v1
       with:
-        files: ./doc ./*.md
+        name: ${{ inputs.tag_name }}
+        state: present
+        from: ${{ inputs.sui_commit }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
