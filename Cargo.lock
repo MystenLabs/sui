@@ -7139,6 +7139,7 @@ dependencies = [
  "node",
  "once_cell",
  "parking_lot 0.12.1",
+ "pin-project",
  "pretty_assertions",
  "prometheus",
  "rand 0.8.5",

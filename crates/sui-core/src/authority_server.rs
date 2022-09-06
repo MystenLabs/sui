@@ -14,10 +14,11 @@ use anyhow::Result;
 use async_trait::async_trait;
 use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
-use futures::{stream::BoxStream, TryStreamExt};
+use futures::{future, stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use narwhal_config::Committee as ConsensusCommittee;
-use prometheus::Registry;
+use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
+use std::future::Future;
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_network::{
@@ -34,6 +35,7 @@ use tokio::{
 use sui_types::messages_checkpoint::CheckpointRequest;
 use sui_types::messages_checkpoint::CheckpointResponse;
 
+use crate::metrics::WatchdogFutureExt;
 use tracing::{info, Instrument};
 
 #[cfg(test)]
@@ -143,6 +145,7 @@ impl AuthorityServer {
                 state: self.state,
                 consensus_adapter: Arc::new(self.consensus_adapter),
                 _checkpoint_consensus_handle: None,
+                metrics: ValidatorServiceMetrics::new_idle(),
             }))
             .bind(&address)
             .await
@@ -162,6 +165,49 @@ pub struct ValidatorService {
     state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
     _checkpoint_consensus_handle: Option<JoinHandle<()>>,
+    metrics: ValidatorServiceMetrics,
+}
+
+struct ValidatorServiceMetrics {
+    pending_spawn: Option<IntGaugeVec>,
+}
+
+impl ValidatorServiceMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        let pending_spawn = Some(
+            register_int_gauge_vec_with_registry!(
+                "pending_spawn",
+                "Total number pending spawned procedures",
+                &["method"],
+                registry,
+            )
+            .unwrap(),
+        );
+        Self { pending_spawn }
+    }
+
+    pub fn new_idle() -> Self {
+        Self {
+            pending_spawn: None,
+        }
+    }
+
+    /// tokio::spawn but monitor number of pending spawns
+    pub fn spawn_watched<F: Future + Send + 'static>(
+        &self,
+        f: F,
+        method: &str,
+    ) -> JoinHandle<F::Output>
+    where
+        F::Output: Send,
+    {
+        let f = if let Some(ref pending_spawn) = self.pending_spawn {
+            future::Either::Right(f.watch_pending(pending_spawn.with_label_values(&[method])))
+        } else {
+            future::Either::Left(f)
+        };
+        tokio::spawn(f)
+    }
 }
 
 impl ValidatorService {
@@ -173,6 +219,7 @@ impl ValidatorService {
         prometheus_registry: Registry,
         rx_reconfigure_consensus: Receiver<(ConsensusKeyPair, ConsensusCommittee)>,
     ) -> Result<Self> {
+        let metrics = ValidatorServiceMetrics::new(&prometheus_registry);
         let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
         let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
 
@@ -211,7 +258,7 @@ impl ValidatorService {
             /* max_pending_transactions */ 1_000_000,
         );
 
-        let metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
+        let adapter_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
 
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
@@ -219,7 +266,7 @@ impl ValidatorService {
             state.clone_committee(),
             tx_sui_to_consensus.clone(),
             /* max_delay */ Duration::from_millis(5_000),
-            metrics.clone(),
+            adapter_metrics.clone(),
         );
 
         // Update the checkpoint store with a consensus client.
@@ -237,7 +284,7 @@ impl ValidatorService {
                 /* checkpoint_locals */ checkpoint_store,
                 /* retry_delay */ Duration::from_millis(5_000),
                 /* max_pending_transactions */ 10_000,
-                metrics,
+                adapter_metrics,
             )
             .spawn();
             Some(handle)
@@ -249,6 +296,7 @@ impl ValidatorService {
             state,
             consensus_adapter: Arc::new(consensus_adapter),
             _checkpoint_consensus_handle: checkpoint_consensus_handle,
+            metrics,
         })
     }
 
@@ -347,7 +395,8 @@ impl Validator for ValidatorService {
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
-        tokio::spawn(async move { Self::handle_transaction(state, request).await })
+        self.metrics
+            .spawn_watched(Self::handle_transaction(state, request), "transaction")
             .await
             .unwrap()
     }
@@ -361,11 +410,13 @@ impl Validator for ValidatorService {
 
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
-        tokio::spawn(
-            async move { Self::handle_certificate(state, consensus_adapter, request).await },
-        )
-        .await
-        .unwrap()
+        self.metrics
+            .spawn_watched(
+                Self::handle_certificate(state, consensus_adapter, request),
+                "certificate",
+            )
+            .await
+            .unwrap()
     }
 
     async fn account_info(
