@@ -84,8 +84,6 @@ export class PublicKey implements PublicKeyData {
         this._buffer = buffer;
       } else if (value instanceof Uint8Array) {
         this._buffer = value;
-      } else if (Array.isArray(value)) {
-        this._buffer = Uint8Array.from(value);
       } else {
         this._buffer = Uint8Array.from(value);
       }
