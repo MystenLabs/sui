@@ -13,3 +13,11 @@ pub use node::{Node, RuntimeType};
 
 mod swarm;
 pub use swarm::{Swarm, SwarmBuilder};
+
+#[cfg(msim)]
+#[path = "./container-sim.rs"]
+mod container;
+
+#[cfg(not(msim))]
+#[path = "./container.rs"]
+mod container;
