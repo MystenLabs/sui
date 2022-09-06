@@ -37,9 +37,11 @@ module.exports = {
                     dark: '#EB5A29',
                     light: '#FFECE5',
                 },
+                success: {
+                    dark: '#008C65',
+                    light: '#D5F7EE',
+                },
                 cardDark: '#F3F4F5',
-                success: '#2DD7A7',
-                error: '#2DD7A7',
                 header: '#2A4362',
                 search: {
                     fill: '#162A43',
