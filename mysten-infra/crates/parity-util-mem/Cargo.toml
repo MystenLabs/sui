@@ -18,6 +18,7 @@ impl-trait-for-tuples = "0.2.0"
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b", features = ["copy_key"] }
 indexmap = { version = "1.9.1", features = ["serde"] }
 roaring = "0.9.0"
+ed25519-consensus = { version = "2.0.1", features = ["serde"] }
 
 smallvec = { version = "1.0.0", optional = true }
 parking_lot = { version = "0.12.0", optional = true }
