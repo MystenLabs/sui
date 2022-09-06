@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
 async-trait = "0.1.57"
 serde = { version = "1.0.144", features = ["derive"] }
 tracing = "0.1.36"

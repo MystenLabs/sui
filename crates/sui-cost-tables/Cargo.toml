@@ -13,6 +13,6 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "70b34a66
 once_cell = "1.13.1"
 workspace-hack = { path = "../workspace-hack"}
 
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
 serde = { version = "1.0.141", features = ["derive"] }
 bcs = "0.1.3"

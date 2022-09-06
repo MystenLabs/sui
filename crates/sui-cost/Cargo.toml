@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 workspace-hack = { path = "../workspace-hack"}
 sui-types = {path = "../sui-types"}
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
 tokio = { version = "1.20.1", features = ["full"] }
 serde = { version = "1.0.144", features = ["derive"] }
 strum = { version = "0.24", features = ["derive"] }

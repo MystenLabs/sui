@@ -7,7 +7,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.58"
+anyhow = "1.0.64"
 async-trait = "0.1.57"
 jsonrpsee = { version = "0.15.1", features = ["full"] }
 serde = { version = "1.0.144", features = ["derive"] }
