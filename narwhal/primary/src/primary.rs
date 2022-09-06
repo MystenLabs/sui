@@ -539,9 +539,8 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 .await
                 .map_err(|_| DagError::ShuttingDown),
         }
-        .unwrap();
-
-        Ok(anemo::Response::new(()))
+        .map(|_| anemo::Response::new(()))
+        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
     }
 }
 
