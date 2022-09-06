@@ -9,18 +9,20 @@ import { sha3_256 } from 'js-sha3';
  */
 export type PublicKeyInitData =
   | string
-  | Buffer
   | Uint8Array
-  | Array<number>
+  | Iterable<number>
   | PublicKeyData;
 
-const zeroPadBuffer = (buffer: Uint8Array, length: number): Uint8Array => {
+const zeroPadBuffer = (
+  buffer: Uint8Array,
+  minimumLength: number
+): Uint8Array => {
   // Short circuit if the buffer is already the correct length.
-  if (buffer.length === length) {
+  if (buffer.byteLength >= minimumLength) {
     return buffer;
   }
-  const next = new Uint8Array(length);
-  Buffer.from(buffer).copy(next, length - buffer.length);
+  const next = new Uint8Array(minimumLength);
+  next.set(buffer, minimumLength - buffer.byteLength);
   return next;
 };
 
