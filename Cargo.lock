@@ -778,6 +778,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "cargo_metadata"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3abb7553d5b9b8421c6de7cb02606ff15e0c6eea7d8eadd75ef013fd636bec36"
+dependencies = [
+ "camino",
+ "cargo-platform",
+ "semver 1.0.9",
+ "serde 1.0.144",
+ "serde_json",
+]
+
+[[package]]
 name = "cassowary"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2486,7 +2499,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7225e3bb8e09a1ef73283a85d589174997acd9f8c36fe72d16c1fe8b9483288"
 dependencies = [
  "camino",
- "cargo_metadata",
+ "cargo_metadata 0.14.2",
  "cfg-if 1.0.0",
  "debug-ignore",
  "fixedbitset 0.4.1",
@@ -7887,9 +7900,9 @@ checksum = "507e9898683b6c43a9aa55b64259b721b52ba226e0f3779137e50ad114a4c90b"
 
 [[package]]
 name = "test-fuzz"
-version = "3.0.2"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f03298404c433dd9e5bb84e2d6e587e80aa98a01a818c45150327d06c3ae1c72"
+checksum = "125df852011c4f8f31df5620f4aea38ecddb5dfb4d9bc569b30485b15ffc3d4e"
 dependencies = [
  "serde 1.0.144",
  "test-fuzz-internal",
@@ -7899,11 +7912,11 @@ dependencies = [
 
 [[package]]
 name = "test-fuzz-internal"
-version = "3.0.2"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bf82068d044bda291ae8cad09018bfa8df3e303825a724839dc2d21283fafeb"
+checksum = "58071dc2471840e9f374eeb0f6e405a31bccb3cc5d59bb4598f02cafc274b5c4"
 dependencies = [
- "cargo_metadata",
+ "cargo_metadata 0.15.0",
  "proc-macro2 1.0.43",
  "quote 1.0.21",
  "serde 1.0.144",
@@ -7912,9 +7925,9 @@ dependencies = [
 
 [[package]]
 name = "test-fuzz-macro"
-version = "3.0.2"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a295a42f7ad46ec073a086fa99b774e1993aa4bfd0ebf43a5258aefa824d26c"
+checksum = "856bbca0314c328004691b9c0639fb198ca764d1ce0e20d4dd8b78f2697c2a6f"
 dependencies = [
  "darling 0.14.1",
  "if_chain",
@@ -7930,9 +7943,9 @@ dependencies = [
 
 [[package]]
 name = "test-fuzz-runtime"
-version = "3.0.2"
+version = "3.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad79f2c8fcea9c962059d3591c8bbaf316f366d034ede848e207310d553ac234"
+checksum = "303774eb17994c2ddb59c460369f4c3a55496f013380278d78eeebd2deb896ac"
 dependencies = [
  "bincode",
  "hex",
@@ -9326,7 +9339,8 @@ dependencies = [
  "bzip2-sys",
  "camino",
  "cargo-platform",
- "cargo_metadata",
+ "cargo_metadata 0.14.2",
+ "cargo_metadata 0.15.0",
  "cassowary",
  "cast 0.2.7",
  "cast 0.3.0",

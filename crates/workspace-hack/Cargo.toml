@@ -76,7 +76,8 @@ bytes = { version = "1", features = ["std"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 camino = { version = "1", default-features = false, features = ["serde", "serde1"] }
 cargo-platform = { version = "0.1", default-features = false }
-cargo_metadata = { version = "0.14" }
+cargo_metadata-582f2526e08bb6a0 = { package = "cargo_metadata", version = "0.14" }
+cargo_metadata-3575ec1268b04181 = { package = "cargo_metadata", version = "0.15" }
 cassowary = { version = "0.3", default-features = false }
 cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
 cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
@@ -665,7 +666,8 @@ bytes = { version = "1", features = ["std"] }
 bzip2-sys = { version = "0.1", default-features = false, features = ["static"] }
 camino = { version = "1", default-features = false, features = ["serde", "serde1"] }
 cargo-platform = { version = "0.1", default-features = false }
-cargo_metadata = { version = "0.14" }
+cargo_metadata-582f2526e08bb6a0 = { package = "cargo_metadata", version = "0.14" }
+cargo_metadata-3575ec1268b04181 = { package = "cargo_metadata", version = "0.15" }
 cassowary = { version = "0.3", default-features = false }
 cast-6f8ce4dd05d13bba = { package = "cast", version = "0.2", features = ["std"] }
 cast-468e82937335b1c9 = { package = "cast", version = "0.3", default-features = false }
