@@ -7,7 +7,7 @@ One Time Witness (OTW) is a special instance of a type which is created only in 
 
 > To check whether an instance is an OTW, [`sui::types::is_one_time_witness(witness)`](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/types.move) should be used.
 
-To get an instance of this type, you need to add it as a first argument in module initializer (both initializer arguments will be supplied automatically by the Sui runtime):
+To get an instance of this type, you need to add it as the first argument to the `init()` function: Sui runtime supplies both initializer arguments automatically.
 
 ```move
 module examples::mycoin {
