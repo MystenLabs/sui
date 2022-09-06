@@ -6,24 +6,24 @@ use crate::common::create_db_stores;
 use anemo::{types::PeerInfo, PeerId};
 use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
-use test_utils::{
-    certificate, fixture_batch_with_transactions, header, headers, keys, pure_committee_from_keys,
-    shared_worker_cache_from_keys, votes, PrimaryToPrimaryMockServer,
-};
+use test_utils::{fixture_batch_with_transactions, CommitteeFixture, PrimaryToPrimaryMockServer};
 use types::{CertificateDigest, Header, Vote};
 
 #[tokio::test]
 async fn process_header() {
     telemetry_subscribers::init_for_testing();
 
-    let mut keys = keys(None);
-    let committee = pure_committee_from_keys(&keys);
-    let worker_cache = shared_worker_cache_from_keys(&keys);
-    let listener_key = keys.pop().unwrap(); // Skip the header' author.
-    let kp = keys.pop().unwrap();
-    let network_key = kp.copy().private().0.to_bytes();
-    let name = kp.public().clone();
-    let mut signature_service = SignatureService::new(kp);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+
+    let header = author.header(&committee);
+
+    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let mut signature_service = SignatureService::new(primary.keypair().copy());
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -41,14 +41,15 @@ async fn process_header() {
     let (header_store, certificates_store, payload_store) = create_db_stores();
 
     // Make the vote we expect to receive.
-    let expected = Vote::new(&header(), &name, &mut signature_service).await;
+    let expected = Vote::new(&header, &name, &mut signature_service).await;
 
     // Spawn a listener to receive the vote.
     let address = committee
-        .primary(&header().author)
+        .primary(&header.author)
         .unwrap()
         .primary_to_primary;
-    let (mut handle, _network) = PrimaryToPrimaryMockServer::spawn(listener_key, address.clone());
+    let (mut handle, _network) =
+        PrimaryToPrimaryMockServer::spawn(author.keypair().copy(), address.clone());
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -74,7 +75,7 @@ async fn process_header() {
 
     let address = network::multiaddr_to_address(&address).unwrap();
     let peer_info = PeerInfo {
-        peer_id: PeerId(header().author.0.to_bytes()),
+        peer_id: PeerId(header.author.0.to_bytes()),
         affinity: anemo::types::PeerAffinity::High,
         address: vec![address],
     };
@@ -104,7 +105,7 @@ async fn process_header() {
 
     // Send a header to the core.
     tx_primary_messages
-        .send(PrimaryMessage::Header(header()))
+        .send(PrimaryMessage::Header(header.clone()))
         .await
         .unwrap();
 
@@ -115,8 +116,8 @@ async fn process_header() {
     }
 
     // Ensure the header is correctly stored.
-    let stored = header_store.read(header().id).await.unwrap();
-    assert_eq!(stored, Some(header()));
+    let stored = header_store.read(header.id).await.unwrap();
+    assert_eq!(stored, Some(header));
 
     let mut m = HashMap::new();
     m.insert("epoch", "0");
@@ -129,13 +130,13 @@ async fn process_header() {
 
 #[tokio::test]
 async fn process_header_missing_parent() {
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-    let kp = k.pop().unwrap();
-    let network_key = kp.copy().private().0.to_bytes();
-    let name = kp.public().clone();
-    let signature_service = SignatureService::new(kp);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
@@ -196,7 +197,6 @@ async fn process_header_missing_parent() {
     );
 
     // Send a header to the core.
-    let kp = keys(None).pop().unwrap();
     let builder = types::HeaderBuilder::default();
     let header = builder
         .author(name.clone())
@@ -204,7 +204,7 @@ async fn process_header_missing_parent() {
         .epoch(0)
         .parents([CertificateDigest::default()].iter().cloned().collect())
         .with_payload_batch(fixture_batch_with_transactions(10), 0)
-        .build(&kp)
+        .build(primary.keypair())
         .unwrap();
 
     let id = header.id;
@@ -219,13 +219,13 @@ async fn process_header_missing_parent() {
 
 #[tokio::test]
 async fn process_header_missing_payload() {
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-    let kp = k.pop().unwrap();
-    let network_key = kp.copy().private().0.to_bytes();
-    let name = kp.public().clone();
-    let signature_service = SignatureService::new(kp);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_sync_headers, _rx_sync_headers) = test_utils::test_channel!(1);
@@ -289,22 +289,11 @@ async fn process_header_missing_payload() {
     // We need this header to be another's node, because our own
     // created headers are not checked against having a payload.
     // Just take another keys other than this node's.
-    let keys = keys(None);
-    let kp = keys.get(1).unwrap();
-    let name = kp.public().clone();
-    let builder = types::HeaderBuilder::default();
-    let header = builder
-        .author(name.clone())
-        .round(1)
-        .epoch(0)
-        .parents(
-            Certificate::genesis(&committee)
-                .iter()
-                .map(|x| x.digest())
-                .collect(),
-        )
+    let author = fixture.authorities().nth(1).unwrap();
+    let header = author
+        .header_builder(&committee)
         .with_payload_batch(fixture_batch_with_transactions(10), 0)
-        .build(kp)
+        .build(author.keypair())
         .unwrap();
 
     let id = header.id;
@@ -319,13 +308,13 @@ async fn process_header_missing_payload() {
 
 #[tokio::test]
 async fn process_votes() {
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-    let kp = k.pop().unwrap();
-    let network_key = kp.copy().private().0.to_bytes();
-    let name = kp.public().clone();
-    let signature_service = SignatureService::new(kp);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -397,19 +386,24 @@ async fn process_votes() {
     );
 
     // Make the certificate we expect to receive.
-    let expected = certificate(&Header::default());
+    let header = Header::default();
+    let expected = fixture.certificate(&header);
 
     // Spawn all listeners to receive our newly formed certificate.
-    let mut handles: Vec<_> = k
-        .into_iter()
-        .map(|kp| {
-            let address = committee.primary(kp.public()).unwrap().primary_to_primary;
-            PrimaryToPrimaryMockServer::spawn(kp, address)
+    let mut handles: Vec<_> = fixture
+        .authorities()
+        .skip(1)
+        .map(|a| {
+            let address = committee
+                .primary(&a.public_key())
+                .unwrap()
+                .primary_to_primary;
+            PrimaryToPrimaryMockServer::spawn(a.keypair().copy(), address)
         })
         .collect();
 
     // Send a votes to the core.
-    for vote in votes(&Header::default()) {
+    for vote in fixture.votes(&header) {
         tx_primary_messages
             .send(PrimaryMessage::Vote(vote))
             .await
@@ -438,13 +432,13 @@ async fn process_votes() {
 
 #[tokio::test]
 async fn process_certificates() {
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-    let kp = k.pop().unwrap();
-    let network_key = kp.copy().private().0.to_bytes();
-    let name = kp.public().clone();
-    let signature_service = SignatureService::new(kp);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().last().unwrap();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -505,7 +499,12 @@ async fn process_certificates() {
     );
 
     // Send enough certificates to the core.
-    let certificates: Vec<_> = headers().iter().take(3).map(certificate).collect();
+    let certificates: Vec<_> = fixture
+        .headers()
+        .iter()
+        .take(3)
+        .map(|h| fixture.certificate(h))
+        .collect();
 
     for x in certificates.clone() {
         tx_primary_messages
@@ -552,14 +551,13 @@ async fn process_certificates() {
 
 #[tokio::test]
 async fn shutdown_core() {
-    let mut keys = keys(None);
-    let committee = pure_committee_from_keys(&keys);
-    let worker_cache = shared_worker_cache_from_keys(&keys);
-    let _ = keys.pop().unwrap(); // Skip the header' author.
-    let kp = keys.pop().unwrap();
-    let network_key = kp.copy().private().0.to_bytes();
-    let name = kp.public().clone();
-    let signature_service = SignatureService::new(kp);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
 
     let (tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -626,18 +624,17 @@ async fn shutdown_core() {
 
 #[tokio::test]
 async fn reconfigure_core() {
-    let mut keys_0 = keys(None);
-    let committee = pure_committee_from_keys(&keys_0);
-    let worker_cache = shared_worker_cache_from_keys(&keys_0);
-    let listener_key = keys_0.pop().unwrap(); // Skip the header' author.
-    let kp = keys_0.pop().unwrap();
-    let network_key = kp.copy().private().0.to_bytes();
-    let name = kp.public().clone();
-    let mut signature_service = SignatureService::new(kp);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let mut signature_service = SignatureService::new(primary.keypair().copy());
 
     // Make the new committee & worker cache
-    let keys_1 = keys(None);
-    let mut new_committee = pure_committee_from_keys(&keys_1);
+    let mut new_committee = committee.clone();
     new_committee.epoch = 1;
 
     // All the channels to interface with the core.
@@ -657,7 +654,7 @@ async fn reconfigure_core() {
     let (header_store, certificates_store, payload_store) = create_db_stores();
 
     // Make the vote we expect to receive.
-    let header = test_utils::header_with_epoch(&new_committee);
+    let header = author.header(&new_committee);
     let expected = Vote::new(&header, &name, &mut signature_service).await;
 
     // Spawn a listener to receive the vote.
@@ -665,7 +662,8 @@ async fn reconfigure_core() {
         .primary(&header.author)
         .unwrap()
         .primary_to_primary;
-    let (mut handle, _network) = PrimaryToPrimaryMockServer::spawn(listener_key, address.clone());
+    let (mut handle, _network) =
+        PrimaryToPrimaryMockServer::spawn(author.keypair().copy(), address.clone());
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
