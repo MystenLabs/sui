@@ -10,10 +10,10 @@ use std::path::PathBuf;
 use strum_macros::EnumString;
 use sui_core::authority::authority_store_tables::AuthorityStoreTables;
 use sui_core::checkpoints::CheckpointStoreTables;
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_storage::default_db_options;
 use sui_storage::{lock_service::LockServiceImpl, node_sync_store::NodeSyncStore, IndexStore};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
-use typed_store::traits::DBMapTableUtil;
 
 #[derive(EnumString, Parser, Debug)]
 pub enum StoreName {
@@ -24,6 +24,7 @@ pub enum StoreName {
     NodeSync,
     Checkpoints,
     Wal,
+    Epoch,
 }
 impl std::fmt::Display for StoreName {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -58,30 +59,38 @@ pub fn dump_table(
 ) -> anyhow::Result<BTreeMap<String, String>> {
     match store_name {
         StoreName::Validator => {
-            AuthorityStoreTables::<AuthoritySignInfo>::open_tables_read_only(db_path, None, None)
+            AuthorityStoreTables::<AuthoritySignInfo>::get_read_only_handle(db_path, None, None)
                 .dump(table_name, page_size, page_number)
         }
-        StoreName::Gateway => AuthorityStoreTables::<EmptySignInfo>::open_tables_read_only(
+        StoreName::Gateway => AuthorityStoreTables::<EmptySignInfo>::get_read_only_handle(
             db_path, None, None,
         )
         .dump(table_name, page_size, page_number),
-        StoreName::Index => IndexStore::open_tables_read_only(db_path, None, None).dump(
+        StoreName::Index => IndexStore::get_read_only_handle(db_path, None, None).dump(
             table_name,
             page_size,
             page_number,
         ),
-        StoreName::LocksService => LockServiceImpl::open_tables_read_only(db_path, None, None)
-            .dump(table_name, page_size, page_number),
-        StoreName::NodeSync => NodeSyncStore::open_tables_read_only(db_path, None, None).dump(
+        StoreName::LocksService => LockServiceImpl::get_read_only_handle(db_path, None, None).dump(
             table_name,
             page_size,
             page_number,
         ),
-        StoreName::Checkpoints => CheckpointStoreTables::open_tables_read_only(db_path, None, None)
+        StoreName::NodeSync => NodeSyncStore::get_read_only_handle(db_path, None, None).dump(
+            table_name,
+            page_size,
+            page_number,
+        ),
+        StoreName::Checkpoints => CheckpointStoreTables::get_read_only_handle(db_path, None, None)
             .dump(table_name, page_size, page_number),
         StoreName::Wal => Err(eyre!(
             "Dumping WAL not yet supported. It requires kmowing the value type"
         )),
+        StoreName::Epoch => EpochStore::get_read_only_handle(db_path, None, None).dump(
+            table_name,
+            page_size,
+            page_number,
+        ),
     }
     .map_err(|err| anyhow!(err.to_string()))
 }
@@ -90,7 +99,6 @@ pub fn dump_table(
 mod test {
     use sui_core::authority::authority_store_tables::AuthorityStoreTables;
     use sui_types::crypto::AuthoritySignInfo;
-    use typed_store::traits::DBMapTableUtil;
 
     use crate::db_tool::db_dump::{dump_table, list_tables, StoreName};
 

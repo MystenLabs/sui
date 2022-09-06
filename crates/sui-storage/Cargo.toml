@@ -27,8 +27,8 @@ tempfile = "3.3.0"
 tap = "1.0.1"
 
 sui-types = { path = "../sui-types" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8"}
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e"}
+typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e"}
 move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 workspace-hack = { path = "../workspace-hack"}
@@ -39,7 +39,7 @@ anyhow = "1.0.58"
 tempfile = "3.3.0"
 num_cpus = "1.13.1"
 pretty_assertions = "1.2.0"
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
 
 [[bench]]
 name = "write_ahead_log"

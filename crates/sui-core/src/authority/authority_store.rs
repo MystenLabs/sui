@@ -23,7 +23,7 @@ use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
 use tracing::{debug, error, info, trace};
 use typed_store::rocks::{DBBatch, DBMap};
-use typed_store::traits::{DBMapTableUtil, Map};
+use typed_store::traits::Map;
 
 pub type AuthorityStore = SuiDataStore<AuthoritySignInfo>;
 pub type GatewayStore = SuiDataStore<EmptySignInfo>;
@@ -1418,7 +1418,7 @@ impl<T: ModuleResolver> ModuleResolver for ResolverWrapper<T> {
 // The primary key type for object storage.
 #[serde_as]
 #[derive(Eq, PartialEq, Clone, Copy, PartialOrd, Ord, Hash, Serialize, Deserialize, Debug)]
-pub(crate) struct ObjectKey(pub ObjectID, pub VersionNumber);
+pub struct ObjectKey(pub ObjectID, pub VersionNumber);
 
 impl ObjectKey {
     pub const ZERO: ObjectKey = ObjectKey(ObjectID::ZERO, VersionNumber::MIN);

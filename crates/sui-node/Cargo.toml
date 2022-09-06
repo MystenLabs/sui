@@ -16,7 +16,7 @@ tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.36"
 parking_lot = "0.12.1"
 futures = "0.3.23"
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8"}
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e"}
 chrono = "0.4.0"
 
 sui-config = { path = "../sui-config" }
@@ -28,8 +28,8 @@ sui-telemetry = { path = "../sui-telemetry" }
 sui-types = { path = "../sui-types" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "0a2956d113d29369a8c05bd492c51ca0ff3423e8" }
+telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
+mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
 workspace-hack = { path = "../workspace-hack"}
 
 [target.'cfg(not(target_env = "msvc"))'.dependencies]

@@ -28,7 +28,8 @@ use sui_types::{
     },
 };
 use tracing::{debug, error, info};
-use typed_store::traits::DBMapTableUtil;
+use typed_store::traits::TypedStoreDebug;
+
 use typed_store::{
     rocks::{DBBatch, DBMap},
     Map,

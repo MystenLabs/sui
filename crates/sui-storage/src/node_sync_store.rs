@@ -12,8 +12,9 @@ use sui_types::{
 };
 
 use typed_store::rocks::DBMap;
-use typed_store::traits::DBMapTableUtil;
+
 use typed_store::traits::Map;
+use typed_store::traits::TypedStoreDebug;
 use typed_store_macros::DBMapUtils;
 
 use tracing::trace;

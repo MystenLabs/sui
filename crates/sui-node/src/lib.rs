@@ -52,7 +52,6 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_types::crypto::KeypairTraits;
-use typed_store::traits::DBMapTableUtil;
 
 pub mod admin;
 pub mod metrics;
