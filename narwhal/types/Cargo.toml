@@ -25,7 +25,7 @@ serde = { version = "1.0.144", features = ["derive"] }
 serde_with = "2.0.0"
 signature = "1.6.0"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
-thiserror = "1.0.33"
+thiserror = "1.0.34"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = { version = "0.7.2", features = ["tls"] }

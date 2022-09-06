@@ -11,7 +11,7 @@ dashmap = "5.4.0"
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b", package = "fastcrypto" }
 futures = "0.3.24"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "9deac015fbf66e24b6da9699630e06750eaa094a" }
-thiserror = "1.0.33"
+thiserror = "1.0.34"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.3", features = ["codec"] }
 tonic = { version = "0.7.2", features = ["tls"] }
