@@ -11,7 +11,7 @@
 
 #![cfg(feature = "std")]
 
-use parity_util_mem::{MallocSizeOf, MallocSizeOfExt};
+use mysten_util_mem::{MallocSizeOf, MallocSizeOfExt};
 
 #[test]
 fn derive_vec() {

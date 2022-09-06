@@ -1,10 +1,10 @@
 [package]
-name = "parity-util-mem-derive"
+name = "mysten-util-mem-derive"
 version = "0.1.0"
 authors = ["Parity Technologies <admin@parity.io>"]
 license = "MIT OR Apache-2.0"
 description = "Crate for memory reporting"
-repository = "https://github.com/paritytech/pariry-common/parity-util-mem/derive"
+repository = "https://github.com/mystenlabs/mysten-infra"
 edition = "2021"
 rust-version = "1.56.1"
 publish = false
