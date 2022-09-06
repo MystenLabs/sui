@@ -1,0 +1,41 @@
+name: Tag
+
+on: 
+  workflow_call:
+    inputs:
+      sui_commit:
+        description: 'Sui repo commit to tag'
+        type: string
+        required: true
+      tag_name:
+        description: 'Tag Name'
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      sui_commit:
+        description: 'Sui repo commit to tag'
+        type: string
+        required: true
+      tag_name:
+        description: 'Tag Name'
+        type: string
+        required: true
+
+jobs:
+  tag:
+    name: Tag
+    runs-on: [self-hosted, self-hosted-arc]
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    - name: Tag
+      uses: julbme/gh-action-manage-tag@v1
+      with:
+        name: ${{ inputs.tag_name }}
+        state: present
+        from: ${{ inputs.sui_commit }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
