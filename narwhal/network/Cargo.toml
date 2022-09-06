@@ -29,7 +29,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 eyre = "0.6.8"
 
 anemo = { git = "https://github.com/mystenlabs/anemo.git", rev = "6278d0fa78147a49ff2cb9dd2e45e763886be0a0" }
-anyhow = "1.0.62"
+anyhow = "1.0.64"
 
 [dev-dependencies]
 bincode = "1.3.3"
