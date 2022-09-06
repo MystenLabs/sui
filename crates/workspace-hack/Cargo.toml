@@ -421,7 +421,8 @@ reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "h
 retain_mut = { version = "0.1", default-features = false }
 rfc6979 = { version = "0.3", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
-roaring = { version = "0.9", default-features = false }
+roaring-93f6ce9d446188ac = { package = "roaring", version = "0.10", default-features = false }
+roaring-274715c4dabd11b0 = { package = "roaring", version = "0.9", default-features = false }
 rocksdb = { version = "0.19", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }
@@ -1070,7 +1071,8 @@ reqwest = { version = "0.11", features = ["__tls", "blocking", "default-tls", "h
 retain_mut = { version = "0.1", default-features = false }
 rfc6979 = { version = "0.3", default-features = false }
 ring = { version = "0.16", features = ["alloc", "dev_urandom_fallback", "once_cell"] }
-roaring = { version = "0.9", default-features = false }
+roaring-93f6ce9d446188ac = { package = "roaring", version = "0.10", default-features = false }
+roaring-274715c4dabd11b0 = { package = "roaring", version = "0.9", default-features = false }
 rocksdb = { version = "0.19", features = ["bzip2", "lz4", "multi-threaded-cf", "snappy", "zlib", "zstd"] }
 rust-ini = { version = "0.13", default-features = false }
 rustc-demangle = { version = "0.1", default-features = false }

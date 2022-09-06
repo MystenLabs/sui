@@ -5258,7 +5258,7 @@ dependencies = [
  "prometheus",
  "prost",
  "rand 0.8.5",
- "roaring",
+ "roaring 0.9.0",
  "serde 1.0.144",
  "storage",
  "tap",
@@ -5893,9 +5893,9 @@ dependencies = [
 
 [[package]]
 name = "retain_mut"
-version = "0.1.9"
+version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4389f1d5789befaf6029ebd9f7dac4af7f7e3d61b69d4f30e2ac02b57e7712b0"
+checksum = "8c31b5c4033f8fdde8700e4657be2c497e7288f01515be52168c631e2e4d4086"
 
 [[package]]
 name = "rfc6979"
@@ -5928,6 +5928,17 @@ name = "roaring"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dd539cab4e32019956fe7e0cf160bb6d4802f4be2b52c4253d76d3bb0f85a5f7"
+dependencies = [
+ "bytemuck",
+ "byteorder",
+ "retain_mut",
+]
+
+[[package]]
+name = "roaring"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "48de5b5febb28599c6d9d34817d8ee8c74417af507b90dde0d481b28ca55ed6f"
 dependencies = [
  "bytemuck",
  "byteorder",
@@ -7690,7 +7701,7 @@ dependencies = [
  "once_cell",
  "opentelemetry",
  "rand 0.8.5",
- "roaring",
+ "roaring 0.10.0",
  "schemars",
  "serde 1.0.144",
  "serde-name",
@@ -8679,7 +8690,7 @@ dependencies = [
  "prost",
  "prost-build",
  "rand 0.8.5",
- "roaring",
+ "roaring 0.9.0",
  "rustversion",
  "serde 1.0.144",
  "serde_with 2.0.0",
@@ -9750,7 +9761,8 @@ dependencies = [
  "retain_mut",
  "rfc6979",
  "ring",
- "roaring",
+ "roaring 0.10.0",
+ "roaring 0.9.0",
  "rocksdb",
  "rust-ini",
  "rustc-demangle",
@@ -10239,7 +10251,7 @@ dependencies = [
  "retain_mut",
  "rfc6979",
  "ring",
- "roaring",
+ "roaring 0.9.0",
  "rocksdb",
  "rustc-demangle",
  "rustc-hash",
