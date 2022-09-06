@@ -11,6 +11,7 @@ use crate::{
 use eyre::{eyre, Result};
 use futures::FutureExt;
 use multiaddr::{Multiaddr, Protocol};
+use std::task::{Context, Poll};
 use std::{convert::Infallible, net::SocketAddr};
 use tokio::net::{TcpListener, ToSocketAddrs};
 use tokio_stream::wrappers::TcpListenerStream;
@@ -28,7 +29,7 @@ use tower::{
     limit::GlobalConcurrencyLimitLayer,
     load_shed::LoadShedLayer,
     util::Either,
-    Service, ServiceBuilder,
+    Layer, Service, ServiceBuilder,
 };
 use tower_http::classify::{GrpcErrorsAsFailures, SharedClassifier};
 use tower_http::propagate_header::PropagateHeaderLayer;
@@ -58,8 +59,11 @@ type WrapperService<M> = Stack<
             Stack<
                 SetRequestHeaderLayer<AddPathToHeaderFunction>,
                 Stack<
-                    Either<LoadShedLayer, Identity>,
-                    Stack<Either<GlobalConcurrencyLimitLayer, Identity>, Identity>,
+                    RequestLifetimeLayer<M>,
+                    Stack<
+                        Either<LoadShedLayer, Identity>,
+                        Stack<Either<GlobalConcurrencyLimitLayer, Identity>, Identity>,
+                    >,
                 >,
             >,
         >,
@@ -88,7 +92,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
             .unwrap_or_default()
             .then_some(tower::load_shed::LoadShedLayer::new());
 
-        let metrics = MetricsHandler::new(metrics_provider);
+        let metrics = MetricsHandler::new(metrics_provider.clone());
 
         let request_metrics = TraceLayer::new_for_grpc()
             .on_request(metrics.clone())
@@ -107,6 +111,7 @@ impl<M: MetricsCallbackProvider> ServerBuilder<M> {
         let layer = ServiceBuilder::new()
             .option_layer(global_concurrency_limit)
             .option_layer(load_shed)
+            .layer(RequestLifetimeLayer { metrics_provider })
             .layer(SetRequestHeaderLayer::overriding(
                 GRPC_ENDPOINT_PATH_HEADER.clone(),
                 add_path_to_request_header as AddPathToHeaderFunction,
@@ -469,5 +474,60 @@ mod test {
     async fn missing_http_protocol() {
         let address: Multiaddr = "/dns/localhost/tcp/0".parse().unwrap();
         test_multiaddr(address).await;
+    }
+}
+
+#[derive(Clone)]
+struct RequestLifetimeLayer<M: MetricsCallbackProvider> {
+    metrics_provider: M,
+}
+
+impl<M: MetricsCallbackProvider, S> Layer<S> for RequestLifetimeLayer<M> {
+    type Service = RequestLifetime<M, S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        RequestLifetime {
+            inner,
+            metrics_provider: self.metrics_provider.clone(),
+            path: None,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct RequestLifetime<M: MetricsCallbackProvider, S> {
+    inner: S,
+    metrics_provider: M,
+    path: Option<String>,
+}
+
+impl<M: MetricsCallbackProvider, S, RequestBody> Service<Request<RequestBody>>
+    for RequestLifetime<M, S>
+where
+    S: Service<Request<RequestBody>>,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = S::Future;
+
+    fn poll_ready(&mut self, cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, request: Request<RequestBody>) -> Self::Future {
+        if self.path.is_none() {
+            let path = request.uri().path().to_string();
+            self.metrics_provider.on_start(&path);
+            self.path = Some(path);
+        }
+        self.inner.call(request)
+    }
+}
+
+impl<M: MetricsCallbackProvider, S> Drop for RequestLifetime<M, S> {
+    fn drop(&mut self) {
+        if let Some(path) = &self.path {
+            self.metrics_provider.on_drop(path)
+        }
     }
 }
