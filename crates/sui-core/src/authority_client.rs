@@ -392,7 +392,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
         let state = self.state.clone();
-        state.handle_account_info_request(request).await
+        state.handle_account_info_request(request)
     }
 
     async fn handle_object_info_request(
@@ -409,7 +409,7 @@ impl AuthorityAPI for LocalAuthorityClient {
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let state = self.state.clone();
-        state.handle_transaction_info_request(request).await
+        state.handle_transaction_info_request(request)
     }
 
     /// Handle Batch information requests for this authority.

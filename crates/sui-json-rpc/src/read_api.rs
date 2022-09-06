@@ -78,7 +78,6 @@ impl RpcReadApiServer for ReadApi {
         Ok(self
             .state
             .get_object_read(&object_id)
-            .await
             .map_err(|e| anyhow!("{e}"))?
             .try_into()?)
     }
@@ -132,7 +131,7 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         &self,
         package: ObjectID,
     ) -> RpcResult<BTreeMap<String, SuiMoveNormalizedModule>> {
-        let modules = get_move_modules_by_package(self, package).await?;
+        let modules = get_move_modules_by_package(self, package)?;
         Ok(modules
             .into_iter()
             .map(|(name, module)| (name, module.into()))
@@ -193,7 +192,6 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         let object_read = self
             .state
             .get_object_read(&package)
-            .await
             .map_err(|e| anyhow!("{e}"))?;
 
         let normalized = match object_read {
@@ -294,21 +292,20 @@ pub async fn get_move_module(
     package: ObjectID,
     module_name: String,
 ) -> RpcResult<NormalizedModule> {
-    let normalized = get_move_modules_by_package(fullnode_api, package).await?;
+    let normalized = get_move_modules_by_package(fullnode_api, package)?;
     Ok(match normalized.get(&module_name) {
         Some(module) => Ok(module.clone()),
         None => Err(anyhow!("No module found with module name {}", module_name)),
     }?)
 }
 
-pub async fn get_move_modules_by_package(
+pub fn get_move_modules_by_package(
     fullnode_api: &FullNodeApi,
     package: ObjectID,
 ) -> RpcResult<BTreeMap<String, NormalizedModule>> {
     let object_read = fullnode_api
         .state
         .get_object_read(&package)
-        .await
         .map_err(|e| anyhow!("{e}"))?;
 
     Ok(match object_read {

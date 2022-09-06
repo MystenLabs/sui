@@ -87,7 +87,7 @@ where
         }
         let next_checkpoint = checkpoints.lock().next_checkpoint();
 
-        let sui_system_state = self.state.get_sui_system_state_object().await?;
+        let sui_system_state = self.state.get_sui_system_state_object()?;
         let next_epoch = epoch + 1;
         let next_epoch_validators = &sui_system_state.validators.next_epoch_validators;
         let votes = next_epoch_validators

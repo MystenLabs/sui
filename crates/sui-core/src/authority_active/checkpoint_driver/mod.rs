@@ -912,8 +912,7 @@ where
     for tx_digest in &fragment.diff.second.items {
         let cert = active_authority
             .state
-            .read_certificate(&tx_digest.transaction)
-            .await?
+            .read_certificate(&tx_digest.transaction)?
             .ok_or(SuiError::CertificateNotfound {
                 certificate_digest: tx_digest.transaction,
             })?;

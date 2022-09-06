@@ -33,8 +33,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
         transactions.push(SingleTransactionKind::TransferObject(TransferObject {
             recipient,
             object_ref: authority_state
-                .get_object(obj_id)
-                .await?
+                .get_object(obj_id)?
                 .unwrap()
                 .compute_object_reference(),
         }));
@@ -55,8 +54,7 @@ async fn test_batch_transaction_ok() -> anyhow::Result<()> {
         TransactionKind::Batch(transactions),
         sender,
         authority_state
-            .get_object(&all_ids[N])
-            .await?
+            .get_object(&all_ids[N])?
             .unwrap()
             .compute_object_reference(),
         100000,
@@ -102,8 +100,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         transactions.push(SingleTransactionKind::TransferObject(TransferObject {
             recipient,
             object_ref: authority_state
-                .get_object(obj_id)
-                .await?
+                .get_object(obj_id)?
                 .unwrap()
                 .compute_object_reference(),
         }));
@@ -119,8 +116,7 @@ async fn test_batch_transaction_last_one_fail() -> anyhow::Result<()> {
         TransactionKind::Batch(transactions),
         sender,
         authority_state
-            .get_object(&all_ids[N])
-            .await?
+            .get_object(&all_ids[N])?
             .unwrap()
             .compute_object_reference(),
         100000,
@@ -152,8 +148,7 @@ async fn test_batch_contains_publish() -> anyhow::Result<()> {
         TransactionKind::Batch(transactions),
         sender,
         authority_state
-            .get_object(&gas_object_id)
-            .await?
+            .get_object(&gas_object_id)?
             .unwrap()
             .compute_object_reference(),
         100000,
@@ -182,8 +177,7 @@ async fn test_batch_contains_transfer_sui() -> anyhow::Result<()> {
         TransactionKind::Batch(transactions),
         sender,
         authority_state
-            .get_object(&gas_object_id)
-            .await?
+            .get_object(&gas_object_id)?
             .unwrap()
             .compute_object_reference(),
         100000,

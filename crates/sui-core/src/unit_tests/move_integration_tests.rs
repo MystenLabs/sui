@@ -468,7 +468,7 @@ pub async fn build_and_try_publish_test_package(
         })
         .collect();
 
-    let gas_object = authority.get_object(gas_object_id).await.unwrap();
+    let gas_object = authority.get_object(gas_object_id).unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
 
     let data = TransactionData::new_module(*sender, gas_object_ref, all_module_bytes, gas_budget);

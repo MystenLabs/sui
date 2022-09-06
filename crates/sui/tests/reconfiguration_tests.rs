@@ -53,7 +53,7 @@ async fn reconfig_end_to_end_tests() {
     }
 
     // get sui system state and confirm it matches network info
-    let sui_system_state = states[0].get_sui_system_state_object().await.unwrap();
+    let sui_system_state = states[0].get_sui_system_state_object().unwrap();
     let mut net_addrs_from_chain: Vec<Multiaddr> = Vec::new();
     let old_committee_size = sui_system_state.validators.next_epoch_validators.len();
     for validator in sui_system_state.validators.active_validators {
@@ -72,7 +72,7 @@ async fn reconfig_end_to_end_tests() {
     }
 
     let effects = create_and_register_new_validator(
-        states[0].get_framework_object_ref().await.unwrap(),
+        states[0].get_framework_object_ref().unwrap(),
         &mut gas_objects,
         validator_stake.compute_object_reference(),
         validator_info,
@@ -81,7 +81,7 @@ async fn reconfig_end_to_end_tests() {
     .unwrap();
     assert!(effects.status.is_ok());
 
-    let sui_system_state = states[0].get_sui_system_state_object().await.unwrap();
+    let sui_system_state = states[0].get_sui_system_state_object().unwrap();
     let new_committee_size = sui_system_state.validators.next_epoch_validators.len();
     assert_eq!(old_committee_size + 1, new_committee_size);
 
@@ -137,7 +137,7 @@ async fn reconfig_end_to_end_tests() {
     futures::future::join_all(results).await;
 
     // refresh the system state and network addresses
-    let sui_system_state = states[0].get_sui_system_state_object().await.unwrap();
+    let sui_system_state = states[0].get_sui_system_state_object().unwrap();
     assert_eq!(sui_system_state.epoch, 1);
     // We should now have one more active validator.
     assert_eq!(sui_system_state.validators.active_validators.len(), 5);

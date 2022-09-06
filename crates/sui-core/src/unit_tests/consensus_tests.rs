@@ -52,7 +52,7 @@ pub async fn test_certificates(authority: &AuthorityState) -> Vec<CertifiedTrans
         // Make a sample transaction.
         let module = "object_basics";
         let function = "create";
-        let package_object_ref = authority.get_framework_object_ref().await.unwrap();
+        let package_object_ref = authority.get_framework_object_ref().unwrap();
 
         let data = TransactionData::new_move_call(
             sender,

@@ -226,18 +226,16 @@ async fn test_finish_epoch_change() {
         assert_eq!(latest_epoch.epoch_info().epoch(), 1);
         // Verify that validator is no longer halted.
         assert!(!active.state.is_halted());
-        let system_state = active.state.get_sui_system_state_object().await.unwrap();
+        let system_state = active.state.get_sui_system_state_object().unwrap();
         assert_eq!(system_state.epoch, 1);
         let (_, tx_digest) = active
             .state
             .get_latest_parent_entry(SUI_SYSTEM_STATE_OBJECT_ID)
-            .await
             .unwrap()
             .unwrap();
         let response = active
             .state
             .handle_transaction_info_request(tx_digest.into())
-            .await
             .unwrap();
         assert!(response.signed_effects.is_some());
         assert!(response.certified_transaction.is_some());

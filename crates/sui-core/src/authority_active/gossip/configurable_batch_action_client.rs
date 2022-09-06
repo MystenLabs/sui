@@ -126,7 +126,7 @@ impl AuthorityAPI for ConfigurableBatchActionClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        self.state.handle_transaction_info_request(request).await
+        self.state.handle_transaction_info_request(request)
     }
 
     /// Handle Batch information requests for this authority.

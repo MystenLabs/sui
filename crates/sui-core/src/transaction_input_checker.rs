@@ -34,10 +34,9 @@ where
         transaction.signed_data.data.gas_budget,
         transaction.signed_data.data.gas_price,
         &transaction.signed_data.data.kind,
-    )
-    .await?;
+    )?;
 
-    let input_objects = check_objects(store, &transaction.signed_data.data).await?;
+    let input_objects = check_objects(store, &transaction.signed_data.data)?;
 
     if transaction.contains_shared_object() {
         // It's important that we do this here to make sure there is enough
@@ -53,7 +52,7 @@ where
 /// Returns the gas object (to be able to reuse it latter) and a gas status
 /// that will be used in the entire lifecycle of the transaction execution.
 #[instrument(level = "trace", skip_all)]
-async fn check_gas<S>(
+fn check_gas<S>(
     store: &SuiDataStore<S>,
     gas_payment_id: ObjectID,
     gas_budget: u64,
@@ -98,7 +97,7 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_objects<S>(
+fn check_objects<S>(
     store: &SuiDataStore<S>,
     transaction: &TransactionData,
 ) -> Result<InputObjects, SuiError>

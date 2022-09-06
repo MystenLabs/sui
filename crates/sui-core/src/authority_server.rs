@@ -299,7 +299,6 @@ impl ValidatorService {
         let digest = certificate.digest();
         if let Some(response) = state
             .check_tx_already_executed(digest)
-            .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
             return Ok(tonic::Response::new(response));
@@ -310,7 +309,6 @@ impl ValidatorService {
         if certificate.contains_shared_object()
             && !state
                 .transaction_shared_locks_exist(&certificate)
-                .await
                 .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
             consensus_adapter
@@ -377,7 +375,6 @@ impl Validator for ValidatorService {
         let response = self
             .state
             .handle_account_info_request(request)
-            .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
         Ok(tonic::Response::new(response))
@@ -407,7 +404,6 @@ impl Validator for ValidatorService {
         let response = self
             .state
             .handle_transaction_info_request(request)
-            .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?;
 
         Ok(tonic::Response::new(response))

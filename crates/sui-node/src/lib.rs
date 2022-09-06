@@ -155,7 +155,7 @@ impl SuiNode {
         net_config.request_timeout = Some(Duration::from_secs(5));
         net_config.http2_keepalive_interval = Some(Duration::from_secs(5));
 
-        let sui_system_state = state.get_sui_system_state_object().await?;
+        let sui_system_state = state.get_sui_system_state_object()?;
 
         let network_metrics = Arc::new(NetworkAuthorityClientMetrics::new(&prometheus_registry));
 

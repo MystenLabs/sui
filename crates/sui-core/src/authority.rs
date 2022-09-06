@@ -367,7 +367,7 @@ impl AuthorityState {
         // Ensure an idempotent answer.
         if self.database.transaction_exists(&transaction_digest)? {
             self.metrics.tx_already_processed.inc();
-            let transaction_info = self.make_transaction_info(&transaction_digest).await?;
+            let transaction_info = self.make_transaction_info(&transaction_digest)?;
             return Ok(transaction_info);
         }
 
@@ -399,7 +399,7 @@ impl AuthorityState {
             .await?;
 
         // Return the signed Transaction or maybe a cert.
-        self.make_transaction_info(&transaction_digest).await
+        self.make_transaction_info(&transaction_digest)
     }
 
     /// Initiate a new transaction.
@@ -424,7 +424,7 @@ impl AuthorityState {
             Err(err) => {
                 if self.database.effects_exists(&transaction_digest)? {
                     self.metrics.tx_already_processed.inc();
-                    Ok(self.make_transaction_info(&transaction_digest).await?)
+                    Ok(self.make_transaction_info(&transaction_digest)?)
                 } else {
                     Err(err)
                 }
@@ -581,7 +581,7 @@ impl AuthorityState {
         let digest = *certificate.digest();
         // The cert could have been processed by a concurrent attempt of the same cert, so check if
         // the effects have already been written.
-        if let Some(info) = self.check_tx_already_executed(&digest).await? {
+        if let Some(info) = self.check_tx_already_executed(&digest)? {
             tx_guard.release();
             return Ok(info);
         }
@@ -608,7 +608,7 @@ impl AuthorityState {
         let (inner_temporary_store, signed_effects) =
             match self.prepare_certificate(certificate, digest).await {
                 Err(e) => {
-                    debug!(name = ?self.name, ?digest, "Error preparing transaction: {}", e);
+                    debug!(name = ?self.name, ?digest, "Error preparing transaction: {e}");
                     tx_guard.release();
                     return Err(e);
                 }
@@ -710,13 +710,13 @@ impl AuthorityState {
         Ok((inner_temp_store, signed_effects))
     }
 
-    pub async fn check_tx_already_executed(
+    pub fn check_tx_already_executed(
         &self,
         digest: &TransactionDigest,
     ) -> SuiResult<Option<TransactionInfoResponse>> {
         if self.database.effects_exists(digest)? {
             debug!("Transaction {digest:?} already executed");
-            Ok(Some(self.make_transaction_info(digest).await?))
+            Ok(Some(self.make_transaction_info(digest)?))
         } else {
             Ok(None)
         }
@@ -752,7 +752,7 @@ impl AuthorityState {
 
     async fn process_one_tx(&self, seq: TxSequenceNumber, digest: &TransactionDigest) -> SuiResult {
         // Load cert and effects.
-        let info = self.make_transaction_info(digest).await?;
+        let info = self.make_transaction_info(digest)?;
         let (cert, effects) = match info {
             TransactionInfoResponse {
                 certified_transaction: Some(cert),
@@ -773,7 +773,7 @@ impl AuthorityState {
             if let Err(e) =
                 self.index_tx(indexes.as_ref(), seq, digest, &cert, &effects, timestamp_ms)
             {
-                warn!(?digest, "Couldn't index tx: {}", e);
+                warn!(?digest, "Couldn't index tx: {e}");
             }
         }
 
@@ -846,15 +846,14 @@ impl AuthorityState {
         u64::try_from(ts_ms).expect("Travelling in time machine")
     }
 
-    pub async fn handle_transaction_info_request(
+    pub fn handle_transaction_info_request(
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
         self.make_transaction_info(&request.transaction_digest)
-            .await
     }
 
-    pub async fn handle_account_info_request(
+    pub fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
@@ -869,13 +868,12 @@ impl AuthorityState {
             ObjectInfoRequestKind::PastObjectInfo(seq)
             | ObjectInfoRequestKind::PastObjectInfoDebug(seq, _) => {
                 // Get the Transaction Digest that created the object
-                self.get_parent_iterator(request.object_id, Some(seq))
-                    .await?
+                self.get_parent_iterator(request.object_id, Some(seq))?
                     .next()
             }
             ObjectInfoRequestKind::LatestObjectInfo(_) => {
                 // Or get the latest object_reference and transaction entry.
-                self.get_latest_parent_entry(request.object_id).await?
+                self.get_latest_parent_entry(request.object_id)?
             }
         };
 
@@ -886,7 +884,7 @@ impl AuthorityState {
                     None
                 } else {
                     // Get the cert from the transaction digest
-                    Some(self.read_certificate(&transaction_digest).await?.ok_or(
+                    Some(self.read_certificate(&transaction_digest)?.ok_or(
                         SuiError::CertificateNotfound {
                             certificate_digest: transaction_digest,
                         },
@@ -899,7 +897,7 @@ impl AuthorityState {
         // Return the latest version of the object and the current lock if any, if requested.
         let object_and_lock = match request.request_kind {
             ObjectInfoRequestKind::LatestObjectInfo(request_layout) => {
-                match self.get_object(&request.object_id).await {
+                match self.get_object(&request.object_id) {
                     Ok(Some(object)) => {
                         let lock = if !object.is_owned_or_quasi_shared() {
                             // Unowned obejcts have no locks.
@@ -1338,23 +1336,22 @@ impl AuthorityState {
         self.committee.load().clone().deref().clone()
     }
 
-    async fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
+    fn get_object(&self, object_id: &ObjectID) -> Result<Option<Object>, SuiError> {
         self.database.get_object(object_id)
     }
 
-    pub async fn get_framework_object_ref(&self) -> SuiResult<ObjectRef> {
+    pub fn get_framework_object_ref(&self) -> SuiResult<ObjectRef> {
         Ok(self
-            .get_object(&SUI_FRAMEWORK_ADDRESS.into())
-            .await?
+            .get_object(&SUI_FRAMEWORK_ADDRESS.into())?
             .expect("framework object should always exist")
             .compute_object_reference())
     }
 
-    pub async fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
+    pub fn get_sui_system_state_object(&self) -> SuiResult<SuiSystemState> {
         self.database.get_sui_system_state_object()
     }
 
-    pub async fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
+    pub fn get_object_read(&self, object_id: &ObjectID) -> Result<ObjectRead, SuiError> {
         match self.database.get_latest_parent_entry(*object_id)? {
             None => Ok(ObjectRead::NotExists(*object_id)),
             Some((obj_ref, _)) => {
@@ -1606,7 +1603,7 @@ impl AuthorityState {
     }
 
     /// Make an information response for a transaction
-    async fn make_transaction_info(
+    fn make_transaction_info(
         &self,
         transaction_digest: &TransactionDigest,
     ) -> Result<TransactionInfoResponse, SuiError> {
@@ -1674,7 +1671,7 @@ impl AuthorityState {
     }
 
     /// Check whether a shared-object certificate has already been given shared-locks.
-    pub async fn transaction_shared_locks_exist(
+    pub fn transaction_shared_locks_exist(
         &self,
         certificate: &CertifiedTransaction,
     ) -> SuiResult<bool> {
@@ -1697,7 +1694,7 @@ impl AuthorityState {
     // Helper functions to manage certificates
 
     /// Read from the DB of certificates
-    pub async fn read_certificate(
+    pub fn read_certificate(
         &self,
         digest: &TransactionDigest,
     ) -> Result<Option<CertifiedTransaction>, SuiError> {
@@ -1719,17 +1716,15 @@ impl AuthorityState {
 
     /// Returns all parents (object_ref and transaction digests) that match an object_id, at
     /// any object version, or optionally at a specific version.
-    pub async fn get_parent_iterator(
+    pub fn get_parent_iterator(
         &self,
         object_id: ObjectID,
         seq: Option<SequenceNumber>,
     ) -> Result<impl Iterator<Item = (ObjectRef, TransactionDigest)> + '_, SuiError> {
-        {
-            self.database.get_parent_iterator(object_id, seq)
-        }
+        self.database.get_parent_iterator(object_id, seq)
     }
 
-    pub async fn get_latest_parent_entry(
+    pub fn get_latest_parent_entry(
         &self,
         object_id: ObjectID,
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {

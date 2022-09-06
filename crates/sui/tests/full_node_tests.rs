@@ -126,7 +126,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     assert!(sync_store.get_effects(&digest).unwrap().is_none());
 
     // verify that the node has seen the transfer
-    let object_read = node.state().get_object_read(&transferred_object).await?;
+    let object_read = node.state().get_object_read(&transferred_object)?;
     let object = object_read.into_object()?;
 
     assert_eq!(object.owner.get_owner_address().unwrap(), receiver);
@@ -366,8 +366,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
         .state()
         .handle_transaction_info_request(TransactionInfoRequest {
             transaction_digest: digest,
-        })
-        .await?;
+        })?;
     assert!(info.signed_effects.is_some());
 
     Ok(())
