@@ -784,10 +784,8 @@ impl AuthorityState {
 
         // Emit events
         if let Some(event_handler) = &self.event_handler {
-            let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);
-
             event_handler
-                .process_events(&effects.effects, timestamp_ms, seq, checkpoint_num)
+                .process_events(&effects.effects, timestamp_ms, seq)
                 .await?;
 
             self.metrics

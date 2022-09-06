@@ -7,7 +7,7 @@
 //! - Filtering of events per Move package, type, or other fields
 //! - Persistent/reliable streaming, which needs to recover filtered events from a marker
 //!   or point in time
-//!   
+//!
 //! Events are also archived into checkpoints so this API should support that as well.
 //!
 
@@ -49,7 +49,6 @@ pub const AMOUNT_KEY: &str = "amount";
 pub struct StoredEvent {
     /// UTC timestamp in milliseconds
     timestamp: u64,
-    checkpoint_num: u64,
     /// Not present for non-transaction System events (eg EpochChange)
     tx_digest: Option<TransactionDigest>,
     /// The variant name from SuiEvent, eg MoveEvent, Publish, etc.
@@ -326,11 +325,7 @@ pub trait EventStore {
     /// which have sequence numbers below the current one will be skipped.  This feature
     /// is intended for deduplication.
     /// Returns Ok(rows_affected).
-    async fn add_events(
-        &self,
-        events: &[EventEnvelope],
-        checkpoint_num: u64,
-    ) -> Result<u64, SuiError>;
+    async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError>;
 
     /// Returns at most `limit` events emitted by a given
     /// transaction, sorted in order emitted.
@@ -401,14 +396,6 @@ pub trait EventStore {
         object: &ObjectID,
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
-
-    /// Generic event iterator to return events emitted in checkpoints
-    /// [start_checkpoint, end_checkpoint), order not guaranteed.
-    fn events_by_checkpoint(
-        &self,
-        start_checkpoint: u64,
-        end_checkpoint: u64,
-    ) -> Result<StreamedResult, SuiError>;
 
     /// Generic event iterator that returns events emitted between
     /// [start_time, end_time), sorted in descending time.

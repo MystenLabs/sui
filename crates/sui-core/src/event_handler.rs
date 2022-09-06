@@ -47,7 +47,6 @@ impl EventHandler {
         effects: &TransactionEffects,
         timestamp_ms: u64,
         seq_num: u64,
-        checkpoint_num: u64,
     ) -> SuiResult {
         let res: Result<Vec<_>, _> = effects
             .events
@@ -57,13 +56,11 @@ impl EventHandler {
         let envelopes = res?;
 
         // Ingest all envelopes together at once (for efficiency) into Event Store
-        self.event_store
-            .add_events(&envelopes, checkpoint_num)
-            .await?;
+        self.event_store.add_events(&envelopes).await?;
         trace!(
             num_events = envelopes.len(),
             tx_digest =? effects.transaction_digest,
-            checkpoint_num, "Finished writing events to event store"
+            "Finished writing events to event store"
         );
 
         // serially dispatch event processing to honor events' orders.
