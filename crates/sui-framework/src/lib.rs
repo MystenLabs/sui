@@ -217,6 +217,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn run_framework_move_unit_tests() {
         get_sui_framework();
         get_move_stdlib();
@@ -235,6 +236,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(msim, ignore)]
     fn run_examples_move_unit_tests() {
         let examples = vec![
             "basics",
