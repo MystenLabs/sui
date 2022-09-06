@@ -26,7 +26,7 @@ use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
+    exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
 use std::ops::Deref;
@@ -128,6 +128,7 @@ pub struct AuthorityMetrics {
     pub follower_items_loaded: IntCounter,
     pub follower_connections: IntCounter,
     pub follower_connections_concurrent: IntGauge,
+    pub follower_start_seq_num: Histogram,
 
     // TODO: consolidate these into GossipMetrics
     // (issue: https://github.com/MystenLabs/sui/issues/3926)
@@ -144,6 +145,9 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
+        // buckets are: 100, 10k, 1M, 100M, 10B, 1T, 100T, 10Q
+        // Safe to unwarp because the values are all valid.
+        let follower_seq_num_buckets = exponential_buckets(100., 100., 8).unwrap();
         Self {
             tx_orders: register_int_counter_with_registry!(
                 "total_transaction_orders",
@@ -242,6 +246,13 @@ impl AuthorityMetrics {
             follower_connections_concurrent: register_int_gauge_with_registry!(
                 "follower_connections_concurrent",
                 "Current number of concurrent follower connections",
+                registry,
+            )
+            .unwrap(),
+            follower_start_seq_num: register_histogram_with_registry!(
+                "follower_start_seq_num",
+                "The start seq number this validator receives from fullnodes node_sync/follower process",
+                follower_seq_num_buckets,
                 registry,
             )
             .unwrap(),
