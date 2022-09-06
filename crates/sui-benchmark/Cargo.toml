@@ -30,6 +30,8 @@ crossterm = "0.23.2"
 rand = "0.8.5"
 base64 = "0.13.0"
 rand_distr = "0.4.3"
+indicatif = "0.17.0"
+duration-str = "0.4.0"
 
 bcs = "0.1.3"
 sui-core = { path = "../sui-core" }
