@@ -1,8 +1,8 @@
 [package]
-name = "parity-util-mem"
+name = "mysten-util-mem"
 version = "0.11.0"
 authors = ["Parity Technologies <admin@parity.io>", "Andrew Schran <aschran@mystenlabs.com>"]
-repository = "https://github.com/paritytech/parity-common"
+repository = "https://github.com/mystenlabs/mysten-infra"
 description = "Collection of memory related utilities"
 license = "MIT OR Apache-2.0"
 edition = "2021"
@@ -13,7 +13,7 @@ publish = false
 cfg-if = "1.0.0"
 lru = { version = "0.7", optional = true }
 hashbrown = { version = "0.12", optional = true }
-parity-util-mem-derive = { path = "../parity-util-mem-derive", version = "0.1" }
+mysten-util-mem-derive = { path = "../mysten-util-mem-derive", version = "0.1" }
 impl-trait-for-tuples = "0.2.0"
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b", features = ["copy_key"] }
 indexmap = { version = "1.9.1", features = ["serde"] }
