@@ -68,3 +68,11 @@ td:nth-child(1) {
     display: flex;
     align-items: center;
 }
+
+.success svg {
+    @apply fill-success;
+}
+
+.fail svg {
+    @apply stroke-issue-dark;
+}

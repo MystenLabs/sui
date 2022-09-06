@@ -19,7 +19,11 @@
 }
 
 .success {
-    @apply bg-[#ECFBF7] capitalize text-sm font-sans text-[#008C65] p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1;
+    @apply bg-success-light capitalize text-sm font-sans text-success-dark p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1;
+}
+
+.success svg {
+    @apply fill-success-dark;
 }
 
 .failed {

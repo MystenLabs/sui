@@ -39,6 +39,7 @@ module.exports = {
                 },
                 success: {
                     dark: '#008C65',
+                    DEFAULT: '#2DD7A7',
                     light: '#D5F7EE',
                 },
                 cardDark: '#F3F4F5',
