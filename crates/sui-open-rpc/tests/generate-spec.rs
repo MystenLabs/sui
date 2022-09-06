@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[test]
+#[cfg_attr(msim, ignore)]
 fn test_json_rpc_spec() {
     // If this test breaks and you intended a json rpc schema change, you need to run to get the fresh schema:
     // # cargo -q run --example generate-json-rpc-spec -- record
