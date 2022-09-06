@@ -1,5 +1,5 @@
 [package]
-name = "typed-store-macros"
+name = "typed-store-derive"
 version = "0.0.0"
 license = "Apache-2.0"
 authors = ["Ade A. <ade@mystenlabs.com>"]

@@ -28,4 +28,4 @@ once_cell = "1.13.0"
 proc-macro2 = "1.0.24"
 quote = "1.0.9"
 syn = { version = "1.0.64", features = ["derive"] }
-typed-store-macros = {path = "../typed-store-macros"}
+typed-store-derive = {path = "../typed-store-derive"}
