@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) 2022, Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 if [ "$1" != "simtest" ]; then
   echo "expected to be invoked via \`cargo simtest\`"
