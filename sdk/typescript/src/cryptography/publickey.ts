@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import BN from 'bn.js';
 import { Buffer } from 'buffer';
 import { sha3_256 } from 'js-sha3';
 
@@ -9,19 +8,36 @@ import { sha3_256 } from 'js-sha3';
  * Value to be converted into public key
  */
 export type PublicKeyInitData =
-  | number
   | string
   | Buffer
   | Uint8Array
   | Array<number>
   | PublicKeyData;
 
+const zeroPadBuffer = (buffer: Uint8Array, length: number): Uint8Array => {
+  const next = new Uint8Array(length);
+  Buffer.from(buffer).copy(next, length - buffer.length);
+  return next;
+};
+
+export const byteArrayEquals = (a: Uint8Array, b: Uint8Array): boolean => {
+  if (a.length !== b.length) {
+    return false;
+  }
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) {
+      return false;
+    }
+  }
+  return true;
+};
+
 /**
  * JSON object representation of PublicKey class
  */
 export type PublicKeyData = {
   /** @internal */
-  _bn: BN;
+  _buffer: Uint8Array;
 };
 
 export const PUBLIC_KEY_SIZE = 32;
@@ -35,15 +51,15 @@ const SIGNATURE_SCHEME_TO_FLAG = {
 };
 
 function isPublicKeyData(value: PublicKeyInitData): value is PublicKeyData {
-  return (value as PublicKeyData)._bn !== undefined;
+  return (value as PublicKeyData)._buffer !== undefined;
 }
 
 /**
  * A public key
  */
-export class PublicKey {
+export class PublicKey implements PublicKeyData {
   /** @internal */
-  _bn: BN;
+  _buffer: Uint8Array;
 
   /**
    * Create a new PublicKey object
@@ -51,7 +67,7 @@ export class PublicKey {
    */
   constructor(value: PublicKeyInitData) {
     if (isPublicKeyData(value)) {
-      this._bn = value._bn;
+      this._buffer = value._buffer;
     } else {
       if (typeof value === 'string') {
         const buffer = Buffer.from(value, 'base64');
@@ -60,13 +76,23 @@ export class PublicKey {
             `Invalid public key input. Expected 32 bytes, got ${buffer.length}`
           );
         }
-        this._bn = new BN(buffer);
+        this._buffer = buffer;
+      } else if (value instanceof Uint8Array) {
+        this._buffer = value;
+      } else if (Array.isArray(value)) {
+        this._buffer = Uint8Array.from(value);
       } else {
-        this._bn = new BN(value);
+        this._buffer = Uint8Array.from(value);
       }
-      if (this._bn.byteLength() > PUBLIC_KEY_SIZE) {
+
+      if (this._buffer.byteLength > PUBLIC_KEY_SIZE) {
         throw new Error(`Invalid public key input`);
       }
+    }
+
+    // Zero-pad to 32 bytes.
+    if (this._buffer.length !== PUBLIC_KEY_SIZE) {
+      this._buffer = zeroPadBuffer(this._buffer, PUBLIC_KEY_SIZE);
     }
   }
 
@@ -74,7 +100,7 @@ export class PublicKey {
    * Checks if two publicKeys are equal
    */
   equals(publicKey: PublicKey): boolean {
-    return this._bn.eq(publicKey._bn);
+    return byteArrayEquals(this._buffer, publicKey._buffer);
   }
 
   /**
@@ -88,21 +114,14 @@ export class PublicKey {
    * Return the byte array representation of the public key
    */
   toBytes(): Uint8Array {
-    return this.toBuffer();
+    return this._buffer.slice();
   }
 
   /**
    * Return the Buffer representation of the public key
    */
   toBuffer(): Buffer {
-    const b = this._bn.toArrayLike(Buffer);
-    if (b.length === PUBLIC_KEY_SIZE) {
-      return b;
-    }
-
-    const zeroPad = Buffer.alloc(PUBLIC_KEY_SIZE);
-    b.copy(zeroPad, PUBLIC_KEY_SIZE - b.length);
-    return zeroPad;
+    return Buffer.from(this._buffer);
   }
 
   /**
@@ -119,16 +138,17 @@ export class PublicKey {
     let tmp = new Uint8Array(PUBLIC_KEY_SIZE + 1);
     tmp.set([SIGNATURE_SCHEME_TO_FLAG[scheme]]);
     tmp.set(this.toBytes(), 1);
-    const hexHash = sha3_256(tmp);
-    const publicKeyBytes = new BN(hexHash, 16).toArray(undefined, 32);
     // Only take the first 20 bytes
-    const addressBytes = publicKeyBytes.slice(0, 20);
+    const addressBytes = zeroPadBuffer(
+      Uint8Array.from(sha3_256.digest(tmp).slice(0, 20)),
+      20
+    );
     return toHexString(addressBytes);
   }
 }
 
 // https://stackoverflow.com/questions/34309988/byte-array-to-hex-string-conversion-in-javascript
-function toHexString(byteArray: number[]) {
+function toHexString(byteArray: Uint8Array) {
   return byteArray.reduce(
     (output, elem) => output + ('0' + elem.toString(16)).slice(-2),
     ''
