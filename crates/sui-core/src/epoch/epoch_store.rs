@@ -9,7 +9,8 @@ use sui_types::committee::{Committee, EpochId};
 use sui_types::error::SuiResult;
 use sui_types::messages::{AuthenticatedEpoch, GenesisEpoch};
 use typed_store::rocks::DBMap;
-use typed_store::traits::DBMapTableUtil;
+use typed_store::traits::TypedStoreDebug;
+
 use typed_store::Map;
 use typed_store_macros::DBMapUtils;
 

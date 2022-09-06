@@ -23,8 +23,8 @@ use std::thread::JoinHandle;
 use tokio::sync::mpsc::{channel, Receiver, Sender};
 use tracing::{debug, error, info, trace, warn};
 use typed_store::rocks::{DBBatch, DBMap};
-use typed_store::traits::DBMapTableUtil;
 use typed_store::traits::Map;
+use typed_store::traits::TypedStoreDebug;
 use typed_store_macros::DBMapUtils;
 
 use sui_types::base_types::{ObjectRef, TransactionDigest};

@@ -42,7 +42,6 @@ use tokio::{
     time::timeout,
 };
 use tracing::{debug, error, info, warn};
-use typed_store::traits::DBMapTableUtil;
 
 use crate::{
     authority::AuthorityState,
