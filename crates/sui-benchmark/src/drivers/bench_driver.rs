@@ -110,10 +110,9 @@ enum NextOp {
     Retry(RetryType),
 }
 
-async fn start_benchmark(pb: Arc<ProgressBar>) -> &'static Instant {
+async fn print_and_start_benchmark() -> &'static Instant {
     static ONCE: OnceCell<Instant> = OnceCell::const_new();
     ONCE.get_or_init(|| async move {
-        pb.finish();
         eprintln!("Starting benchmark!");
         Instant::now()
     })
@@ -211,7 +210,6 @@ impl Driver<()> for BenchDriver {
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
         let metrics = Arc::new(BenchMetrics::new(registry));
         let barrier = Arc::new(Barrier::new(num_workers as usize));
-        let pb = Arc::new(ProgressBar::new(num_workers));
         eprintln!("Setting up workers...");
         let progress = Arc::new(match run_duration {
             Interval::Count(count) => ProgressBar::new(count),
@@ -222,7 +220,6 @@ impl Driver<()> for BenchDriver {
             let request_delay_micros = 1_000_000 / worker.target_qps;
             let mut free_pool = worker.payload;
             let progress = progress.clone();
-            let pb = pb.clone();
             let tx_cloned = tx.clone();
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
@@ -231,9 +228,8 @@ impl Driver<()> for BenchDriver {
                 QuorumDriverHandler::new(aggregator.clone(), QuorumDriverMetrics::new_for_tests());
             let qd = quorum_driver_handler.clone_quorum_driver();
             let runner = tokio::spawn(async move {
-                pb.inc(1);
                 cloned_barrier.wait().await;
-                let start_time = start_benchmark(pb).await;
+                let start_time = print_and_start_benchmark().await;
                 let mut num_success = 0;
                 let mut num_error = 0;
                 let mut min_latency = Duration::MAX;

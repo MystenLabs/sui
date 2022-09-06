@@ -16,6 +16,7 @@ use sui_types::{
 };
 
 use test_utils::messages::make_transfer_object_transaction;
+use tracing::log::info;
 
 use super::workload::{
     get_latest, transfer_sui_for_testing, Gas, Payload, Workload, WorkloadType, MAX_GAS_FOR_TESTING,
@@ -128,7 +129,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
             .choose(&mut rand::thread_rng())
             .unwrap();
         // create as many gas objects as there are number of transfer objects times number of accounts
-        eprintln!("Creating enough gas to transfer objects..");
+        info!("Creating enough gas to transfer objects..");
         let mut transfer_gas: Vec<Vec<Gas>> = vec![];
         for _i in 0..count {
             let mut account_transfer_gas = vec![];
@@ -148,7 +149,7 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
             }
             transfer_gas.push(account_transfer_gas);
         }
-        eprintln!("Creating objects to transfer..");
+        info!("Creating objects to transfer..");
         // create transfer objects with 1 SUI value each
         let mut transfer_objects: Vec<Gas> = vec![];
         for _i in 0..count {
