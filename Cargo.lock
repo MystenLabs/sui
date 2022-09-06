@@ -7491,6 +7491,7 @@ dependencies = [
  "proc-macro2 1.0.43",
  "quote 1.0.21",
  "syn 1.0.99",
+ "workspace-hack 0.1.0",
 ]
 
 [[package]]
@@ -7626,6 +7627,7 @@ name = "sui-simulator"
 version = "0.7.0"
 dependencies = [
  "msim",
+ "workspace-hack 0.1.0",
 ]
 
 [[package]]
