@@ -15,15 +15,15 @@
 }
 
 .txresulttype {
-    @apply text-sm ml-2 mr-2;
+    @apply text-sm ml-2 mr-2 font-medium;
 }
 
 .success {
-    @apply bg-[#ECFBF7] capitalize text-sm font-sans text-[#008C65] font-normal p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1;
+    @apply bg-[#ECFBF7] capitalize text-sm font-sans text-[#008C65] p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1;
 }
 
 .failed {
-    @apply bg-issue-light capitalize text-sm font-sans text-issue-dark stroke-issue-dark font-normal p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1 break-all;
+    @apply bg-issue-light capitalize text-sm font-sans text-issue-dark stroke-issue-dark p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1 break-all;
 
     box-sizing: border-box;
 }
@@ -34,7 +34,7 @@
 }
 
 .error {
-    @apply m-0 text-sm p-1 pl-2 pr-2 font-normal mt-2;
+    @apply m-0 text-sm p-1 pl-2 pr-2 mt-2;
 
     box-sizing: border-box;
 }
