@@ -9337,6 +9337,7 @@ dependencies = [
  "camino",
  "cargo-platform",
  "cargo_metadata 0.14.2",
+ "cargo_metadata 0.15.0",
  "cassowary",
  "cast 0.2.7",
  "cast 0.3.0",
