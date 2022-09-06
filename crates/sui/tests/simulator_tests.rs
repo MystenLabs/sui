@@ -11,36 +11,33 @@ use rand::{
     Rng,
 };
 use std::collections::{HashMap, HashSet};
-use std::future::Future;
 use tokio::time::{sleep, Duration, Instant};
 use tracing::{debug, trace};
 
 use sui_macros::*;
 
-fn make_fut(i: usize) -> impl Future<Output = usize> {
-    async move {
-        let count_dist = Uniform::from(1..5);
-        let sleep_dist = Uniform::from(1000..10000);
+async fn make_fut(i: usize) -> usize {
+    let count_dist = Uniform::from(1..5);
+    let sleep_dist = Uniform::from(1000..10000);
 
-        let count = count_dist.sample(&mut OsRng);
-        for _ in 0..count {
-            let dur = Duration::from_millis(sleep_dist.sample(&mut OsRng));
-            trace!("sleeping for {:?}", dur);
-            sleep(dur).await;
-        }
-
-        trace!("future {} finished at {:?}", i, Instant::now());
-        i
+    let count = count_dist.sample(&mut OsRng);
+    for _ in 0..count {
+        let dur = Duration::from_millis(sleep_dist.sample(&mut OsRng));
+        trace!("sleeping for {:?}", dur);
+        sleep(dur).await;
     }
+
+    trace!("future {} finished at {:?}", i, Instant::now());
+    i
 }
 
 #[sim_test(check_determinism)]
 async fn test_futures_ordered() {
     telemetry_subscribers::init_for_testing();
 
-    let mut futures = FuturesOrdered::from_iter((0..200).map(|i| make_fut(i)));
+    let mut futures = FuturesOrdered::from_iter((0..200).map(make_fut));
 
-    while let Some(_) = futures.next().await {
+    while (futures.next().await).is_some() {
         // mix rng state as futures finish
         OsRng.gen::<u32>();
     }
@@ -51,7 +48,7 @@ async fn test_futures_ordered() {
 async fn test_futures_unordered() {
     telemetry_subscribers::init_for_testing();
 
-    let mut futures = FuturesUnordered::from_iter((0..200).map(|i| make_fut(i)));
+    let mut futures = FuturesUnordered::from_iter((0..200).map(make_fut));
 
     while let Some(i) = futures.next().await {
         // mix rng state depending on the order futures finish in
@@ -64,8 +61,8 @@ async fn test_futures_unordered() {
 
 #[sim_test(check_determinism)]
 async fn test_select_unbiased() {
-    let mut f1 = FuturesUnordered::from_iter((0..200).map(|i| make_fut(i)));
-    let mut f2 = FuturesUnordered::from_iter((0..200).map(|i| make_fut(i)));
+    let mut f1 = FuturesUnordered::from_iter((0..200).map(make_fut));
+    let mut f2 = FuturesUnordered::from_iter((0..200).map(make_fut));
 
     loop {
         tokio::select! {
