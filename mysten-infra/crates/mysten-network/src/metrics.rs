@@ -28,6 +28,13 @@ pub trait MetricsCallbackProvider: Send + Sync + Clone + 'static {
     /// `status`: the http status code of the response
     /// `grpc_status_code`: the grpc status code (see https://github.com/grpc/grpc/blob/master/doc/statuscodes.md#status-codes-and-their-use-in-grpc)
     fn on_response(&self, path: String, latency: Duration, status: u16, grpc_status_code: Code);
+
+    /// Called when request call is started
+    fn on_start(&self, _path: &str) {}
+
+    /// Called when request call is dropped.
+    /// It is guaranteed that for each on_start there will be corresponding on_drop
+    fn on_drop(&self, _path: &str) {}
 }
 
 #[derive(Clone, Default)]
