@@ -131,9 +131,6 @@ impl Workload<dyn Payload> for TransferObjectWorkload {
         // create as many gas objects as there are number of transfer objects times number of accounts
         info!("Creating enough gas to transfer objects..");
         let mut transfer_gas: Vec<Vec<Gas>> = vec![];
-        for _i in 0..count {
-            let mut account_transfer_gas = vec![];
-            for (owner, _) in self.transfer_keypairs.iter() {
                 if let Some((updated, minted)) = transfer_sui_for_testing(
                     (primary_gas_ref, Owner::AddressOwner(self.test_gas_owner)),
                     &self.test_gas_keypair,
