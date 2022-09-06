@@ -33,6 +33,10 @@ module.exports = {
                         35: '#FEFEFE',
                     },
                 },
+                issue: {
+                    dark: '#EB5A29',
+                    light: '#FFECE5',
+                },
                 cardDark: '#F3F4F5',
                 success: '#2DD7A7',
                 error: '#2DD7A7',
