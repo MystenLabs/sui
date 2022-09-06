@@ -4,11 +4,11 @@
 /// This example illustrates how One Time Witness works.
 ///
 /// One Time Witness (OTW) is an instance of a type which is guaranteed to
-/// be unique accross the system. It has the following properties:
+/// be unique across the system. It has the following properties:
 ///
 /// - created only in module initializer
 /// - named after the module (uppercased)
-/// - cannot be created othewise
+/// - cannot be packed manually
 /// - has a `drop` ability
 module examples::one_time_witness_registry {
     use sui::tx_context::TxContext;
