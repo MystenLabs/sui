@@ -1,6 +1,8 @@
 name: nightly
 
 on:
+  ## Allow triggering this workflow manually via GitHub CLI/web
+  workflow_dispatch:
   schedule:
     - cron: '0 0 * * *'  # every day at midnight
 
