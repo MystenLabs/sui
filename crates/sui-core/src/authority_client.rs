@@ -242,10 +242,6 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: BatchInfoRequest,
     ) -> Result<BatchInfoResponseItemStream, SuiError> {
-        self.metrics
-            .batch_info_request_start_seq
-            .observe(request.start.unwrap_or(0) as f64);
-
         let stream = self
             .client()
             .batch_info(request)
@@ -490,8 +486,6 @@ pub struct NetworkAuthorityClientMetrics {
     pub handle_object_info_request_latency: Histogram,
     pub handle_transaction_info_request_latency: Histogram,
     pub handle_checkpoint_request_latency: Histogram,
-
-    pub batch_info_request_start_seq: Histogram,
 }
 
 impl NetworkAuthorityClientMetrics {
@@ -530,12 +524,6 @@ impl NetworkAuthorityClientMetrics {
             handle_checkpoint_request_latency: register_histogram_with_registry!(
                 "handle_checkpoint_request_latency",
                 "Latency of handle checkpoint request",
-                registry
-            )
-            .unwrap(),
-            batch_info_request_start_seq: register_histogram_with_registry!(
-                "batch_info_request_start_seq",
-                "The start sequences of the batch info requests",
                 registry
             )
             .unwrap(),
