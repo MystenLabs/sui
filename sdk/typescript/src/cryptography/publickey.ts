@@ -78,9 +78,9 @@ export class PublicKey implements PublicKeyData {
     } else {
       if (typeof value === 'string') {
         const buffer = Buffer.from(value, 'base64');
-        if (buffer.length !== 32) {
+        if (buffer.length !== PUBLIC_KEY_SIZE) {
           throw new Error(
-            `Invalid public key input. Expected 32 bytes, got ${buffer.length}`
+            `Invalid public key input. Expected ${PUBLIC_KEY_SIZE} bytes, got ${buffer.length}`
           );
         }
         this._buffer = buffer;
