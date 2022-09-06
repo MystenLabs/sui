@@ -15,16 +15,21 @@ export type PublicKeyInitData =
   | PublicKeyData;
 
 const zeroPadBuffer = (buffer: Uint8Array, length: number): Uint8Array => {
+  // Short circuit if the buffer is already the correct length.
+  if (buffer.length === length) {
+    return buffer;
+  }
   const next = new Uint8Array(length);
   Buffer.from(buffer).copy(next, length - buffer.length);
   return next;
 };
 
-export const byteArrayEquals = (a: Uint8Array, b: Uint8Array): boolean => {
+const byteArrayEquals = (a: Uint8Array, b: Uint8Array): boolean => {
   if (a.length !== b.length) {
     return false;
   }
-  for (let i = 0; i < a.length; i++) {
+  // Compare backwards since pubkeys will often contain leading zeroes.
+  for (let i = a.length - 1; i >= 0; i--) {
     if (a[i] !== b[i]) {
       return false;
     }
@@ -137,7 +142,7 @@ export class PublicKey implements PublicKeyData {
   toSuiAddress(scheme: SignatureScheme = 'ED25519'): string {
     let tmp = new Uint8Array(PUBLIC_KEY_SIZE + 1);
     tmp.set([SIGNATURE_SCHEME_TO_FLAG[scheme]]);
-    tmp.set(this.toBytes(), 1);
+    tmp.set(this._buffer, 1);
     // Only take the first 20 bytes
     const addressBytes = zeroPadBuffer(
       Uint8Array.from(sha3_256.digest(tmp).slice(0, 20)),
