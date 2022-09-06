@@ -1,6 +1,9 @@
 name: Tag
 
-on: 
+on:
+  repository_dispatch:
+    types: [tag-main]
+
   workflow_call:
     inputs:
       sui_commit:
