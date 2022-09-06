@@ -605,6 +605,10 @@ pub struct CheckpointFragment {
 
 impl CheckpointFragment {
     pub fn verify(&self, committee: &Committee) -> SuiResult {
+        fp_ensure!(
+            self.proposer.summary.sequence_number == self.other.summary.sequence_number,
+            SuiError::from("Proposer and other have inconsistent sequence number")
+        );
         // Check the signatures of proposer and other
         self.proposer.verify(committee, None)?;
         self.other.verify(committee, None)?;
@@ -757,5 +761,26 @@ mod tests {
             .collect();
 
         assert!(CertifiedCheckpointSummary::aggregate(signed_checkpoints, &committee).is_err());
+    }
+
+    #[test]
+    fn test_fragment() {
+        let mut rng = StdRng::from_seed(RNG_SEED);
+        let (authority_key, committee) = make_committee_key(&mut rng);
+        let name1: AuthorityName = authority_key[0].public().into();
+        let name2: AuthorityName = authority_key[1].public().into();
+
+        let set = CheckpointProposalContents::new([ExecutionDigests::random()].into_iter());
+
+        let proposal1 =
+            CheckpointProposal::new(committee.epoch, 1, name1, &authority_key[0], set.clone());
+        let proposal2 =
+            CheckpointProposal::new(committee.epoch, 1, name2, &authority_key[1], set.clone());
+        let fragment1 = proposal1.fragment_with(&proposal2);
+        assert!(fragment1.verify(&committee).is_ok());
+
+        let proposal3 = CheckpointProposal::new(committee.epoch, 2, name2, &authority_key[1], set);
+        let fragment2 = proposal1.fragment_with(&proposal3);
+        assert!(fragment2.verify(&committee).is_err());
     }
 }
