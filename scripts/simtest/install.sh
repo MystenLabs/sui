@@ -1,4 +1,6 @@
 #!/bin/bash
+# Copyright (c) 2022, Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
 
 cd "$(dirname "${BASH_SOURCE[0]}")"
 
