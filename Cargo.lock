@@ -425,7 +425,7 @@ dependencies = [
  "cc",
  "cfg-if 1.0.0",
  "libc",
- "miniz_oxide 0.5.4",
+ "miniz_oxide",
  "object 0.28.4",
  "rustc-demangle",
 ]
@@ -3474,15 +3474,6 @@ name = "miniz_oxide"
 version = "0.5.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96590ba8f175222643a85693f33d26e9c8a015f599c216509b1a6894af675d34"
-dependencies = [
- "adler",
-]
-
-[[package]]
-name = "miniz_oxide"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b275950c28b37e794e8c55d88aeb5e139d0ce23fdbbeda68f8d7174abdf9e8fa"
 dependencies = [
  "adler",
 ]
@@ -9559,7 +9550,7 @@ dependencies = [
  "merlin",
  "mime",
  "minimal-lexical",
- "miniz_oxide 0.6.2",
+ "miniz_oxide",
  "mio 0.8.4",
  "mockall",
  "mockall_derive",
@@ -10137,7 +10128,7 @@ dependencies = [
  "merlin",
  "mime",
  "minimal-lexical",
- "miniz_oxide 0.5.4",
+ "miniz_oxide",
  "mio 0.8.4",
  "mockall",
  "mockall_derive",
