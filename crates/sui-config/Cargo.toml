@@ -10,7 +10,7 @@ edition = "2021"
 bcs = "0.1.3"
 arc-swap = "1.5.1"
 camino = "1.1.1"
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
 serde = { version = "1.0.144", features = ["derive", "rc"] }
 serde_with = "1.14.0"
 serde_yaml = "0.8.26"

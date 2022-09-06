@@ -8,7 +8,7 @@ publish = false
 edition = "2021"
 
 [dependencies]
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
 bcs = "0.1.3"
 leb128 = "0.2.5"
 once_cell = "1.13.1"
