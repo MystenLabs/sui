@@ -40,7 +40,7 @@ validator_configs:
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 20000
+    grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
   - protocol-key-pair: QiWNzaFM8RHGAriXG4zIQ+keRsqQUVHAJ0SmsBfmkxbMYjMuNLstXNafYO+7KjbLkWx+tFgwHqNmNsTbsBK9iA==
@@ -80,7 +80,7 @@ validator_configs:
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 20000
+    grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
   - protocol-key-pair: 4BB+FmG6xjjQpGNs/bv21foY4nMY2jMCltCjhxgNbIzqP8527hCzpkX7MEBRHfq0yc1gWPQZKQFNFkZvXjssKg==
@@ -120,7 +120,7 @@ validator_configs:
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 20000
+    grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
   - protocol-key-pair: kYP0d2s+pZoXgeVko+rpZ2k5e4q0NbJd2kGJ4QPQMc9cR/734xE9wBxW701He/5RV6/DOWmgFPi7VTfhjM7GTA==
@@ -160,7 +160,7 @@ validator_configs:
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 20000
+    grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
   - protocol-key-pair: ZyDgEy8FWgoN24poviNcDhIx9n6fKOuCHqxbHTnJPg+9UN97gnKsq+V1YAwCB2p5S8AIWrDXl7g9SiPgHI58JA==
@@ -200,7 +200,7 @@ validator_configs:
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 20000
+    grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
   - protocol-key-pair: RuBQj94iWraVKHboVHWawvBtJms/9hWcJ38WR6jgPck7oQxlS+QUbas9bauAs84kzjfbfHRcKyUyBdYvlnsAsw==
@@ -240,7 +240,7 @@ validator_configs:
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 20000
+    grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
   - protocol-key-pair: a7tE8gojj/hBeXcgQGHOCDL2HfJ2KPJ4Q1ggrXvO/+ZVrIhjM+yKuhWtjh6KURRUoIz8t81wxY3YQsqgcI0avw==
@@ -280,7 +280,7 @@ validator_configs:
     enable-checkpoint: true
     enable-reconfig: false
     grpc-load-shed: ~
-    grpc-concurrency-limit: 20000
+    grpc-concurrency-limit: 20000000000
     genesis:
       genesis: "[fake genesis]"
 account_keys:
