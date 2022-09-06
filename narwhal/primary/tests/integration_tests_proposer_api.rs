@@ -18,8 +18,7 @@ use std::{
     time::Duration,
 };
 use test_utils::{
-    keys, make_optimal_certificates, make_optimal_signed_certificates, pure_committee_from_keys,
-    shared_worker_cache_from_keys, temp_dir,
+    make_optimal_certificates, make_optimal_signed_certificates, temp_dir, CommitteeFixture,
 };
 use tokio::sync::watch;
 use tonic::transport::Channel;
@@ -31,11 +30,12 @@ use types::{
 #[tokio::test]
 async fn test_rounds_errors() {
     // GIVEN keys
-    let mut k = keys(None);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
 
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-    let keypair = k.pop().unwrap();
+    let author = fixture.authorities().last().unwrap();
+    let keypair = author.keypair().copy();
     let name = keypair.public().clone();
 
     struct TestCase {
@@ -149,12 +149,12 @@ async fn test_rounds_errors() {
 #[tokio::test]
 async fn test_rounds_return_successful_response() {
     // GIVEN keys
-    let mut k = keys(None);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
 
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-
-    let keypair = k.pop().unwrap();
+    let author = fixture.authorities().last().unwrap();
+    let keypair = author.keypair().copy();
     let name = keypair.public().clone();
 
     let parameters = Parameters {
@@ -203,16 +203,20 @@ async fn test_rounds_return_successful_response() {
 
     // AND create some certificates and insert to DAG
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = keys(None)
-        .into_iter()
-        .map(|kp| kp.public().clone())
-        .collect();
     let mut genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
+    let (mut certificates, _next_parents) = make_optimal_certificates(
+        1..=4,
+        &genesis,
+        &committee
+            .authorities
+            .keys()
+            .cloned()
+            .collect::<Vec<PublicKey>>(),
+    );
 
     // Feed the certificates to the Dag
     while let Some(certificate) = genesis_certs.pop() {
@@ -240,10 +244,12 @@ async fn test_rounds_return_successful_response() {
 
 #[tokio::test]
 async fn test_node_read_causal_signed_certificates() {
-    let mut k = keys(None);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
 
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
+    let authority_1 = fixture.authorities().next().unwrap();
+    let authority_2 = fixture.authorities().nth(1).unwrap();
 
     // Make the data store.
     let primary_store_1 = NodeStorage::reopen(temp_dir());
@@ -275,8 +281,12 @@ async fn test_node_read_causal_signed_certificates() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
 
+    let keys = fixture
+        .authorities()
+        .map(|a| a.keypair().copy())
+        .collect::<Vec<_>>();
     let (certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &committee, &k);
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
     collection_ids.extend(
         certificates
@@ -312,7 +322,7 @@ async fn test_node_read_causal_signed_certificates() {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let keypair_1 = k.pop().unwrap();
+    let keypair_1 = authority_1.keypair().copy();
     let name_1 = keypair_1.public().clone();
 
     let (tx_get_block_commands_1, rx_get_block_commands_1) =
@@ -350,7 +360,7 @@ async fn test_node_read_causal_signed_certificates() {
         batch_size: 200, // Two transactions.
         ..Parameters::default()
     };
-    let keypair_2 = k.pop().unwrap();
+    let keypair_2 = authority_2.keypair().copy();
     let name_2 = keypair_2.public().clone();
     let consensus_metrics_2 = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
@@ -450,7 +460,7 @@ async fn test_node_read_causal_signed_certificates() {
     ));
 
     // Test node read causal for key that is not an authority of the mempool.
-    let unknown_keypair = keys(1).pop().unwrap();
+    let unknown_keypair = test_utils::random_key();
     let unknown_name = unknown_keypair.public().clone();
 
     let request = tonic::Request::new(NodeReadCausalRequest {
