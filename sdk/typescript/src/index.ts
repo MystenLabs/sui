@@ -2,7 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 export * from './cryptography/ed25519-keypair';
+export * from './cryptography/secp256k1-keypair';
 export * from './cryptography/keypair';
+export * from './cryptography/ed25519-publickey';
+export * from './cryptography/secp256k1-publickey';
 export * from './cryptography/publickey';
 
 export * from './providers/provider';

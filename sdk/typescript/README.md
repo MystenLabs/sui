@@ -41,6 +41,13 @@ You can view the generated [Type Doc](https://typedoc.org/) for the [current rel
 
 For the latest docs for the `main` branch, run `pnpm doc` and open the [doc/index.html](doc/index.html) in your browser.
 
+## Testing
+
+```
+cd sdk/typescript
+pnpm run test
+```
+
 ## Usage
 
 The `JsonRpcProvider` class provides a connection to the JSON-RPC Server and should be used for all read-only operations. The default URLs to connect with the RPC server are:
@@ -76,8 +83,9 @@ To transfer a `0x2::coin::Coin<SUI>`:
 
 ```typescript
 import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
-// Generate a new Keypair
+// Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
+
 const signer = new RawSigner(
   keypair,
   new JsonRpcProvider('https://gateway.devnet.sui.io:443')
@@ -173,4 +181,18 @@ const publishTxn = await signer.publish(
   }
 );
 console.log('publishTxn', publishTxn);
+```
+
+
+Alternatively, a Secp256k1 can be initiated:
+
+```typescript
+import { Secp256k1Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+// Generate a new Secp256k1 Keypair
+const keypair = new Secp256k1Keypair();
+
+const signer = new RawSigner(
+  keypair,
+  new JsonRpcProvider('https://gateway.devnet.sui.io:443')
+);
 ```

@@ -122,6 +122,8 @@ importers:
     specifiers:
       '@mysten/bcs': workspace:*
       '@mysten/sui-open-rpc': file:../../crates/sui-open-rpc
+      '@noble/hashes': ^1.1.2
+      '@noble/secp256k1': ^1.6.3
       '@size-limit/preset-small-lib': ^7.0.8
       '@types/bn.js': ^5.1.0
       '@types/lossless-json': ^1.0.1
@@ -149,6 +151,8 @@ importers:
       vitest: ^0.22.1
     dependencies:
       '@mysten/bcs': link:bcs
+      '@noble/hashes': 1.1.2
+      '@noble/secp256k1': 1.6.3
       bn.js: 5.2.1
       buffer: 6.0.3
       cross-fetch: 3.1.5
@@ -3151,6 +3155,14 @@ packages:
     requiresBuild: true
     dev: false
     optional: true
+
+  /@noble/hashes/1.1.2:
+    resolution: {integrity: sha512-KYRCASVTv6aeUi1tsF8/vpyR7zpfs3FUzy2Jqm+MU+LmUKhQ0y2FpfwqkCcxSg2ua4GALJd8k2R76WxwZGbQpA==}
+    dev: false
+
+  /@noble/secp256k1/1.6.3:
+    resolution: {integrity: sha512-T04e4iTurVy7I8Sw4+c5OSN9/RkPlo1uKxAomtxQNLq8j1uPAqnsqG1bqvY3Jv7c13gyr6dui0zmh/I3+f/JaQ==}
+    dev: false
 
   /@nodelib/fs.scandir/2.1.5:
     resolution: {integrity: sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g==}

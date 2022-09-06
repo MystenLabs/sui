@@ -91,16 +91,16 @@ impl KeyToolCommand {
             }
             KeyToolCommand::List => {
                 println!(
-                    " {0: ^42} | {1: ^45} | {2: ^1}",
-                    "Sui Address", "Public Key (Base64)", "Flag"
+                    " {0: ^42} | {1: ^45} | {2: ^6}",
+                    "Sui Address", "Public Key (Base64)", "Scheme"
                 );
                 println!("{}", ["-"; 100].join(""));
                 for pub_key in keystore.keys() {
                     println!(
-                        " {0: ^42} | {1: ^45} | {2: ^1}",
+                        " {0: ^42} | {1: ^45} | {2: ^6}",
                         Into::<SuiAddress>::into(&pub_key),
                         Base64::encode(&pub_key),
-                        pub_key.flag()
+                        pub_key.scheme().to_string()
                     );
                 }
             }
