@@ -5,6 +5,7 @@ use anyhow::anyhow;
 use anyhow::bail;
 use anyhow::Result;
 use futures::TryFutureExt;
+use mysten_network::server::ServerBuilder;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::option::Option::None;
@@ -39,6 +40,7 @@ use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 
+use crate::metrics::GrpcMetrics;
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
@@ -278,7 +280,8 @@ impl SuiNode {
             let mut server_conf = mysten_network::config::Config::new();
             server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
             server_conf.load_shed = config.grpc_load_shed;
-            let mut server_builder = server_conf.server_builder();
+            let mut server_builder =
+                ServerBuilder::from_config(&server_conf, GrpcMetrics::new(&prometheus_registry));
 
             if let Some(validator_service) = validator_service {
                 server_builder =
