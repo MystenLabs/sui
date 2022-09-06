@@ -170,7 +170,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// use rocksdb::Options;
 /// use typed_store::rocks::DBMap;
 /// use typed_store::Store;
-/// use typed_store_macros::DBMapUtils;
+/// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
 /// /// Define a struct with all members having type DBMap<K, V>
 ///
@@ -222,7 +222,7 @@ fn extract_generics_names(generics: &Generics) -> Vec<Ident> {
 /// use rocksdb::Options;
 /// use typed_store::rocks::DBMap;
 /// use typed_store::Store;
-/// use typed_store_macros::DBMapUtils;
+/// use typed_store_derive::DBMapUtils;
 /// use typed_store::traits::TypedStoreDebug;
 /// /// Define a struct with all members having type DBMap<K, V>
 ///
