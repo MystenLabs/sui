@@ -3,9 +3,17 @@
 
 use crate::{MallocShallowSizeOf, MallocSizeOf};
 
+// ed25519_consensus
+malloc_size_of_is_0!(ed25519_consensus::Signature);
+
 // fastcrypto
 malloc_size_of_is_0!(fastcrypto::ed25519::Ed25519PublicKey);
 malloc_size_of_is_0!(fastcrypto::ed25519::Ed25519Signature);
+impl MallocSizeOf for fastcrypto::ed25519::Ed25519AggregateSignature {
+    fn size_of(&self, ops: &mut crate::MallocSizeOfOps) -> usize {
+        self.0.size_of(ops)
+    }
+}
 
 // hash_map
 malloc_size_of_is_0!(std::collections::hash_map::RandomState);
