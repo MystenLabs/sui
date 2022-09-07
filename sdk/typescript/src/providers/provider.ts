@@ -146,13 +146,18 @@ export abstract class Provider {
 
   abstract syncAccountState(address: string): Promise<any>;
 
+  /**
+   * Get events for one transaction
+   * @param digest transaction digest to search by
+   * @param count max result count
+   */
   abstract getEventsByTransaction(digest: TransactionDigest, count: number): Promise<SuiEvents>;
 
   /**
    * Get events emitted from within the specified Move module
    * @param package_ Move package object ID
    * @param module Move module name
-   * @param options count, start & end times
+   * @param options max result count, start & end times
    */
   abstract getEventsByTransactionModule(
     package_: ObjectId,                   // 'package' is reserved word
@@ -163,7 +168,7 @@ export abstract class Provider {
   /**
    * Get events with a matching Move type name
    * @param moveEventStructName Move struct type name
-   * @param options count, start & end times
+   * @param options max result count, start & end times
    */
   abstract getEventsByMoveEventStructName(
     moveEventStructName: string,
@@ -173,7 +178,7 @@ export abstract class Provider {
   /**
    * Get events with a matching Move type name
    * @param sender Sui address of the sender of the transaction that generated the event
-   * @param options count, start & end times
+   * @param options max result count, start & end times
    */
   abstract getEventsBySender(
     sender: SuiAddress,
@@ -182,8 +187,8 @@ export abstract class Provider {
 
   /**
    * Get events with a matching recipient
-   * @param recipient Object owner that received the transaction that generated the event
-   * @param options count, start & end times
+   * @param recipient object owner that received the transaction that generated the event
+   * @param options max result count, start & end times
    */
   abstract getEventsByRecipient(
     recipient: ObjectOwner,
@@ -193,7 +198,7 @@ export abstract class Provider {
   /**
    * Get events involving the given object
    * @param object object id created, mutated, or deleted in events
-   * @param options count, start & end times
+   * @param options max result count, start & end times
    */
   abstract getEventsByObject(
     object: ObjectId,
@@ -202,14 +207,14 @@ export abstract class Provider {
 
   /**
    * Get all events within the given time span
-   * @param options count, start & end times
+   * @param options max result count, start & end times
    */
   abstract getEventsByTimeRange(options: TimeRangeQueryOptions): Promise<SuiEvents>;
 
   /**
    * Subscribe to get notifications whenever an event matching the filter occurs
-   * @param filter - filter describing the subset of events to follow
-   * @param onMessage - function to run when we receive a notification of a new event matching the filter
+   * @param filter filter describing the subset of events to follow
+   * @param onMessage function to run when we receive a notification of a new event matching the filter
    */
   abstract subscribeEvent(
     filter: SuiEventFilter,
