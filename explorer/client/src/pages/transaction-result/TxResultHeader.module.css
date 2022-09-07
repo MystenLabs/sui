@@ -9,7 +9,7 @@
 }
 
 .txresulttype {
-    @apply text-[14px] font-medium font-sans capitalize rounded-[6px] py-[4px] px-[8px] flex items-center justify-around mt-[8px] lg:ml-[6px];
+    @apply text-[14px] leading-[12.6px] font-medium font-sans capitalize rounded-[6px] py-[4px] px-[8px] flex items-center gap-[6px] mt-[8px] lg:ml-[6px] lg:mt-0;
 }
 
 .txresulttype > span,
@@ -18,11 +18,15 @@
 }
 
 .success {
-    @apply bg-success-light text-success-dark w-[91px] h-[22px];
+    @apply bg-success-light text-success-dark w-auto h-[14px];
 }
 
 .success svg {
     @apply fill-success-dark;
+}
+
+.success span {
+    @apply w-[57px] h-[14px] pr-[1px] flex items-start;
 }
 
 .failed {
