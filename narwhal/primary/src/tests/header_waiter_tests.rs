@@ -11,14 +11,19 @@ use fastcrypto::{traits::KeyPair, Hash};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
-use test_utils::{fixture_header_with_payload, keys, resolve_name_committee_and_worker_cache};
+use test_utils::{fixture_payload, CommitteeFixture};
 use tokio::{sync::watch, time::timeout};
 use types::{BatchDigest, ReconfigureNotification, Round};
 
 #[tokio::test]
 async fn successfully_synchronize_batches() {
     // GIVEN
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
     let (_, certificate_store, payload_store) = create_db_stores();
     let gc_depth: Round = 1;
     let (_tx_reconfigure, rx_reconfigure) =
@@ -31,11 +36,10 @@ async fn successfully_synchronize_batches() {
     let own_address =
         network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
             .unwrap();
-    let kp = keys(None).remove(2);
 
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(kp.private().0.to_bytes())
+        .private_key(primary.keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 
@@ -59,7 +63,11 @@ async fn successfully_synchronize_batches() {
 
     // AND a header
     let worker_id = 0;
-    let header = fixture_header_with_payload(2);
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(2))
+        .build(author.keypair())
+        .unwrap();
     let missing_digests = vec![BatchDigest::default()];
     let missing_digests_map = missing_digests
         .clone()
