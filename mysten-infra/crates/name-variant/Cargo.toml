@@ -1,12 +1,12 @@
 [package]
 name = "name-variant"
-version = "1.0.0"
+version = "0.1.0"
 authors = ["Francois Garillot <francois@mystenlabs.com>"]
 edition = "2021"
 description = "Generates a method to name enum variants."
 license = "Apache-2.0"
-repository = "https://github.com/mysten_infra/name_variant"
-publish = false
+repository = "https://github.com/mystenlabs/mysten-infra"
+publish = ["crates-io"]
 
 [lib]
 proc-macro = true

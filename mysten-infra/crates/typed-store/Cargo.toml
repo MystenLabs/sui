@@ -6,7 +6,7 @@ authors = ["Francois Garillot <francois@mystenlabs.com>"]
 description = "a typed database interface"
 repository = "https://github.com/mystenlabs/mysten-infra"
 edition = "2021"
-publish = false
+publish = ["crates-io"]
 
 [dependencies]
 bincode = "1.3.3"
