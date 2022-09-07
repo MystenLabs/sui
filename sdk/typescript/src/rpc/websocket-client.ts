@@ -163,7 +163,7 @@ export class WebsocketClient {
     in multiple message handlers firing each time
   */
   private async refreshSubscriptions() {
-    if(this.eventSubscriptions.size === 0)
+    if (this.eventSubscriptions.size === 0)
       return;
 
     try {
