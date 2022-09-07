@@ -1,0 +1,9 @@
+[package]
+name = "entry_point_vector"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../../../sui-framework" }
+
+[addresses]
+entry_point_vector =  "0x0"

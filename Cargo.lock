@@ -3283,6 +3283,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
+name = "leb128"
+version = "0.2.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
+
+[[package]]
 name = "lexical-core"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6985,6 +6991,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "leb128",
  "move-binary-format",
  "move-core-types",
  "move-package",
@@ -9546,6 +9553,7 @@ dependencies = [
  "lazy_static 0.2.11",
  "lazy_static 1.4.0",
  "lazycell",
+ "leb128",
  "lexical-core",
  "libc",
  "libloading",

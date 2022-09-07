@@ -255,6 +255,7 @@ keccak = { version = "0.1", default-features = false }
 kstring = { version = "1", features = ["max_inline", "serde"] }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
 lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default-features = false }
+leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7", features = ["arrayvec", "correct", "ryu", "static_assertions", "std", "table"] }
 libc = { version = "0.2", features = ["std"] }
 libm = { version = "0.2" }
@@ -872,6 +873,7 @@ kstring = { version = "1", features = ["max_inline", "serde"] }
 lazy_static-6f8ce4dd05d13bba = { package = "lazy_static", version = "0.2", default-features = false }
 lazy_static-dff4ba8e3ae991db = { package = "lazy_static", version = "1", default-features = false }
 lazycell = { version = "1", default-features = false }
+leb128 = { version = "0.2", default-features = false }
 lexical-core = { version = "0.7", features = ["arrayvec", "correct", "ryu", "static_assertions", "std", "table"] }
 libc = { version = "0.2", features = ["std"] }
 libloading = { version = "0.7", default-features = false }

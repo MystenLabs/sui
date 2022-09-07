@@ -42,25 +42,37 @@ pub enum TestCallArg {
     Object(ObjectID),
     U64(u64),
     Address(SuiAddress),
+    PrimVec(Vec<u64>),
+    ObjVec(Vec<ObjectID>),
 }
 
 impl TestCallArg {
     pub async fn to_call_arg(self, state: &AuthorityState) -> CallArg {
         match self {
             Self::Object(object_id) => {
-                let object = state.get_object(&object_id).await.unwrap().unwrap();
-                if object.is_shared() {
-                    CallArg::Object(ObjectArg::SharedObject(object_id))
-                } else {
-                    CallArg::Object(ObjectArg::ImmOrOwnedObject(
-                        object.compute_object_reference(),
-                    ))
-                }
+                CallArg::Object(Self::call_arg_from_id(object_id, state).await)
             }
             Self::U64(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
             Self::Address(addr) => {
                 CallArg::Pure(bcs::to_bytes(&AccountAddress::from(addr)).unwrap())
             }
+            Self::PrimVec(value) => CallArg::Pure(bcs::to_bytes(&value).unwrap()),
+            Self::ObjVec(vec) => {
+                let mut refs = vec![];
+                for object_id in vec {
+                    refs.push(Self::call_arg_from_id(object_id, state).await)
+                }
+                CallArg::ObjVec(refs)
+            }
+        }
+    }
+
+    async fn call_arg_from_id(object_id: ObjectID, state: &AuthorityState) -> ObjectArg {
+        let object = state.get_object(&object_id).await.unwrap().unwrap();
+        if object.is_shared() {
+            ObjectArg::SharedObject(object_id)
+        } else {
+            ObjectArg::ImmOrOwnedObject(object.compute_object_reference())
         }
     }
 }
@@ -508,6 +520,19 @@ pub async fn send_and_confirm_transaction(
     authority: &AuthorityState,
     transaction: Transaction,
 ) -> Result<TransactionInfoResponse, SuiError> {
+    send_and_confirm_transaction_with_shared(
+        authority,
+        transaction,
+        false, /* no shared objects */
+    )
+    .await
+}
+
+pub async fn send_and_confirm_transaction_with_shared(
+    authority: &AuthorityState,
+    transaction: Transaction,
+    with_shared: bool, // transaction includes shared objects
+) -> Result<TransactionInfoResponse, SuiError> {
     // Make the initial request
     let response = authority.handle_transaction(transaction.clone()).await?;
     let vote = response.signed_transaction.unwrap();
@@ -519,6 +544,11 @@ pub async fn send_and_confirm_transaction(
         .append(vote.auth_sign_info.authority, vote.auth_sign_info.signature)
         .unwrap()
         .unwrap();
+
+    if with_shared {
+        send_consensus(authority, &certificate).await;
+    }
+
     // Submit the confirmation. *Now* execution actually happens, and it should fail when we try to look up our dummy module.
     // we unfortunately don't get a very descriptive error message, but we can at least see that something went wrong inside the VM
     authority.handle_certificate(certificate).await
@@ -2032,6 +2062,22 @@ fn init_certified_transaction(
         .unwrap()
 }
 
+#[cfg(test)]
+async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction) {
+    authority
+        .handle_consensus_transaction(
+            // TODO [2533]: use this once integrating Narwhal reconfiguration
+            &narwhal_consensus::ConsensusOutput {
+                certificate: narwhal_types::Certificate::default(),
+                consensus_index: narwhal_types::SequenceNumber::default(),
+            },
+            /* last_consensus_index */ ExecutionIndices::default(),
+            ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
+        )
+        .await
+        .unwrap();
+}
+
 pub async fn call_move(
     authority: &AuthorityState,
     gas_object_id: &ObjectID,
@@ -2042,6 +2088,33 @@ pub async fn call_move(
     function: &'_ str,
     type_args: Vec<TypeTag>,
     test_args: Vec<TestCallArg>,
+) -> SuiResult<TransactionEffects> {
+    call_move_with_shared(
+        authority,
+        gas_object_id,
+        sender,
+        sender_key,
+        package,
+        module,
+        function,
+        type_args,
+        test_args,
+        false, // no shared objects
+    )
+    .await
+}
+
+pub async fn call_move_with_shared(
+    authority: &AuthorityState,
+    gas_object_id: &ObjectID,
+    sender: &SuiAddress,
+    sender_key: &AccountKeyPair,
+    package: &ObjectRef,
+    module: &'_ str,
+    function: &'_ str,
+    type_args: Vec<TypeTag>,
+    test_args: Vec<TestCallArg>,
+    with_shared: bool, // Move call includes shared objects
 ) -> SuiResult<TransactionEffects> {
     let gas_object = authority.get_object(gas_object_id).await.unwrap();
     let gas_object_ref = gas_object.unwrap().compute_object_reference();
@@ -2063,7 +2136,8 @@ pub async fn call_move(
     let signature = Signature::new(&data, sender_key);
     let transaction = Transaction::new(data, signature);
 
-    let response = send_and_confirm_transaction(authority, transaction).await?;
+    let response =
+        send_and_confirm_transaction_with_shared(authority, transaction, with_shared).await?;
     Ok(response.signed_effects.unwrap().effects)
 }
 
@@ -2176,18 +2250,7 @@ async fn shared_object() {
     assert!(matches!(result, Err(SuiError::ObjectErrors { .. })));
 
     // Sequence the certificate to assign a sequence number to the shared object.
-    authority
-        .handle_consensus_transaction(
-            // TODO [2533]: use this once integrating Narwhal reconfiguration
-            &narwhal_consensus::ConsensusOutput {
-                certificate: narwhal_types::Certificate::default(),
-                consensus_index: narwhal_types::SequenceNumber::default(),
-            },
-            /* last_consensus_index */ ExecutionIndices::default(),
-            ConsensusTransaction::new_certificate_message(&authority.name, certificate.clone()),
-        )
-        .await
-        .unwrap();
+    send_consensus(&authority, &certificate).await;
 
     let shared_object_version = authority
         .db()
@@ -2256,21 +2319,6 @@ async fn test_consensus_message_processed() {
         Some((committee.clone(), sec2)),
     )
     .await;
-
-    async fn send_consensus(authority: &AuthorityState, cert: &CertifiedTransaction) {
-        authority
-            .handle_consensus_transaction(
-                // TODO [2533]: use this once integrating Narwhal reconfiguration
-                &narwhal_consensus::ConsensusOutput {
-                    certificate: narwhal_types::Certificate::default(),
-                    consensus_index: narwhal_types::SequenceNumber::default(),
-                },
-                /* last_consensus_index */ ExecutionIndices::default(),
-                ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
-            )
-            .await
-            .unwrap();
-    }
 
     async fn handle_cert(
         authority: &AuthorityState,
