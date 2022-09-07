@@ -89,6 +89,15 @@ export type SuiEventEnvelope = {
     event: SuiEvent
 }
 
+// export a type for this so we get a type guard
+export type SuiEvents = SuiEventEnvelope[];
+
 export type SubscriptionId = number;
 
 export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
+
+export type TimeRangeQueryOptions = {
+    count: number,
+    startTime: number,
+    endTime: number
+}

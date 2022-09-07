@@ -21,10 +21,15 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
+  ObjectOwner,
+  TimeRangeQueryOptions,
+  SuiAddress,
+  ObjectId,
 } from '../types';
 import { Provider } from './provider';
 
 export class VoidProvider extends Provider {
+
   // Objects
   async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
     throw this.newError('getObjectsOwnedByAddress');
@@ -124,6 +129,34 @@ export class VoidProvider extends Provider {
 
   async syncAccountState(_address: string): Promise<any> {
     throw this.newError('syncAccountState');
+  }
+
+  async getEventsByTransaction(_digest: TransactionDigest, _count: number): Promise<SuiEventEnvelope[]> {
+    throw this.newError('getEventsByTransaction');
+  }
+
+  async getEventsByTransactionModule(_package_: string, _module: string, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+    throw this.newError('getEventsByTransactionModule');
+  }
+
+  async getEventsByMoveEventStructName(_moveEventStructName: string, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+    throw this.newError('getEventsByMoveEventStructName');
+  }
+
+  async getEventsBySender(_sender: SuiAddress, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+    throw this.newError('getEventsBySender');
+  }
+
+  async getEventsByRecipient(_recipient: ObjectOwner, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+    throw this.newError('getEventsByRecipient');
+  }
+
+  async getEventsByObject(_object: ObjectId, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+    throw this.newError('getEventsByObject');
+  }
+
+  async getEventsByTimeRange(_options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+    throw this.newError('getEventsByTimeRange');
   }
 
   async subscribeEvent(

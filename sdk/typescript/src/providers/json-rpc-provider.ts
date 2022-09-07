@@ -14,6 +14,7 @@ import {
   isSuiMoveNormalizedFunction,
   isSuiMoveNormalizedStruct,
   isSuiExecuteTransactionResponse,
+  isSuiEvents
 } from '../types/index.guard';
 import {
   GatewayTxSeqNumber,
@@ -35,6 +36,11 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
+  TimeRangeQueryOptions,
+  SuiAddress,
+  ObjectOwner,
+  ObjectId,
+  SuiEvents,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
@@ -427,6 +433,111 @@ export class JsonRpcProvider extends Provider {
     } catch (err) {
       throw new Error(
         `Error sync account address for address: ${address} with error: ${err}`
+      );
+    }
+  }
+
+  async getEventsByTransaction(digest: TransactionDigest, count: number): Promise<SuiEvents> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getEventsByTransaction',
+        [digest, count],
+        isSuiEvents,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting events by transaction: ${digest}, with error: ${err}`
+      );
+    }
+  }
+
+  async getEventsByTransactionModule(package_: string, module: string, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getEventsByTransactionModule',
+        [package_, module, options.count, options.startTime, options.endTime],
+        isSuiEvents,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting events by transaction module: ${package_}::${module}, with error: ${err}`
+      );
+    }
+  }
+
+  async getEventsByMoveEventStructName(moveEventStructName: string, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getEventsByMoveEventStructName',
+        [moveEventStructName, options.count, options.startTime, options.endTime],
+        isSuiEvents,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting events by move event struct name: ${moveEventStructName}, with error: ${err}`
+      );
+    }
+  }
+
+  async getEventsBySender(sender: SuiAddress, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getEventsBySender',
+        [sender, options.count, options.startTime, options.endTime],
+        isSuiEvents,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting events by sender: ${sender}, with error: ${err}`
+      );
+    }
+  }
+
+  async getEventsByRecipient(recipient: ObjectOwner, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getEventsByRecipient',
+        [recipient, options.count, options.startTime, options.endTime],
+        isSuiEvents,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting events by receipient: ${recipient}, with error: ${err}`
+      );
+    }
+  }
+
+  async getEventsByObject(object: ObjectId, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getEventsByObject',
+        [object, options.count, options.startTime, options.endTime],
+        isSuiEvents,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting events by object: ${object}, with error: ${err}`
+      );
+    }
+  }
+
+  async getEventsByTimeRange(options: TimeRangeQueryOptions): Promise<SuiEvents> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getEventsByTimeRange',
+        [options.count, options.startTime, options.endTime],
+        isSuiEvents,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(
+        `Error getting events by time range: ${options.startTime} thru ${options.endTime}, with error: ${err}`
       );
     }
   }

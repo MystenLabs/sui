@@ -19,6 +19,11 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
+  TransactionDigest,
+  ObjectId,
+  TimeRangeQueryOptions,
+  SuiAddress,
+  ObjectOwner,
 } from '../types';
 
 ///////////////////////////////
@@ -139,6 +144,36 @@ export abstract class Provider {
   ): Promise<SuiMoveNormalizedStruct>;
 
   abstract syncAccountState(address: string): Promise<any>;
+
+  abstract getEventsByTransaction(digest: TransactionDigest, count: number): Promise<SuiEventEnvelope[]>;
+
+  abstract getEventsByTransactionModule(
+    package_: ObjectId,                   // 'package' is reserved word
+    module: string,
+    options: TimeRangeQueryOptions
+  ): Promise<SuiEventEnvelope[]>;
+
+  abstract getEventsByMoveEventStructName(
+    moveEventStructName: string,
+    options: TimeRangeQueryOptions
+  ): Promise<SuiEventEnvelope[]>;
+
+  abstract getEventsBySender(
+    sender: SuiAddress,
+    options: TimeRangeQueryOptions
+  ): Promise<SuiEventEnvelope[]>;
+
+  abstract getEventsByRecipient(
+    recipient: ObjectOwner,
+    options: TimeRangeQueryOptions
+  ): Promise<SuiEventEnvelope[]>;
+
+  abstract getEventsByObject(
+    object: ObjectId,
+    options: TimeRangeQueryOptions
+  ): Promise<SuiEventEnvelope[]>;
+
+  abstract getEventsByTimeRange(options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]>;
 
   /**
    * Subscribe to get notifications whenever an event matching the filter occurs
