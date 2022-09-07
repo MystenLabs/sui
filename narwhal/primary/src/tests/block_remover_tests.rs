@@ -20,15 +20,9 @@ use futures::{
 use network::PrimaryToWorkerNetwork;
 use prometheus::Registry;
 use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
-use test_utils::{
-    certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
-    resolve_name_committee_and_worker_cache, PrimaryToWorkerMockServer,
-};
+use test_utils::{fixture_batch_with_transactions, CommitteeFixture, PrimaryToWorkerMockServer};
 use tokio::{
-    sync::{
-        mpsc::{self},
-        watch,
-    },
+    sync::{mpsc, watch},
     task::JoinHandle,
     time::{sleep, timeout},
 };
@@ -45,7 +39,12 @@ async fn test_successful_blocks_delete() {
     let (tx_delete_batches, rx_delete_batches) = test_utils::test_channel!(10);
 
     // AND the necessary keys
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     // AND a Dag with genesis populated
@@ -72,8 +71,6 @@ async fn test_successful_blocks_delete() {
     let mut header_ids = Vec::new();
     let handlers = FuturesUnordered::new();
 
-    let key = keys(None).pop().unwrap();
-
     let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
 
     let worker_id_0 = 0;
@@ -84,13 +81,14 @@ async fn test_successful_blocks_delete() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_0)
             .with_payload_batch(batch_2.clone(), worker_id_1)
-            .build(&key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
         let block_id = certificate.digest();
 
         // write the certificate
@@ -210,7 +208,12 @@ async fn test_timeout() {
     let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(10);
 
     // AND the necessary keys
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     // AND a Dag with genesis populated
@@ -236,8 +239,6 @@ async fn test_timeout() {
     let mut block_ids = Vec::new();
     let mut header_ids = Vec::new();
 
-    let key = keys(None).pop().unwrap();
-
     let mut worker_batches: HashMap<WorkerId, Vec<BatchDigest>> = HashMap::new();
 
     let worker_id_2 = 2;
@@ -248,13 +249,14 @@ async fn test_timeout() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_2)
             .with_payload_batch(batch_2.clone(), worker_id_3)
-            .build(&key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
         let block_id = certificate.digest();
 
         // write the certificate
@@ -346,7 +348,12 @@ async fn test_unlocking_pending_requests() {
     let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(10);
 
     // AND the necessary keys
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
     // AND a Dag with genesis populated
@@ -375,17 +382,16 @@ async fn test_unlocking_pending_requests() {
     let mut block_ids = Vec::new();
     let mut header_ids = Vec::new();
 
-    let key = keys(None).pop().unwrap();
-
     let worker_id_0 = 0;
 
     let batch = fixture_batch_with_transactions(10);
-    let header = fixture_header_builder()
+    let header = author
+        .header_builder(&committee)
         .with_payload_batch(batch.clone(), worker_id_0)
-        .build(&key)
+        .build(author.keypair())
         .unwrap();
 
-    let certificate = certificate(&header);
+    let certificate = fixture.certificate(&header);
     let block_id = certificate.digest();
 
     // write the certificate
