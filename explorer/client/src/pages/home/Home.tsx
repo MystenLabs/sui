@@ -4,7 +4,6 @@ import cl from 'classnames';
 import { useEffect, useState, useContext, lazy, Suspense } from 'react';
 
 import ErrorResult from '../../components/error-result/ErrorResult';
-import EventSubscription from '../../components/event-subscription/EventSubscription';
 import {
     TopValidatorsCardAPI,
     TopValidatorsCardStatic,
@@ -107,9 +106,6 @@ function HomeAPI() {
                 <Suspense fallback={null}>
                     <ValidatorMap />
                 </Suspense>
-            </section>
-            <section>
-                <EventSubscription />
             </section>
         </div>
     );
