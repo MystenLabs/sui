@@ -9,3 +9,7 @@
 .address {
     @apply text-offblack font-bold text-lg md:text-2xl font-mono break-all block items-center mb-2.5;
 }
+
+.address svg {
+    @apply h-[18px];
+}
