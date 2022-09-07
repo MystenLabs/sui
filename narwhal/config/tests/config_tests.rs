@@ -16,24 +16,23 @@
 // 1. Run `cargo insta test --review` under `./config`.
 // 2. Review, accept or reject changes.
 
-use std::collections::{BTreeMap, HashMap};
-
 use config::{
-    Committee, ConsensusAPIGrpcParameters, Epoch, Import, Parameters, PrimaryAddresses,
-    PrometheusMetricsParameters, Stake, WorkerCache,
+    ConsensusAPIGrpcParameters, Import, Parameters, PrimaryAddresses, PrometheusMetricsParameters,
+    Stake,
 };
 use crypto::PublicKey;
-use fastcrypto::traits::KeyPair as _;
 use insta::assert_json_snapshot;
-use rand::seq::SliceRandom;
+use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
+use std::collections::{BTreeMap, HashMap};
 use std::{fs::File, io::Write};
 use tempfile::tempdir;
-use test_utils::{initialize_worker_index_with_port_getter, make_authority_with_port_getter};
+use test_utils::CommitteeFixture;
 
 #[test]
 fn leader_election_rotates_through_all() {
     // this committee has equi-sized stakes
-    let committee = test_utils::committee(None);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let mut leader_counts = HashMap::new();
     // We most probably will only call `leader` on even rounds, so let's check this
     // still lets us use the whole roster of leaders.
@@ -52,7 +51,8 @@ fn leader_election_rotates_through_all() {
 
 #[test]
 fn update_primary_network_info_test() {
-    let committee = test_utils::committee(None);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let res = committee
         .clone()
         .update_primary_network_info(BTreeMap::new())
@@ -64,7 +64,8 @@ fn update_primary_network_info_test() {
         ))
     }
 
-    let committee2 = test_utils::committee(42);
+    let fixture = CommitteeFixture::builder().build();
+    let committee2 = fixture.committee();
     let invalid_new_info = committee2
         .authorities
         .iter()
@@ -83,8 +84,7 @@ fn update_primary_network_info_test() {
         ))
     }
 
-    let committee3 = test_utils::committee(None);
-    let invalid_new_info = committee3
+    let invalid_new_info = committee
         .authorities
         .iter()
         // change the stake
@@ -101,7 +101,7 @@ fn update_primary_network_info_test() {
         ))
     }
 
-    let committee4 = test_utils::committee(None);
+    let committee4 = committee.clone();
     let mut pk_n_stake = Vec::new();
     let mut addresses = Vec::new();
 
@@ -205,25 +205,10 @@ fn parameters_import_snapshot_matches() {
 fn commmittee_snapshot_matches() {
     // The shape of this configuration is load-bearing in the NW benchmarks,
     // and in Sui (prod)
-    let keys = test_utils::keys(None);
+    let rng = StdRng::from_seed([0; 32]);
+    let fixture = CommitteeFixture::builder().rng(rng).build();
+    let committee = fixture.committee();
 
-    let committee = Committee {
-        epoch: Epoch::default(),
-        authorities: keys
-            .iter()
-            .map(|kp| {
-                let mut port = 0;
-                let increment_port_getter = || {
-                    port += 1;
-                    port
-                };
-                (
-                    kp.public().clone(),
-                    make_authority_with_port_getter(increment_port_getter),
-                )
-            })
-            .collect(),
-    };
     // we need authorities to be serialized in order
     let mut settings = insta::Settings::clone_current();
     settings.set_sort_maps(true);
@@ -234,25 +219,9 @@ fn commmittee_snapshot_matches() {
 fn workers_snapshot_matches() {
     // The shape of this configuration is load-bearing in the NW benchmarks,
     // and in Sui (prod)
-    let keys = test_utils::keys(None);
-
-    let worker_cache = WorkerCache {
-        epoch: Epoch::default(),
-        workers: keys
-            .iter()
-            .map(|kp| {
-                let mut port = 0;
-                let increment_port_getter = || {
-                    port += 1;
-                    port
-                };
-                (
-                    kp.public().clone(),
-                    initialize_worker_index_with_port_getter(increment_port_getter),
-                )
-            })
-            .collect(),
-    };
+    let rng = StdRng::from_seed([0; 32]);
+    let fixture = CommitteeFixture::builder().rng(rng).build();
+    let worker_cache = fixture.worker_cache();
 
     // we need authorities to be serialized in order
     let mut settings = insta::Settings::clone_current();
