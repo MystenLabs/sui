@@ -822,7 +822,7 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
 }
 
 /// Test a validator node does not have quorum driver
-#[sui_test]
+#[tokio::test]
 async fn test_validator_node_has_no_quorum_driver() {
     let configs = test_and_configure_authority_configs(1);
     let validator_config = &configs.validator_configs()[0];

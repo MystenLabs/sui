@@ -96,6 +96,7 @@ fn populated_genesis_snapshot_matches() {
 }
 
 #[test]
+#[cfg_attr(msim, ignore)]
 fn network_config_snapshot_matches() {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::path::PathBuf;
