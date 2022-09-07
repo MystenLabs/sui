@@ -149,9 +149,8 @@ async fn test_process_certificates_batch_mode() {
     let name = author.public_key();
     let requestor = fixture.authorities().nth(1).unwrap();
     let requestor_name = requestor.public_key();
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
-        test_utils::committee(None),
-    ));
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     let own_address =
@@ -287,9 +286,8 @@ async fn test_process_payload_availability_success() {
     let name = author.public_key();
     let requestor = fixture.authorities().nth(1).unwrap();
     let requestor_name = requestor.public_key();
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
-        test_utils::committee(None),
-    ));
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     let own_address =
@@ -448,9 +446,8 @@ async fn test_process_payload_availability_when_failures() {
     let name = author.public_key();
     let requestor = fixture.authorities().nth(1).unwrap();
     let requestor_name = requestor.public_key();
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
-        test_utils::committee(None),
-    ));
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     let own_address =
