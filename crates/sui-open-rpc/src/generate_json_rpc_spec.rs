@@ -13,6 +13,7 @@ use move_package::BuildConfig;
 use pretty_assertions::assert_str_eq;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
+use sui_json_rpc::api::EventReadApiOpenRpc;
 use sui_types::messages::Transaction;
 
 use crate::examples::RpcExampleProvider;
@@ -80,8 +81,7 @@ async fn main() {
     open_rpc.add_module(FullNodeApi::rpc_doc_module());
     open_rpc.add_module(BcsApiImpl::rpc_doc_module());
     open_rpc.add_module(EventStreamingApiOpenRpc::module_doc());
-    // TODO: Re-enable this when event read API is ready
-    //open_rpc.add_module(EventReadApiOpenRpc::module_doc());
+    open_rpc.add_module(EventReadApiOpenRpc::module_doc());
     open_rpc.add_module(GatewayWalletSyncApiImpl::rpc_doc_module());
 
     open_rpc.add_examples(RpcExampleProvider::new().examples());
