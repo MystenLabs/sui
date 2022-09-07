@@ -16,7 +16,7 @@ use std::{
     fmt::Debug,
     sync::{Arc, Mutex},
 };
-use test_utils::{keys, resolve_name_committee_and_worker_cache};
+use test_utils::CommitteeFixture;
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
@@ -25,19 +25,19 @@ use types::{ReconfigureNotification, TransactionProto, TransactionsClient, Worke
 
 /// A simple/dumb execution engine.
 struct SimpleExecutionState {
-    index: usize,
+    keypair: KeyPair,
     committee: Arc<Mutex<Committee>>,
     tx_reconfigure: Sender<(KeyPair, Committee)>,
 }
 
 impl SimpleExecutionState {
     pub fn new(
-        index: usize,
+        keypair: KeyPair,
         committee: Committee,
         tx_reconfigure: Sender<(KeyPair, Committee)>,
     ) -> Self {
         Self {
-            index,
+            keypair,
             committee: Arc::new(Mutex::new(committee)),
             tx_reconfigure,
         }
@@ -66,17 +66,9 @@ impl ExecutionState for SimpleExecutionState {
                 guard.epoch = epoch;
             };
 
-            let keypair = keys(None)
-                .into_iter()
-                .enumerate()
-                .filter(|(i, _)| i == &self.index)
-                .map(|(_, x)| x)
-                .collect::<Vec<_>>()
-                .pop()
-                .unwrap();
             let new_committee = self.committee.lock().unwrap().clone();
             self.tx_reconfigure
-                .send((keypair, new_committee))
+                .send((self.keypair.copy(), new_committee))
                 .await
                 .unwrap();
         }
@@ -166,7 +158,10 @@ async fn run_client(
 
 #[tokio::test]
 async fn restart() {
-    let (_, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+
     let parameters = Parameters {
         batch_size: 200,
         header_size: 1,
@@ -176,12 +171,12 @@ async fn restart() {
     // Spawn the nodes.
     let mut states = Vec::new();
     let mut rx_nodes = Vec::new();
-    for (i, keypair) in keys(None).into_iter().enumerate() {
+    for a in fixture.authorities() {
         let (tx_output, rx_output) = channel(10);
         let (tx_node_reconfigure, rx_node_reconfigure) = channel(10);
 
         let execution_state = Arc::new(SimpleExecutionState::new(
-            i,
+            a.keypair().copy(),
             committee.clone(),
             tx_node_reconfigure,
         ));
@@ -191,6 +186,7 @@ async fn restart() {
         let worker_cache = worker_cache.clone();
         let execution_state = execution_state.clone();
         let parameters = parameters.clone();
+        let keypair = a.keypair().copy();
         tokio::spawn(async move {
             NodeRestarter::watch(
                 keypair,
@@ -214,11 +210,11 @@ async fn restart() {
 
     // Spawn some clients.
     let mut tx_clients = Vec::new();
-    for keypair in keys(None) {
+    for a in fixture.authorities() {
         let (tx_client_reconfigure, rx_client_reconfigure) = channel(10);
         tx_clients.push(tx_client_reconfigure);
 
-        let name = keypair.public().clone();
+        let name = a.public_key();
         let worker_cache = worker_cache.clone();
         tokio::spawn(
             async move { run_client(name, worker_cache.clone(), rx_client_reconfigure).await },
@@ -252,7 +248,9 @@ async fn restart() {
 
 #[tokio::test]
 async fn epoch_change() {
-    let (_, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
     let parameters = Parameters {
         batch_size: 200,
         header_size: 1,
@@ -262,15 +260,15 @@ async fn epoch_change() {
     // Spawn the nodes.
     let mut states = Vec::new();
     let mut rx_nodes = Vec::new();
-    for (i, keypair) in keys(None).into_iter().enumerate() {
+    for a in fixture.authorities() {
         let (tx_output, rx_output) = channel(10);
         let (tx_node_reconfigure, mut rx_node_reconfigure) = channel(10);
 
-        let name = keypair.public().clone();
+        let name = a.public_key();
         let store = NodeStorage::reopen(test_utils::temp_dir());
 
         let execution_state = Arc::new(SimpleExecutionState::new(
-            i,
+            a.keypair().copy(),
             committee.clone(),
             tx_node_reconfigure,
         ));
@@ -314,7 +312,7 @@ async fn epoch_change() {
         });
 
         let _primary_handles = Node::spawn_primary(
-            keypair,
+            a.keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &store,
@@ -345,11 +343,11 @@ async fn epoch_change() {
 
     // Spawn some clients.
     let mut tx_clients = Vec::new();
-    for keypair in keys(None) {
+    for a in fixture.authorities() {
         let (tx_client_reconfigure, rx_client_reconfigure) = channel(10);
         tx_clients.push(tx_client_reconfigure);
 
-        let name = keypair.public().clone();
+        let name = a.public_key();
         let worker_cache = worker_cache.clone();
         tokio::spawn(
             async move { run_client(name, worker_cache.clone(), rx_client_reconfigure).await },
