@@ -23,7 +23,7 @@ type Category =
     | 'ethAddress'
     | 'unknown';
 
-export type Link = {
+export type LinkObj = {
     url: string;
     name?: string;
     copy?: boolean;
@@ -37,7 +37,7 @@ type TableColumn = {
 };
 // TODO: update Link to use Tuple type
 // type Links = [Link, Link?];
-type Links = Link[];
+type Links = LinkObj[];
 
 type TxStatus = {
     txTypeName: TransactionKindName | undefined;
@@ -56,7 +56,7 @@ type TxType = {
         | TxStatus;
 };
 
-export function TxAddresses({ content }: { content: Link[] }) {
+export function TxAddresses({ content }: { content: LinkObj[] }) {
     return (
         <section className={styles.addresses}>
             {content.map((itm, idx) => (

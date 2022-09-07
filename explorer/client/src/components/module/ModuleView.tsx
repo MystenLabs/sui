@@ -17,10 +17,12 @@ import type { Language } from 'prism-react-renderer';
 
 import styles from './ModuleView.module.css';
 
-// inclue Rust language.
-// @ts-ignore
-(typeof global !== 'undefined' ? global : window).Prism = Prism;
-require('prismjs/components/prism-rust');
+// Include Rust language support.
+// TODO: Write a custom prismjs syntax for Move Bytecode.
+// @ts-expect-error: Defining global prism object:
+globalThis.Prism = Prism;
+// @ts-expect-error: This file is untyped:
+import('prismjs/components/prism-rust');
 
 interface Props {
     id?: string;

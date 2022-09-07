@@ -14,6 +14,7 @@ import {
     getTransferSuiAmount,
 } from '@mysten/sui.js';
 import cl from 'classnames';
+import { Link } from 'react-router-dom';
 
 import {
     eventToDisplay,
@@ -21,7 +22,7 @@ import {
 } from '../../components/events/eventDisplay';
 import Longtext from '../../components/longtext/Longtext';
 import ModulesWrapper from '../../components/module/ModulesWrapper';
-import { type Link, TxAddresses } from '../../components/table/TableCard';
+import { type LinkObj, TxAddresses } from '../../components/table/TableCard';
 import Tabs from '../../components/tabs/Tabs';
 import { presentBN } from '../../utils/stringUtils';
 import SendReceiveView from './SendReceiveView';
@@ -158,6 +159,7 @@ type TxItemView = {
         link?: boolean;
         category?: string;
         monotypeClass?: boolean;
+        href?: string;
     }[];
 };
 
@@ -176,7 +178,7 @@ function ItemView({ data }: { data: TxItemView }) {
             <div className={styles.itemviewcontent}>
                 {data.content.map((item, index) => {
                     // handle sender -> recipient display in one line
-                    let links: Link[] = [];
+                    let links: LinkObj[] = [];
                     let label = item.label;
                     if (Array.isArray(item)) {
                         links = getAddressesLinks(item);
@@ -211,6 +213,13 @@ function ItemView({ data }: { data: TxItemView }) {
                                         category={item.category as Category}
                                         isLink={true}
                                     />
+                                ) : item.href ? (
+                                    <Link
+                                        to={item.href}
+                                        className={styles.customhreflink}
+                                    >
+                                        {item.value}
+                                    </Link>
                                 ) : (
                                     item.value
                                 )}
@@ -333,6 +342,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
                           label: 'Module',
                           monotypeClass: true,
                           value: txKindData.module.value,
+                          href: `/objects/${txKindData.package.value}?module=${txKindData.module.value}`,
                       },
                       {
                           label: 'Function',

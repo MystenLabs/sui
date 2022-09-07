@@ -200,7 +200,7 @@ function TransferCoinPage() {
                 {...(currentStep > 1 && { onClick: handleBackStep })}
             />
 
-            <Content>
+            <Content className={st.content}>
                 <Loading loading={loadingBalance}>
                     <ProgressBar
                         currentStep={currentStep}

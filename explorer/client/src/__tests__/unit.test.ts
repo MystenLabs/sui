@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import BN from 'bn.js';
+import { describe, it, expect } from 'vitest';
 
 import { presentBN } from '../utils/stringUtils';
 import { timeAgo } from '../utils/timeUtils';

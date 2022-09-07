@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::Result;
-use axum::{response::IntoResponse, routing::post, Extension, Json, Router};
+use axum::{
+    response::IntoResponse,
+    routing::{get, post},
+    Extension, Json, Router,
+};
 use clap::Parser;
 use http::{Method, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -86,12 +90,15 @@ async fn start_faucet(cluster: &LocalNewCluster, port: u16) -> Result<()> {
         .allow_headers(Any)
         .allow_origin(Any);
 
-    let app = Router::new().route("/faucet", post(faucet_request)).layer(
-        ServiceBuilder::new()
-            .layer(cors)
-            .layer(Extension(app_state))
-            .into_inner(),
-    );
+    let app = Router::new()
+        .route("/", get(health))
+        .route("/faucet", post(faucet_request))
+        .layer(
+            ServiceBuilder::new()
+                .layer(cors)
+                .layer(Extension(app_state))
+                .into_inner(),
+        );
 
     let addr = SocketAddr::from(([127, 0, 0, 1], port));
 
@@ -102,6 +109,11 @@ async fn start_faucet(cluster: &LocalNewCluster, port: u16) -> Result<()> {
         .await?;
 
     Ok(())
+}
+
+/// basic handler that responds with a static string
+async fn health() -> &'static str {
+    "OK"
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

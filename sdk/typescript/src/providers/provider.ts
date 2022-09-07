@@ -17,6 +17,8 @@ import {
   SuiEventFilter,
   SuiEventEnvelope,
   SubscriptionId,
+  ExecuteTransactionRequestType,
+  SuiExecuteTransactionResponse,
 } from '../types';
 
 ///////////////////////////////
@@ -79,6 +81,19 @@ export abstract class Provider {
     pubkey: string
   ): Promise<SuiTransactionResponse>;
 
+  /**
+   * This is under development endpoint on Fullnode that will eventually
+   * replace the other `executeTransaction` that's only available on the
+   * Gateway
+   */
+  abstract executeTransactionWithRequestType(
+    txnBytes: string,
+    signatureScheme: SignatureScheme,
+    signature: string,
+    pubkey: string,
+    requestType: ExecuteTransactionRequestType
+  ): Promise<SuiExecuteTransactionResponse>;
+
   // Move info
   /**
    * Get Move function argument types like read, write and full access
@@ -93,14 +108,16 @@ export abstract class Provider {
    * Get a map from module name to
    * structured representations of Move modules
    */
-  abstract getNormalizedMoveModulesByPackage(objectId: string,): Promise<SuiMoveNormalizedModules>;
+  abstract getNormalizedMoveModulesByPackage(
+    objectId: string
+  ): Promise<SuiMoveNormalizedModules>;
 
   /**
    * Get a structured representation of Move module
    */
   abstract getNormalizedMoveModule(
     objectId: string,
-    moduleName: string,
+    moduleName: string
   ): Promise<SuiMoveNormalizedModule>;
 
   /**
@@ -110,7 +127,7 @@ export abstract class Provider {
     objectId: string,
     moduleName: string,
     functionName: string
-  ): Promise<SuiMoveNormalizedFunction>
+  ): Promise<SuiMoveNormalizedFunction>;
 
   /**
    * Get a structured representation of Move struct

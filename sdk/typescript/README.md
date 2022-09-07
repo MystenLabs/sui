@@ -16,36 +16,37 @@ You can also use your preferred npm client, such as yarn or pnpm.
 
 ## Working with local network
 
-Note that the [published SDK](https://www.npmjs.com/package/@mysten/sui.js) might go out of sync with the RPC server on the `main` branch until the next bi-weekly release, therefore it's recommended to build the SDK locally if you want to test against the local network.
-
-To get started you need to install [pnpm](https://pnpm.io/), then run the following command in the `sui/sdk/typescript` directory to build the SDK and [create a symlink](https://docs.npmjs.com/cli/v8/commands/npm-link) in the global folder.
+Note that the `latest` tag for the [published SDK](https://www.npmjs.com/package/@mysten/sui.js) might go out of sync with the RPC server on the `main` branch until the next release. If you're developing against a local network, we recommend using the `experimental`-tagged packages, which contain the latest changes from `main`.
 
 ```bash
-$ cd <path to sui repo>/sdk/typescript
-$ pnpm install && pnpm build
-$ npm link
+npm install @mysten/sui.js@experimental
 ```
 
-Next, go to your project directory and create a symbolic link from globally-installed `@mysten/sui.js` to the `node_modules/` of your project directory.
+Refer to the [JSON RPC](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md) topic for instructions about how to start a local network and local RPC server.
+
+## Building Locally
+
+To get started you need to install [pnpm](https://pnpm.io/), then run the following command:
 
 ```bash
-cd <your project directory>
-npm link @mysten/sui.js
+# Install all dependencies
+$ pnpm install
+# Run the build for the TypeScript SDK and all of its dependencies.
+$ pnpm --filter @mysten/sui.js... build
 ```
-
-If you wish to rebuild all dependencies of the TypeScript SDK, or if you're encountering issues with the `@mysten/bcs` module not being found, you can re-build the SDK module and all of it's local dependencies using the following command:
-
-```bash
-pnpm --filter @mysten/sui.js... build
-```
-
-Refer to the [JSON RPC doc](https://github.com/MystenLabs/sui/blob/main/doc/src/build/json-rpc.md) for instructions about how to start a local network and local RPC server
 
 ## Type Doc
 
 You can view the generated [Type Doc](https://typedoc.org/) for the [current release of the SDK](https://www.npmjs.com/package/@mysten/sui.js) at http://typescript-sdk-docs.s3-website-us-east-1.amazonaws.com/.
 
 For the latest docs for the `main` branch, run `pnpm doc` and open the [doc/index.html](doc/index.html) in your browser.
+
+## Testing
+
+```
+cd sdk/typescript
+pnpm run test
+```
 
 ## Usage
 
@@ -82,8 +83,9 @@ To transfer a `0x2::coin::Coin<SUI>`:
 
 ```typescript
 import { Ed25519Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
-// Generate a new Keypair
+// Generate a new Ed25519 Keypair
 const keypair = new Ed25519Keypair();
+
 const signer = new RawSigner(
   keypair,
   new JsonRpcProvider('https://gateway.devnet.sui.io:443')
@@ -179,4 +181,18 @@ const publishTxn = await signer.publish(
   }
 );
 console.log('publishTxn', publishTxn);
+```
+
+
+Alternatively, a Secp256k1 can be initiated:
+
+```typescript
+import { Secp256k1Keypair, JsonRpcProvider, RawSigner } from '@mysten/sui.js';
+// Generate a new Secp256k1 Keypair
+const keypair = new Secp256k1Keypair();
+
+const signer = new RawSigner(
+  keypair,
+  new JsonRpcProvider('https://gateway.devnet.sui.io:443')
+);
 ```

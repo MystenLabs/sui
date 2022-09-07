@@ -1891,7 +1891,16 @@ pub async fn init_state_with_committee(
         }
     };
 
-    AuthorityState::new_for_testing(committee, &authority_key, None, None, None).await
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
+    AuthorityState::new_for_testing(
+        committee,
+        &authority_key,
+        None,
+        None,
+        None,
+        tx_reconfigure_consensus,
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -2175,7 +2184,7 @@ async fn shared_object() {
                 consensus_index: narwhal_types::SequenceNumber::default(),
             },
             /* last_consensus_index */ ExecutionIndices::default(),
-            ConsensusTransaction::UserTransaction(Box::new(certificate.clone())),
+            ConsensusTransaction::new_certificate_message(&authority.name, certificate.clone()),
         )
         .await
         .unwrap();
@@ -2257,7 +2266,7 @@ async fn test_consensus_message_processed() {
                     consensus_index: narwhal_types::SequenceNumber::default(),
                 },
                 /* last_consensus_index */ ExecutionIndices::default(),
-                ConsensusTransaction::UserTransaction(Box::new(cert.clone())),
+                ConsensusTransaction::new_certificate_message(&authority.name, cert.clone()),
             )
             .await
             .unwrap();

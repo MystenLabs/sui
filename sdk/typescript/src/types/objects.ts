@@ -56,7 +56,7 @@ export type SuiMoveNormalizedModule = {
   friends: SuiMoveModuleId[];
   structs: Record<string, SuiMoveNormalizedStruct>;
   exposed_functions: Record<string, SuiMoveNormalizedFunction>;
-}
+};
 
 export type SuiMoveModuleId = {
   address: string;
@@ -67,17 +67,17 @@ export type SuiMoveNormalizedStruct = {
   abilities: SuiMoveAbilitySet;
   type_parameters: SuiMoveStructTypeParameter[];
   fields: SuiMoveNormalizedField[];
-}
+};
 
 export type SuiMoveStructTypeParameter = {
   constraints: SuiMoveAbilitySet;
   is_phantom: boolean;
-}
+};
 
 export type SuiMoveNormalizedField = {
   name: string;
   type_: SuiMoveNormalizedType;
-}
+};
 
 export type SuiMoveNormalizedFunction = {
   visibility: SuiMoveVisibility;
@@ -87,30 +87,34 @@ export type SuiMoveNormalizedFunction = {
   return_: SuiMoveNormalizedType[];
 };
 
-export type SuiMoveVisibility = 
-  | "Private"
-  | "Public"
-  | "Friend";
+export type SuiMoveVisibility = 'Private' | 'Public' | 'Friend';
 
 export type SuiMoveTypeParameterIndex = number;
 
 export type SuiMoveAbilitySet = {
-  abilities: string[],
+  abilities: string[];
 };
 
-export type SuiMoveNormalizedType = (
+export type SuiMoveNormalizedType =
   | string
-  | {TypeParameter: SuiMoveTypeParameterIndex}
-  | {Reference: SuiMoveNormalizedType}
-  | {MutableReference: SuiMoveNormalizedType}
-  | {Vector: SuiMoveNormalizedType}
-  | {Struct: {
-    address: string,
-    module: string,
-    name: string,
-    type_arguments: SuiMoveNormalizedType[],
-  }}
-);
+  | SuiMoveNormalizedTypeParameterType
+  | { Reference: SuiMoveNormalizedStructType }
+  | { MutableReference: SuiMoveNormalizedStructType }
+  | { Vector: SuiMoveNormalizedType }
+  | SuiMoveNormalizedStructType;
+
+export type SuiMoveNormalizedTypeParameterType = {
+  TypeParameter: SuiMoveTypeParameterIndex;
+};
+
+export type SuiMoveNormalizedStructType = {
+  Struct: {
+    address: string;
+    module: string;
+    name: string;
+    type_arguments: SuiMoveNormalizedTypeParameterType[];
+  };
+};
 
 export type SuiObject = {
   /** The meat of the object */
@@ -216,6 +220,16 @@ export function getObjectOwner(
   return getObjectExistsResponse(resp)?.owner;
 }
 
+export function isSharedObject(resp: GetObjectDataResponse): boolean {
+  const owner = getObjectOwner(resp);
+  return owner === 'Shared';
+}
+
+export function isImmutableObject(resp: GetObjectDataResponse): boolean {
+  const owner = getObjectOwner(resp);
+  return owner === 'Immutable';
+}
+
 export function getMoveObjectType(
   resp: GetObjectDataResponse
 ): string | undefined {
@@ -258,4 +272,35 @@ export function getMovePackageContent(
     return undefined;
   }
   return (suiObject.data as SuiMovePackage).disassembled;
+}
+
+export function extractMutableReference(
+  normalizedType: SuiMoveNormalizedType
+): SuiMoveNormalizedStructType | undefined {
+  return typeof normalizedType === 'object' &&
+    'MutableReference' in normalizedType
+    ? normalizedType.MutableReference
+    : undefined;
+}
+
+export function extractReference(
+  normalizedType: SuiMoveNormalizedType
+): SuiMoveNormalizedStructType | undefined {
+  return typeof normalizedType === 'object' && 'Reference' in normalizedType
+    ? normalizedType.Reference
+    : undefined;
+}
+
+export function extractStructTag(
+  normalizedType: SuiMoveNormalizedType
+): SuiMoveNormalizedStructType | undefined {
+  if (typeof normalizedType === 'object' && 'Struct' in normalizedType) {
+    return normalizedType;
+  }
+
+  return (
+    (extractReference(normalizedType) ||
+      extractMutableReference(normalizedType)) ??
+    undefined
+  );
 }

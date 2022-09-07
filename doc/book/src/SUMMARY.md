@@ -10,6 +10,7 @@
     - [Transfer](./basics/transfer.md)
     - [Custom transfer](./basics/custom-transfer.md)
     - [Events](./basics/events.md)
+    - [One Time Witness](./basics/one-time-witness.md)
     <!-- - [Owned Objects](./basics/owned-objects.md) -->
     <!-- - [Bag](./basics/bag.md) -->
     <!-- - [Map - Indexed Collection](./basics/vec-map.md) -->

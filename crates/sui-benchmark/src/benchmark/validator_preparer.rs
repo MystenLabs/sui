@@ -283,6 +283,7 @@ fn make_authority_state(
         Some(opts.clone()),
     ));
     let epoch_store = Arc::new(EpochStore::new(path.join("epochs"), committee, Some(opts)));
+    let (tx_reconfigure_consensus, _rx_reconfigure_consensus) = tokio::sync::mpsc::channel(10);
     (
         Runtime::new().unwrap().block_on(async {
             AuthorityState::new(
@@ -293,8 +294,10 @@ fn make_authority_state(
                 None,
                 None,
                 None,
+                None,
                 &sui_config::genesis::Genesis::get_default_genesis(),
                 &prometheus::Registry::new(),
+                tx_reconfigure_consensus,
             )
             .await
         }),

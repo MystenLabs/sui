@@ -2,6 +2,6 @@
   "extends": "../tsconfig.json",
   "include": ["./"],
   "compilerOptions": {
-    "types": ["jest"]
+    "resolveJsonModule": true
   }
 }

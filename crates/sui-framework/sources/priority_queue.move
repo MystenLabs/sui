@@ -5,7 +5,8 @@
 module sui::priority_queue {
     use std::vector;
 
-    const POP_FROM_EMPTY_HEAP : u64 = 0;
+    /// For when heap is empty and there's no data to pop.
+    const EPopFromEmptyHeap: u64 = 0;
 
     struct PriorityQueue<T: drop> has store, drop {
         entries: vector<Entry<T>>,
@@ -30,7 +31,7 @@ module sui::priority_queue {
     /// Pop the entry with the highest priority value.
     public fun pop_max<T: drop>(pq: &mut PriorityQueue<T>) : (u64, T) {
         let len = vector::length(&pq.entries);
-        assert!(len > 0, POP_FROM_EMPTY_HEAP);
+        assert!(len > 0, EPopFromEmptyHeap);
         let Entry { priority, value } = vector::remove(&mut pq.entries, 0);
         max_heapify_recursive(&mut pq.entries, len - 1, 0);
         (priority, value)
@@ -126,4 +127,3 @@ module sui::priority_queue {
         assert!(value == expected_value, 0);
     }
 }
-

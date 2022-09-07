@@ -8,7 +8,7 @@ use std::fmt::Debug;
 use std::sync::Arc;
 use sui_types::base_types::ObjectID;
 use sui_types::error::SuiError;
-use sui_types::event_filter::Filter;
+use sui_types::filter::Filter;
 use tokio::runtime::Handle;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::{mpsc, RwLock};

@@ -7,7 +7,7 @@ import Browser from 'webextension-polyfill';
 
 import { Window } from './Window';
 
-import type { MoveCallTransaction } from '@mysten/sui.js';
+import type { TransactionDataType } from '_messages/payloads/transactions/ExecuteTransactionRequest';
 import type { TransactionRequest } from '_payloads/transactions';
 import type { TransactionRequestResponse } from '_payloads/transactions/ui/TransactionRequestResponse';
 import type { ContentScriptConnection } from '_src/background/connections/ContentScriptConnection';
@@ -25,13 +25,11 @@ class Transactions {
     private _txResponseMessages = new Subject<TransactionRequestResponse>();
 
     public async executeTransaction(
-        tx: MoveCallTransaction | undefined,
-        txBytes: Uint8Array | undefined,
+        tx: TransactionDataType,
         connection: ContentScriptConnection
     ) {
         const txRequest = this.createTransactionRequest(
             tx,
-            txBytes,
             connection.origin,
             connection.originFavIcon
         );
@@ -93,34 +91,18 @@ class Transactions {
     }
 
     private createTransactionRequest(
-        tx: MoveCallTransaction | undefined,
-        txBytes: Uint8Array | undefined,
+        tx: TransactionDataType,
         origin: string,
         originFavIcon?: string
     ): TransactionRequest {
-        if (tx !== undefined) {
-            return {
-                id: uuidV4(),
-                approved: null,
-                origin,
-                originFavIcon,
-                createdDate: new Date().toISOString(),
-                type: 'move-call',
-                tx,
-            };
-        } else if (txBytes !== undefined) {
-            return {
-                id: uuidV4(),
-                approved: null,
-                origin,
-                originFavIcon,
-                createdDate: new Date().toISOString(),
-                type: 'serialized-move-call',
-                txBytes,
-            };
-        } else {
-            throw new Error('Either tx or txBytes needs to be defined.');
-        }
+        return {
+            id: uuidV4(),
+            approved: null,
+            origin,
+            originFavIcon,
+            createdDate: new Date().toISOString(),
+            tx,
+        };
     }
 
     private async saveTransactionRequests(

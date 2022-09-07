@@ -50,6 +50,7 @@ function Search() {
             <input
                 className={styles.searchtextdesktop}
                 id="searchText"
+                data-testid="search"
                 placeholder="Search by Addresses / Objects / Transactions"
                 value={input}
                 onChange={handleTextChange}

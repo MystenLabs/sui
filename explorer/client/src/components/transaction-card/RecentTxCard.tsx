@@ -7,7 +7,6 @@ import {
     type TransactionKindName,
 } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
-import BN from 'bn.js';
 import cl from 'classnames';
 import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
@@ -21,15 +20,16 @@ import theme from '../../styles/theme.module.css';
 import {
     DefaultRpcClient as rpc,
     type Network,
-    getDataOnTxDigests,
 } from '../../utils/api/DefaultRpcClient';
 import { IS_STATIC_ENV } from '../../utils/envUtil';
-import { numberSuffix } from '../../utils/numberUtil';
 import { getAllMockTransaction } from '../../utils/static/searchUtil';
-import { truncate, presentBN } from '../../utils/stringUtils';
-import { timeAgo } from '../../utils/timeUtils';
 import ErrorResult from '../error-result/ErrorResult';
 import Pagination from '../pagination/Pagination';
+import {
+    type TxnData,
+    genTableDataFromTxData,
+    getDataOnTxDigests,
+} from './TxCardUtils';
 
 import styles from './RecentTxCard.module.css';
 
@@ -53,18 +53,6 @@ const initState: {
     txPerPage: NUMBER_OF_TX_PER_PAGE,
     truncateLength: TRUNCATE_LENGTH,
     paginationtype: 'pagination',
-};
-
-type TxnData = {
-    To?: string;
-    seq: number;
-    txId: string;
-    status: ExecutionStatusType;
-    txGas: number;
-    suiAmount: BN;
-    kind: TransactionKindName | undefined;
-    From: string;
-    timestamp_ms?: number;
 };
 
 function generateStartEndRange(
@@ -138,101 +126,6 @@ type RecentTx = {
     paginationtype?: PaginationType;
     txPerPage?: number;
     truncateLength?: number;
-};
-
-function SuiAmount({ amount }: { amount: BN | string | undefined }) {
-    if (amount) {
-        const SuiSuffix = <abbr className={styles.suisuffix}>SUI</abbr>;
-
-        if (BN.isBN(amount)) {
-            return (
-                <span>
-                    {presentBN(amount)}
-                    {SuiSuffix}
-                </span>
-            );
-        }
-        if (typeof amount === 'string') {
-            return (
-                <span className={styles.suiamount}>
-                    {amount}
-                    {SuiSuffix}
-                </span>
-            );
-        }
-    }
-
-    return <span className={styles.suiamount}>--</span>;
-}
-
-// Generate table data from the transaction data
-const recentTxTable = (results: TxnData[], truncateLength: number) => {
-    return {
-        data: results.map((txn) => ({
-            date: `${timeAgo(txn.timestamp_ms, undefined, true)} ago`,
-            transactionId: [
-                {
-                    url: txn.txId,
-                    name: truncate(txn.txId, truncateLength),
-                    category: 'transactions',
-                    isLink: true,
-                    copy: false,
-                },
-            ],
-            addresses: [
-                {
-                    url: txn.From,
-                    name: truncate(txn.From, truncateLength),
-                    category: 'addresses',
-                    isLink: true,
-                    copy: false,
-                },
-                ...(txn.To
-                    ? [
-                          {
-                              url: txn.To,
-                              name: truncate(txn.To, truncateLength),
-                              category: 'addresses',
-                              isLink: true,
-                              copy: false,
-                          },
-                      ]
-                    : []),
-            ],
-            txTypes: {
-                txTypeName: txn.kind,
-                status: txn.status,
-            },
-            amounts: <SuiAmount amount={txn.suiAmount} />,
-            gas: <SuiAmount amount={numberSuffix(txn.txGas)} />,
-        })),
-        columns: [
-            {
-                headerLabel: 'Time',
-                accessorKey: 'date',
-            },
-            {
-                headerLabel: 'Type',
-                accessorKey: 'txTypes',
-            },
-            {
-                headerLabel: 'Transaction ID',
-                accessorKey: 'transactionId',
-            },
-            {
-                headerLabel: 'Addresses',
-                accessorKey: 'addresses',
-            },
-            {
-                headerLabel: 'Amount',
-                accessorKey: 'amounts',
-            },
-            {
-                headerLabel: 'Gas',
-                accessorKey: 'gas',
-            },
-        ],
-    };
 };
 
 function LatestTxCard({ ...data }: RecentTx) {
@@ -320,7 +213,7 @@ function LatestTxCard({ ...data }: RecentTx) {
     }
 
     const defaultActiveTab = 0;
-    const recentTx = recentTxTable(results.latestTx, truncateLength);
+    const recentTx = genTableDataFromTxData(results.latestTx, truncateLength);
 
     const stats = {
         count,

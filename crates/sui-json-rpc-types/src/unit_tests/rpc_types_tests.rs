@@ -12,7 +12,7 @@ use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::gas_coin::GasCoin;
 use sui_types::object::MoveObject;
 use sui_types::sui_serde::Base64;
-use sui_types::SUI_FRAMEWORK_ADDRESS;
+use sui_types::{MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS};
 
 #[test]
 fn test_move_value_to_sui_bytearray() {
@@ -56,8 +56,8 @@ fn test_move_value_to_string() {
 
     let move_value = MoveValue::Struct(MoveStruct::WithTypes {
         type_: StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: ident_str!("utf8").to_owned(),
+            address: MOVE_STDLIB_ADDRESS,
+            module: ident_str!("string").to_owned(),
             name: ident_str!("String").to_owned(),
             type_params: vec![],
         },
@@ -80,8 +80,8 @@ fn test_move_value_to_url() {
 
     let string_move_value = MoveValue::Struct(MoveStruct::WithTypes {
         type_: StructTag {
-            address: SUI_FRAMEWORK_ADDRESS,
-            module: ident_str!("utf8").to_owned(),
+            address: MOVE_STDLIB_ADDRESS,
+            module: ident_str!("string").to_owned(),
             name: ident_str!("String").to_owned(),
             type_params: vec![],
         },

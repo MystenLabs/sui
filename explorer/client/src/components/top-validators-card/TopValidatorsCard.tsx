@@ -132,7 +132,7 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     };
 
     return (
-        <div className={styles.validators}>
+        <div data-testid="validators-table" className={styles.validators}>
             <Tabs selected={0}>
                 <div title="Top Validators">
                     <TableCard tabledata={tableData} />

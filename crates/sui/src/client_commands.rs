@@ -12,7 +12,7 @@ use std::{
 use anyhow::anyhow;
 use clap::*;
 use colored::Colorize;
-use move_core_types::{language_storage::TypeTag, parser::parse_type_tag};
+use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
 use serde::Serialize;
 use serde_json::json;
@@ -26,14 +26,17 @@ use sui_json_rpc_types::{
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::SuiKeystore;
 use sui_sdk::{ClientType, SuiClient};
-use sui_types::sui_serde::{Base64, Encoding};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
     messages::ExecuteTransactionRequestType,
     messages::Transaction,
     object::Owner,
-    SUI_FRAMEWORK_ADDRESS,
+    parse_sui_type_tag, SUI_FRAMEWORK_ADDRESS,
+};
+use sui_types::{
+    crypto::SignatureScheme,
+    sui_serde::{Base64, Encoding},
 };
 use tracing::info;
 
@@ -117,7 +120,7 @@ pub enum SuiClientCommands {
         /// Function name in module
         #[clap(
         long,
-        parse(try_from_str = parse_type_tag),
+        parse(try_from_str = parse_sui_type_tag),
         multiple_occurrences = false,
         multiple_values = true
         )]
@@ -188,9 +191,9 @@ pub enum SuiClientCommands {
     #[clap(name = "addresses")]
     Addresses,
 
-    /// Generate new address and keypair, with optional keypair scheme {ed25519 | secp256k1}, default to ed25519.
+    /// Generate new address and keypair with keypair scheme flag {ed25519 | secp256k1}.
     #[clap(name = "new-address")]
-    NewAddress { key_scheme: Option<String> },
+    NewAddress { key_scheme: SignatureScheme },
 
     /// Obtain all objects owned by the address.
     #[clap(name = "objects")]
@@ -407,8 +410,8 @@ impl SuiClientCommands {
                 SuiClientCommandResult::SyncClientState
             }
             SuiClientCommands::NewAddress { key_scheme } => {
-                let (address, phrase, flag) = context.keystore.generate_new_key(key_scheme)?;
-                SuiClientCommandResult::NewAddress((address, phrase, flag))
+                let (address, phrase, scheme) = context.keystore.generate_new_key(key_scheme)?;
+                SuiClientCommandResult::NewAddress((address, phrase, scheme))
             }
             SuiClientCommands::Gas { address } => {
                 let address = address.unwrap_or(context.active_address()?);
@@ -771,10 +774,11 @@ impl Display for SuiClientCommandResult {
             SuiClientCommandResult::SyncClientState => {
                 writeln!(writer, "Client state sync complete.")?;
             }
-            SuiClientCommandResult::NewAddress((address, recovery_phrase, flag)) => {
+            SuiClientCommandResult::NewAddress((address, recovery_phrase, scheme)) => {
                 writeln!(
                     writer,
-                    "Created new keypair for address with flag {flag}: [{address}]"
+                    "Created new keypair for address with scheme {:?}: [{address}]",
+                    scheme
                 )?;
                 writeln!(writer, "Secret Recovery Phrase : [{recovery_phrase}]")?;
             }
@@ -943,7 +947,7 @@ pub enum SuiClientCommandResult {
     Addresses(Vec<SuiAddress>),
     Objects(Vec<SuiObjectInfo>),
     SyncClientState,
-    NewAddress((SuiAddress, String, u8)),
+    NewAddress((SuiAddress, String, SignatureScheme)),
     Gas(Vec<GasCoin>),
     SplitCoin(SuiTransactionResponse),
     MergeCoin(SuiTransactionResponse),

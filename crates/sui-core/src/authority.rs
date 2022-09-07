@@ -2,7 +2,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::checkpoints::{ConsensusSender, FragmentInternalError};
+use crate::checkpoints::ConsensusSender;
 use crate::{
     authority_batch::{BroadcastReceiver, BroadcastSender},
     checkpoints::CheckpointStore,
@@ -10,19 +10,23 @@ use crate::{
     execution_engine,
     query_helpers::QueryHelpers,
     transaction_input_checker,
+    transaction_streamer::TransactionStreamer,
 };
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
+use bincode::Error;
 use chrono::prelude::*;
+use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
+use narwhal_config::Committee as ConsensusCommittee;
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
+    exponential_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge,
 };
 use std::ops::Deref;
@@ -57,7 +61,9 @@ use sui_types::{
     MOVE_STDLIB_ADDRESS, SUI_FRAMEWORK_ADDRESS, SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use tap::TapFallible;
+use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
+use tokio::sync::mpsc::Sender;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
@@ -122,6 +128,7 @@ pub struct AuthorityMetrics {
     pub follower_items_loaded: IntCounter,
     pub follower_connections: IntCounter,
     pub follower_connections_concurrent: IntGauge,
+    pub follower_start_seq_num: Histogram,
 
     // TODO: consolidate these into GossipMetrics
     // (issue: https://github.com/MystenLabs/sui/issues/3926)
@@ -138,6 +145,9 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
+        // buckets are: 100, 10k, 1M, 100M, 10B, 1T, 100T, 10Q
+        // Safe to unwarp because the values are all valid.
+        let follower_seq_num_buckets = exponential_buckets(100., 100., 8).unwrap();
         Self {
             tx_orders: register_int_counter_with_registry!(
                 "total_transaction_orders",
@@ -239,6 +249,13 @@ impl AuthorityMetrics {
                 registry,
             )
             .unwrap(),
+            follower_start_seq_num: register_histogram_with_registry!(
+                "follower_start_seq_num",
+                "The start seq number this validator receives from fullnodes node_sync/follower process",
+                follower_seq_num_buckets,
+                registry,
+            )
+            .unwrap(),
             gossip_queued_count: register_int_counter_with_registry!(
                 "gossip_queued_count",
                 "Number of digests queued from gossip peers",
@@ -301,6 +318,7 @@ pub struct AuthorityState {
     pub module_cache: Arc<SyncModuleCache<ResolverWrapper<AuthorityStore>>>, // TODO: use strategies (e.g. LRU?) to constraint memory usage
 
     pub event_handler: Option<Arc<EventHandler>>,
+    pub transaction_streamer: Option<Arc<TransactionStreamer>>,
 
     /// The checkpoint store
     pub checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
@@ -323,6 +341,9 @@ pub struct AuthorityState {
 
     // Cache the latest checkpoint number to avoid expensive locking to access checkpoint store
     latest_checkpoint_num: AtomicU64,
+
+    /// A channel to tell consensus to reconfigure.
+    tx_reconfigure_consensus: Sender<(ConsensusKeyPair, ConsensusCommittee)>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -767,12 +788,15 @@ impl AuthorityState {
             }
         }
 
+        // Stream transaction
+        if let Some(transaction_streamer) = &self.transaction_streamer {
+            transaction_streamer.enqueue((cert, effects.clone())).await;
+        }
+
         // Emit events
         if let Some(event_handler) = &self.event_handler {
-            let checkpoint_num = self.latest_checkpoint_num.load(Ordering::Relaxed);
-
             event_handler
-                .process_events(&effects.effects, timestamp_ms, seq, checkpoint_num)
+                .process_events(&effects.effects, timestamp_ms, seq)
                 .await?;
 
             self.metrics
@@ -1054,9 +1078,11 @@ impl AuthorityState {
         epoch_store: Arc<EpochStore>,
         indexes: Option<Arc<IndexStore>>,
         event_store: Option<Arc<EventStoreType>>,
+        transaction_streamer: Option<Arc<TransactionStreamer>>,
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
+        tx_reconfigure_consensus: Sender<(ConsensusKeyPair, ConsensusCommittee)>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1097,6 +1123,7 @@ impl AuthorityState {
             // this is because they largely deal with different types of MoveStructs
             module_cache: Arc::new(SyncModuleCache::new(ResolverWrapper(store.clone()))),
             event_handler,
+            transaction_streamer,
             checkpoints,
             epoch_store,
             batch_channels: tx,
@@ -1107,6 +1134,7 @@ impl AuthorityState {
             consensus_guardrail: AtomicUsize::new(0),
             metrics: Arc::new(AuthorityMetrics::new(prometheus_registry)),
             latest_checkpoint_num: AtomicU64::new(0),
+            tx_reconfigure_consensus,
         };
 
         // Process tx recovery log first, so that the batch and checkpoint recovery (below)
@@ -1164,6 +1192,7 @@ impl AuthorityState {
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
         consensus_sender: Option<Box<dyn ConsensusSender>>,
+        tx_reconfigure_consensus: Sender<(ConsensusKeyPair, ConsensusCommittee)>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -1201,22 +1230,21 @@ impl AuthorityState {
             &genesis_committee,
             None,
         ));
-
-        let state = AuthorityState::new(
+        // add the object_basics module
+        AuthorityState::new(
             secret.public().into(),
             secret.clone(),
             store,
             epochs,
             None,
             None,
+            None,
             Some(Arc::new(Mutex::new(checkpoints))),
             genesis,
             &prometheus::Registry::new(),
+            tx_reconfigure_consensus,
         )
-        .await;
-
-        // add the object_basics module
-        state
+        .await
     }
 
     // Continually pop in-progress txes from the WAL and try to drive them to completion.
@@ -1716,12 +1744,25 @@ impl AuthorityState {
     ) -> Result<Option<(ObjectRef, TransactionDigest)>, SuiError> {
         self.database.get_latest_parent_entry(object_id)
     }
+
+    fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
+        // Ensure the input is a shared object certificate. Remember that Byzantine authorities
+        // may input anything into consensus.
+        fp_ensure!(
+            certificate.contains_shared_object(),
+            SuiError::NotASharedObjectTransaction
+        );
+
+        // Check the certificate. Remember that Byzantine authorities may input anything into
+        // consensus.
+        certificate.verify(&self.committee.load())
+    }
 }
 
 #[async_trait]
 impl ExecutionState for AuthorityState {
     type Transaction = ConsensusTransaction;
-    type Error = SuiError;
+    type Error = NarwhalHandlerError;
     type Outcome = Vec<u8>;
 
     /// This function will be called by Narwhal, after Narwhal sequenced this certificate.
@@ -1734,51 +1775,69 @@ impl ExecutionState for AuthorityState {
         transaction: Self::Transaction,
     ) -> Result<Self::Outcome, Self::Error> {
         self.metrics.total_consensus_txns.inc();
-        match transaction {
-            ConsensusTransaction::UserTransaction(certificate) => {
-                // Ensure the input is a shared object certificate. Remember that Byzantine authorities
-                // may input anything into consensus.
-                fp_ensure!(
-                    certificate.contains_shared_object(),
-                    SuiError::NotASharedObjectTransaction
+        let tracking_id = transaction.get_tracking_id();
+        match transaction.kind {
+            ConsensusTransactionKind::UserTransaction(certificate) => {
+                self.verify_narwhal_transaction(&certificate)
+                    .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
+
+                debug!(
+                    ?consensus_index,
+                    ?tracking_id,
+                    tx_digest = ?certificate.digest(),
+                    "handle_consensus_transaction UserTransaction",
                 );
-
-                // Check the certificate. Remember that Byzantine authorities may input anything into
-                // consensus.
-                certificate.verify(&self.committee.load())?;
-
-                debug!(tx_digest = ?certificate.digest(), "handle_consensus_transaction UserTransaction");
 
                 self.database
                     .persist_certificate_and_lock_shared_objects(*certificate, consensus_index)
-                    .await?;
+                    // todo - potentially more errors from inside here needs to be mapped differently
+                    .await
+                    .map_err(NarwhalHandlerError::NodeError)?;
 
                 // TODO: This return time is not ideal.
                 // TODO [2533]: edit once integrating Narwhal reconfiguration
                 Ok(Vec::default())
             }
-            ConsensusTransaction::Checkpoint(fragment) => {
-                let seq = consensus_index;
-                debug!(?seq, "handle_consensus_transaction Checkpoint");
+            ConsensusTransactionKind::Checkpoint(fragment) => {
+                let cp_seq = fragment.proposer_sequence_number();
+                debug!(
+                    ?consensus_index,
+                    ?cp_seq,
+                    "handle_consensus_transaction Checkpoint. Proposer: {}, Other: {}",
+                    fragment.proposer.authority(),
+                    fragment.other.authority(),
+                );
 
                 if let Some(checkpoint) = &self.checkpoints {
+                    let committee = self.committee.load();
+                    fragment
+                        .verify(&committee)
+                        .map_err(NarwhalHandlerError::SkipNarwhalTransaction)?;
+
                     let mut checkpoint = checkpoint.lock();
                     checkpoint
-                        .handle_internal_fragment(
-                            seq,
-                            *fragment,
-                            &self.committee.load(),
-                            self.database.clone(),
-                        )
-                        .map_err(|e| SuiError::from(&e.to_string()[..]))?;
+                        .handle_internal_fragment(consensus_index, *fragment, self.database.clone())
+                        .map_err(NarwhalHandlerError::NodeError)?;
 
                     // NOTE: The method `handle_internal_fragment` is idempotent, so we don't need
                     // to persist the consensus index. If the validator crashes, this transaction
                     // may be resent to the checkpoint logic that will simply ignore it.
 
-                    // Cache the next checkpoint number if it changes
+                    // Cache the next checkpoint number if it changes.
                     self.latest_checkpoint_num
                         .store(checkpoint.next_checkpoint(), Ordering::Relaxed);
+
+                    // TODO: At this point we should know whether we want to change epoch. If we do,
+                    // we should have (i) the new committee and (ii) the new keypair of this authority.
+                    // We then call:
+                    // ```
+                    //  self
+                    //      .tx_reconfigure_consensus
+                    //      .send((new_keypair, new_committee))
+                    //      .await
+                    //      .expect("Failed to reconfigure consensus");
+                    // ```
+                    let _tx_reconfigure_consensus = &self.tx_reconfigure_consensus;
                 }
 
                 // TODO: This return time is not ideal. The authority submitting the checkpoint fragment
@@ -1787,6 +1846,10 @@ impl ExecutionState for AuthorityState {
                 Ok(Vec::default())
             }
         }
+    }
+
+    fn deserialize(bytes: &[u8]) -> Result<Self::Transaction, Error> {
+        bincode::deserialize(bytes)
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
@@ -1798,19 +1861,28 @@ impl ExecutionState for AuthorityState {
     }
 
     async fn load_execution_indices(&self) -> Result<ExecutionIndices, Self::Error> {
-        self.database.last_consensus_index()
+        self.database
+            .last_consensus_index()
+            .map_err(NarwhalHandlerError::NodeError)
     }
 }
 
-impl ExecutionStateError for FragmentInternalError {
+#[derive(Eq, PartialEq, Clone, Debug, Error)]
+pub enum NarwhalHandlerError {
+    /// Local node error after which it is not safe to continue consuming narwhal stream
+    #[error("Local node error {}", 0)]
+    NodeError(SuiError),
+    /// Transaction from narwhal did not pass verification and should be rejected,
+    /// narwhal can continue streaming next transactions to SUI
+    #[error("Invalid transaction {}", 0)]
+    SkipNarwhalTransaction(SuiError),
+}
+
+impl ExecutionStateError for NarwhalHandlerError {
     fn node_error(&self) -> bool {
         match self {
-            // Those are errors caused by the client. Every authority processing this fragment will
-            // deterministically trigger this error.
-            Self::Error(..) => false,
-            // Those are errors caused by the authority (eg. storage failure). It is not guaranteed
-            // that other validators will also trigger it and they may not be deterministic.
-            Self::Retry(..) => true,
+            Self::NodeError(..) => true,
+            Self::SkipNarwhalTransaction(..) => false,
         }
     }
 }

@@ -8,7 +8,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes
-        uses: "./.github/actions/diffs"
+        uses: "./.github/actions/pnpm-diffs"
         id: diff
   client_checks:
     name: Lint, Test & Build
@@ -28,16 +28,14 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build SDK
-        run: pnpm --filter @mysten/sui.js build
       - name: Lint
         run: pnpm --filter sui-explorer lint
       - name: Unit Tests
         run: pnpm --filter sui-explorer test:unit
       - name: Build
         run: pnpm --filter sui-explorer build
-  end_to_end:
-    name: End-to-end tests
+  end_to_end_static:
+    name: End-to-end tests (Static)
     needs: diff
     if: needs.diff.outputs.isClient == 'true'
     runs-on: [ubuntu-latest]
@@ -54,8 +52,6 @@ jobs:
           cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build TS sdk
-        run: pnpm --filter @mysten/sui.js build
       - name: Install Cypress
         run: pnpm --filter sui-explorer exec cypress install
       - name: Run e2e tests
@@ -64,3 +60,36 @@ jobs:
           install: false
           start: pnpm dev:static
           working-directory: ./explorer/client
+          spec: cypress/e2e/static/*
+  end_to_end_localnet:
+    name: End-to-end tests (Localnet)
+    needs: diff
+    if: needs.diff.outputs.isClient == 'true'
+    runs-on: [ubuntu-ghcloud]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7
+      - run: cargo build --bin sui-test-validator --profile dev
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Cypress
+        run: pnpm --filter sui-explorer exec cypress install
+      - name: Run e2e tests
+        uses: cypress-io/github-action@v4
+        with:
+          install: false
+          start: pnpm dlx concurrently 'cargo run --bin sui-test-validator' 'pnpm dev:local'
+          working-directory: ./explorer/client
+          spec: cypress/e2e/localnet/*
+          # Wait on faucet and explorer:
+          wait-on: 'http://localhost:3000, http://localhost:9123'
+          # wait for 2 minutes for the server to respond
+          wait-on-timeout: 120

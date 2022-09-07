@@ -256,6 +256,10 @@ impl crate::authority::AuthorityState {
             metrics.follower_connections_concurrent.dec();
         });
 
+        metrics
+            .follower_start_seq_num
+            .observe(request.start.unwrap_or(0) as f64);
+
         // Register a subscriber to not miss any updates
         let subscriber = self.subscribe_batch();
 

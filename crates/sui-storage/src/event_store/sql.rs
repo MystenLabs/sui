@@ -50,8 +50,6 @@ enum EventsTableColumns {
     Timestamp = 0,
     /// seq_num INTEGER
     SeqNum,
-    /// checkpoint INTEGER
-    Checkpoint,
     /// tx_digest BLOB
     TxDigest,
     /// event_type INTEGER
@@ -76,10 +74,9 @@ enum EventsTableColumns {
     Recipient,
 }
 
-const SQL_INSERT_TX: &str =
-    "INSERT INTO events (timestamp, seq_num, checkpoint, tx_digest, event_type, \
+const SQL_INSERT_TX: &str = "INSERT INTO events (timestamp, seq_num, tx_digest, event_type, \
     package_id, module_name, object_id, fields, move_event_name, contents, sender,  \
-    recipient) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+    recipient) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
 const INDEXED_COLUMNS: &[&str] = &[
     "timestamp",
@@ -231,7 +228,7 @@ impl SqlEventStore {
         }
     }
 
-    // convert an event's extra fields into a stringifed JSON Value.
+    // convert an event's extra fields into a stringified JSON Value.
     fn event_to_json(event: &EventEnvelope) -> String {
         // For move events, we only store the move_struct_json_value
         if let Some(json_value) = &event.move_struct_json_value {
@@ -249,6 +246,9 @@ impl SqlEventStore {
             };
             if let Some(object_version) = event.event.object_version().map(|ov| ov.value()) {
                 fields.insert(OBJECT_VERSION_KEY, object_version as u64);
+            }
+            if let Some(amount) = event.event.amount() {
+                fields.insert(AMOUNT_KEY, amount);
             }
             json!(fields).to_string()
         }
@@ -269,7 +269,6 @@ impl From<SqliteRow> for StoredEvent {
     // TODO: gracefully handle data corruption/incompatibility without panicking
     fn from(row: SqliteRow) -> Self {
         let timestamp: i64 = row.get(EventsTableColumns::Timestamp as usize);
-        let checkpoint: i64 = row.get(EventsTableColumns::Checkpoint as usize);
         let digest_raw: Option<Vec<u8>> = row.get(EventsTableColumns::TxDigest as usize);
         let tx_digest = digest_raw.map(|bytes| {
             TransactionDigest::new(
@@ -314,7 +313,6 @@ impl From<SqliteRow> for StoredEvent {
 
         StoredEvent {
             timestamp: timestamp as u64,
-            checkpoint_num: checkpoint as u64,
             tx_digest,
             event_type: SharedStr::from(Event::name_from_ordinal(event_type as usize)),
             package_id,
@@ -354,15 +352,9 @@ const QUERY_BY_RECIPIENT: &str = "SELECT * FROM events WHERE timestamp >= ? AND 
 const QUERY_BY_OBJECT_ID: &str = "SELECT * FROM events WHERE timestamp >= ? AND \
     timestamp < ? AND object_id = ? ORDER BY timestamp DESC LIMIT ?";
 
-const QUERY_BY_CHECKPOINT: &str = "SELECT * FROM events WHERE checkpoint >= ? AND checkpoint < ?";
-
 #[async_trait]
 impl EventStore for SqlEventStore {
-    async fn add_events(
-        &self,
-        events: &[EventEnvelope],
-        checkpoint_num: u64,
-    ) -> Result<u64, SuiError> {
+    async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError> {
         // TODO: submit writes in one transaction/batch so it won't just fail in the middle
         let mut cur_seq = self.seq_num.load(Ordering::Acquire);
         let initial_seq = cur_seq;
@@ -391,7 +383,6 @@ impl EventStore for SqlEventStore {
             let res = insert_tx_q
                 .bind(event.timestamp as i64)
                 .bind(event.seq_num as i64)
-                .bind(checkpoint_num as i64)
                 .bind(event.tx_digest.map(|txd| txd.to_bytes()))
                 .bind(event_type as u16)
                 .bind(event.event.package_id().map(|pid| pid.to_vec()))
@@ -474,20 +465,6 @@ impl EventStore for SqlEventStore {
             .await
             .map_err(convert_sqlx_err)?;
         Ok(rows)
-    }
-
-    fn events_by_checkpoint(
-        &self,
-        start_checkpoint: u64,
-        end_checkpoint: u64,
-    ) -> Result<StreamedResult, SuiError> {
-        let stream = sqlx::query(QUERY_BY_CHECKPOINT)
-            .bind(start_checkpoint as i64)
-            .bind(end_checkpoint as i64)
-            .map(StoredEvent::from)
-            .fetch(&self.pool)
-            .map(|r| r.map_err(convert_sqlx_err));
-        Ok(StreamedResult::new(Box::pin(stream)))
     }
 
     async fn events_by_module_id(
@@ -610,8 +587,6 @@ fn convert_sqlx_err(err: sqlx::Error) -> SuiError {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
-
     use super::test_utils;
     use super::*;
     use flexstr::shared_str;
@@ -619,13 +594,8 @@ mod tests {
 
     use sui_types::event::{EventEnvelope, TransferType};
 
-    fn test_queried_event_vs_test_envelope(
-        queried: &StoredEvent,
-        orig: &EventEnvelope,
-        checkpoint: u64,
-    ) {
+    fn test_queried_event_vs_test_envelope(queried: &StoredEvent, orig: &EventEnvelope) {
         assert_eq!(queried.timestamp, orig.timestamp);
-        assert_eq!(queried.checkpoint_num, checkpoint);
         assert_eq!(queried.tx_digest, orig.tx_digest);
         assert_eq!(queried.event_type, shared_str!(orig.event_type()));
         assert_eq!(queried.package_id, orig.event.package_id());
@@ -648,6 +618,7 @@ mod tests {
             queried.move_event_contents.as_deref(),
             orig.event.move_event_contents()
         );
+        assert_eq!(queried.amount().unwrap(), orig.event.amount());
         let move_event_name = orig.event.move_event_name();
         assert_eq!(queried.move_event_name.as_ref(), move_event_name.as_ref());
     }
@@ -692,7 +663,7 @@ mod tests {
                 "test_foo",
             ),
         ];
-        assert_eq!(db.add_events(&to_insert, 1).await?, 6);
+        assert_eq!(db.add_events(&to_insert).await?, 6);
         info!("Done inserting");
 
         assert_eq!(db.total_event_count().await?, 6);
@@ -702,76 +673,8 @@ mod tests {
         assert_eq!(queried_events.len(), 2);
         for i in 0..2 {
             // DESCENDING order
-            test_queried_event_vs_test_envelope(&queried_events[1 - i], &to_insert[i], 1);
+            test_queried_event_vs_test_envelope(&queried_events[1 - i], &to_insert[i]);
         }
-
-        Ok(())
-    }
-
-    #[tokio::test]
-    async fn test_eventstore_query_by_checkpoint() -> Result<(), SuiError> {
-        telemetry_subscribers::init_for_testing();
-
-        let db = SqlEventStore::new_memory_only_not_prod().await?;
-        db.initialize().await?;
-
-        // Insert txns from checkpoint 1
-        info!("Inserting records from checkpoint 1!");
-        let checkpoint_1 = vec![
-            test_utils::new_test_newobj_event(1_000_000, 1, None, None, None),
-            test_utils::new_test_newobj_event(1_001_000, 2, None, None, None),
-            test_utils::new_test_newobj_event(1_002_000, 3, None, None, None),
-        ];
-        let mut tx_digests_checkpoint1 = checkpoint_1
-            .iter()
-            .map(|e| e.tx_digest.unwrap())
-            .collect::<HashSet<TransactionDigest>>();
-        assert_eq!(db.add_events(&checkpoint_1, 1).await?, 3);
-        info!("Done inserting from checkpoint 1");
-        assert_eq!(db.total_event_count().await?, 3);
-
-        // Query txns between checkpoint [1, 3), expect 3 txns from checkpoint 1
-        let mut event_stream = db.events_by_checkpoint(1, 3)?;
-        let events = event_stream.next_chunk(100).await?;
-        let tx_digests = events
-            .iter()
-            .map(|e| e.tx_digest.unwrap())
-            .collect::<HashSet<TransactionDigest>>();
-        assert_eq!(tx_digests, tx_digests_checkpoint1);
-
-        // Insert txns from checkpoint 2
-        info!("Inserting records from checkpoint 2!");
-        let checkpoint_2 = vec![
-            test_utils::new_test_deleteobj_event(1_003_000, 3, None, None),
-            test_utils::new_test_deleteobj_event(1_004_000, 4, None, None),
-            test_utils::new_test_deleteobj_event(1_005_000, 5, None, None),
-        ];
-        let tx_digests_checkpoint2 = checkpoint_2
-            .iter()
-            .map(|e| e.tx_digest.unwrap())
-            .collect::<HashSet<TransactionDigest>>();
-        assert_eq!(db.add_events(&checkpoint_2, 2).await?, 3);
-        info!("Done inserting from checkpoint 2");
-        assert_eq!(db.total_event_count().await?, 6);
-
-        // Query txns between checkpoint [2, 3), expect 3 txns from checkpoint 2
-        let mut event_stream = db.events_by_checkpoint(2, 3)?;
-        let events = event_stream.next_chunk(100).await?;
-        let tx_digests = events
-            .iter()
-            .map(|e| e.tx_digest.unwrap())
-            .collect::<HashSet<TransactionDigest>>();
-        assert_eq!(tx_digests, tx_digests_checkpoint2);
-
-        // Query txns between checkpoint [1, 3), expect 6 txns from checkpoint 1 and 2
-        let mut event_stream = db.events_by_checkpoint(1, 3)?;
-        let events = event_stream.next_chunk(100).await?;
-        let tx_digests = events
-            .iter()
-            .map(|e| e.tx_digest.unwrap())
-            .collect::<HashSet<TransactionDigest>>();
-        tx_digests_checkpoint1.extend(tx_digests_checkpoint2);
-        assert_eq!(tx_digests, tx_digests_checkpoint1);
 
         Ok(())
     }
@@ -816,7 +719,7 @@ mod tests {
                 "test_foo",
             ),
         ];
-        db.add_events(&to_insert, 1).await?;
+        db.add_events(&to_insert).await?;
         let target_event = &to_insert[2];
         info!("Done inserting");
 
@@ -827,9 +730,9 @@ mod tests {
         assert_eq!(events.len(), 1); // Should be no more events, just that one
         let transfer_event = events.pop().unwrap();
 
-        test_queried_event_vs_test_envelope(&transfer_event, target_event, 1);
+        test_queried_event_vs_test_envelope(&transfer_event, target_event);
 
-        assert_eq!(transfer_event.fields.len(), 2);
+        assert_eq!(transfer_event.fields.len(), 3); // type, obj ver, amount
 
         Ok(())
     }
@@ -875,7 +778,7 @@ mod tests {
                 "test_foo",
             ),
         ];
-        db.add_events(&to_insert, 1).await?;
+        db.add_events(&to_insert).await?;
         info!("Done inserting");
 
         let queried_events = db
@@ -884,16 +787,16 @@ mod tests {
         assert_eq!(queried_events.len(), 2);
 
         // Desc timestamp order, so the last transfer event should be first
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4], 1);
-        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[2], 1);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4]);
+        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[2]);
 
         // Query again with limit of 1, it should return only the last transfer event
         let queried_events = db
             .events_by_type(1_000_000, 1_005_000, EventType::TransferObject, 1)
             .await?;
         assert_eq!(queried_events.len(), 1);
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4], 1);
-        assert_eq!(queried_events[0].fields.len(), 2);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[4]);
+        assert_eq!(queried_events[0].fields.len(), 3);
 
         // Query with wrong time range, return 0 events
         let queried_events = db
@@ -906,7 +809,7 @@ mod tests {
             .events_by_type(1_001_000, 1_002_000, EventType::Publish, 1)
             .await?;
         assert_eq!(queried_events.len(), 1);
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[1], 1);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[1]);
         assert_eq!(queried_events[0].fields.len(), 0);
 
         // Query NewObject Event
@@ -914,7 +817,7 @@ mod tests {
             .events_by_type(1_000_000, 1_002_000, EventType::NewObject, 1)
             .await?;
         assert_eq!(queried_events.len(), 1);
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[0], 1);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[0]);
         assert_eq!(queried_events[0].fields.len(), 0);
 
         // Query DeleteObject Event
@@ -922,7 +825,7 @@ mod tests {
             .events_by_type(1_003_000, 1_004_000, EventType::DeleteObject, 1)
             .await?;
         assert_eq!(queried_events.len(), 1);
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[3], 1);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[3]);
         assert_eq!(queried_events[0].fields.len(), 0);
 
         // Query Move Event
@@ -930,7 +833,7 @@ mod tests {
             .events_by_type(1_004_000, 1_006_000, EventType::MoveEvent, 1)
             .await?;
         assert_eq!(queried_events.len(), 1);
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5], 1);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[5]);
         assert_ne!(queried_events[0].fields.len(), 0);
 
         Ok(())
@@ -984,7 +887,7 @@ mod tests {
                 "test_foo",
             ),
         ];
-        db.add_events(&to_insert, 1).await?;
+        db.add_events(&to_insert).await?;
         info!("Done inserting");
 
         // Query for the Move event and validate basic fields
@@ -994,7 +897,7 @@ mod tests {
         let move_event = &events[0];
         assert_eq!(events.len(), 1); // Should be no more events, just that one
 
-        test_queried_event_vs_test_envelope(move_event, &to_insert[5], 1);
+        test_queried_event_vs_test_envelope(move_event, &to_insert[5]);
         assert_eq!(move_event.fields.len(), 2);
 
         // Query by module ID
@@ -1008,8 +911,8 @@ mod tests {
         assert_eq!(queried_events.len(), 2);
 
         // results are sorted in DESC order
-        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[6], 1);
-        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[5], 1);
+        test_queried_event_vs_test_envelope(&queried_events[0], &to_insert[6]);
+        test_queried_event_vs_test_envelope(&queried_events[1], &to_insert[5]);
         assert_eq!(queried_events[0].fields.len(), 2);
         assert_eq!(queried_events[1].fields.len(), 2);
 
@@ -1050,7 +953,7 @@ mod tests {
             ),
         ];
 
-        assert_eq!(db.add_events(&to_insert, 1).await?, 3);
+        assert_eq!(db.add_events(&to_insert).await?, 3);
         info!("Done inserting");
 
         let events = db
@@ -1063,8 +966,8 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 2);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[1], 1);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[0], 1);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[1]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[0]);
         assert_eq!(events[0].fields.len(), 2);
         assert_eq!(events[1].fields.len(), 2);
 
@@ -1147,7 +1050,7 @@ mod tests {
             ),
         ];
 
-        assert_eq!(db.add_events(&to_insert, 1).await?, 8);
+        assert_eq!(db.add_events(&to_insert).await?, 8);
         info!("Done inserting");
 
         // Query by sender
@@ -1156,11 +1059,11 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 5);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[7], 1);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[5], 1);
-        test_queried_event_vs_test_envelope(&events[2], &to_insert[4], 1);
-        test_queried_event_vs_test_envelope(&events[3], &to_insert[1], 1);
-        test_queried_event_vs_test_envelope(&events[4], &to_insert[0], 1);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[7]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[5]);
+        test_queried_event_vs_test_envelope(&events[2], &to_insert[4]);
+        test_queried_event_vs_test_envelope(&events[3], &to_insert[1]);
+        test_queried_event_vs_test_envelope(&events[4], &to_insert[0]);
 
         // Query by recipient
         let events = db
@@ -1168,9 +1071,9 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 3);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[3], 1);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[2], 1);
-        test_queried_event_vs_test_envelope(&events[2], &to_insert[0], 1);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[3]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[2]);
+        test_queried_event_vs_test_envelope(&events[2], &to_insert[0]);
 
         // Query by object
         let events = db
@@ -1178,10 +1081,10 @@ mod tests {
             .await?;
         assert_eq!(events.len(), 4);
 
-        test_queried_event_vs_test_envelope(&events[0], &to_insert[4], 1);
-        test_queried_event_vs_test_envelope(&events[1], &to_insert[3], 1);
-        test_queried_event_vs_test_envelope(&events[2], &to_insert[1], 1);
-        test_queried_event_vs_test_envelope(&events[3], &to_insert[0], 1);
+        test_queried_event_vs_test_envelope(&events[0], &to_insert[4]);
+        test_queried_event_vs_test_envelope(&events[1], &to_insert[3]);
+        test_queried_event_vs_test_envelope(&events[2], &to_insert[1]);
+        test_queried_event_vs_test_envelope(&events[3], &to_insert[0]);
 
         Ok(())
     }
@@ -1204,7 +1107,7 @@ mod tests {
             None,
             None,
         )];
-        db.add_events(&to_insert, 1).await?;
+        db.add_events(&to_insert).await?;
 
         let events = db
             .events_by_transaction(to_insert[0].tx_digest.unwrap(), 10)
@@ -1260,11 +1163,11 @@ mod tests {
                 "test_foo",
             ),
         ];
-        assert_eq!(db.add_events(&to_insert[..4], 1).await?, 4);
+        assert_eq!(db.add_events(&to_insert[..4]).await?, 4);
         assert_eq!(db.total_event_count().await?, 4);
 
         // Write in an older event with older sequence number, should be skipped
-        assert_eq!(db.add_events(&to_insert[1..2], 1).await?, 0);
+        assert_eq!(db.add_events(&to_insert[1..2]).await?, 0);
         assert_eq!(db.total_event_count().await?, 4);
 
         // Drop and reload DB from the same file, test that sequence number was recovered
@@ -1275,11 +1178,11 @@ mod tests {
         assert_eq!(db.total_event_count().await?, 4);
 
         // Try ingesting older event, check still skipped
-        assert_eq!(db.add_events(&to_insert[1..2], 1).await?, 0);
+        assert_eq!(db.add_events(&to_insert[1..2]).await?, 0);
         assert_eq!(db.total_event_count().await?, 4);
 
         // Check writing new events still succeeds
-        assert_eq!(db.add_events(&to_insert[4..], 1).await?, 2);
+        assert_eq!(db.add_events(&to_insert[4..]).await?, 2);
         assert_eq!(db.total_event_count().await?, 6);
 
         Ok(())

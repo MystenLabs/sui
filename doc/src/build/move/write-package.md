@@ -92,7 +92,7 @@ Since we are developing a fantasy game, in addition to the mandatory
 describing its respective attribute values. Please note that we need
 to import the
 [Object package](https://github.com/MystenLabs/sui/blob/main/crates/sui-framework/sources/object.move) from
-Sui framework to gain access to the `Info` struct type defined
+Sui framework to gain access to the `ID` struct type defined
 in this package.
 
 If we want to access sword attributes from a different package, we

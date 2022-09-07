@@ -4,7 +4,7 @@
 module examples::item {
     use sui::transfer;
     use sui::object::{Self, UID};
-    use sui::utf8::{Self, String};
+    use std::string::{Self, String};
     use sui::tx_context::{Self, TxContext};
 
     /// Type that marks Capability to create new `Item`s.
@@ -29,7 +29,7 @@ module examples::item {
     ) {
         transfer::transfer(Item {
             id: object::new(ctx),
-            name: utf8::string_unsafe(name)
+            name: string::utf8(name)
         }, to)
     }
 }

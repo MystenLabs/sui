@@ -2,17 +2,22 @@
   "name": "@mysten/bcs",
   "version": "0.2.0",
   "description": "BCS - Canonical Binary Serialization implementation for JavaScript",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "directories": {
-    "example": "examples",
-    "test": "tests"
+  "license": "Apache-2.0",
+  "author": "Mysten Labs <build@mystenlabs.com>",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
   },
   "scripts": {
-    "prepublish": "tsdx lint && tsdx build",
-    "build": "tsdx build",
-    "test": "tsdx test",
-    "prepare": "tsdx build"
+    "build": "pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
+    "build:types": "tsc --build",
+    "prepublishOnly": "pnpm build",
+    "test": "vitest"
   },
   "repository": {
     "type": "git",
@@ -26,8 +31,6 @@
     "serialization",
     "serde"
   ],
-  "author": "Damir Shamanaev <damirka.ru@gmail.com>",
-  "license": "MIT",
   "bugs": {
     "url": "https://github.com/mystenlabs/sui/issues"
   },
@@ -37,6 +40,8 @@
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",
-    "tsdx": "^0.14.1"
+    "tsup": "^6.2.2",
+    "typescript": "^4.8.2",
+    "vitest": "^0.22.1"
   }
 }

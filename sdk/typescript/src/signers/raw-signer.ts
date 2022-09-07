@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Ed25519Keypair } from '../cryptography/ed25519-keypair';
+import { Keypair } from '../cryptography/keypair';
 import { Provider } from '../providers/provider';
 import { Base64DataBuffer } from '../serialization/base64';
 import { SuiAddress } from '../types';
@@ -10,10 +10,10 @@ import { SignerWithProvider } from './signer-with-provider';
 import { TxnDataSerializer } from './txn-data-serializers/txn-data-serializer';
 
 export class RawSigner extends SignerWithProvider {
-  private readonly keypair: Ed25519Keypair;
+  private readonly keypair: Keypair;
 
   constructor(
-    keypair: Ed25519Keypair,
+    keypair: Keypair,
     provider?: Provider,
     serializer?: TxnDataSerializer
   ) {
@@ -27,7 +27,7 @@ export class RawSigner extends SignerWithProvider {
 
   async signData(data: Base64DataBuffer): Promise<SignaturePubkeyPair> {
     return {
-      signatureScheme: 'ED25519',
+      signatureScheme: this.keypair.getKeyScheme(),
       signature: this.keypair.signData(data),
       pubKey: this.keypair.getPublicKey(),
     };

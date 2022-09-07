@@ -12,7 +12,12 @@ import styles from './Header.module.css';
 const Header = () => {
     return (
         <header>
-            <Link id="homeBtn" className={styles.suititle} to="/">
+            <Link
+                id="homeBtn"
+                data-testid="nav-logo-button"
+                className={styles.suititle}
+                to="/"
+            >
                 <SuiLogo />
             </Link>
 

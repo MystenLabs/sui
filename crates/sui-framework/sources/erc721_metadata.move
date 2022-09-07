@@ -4,7 +4,7 @@
 module sui::erc721_metadata {
     use std::ascii;
     use sui::url::{Self, Url};
-    use sui::utf8;
+    use std::string;
 
     // TODO: add symbol()?
     /// A wrapper type for the ERC721 metadata standard https://eips.ethereum.org/EIPS/eip-721
@@ -14,7 +14,7 @@ module sui::erc721_metadata {
         /// A descriptive name for a collection of NFTs in this contract.
         /// This corresponds to the `name()` method in the
         /// ERC721Metadata interface in EIP-721.
-        name: utf8::String,
+        name: string::String,
         /// A distinct Uniform Resource Identifier (URI) for a given asset.
         /// This corresponds to the `tokenURI()` method in the ERC721Metadata
         /// interface in EIP-721.
@@ -35,7 +35,7 @@ module sui::erc721_metadata {
         let uri_str = ascii::string(token_uri);
         ERC721Metadata {
             token_id,
-            name: utf8::string_unsafe(name),
+            name: string::utf8(name),
             token_uri: url::new_unsafe(uri_str),
         }
     }
@@ -52,7 +52,7 @@ module sui::erc721_metadata {
         &self.token_uri
     }
 
-    public fun name(self: &ERC721Metadata): &utf8::String {
+    public fun name(self: &ERC721Metadata): &string::String {
         &self.name
     }
 }

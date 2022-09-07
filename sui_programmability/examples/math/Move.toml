@@ -1,0 +1,9 @@
+[package]
+name = "Math"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework" }
+
+[addresses]
+math = "0x0"

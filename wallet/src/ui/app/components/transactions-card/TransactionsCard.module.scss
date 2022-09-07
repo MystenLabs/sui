@@ -57,12 +57,14 @@
         display: flex;
         flex-flow: column;
         text-align: end;
+        justify-content: center;
 
         .tx-amount {
             @include utils.typography('table/text-sm');
 
             color: colors.$gray-100;
             text-align: right;
+            line-height: 120%;
         }
 
         .tx-image {

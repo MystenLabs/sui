@@ -13,7 +13,8 @@ import {
   isSuiMoveNormalizedModule,
   isSuiMoveNormalizedFunction,
   isSuiMoveNormalizedStruct,
-} from '../index.guard';
+  isSuiExecuteTransactionResponse,
+} from '../types/index.guard';
 import {
   GatewayTxSeqNumber,
   GetTxnDigestsResponse,
@@ -32,6 +33,8 @@ import {
   SuiEventFilter,
   SuiEventEnvelope,
   SubscriptionId,
+  ExecuteTransactionRequestType,
+  SuiExecuteTransactionResponse,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
@@ -89,6 +92,7 @@ export class JsonRpcProvider extends Provider {
   async getNormalizedMoveModulesByPackage(
     objectId: string
   ): Promise<SuiMoveNormalizedModules> {
+    // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModulesByPackage',
@@ -105,6 +109,7 @@ export class JsonRpcProvider extends Provider {
     objectId: string,
     moduleName: string
   ): Promise<SuiMoveNormalizedModule> {
+    // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveModule',
@@ -124,6 +129,7 @@ export class JsonRpcProvider extends Provider {
     moduleName: string,
     functionName: string
   ): Promise<SuiMoveNormalizedFunction> {
+    // TODO: Add caching since package object does not change
     try {
       return await this.client.requestWithType(
         'sui_getNormalizedMoveFunction',
@@ -212,7 +218,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getObjectBatch(objectIds: string[]): Promise<GetObjectDataResponse[]> {
-    const requests = objectIds.map(id => ({
+    const requests = objectIds.map((id) => ({
       method: 'sui_getObject',
       args: [id],
     }));
@@ -306,7 +312,7 @@ export class JsonRpcProvider extends Provider {
   async getTransactionWithEffectsBatch(
     digests: TransactionDigest[]
   ): Promise<SuiTransactionResponse[]> {
-    const requests = digests.map(d => ({
+    const requests = digests.map((d) => ({
       method: 'sui_getTransaction',
       args: [d],
     }));
@@ -340,6 +346,26 @@ export class JsonRpcProvider extends Provider {
       return resp;
     } catch (err) {
       throw new Error(`Error executing transaction: ${err}}`);
+    }
+  }
+
+  async executeTransactionWithRequestType(
+    txnBytes: string,
+    signatureScheme: SignatureScheme,
+    signature: string,
+    pubkey: string,
+    requestType: ExecuteTransactionRequestType = 'WaitForEffectsCert'
+  ): Promise<SuiExecuteTransactionResponse> {
+    try {
+      const resp = await this.client.requestWithType(
+        'sui_executeTransaction',
+        [txnBytes, signatureScheme, signature, pubkey, requestType],
+        isSuiExecuteTransactionResponse,
+        this.skipDataValidation
+      );
+      return resp;
+    } catch (err) {
+      throw new Error(`Error executing transaction with request type: ${err}}`);
     }
   }
 

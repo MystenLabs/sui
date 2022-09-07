@@ -9,7 +9,7 @@ import DisplayBox from '../../../components/displaybox/DisplayBox';
 import Longtext from '../../../components/longtext/Longtext';
 import ModulesWrapper from '../../../components/module/ModulesWrapper';
 import OwnedObjects from '../../../components/ownedobjects/OwnedObjects';
-import TxForID from '../../../components/transactions-for-id/TxForID';
+import TxForID from '../../../components/transaction-card/TxForID';
 import {
     getOwnerStr,
     parseImageURL,

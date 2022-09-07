@@ -12,14 +12,15 @@ bcs
   .registerVectorType('vector<vector<u8>>', 'vector<u8>')
   .registerAddressType('ObjectID', 20)
   .registerAddressType('SuiAddress', 20)
+  .registerAddressType('address', 20)
   .registerType(
     'utf8string',
     (writer, str) => {
       let bytes = Array.from(Buffer.from(str));
       return writer.writeVec(bytes, (writer, el) => writer.write8(el));
     },
-    reader => {
-      let bytes = reader.readVec(reader => reader.read8());
+    (reader) => {
+      let bytes = reader.readVec((reader) => reader.read8());
       return Buffer.from(bytes).toString('utf-8');
     }
   )
@@ -29,8 +30,8 @@ bcs
       let bytes = Array.from(decodeStr(str, 'base64'));
       return writer.writeVec(bytes, (writer, el) => writer.write8(el));
     },
-    reader => {
-      let bytes = reader.readVec(reader => reader.read8());
+    (reader) => {
+      let bytes = reader.readVec((reader) => reader.read8());
       return encodeStr(new Uint8Array(bytes), 'base64');
     }
   );
@@ -98,7 +99,7 @@ bcs.registerStructType('TransferSuiTx', {
  */
 export type PublishTx = {
   Publish: {
-    modules: Iterable<Iterable<number>>;
+    modules: ArrayLike<ArrayLike<number>>;
   };
 };
 
@@ -132,7 +133,7 @@ export type ObjectArg = { ImmOrOwned: SuiObjectRef } | { Shared: string };
  * For `Pure` arguments BCS is required. You must encode the values with BCS according
  * to the type required by the called function. Pure accepts only serialized values
  */
-export type CallArg = { Pure: Iterable<number> } | { Object: ObjectArg };
+export type CallArg = { Pure: ArrayLike<number> } | { Object: ObjectArg };
 
 bcs
   .registerEnumType('ObjectArg', {

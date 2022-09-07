@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::get_client;
-use crate::messages::{create_publish_move_package_transaction, make_certificates};
+use crate::messages::{create_publish_move_package_transaction, make_tx_certs_and_signed_effects};
 use crate::test_account_keys;
 use futures::StreamExt;
 use move_package::BuildConfig;
@@ -20,18 +20,29 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::UpdateItem;
 use sui_types::error::SuiResult;
 use sui_types::messages::{
-    BatchInfoRequest, BatchInfoResponseItem, Transaction, TransactionEffects,
-    TransactionInfoResponse,
+    BatchInfoRequest, BatchInfoResponseItem, ObjectInfoRequest, ObjectInfoResponse, Transaction,
+    TransactionEffects, TransactionInfoResponse,
 };
 use sui_types::object::{Object, Owner};
+use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 use tokio::time::{sleep, Duration};
-use tracing::{debug, info};
+use tracing::debug;
+use tracing::info;
 
 pub async fn publish_package(
     gas_object: Object,
     path: PathBuf,
     configs: &[ValidatorInfo],
 ) -> ObjectRef {
+    let effects = publish_package_for_effects(gas_object, path, configs).await;
+    parse_package_ref(&effects).unwrap()
+}
+
+pub async fn publish_package_for_effects(
+    gas_object: Object,
+    path: PathBuf,
+    configs: &[ValidatorInfo],
+) -> TransactionEffects {
     let (sender, keypair) = test_account_keys().pop().unwrap();
     let transaction = create_publish_move_package_transaction(
         gas_object.compute_object_reference(),
@@ -39,8 +50,7 @@ pub async fn publish_package(
         sender,
         &keypair,
     );
-    let effects = submit_single_owner_transaction(transaction, configs).await;
-    parse_package_ref(&effects).unwrap()
+    submit_single_owner_transaction(transaction, configs).await
 }
 
 /// Helper function to publish the move package of a simple shared counter.
@@ -184,7 +194,10 @@ pub async fn submit_single_owner_transaction(
     transaction: Transaction,
     configs: &[ValidatorInfo],
 ) -> TransactionEffects {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
+    let certificate = make_tx_certs_and_signed_effects(vec![transaction])
+        .0
+        .pop()
+        .unwrap();
 
     let mut responses = Vec::new();
     for config in configs {
@@ -205,7 +218,10 @@ pub async fn submit_shared_object_transaction(
     transaction: Transaction,
     configs: &[ValidatorInfo],
 ) -> SuiResult<TransactionEffects> {
-    let certificate = make_certificates(vec![transaction]).pop().unwrap();
+    let certificate = make_tx_certs_and_signed_effects(vec![transaction])
+        .0
+        .pop()
+        .unwrap();
 
     let replies = loop {
         let futures: Vec<_> = configs
@@ -256,6 +272,32 @@ pub fn parse_package_ref(effects: &TransactionEffects) -> Option<ObjectRef> {
         .iter()
         .find(|(_, owner)| matches!(owner, Owner::Immutable))
         .map(|(reference, _)| *reference)
+}
+
+/// Get the framework object
+pub async fn get_framework_object(configs: &[ValidatorInfo]) -> Object {
+    let mut responses = Vec::new();
+    for config in configs {
+        let client = get_client(config);
+        let reply = client
+            .handle_object_info_request(ObjectInfoRequest::latest_object_info_request(
+                SUI_FRAMEWORK_OBJECT_ID,
+                None,
+            ))
+            .await
+            .unwrap();
+        responses.push(reply);
+    }
+    extract_obj(responses)
+}
+
+pub fn extract_obj(replies: Vec<ObjectInfoResponse>) -> Object {
+    let mut all_objects = HashSet::new();
+    for reply in replies {
+        all_objects.insert(reply.object_and_lock.unwrap().object);
+    }
+    assert_eq!(all_objects.len(), 1);
+    all_objects.into_iter().next().unwrap()
 }
 
 pub async fn wait_for_tx(wait_digest: TransactionDigest, state: Arc<AuthorityState>) {

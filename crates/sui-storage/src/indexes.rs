@@ -17,8 +17,8 @@ use sui_types::object::Owner;
 
 use move_core_types::identifier::Identifier;
 use typed_store::rocks::DBMap;
-use typed_store::traits::DBMapTableUtil;
 use typed_store::traits::Map;
+use typed_store::traits::TypedStoreDebug;
 
 use crate::default_db_options;
 

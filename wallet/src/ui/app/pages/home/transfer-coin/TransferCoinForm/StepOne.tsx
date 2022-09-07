@@ -5,10 +5,7 @@ import cl from 'classnames';
 import { ErrorMessage, Field, Form, useFormikContext } from 'formik';
 import { useEffect, useRef, memo } from 'react';
 
-import BottomMenuLayout, {
-    Content,
-    Menu,
-} from '_app/shared/bottom-menu-layout';
+import { Content, Menu } from '_app/shared/bottom-menu-layout';
 import Button from '_app/shared/button';
 import ActiveCoinsCard from '_components/active-coins-card';
 import Icon, { SuiIcons } from '_components/icon';
@@ -49,45 +46,43 @@ function StepOne({
             autoComplete="off"
             noValidate={true}
         >
-            <BottomMenuLayout>
-                <Content>
-                    <div className={st.group}>
-                        <label className={st.label}>Amount:</label>
-                        <Field
-                            component={NumberInput}
-                            allowNegative={false}
-                            name="amount"
-                            placeholder={`Total ${coinSymbol.toLocaleUpperCase()} to send`}
-                            className={st.input}
-                        />
+            <Content>
+                <div className={st.group}>
+                    <label className={st.label}>Amount:</label>
+                    <Field
+                        component={NumberInput}
+                        allowNegative={false}
+                        name="amount"
+                        placeholder={`Total ${coinSymbol.toLocaleUpperCase()} to send`}
+                        className={st.input}
+                    />
 
-                        <ErrorMessage
-                            className={st.error}
-                            name="amount"
-                            component="div"
+                    <ErrorMessage
+                        className={st.error}
+                        name="amount"
+                        component="div"
+                    />
+                </div>
+                <div className={st.activeCoinCard}>
+                    <ActiveCoinsCard activeCoinType={coinType} />
+                </div>
+            </Content>
+            <Menu stuckClass={st.shadow}>
+                <div className={cl(st.group, st.cta)}>
+                    <Button
+                        type="submit"
+                        disabled={!isValid}
+                        mode="primary"
+                        className={st.btn}
+                    >
+                        Continue
+                        <Icon
+                            icon={SuiIcons.ArrowLeft}
+                            className={cl(st.arrowLeft)}
                         />
-                    </div>
-                    <div className={st.activeCoinCard}>
-                        <ActiveCoinsCard activeCoinType={coinType} />
-                    </div>
-                </Content>
-                <Menu stuckClass={st.shadow}>
-                    <div className={cl(st.group, st.cta)}>
-                        <Button
-                            type="submit"
-                            disabled={!isValid}
-                            mode="primary"
-                            className={st.btn}
-                        >
-                            Continue
-                            <Icon
-                                icon={SuiIcons.ArrowLeft}
-                                className={cl(st.arrowLeft)}
-                            />
-                        </Button>
-                    </div>
-                </Menu>
-            </BottomMenuLayout>
+                    </Button>
+                </div>
+            </Menu>
         </Form>
     );
 }

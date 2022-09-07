@@ -14,7 +14,7 @@ import { getOwnerStr } from '../../utils/objectUtils';
 import { truncate } from '../../utils/stringUtils';
 
 import type { Category } from '../../pages/transaction-result/TransactionResultType';
-import type { Link } from '../table/TableCard';
+import type { LinkObj } from '../table/TableCard';
 import type {
     MoveEvent,
     NewObjectEvent,
@@ -143,7 +143,7 @@ export function transferObjectEventDisplay(
     };
 }
 
-export function getAddressesLinks(item: ContentItem[]): Link[] {
+export function getAddressesLinks(item: ContentItem[]): LinkObj[] {
     return item.map((content) => {
         return {
             url: content.value,
@@ -151,7 +151,7 @@ export function getAddressesLinks(item: ContentItem[]): Link[] {
             copy: false,
             category: content.category,
             isLink: true,
-        } as Link;
+        } as LinkObj;
     });
 }
 

@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use anyhow::anyhow;
+use anyhow::bail;
 use anyhow::Result;
 use futures::TryFutureExt;
+use mysten_network::server::ServerBuilder;
 use parking_lot::Mutex;
 use prometheus::Registry;
 use std::option::Option::None;
@@ -14,6 +16,7 @@ use sui_core::authority_active::checkpoint_driver::CheckpointMetrics;
 use sui_core::authority_aggregator::{AuthAggMetrics, AuthorityAggregator};
 use sui_core::authority_server::ValidatorService;
 use sui_core::safe_client::SafeClientMetrics;
+use sui_core::transaction_streamer::TransactionStreamer;
 use sui_core::{
     authority::{AuthorityState, AuthorityStore},
     authority_active::{gossip::GossipMetrics, ActiveAuthority},
@@ -24,6 +27,7 @@ use sui_core::{
     checkpoints::CheckpointStore,
 };
 use sui_json_rpc::bcs_api::BcsApiImpl;
+use sui_json_rpc::streaming_api::TransactionStreamingApiImpl;
 use sui_network::api::ValidatorServer;
 use sui_quorum_driver::QuorumDriverMetrics;
 use sui_quorum_driver::{QuorumDriver, QuorumDriverHandler};
@@ -33,8 +37,10 @@ use sui_storage::{
     IndexStore,
 };
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
+use tokio::sync::mpsc::channel;
 use tracing::{error, info};
 
+use crate::metrics::GrpcMetrics;
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use sui_core::epoch::epoch_store::EpochStore;
 use sui_json_rpc::event_api::EventReadApiImpl;
@@ -46,7 +52,6 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
 use sui_types::crypto::KeypairTraits;
-use typed_store::traits::DBMapTableUtil;
 
 pub mod admin;
 pub mod metrics;
@@ -63,6 +68,7 @@ pub struct SuiNode {
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     quorum_driver_handler: Option<QuorumDriverHandler<NetworkAuthorityClient>>,
+    _prometheus_registry: Registry,
 }
 
 impl SuiNode {
@@ -122,6 +128,12 @@ impl SuiNode {
             None
         };
 
+        let (tx_reconfigure_consensus, rx_reconfigure_consensus) = channel(100);
+
+        let transaction_streamer = config
+            .websocket_address
+            .map(|_| Arc::new(TransactionStreamer::new()));
+
         let state = Arc::new(
             AuthorityState::new(
                 config.protocol_public_key(),
@@ -130,9 +142,11 @@ impl SuiNode {
                 epoch_store.clone(),
                 index_store.clone(),
                 event_store,
+                transaction_streamer,
                 Some(checkpoint_store),
                 genesis,
                 &prometheus_registry,
+                tx_reconfigure_consensus,
             )
             .await,
         );
@@ -251,8 +265,12 @@ impl SuiNode {
                 None
             };
 
+        let registry = prometheus_registry.clone();
         let validator_service = if config.consensus_config().is_some() {
-            Some(ValidatorService::new(config, state.clone(), &prometheus_registry).await?)
+            Some(
+                ValidatorService::new(config, state.clone(), registry, rx_reconfigure_consensus)
+                    .await?,
+            )
         } else {
             None
         };
@@ -261,7 +279,8 @@ impl SuiNode {
             let mut server_conf = mysten_network::config::Config::new();
             server_conf.global_concurrency_limit = config.grpc_concurrency_limit;
             server_conf.load_shed = config.grpc_load_shed;
-            let mut server_builder = server_conf.server_builder();
+            let mut server_builder =
+                ServerBuilder::from_config(&server_conf, GrpcMetrics::new(&prometheus_registry));
 
             if let Some(validator_service) = validator_service {
                 server_builder =
@@ -297,6 +316,7 @@ impl SuiNode {
             state,
             active: active_authority,
             quorum_driver_handler,
+            _prometheus_registry: prometheus_registry,
         };
 
         info!("SuiNode started!");
@@ -369,11 +389,20 @@ pub async fn build_node_server(
         .into_http_server_handle()
         .expect("Expect a http server handle");
 
-    // TODO: we will change the conditions soon when we introduce txn subs
-    let ws_server_handle = match (config.websocket_address, state.event_handler.clone()) {
-        (Some(ws_addr), Some(event_handler)) => {
+    let ws_server_handle = match config.websocket_address {
+        Some(ws_addr) => {
             let mut server = JsonRpcServerBuilder::new(true, prometheus_registry)?;
-            server.register_module(EventStreamingApiImpl::new(state.clone(), event_handler))?;
+            if let Some(tx_streamer) = state.transaction_streamer.clone() {
+                server.register_module(TransactionStreamingApiImpl::new(
+                    state.clone(),
+                    tx_streamer,
+                ))?;
+            } else {
+                bail!("Expect State to have Some TransactionStreamer when websocket_address is present in node config");
+            }
+            if let Some(event_handler) = state.event_handler.clone() {
+                server.register_module(EventStreamingApiImpl::new(state.clone(), event_handler))?;
+            }
             Some(
                 server
                     .start(ws_addr)
@@ -382,7 +411,7 @@ pub async fn build_node_server(
                     .expect("Expect a websocket server handle"),
             )
         }
-        _ => None,
+        None => None,
     };
     Ok((Some(rpc_server_handle), ws_server_handle))
 }

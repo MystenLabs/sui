@@ -57,10 +57,6 @@ pub async fn init_local_authorities(
             protocol_key: authority_name,
             account_key: account_key_pair.public(),
             network_key: network_key_pair.public(),
-            proof_of_possession: generate_proof_of_possession(
-                &key_pair,
-                (&account_key_pair.public()).into(),
-            ),
             stake: 1,
             delegation: 0,
             gas_price: 1,
@@ -71,7 +67,8 @@ pub async fn init_local_authorities(
             narwhal_worker_to_worker: sui_config::utils::new_network_address(),
             narwhal_consensus_address: sui_config::utils::new_network_address(),
         };
-        builder = builder.add_validator(validator_info);
+        let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());
+        builder = builder.add_validator(validator_info, pop);
         key_pairs.push((authority_name, key_pair));
     }
     let genesis = builder.build();

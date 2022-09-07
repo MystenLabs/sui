@@ -5,37 +5,38 @@ use clap::*;
 use futures::future::join_all;
 use futures::future::try_join_all;
 use prometheus::Registry;
+use rand::seq::SliceRandom;
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::time::Duration;
+use strum_macros::EnumString;
 use sui_benchmark::benchmark::follow;
+use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
+use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
+use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
 use sui_benchmark::workloads::workload::get_latest;
+use sui_benchmark::workloads::workload::CombinationWorkload;
+use sui_benchmark::workloads::workload::Payload;
+use sui_benchmark::workloads::workload::Workload;
 use sui_benchmark::workloads::workload::WorkloadType;
 use sui_config::gateway::GatewayConfig;
 use sui_config::Config;
 use sui_config::PersistedConfig;
 use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::gateway_state::GatewayState;
 use sui_core::safe_client::SafeClientMetrics;
 use sui_node::metrics;
 use sui_node::SuiNode;
+use sui_sdk::crypto::FileBasedKeystore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::AccountKeyPair;
-
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
-use std::time::Duration;
-use strum_macros::EnumString;
-use sui_benchmark::drivers::bench_driver::BenchDriver;
-use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
-use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
-use sui_benchmark::workloads::workload::CombinationWorkload;
-use sui_benchmark::workloads::workload::Payload;
-use sui_benchmark::workloads::workload::Workload;
-use sui_core::epoch::epoch_store::EpochStore;
-use sui_sdk::crypto::FileBasedKeystore;
 use sui_types::crypto::EncodeDecodeBase64;
+use sui_types::crypto::SuiKeyPair;
 
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use test_utils::authority::spawn_test_authorities;
@@ -76,6 +77,8 @@ struct Opts {
     /// with large enough gas i.e. u64::MAX
     #[clap(long, default_value = "", global = true)]
     pub primary_gas_id: String,
+    #[clap(long, default_value = "5000", global = true)]
+    pub primary_gas_objects: u64,
     /// Whether to run local or remote benchmark
     /// NOTE: For running remote benchmark we must have the following
     /// gateway_config_path, keypair_path and primary_gas_id
@@ -86,6 +89,8 @@ struct Opts {
     run_spec: RunSpec,
     #[clap(long, default_value = "9091", global = true)]
     pub server_metric_port: u16,
+    #[clap(long, default_value = "127.0.0.1", global = true)]
+    pub client_metric_host: String,
     #[clap(long, default_value = "8081", global = true)]
     pub client_metric_port: u16,
     /// Number of followers to run. This also  stresses the follower logic in validators
@@ -285,8 +290,10 @@ async fn main() -> Result<()> {
             AuthAggMetrics::new(&registry),
             SafeClientMetrics::new(&registry),
         );
-        let primary_gas_id = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
-        let primary_gas = get_latest(primary_gas_id, &aggregator)
+        let offset = ObjectID::from_hex_literal(&opts.primary_gas_id)?;
+        let ids = ObjectID::in_range(offset, opts.primary_gas_objects)?;
+        let primary_gas_id = ids.choose(&mut rand::thread_rng()).unwrap();
+        let primary_gas = get_latest(*primary_gas_id, &aggregator)
             .await
             .ok_or_else(|| {
                 anyhow!(format!(
@@ -314,10 +321,16 @@ async fn main() -> Result<()> {
             })
             .map(|x| x.encode_base64())
             .unwrap();
+        // TODO(joyqvq): This is a hack to decode base64 keypair with added flag, ok for now since it is for benchmark use.
+        // Rework to get the typed keypair directly from above.
+        let ed25519_keypair = match SuiKeyPair::decode_base64(&keypair).unwrap() {
+            SuiKeyPair::Ed25519SuiKeyPair(x) => x,
+            _ => panic!("Unexpected keypair type"),
+        };
         (
-            primary_gas_id,
+            *primary_gas_id,
             primary_gas_account,
-            Arc::new(keypair.parse().map_err(|e| anyhow!("{:#?}", e))?),
+            Arc::new(ed25519_keypair),
             config,
         )
     };
@@ -337,7 +350,7 @@ async fn main() -> Result<()> {
                 NetworkAuthorityClientMetrics::new_for_tests(),
             );
             let registry: Registry = metrics::start_prometheus_server(
-                format!("127.0.0.1:{}", opts.client_metric_port)
+                format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
                     .parse()
                     .unwrap(),
             );

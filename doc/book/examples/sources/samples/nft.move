@@ -3,7 +3,7 @@
 
 module examples::devnet_nft {
     use sui::url::{Self, Url};
-    use sui::utf8;
+    use std::string;
     use sui::object::{Self, ID, UID};
     use sui::event;
     use sui::transfer;
@@ -13,9 +13,9 @@ module examples::devnet_nft {
     struct DevNetNFT has key, store {
         id: UID,
         /// Name for the token
-        name: utf8::String,
+        name: string::String,
         /// Description of the token
-        description: utf8::String,
+        description: string::String,
         /// URL for the token
         url: Url,
         // TODO: allow custom attributes
@@ -29,18 +29,18 @@ module examples::devnet_nft {
         // The creator of the NFT
         creator: address,
         // The name of the NFT
-        name: utf8::String,
+        name: string::String,
     }
 
     // ===== Public view functions =====
 
     /// Get the NFT's `name`
-    public fun name(nft: &DevNetNFT): &utf8::String {
+    public fun name(nft: &DevNetNFT): &string::String {
         &nft.name
     }
 
     /// Get the NFT's `description`
-    public fun description(nft: &DevNetNFT): &utf8::String {
+    public fun description(nft: &DevNetNFT): &string::String {
         &nft.description
     }
 
@@ -61,8 +61,8 @@ module examples::devnet_nft {
         let sender = tx_context::sender(ctx);
         let nft = DevNetNFT {
             id: object::new(ctx),
-            name: utf8::string_unsafe(name),
-            description: utf8::string_unsafe(description),
+            name: string::utf8(name),
+            description: string::utf8(description),
             url: url::new_unsafe_from_bytes(url)
         };
 
@@ -88,7 +88,7 @@ module examples::devnet_nft {
         new_description: vector<u8>,
         _: &mut TxContext
     ) {
-        nft.description = utf8::string_unsafe(new_description)
+        nft.description = string::utf8(new_description)
     }
 
     /// Permanently delete `nft`

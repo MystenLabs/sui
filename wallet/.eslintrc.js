@@ -9,7 +9,6 @@ module.exports = {
         'plugin:react/recommended',
         'plugin:react/jsx-runtime',
         'react-app',
-        'react-app/jest',
         'prettier',
     ],
     rules: {

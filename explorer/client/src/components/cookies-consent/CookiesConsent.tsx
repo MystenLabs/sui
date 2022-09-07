@@ -15,7 +15,7 @@ export function CookiesConsent() {
     useEffect(() => {
         (async () => {
             await import('vanilla-cookieconsent');
-            const cc = global.initCookieConsent();
+            const cc = globalThis.initCookieConsent();
             document.body.classList.add('c_darkmode');
             cc.run({
                 revision: 0,

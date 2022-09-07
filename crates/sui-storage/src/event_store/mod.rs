@@ -7,7 +7,7 @@
 //! - Filtering of events per Move package, type, or other fields
 //! - Persistent/reliable streaming, which needs to recover filtered events from a marker
 //!   or point in time
-//!   
+//!
 //! Events are also archived into checkpoints so this API should support that as well.
 //!
 
@@ -41,6 +41,7 @@ pub const EVENT_STORE_QUERY_MAX_LIMIT: usize = 100;
 
 pub const TRANSFER_TYPE_KEY: &str = "xfer_type";
 pub const OBJECT_VERSION_KEY: &str = "obj_ver";
+pub const AMOUNT_KEY: &str = "amount";
 
 /// One event pulled out from the EventStore
 #[allow(unused)]
@@ -48,7 +49,6 @@ pub const OBJECT_VERSION_KEY: &str = "obj_ver";
 pub struct StoredEvent {
     /// UTC timestamp in milliseconds
     timestamp: u64,
-    checkpoint_num: u64,
     /// Not present for non-transaction System events (eg EpochChange)
     tx_digest: Option<TransactionDigest>,
     /// The variant name from SuiEvent, eg MoveEvent, Publish, etc.
@@ -137,6 +137,7 @@ impl StoredEvent {
             object_id,
             version,
             type_,
+            amount: self.amount()?,
         })
     }
 
@@ -234,46 +235,39 @@ impl StoredEvent {
         })
     }
 
-    fn object_version(&self) -> Result<Option<SequenceNumber>, anyhow::Error> {
-        let object_version = self.fields.get(OBJECT_VERSION_KEY);
-        match object_version {
-            Some(EventValue::Json(serde_json::Value::Number(object_version_ordinal))) => {
-                let object_version_ordinal = object_version_ordinal.as_u64().ok_or_else(|| {
-                    SuiError::ExtraFieldFailedToDeserialize {
-                        error: format!(
-                            "Error parsing object version from extra fields: {object_version:?}"
-                        ),
-                    }
-                })?;
-                Ok(Some(SequenceNumber::from_u64(object_version_ordinal)))
+    fn extract_u64_field(&self, key: &str) -> Result<Option<u64>, anyhow::Error> {
+        let field_value = self.fields.get(key);
+        match field_value {
+            Some(EventValue::Json(serde_json::Value::Number(num))) => {
+                let num = num
+                    .as_u64()
+                    .ok_or_else(|| SuiError::ExtraFieldFailedToDeserialize {
+                        error: format!("Error parsing {key} from extra fields: {field_value:?}"),
+                    })?;
+                Ok(Some(num))
             }
             None => Ok(None),
             Some(other_value) => anyhow::bail!(SuiError::ExtraFieldFailedToDeserialize {
-                error: format!("Got unexpected stored value for object_version: {other_value:?}"),
+                error: format!("Got unexpected stored value for {key}: {other_value:?}"),
             }),
         }
     }
 
+    fn object_version(&self) -> Result<Option<SequenceNumber>, anyhow::Error> {
+        self.extract_u64_field(OBJECT_VERSION_KEY)
+            .map(|opt| opt.map(SequenceNumber::from_u64))
+    }
+
     fn transfer_type(&self) -> Result<Option<TransferType>, anyhow::Error> {
-        let transfer_type = self.fields.get(TRANSFER_TYPE_KEY);
-        match transfer_type {
-            Some(EventValue::Json(serde_json::Value::Number(transfer_type_ordinal))) => {
-                let transfer_type_ordinal = transfer_type_ordinal.as_u64().ok_or_else(|| {
-                    SuiError::ExtraFieldFailedToDeserialize {
-                        error: format!(
-                            "Error parsing transfer type from extra fields: {transfer_type:?}"
-                        ),
-                    }
-                })?;
-                Ok(Some(Event::transfer_type_from_ordinal(
-                    transfer_type_ordinal as usize,
-                )?))
-            }
-            None => Ok(None),
-            Some(other_value) => anyhow::bail!(SuiError::ExtraFieldFailedToDeserialize {
-                error: format!("Got unexpected stored value for transfer_type: {other_value:?}"),
-            }),
-        }
+        self.extract_u64_field(TRANSFER_TYPE_KEY).and_then(|opt| {
+            opt.map(|type_ordinal| Event::transfer_type_from_ordinal(type_ordinal as usize))
+                .transpose() // Switch Option<Result<_>> -> Result<Option<_>>
+                .map_err(|e| anyhow!(e))
+        })
+    }
+
+    fn amount(&self) -> Result<Option<u64>, anyhow::Error> {
+        self.extract_u64_field(AMOUNT_KEY)
     }
 }
 
@@ -331,11 +325,7 @@ pub trait EventStore {
     /// which have sequence numbers below the current one will be skipped.  This feature
     /// is intended for deduplication.
     /// Returns Ok(rows_affected).
-    async fn add_events(
-        &self,
-        events: &[EventEnvelope],
-        checkpoint_num: u64,
-    ) -> Result<u64, SuiError>;
+    async fn add_events(&self, events: &[EventEnvelope]) -> Result<u64, SuiError>;
 
     /// Returns at most `limit` events emitted by a given
     /// transaction, sorted in order emitted.
@@ -406,14 +396,6 @@ pub trait EventStore {
         object: &ObjectID,
         limit: usize,
     ) -> Result<Vec<StoredEvent>, SuiError>;
-
-    /// Generic event iterator to return events emitted in checkpoints
-    /// [start_checkpoint, end_checkpoint), order not guaranteed.
-    fn events_by_checkpoint(
-        &self,
-        start_checkpoint: u64,
-        end_checkpoint: u64,
-    ) -> Result<StreamedResult, SuiError>;
 
     /// Generic event iterator that returns events emitted between
     /// [start_time, end_time), sorted in descending time.

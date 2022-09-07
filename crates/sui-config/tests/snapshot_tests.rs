@@ -74,7 +74,6 @@ fn populated_genesis_snapshot_matches() {
         protocol_key: key.public().into(),
         account_key: account_key.public().clone().into(),
         network_key: network_key.public().clone().into(),
-        proof_of_possession: generate_proof_of_possession(&key, account_key.public().into()),
         stake: 1,
         delegation: 0,
         gas_price: 1,
@@ -85,14 +84,16 @@ fn populated_genesis_snapshot_matches() {
         narwhal_worker_to_worker: Multiaddr::empty(),
         narwhal_consensus_address: Multiaddr::empty(),
     };
+    let pop = generate_proof_of_possession(&key, account_key.public().into());
 
     let genesis = Builder::new()
         .add_objects(objects)
-        .add_validator(validator)
+        .add_validator(validator, pop)
         .build();
     assert_yaml_snapshot!(genesis.validator_set());
     assert_yaml_snapshot!(genesis.committee().unwrap());
     assert_yaml_snapshot!(genesis.narwhal_committee());
+    assert_yaml_snapshot!(genesis.narwhal_worker_cache());
     assert_yaml_snapshot!(genesis.sui_system_object());
     // Serialized `genesis` is not static and cannot be snapshot tested.
 }

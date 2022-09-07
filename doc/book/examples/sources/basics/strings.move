@@ -6,7 +6,7 @@ module examples::strings {
     use sui::tx_context::TxContext;
 
     // Use this dependency to get a type wrapper for UTF-8 strings
-    use sui::utf8::{Self, String};
+    use std::string::{Self, String};
 
     /// A dummy Object that holds a String type
     struct Name has key, store {
@@ -22,7 +22,7 @@ module examples::strings {
     ): Name {
         Name {
             id: object::new(ctx),
-            name: utf8::string_unsafe(name_bytes)
+            name: string::utf8(name_bytes)
         }
     }
 }

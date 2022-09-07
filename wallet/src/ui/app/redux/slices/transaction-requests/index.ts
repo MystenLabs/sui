@@ -80,10 +80,10 @@ export const respondToTransactionRequest = createAsyncThunk<
         if (approved) {
             const signer = api.getSignerInstance(keypairVault.getKeyPair());
             try {
-                if (txRequest.type === 'move-call') {
-                    txResult = await signer.executeMoveCall(txRequest.tx);
-                } else if (txRequest.type === 'serialized-move-call') {
-                    const txBytes = new Base64DataBuffer(txRequest.txBytes);
+                if (txRequest.tx.type === 'move-call') {
+                    txResult = await signer.executeMoveCall(txRequest.tx.data);
+                } else if (txRequest.tx.type === 'serialized-move-call') {
+                    const txBytes = new Base64DataBuffer(txRequest.tx.data);
                     txResult = await signer.signAndExecuteTransaction(txBytes);
                 } else {
                     throw new Error(
@@ -112,6 +112,8 @@ const slice = createSlice({
             state,
             { payload }: PayloadAction<TransactionRequest[]>
         ) => {
+            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+            // @ts-ignore
             txRequestsAdapter.setAll(state, payload);
             state.initialized = true;
         },

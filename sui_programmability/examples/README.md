@@ -1,6 +1,7 @@
 Lots of Move code examples, partitioned by category:
 
 * basics: The very simplest examples of Sui programming.
+* crypto: A simple contract to perform ECDSA secp256k1 signature verification and ecrecover (derive the public key from a signature).
 * defi: DeFi primitives like escrows, atomic swaps, flash loans, DEXes.
 * fungible_tokens: Implementations of fungible tokens with different minting and burning policies.
 * games: Various classic and not-so-classic on-chain games.

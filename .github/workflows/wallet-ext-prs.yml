@@ -2,19 +2,19 @@ name: Wallet Extension PR checks
 on: pull_request
 jobs:
   diff:
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ubuntu-latest]
     outputs:
       isWalletExt: ${{ steps.diff.outputs.isWalletExt }}
     steps:
       - uses: actions/checkout@v3
       - name: Detect Changes
-        uses: "./.github/actions/diffs"
+        uses: "./.github/actions/pnpm-diffs"
         id: diff
   run_checks:
     name: Lint, Test & Build
     needs: diff
     if: needs.diff.outputs.isWalletExt == 'true'
-    runs-on: [ubuntu-ghcloud]
+    runs-on: [ubuntu-latest]
     env:
       working-directory: ./wallet
     steps:
@@ -30,8 +30,6 @@ jobs:
           cache: 'pnpm'
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      - name: Build SDK
-        run: pnpm --filter @mysten/sui.js build
       - name: Lint
         working-directory: ${{env.working-directory}}
         run: pnpm lint

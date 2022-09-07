@@ -9,6 +9,7 @@ members = [
     "crates/sui-config",
     "crates/sui-core",
     "crates/sui-cost",
+    "crates/sui-cost-tables",
     "crates/sui-faucet",
     "crates/sui-framework",
     "crates/sui-framework-build",

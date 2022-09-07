@@ -17,7 +17,7 @@ prometheus = "0.13.1"
 anyhow = "1.0.58"
 tracing = "0.1.36"
 async-trait = "0.1.57"
-serde = { version = "1.0.141", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 futures = "0.3.23"
 tokio = { version = "1.20.1", features = ["full"] }
 signature = "1.6.0"
@@ -29,4 +29,5 @@ sui-open-rpc = { path = "../sui-open-rpc" }
 sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-open-rpc-macros = { path = "../sui-open-rpc-macros" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
+sui-cost = { path = "../sui-cost" }
 workspace-hack = { path = "../workspace-hack" }

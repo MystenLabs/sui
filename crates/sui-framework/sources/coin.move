@@ -1,6 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+/// Defines the `Coin` type - platform wide representation of fungible
+/// tokens and coins. `Coin` can be described as a secure wrapper around
+/// `Balance` type.
 module sui::coin {
     use sui::balance::{Self, Balance, Supply};
     use sui::object::{Self, UID};
@@ -38,6 +41,9 @@ module sui::coin {
     }
 
     /// Unwrap `TreasuryCap` getting the `Supply`.
+    ///
+    /// Operation is irreversible. Supply cannot be converted into a `TreasuryCap` due
+    /// to different security guarantees (TreasuryCap can be created only once for a type)
     public fun treasury_into_supply<T>(treasury: TreasuryCap<T>): Supply<T> {
         let TreasuryCap { id, total_supply } = treasury;
         object::delete(id);
@@ -142,12 +148,9 @@ module sui::coin {
         Coin { id: object::new(ctx), balance: balance::zero() }
     }
 
-    /// Create a new currency type `T` as and return the `TreasuryCap`
-    /// for `T` to the caller.
-    /// NOTE: It is the caller's responsibility to ensure that
-    /// `create_currency` can only be invoked once (e.g., by calling it from a
-    /// module initializer with a `witness` object that can only be created
-    /// in the initializer).
+    /// Create a new currency type `T` as and return the `TreasuryCap` for
+    /// `T` to the caller. Can only be called with a `one-time-witness`
+    /// type, ensuring that there's only one `TreasuryCap` per `T`.
     public fun create_currency<T: drop>(
         witness: T,
         ctx: &mut TxContext

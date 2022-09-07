@@ -5,7 +5,7 @@
 use crate::{base_types::*, committee::EpochId, messages::ExecutionFailureStatus};
 use move_binary_format::errors::{Location, PartialVMError, VMError};
 use move_core_types::vm_status::{StatusCode, StatusType};
-use narwhal_executor::{ExecutionStateError, SubscriberError};
+use narwhal_executor::SubscriberError;
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 use thiserror::Error;
@@ -464,18 +464,6 @@ impl std::convert::From<&str> for SuiError {
         SuiError::GenericAuthorityError {
             error: error.to_string(),
         }
-    }
-}
-
-impl ExecutionStateError for SuiError {
-    fn node_error(&self) -> bool {
-        matches!(
-            self,
-            Self::ObjectFetchFailed { .. }
-                | Self::ByzantineAuthoritySuspicion { .. }
-                | Self::StorageError(..)
-                | Self::GenericAuthorityError { .. }
-        )
     }
 }
 

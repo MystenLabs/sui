@@ -12,7 +12,7 @@ use sui_sdk::crypto::SuiKeystore;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
-    random_key_pair_by_type, AuthorityKeyPair, EncodeDecodeBase64, SuiKeyPair,
+    random_key_pair_by_type, AuthorityKeyPair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair,
 };
 use sui_types::sui_serde::{Base64, Encoding};
 
@@ -24,9 +24,9 @@ mod keytool_tests;
 #[derive(Subcommand)]
 #[clap(rename_all = "kebab-case")]
 pub enum KeyToolCommand {
-    /// Generate a new keypair with optional keypair scheme flag, default using ed25519. Output file to current dir (to generate keypair to sui.keystore, use `sui client new-address`)
+    /// Generate a new keypair with keypair scheme flag {ed25519 | secp256k1}. Output file to current dir (to generate keypair to sui.keystore, use `sui client new-address`)
     Generate {
-        key_scheme: Option<String>,
+        key_scheme: SignatureScheme,
     },
     Show {
         file: PathBuf,
@@ -35,7 +35,7 @@ pub enum KeyToolCommand {
     Unpack {
         keypair: SuiKeyPair,
     },
-    /// List all keys in the keystore
+    /// List all keys by its address, public key, key scheme in the keystore
     List,
     /// Create signature using the sui keystore and provided data.
     Sign {
@@ -44,10 +44,10 @@ pub enum KeyToolCommand {
         #[clap(long)]
         data: String,
     },
-    /// Import mnemonic phrase and generate keypair based on key scheme, default using ed25519.
+    /// Import mnemonic phrase and generate keypair based on key scheme flag {ed25519 | secp256k1}.
     Import {
         mnemonic_phrase: String,
-        key_scheme: Option<String>,
+        key_scheme: SignatureScheme,
     },
     /// This is a temporary helper function to ensure that testnet genesis does not break while
     /// we transition towards BLS signatures.
@@ -60,15 +60,12 @@ impl KeyToolCommand {
     pub fn execute(self, keystore: &mut SuiKeystore) -> Result<(), anyhow::Error> {
         match self {
             KeyToolCommand::Generate { key_scheme } => {
-                let k = key_scheme.clone();
+                let k = key_scheme.to_string();
                 match random_key_pair_by_type(key_scheme) {
                     Ok((address, keypair)) => {
                         let file_name = format!("{address}.key");
                         write_keypair_to_file(&keypair, &file_name)?;
-                        println!(
-                            "{:?} key generated and saved to '{file_name}'",
-                            k.unwrap_or_else(|| "ed25519".to_string())
-                        )
+                        println!("{:?} key generated and saved to '{file_name}'", k);
                     }
                     Err(e) => {
                         println!("Failed to generate keypair: {:?}", e)
@@ -94,16 +91,16 @@ impl KeyToolCommand {
             }
             KeyToolCommand::List => {
                 println!(
-                    " {0: ^42} | {1: ^45} | {2: ^1}",
-                    "Sui Address", "Public Key (Base64)", "Flag"
+                    " {0: ^42} | {1: ^45} | {2: ^6}",
+                    "Sui Address", "Public Key (Base64)", "Scheme"
                 );
                 println!("{}", ["-"; 100].join(""));
                 for pub_key in keystore.keys() {
                     println!(
-                        " {0: ^42} | {1: ^45} | {2: ^1}",
+                        " {0: ^42} | {1: ^45} | {2: ^6}",
                         Into::<SuiAddress>::into(&pub_key),
                         Base64::encode(&pub_key),
-                        pub_key.flag()
+                        pub_key.scheme().to_string()
                     );
                 }
             }

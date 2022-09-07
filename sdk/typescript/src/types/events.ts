@@ -29,6 +29,7 @@ export type TransferObjectEvent = {
     objectId: ObjectId;
     version: SequenceNumber;
     type: string; // TODO - better type
+    amount: number | null;
 };
 
 export type DeleteObjectEvent = {

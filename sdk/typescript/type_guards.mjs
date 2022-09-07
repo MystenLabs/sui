@@ -4,9 +4,9 @@
 import { readFile, writeFile } from 'fs/promises';
 import { generate } from 'ts-auto-guard';
 
-const GUARD_FILES = ['src/rpc/client.guard.ts', 'src/index.guard.ts'];
+const GUARD_FILES = ['src/rpc/client.guard.ts', 'src/types/index.guard.ts'];
 const LICENSE =
-  '// Copyright (c) 2022, Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\n';
+  '// Copyright (c) 2022, Mysten Labs, Inc.\n// SPDX-License-Identifier: Apache-2.0\n\n/* eslint-disable */\n\n';
 
 async function main() {
   const tsconfig = new URL('./tsconfig.json', import.meta.url);
@@ -17,7 +17,7 @@ async function main() {
 
   await generate({
     project: tsconfig.pathname,
-    paths: ['src/rpc/client.ts', 'src/**.ts'],
+    paths: ['src/rpc/client.ts', 'src/types/index.ts'],
     processOptions: {
       exportAll: true,
     },

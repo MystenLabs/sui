@@ -19,7 +19,6 @@ use move_binary_format::normalized::{
 use move_bytecode_utils::module_cache::GetModule;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::{StructTag, TypeTag};
-use move_core_types::parser::{parse_struct_tag, parse_type_tag};
 use move_core_types::value::{MoveStruct, MoveStructLayout, MoveValue};
 use schemars::JsonSchema;
 use serde::ser::Error;
@@ -27,6 +26,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use serde_with::serde_as;
+use sui_types::{parse_sui_struct_tag, parse_sui_type_tag};
 use tracing::warn;
 
 use sui_json::SuiJsonValue;
@@ -39,7 +39,7 @@ use sui_types::crypto::{AuthorityStrongQuorumSignInfo, SignableBytes, Signature}
 use sui_types::error::SuiError;
 use sui_types::event::{Event, TransferType};
 use sui_types::event::{EventEnvelope, EventType};
-use sui_types::event_filter::EventFilter;
+use sui_types::filter::{EventFilter, TransactionFilter};
 use sui_types::gas::GasCostSummary;
 use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
@@ -477,7 +477,7 @@ impl TryInto<Object> for SuiObject<SuiRawData> {
     fn try_into(self) -> Result<Object, Self::Error> {
         let data = match self.data {
             SuiRawData::MoveObject(o) => {
-                let struct_tag = parse_struct_tag(o.type_())?;
+                let struct_tag = parse_sui_struct_tag(o.type_())?;
                 Data::Move(unsafe {
                     MoveObject::new_from_execution(
                         struct_tag,
@@ -1183,7 +1183,7 @@ fn try_convert_type(type_: &StructTag, fields: &[(Identifier, MoveValue)]) -> Op
         .map(|(id, value)| (id.to_string(), value.clone().into()))
         .collect::<BTreeMap<_, SuiMoveValue>>();
     match struct_name.as_str() {
-        "0x2::utf8::String" | "0x1::ascii::String" => {
+        "0x1::string::String" | "0x1::ascii::String" => {
             if let Some(SuiMoveValue::Bytearray(bytes)) = fields.get("bytes") {
                 if let Ok(bytes) = bytes.to_vec() {
                     if let Ok(s) = String::from_utf8(bytes) {
@@ -1758,6 +1758,7 @@ pub enum SuiEvent {
         object_id: ObjectID,
         version: SequenceNumber,
         type_: TransferType,
+        amount: Option<u64>,
     },
     /// Delete object
     #[serde(rename_all = "camelCase")]
@@ -1825,6 +1826,7 @@ impl SuiEvent {
                 object_id,
                 version,
                 type_,
+                amount,
             } => SuiEvent::TransferObject {
                 package_id,
                 transaction_module: transaction_module.to_string(),
@@ -1833,6 +1835,7 @@ impl SuiEvent {
                 object_id,
                 version,
                 type_,
+                amount,
             },
             Event::DeleteObject {
                 package_id,
@@ -1918,6 +1921,7 @@ impl PartialEq<SuiEvent> for Event {
                 type_: self_type,
                 object_id: self_object_id,
                 version: self_version,
+                amount: self_amount,
             } => {
                 if let SuiEvent::TransferObject {
                     package_id,
@@ -1927,6 +1931,7 @@ impl PartialEq<SuiEvent> for Event {
                     object_id,
                     version,
                     type_,
+                    amount,
                 } = other
                 {
                     package_id == self_package_id
@@ -1936,6 +1941,7 @@ impl PartialEq<SuiEvent> for Event {
                         && self_object_id == object_id
                         && self_version == version
                         && self_type == type_
+                        && self_amount == amount
                 } else {
                     false
                 }
@@ -2091,7 +2097,7 @@ pub struct SuiTypeTag(String);
 impl TryInto<TypeTag> for SuiTypeTag {
     type Error = anyhow::Error;
     fn try_into(self) -> Result<TypeTag, Self::Error> {
-        parse_type_tag(&self.0)
+        parse_sui_type_tag(&self.0)
     }
 }
 
@@ -2127,6 +2133,21 @@ pub struct MoveCallParams {
 }
 
 #[derive(Serialize, Deserialize, JsonSchema, Debug)]
+#[serde(rename = "SuiTransactionFilter")]
+pub enum SuiTransactionFilter {
+    Any,
+}
+
+impl From<SuiTransactionFilter> for TransactionFilter {
+    fn from(filter: SuiTransactionFilter) -> Self {
+        use SuiTransactionFilter::*;
+        match filter {
+            Any => TransactionFilter::Any,
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, JsonSchema, Debug)]
 #[serde(rename = "EventFilter")]
 pub enum SuiEventFilter {
     Package(ObjectID),
@@ -2155,8 +2176,8 @@ impl TryInto<EventFilter> for SuiEventFilter {
             Package(id) => EventFilter::Package(id),
             Module(module) => EventFilter::Module(Identifier::new(module)?),
             MoveEventType(event_type) => {
-                // parse_struct_tag converts StructTag string e.g. `0x2::devnet_nft::MintNFTEvent` to StructTag object
-                EventFilter::MoveEventType(parse_struct_tag(&event_type)?)
+                // parse_sui_struct_tag converts StructTag string e.g. `0x2::devnet_nft::MintNFTEvent` to StructTag object
+                EventFilter::MoveEventType(parse_sui_struct_tag(&event_type)?)
             }
             MoveEventField { path, value } => EventFilter::MoveEventField { path, value },
             SenderAddress(address) => EventFilter::SenderAddress(address),

@@ -2,13 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { Base64DataBuffer } from '../../serialization/base64';
-import {
-  CallArg,
-  ObjectId,
-  SuiAddress,
-  SuiJsonValue,
-  TypeTag,
-} from '../../types';
+import { ObjectId, SuiAddress, SuiJsonValue, TypeTag } from '../../types';
 
 ///////////////////////////////
 // Exported Types
@@ -50,11 +44,7 @@ export interface MoveCallTransaction {
    * RpcTxnDataSerializer soon.
    */
   typeArguments: string[] | TypeTag[];
-  /**
-   * Usage: pass in SuiJsonValue[] if you use RpcTxnDataSerializer,
-   * Otherwise you need to pass in CallArg[].
-   */
-  arguments: SuiJsonValue[] | CallArg[];
+  arguments: SuiJsonValue[];
   gasPayment?: ObjectId;
   gasBudget: number;
 }
@@ -83,7 +73,7 @@ export interface PublishTransaction {
    *
    * Each module should be represented as a sequence of bytes.
    */
-  compiledModules: Iterable<string> | Iterable<Iterable<number>>;
+  compiledModules: ArrayLike<string> | ArrayLike<ArrayLike<number>>;
   gasPayment?: ObjectId;
   gasBudget: number;
 }

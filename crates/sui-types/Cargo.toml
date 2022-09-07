@@ -9,10 +9,11 @@ edition = "2021"
 [dependencies]
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 bcs = "0.1.3"
+byteorder = "1.4.3"
 itertools = "0.10.3"
 once_cell = "1.13.1"
 rand = "0.8.5"
-serde = { version = "1.0.141", features = ["derive"] }
+serde = { version = "1.0.144", features = ["derive"] }
 curve25519-dalek = { version = "3", default-features = false, features = ["serde", "u64_backend"] }
 serde-name = "0.2.1"
 sha2 = "0.9.9"
@@ -26,7 +27,7 @@ serde_with = "1.14.0"
 signature = "1.6.0"
 static_assertions = "1.1.0"
 opentelemetry = { version = "0.17.0", features = ["rt-tokio"] }
-base64ct = { version = "1.5.1", features = ["std", "alloc"] }
+base64ct = { version = "1.5.2", features = ["std", "alloc"] }
 zeroize = "1.5.7"
 hkdf = "0.12.3"
 digest = "0.10.3"
@@ -38,23 +39,24 @@ roaring = "0.9.0"
 enum_dispatch = "^0.3"
 eyre = "0.6.8"
 
-name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "8d090689be14078f2ca41c356e7bbc0af21f73ab" }
+name-variant = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
+typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-bytecode-utils = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
+move-command-line-common = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
 move-disassembler = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-ir-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
-move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
 
-narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "f4cab79d77cf70b0d564fa640fb748584a3ba36f", package = "executor" }
+narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "842a611a0a58dd378a904d85f79b4edbbbc7b137", package = "executor" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "a9e58305dc463c40b9d357730203406214909f04", features = ["copy_key"] }
+fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b", features = ["copy_key"] }
 
+sui-cost-tables = { path = "../sui-cost-tables"}
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
 bincode = "1.3.3"
-
+test-utils = { path = "../test-utils" }

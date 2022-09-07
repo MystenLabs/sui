@@ -118,7 +118,7 @@
       },
       {
         "label": "Optional - Run Locally with CLI",
-        "fileName": "contribute/cli-client"
+        "fileName": "build/cli-client"
       },
       {
         "label": "Create Smart Contracts with Move",
@@ -216,6 +216,10 @@
       }
     ],
     "explore": [
+      {
+        "label": "Sui Explorer",
+        "fileName": "explore/sui-explorer"
+      },
       {
         "label": "Wallet in Browser",
         "fileName": "explore/wallet-browser"
