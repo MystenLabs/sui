@@ -25,6 +25,10 @@ on:
         type: string
         required: true
 
+env:
+  SUI_COMMIT: "${{ github.event.client_payload.sui_commit || github.event.inputs.sui_commit }}"
+  TAG_NAME: "${{ github.event.client_payload.tag_name || github.event.inputs.tag_name }}"
+
 jobs:
   tag:
     name: Tag
@@ -37,8 +41,8 @@ jobs:
     - name: Tag
       uses: julbme/gh-action-manage-tag@v1
       with:
-        name: ${{ inputs.tag_name }}
+        name: ${{ env.TAG_NAME }}
         state: present
-        from: ${{ inputs.sui_commit }}
+        from: ${{ env.SUI_COMMIT }}
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
