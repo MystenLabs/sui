@@ -157,7 +157,7 @@ export abstract class Provider {
    * @param package_ Move package object ID
    * @param module Move module name
    * @param count max result count
-   * @param options.startTime start of time range
+   * @param startTime start of time range
    * @param endTime end of time range
    */
   abstract getEventsByTransactionModule(
