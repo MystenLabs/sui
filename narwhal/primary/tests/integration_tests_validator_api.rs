@@ -18,8 +18,8 @@ use std::{
 use storage::CertificateStore;
 use store::Store;
 use test_utils::{
-    certificate, fixture_batch_with_transactions, make_optimal_certificates,
-    make_optimal_signed_certificates, temp_dir, AuthorityFixture, CommitteeFixture,
+    fixture_batch_with_transactions, make_optimal_certificates, make_optimal_signed_certificates,
+    temp_dir, AuthorityFixture, CommitteeFixture,
 };
 use tokio::sync::watch;
 use tonic::transport::Channel;
@@ -68,7 +68,7 @@ async fn test_get_collections() {
             .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
         let block_id = certificate.digest();
         collection_ids.push(block_id);
 
@@ -266,7 +266,7 @@ async fn test_remove_collections() {
             .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
         let block_id = certificate.digest();
         collection_ids.push(block_id);
 
