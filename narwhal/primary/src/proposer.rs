@@ -311,7 +311,7 @@ impl Proposer {
                 }
 
                 // Check whether the timer expired.
-                () = &mut timer => {
+                () = &mut timer, if !timer_expired => {
                     // Nothing to do.
                 }
 
