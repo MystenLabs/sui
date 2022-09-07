@@ -15,9 +15,8 @@ use std::{
 use storage::CertificateStore;
 use store::{reopen, rocks, rocks::DBMap, Store};
 use test_utils::{
-    certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
-    resolve_name_committee_and_worker_cache, temp_dir, PrimaryToPrimaryMockServer, CERTIFICATES_CF,
-    CERTIFICATE_ID_BY_ROUND_CF, PAYLOAD_CF,
+    fixture_batch_with_transactions, temp_dir, CommitteeFixture, PrimaryToPrimaryMockServer,
+    CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF, PAYLOAD_CF,
 };
 use tokio::{sync::watch, time::timeout};
 use types::{BatchDigest, Certificate, CertificateDigest, ReconfigureNotification, Round};
@@ -27,13 +26,15 @@ async fn test_process_certificates_stream_mode() {
     telemetry_subscribers::init_for_testing();
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let mut primary_keys = keys(None);
-    let author_key = primary_keys.pop().unwrap();
-    let name = author_key.public().clone();
-    let (requestor_name, committee, _) = resolve_name_committee_and_worker_cache();
-    let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
-        test_utils::committee(None),
-    ));
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+    let name = author.public_key();
+    let requestor = fixture.authorities().nth(1).unwrap();
+    let requestor_name = requestor.public_key();
+
+    let (_tx_reconfigure, rx_reconfigure) =
+        watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
     let own_address =
@@ -41,7 +42,7 @@ async fn test_process_certificates_stream_mode() {
             .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(author_key.copy().private().0.to_bytes())
+        .private_key(author.keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 
@@ -71,12 +72,13 @@ async fn test_process_certificates_stream_mode() {
     // AND some mock certificates
     let mut certificates = HashMap::new();
     for _ in 0..5 {
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(&author_key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
         let id = certificate.clone().digest();
 
         // write the certificate
@@ -90,7 +92,7 @@ async fn test_process_certificates_stream_mode() {
         .primary(&requestor_name)
         .unwrap()
         .primary_to_primary;
-    let requestor_key = primary_keys.pop().unwrap();
+    let requestor_key = requestor.keypair().copy();
     let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
 
     // Wait for connectivity
@@ -141,10 +143,12 @@ async fn test_process_certificates_stream_mode() {
 async fn test_process_certificates_batch_mode() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let mut primary_keys = keys(None);
-    let author_key = primary_keys.pop().unwrap();
-    let name = author_key.public().clone();
-    let (requestor_name, committee, _) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+    let name = author.public_key();
+    let requestor = fixture.authorities().nth(1).unwrap();
+    let requestor_name = requestor.public_key();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
@@ -155,7 +159,7 @@ async fn test_process_certificates_batch_mode() {
             .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(author_key.copy().private().0.to_bytes())
+        .private_key(author.keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 
@@ -187,12 +191,13 @@ async fn test_process_certificates_batch_mode() {
     let mut missing_certificates = HashSet::new();
 
     for i in 0..10 {
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(&author_key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
         let id = certificate.clone().digest();
 
         certificates.insert(id, certificate.clone());
@@ -213,7 +218,7 @@ async fn test_process_certificates_batch_mode() {
         .primary(&requestor_name)
         .unwrap()
         .primary_to_primary;
-    let requestor_key = primary_keys.pop().unwrap();
+    let requestor_key = requestor.keypair().copy();
     let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
 
     // Wait for connectivity
@@ -276,10 +281,12 @@ async fn test_process_certificates_batch_mode() {
 async fn test_process_payload_availability_success() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let mut primary_keys = keys(None);
-    let author_key = primary_keys.pop().unwrap();
-    let name = author_key.public().clone();
-    let (requestor_name, committee, _) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+    let name = author.public_key();
+    let requestor = fixture.authorities().nth(1).unwrap();
+    let requestor_name = requestor.public_key();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
@@ -290,7 +297,7 @@ async fn test_process_payload_availability_success() {
             .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(author_key.copy().private().0.to_bytes())
+        .private_key(author.keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 
@@ -322,12 +329,13 @@ async fn test_process_payload_availability_success() {
     let mut missing_certificates = HashSet::new();
 
     for i in 0..10 {
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(&author_key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
         let id = certificate.clone().digest();
 
         certificates.insert(id, certificate.clone());
@@ -352,7 +360,7 @@ async fn test_process_payload_availability_success() {
         .primary(&requestor_name)
         .unwrap()
         .primary_to_primary;
-    let requestor_key = primary_keys.pop().unwrap();
+    let requestor_key = requestor.keypair().copy();
     let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
 
     // Wait for connectivity
@@ -434,10 +442,12 @@ async fn test_process_payload_availability_when_failures() {
     let payload_store: Store<(types::BatchDigest, WorkerId), PayloadToken> =
         Store::new(payload_map);
 
-    let mut primary_keys = keys(None);
-    let author_key = primary_keys.pop().unwrap();
-    let name = author_key.public().clone();
-    let (requestor_name, committee, _) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+    let name = author.public_key();
+    let requestor = fixture.authorities().nth(1).unwrap();
+    let requestor_name = requestor.public_key();
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(
         test_utils::committee(None),
     ));
@@ -448,7 +458,7 @@ async fn test_process_payload_availability_when_failures() {
             .unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(author_key.copy().private().0.to_bytes())
+        .private_key(author.keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 
@@ -478,12 +488,13 @@ async fn test_process_payload_availability_when_failures() {
     // AND some mock certificates
     let mut certificate_ids = Vec::new();
     for _ in 0..10 {
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(&author_key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
         let id = certificate.clone().digest();
 
         // In order to test an error scenario that is coming from the data store,
@@ -516,7 +527,7 @@ async fn test_process_payload_availability_when_failures() {
         .primary(&requestor_name)
         .unwrap()
         .primary_to_primary;
-    let requestor_key = primary_keys.pop().unwrap();
+    let requestor_key = requestor.keypair().copy();
     let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
 
     // Wait for connectivity
