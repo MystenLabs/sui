@@ -6,6 +6,7 @@ use std::str::FromStr;
 
 use anyhow::{anyhow, Error};
 use base64ct::Encoding;
+use bip32::XPrv;
 use digest::Digest;
 use fastcrypto::ed25519::{
     Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
@@ -28,6 +29,7 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_with::{serde_as, Bytes};
 use sha3::Sha3_256;
 use signature::Signer;
+use slip10_ed25519::derive_ed25519_private_key;
 
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
@@ -476,6 +478,38 @@ where
 {
     let kp = KP::generate(csprng);
     (kp.public().into(), kp)
+}
+
+const DEFAULT_DERIVATION_PATH_PREFIX: &str = "m/44'/784'/0'/0/";
+
+pub fn derive_key_pair_at_index(
+    seed: &[u8],
+    index: u32,
+    key_scheme: &SignatureScheme,
+) -> Result<(SuiAddress, SuiKeyPair), SuiError> {
+    match key_scheme {
+        SignatureScheme::Secp256k1 => {
+            let child_xprv = XPrv::derive_from_path(
+                &seed,
+                &format!("{}{}", DEFAULT_DERIVATION_PATH_PREFIX, index)
+                    .parse()
+                    .unwrap(),
+            )
+            .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
+            let kp = Secp256k1KeyPair::from(
+                Secp256k1PrivateKey::from_bytes(child_xprv.private_key().to_bytes().as_slice())
+                    .unwrap(),
+            );
+            Ok((kp.public().into(), SuiKeyPair::Secp256k1SuiKeyPair(kp)))
+        }
+        SignatureScheme::ED25519 => {
+            let derived = derive_ed25519_private_key(seed, &[44, 784, 0, 0, index]);
+            let sk = Ed25519PrivateKey::from_bytes(&derived)
+                .map_err(|e| SuiError::SignatureKeyGenError(e.to_string()))?;
+            let kp = Ed25519KeyPair::from(sk);
+            Ok((kp.public().into(), SuiKeyPair::Ed25519SuiKeyPair(kp)))
+        }
+    }
 }
 
 /// Wrapper function to return SuiKeypair based on key scheme string with seedable rng.

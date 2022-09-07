@@ -18,6 +18,7 @@ use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::Secp256k1SuiSignature;
 use sui_types::crypto::Signature;
+use sui_types::crypto::SignatureScheme;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
 use tempfile::TempDir;
@@ -142,4 +143,54 @@ fn test_load_keystore_err() {
 
     // cannot load keypair due to missing flag
     assert!(KeystoreType::File(path2).init().is_err());
+}
+
+#[test]
+fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
+    let mut keystore = KeystoreType::InMem(0).init().unwrap();
+    // Ed25519 follows SLIP0010 using hardened path: m/44'/784'/0'/0'/{index}
+    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
+    KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::ED25519,
+    }
+    .execute(&mut keystore)?;
+    keystore.keys().iter().for_each(|pk| {
+        assert_eq!(
+            hex::encode(pk.as_ref()),
+            "685b2d6f98784dd763249af21c92f588ca1be80c40a98c55bf7c91b74e5ac1e2"
+        );
+    });
+    keystore.addresses().iter().for_each(|addr| {
+        assert_eq!(
+            addr.to_string(),
+            "0x1a4623343cd42be47d67314fce0ad042f3c82685"
+        );
+    });
+    Ok(())
+}
+
+#[test]
+fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
+    let mut keystore = KeystoreType::InMem(0).init().unwrap();
+    // Test case generated from https://microbitcoinorg.github.io/mnemonic/ with path m/44'/784'/0'/0/0
+    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
+    KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::Secp256k1,
+    }
+    .execute(&mut keystore)?;
+    keystore.keys().iter().for_each(|pk| {
+        assert_eq!(
+            hex::encode(pk.as_ref()),
+            "032344edbd2cba1a1e83bf833cbc050bdfbb81d3226ea37b1352c6e47449d3b076"
+        );
+    });
+    keystore.addresses().iter().for_each(|addr| {
+        assert_eq!(
+            addr.to_string(),
+            "0xba8b7f41dcca924b5f5a8e76cead11ad668993fd"
+        );
+    });
+    Ok(())
 }
