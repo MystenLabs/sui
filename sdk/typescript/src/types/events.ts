@@ -72,12 +72,12 @@ export type EventType =
 
 // mirrors sui_json_rpc_types::SuiEventFilter
 export type SuiEventFilter =
-    | { "package" : ObjectId }
-    | { "module" : string }
-    | { "moveEventType" : string }
-    | { "moveEventField" : MoveEventField }
-    | { "senderAddress" : SuiAddress }
-    | { "eventType" : EventType }
+    | { "Package" : ObjectId }
+    | { "Module" : string }
+    | { "MoveEventType" : string }
+    | { "MoveEventField" : MoveEventField }
+    | { "SenderAddress" : SuiAddress }
+    | { "EventType" : EventType }
     | { "All" : SuiEventFilter[] }
     | { "Any" : SuiEventFilter[] }
     | { "And" : [SuiEventFilter, SuiEventFilter] }
