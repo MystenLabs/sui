@@ -17,4 +17,5 @@ syn = "1"
 workspace-hack = { path = "../workspace-hack"}
 
 [target.'cfg(msim)'.dependencies]
-msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "15dff80e8e69218bc20b08a5ef91a4f156e626ac", package = "msim-macros" }
+#msim-macros = { git = "https://github.com/MystenLabs/mysten-sim.git", rev = "15dff80e8e69218bc20b08a5ef91a4f156e626ac", package = "msim-macros" }
+msim-macros = { path = "../../../mysten-sim/msim-macros" }
