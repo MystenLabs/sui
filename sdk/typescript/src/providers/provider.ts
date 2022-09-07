@@ -183,7 +183,7 @@ export abstract class Provider {
   ): Promise<SuiEvents>;
 
   /**
-   * Get events with a matching Move type name
+   * Get events from transactions sent by a specific address
    * @param sender Sui address of the sender of the transaction that generated the event
    * @param count max result count
    * @param startTime start of time range to search
