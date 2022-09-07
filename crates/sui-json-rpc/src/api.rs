@@ -112,19 +112,6 @@ pub trait RpcReadApi {
         /// the ID of the queried object
         object_id: ObjectID,
     ) -> RpcResult<GetObjectDataResponse>;
-
-    /// Note there is no software-level guarantee/SLA that objects with past versions
-    /// can be retrieved with this API, even if the object and version exists/existed.
-    /// The result may vary across nodes depending on their pruning policies.
-    /// Return the object information for a specified version
-    #[method(name = "getPastObjectMaybe")]
-    async fn get_past_object_maybe(
-        &self,
-        /// the ID of the queried object
-        object_id: ObjectID,
-        /// the version of the queried object. If None, default to the latest known version
-        version: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Full Node API")]
@@ -216,6 +203,19 @@ pub trait RpcFullNodeReadApi {
         /// the recipient's Sui address
         addr: SuiAddress,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
+    /// Note there is no software-level guarantee/SLA that objects with past versions
+    /// can be retrieved by this API, even if the object and version exists/existed.
+    /// The result may vary across nodes depending on their pruning policies.
+    /// Return the object information for a specified version
+    #[method(name = "tryGetPastObject")]
+    async fn try_get_past_object(
+        &self,
+        /// the ID of the queried object
+        object_id: ObjectID,
+        /// the version of the queried object. If None, default to the latest known version
+        version: SequenceNumber,
+    ) -> RpcResult<GetPastObjectDataResponse>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]

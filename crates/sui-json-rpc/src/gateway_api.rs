@@ -12,13 +12,11 @@ use jsonrpsee_core::server::rpc_module::RpcModule;
 use signature::Signature;
 use sui_core::gateway_state::{GatewayClient, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::GetPastObjectDataResponse;
 use sui_json_rpc_types::{
     GetObjectDataResponse, RPCTransactionRequestParams, SuiObjectInfo, SuiTransactionResponse,
     SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc::Module;
-use sui_types::base_types::SequenceNumber;
 use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::Base64;
 use sui_types::{
@@ -140,14 +138,6 @@ impl RpcReadApiServer for GatewayReadApiImpl {
 
     async fn get_object(&self, object_id: ObjectID) -> RpcResult<GetObjectDataResponse> {
         Ok(self.client.get_object(object_id).await?)
-    }
-
-    async fn get_past_object_maybe(
-        &self,
-        _object_id: ObjectID,
-        _seq_num: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse> {
-        unimplemented!("Gateway is being deprecated and does not support this api")
     }
 
     async fn get_recent_transactions(

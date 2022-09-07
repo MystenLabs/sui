@@ -84,19 +84,6 @@ impl RpcReadApiServer for ReadApi {
             .try_into()?)
     }
 
-    async fn get_past_object_maybe(
-        &self,
-        object_id: ObjectID,
-        version: SequenceNumber,
-    ) -> RpcResult<GetPastObjectDataResponse> {
-        Ok(self
-            .state
-            .get_past_object_read(&object_id, version)
-            .await
-            .map_err(|e| anyhow!("{e}"))?
-            .try_into()?)
-    }
-
     async fn get_total_transaction_number(&self) -> RpcResult<u64> {
         Ok(self.state.get_total_transaction_number()?)
     }
@@ -290,6 +277,19 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         addr: SuiAddress,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
         Ok(self.state.get_transactions_to_addr(addr).await?)
+    }
+
+    async fn try_get_past_object(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> RpcResult<GetPastObjectDataResponse> {
+        Ok(self
+            .state
+            .get_past_object_read(&object_id, version)
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .try_into()?)
     }
 }
 

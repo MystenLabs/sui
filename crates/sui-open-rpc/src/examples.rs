@@ -16,10 +16,10 @@ use sui::client_commands::EXAMPLE_NFT_URL;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
-    SuiCertifiedTransaction, SuiData, SuiExecutionStatus, SuiGasCostSummary, SuiObject,
-    SuiObjectRead, SuiObjectRef, SuiParsedData, SuiPastObjectRead, SuiRawData, SuiRawMoveObject,
-    SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse, TransactionBytes,
-    TransferObjectParams,
+    SuiCertifiedTransaction, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
+    SuiGasCostSummary, SuiObject, SuiObjectRead, SuiObjectRef, SuiParsedData, SuiPastObjectRead,
+    SuiRawData, SuiRawMoveObject, SuiTransactionData, SuiTransactionEffects,
+    SuiTransactionResponse, TransactionBytes, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -247,7 +247,7 @@ impl RpcExampleProvider {
         });
 
         Examples::new(
-            "sui_getPastObjectMaybe",
+            "sui_tryGetPastObject",
             vec![ExamplePairing::new(
                 "Get Past Object data",
                 vec![("object_id", json!(object_id)), ("version", json!(4))],

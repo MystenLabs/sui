@@ -236,13 +236,13 @@ impl ReadApi {
         })
     }
 
-    pub async fn get_parsed_past_object_maybe(
+    pub async fn try_get_parsed_past_object(
         &self,
         object_id: ObjectID,
         version: SequenceNumber,
     ) -> anyhow::Result<GetPastObjectDataResponse> {
         Ok(match &*self.api {
-            SuiClientApi::Rpc(c, _) => c.get_past_object_maybe(object_id, version).await?,
+            SuiClientApi::Rpc(c, _) => c.try_get_past_object(object_id, version).await?,
             // Gateway does not support get past object
             SuiClientApi::Embedded(_) => {
                 unimplemented!("Gateway/embedded client does not support get past object")
