@@ -3,6 +3,7 @@
 
 use futures::future::join_all;
 use multiaddr::Multiaddr;
+use prometheus::Registry;
 use sui_config::ValidatorInfo;
 use sui_core::authority_active::checkpoint_driver::{
     checkpoint_process_step, CheckpointProcessControl,
@@ -41,7 +42,7 @@ async fn reconfig_end_to_end_tests() {
     let mut states = Vec::new();
     let mut nodes = Vec::new();
     for validator in configs.validator_configs() {
-        let node = SuiNode::start(validator).await.unwrap();
+        let node = SuiNode::start(validator, Registry::new()).await.unwrap();
         let state = node.state();
 
         for gas in gas_objects.clone() {

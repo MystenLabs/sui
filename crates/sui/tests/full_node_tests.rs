@@ -1,10 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::net::SocketAddr;
-use std::str::FromStr;
-use std::{collections::BTreeMap, sync::Arc};
-
 use futures::future;
 use jsonrpsee::core::client::{Client, ClientT, Subscription, SubscriptionClientT};
 use jsonrpsee::http_client::{HttpClient, HttpClientBuilder};
@@ -13,6 +9,10 @@ use jsonrpsee::ws_client::WsClientBuilder;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
+use prometheus::Registry;
+use std::net::SocketAddr;
+use std::str::FromStr;
+use std::{collections::BTreeMap, sync::Arc};
 use sui_types::base_types::SequenceNumber;
 use sui_types::event::TransferType;
 use sui_types::object::Owner;
@@ -115,7 +115,7 @@ async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config).await?;
+    let node = SuiNode::start(&config, Registry::new()).await?;
 
     let (transferred_object, _, receiver, digest) = transfer_coin(&mut context).await?;
     wait_for_tx(digest, node.state().clone()).await;
@@ -145,7 +145,7 @@ async fn test_full_node_shared_objects() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config).await?;
+    let node = SuiNode::start(&config, Registry::new()).await?;
 
     let sender = context.keystore.addresses().get(0).cloned().unwrap();
 
@@ -166,7 +166,7 @@ async fn test_full_node_move_function_index() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config).await?;
+    let node = SuiNode::start(&config, Registry::new()).await?;
     let sender = context.keystore.addresses().get(0).cloned().unwrap();
     let (package_ref, counter_id) = publish_basics_package_and_make_counter(&context, sender).await;
     let effects = increment_counter(&context, sender, None, package_ref, counter_id).await;
@@ -213,7 +213,7 @@ async fn test_full_node_indexes() -> Result<(), anyhow::Error> {
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config).await?;
+    let node = SuiNode::start(&config, Registry::new()).await?;
 
     let (transferred_object, sender, receiver, digest) = transfer_coin(&mut context).await?;
 
@@ -358,7 +358,7 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     sleep(Duration::from_millis(1000)).await;
 
     let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config).await?;
+    let node = SuiNode::start(&config, Registry::new()).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -380,7 +380,7 @@ async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
     let config = swarm.config().generate_fullnode_config();
-    let node = SuiNode::start(&config).await?;
+    let node = SuiNode::start(&config, Registry::new()).await?;
 
     let mut futures = Vec::new();
 
@@ -476,7 +476,7 @@ async fn set_up_subscription(swarm: &Swarm) -> Result<(SuiNode, Client), anyhow:
     let mut config = swarm.config().generate_fullnode_config();
     config.websocket_address = Some(ws_addr);
 
-    let node = SuiNode::start(&config).await?;
+    let node = SuiNode::start(&config, Registry::new()).await?;
 
     let client = WsClientBuilder::default()
         .build(&format!("ws://{}", ws_server_url))
@@ -499,7 +499,7 @@ async fn set_up_jsonrpc(
         .generate_fullnode_config_with_custom_db_path(fullnode_db_path, false);
     config.json_rpc_address = jsonrpc_addr;
 
-    let node = SuiNode::start(&config).await?;
+    let node = SuiNode::start(&config, Registry::new()).await?;
 
     let client = HttpClientBuilder::default().build(&format!("http://{}", jsonrpc_server_url))?;
     Ok((node, client))
@@ -884,7 +884,9 @@ async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
 async fn test_validator_node_has_no_quorum_driver() {
     let configs = test_and_configure_authority_configs(1);
     let validator_config = &configs.validator_configs()[0];
-    let node = SuiNode::start(validator_config).await.unwrap();
+    let node = SuiNode::start(validator_config, Registry::new())
+        .await
+        .unwrap();
     assert!(node.quorum_driver().is_none());
     assert!(node.subscribe_to_quorum_driver_effects().is_err());
 }

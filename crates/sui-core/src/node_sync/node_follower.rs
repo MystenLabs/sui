@@ -309,10 +309,8 @@ where
 mod test {
     use super::*;
     use crate::{
-        authority_active::gossip::GossipMetrics,
-        authority_client::NetworkAuthorityClient,
-        node_sync::SyncStatus,
-        test_utils::{spawn_test_authorities, test_authority_aggregator},
+        authority_active::gossip::GossipMetrics, authority_client::NetworkAuthorityClient,
+        node_sync::SyncStatus, test_utils::test_authority_aggregator,
     };
     use std::sync::{Arc, Mutex};
     use sui_types::{
@@ -322,7 +320,8 @@ mod test {
         object::Object,
     };
     use test_utils::{
-        authority::test_and_configure_authority_configs, messages::make_transfer_sui_transaction,
+        authority::{spawn_test_authorities, test_and_configure_authority_configs},
+        messages::make_transfer_sui_transaction,
     };
     use tokio::{sync::broadcast, time::Instant};
 
