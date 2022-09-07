@@ -4,39 +4,34 @@
 
 .txaddress {
     @apply block lg:flex justify-start align-middle items-center;
+}
 
-    box-sizing: border-box;
+.explain,
+.txresulttype {
+    @apply text-[14px] leading-[12.6px] font-sans font-medium;
 }
 
 .txresulttype {
-    @apply text-[14px] leading-[12.6px] font-medium font-sans capitalize rounded-[6px] py-[4px] px-[8px] flex items-center gap-[6px] mt-[8px] lg:ml-[6px] lg:mt-0;
+    @apply capitalize py-[4px] px-[8px] flex items-center gap-[6px] mt-[8px] lg:ml-[6px] lg:mt-0  rounded-[6px] w-fit;
 }
 
-.txresulttype > span,
-.txresulttype > svg {
+.explain > span,
+.explain > svg {
     @apply inline align-middle;
 }
 
+.explain {
+    @apply rounded-[10px] py-[8px] px-[10px];
+}
+
 .success {
-    @apply bg-success-light text-success-dark w-auto h-[14px];
+    @apply bg-success-light text-success-dark;
 }
 
 .success svg {
     @apply fill-success-dark;
 }
 
-.success span {
-    @apply w-[57px] h-[14px] pr-[1px] flex items-start;
-}
-
 .failed {
-    @apply bg-issue-light text-issue-dark stroke-issue-dark break-all;
-
-    box-sizing: border-box;
-}
-
-.error {
-    @apply m-0 text-sm p-1 pl-2 pr-2 mt-2;
-
-    box-sizing: border-box;
+    @apply bg-issue-light text-issue-dark stroke-issue-dark break-all leading-[16.9px] w-fit;
 }

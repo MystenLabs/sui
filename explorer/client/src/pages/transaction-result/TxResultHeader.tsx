@@ -70,13 +70,7 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
                     </div>
                 </div>
                 {data.error && (
-                    <div
-                        className={cl([
-                            styles.txresulttype,
-                            styles.failed,
-                            styles.error,
-                        ])}
-                    >
+                    <div className={cl([styles.failed, styles.explain])}>
                         <InfoIcon /> <span>{data.error}</span>
                     </div>
                 )}
