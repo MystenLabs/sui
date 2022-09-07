@@ -30,7 +30,6 @@ import {
 import { Provider } from './provider';
 
 export class VoidProvider extends Provider {
-
   // Objects
   async getObjectsOwnedByAddress(_address: string): Promise<SuiObjectInfo[]> {
     throw this.newError('getObjectsOwnedByAddress');
