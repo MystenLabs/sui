@@ -15,9 +15,7 @@ use mockall::*;
 use network::PrimaryToWorkerNetwork;
 use std::{collections::HashMap, sync::Arc};
 use test_utils::{
-    certificate, fixture_batch_with_transactions, fixture_header_builder,
-    fixture_header_with_payload, keys, resolve_name_committee_and_worker_cache,
-    PrimaryToWorkerMockServer,
+    fixture_batch_with_transactions, fixture_payload, CommitteeFixture, PrimaryToWorkerMockServer,
 };
 use tokio::{
     sync::{oneshot, watch},
@@ -32,11 +30,19 @@ use types::{
 #[tokio::test]
 async fn test_successfully_retrieve_block() {
     // GIVEN
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let name = fixture.authorities().nth(1).unwrap().public_key();
 
     // AND store certificate
-    let header = fixture_header_with_payload(2);
-    let certificate = certificate(&header);
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(2))
+        .build(author.keypair())
+        .unwrap();
+    let certificate = fixture.certificate(&header);
     let block_id = certificate.digest();
 
     // AND spawn a new blocks waiter
@@ -139,9 +145,12 @@ async fn test_successfully_retrieve_block() {
 #[tokio::test]
 async fn test_successfully_retrieve_multiple_blocks() {
     // GIVEN
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let name = fixture.authorities().nth(1).unwrap().public_key();
 
-    let key = keys(None).pop().unwrap();
     let mut block_ids = Vec::new();
     let mut expected_batch_messages = HashMap::new();
     let worker_id = 0;
@@ -155,7 +164,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let common_batch_2 = fixture_batch_with_transactions(10);
 
     for i in 0..10 {
-        let mut builder = fixture_header_builder();
+        let mut builder = author.header_builder(&committee);
 
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
@@ -228,9 +237,9 @@ async fn test_successfully_retrieve_multiple_blocks() {
         // sort the batches to make sure that the response is the expected one.
         batches.sort_by(|a, b| a.id.cmp(&b.id));
 
-        let header = builder.build(&key).unwrap();
+        let header = builder.build(author.keypair()).unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
         certificates.push(certificate.clone());
 
         block_ids.push(certificate.digest());
@@ -341,11 +350,19 @@ async fn test_successfully_retrieve_multiple_blocks() {
 #[tokio::test]
 async fn test_one_pending_request_for_block_at_time() {
     // GIVEN
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let name = fixture.authorities().nth(1).unwrap().public_key();
 
     // AND store certificate
-    let header = fixture_header_with_payload(2);
-    let certificate = certificate(&header);
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(2))
+        .build(author.keypair())
+        .unwrap();
+    let certificate = fixture.certificate(&header);
     let block_id = certificate.digest();
 
     // AND
@@ -419,11 +436,19 @@ async fn test_one_pending_request_for_block_at_time() {
 #[tokio::test]
 async fn test_unlocking_pending_get_block_request_after_response() {
     // GIVEN
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let name = fixture.authorities().nth(1).unwrap().public_key();
 
     // AND store certificate
-    let header = fixture_header_with_payload(2);
-    let certificate = certificate(&header);
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(2))
+        .build(author.keypair())
+        .unwrap();
+    let certificate = fixture.certificate(&header);
     let block_id = certificate.digest();
 
     // AND spawn a new blocks waiter
@@ -488,11 +513,19 @@ async fn test_unlocking_pending_get_block_request_after_response() {
 #[tokio::test]
 async fn test_batch_timeout() {
     // GIVEN
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let name = fixture.authorities().nth(1).unwrap().public_key();
 
     // AND store certificate
-    let header = fixture_header_with_payload(2);
-    let certificate = certificate(&header);
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(2))
+        .build(author.keypair())
+        .unwrap();
+    let certificate = fixture.certificate(&header);
     let block_id = certificate.digest();
 
     // AND spawn a new blocks waiter
@@ -559,7 +592,10 @@ async fn test_batch_timeout() {
 #[tokio::test]
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().nth(1).unwrap().public_key();
 
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
@@ -622,7 +658,10 @@ async fn test_return_error_when_certificate_is_missing() {
 #[tokio::test]
 async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     // GIVEN
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().nth(1).unwrap().public_key();
 
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
