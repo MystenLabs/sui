@@ -128,7 +128,7 @@ export abstract class Provider {
    * @param filter - filter describing the subset of events to follow
    * @param onMessage - function to run when we receive a notification of a new event matching the filter
    */
-   abstract subscribeEvent(
+  abstract subscribeEvent(
     filter: SuiEventFilter,
     onMessage: (event: SuiEventEnvelope) => void
   ): Promise<SubscriptionId>;
