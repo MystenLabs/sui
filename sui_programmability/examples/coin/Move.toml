@@ -1,0 +1,9 @@
+[package]
+name = "TestCoin"
+version = "0.0.1"
+
+[dependencies]
+Sui = { local = "../../../crates/sui-framework" }
+
+[addresses]
+test_coin = "0x0"

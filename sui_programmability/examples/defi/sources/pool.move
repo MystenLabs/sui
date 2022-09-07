@@ -166,6 +166,26 @@ module defi::pool {
         )
     }
 
+    entry fun split_and_swap_token_<P,T>(
+        pool: &mut Pool<P, T>, token: &mut Coin<T>, amount: u64, ctx: &mut TxContext
+    ) {
+        let splitted_token = coin::take(coin::balance_mut(token), amount, ctx);
+        transfer::transfer(
+            swap_token(pool, splitted_token, ctx),
+            tx_context::sender(ctx)
+        )
+    }
+
+    entry fun split_and_swap_sui_<P,T>(
+        pool: &mut Pool<P, T>, sui: &mut Coin<SUI>, amount: u64, ctx: &mut TxContext
+    ) {
+        let splitted_token = coin::take(coin::balance_mut(sui), amount, ctx);
+        transfer::transfer(
+            swap_sui(pool, splitted_token, ctx),
+            tx_context::sender(ctx)
+        )
+    }
+
     /// Swap `Coin<T>` for the `Coin<SUI>`.
     /// Returns the swapped `Coin<SUI>`.
     public fun swap_token<P, T>(
