@@ -10,8 +10,8 @@ use crate::{
 };
 use fastcrypto::Hash;
 use std::{collections::HashSet, time::Duration};
-use test_utils::{certificate, fixture_header_with_payload};
-use types::{Certificate, CertificateDigest, PrimaryMessage};
+use test_utils::{fixture_payload, CommitteeFixture};
+use types::{CertificateDigest, PrimaryMessage};
 
 #[tokio::test]
 async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
@@ -27,8 +27,17 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_storage() {
         certificate_deliver_timeout: Duration::from_millis(2_000),
     };
 
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+
     // AND dummy certificate
-    let certificate = certificate(&fixture_header_with_payload(1));
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(1))
+        .build(author.keypair())
+        .unwrap();
+    let certificate = fixture.certificate(&header);
 
     // AND
     let block_ids = vec![CertificateDigest::default()];
@@ -76,12 +85,26 @@ async fn test_get_and_synchronize_block_headers_when_fetched_from_peers() {
         certificate_deliver_timeout: Duration::from_millis(2_000),
     };
 
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+
     // AND a certificate stored
-    let cert_stored = certificate(&fixture_header_with_payload(1));
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(1))
+        .build(author.keypair())
+        .unwrap();
+    let cert_stored = fixture.certificate(&header);
     certificate_store.write(cert_stored.clone()).unwrap();
 
     // AND a certificate NOT stored
-    let cert_missing = certificate(&fixture_header_with_payload(2));
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(2))
+        .build(author.keypair())
+        .unwrap();
+    let cert_missing = fixture.certificate(&header);
 
     // AND
     let mut block_ids = HashSet::new();
@@ -161,12 +184,26 @@ async fn test_get_and_synchronize_block_headers_timeout_on_causal_completion() {
         certificate_deliver_timeout: Duration::from_millis(2_000),
     };
 
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+
     // AND a certificate stored
-    let cert_stored = certificate(&fixture_header_with_payload(1));
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(1))
+        .build(author.keypair())
+        .unwrap();
+    let cert_stored = fixture.certificate(&header);
     certificate_store.write(cert_stored.clone()).unwrap();
 
     // AND a certificate NOT stored
-    let cert_missing = certificate(&fixture_header_with_payload(2));
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(2))
+        .build(author.keypair())
+        .unwrap();
+    let cert_missing = fixture.certificate(&header);
 
     // AND
     let block_ids = vec![cert_stored.digest(), cert_missing.digest()];
@@ -228,14 +265,28 @@ async fn test_synchronize_block_payload() {
         certificate_deliver_timeout: Duration::from_millis(2_000),
     };
 
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let author = fixture.authorities().next().unwrap();
+
     // AND a certificate with payload already available
-    let cert_stored: Certificate = certificate(&fixture_header_with_payload(1));
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(1))
+        .build(author.keypair())
+        .unwrap();
+    let cert_stored = fixture.certificate(&header);
     for e in cert_stored.clone().header.payload {
         payload_store.write(e, 1).await;
     }
 
     // AND a certificate with payload NOT available
-    let cert_missing = certificate(&fixture_header_with_payload(2));
+    let header = author
+        .header_builder(&committee)
+        .payload(fixture_payload(2))
+        .build(author.keypair())
+        .unwrap();
+    let cert_missing = fixture.certificate(&header);
 
     // AND
     let block_ids = vec![cert_stored.digest(), cert_missing.digest()];
