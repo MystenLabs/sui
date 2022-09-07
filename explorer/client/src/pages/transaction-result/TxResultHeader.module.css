@@ -20,8 +20,12 @@
     @apply inline align-middle;
 }
 
+.explain svg {
+    @apply mr-[6px];
+}
+
 .explain {
-    @apply rounded-[10px] py-[8px] px-[10px];
+    @apply rounded-[10px] py-[8px] px-[10px] text-[13px];
 }
 
 .success {
