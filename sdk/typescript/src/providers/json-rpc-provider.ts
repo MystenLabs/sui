@@ -75,8 +75,6 @@ export class JsonRpcProvider extends Provider {
 
     this.client = new JsonRpcClient(endpoint);
     this.wsClient = new WebsocketClient(endpoint, skipDataValidation, socketOptions);
-
-    console.log(this);
   }
 
   // Move info
