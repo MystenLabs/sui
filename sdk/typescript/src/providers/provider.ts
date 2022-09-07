@@ -24,6 +24,7 @@ import {
   TimeRangeQueryOptions,
   SuiAddress,
   ObjectOwner,
+  SuiEvents,
 } from '../types';
 
 ///////////////////////////////
@@ -145,35 +146,65 @@ export abstract class Provider {
 
   abstract syncAccountState(address: string): Promise<any>;
 
-  abstract getEventsByTransaction(digest: TransactionDigest, count: number): Promise<SuiEventEnvelope[]>;
+  abstract getEventsByTransaction(digest: TransactionDigest, count: number): Promise<SuiEvents>;
 
+  /**
+   * Get events emitted from within the specified Move module
+   * @param package_ Move package object ID
+   * @param module Move module name
+   * @param options count, start & end times
+   */
   abstract getEventsByTransactionModule(
     package_: ObjectId,                   // 'package' is reserved word
     module: string,
     options: TimeRangeQueryOptions
-  ): Promise<SuiEventEnvelope[]>;
+  ): Promise<SuiEvents>;
 
+  /**
+   * Get events with a matching Move type name
+   * @param moveEventStructName Move struct type name
+   * @param options count, start & end times
+   */
   abstract getEventsByMoveEventStructName(
     moveEventStructName: string,
     options: TimeRangeQueryOptions
-  ): Promise<SuiEventEnvelope[]>;
+  ): Promise<SuiEvents>;
 
+  /**
+   * Get events with a matching Move type name
+   * @param sender Sui address of the sender of the transaction that generated the event
+   * @param options count, start & end times
+   */
   abstract getEventsBySender(
     sender: SuiAddress,
     options: TimeRangeQueryOptions
-  ): Promise<SuiEventEnvelope[]>;
+  ): Promise<SuiEvents>;
 
+  /**
+   * Get events with a matching recipient
+   * @param recipient Object owner that received the transaction that generated the event
+   * @param options count, start & end times
+   */
   abstract getEventsByRecipient(
     recipient: ObjectOwner,
     options: TimeRangeQueryOptions
-  ): Promise<SuiEventEnvelope[]>;
+  ): Promise<SuiEvents>;
 
+  /**
+   * Get events involving the given object
+   * @param object object id created, mutated, or deleted in events
+   * @param options count, start & end times
+   */
   abstract getEventsByObject(
     object: ObjectId,
     options: TimeRangeQueryOptions
-  ): Promise<SuiEventEnvelope[]>;
+  ): Promise<SuiEvents>;
 
-  abstract getEventsByTimeRange(options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]>;
+  /**
+   * Get all events within the given time span
+   * @param options count, start & end times
+   */
+  abstract getEventsByTimeRange(options: TimeRangeQueryOptions): Promise<SuiEvents>;
 
   /**
    * Subscribe to get notifications whenever an event matching the filter occurs

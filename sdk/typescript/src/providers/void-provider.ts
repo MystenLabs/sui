@@ -25,6 +25,7 @@ import {
   TimeRangeQueryOptions,
   SuiAddress,
   ObjectId,
+  SuiEvents,
 } from '../types';
 import { Provider } from './provider';
 
@@ -131,31 +132,31 @@ export class VoidProvider extends Provider {
     throw this.newError('syncAccountState');
   }
 
-  async getEventsByTransaction(_digest: TransactionDigest, _count: number): Promise<SuiEventEnvelope[]> {
+  async getEventsByTransaction(_digest: TransactionDigest, _count: number): Promise<SuiEvents> {
     throw this.newError('getEventsByTransaction');
   }
 
-  async getEventsByTransactionModule(_package: string, _module: string, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+  async getEventsByTransactionModule(_package: string, _module: string, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
     throw this.newError('getEventsByTransactionModule');
   }
 
-  async getEventsByMoveEventStructName(_moveEventStructName: string, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+  async getEventsByMoveEventStructName(_moveEventStructName: string, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
     throw this.newError('getEventsByMoveEventStructName');
   }
 
-  async getEventsBySender(_sender: SuiAddress, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+  async getEventsBySender(_sender: SuiAddress, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
     throw this.newError('getEventsBySender');
   }
 
-  async getEventsByRecipient(_recipient: ObjectOwner, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+  async getEventsByRecipient(_recipient: ObjectOwner, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
     throw this.newError('getEventsByRecipient');
   }
 
-  async getEventsByObject(_object: ObjectId, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+  async getEventsByObject(_object: ObjectId, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
     throw this.newError('getEventsByObject');
   }
 
-  async getEventsByTimeRange(_options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+  async getEventsByTimeRange(_options: TimeRangeQueryOptions): Promise<SuiEvents> {
     throw this.newError('getEventsByTimeRange');
   }
 
