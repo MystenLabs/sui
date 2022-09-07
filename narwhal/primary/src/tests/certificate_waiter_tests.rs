@@ -12,22 +12,19 @@ use fastcrypto::{traits::KeyPair, Hash, SignatureService};
 use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
-use test_utils::{
-    certificate, fixture_headers_round, keys, pure_committee_from_keys,
-    shared_worker_cache_from_keys,
-};
+use test_utils::CommitteeFixture;
 use tokio::sync::watch;
 use types::{Certificate, PrimaryMessage, ReconfigureNotification, Round};
 
 #[tokio::test]
 async fn process_certificate_missing_parents_in_reverse() {
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-    let kp = k.pop().unwrap();
-    let network_key = kp.copy().private().0.to_bytes();
-    let name = kp.public().clone();
-    let signature_service = SignatureService::new(kp);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
 
     // kept empty
     let (_tx_reconfigure, rx_reconfigure) =
@@ -138,9 +135,9 @@ async fn process_certificate_missing_parents_in_reverse() {
     for i in 0..rounds {
         let parents: BTreeSet<_> = current_round
             .into_iter()
-            .map(|header| certificate(&header).digest())
+            .map(|header| fixture.certificate(&header).digest())
             .collect();
-        (_, current_round) = fixture_headers_round(i, &parents);
+        (_, current_round) = fixture.headers_round(i, &parents);
         headers.extend(current_round.clone());
     }
 
@@ -150,17 +147,17 @@ async fn process_certificate_missing_parents_in_reverse() {
     }
 
     // sanity-check
-    assert!(headers.len() == keys(None).len() * rounds as usize); // note we don't include genesis
+    assert!(headers.len() == fixture.authorities().count() * rounds as usize); // note we don't include genesis
 
     // the `rev()` below is important, as we want to test anti-topological arrival
     #[allow(clippy::needless_collect)]
     let ids: Vec<_> = headers
         .iter()
-        .map(|header| certificate(header).digest())
+        .map(|header| fixture.certificate(header).digest())
         .collect();
     for header in headers.into_iter().rev() {
         tx_primary_messages
-            .send(PrimaryMessage::Certificate(certificate(&header)))
+            .send(PrimaryMessage::Certificate(fixture.certificate(&header)))
             .await
             .unwrap();
     }
@@ -175,13 +172,13 @@ async fn process_certificate_missing_parents_in_reverse() {
 
 #[tokio::test]
 async fn process_certificate_check_gc_fires() {
-    let mut k = keys(None);
-    let committee = pure_committee_from_keys(&k);
-    let worker_cache = shared_worker_cache_from_keys(&k);
-    let kp = k.pop().unwrap();
-    let network_key = kp.copy().private().0.to_bytes();
-    let name = kp.public().clone();
-    let signature_service = SignatureService::new(kp);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let name = primary.public_key();
+    let signature_service = SignatureService::new(primary.keypair().copy());
 
     // kept empty
     let (_tx_reconfigure, rx_reconfigure) =
@@ -292,9 +289,9 @@ async fn process_certificate_check_gc_fires() {
     for i in 0..rounds {
         let parents: BTreeSet<_> = current_round
             .into_iter()
-            .map(|header| certificate(&header).digest())
+            .map(|header| fixture.certificate(&header).digest())
             .collect();
-        (_, current_round) = fixture_headers_round(i, &parents);
+        (_, current_round) = fixture.headers_round(i, &parents);
         headers.extend(current_round.clone());
     }
 
@@ -304,11 +301,11 @@ async fn process_certificate_check_gc_fires() {
     }
 
     // sanity-check
-    assert!(headers.len() == keys(None).len() * rounds as usize); // note we don't include genesis
+    assert!(headers.len() == fixture.authorities().count() * rounds as usize); // note we don't include genesis
 
     // Just send the last header, the causal certificate completion cannot complete
     let header = headers.last().unwrap();
-    let cert = certificate(header);
+    let cert = fixture.certificate(header);
     let id = cert.digest();
 
     tx_primary_messages
