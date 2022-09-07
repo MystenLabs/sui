@@ -89,16 +89,8 @@ export type SuiEventEnvelope = {
     event: SuiEvent
 }
 
-// export a type for this so we get a type guard
 export type SuiEvents = SuiEventEnvelope[];
 
 export type SubscriptionId = number;
 
 export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
-
-// groups the 3 RPC parameters found on getEvents rpc methods
-export type TimeRangeQueryOptions = {
-    count: number,
-    startTime: number,
-    endTime: number
-}
