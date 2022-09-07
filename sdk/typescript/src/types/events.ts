@@ -94,3 +94,7 @@ export type SuiEvents = SuiEventEnvelope[];
 export type SubscriptionId = number;
 
 export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
+
+export const DEFAULT_RESULT_COUNT = 1000;
+export const DEFAULT_START_TIME = 0;
+export const DEFAULT_END_TIME = Number.MAX_SAFE_INTEGER;

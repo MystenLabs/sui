@@ -40,6 +40,9 @@ import {
   ObjectOwner,
   ObjectId,
   SuiEvents,
+  DEFAULT_RESULT_COUNT,
+  DEFAULT_START_TIME,
+  DEFAULT_END_TIME,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
@@ -438,7 +441,12 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getEventsByTransaction(digest: TransactionDigest, count: number): Promise<SuiEvents> {
+  // Events
+
+  async getEventsByTransaction(
+    digest: TransactionDigest,
+    count: number = DEFAULT_RESULT_COUNT
+  ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
         'sui_getEventsByTransaction',
@@ -456,9 +464,9 @@ export class JsonRpcProvider extends Provider {
   async getEventsByTransactionModule(
     package_: string,
     module: string,
-    count: number,
-    startTime: number,
-    endTime: number
+    count: number = DEFAULT_RESULT_COUNT,
+    startTime: number = DEFAULT_START_TIME,
+    endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
@@ -476,9 +484,9 @@ export class JsonRpcProvider extends Provider {
 
   async getEventsByMoveEventStructName(
     moveEventStructName: string,
-    count: number,
-    startTime: number,
-    endTime: number
+    count: number = DEFAULT_RESULT_COUNT,
+    startTime: number = DEFAULT_START_TIME,
+    endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
@@ -496,9 +504,9 @@ export class JsonRpcProvider extends Provider {
 
   async getEventsBySender(
     sender: SuiAddress,
-    count: number,
-    startTime: number,
-    endTime: number
+    count: number = DEFAULT_RESULT_COUNT,
+    startTime: number = DEFAULT_START_TIME,
+    endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
@@ -516,9 +524,9 @@ export class JsonRpcProvider extends Provider {
 
   async getEventsByRecipient(
     recipient: ObjectOwner,
-    count: number,
-    startTime: number,
-    endTime: number
+    count: number = DEFAULT_RESULT_COUNT,
+    startTime: number = DEFAULT_START_TIME,
+    endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
@@ -536,9 +544,9 @@ export class JsonRpcProvider extends Provider {
 
   async getEventsByObject(
     object: ObjectId,
-    count: number,
-    startTime: number,
-    endTime: number
+    count: number = DEFAULT_RESULT_COUNT,
+    startTime: number = DEFAULT_START_TIME,
+    endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
@@ -555,9 +563,9 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getEventsByTimeRange(
-    count: number,
-    startTime: number,
-    endTime: number
+    count: number = DEFAULT_RESULT_COUNT,
+    startTime: number = DEFAULT_START_TIME,
+    endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
