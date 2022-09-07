@@ -50,10 +50,25 @@ const isMinimumSubscriptionMessage = (msg: any): msg is MinimumSubscriptionMessa
   && ('subscription' in msg && typeof msg['subscription'] === 'number')
   && ('result' in msg && typeof msg['result'] === 'object')
 
-export type WebsocketClientOptions = {
+/**
+ * Configuration options for the websocket connection
+ */
+ export type WebsocketClientOptions = {
+  /**
+   * Milliseconds before timing out while initially connecting
+   */
   connectTimeout: number,
+  /**
+   * Milliseconds before timing out while calling an RPC method
+   */
   callTimeout: number,
+  /**
+   * Milliseconds between attempts to connect
+   */
   reconnectInterval: number,
+  /**
+   * Maximum number of times to try connecting before giving up
+   */
   maxReconnects: number
 }
 
