@@ -12,7 +12,7 @@ export type MoveEvent = {
     transactionModule: string;
     sender: SuiAddress;
     type: string;
-    fields: { [key: string]: any; }; // TODO - better type
+    fields: { [key: string]: any; };
     bcs: string;
 };
 
