@@ -1,12 +1,12 @@
 [package]
 name = "typed-store-derive"
-version = "0.0.0"
+version = "0.1.0"
 license = "Apache-2.0"
 authors = ["Ade A. <ade@mystenlabs.com>"]
-description = "macros for typed store"
+description = "macros for the typed-store crate"
 repository = "https://github.com/mystenlabs/mysten-infra"
 edition = "2021"
-publish = false
+publish = ["crates-io"]
 
 [lib]
 proc-macro = true
@@ -21,4 +21,6 @@ rocksdb = { version = "0.19.0", features = ["snappy", "lz4", "zstd", "zlib", "mu
 syn = { version = "1.0.64", features = ["derive"] }
 tempfile = "3.3.0"
 tokio = { version = "1.20.0", features = ["sync", "macros", "rt"] }
+
+[dev-dependencies]
 typed-store = { path = "../typed-store" }

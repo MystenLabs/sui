@@ -6,7 +6,7 @@ authors = ["Evan Chan <echan@mystenlabs.com>"]
 description = "Library for common telemetry and observability functionality"
 repository = "https://github.com/mystenlabs/mysten-infra"
 edition = "2021"
-publish = false
+publish = ["crates-io"]
 
 [dependencies]
 console-subscriber = { version = "0.1.6", optional = true }

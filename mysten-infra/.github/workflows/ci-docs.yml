@@ -16,4 +16,4 @@ jobs:
     - name: Spell Check Docs
       uses: crate-ci/typos@master
       with:
-        files: *.md ./*/*.md
+        files: *.md
