@@ -217,7 +217,9 @@ export abstract class Provider {
 
   /**
    * Get all events within the given time span
-   * @param options max result count, start & end times
+   * @param options.count max result count
+   * @param options.startTime start of time range to search
+   * @param options.endTime end of time range
    */
   abstract getEventsByTimeRange(options: TimeRangeQueryOptions): Promise<SuiEvents>;
 
