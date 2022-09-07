@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 dashmap = "5.4.0"
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b", package = "fastcrypto" }
+fastcrypto = { version = "0.1.1" }
 futures = "0.3.24"
 store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "352091e92070c2ecfcccad444361a78249ecfe59" }
 thiserror = "1.0.34"

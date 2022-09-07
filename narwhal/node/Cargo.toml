@@ -32,7 +32,7 @@ itertools = "0.10.3"
 
 config = { path = "../config" }
 consensus = { path = "../consensus" }
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b" }
+fastcrypto = { version = "0.1.1" }
 crypto = { path = "../crypto" }
 executor = { path = "../executor" }
 network = { path = "../network" }
