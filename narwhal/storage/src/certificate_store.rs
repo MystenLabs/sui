@@ -325,9 +325,7 @@ mod test {
         reopen,
         rocks::{open_cf, DBMap},
     };
-    use test_utils::{
-        certificate, certificate_from_committee, committee, fixture_headers_round, temp_dir,
-    };
+    use test_utils::{temp_dir, CommitteeFixture};
     use types::{Certificate, CertificateDigest, Round};
 
     fn new_store(path: std::path::PathBuf) -> CertificateStore {
@@ -348,24 +346,25 @@ mod test {
     // helper method that creates certificates for the provided
     // number of rounds.
     fn certificates(rounds: u64) -> Vec<Certificate> {
-        let mut current_round: Vec<_> = Certificate::genesis(&committee(None))
+        let fixture = CommitteeFixture::builder().build();
+        let committee = fixture.committee();
+        let mut current_round: Vec<_> = Certificate::genesis(&committee)
             .into_iter()
             .map(|cert| cert.header)
             .collect();
-        let committee = &committee(None);
 
         let mut result: Vec<Certificate> = Vec::new();
         for i in 0..rounds {
             let parents: BTreeSet<_> = current_round
                 .iter()
-                .map(|header| certificate_from_committee(header, committee).digest())
+                .map(|header| fixture.certificate(header).digest())
                 .collect();
-            (_, current_round) = fixture_headers_round(i, &parents);
+            (_, current_round) = fixture.headers_round(i, &parents);
 
             result.extend(
                 current_round
                     .iter()
-                    .map(certificate)
+                    .map(|h| fixture.certificate(h))
                     .collect::<Vec<Certificate>>(),
             );
         }
