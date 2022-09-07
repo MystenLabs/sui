@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use config::WorkerId;
+use config::{Committee, WorkerId};
 use fastcrypto::Hash;
 use indexmap::IndexMap;
 use rand::{rngs::StdRng, RngCore, SeedableRng};
@@ -11,7 +11,6 @@ use store::{
     rocks::{open_cf, DBMap},
     Store,
 };
-use test_utils::committee;
 use types::{Batch, BatchDigest, Certificate, CertificateDigest, Header};
 
 /// A test batch containing specific transactions.
@@ -27,9 +26,12 @@ pub fn test_batch<T: Serialize>(transactions: Vec<T>) -> (BatchDigest, Batch) {
 }
 
 /// A test certificate with a specific payload.
-pub fn test_certificate(payload: IndexMap<BatchDigest, WorkerId>) -> Certificate {
+pub fn test_certificate(
+    committee: &Committee,
+    payload: IndexMap<BatchDigest, WorkerId>,
+) -> Certificate {
     Certificate::new_unsigned(
-        &committee(None),
+        committee,
         Header {
             payload,
             ..Header::default()
@@ -51,6 +53,7 @@ pub fn test_store() -> Store<(CertificateDigest, BatchDigest), Batch> {
 
 /// Create a number of test certificates containing transactions of type u64.
 pub fn test_u64_certificates(
+    committee: &Committee,
     certificates: usize,
     batches_per_certificate: usize,
     transactions_per_batch: usize,
@@ -74,7 +77,7 @@ pub fn test_u64_certificates(
                 .map(|(i, (digest, _))| (*digest, /* worker_id */ i as WorkerId))
                 .collect();
 
-            let certificate = test_certificate(payload);
+            let certificate = test_certificate(committee, payload);
 
             (certificate, batches)
         })

@@ -6,17 +6,18 @@ use crate::{
     fixtures::{test_batch, test_certificate, test_store, test_u64_certificates},
 };
 use std::sync::Arc;
-use test_utils::committee;
+use test_utils::CommitteeFixture;
 use tokio::sync::mpsc::channel;
 use types::Certificate;
 
 #[tokio::test]
 async fn execute_transactions() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
-    let committee = committee(None);
-    let message = ReconfigureNotification::NewEpoch(committee);
+    let message = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn the executor.
@@ -33,7 +34,7 @@ async fn execute_transactions() {
     // Feed certificates to the mock sequencer and add the transaction data to storage (as if
     // the batch loader downloaded them).
     let certificates = test_u64_certificates(
-        /* certificates */ 2, /* batches_per_certificate */ 2,
+        &committee, /* certificates */ 2, /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
     );
     for (certificate, batches) in certificates.clone() {
@@ -62,11 +63,12 @@ async fn execute_transactions() {
 
 #[tokio::test]
 async fn execute_empty_certificate() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
-    let committee = committee(None);
-    let message = ReconfigureNotification::NewEpoch(committee);
+    let message = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn the executor.
@@ -92,7 +94,7 @@ async fn execute_empty_certificate() {
 
     // Then feed one non-empty certificate.
     let certificates = test_u64_certificates(
-        /* certificates */ 1, /* batches_per_certificate */ 2,
+        &committee, /* certificates */ 1, /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
     );
     for (certificate, batches) in certificates {
@@ -118,11 +120,12 @@ async fn execute_empty_certificate() {
 
 #[tokio::test]
 async fn execute_malformed_transactions() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
-    let committee = committee(None);
-    let message = ReconfigureNotification::NewEpoch(committee);
+    let message = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn the executor.
@@ -142,7 +145,7 @@ async fn execute_malformed_transactions() {
     let (digest, batch) = test_batch(vec![tx0, tx1]);
 
     let payload = [(digest, 0)].iter().cloned().collect();
-    let certificate = test_certificate(payload);
+    let certificate = test_certificate(&committee, payload);
     store.write((certificate.digest(), digest), batch).await;
 
     let message = ConsensusOutput {
@@ -153,7 +156,7 @@ async fn execute_malformed_transactions() {
 
     // Feed two certificates with good transactions to the executor.
     let certificates = test_u64_certificates(
-        /* certificates */ 2, /* batches_per_certificate */ 2,
+        &committee, /* certificates */ 2, /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
     );
     for (certificate, batches) in certificates.clone() {
@@ -182,11 +185,12 @@ async fn execute_malformed_transactions() {
 
 #[tokio::test]
 async fn internal_error_execution() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
-    let committee = committee(None);
-    let message = ReconfigureNotification::NewEpoch(committee);
+    let message = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn the executor.
@@ -211,7 +215,7 @@ async fn internal_error_execution() {
     let (digest_1, batch_1) = test_batch(vec![tx10, tx11]);
 
     let payload = [(digest_0, 0), (digest_1, 1)].iter().cloned().collect();
-    let certificate = test_certificate(payload);
+    let certificate = test_certificate(&committee, payload);
     let certificate_id = certificate.digest();
 
     store.write((certificate_id, digest_0), batch_0).await;
@@ -247,11 +251,12 @@ async fn internal_error_execution() {
 
 #[tokio::test]
 async fn crash_recovery() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (tx_executor, rx_executor) = test_utils::test_channel!(10);
     let (tx_output, mut rx_output) = channel(10);
 
-    let committee = committee(None);
-    let reconfigure_notification = ReconfigureNotification::NewEpoch(committee);
+    let reconfigure_notification = ReconfigureNotification::NewEpoch(committee.clone());
     let (_tx_reconfigure, rx_reconfigure) = watch::channel(reconfigure_notification.clone());
 
     // Spawn the executor.
@@ -267,7 +272,7 @@ async fn crash_recovery() {
 
     // Feed two certificates with good transactions to the executor.
     let certificates = test_u64_certificates(
-        /* certificates */ 2, /* batches_per_certificate */ 2,
+        &committee, /* certificates */ 2, /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
     );
     for (certificate, batches) in certificates {
@@ -288,7 +293,7 @@ async fn crash_recovery() {
     let (digest, batch) = test_batch(vec![tx0, tx1]);
 
     let payload = [(digest, 0)].iter().cloned().collect();
-    let certificate = test_certificate(payload);
+    let certificate = test_certificate(&committee, payload);
 
     store.write((certificate.digest(), digest), batch).await;
 
@@ -322,7 +327,7 @@ async fn crash_recovery() {
 
     // Feed two certificates with good transactions to the executor.
     let certificates = test_u64_certificates(
-        /* certificates */ 2, /* batches_per_certificate */ 2,
+        &committee, /* certificates */ 2, /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
     );
     for (certificate, batches) in certificates.clone() {

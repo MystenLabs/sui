@@ -2,15 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::fixtures::{test_store, test_u64_certificates};
+use config::Committee;
 use primary::GetBlockResponse;
 use prometheus::Registry;
-use test_utils::{committee, test_channel};
+use test_utils::{test_channel, CommitteeFixture};
 use types::{
     BatchMessage, BlockError, BlockErrorKind, BlockResult, CertificateDigest, SequenceNumber,
 };
 
 /// Spawn a mock consensus core and a test subscriber.
-async fn spawn_subscriber(
+fn spawn_subscriber(
+    committee: &Committee,
     rx_sequence: metered_channel::Receiver<ConsensusOutput>,
     tx_executor: metered_channel::Sender<ConsensusOutput>,
     tx_get_block_commands: metered_channel::Sender<BlockCommand>,
@@ -20,8 +22,7 @@ async fn spawn_subscriber(
     watch::Sender<ReconfigureNotification>,
     JoinHandle<()>,
 ) {
-    let committee = committee(None);
-    let message = ReconfigureNotification::NewEpoch(committee);
+    let message = ReconfigureNotification::NewEpoch(committee.to_owned());
     let (tx_reconfigure, rx_reconfigure) = watch::channel(message);
 
     // Spawn a test subscriber.
@@ -42,16 +43,24 @@ async fn spawn_subscriber(
 
 #[tokio::test]
 async fn handle_certificate_with_downloaded_batch() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (tx_sequence, rx_sequence) = test_channel!(10);
     let (tx_executor, mut rx_executor) = test_channel!(10);
     let (tx_get_block_command, mut rx_get_block_command) = test_utils::test_get_block_commands!(1);
 
     // Spawn a subscriber.
-    let (store, _tx_reconfigure, _) =
-        spawn_subscriber(rx_sequence, tx_executor, tx_get_block_command, vec![]).await;
+    let (store, _tx_reconfigure, _) = spawn_subscriber(
+        &committee,
+        rx_sequence,
+        tx_executor,
+        tx_get_block_command,
+        vec![],
+    );
 
     let total_certificates = 2;
     let certificates = test_u64_certificates(
+        &committee,
         total_certificates,
         /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
@@ -104,17 +113,25 @@ async fn handle_certificate_with_downloaded_batch() {
 
 #[tokio::test]
 async fn should_retry_when_failed_to_get_payload() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (tx_sequence, rx_sequence) = test_channel!(10);
     let (tx_executor, mut rx_executor) = test_channel!(10);
     let (tx_get_block_command, mut rx_get_block_command) = test_utils::test_get_block_commands!(1);
 
     // Spawn a subscriber.
-    let (store, _tx_reconfigure, _) =
-        spawn_subscriber(rx_sequence, tx_executor, tx_get_block_command, vec![]).await;
+    let (store, _tx_reconfigure, _) = spawn_subscriber(
+        &committee,
+        rx_sequence,
+        tx_executor,
+        tx_get_block_command,
+        vec![],
+    );
 
     // Create a certificate
     let total_certificates = 1;
     let certificates = test_u64_certificates(
+        &committee,
         total_certificates,
         /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
@@ -177,17 +194,25 @@ async fn should_retry_when_failed_to_get_payload() {
 
 #[tokio::test]
 async fn subscriber_should_crash_when_irrecoverable_error() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (tx_sequence, rx_sequence) = test_channel!(10);
     let (tx_executor, _rx_executor) = test_channel!(10);
     let (tx_get_block_command, mut rx_get_block_command) = test_utils::test_get_block_commands!(1);
 
     // Spawn a subscriber.
-    let (_store, _tx_reconfigure, handle) =
-        spawn_subscriber(rx_sequence, tx_executor, tx_get_block_command, vec![]).await;
+    let (_store, _tx_reconfigure, handle) = spawn_subscriber(
+        &committee,
+        rx_sequence,
+        tx_executor,
+        tx_get_block_command,
+        vec![],
+    );
 
     // Create a certificate
     let total_certificates = 1;
     let certificates = test_u64_certificates(
+        &committee,
         total_certificates,
         /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
@@ -216,6 +241,8 @@ async fn subscriber_should_crash_when_irrecoverable_error() {
 
 #[tokio::test]
 async fn test_subscriber_with_restored_consensus_output() {
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (_tx_sequence, rx_sequence) = test_channel!(10);
     let (tx_executor, mut rx_executor) = test_channel!(10);
     let (tx_get_block_command, mut rx_get_block_command) = test_utils::test_get_block_commands!(1);
@@ -223,6 +250,7 @@ async fn test_subscriber_with_restored_consensus_output() {
     // Create restored consensus output
     let total_certificates = 2;
     let certificates = test_u64_certificates(
+        &committee,
         total_certificates,
         /* batches_per_certificate */ 2,
         /* transactions_per_batch */ 2,
@@ -239,12 +267,12 @@ async fn test_subscriber_with_restored_consensus_output() {
 
     // Spawn a subscriber.
     let (_store, _tx_reconfigure, _handle) = spawn_subscriber(
+        &committee,
         rx_sequence,
         tx_executor,
         tx_get_block_command,
         restored_consensus,
-    )
-    .await;
+    );
 
     for i in 0..total_certificates {
         let request = rx_get_block_command.recv().await.unwrap();
