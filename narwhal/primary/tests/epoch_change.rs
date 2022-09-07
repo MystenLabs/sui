@@ -1,17 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use arc_swap::ArcSwap;
-use config::{Committee, Epoch, Parameters};
+use config::{Committee, Parameters};
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
 use network::{CancelOnDropHandler, ReliableNetwork, WorkerToPrimaryNetwork};
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
-use test_utils::{
-    keys, make_authority, pure_committee_from_keys, shared_worker_cache_from_keys, temp_dir,
-};
+use std::{sync::Arc, time::Duration};
+use test_utils::{temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 use types::{ReconfigureNotification, WorkerPrimaryMessage};
 
@@ -24,16 +22,16 @@ async fn test_simple_epoch_change() {
     };
 
     // The configuration of epoch 0.
-    let keys_0 = keys(None);
-    let committee_0 = pure_committee_from_keys(&keys_0);
-    let worker_cache_0 = shared_worker_cache_from_keys(&keys_0);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee_0 = fixture.committee();
+    let worker_cache_0 = fixture.shared_worker_cache();
 
     // Spawn the committee of epoch 0.
     let mut rx_channels = Vec::new();
     let mut tx_channels = Vec::new();
-    for keypair in keys_0 {
-        let name = keypair.public().clone();
-        let signer = keypair;
+    for authority in fixture.authorities() {
+        let name = authority.public_key();
+        let signer = authority.keypair().copy();
 
         let (tx_new_certificates, rx_new_certificates) =
             test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
@@ -130,24 +128,16 @@ async fn test_partial_committee_change() {
     };
 
     // Make the committee of epoch 0.
-    let keys_0 = keys(None);
-    let authorities_0: Vec<_> = keys_0.iter().map(|_| make_authority()).collect();
-    let committee_0 = Committee {
-        epoch: Epoch::default(),
-        authorities: keys_0
-            .iter()
-            .zip(authorities_0.clone().into_iter())
-            .map(|(kp, authority)| (kp.public().clone(), authority))
-            .collect(),
-    };
-    let worker_cache_0 = shared_worker_cache_from_keys(&keys_0);
+    let mut fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee_0 = fixture.committee();
+    let worker_cache_0 = fixture.shared_worker_cache();
 
     // Spawn the committee of epoch 0.
     let mut epoch_0_rx_channels = Vec::new();
     let mut epoch_0_tx_channels = Vec::new();
-    for keypair in keys_0 {
-        let name = keypair.public().clone();
-        let signer = keypair;
+    for authority in fixture.authorities() {
+        let name = authority.public_key();
+        let signer = authority.keypair().copy();
 
         let (tx_new_certificates, rx_new_certificates) =
             test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
@@ -195,46 +185,17 @@ async fn test_partial_committee_change() {
     }
 
     // Make the committee of epoch 1.
-    let mut to_spawn = Vec::new();
-
-    let keys_0 = keys(None);
-    let keys_1 = keys(Some(1));
-    let mut total_stake = 0;
-    let mut committee_keys = vec![];
-    let authorities_1: BTreeMap<_, _> = authorities_0
-        .into_iter()
-        .zip(keys_0.into_iter())
-        .zip(keys_1.into_iter())
-        .map(|((authority, key_0), key_1)| {
-            let stake = authority.stake;
-            let x = if total_stake < committee_0.validity_threshold() {
-                let pk = key_0.public().clone();
-                committee_keys.push(key_0);
-                (pk, authority)
-            } else {
-                let new_authority = make_authority();
-                let pk = key_1.public().clone();
-                committee_keys.push(key_1.copy());
-                to_spawn.push(key_1);
-                (pk, new_authority)
-            };
-            total_stake += stake;
-            x
-        })
-        .collect();
-
-    let committee_1 = Committee {
-        epoch: Epoch::default() + 1,
-        authorities: authorities_1,
-    };
-    let worker_cache_1 = shared_worker_cache_from_keys(&committee_keys);
+    fixture.add_authority();
+    fixture.bump_epoch();
+    let committee_1 = fixture.committee();
+    let worker_cache_1 = fixture.shared_worker_cache();
 
     // Spawn the committee of epoch 1 (only the node not already booted).
     let mut epoch_1_rx_channels = Vec::new();
     let mut epoch_1_tx_channels = Vec::new();
-    for keypair in to_spawn {
-        let name = keypair.public().clone();
-        let signer = keypair;
+    if let Some(authority) = fixture.authorities().last() {
+        let name = authority.public_key();
+        let signer = authority.keypair().copy();
 
         let (tx_new_certificates, rx_new_certificates) =
             test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
@@ -258,7 +219,7 @@ async fn test_partial_committee_change() {
             parameters.clone(),
             store.header_store.clone(),
             store.certificate_store.clone(),
-            store.payload_store.clone(),
+            store.payload_store,
             /* tx_consensus */ tx_new_certificates,
             /* rx_consensus */ rx_feedback,
             tx_get_block_commands,
@@ -310,17 +271,17 @@ async fn test_restart_with_new_committee_change() {
     };
 
     // The configuration of epoch 0.
-    let keys_0 = keys(None);
-    let committee_0 = pure_committee_from_keys(&keys_0);
-    let worker_cache_0 = shared_worker_cache_from_keys(&keys_0);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee_0 = fixture.committee();
+    let worker_cache_0 = fixture.shared_worker_cache();
 
     // Spawn the committee of epoch 0.
     let mut rx_channels = Vec::new();
     let mut tx_channels = Vec::new();
     let mut handles = Vec::new();
-    for keypair in keys_0 {
-        let name = keypair.public().clone();
-        let signer = keypair;
+    for authority in fixture.authorities() {
+        let name = authority.public_key();
+        let signer = authority.keypair().copy();
 
         let (tx_new_certificates, rx_new_certificates) =
             test_utils::test_new_certificates_channel!(CHANNEL_CAPACITY);
@@ -401,9 +362,9 @@ async fn test_restart_with_new_committee_change() {
         let mut rx_channels = Vec::new();
         let mut tx_channels = Vec::new();
         let mut handles = Vec::new();
-        for keypair in keys(None) {
-            let name = keypair.public().clone();
-            let signer = keypair;
+        for authority in fixture.authorities() {
+            let name = authority.public_key();
+            let signer = authority.keypair().copy();
 
             let (tx_new_certificates, rx_new_certificates) =
                 test_utils::test_channel!(CHANNEL_CAPACITY);
@@ -483,16 +444,16 @@ async fn test_simple_committee_update() {
     };
 
     // The configuration of epoch 0.
-    let keys_0 = keys(None);
-    let committee_0 = pure_committee_from_keys(&keys_0);
-    let worker_cache_0 = shared_worker_cache_from_keys(&keys_0);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee_0 = fixture.committee();
+    let worker_cache_0 = fixture.shared_worker_cache();
 
     // Spawn the committee of epoch 0.
     let mut rx_channels = Vec::new();
     let mut tx_channels = Vec::new();
-    for keypair in keys_0 {
-        let name = keypair.public().clone();
-        let signer = keypair;
+    for authority in fixture.authorities() {
+        let name = authority.public_key();
+        let signer = authority.keypair().copy();
 
         let (tx_new_certificates, rx_new_certificates) =
             test_utils::test_channel!(CHANNEL_CAPACITY);
