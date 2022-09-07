@@ -23,7 +23,7 @@
 }
 
 .failed {
-    @apply bg-[#EB5A291A] capitalize text-sm font-sans text-[#B94118] font-normal p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1;
+    @apply bg-[#EB5A291A] capitalize text-sm font-sans text-[#B94118] font-normal p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1 break-all;
 
     box-sizing: border-box;
 }
