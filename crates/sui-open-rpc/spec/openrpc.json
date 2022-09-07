@@ -258,6 +258,7 @@
                 "events": [
                   {
                     "transferObject": {
+                      "amount": 100,
                       "objectId": "0xa8bc9be64e0d5ae796884274aef3005ae6733809",
                       "packageId": "0x0000000000000000000000000000000000000002",
                       "recipient": {
@@ -416,6 +417,7 @@
               {
                 "event": {
                   "transferObject": {
+                    "amount": 100,
                     "objectId": "0x2a017bf2fb0bd930d1ec22c06f1ee4e451ceab2e",
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "recipient": {
@@ -620,6 +622,7 @@
               {
                 "event": {
                   "transferObject": {
+                    "amount": 100,
                     "objectId": "0x50201d79d05c061f8dde264724ab51a21c752e81",
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "recipient": {
@@ -726,6 +729,7 @@
               {
                 "event": {
                   "transferObject": {
+                    "amount": 100,
                     "objectId": "0x3609b111436d8f0f47b7f8b9927ec3f8975a1dcb",
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "recipient": {
@@ -830,6 +834,7 @@
               {
                 "event": {
                   "transferObject": {
+                    "amount": 100,
                     "objectId": "0xc952002a71ea08ffdb2fd0ea41696ca3ea204b35",
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "recipient": {
@@ -922,6 +927,7 @@
               {
                 "event": {
                   "transferObject": {
+                    "amount": 100,
                     "objectId": "0xf96ef8bab1b6d79fbfa88548f44d295a385dc354",
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "recipient": {
@@ -998,6 +1004,7 @@
               {
                 "event": {
                   "transferObject": {
+                    "amount": 100,
                     "objectId": "0xa76be9ec0b5d72879b091d6d6d8f832ef94830cb",
                     "packageId": "0x0000000000000000000000000000000000000002",
                     "recipient": {
@@ -1683,6 +1690,7 @@
                 "events": [
                   {
                     "transferObject": {
+                      "amount": 100,
                       "objectId": "0xd9504e96a1108a178ef76f56c399633a2eb310bc",
                       "packageId": "0x0000000000000000000000000000000000000002",
                       "recipient": {

@@ -467,6 +467,7 @@ impl RpcExampleProvider {
             object_id: object_ref.0,
             version: object_ref.1,
             type_: TransferType::ToAddress,
+            amount: Some(100),
         };
         let events = vec![SuiEventEnvelope {
             timestamp: std::time::Instant::now().elapsed().as_secs(),
