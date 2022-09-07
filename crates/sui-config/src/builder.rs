@@ -26,6 +26,11 @@ pub enum CommitteeConfig {
     Validators(Vec<ValidatorGenesisInfo>),
 }
 
+enum ValidatorIpSelection {
+    Localhost,
+    Simulator,
+}
+
 pub struct ConfigBuilder<R = OsRng> {
     rng: Option<R>,
     config_directory: PathBuf,
@@ -33,6 +38,7 @@ pub struct ConfigBuilder<R = OsRng> {
     committee: Option<CommitteeConfig>,
     initial_accounts_config: Option<GenesisConfig>,
     with_swarm: bool,
+    validator_ip_sel: ValidatorIpSelection,
 }
 
 impl ConfigBuilder {
@@ -44,6 +50,13 @@ impl ConfigBuilder {
             committee: Some(CommitteeConfig::Size(NonZeroUsize::new(1).unwrap())),
             initial_accounts_config: None,
             with_swarm: false,
+            // Set a sensible default here so that most tests can run with or without the
+            // simulator.
+            validator_ip_sel: if cfg!(msim) {
+                ValidatorIpSelection::Simulator
+            } else {
+                ValidatorIpSelection::Localhost
+            },
         }
     }
 }
@@ -87,6 +100,7 @@ impl<R> ConfigBuilder<R> {
             committee: self.committee,
             initial_accounts_config: self.initial_accounts_config,
             with_swarm: self.with_swarm,
+            validator_ip_sel: self.validator_ip_sel,
         }
     }
 }
@@ -136,68 +150,30 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         account_key_pair: SuiKeyPair,
         network_key_pair: SuiKeyPair,
     ) -> ValidatorGenesisInfo {
-        #[cfg(msim)]
-        return self.build_validator_for_simulator(
-            index,
-            key_pair,
-            account_key_pair,
-            network_key_pair,
-        );
+        match self.validator_ip_sel {
+            ValidatorIpSelection::Localhost => ValidatorGenesisInfo::from_localhost_for_testing(
+                key_pair,
+                account_key_pair,
+                network_key_pair,
+            ),
+            ValidatorIpSelection::Simulator => {
+                // we will probably never run this many validators in a sim
+                let low_octet = index + 1;
+                if low_octet > 255 {
+                    todo!("smarter IP formatting required");
+                }
 
-        #[cfg(not(msim))]
-        return Self::build_validator_for_localhost(
-            index,
-            key_pair,
-            account_key_pair,
-            network_key_pair,
-        );
-    }
+                let ip = format!("10.10.0.{}", low_octet);
 
-    #[cfg(msim)]
-    fn build_validator_for_simulator(
-        &self,
-        index: usize,
-        key_pair: AuthorityKeyPair,
-        account_key_pair: SuiKeyPair,
-        network_key_pair: SuiKeyPair,
-    ) -> ValidatorGenesisInfo {
-        let ip = if !self.with_swarm {
-            let ip_addr = sui_simulator::runtime::NodeHandle::try_current()
-                .map(|node| {
-                    node.ip()
-                        .expect("expected to be called within a simulator node")
-                })
-                // There are a few #[test]s that call this code not from within a simulator runtime,
-                // so we provide a fall back so that they can run.
-                .unwrap_or_else(|| "127.0.0.1".parse().unwrap());
-
-            format!("{}", ip_addr)
-        } else {
-            let low_octet = index + 1;
-
-            // we will probably never run this many validators in a sim
-            if low_octet > 255 {
-                todo!("smarter IP formatting required");
+                ValidatorGenesisInfo::from_base_ip(
+                    key_pair,
+                    account_key_pair,
+                    network_key_pair,
+                    ip,
+                    index,
+                )
             }
-
-            format!("10.10.0.{}", low_octet)
-        };
-
-        ValidatorGenesisInfo::from_base_ip(key_pair, account_key_pair, network_key_pair, ip, index)
-    }
-
-    #[cfg(not(msim))]
-    fn build_validator_for_localhost(
-        _index: usize,
-        key_pair: AuthorityKeyPair,
-        account_key_pair: SuiKeyPair,
-        network_key_pair: SuiKeyPair,
-    ) -> ValidatorGenesisInfo {
-        ValidatorGenesisInfo::from_localhost_for_testing(
-            key_pair,
-            account_key_pair,
-            network_key_pair,
-        )
+        }
     }
 
     fn build_with_validators(
