@@ -2,24 +2,23 @@
     @apply pb-2 mb-0;
 }
 
-.longtext {
-    @apply bg-transparent border-0 font-sans text-sm text-[#1F6493] font-[500] cursor-pointer hover:text-sui-grey-80;
-
-    box-sizing: border-box;
-}
-
 .txaddress {
-    @apply block md:flex justify-start align-middle items-center;
+    @apply block lg:flex justify-start align-middle items-center;
 
     box-sizing: border-box;
 }
 
 .txresulttype {
-    @apply text-sm ml-2 mr-2 font-medium;
+    @apply text-[14px] font-medium font-sans capitalize rounded-[6px] py-[4px] px-[8px] flex items-center justify-around mt-[8px] lg:ml-[6px];
+}
+
+.txresulttype > span,
+.txresulttype > svg {
+    @apply inline align-middle;
 }
 
 .success {
-    @apply bg-success-light capitalize text-sm font-sans text-success-dark p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1;
+    @apply bg-success-light text-success-dark w-[91px] h-[22px];
 }
 
 .success svg {
@@ -27,14 +26,9 @@
 }
 
 .failed {
-    @apply bg-issue-light capitalize text-sm font-sans text-issue-dark stroke-issue-dark p-0.5 pr-3 pl-3 rounded-[10px] inline-block m-0 mt-1 break-all;
+    @apply bg-issue-light text-issue-dark stroke-issue-dark break-all;
 
     box-sizing: border-box;
-}
-
-.failed > span,
-.failed > svg {
-    @apply inline align-middle;
 }
 
 .error {

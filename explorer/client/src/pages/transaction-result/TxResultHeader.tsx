@@ -63,7 +63,7 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
                             styles[statusName],
                         ])}
                     >
-                        <TxResultStatus />{' '}
+                        <TxResultStatus />
                         <span>
                             {statusName === 'failed' ? 'failure' : 'success'}
                         </span>
