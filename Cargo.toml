@@ -57,3 +57,10 @@ debug-assertions = true
 overflow-checks = true
 # opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
 opt-level = 1
+
+[patch.'https://github.com/MystenLabs/narwhal']
+narwhal-config = { path = "../narwhal/config", package = "config" }
+narwhal-consensus = { path = "../narwhal/consensus", package = "consensus" }
+narwhal-executor = { path = "../narwhal/executor", package = "executor" }
+narwhal-types = { path = "../narwhal/types", package = "types" }
+narwhal-node = { path = "../narwhal/node", package = "node" }
