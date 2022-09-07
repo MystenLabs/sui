@@ -70,8 +70,6 @@ impl IntoResponse for AccountBalanceResponse {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct BlockIdentifier {
     pub index: u64,
-    #[serde(skip)]
-    pub seq: u64,
     pub hash: BlockHash,
 }
 #[serde_as]
@@ -79,6 +77,17 @@ pub struct BlockIdentifier {
 pub struct BlockHash(
     #[serde_as(as = "Readable<Base64, _>")] pub(crate) [u8; TRANSACTION_DIGEST_LENGTH],
 );
+
+impl TryFrom<&[u8]> for BlockHash {
+    type Error = Error;
+
+    fn try_from(bytes: &[u8]) -> Result<Self, Error> {
+        let arr: [u8; TRANSACTION_DIGEST_LENGTH] = bytes
+            .try_into()
+            .map_err(|e| Error::new_with_cause(ErrorType::InvalidInput, e))?;
+        Ok(Self(arr))
+    }
+}
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Amount {

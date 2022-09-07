@@ -6,7 +6,6 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use async_trait::async_trait;
-use sha3::{Digest, Sha3_256};
 use tokio::sync::RwLock;
 use tracing::{debug, error};
 
@@ -77,7 +76,7 @@ impl BookKeeper {
         let all_tx = self.state.get_total_transaction_number()?;
         let current_block = self.blocks.current_block().await?;
 
-        Ok(if current_block.block.block_identifier.seq < all_tx {
+        Ok(if current_block.block.block_identifier.index < all_tx {
             self.state
                 .get_transactions_in_range(current_block.block.block_identifier.index, all_tx)?
                 .into_iter()
@@ -165,7 +164,6 @@ impl BlockProvider for PseudoBlockProvider {
     fn genesis_block_identifier(&self) -> BlockIdentifier {
         BlockIdentifier {
             index: 0,
-            seq: 0,
             hash: BlockHash([0u8; TRANSACTION_DIGEST_LENGTH]),
         }
     }
@@ -217,46 +215,38 @@ impl PseudoBlockProvider {
     async fn create_next_block(&self, state: Arc<AuthorityState>) -> Result<(), Error> {
         let current_block = self.current_block_identifier().await?;
         let total_tx = state.get_total_transaction_number()?;
+        if total_tx == 0 {
+            return Ok(());
+        }
+        if current_block.index < total_tx {
+            let tx_digests = state.get_transactions_in_range(current_block.index, total_tx)?;
+            let mut index = current_block.index;
+            let mut parent_block_identifier = current_block;
 
-        if current_block.seq < total_tx {
-            let tx_digests = state.get_transactions_in_range(current_block.seq, total_tx)?;
+            for (seq, digest) in tx_digests {
+                index += 1;
+                let block_identifier = BlockIdentifier {
+                    index,
+                    hash: digest.as_ref().try_into()?,
+                };
 
-            // Create block hash using all transaction hashes
-            let hasher = tx_digests
-                .iter()
-                .fold(Sha3_256::default(), |mut hasher, (_, digest)| {
-                    hasher.update(digest.as_ref());
-                    hasher
-                });
-            let hash = hasher.finalize();
-            let hash = BlockHash(hash.into());
-
-            let block_identifier = BlockIdentifier {
-                index: current_block.index + 1,
-                seq: total_tx,
-                hash,
-            };
-
-            let other_transactions = tx_digests
-                .iter()
-                .map(|(_, digest)| TransactionIdentifier { hash: *digest })
-                .collect();
-
-            let new_block = BlockResponse {
-                block: Block {
-                    block_identifier,
-                    parent_block_identifier: current_block,
-                    timestamp: SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .map_err(|e| Error::new_with_cause(InternalError, e))?
-                        .as_millis()
-                        .try_into()?,
-                    transactions: vec![],
-                    metadata: None,
-                },
-                other_transactions,
-            };
-            self.blocks.write().await.push(new_block);
+                let new_block = BlockResponse {
+                    block: Block {
+                        block_identifier: block_identifier.clone(),
+                        parent_block_identifier: parent_block_identifier.clone(),
+                        timestamp: SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .map_err(|e| Error::new_with_cause(InternalError, e))?
+                            .as_millis()
+                            .try_into()?,
+                        transactions: vec![],
+                        metadata: None,
+                    },
+                    other_transactions: vec![TransactionIdentifier { hash: digest }],
+                };
+                self.blocks.write().await.push(new_block);
+                parent_block_identifier = block_identifier
+            }
         } else {
             debug!("No new transactions.")
         };
@@ -268,7 +258,6 @@ impl PseudoBlockProvider {
 fn genesis_block(genesis: &Genesis) -> BlockResponse {
     let id = BlockIdentifier {
         index: 0,
-        seq: 0,
         hash: BlockHash([0u8; TRANSACTION_DIGEST_LENGTH]),
     };
 
