@@ -18,10 +18,7 @@ use std::{
     collections::{HashMap, HashSet},
     time::Duration,
 };
-use test_utils::{
-    certificate, fixture_batch_with_transactions, fixture_header_builder, keys,
-    resolve_name_committee_and_worker_cache, PrimaryToPrimaryMockServer,
-};
+use test_utils::{fixture_batch_with_transactions, CommitteeFixture, PrimaryToPrimaryMockServer};
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
@@ -41,9 +38,13 @@ async fn test_successful_headers_synchronization() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
-
-    let mut primary_keys = keys(None);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -54,7 +55,6 @@ async fn test_successful_headers_synchronization() {
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
 
-    let key = keys(None).pop().unwrap();
     let worker_id_0 = 0;
     let worker_id_1 = 1;
 
@@ -63,13 +63,14 @@ async fn test_successful_headers_synchronization() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_0)
             .with_payload_batch(batch_2.clone(), worker_id_1)
-            .build(&key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
 
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
@@ -78,10 +79,9 @@ async fn test_successful_headers_synchronization() {
         network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
             .unwrap();
     println!("New primary added: {:?}", own_address);
-    let kp = primary_keys.remove(2);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(kp.private().0.to_bytes())
+        .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
 
@@ -116,12 +116,16 @@ async fn test_successful_headers_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = primary_keys
-        .into_iter()
-        .map(|kp| {
-            let address = committee.primary(kp.public()).unwrap().primary_to_primary;
+    let handlers: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = fixture
+        .authorities()
+        .filter(|a| a.public_key() != name)
+        .map(|a| {
+            let address = committee
+                .primary(&a.public_key())
+                .unwrap()
+                .primary_to_primary;
             println!("New primary added: {:?}", address);
-            primary_listener(1, kp, address)
+            primary_listener(1, a.keypair().copy(), address)
         })
         .collect();
 
@@ -234,9 +238,13 @@ async fn test_successful_payload_synchronization() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
-
-    let mut primary_keys = keys(None);
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -248,7 +256,6 @@ async fn test_successful_payload_synchronization() {
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
 
-    let key = keys(None).pop().unwrap();
     let worker_id_0: u32 = 0;
     let worker_id_1: u32 = 1;
 
@@ -257,13 +264,14 @@ async fn test_successful_payload_synchronization() {
         let batch_1 = fixture_batch_with_transactions(10);
         let batch_2 = fixture_batch_with_transactions(10);
 
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(batch_1.clone(), worker_id_0)
             .with_payload_batch(batch_2.clone(), worker_id_1)
-            .build(&key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
 
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
@@ -272,10 +280,9 @@ async fn test_successful_payload_synchronization() {
         network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
             .unwrap();
     println!("New primary added: {:?}", own_address);
-    let kp = primary_keys.remove(2);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(kp.private().0.to_bytes())
+        .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
 
@@ -310,12 +317,16 @@ async fn test_successful_payload_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let handlers_primaries: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = primary_keys
-        .into_iter()
-        .map(|kp| {
-            let address = committee.primary(kp.public()).unwrap().primary_to_primary;
+    let handlers_primaries: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = fixture
+        .authorities()
+        .filter(|a| a.public_key() != name)
+        .map(|a| {
+            let address = committee
+                .primary(&a.public_key())
+                .unwrap()
+                .primary_to_primary;
             println!("New primary added: {:?}", address);
-            primary_listener(1, kp, address)
+            primary_listener(1, a.keypair().copy(), address)
         })
         .collect();
 
@@ -468,7 +479,13 @@ async fn test_successful_payload_synchronization() {
 async fn test_multiple_overlapping_requests() {
     // GIVEN
     let (_, certificate_store, payload_store) = create_db_stores();
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
@@ -478,16 +495,15 @@ async fn test_multiple_overlapping_requests() {
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
 
-    let key = keys(None).pop().unwrap();
-
     // AND generate headers with distributed batches between 2 workers (0 and 1)
     for _ in 0..5 {
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(fixture_batch_with_transactions(10), 0)
-            .build(&key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
 
         certificates.insert(certificate.clone().digest(), certificate.clone());
     }
@@ -498,10 +514,9 @@ async fn test_multiple_overlapping_requests() {
         network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
             .unwrap();
     println!("New primary added: {:?}", own_address);
-    let kp = keys(None).remove(2);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(kp.private().0.to_bytes())
+        .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
 
@@ -597,8 +612,13 @@ async fn test_timeout_while_waiting_for_certificates() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
-    let key = keys(None).pop().unwrap();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -610,12 +630,13 @@ async fn test_timeout_while_waiting_for_certificates() {
     let block_ids: Vec<CertificateDigest> = (0..10)
         .into_iter()
         .map(|_| {
-            let header = fixture_header_builder()
+            let header = author
+                .header_builder(&committee)
                 .with_payload_batch(fixture_batch_with_transactions(10), 0)
-                .build(&key)
+                .build(author.keypair())
                 .unwrap();
 
-            certificate(&header).digest()
+            fixture.certificate(&header).digest()
         })
         .collect();
 
@@ -623,10 +644,9 @@ async fn test_timeout_while_waiting_for_certificates() {
         network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
             .unwrap();
     println!("New primary added: {:?}", own_address);
-    let kp = keys(None).remove(2);
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(kp.private().0.to_bytes())
+        .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
 
@@ -700,8 +720,13 @@ async fn test_reply_with_certificates_already_in_storage() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
-    let key = keys(None).pop().unwrap();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
@@ -711,11 +736,10 @@ async fn test_reply_with_certificates_already_in_storage() {
     let own_address =
         network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
             .unwrap();
-    let kp = keys(None).remove(2);
 
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(kp.private().0.to_bytes())
+        .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
 
@@ -747,12 +771,13 @@ async fn test_reply_with_certificates_already_in_storage() {
     for i in 1..=8 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(batch.clone(), 0)
-            .build(&key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
 
         block_ids.push(certificate.digest());
         certificates.insert(certificate.clone().digest(), certificate.clone());
@@ -803,8 +828,13 @@ async fn test_reply_with_payload_already_in_storage() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
-    let key = keys(None).pop().unwrap();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let author = fixture.authorities().next().unwrap();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
@@ -814,11 +844,10 @@ async fn test_reply_with_payload_already_in_storage() {
     let own_address =
         network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
             .unwrap();
-    let kp = keys(None).remove(2);
 
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(kp.private().0.to_bytes())
+        .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
     let synchronizer = BlockSynchronizer {
@@ -849,12 +878,13 @@ async fn test_reply_with_payload_already_in_storage() {
     for i in 1..=8 {
         let batch = fixture_batch_with_transactions(10);
 
-        let header = fixture_header_builder()
+        let header = author
+            .header_builder(&committee)
             .with_payload_batch(batch.clone(), 0)
-            .build(&key)
+            .build(author.keypair())
             .unwrap();
 
-        let certificate: Certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
 
         certificates.push(certificate.clone());
         certificates_map.insert(certificate.clone().digest(), certificate.clone());
@@ -909,12 +939,15 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     let (_, certificate_store, payload_store) = create_db_stores();
 
     // AND the necessary keys
-    let (_, committee, worker_cache) = resolve_name_committee_and_worker_cache();
-    let key = keys(None).pop().unwrap();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let primary = fixture.authorities().next().unwrap();
+    let network_key = primary.keypair().copy().private().0.to_bytes();
 
     // AND make sure the key used for our "own" primary is the one that will
     // be used to create the headers.
-    let name = key.public().clone();
+    let name = primary.public_key();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
@@ -924,11 +957,10 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     let own_address =
         network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
             .unwrap();
-    let kp = keys(None).remove(2);
 
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(kp.private().0.to_bytes())
+        .private_key(network_key)
         .start(anemo::Router::new())
         .unwrap();
     let synchronizer = BlockSynchronizer {
@@ -958,22 +990,13 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     for _ in 0..5 {
         let batch = fixture_batch_with_transactions(10);
 
-        let builder = types::HeaderBuilder::default();
-        let header = builder
-            .author(name.clone())
-            .round(1)
-            .epoch(0)
-            .parents(
-                Certificate::genesis(&committee)
-                    .iter()
-                    .map(|x| x.digest())
-                    .collect(),
-            )
+        let header = primary
+            .header_builder(&committee)
             .with_payload_batch(batch.clone(), 0)
-            .build(&key)
+            .build(primary.keypair())
             .unwrap();
 
-        let certificate: Certificate = certificate(&header);
+        let certificate = fixture.certificate(&header);
 
         certificates.push(certificate.clone());
         certificates_map.insert(certificate.clone().digest(), certificate.clone());
