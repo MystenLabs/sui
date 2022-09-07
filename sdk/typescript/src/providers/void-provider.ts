@@ -22,7 +22,6 @@ import {
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
   ObjectOwner,
-  TimeRangeQueryOptions,
   SuiAddress,
   ObjectId,
   SuiEvents,
@@ -135,27 +134,57 @@ export class VoidProvider extends Provider {
     throw this.newError('getEventsByTransaction');
   }
 
-  async getEventsByTransactionModule(_package: string, _module: string, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByTransactionModule(
+    _package: string,
+    _module: string,
+    _count: number,
+    _startTime: number,
+    _endTime: number
+  ): Promise<SuiEvents> {
     throw this.newError('getEventsByTransactionModule');
   }
 
-  async getEventsByMoveEventStructName(_moveEventStructName: string, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByMoveEventStructName(
+    _moveEventStructName: string,
+    _count: number,
+    _startTime: number,
+    _endTime: number
+  ): Promise<SuiEvents> {
     throw this.newError('getEventsByMoveEventStructName');
   }
 
-  async getEventsBySender(_sender: SuiAddress, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsBySender(
+    _sender: SuiAddress,
+    _count: number,
+    _startTime: number,
+    _endTime: number
+  ): Promise<SuiEvents> {
     throw this.newError('getEventsBySender');
   }
 
-  async getEventsByRecipient(_recipient: ObjectOwner, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByRecipient(
+    _recipient: ObjectOwner,
+    _count: number,
+    _startTime: number,
+    _endTime: number
+  ): Promise<SuiEvents> {
     throw this.newError('getEventsByRecipient');
   }
 
-  async getEventsByObject(_object: ObjectId, _options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByObject(
+    _object: ObjectId,
+    _count: number,
+    _startTime: number,
+    _endTime: number
+  ): Promise<SuiEvents> {
     throw this.newError('getEventsByObject');
   }
 
-  async getEventsByTimeRange(_options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByTimeRange(
+    _count: number,
+    _startTime: number,
+    _endTime: number
+  ): Promise<SuiEvents> {
     throw this.newError('getEventsByTimeRange');
   }
 

@@ -36,7 +36,6 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
-  TimeRangeQueryOptions,
   SuiAddress,
   ObjectOwner,
   ObjectId,
@@ -73,6 +72,8 @@ export class JsonRpcProvider extends Provider {
 
     this.client = new JsonRpcClient(endpoint);
     this.wsClient = new WebsocketClient(endpoint, skipDataValidation, socketOptions);
+
+    console.log(this);
   }
 
   // Move info
@@ -452,11 +453,17 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getEventsByTransactionModule(package_: string, module: string, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByTransactionModule(
+    package_: string,
+    module: string,
+    count: number,
+    startTime: number,
+    endTime: number
+  ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
         'sui_getEventsByTransactionModule',
-        [package_, module, options.count, options.startTime, options.endTime],
+        [package_, module, count, startTime, endTime],
         isSuiEvents,
         this.skipDataValidation
       );
@@ -467,11 +474,16 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getEventsByMoveEventStructName(moveEventStructName: string, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByMoveEventStructName(
+    moveEventStructName: string,
+    count: number,
+    startTime: number,
+    endTime: number
+  ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
         'sui_getEventsByMoveEventStructName',
-        [moveEventStructName, options.count, options.startTime, options.endTime],
+        [moveEventStructName, count, startTime, endTime],
         isSuiEvents,
         this.skipDataValidation
       );
@@ -482,11 +494,16 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getEventsBySender(sender: SuiAddress, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsBySender(
+    sender: SuiAddress,
+    count: number,
+    startTime: number,
+    endTime: number
+  ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
         'sui_getEventsBySender',
-        [sender, options.count, options.startTime, options.endTime],
+        [sender, count, startTime, endTime],
         isSuiEvents,
         this.skipDataValidation
       );
@@ -497,11 +514,16 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getEventsByRecipient(recipient: ObjectOwner, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByRecipient(
+    recipient: ObjectOwner,
+    count: number,
+    startTime: number,
+    endTime: number
+  ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
         'sui_getEventsByRecipient',
-        [recipient, options.count, options.startTime, options.endTime],
+        [recipient, count, startTime, endTime],
         isSuiEvents,
         this.skipDataValidation
       );
@@ -512,11 +534,16 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getEventsByObject(object: ObjectId, options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByObject(
+    object: ObjectId,
+    count: number,
+    startTime: number,
+    endTime: number
+  ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
         'sui_getEventsByObject',
-        [object, options.count, options.startTime, options.endTime],
+        [object, count, startTime, endTime],
         isSuiEvents,
         this.skipDataValidation
       );
@@ -527,17 +554,21 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getEventsByTimeRange(options: TimeRangeQueryOptions): Promise<SuiEvents> {
+  async getEventsByTimeRange(
+    count: number,
+    startTime: number,
+    endTime: number
+  ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
         'sui_getEventsByTimeRange',
-        [options.count, options.startTime, options.endTime],
+        [count, startTime, endTime],
         isSuiEvents,
         this.skipDataValidation
       );
     } catch (err) {
       throw new Error(
-        `Error getting events by time range: ${options.startTime} thru ${options.endTime}, with error: ${err}`
+        `Error getting events by time range: ${startTime} thru ${endTime}, with error: ${err}`
       );
     }
   }

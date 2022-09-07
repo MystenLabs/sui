@@ -21,7 +21,6 @@ import {
   SuiExecuteTransactionResponse,
   TransactionDigest,
   ObjectId,
-  TimeRangeQueryOptions,
   SuiAddress,
   ObjectOwner,
   SuiEvents,
@@ -157,71 +156,85 @@ export abstract class Provider {
    * Get events emitted from within the specified Move module
    * @param package_ Move package object ID
    * @param module Move module name
-   * @param options.count max result count
+   * @param count max result count
    * @param options.startTime start of time range
    * @param options.endTime end of time range
    */
   abstract getEventsByTransactionModule(
     package_: ObjectId,                   // 'package' is reserved word
     module: string,
-    options: TimeRangeQueryOptions
+    count: number,
+    startTime: number,
+    endTime: number
   ): Promise<SuiEvents>;
 
   /**
    * Get events with a matching Move type name
    * @param moveEventStructName Move struct type name
-   * @param options.count max result count
-   * @param options.startTime start of time range to search
+   * @param count max result count
+   * @param startTime start of time range to search
    * @param options.endTime end of time range
    */
   abstract getEventsByMoveEventStructName(
     moveEventStructName: string,
-    options: TimeRangeQueryOptions
+    count: number,
+    startTime: number,
+    endTime: number
   ): Promise<SuiEvents>;
 
   /**
    * Get events with a matching Move type name
    * @param sender Sui address of the sender of the transaction that generated the event
-   * @param options.count max result count
-   * @param options.startTime start of time range to search
+   * @param count max result count
+   * @param startTime start of time range to search
    * @param options.endTime end of time range
    */
   abstract getEventsBySender(
     sender: SuiAddress,
-    options: TimeRangeQueryOptions
+    count: number,
+    startTime: number,
+    endTime: number
   ): Promise<SuiEvents>;
 
   /**
    * Get events with a matching recipient
    * @param recipient object owner that received the transaction that generated the event
-   * @param options.count max result count
-   * @param options.startTime start of time range to search
+   * @param count max result count
+   * @param startTime start of time range to search
    * @param options.endTime end of time range
    */
   abstract getEventsByRecipient(
     recipient: ObjectOwner,
-    options: TimeRangeQueryOptions
+    count: number,
+    startTime: number,
+    endTime: number
   ): Promise<SuiEvents>;
 
   /**
    * Get events involving the given object
    * @param object object id created, mutated, or deleted in events
-   * @param options.count max result count
-   * @param options.startTime start of time range to search
+   * @param count max result count
+   * @param startTime start of time range to search
    * @param options.endTime end of time range
    */
   abstract getEventsByObject(
     object: ObjectId,
-    options: TimeRangeQueryOptions
+    count: number,
+    startTime: number,
+    endTime: number
   ): Promise<SuiEvents>;
 
   /**
    * Get all events within the given time span
-   * @param options.count max result count
-   * @param options.startTime start of time range to search
+   * @param count max result count
+   * @param startTime start of time range to search
    * @param options.endTime end of time range
    */
-  abstract getEventsByTimeRange(options: TimeRangeQueryOptions): Promise<SuiEvents>;
+  abstract getEventsByTimeRange(
+    count: number,
+    startTime: number,
+    endTime: number
+  ): Promise<SuiEvents>;
 
   /**
    * Subscribe to get notifications whenever an event matching the filter occurs
