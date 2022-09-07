@@ -5,16 +5,16 @@ use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use fastcrypto::{traits::KeyPair, Hash};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
-use test_utils::{committee, keys, make_optimal_signed_certificates};
+use test_utils::{make_optimal_signed_certificates, CommitteeFixture};
 use types::Certificate;
 
 #[tokio::test]
 async fn deliver_certificate_using_dag() {
-    let kp = keys(None).pop().unwrap();
-    let name = kp.public().clone();
+    let fixture = CommitteeFixture::builder().build();
+    let name = fixture.authorities().next().unwrap().public_key();
 
     // Make the current committee.
-    let committee = committee(None);
+    let committee = fixture.committee();
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_header_waiter, _rx_header_waiter) = test_utils::test_channel!(1);
@@ -41,8 +41,13 @@ async fn deliver_certificate_using_dag() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
 
+    let keys = fixture
+        .authorities()
+        .map(|a| a.keypair().copy())
+        .take(3)
+        .collect::<Vec<_>>();
     let (mut certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys(None)[..3]);
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
     // insert the certificates in the DAG
     for certificate in certificates.clone() {
@@ -62,11 +67,11 @@ async fn deliver_certificate_using_dag() {
 
 #[tokio::test]
 async fn deliver_certificate_using_store() {
-    let kp = keys(None).pop().unwrap();
-    let name = kp.public().clone();
+    let fixture = CommitteeFixture::builder().build();
+    let name = fixture.authorities().next().unwrap().public_key();
 
     // Make the current committee.
-    let committee = committee(None);
+    let committee = fixture.committee();
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_header_waiter, _rx_header_waiter) = test_utils::test_channel!(1);
@@ -89,8 +94,13 @@ async fn deliver_certificate_using_store() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
 
+    let keys = fixture
+        .authorities()
+        .map(|a| a.keypair().copy())
+        .take(3)
+        .collect::<Vec<_>>();
     let (mut certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys(None)[..3]);
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
     // insert the certificates in the DAG
     for certificate in certificates.clone() {
@@ -110,11 +120,11 @@ async fn deliver_certificate_using_store() {
 
 #[tokio::test]
 async fn deliver_certificate_not_found_parents() {
-    let kp = keys(None).pop().unwrap();
-    let name = kp.public().clone();
+    let fixture = CommitteeFixture::builder().build();
+    let name = fixture.authorities().next().unwrap().public_key();
 
     // Make the current committee.
-    let committee = committee(None);
+    let committee = fixture.committee();
 
     let (_, certificates_store, payload_store) = create_db_stores();
     let (tx_header_waiter, _rx_header_waiter) = test_utils::test_channel!(1);
@@ -137,8 +147,13 @@ async fn deliver_certificate_not_found_parents() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
 
+    let keys = fixture
+        .authorities()
+        .map(|a| a.keypair().copy())
+        .take(3)
+        .collect::<Vec<_>>();
     let (mut certificates, _next_parents) =
-        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys(None)[..3]);
+        make_optimal_signed_certificates(1..=4, &genesis, &committee, &keys);
 
     // take the last one (top) and test for parents
     let test_certificate = certificates.pop_back().unwrap();
