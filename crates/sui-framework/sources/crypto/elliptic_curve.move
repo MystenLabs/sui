@@ -4,6 +4,7 @@
 /// Library for Elliptic Curve operations on chain. We specifically support the Ristretto-255 sub-group.
 module sui::elliptic_curve {
     use std::vector;
+    use std::debug;
 
     ///////////////////////////////////
     /// Elliptic Curve structs
@@ -59,6 +60,7 @@ module sui::elliptic_curve {
 
     /// Create a field element from u64
     public fun new_scalar_from_u64(value: u64): Scalar {
+        debug::print(&value);
         Scalar {
             value: native_scalar_from_u64(value)
         }
