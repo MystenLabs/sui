@@ -1,7 +1,7 @@
 .copy {
     @apply cursor-pointer mr-2;
 
-    /* fix some wiered vertical spacing svg with copy 16px is the high of svg */
+    /* fix some weird vertical spacing svg with copy 16px is the high of svg */
     font-size: 16px !important;
     vertical-align: middle;
     line-height: 100%;
