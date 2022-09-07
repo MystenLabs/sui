@@ -9,7 +9,7 @@ use types::{
 
 #[tokio::test]
 async fn test_new_epoch() {
-    let mut cluster = Cluster::new(None, None, None, false);
+    let mut cluster = Cluster::new(None, false);
 
     // start the cluster will all the possible nodes
     cluster.start(Some(2), Some(1), None).await;
@@ -53,7 +53,7 @@ async fn test_new_epoch() {
 
 #[tokio::test]
 async fn test_new_network_info() {
-    let mut cluster = Cluster::new(None, None, None, false);
+    let mut cluster = Cluster::new(None, false);
 
     // start the cluster will all the possible nodes
     cluster.start(Some(2), Some(1), None).await;
@@ -113,7 +113,7 @@ async fn test_new_network_info() {
 
 #[tokio::test]
 async fn test_get_primary_address() {
-    let mut cluster = Cluster::new(None, None, None, false);
+    let mut cluster = Cluster::new(None, false);
 
     // start the cluster will all the possible nodes
     cluster.start(Some(2), Some(1), None).await;

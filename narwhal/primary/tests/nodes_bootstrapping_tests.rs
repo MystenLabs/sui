@@ -14,7 +14,7 @@ async fn test_shutdown_bug() {
     let delay = Duration::from_secs(10); // 10 seconds
 
     // A cluster of 4 nodes will be created
-    let cluster = Cluster::new(None, None, None, false);
+    let cluster = Cluster::new(None, false);
 
     // ==== Start first authority ====
     let authority = cluster.authority(0);
@@ -53,7 +53,7 @@ async fn test_node_staggered_starts() {
     let node_staggered_delay = Duration::from_secs(60 * 5); // 5 minutes
 
     // A cluster of 4 nodes will be created
-    let cluster = Cluster::new(None, None, None, true);
+    let cluster = Cluster::new(None, true);
 
     // ==== Start first authority ====
     cluster.authority(0).start(false, Some(1)).await;
@@ -103,7 +103,7 @@ async fn test_second_node_restart() {
     let node_advance_delay = Duration::from_secs(60);
 
     // A cluster of 4 nodes will be created
-    let mut cluster = Cluster::new(None, None, None, true);
+    let mut cluster = Cluster::new(None, true);
 
     // ===== Start the cluster ====
     cluster.start(Some(4), Some(1), None).await;
@@ -148,7 +148,7 @@ async fn test_loss_of_liveness_without_recovery() {
     let node_advance_delay = Duration::from_secs(60);
 
     // A cluster of 4 nodes will be created
-    let mut cluster = Cluster::new(None, None, None, true);
+    let mut cluster = Cluster::new(None, true);
 
     // ===== Start the cluster ====
     cluster.start(Some(4), Some(1), None).await;
@@ -199,7 +199,7 @@ async fn test_loss_of_liveness_with_recovery() {
     let node_advance_delay = Duration::from_secs(60);
 
     // A cluster of 4 nodes will be created
-    let mut cluster = Cluster::new(None, None, None, true);
+    let mut cluster = Cluster::new(None, true);
 
     // ===== Start the cluster ====
     cluster.start(Some(4), Some(1), None).await;
