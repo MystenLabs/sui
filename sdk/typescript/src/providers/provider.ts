@@ -157,7 +157,9 @@ export abstract class Provider {
    * Get events emitted from within the specified Move module
    * @param package_ Move package object ID
    * @param module Move module name
-   * @param options max result count, start & end times
+   * @param options.count max result count
+   * @param options.startTime start of time range
+   * @param options.endTime end of time range
    */
   abstract getEventsByTransactionModule(
     package_: ObjectId,                   // 'package' is reserved word
@@ -168,7 +170,9 @@ export abstract class Provider {
   /**
    * Get events with a matching Move type name
    * @param moveEventStructName Move struct type name
-   * @param options max result count, start & end times
+   * @param options.count max result count
+   * @param options.startTime start of time range to search
+   * @param options.endTime end of time range
    */
   abstract getEventsByMoveEventStructName(
     moveEventStructName: string,
@@ -178,7 +182,9 @@ export abstract class Provider {
   /**
    * Get events with a matching Move type name
    * @param sender Sui address of the sender of the transaction that generated the event
-   * @param options max result count, start & end times
+   * @param options.count max result count
+   * @param options.startTime start of time range to search
+   * @param options.endTime end of time range
    */
   abstract getEventsBySender(
     sender: SuiAddress,
@@ -188,7 +194,9 @@ export abstract class Provider {
   /**
    * Get events with a matching recipient
    * @param recipient object owner that received the transaction that generated the event
-   * @param options max result count, start & end times
+   * @param options.count max result count
+   * @param options.startTime start of time range to search
+   * @param options.endTime end of time range
    */
   abstract getEventsByRecipient(
     recipient: ObjectOwner,
@@ -198,7 +206,9 @@ export abstract class Provider {
   /**
    * Get events involving the given object
    * @param object object id created, mutated, or deleted in events
-   * @param options max result count, start & end times
+   * @param options.count max result count
+   * @param options.startTime start of time range to search
+   * @param options.endTime end of time range
    */
   abstract getEventsByObject(
     object: ObjectId,
