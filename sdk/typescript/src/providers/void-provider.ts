@@ -135,7 +135,7 @@ export class VoidProvider extends Provider {
     throw this.newError('getEventsByTransaction');
   }
 
-  async getEventsByTransactionModule(_package_: string, _module: string, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
+  async getEventsByTransactionModule(_package: string, _module: string, _options: TimeRangeQueryOptions): Promise<SuiEventEnvelope[]> {
     throw this.newError('getEventsByTransactionModule');
   }
 
