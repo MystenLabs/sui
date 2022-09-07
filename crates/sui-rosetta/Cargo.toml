@@ -27,6 +27,7 @@ strum = "0.24.1"
 strum_macros = "0.24.3"
 sha3 = "0.10.2"
 async-trait = "0.1.57"
+futures = "0.3.24"
 
 telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
 

@@ -43,7 +43,7 @@ pub async fn payload(
     Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<ConstructionPayloadsResponse, Error> {
     context.checks_network_identifier(&payload.network_identifier)?;
-    let data = Operation::parse_operations(payload.operations, &context.state).await?;
+    let data = Operation::parse_transaction_data(payload.operations, &context.state).await?;
 
     let signer = data.signer();
     let hex_bytes = payload
@@ -126,7 +126,7 @@ pub async fn preprocess(
     Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<ConstructionPreprocessResponse, Error> {
     context.checks_network_identifier(&payload.network_identifier)?;
-    let data = Operation::parse_operations(payload.operations, &context.state).await?;
+    let data = Operation::parse_transaction_data(payload.operations, &context.state).await?;
     let signer = data.signer();
     Ok(ConstructionPreprocessResponse {
         options: None,
@@ -161,9 +161,9 @@ pub async fn metadata(
 #[axum_macros::debug_handler]
 pub async fn parse(
     Json(payload): Json<ConstructionParseRequest>,
-    Extension(state): Extension<Arc<ServerContext>>,
+    Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<ConstructionParseResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
+    context.checks_network_identifier(&payload.network_identifier)?;
 
     let data = if payload.signed {
         let tx: Transaction = bcs::from_bytes(&payload.transaction.to_vec()?)?;
@@ -172,7 +172,7 @@ pub async fn parse(
         TransactionData::from_signable_bytes(&payload.transaction.to_vec()?)?
     };
     let address = data.signer();
-    let operations = Operation::from_data_and_effect(&data, None)?;
+    let operations = Operation::from_data_and_effect(&data, None, &context.state).await?;
 
     Ok(ConstructionParseResponse {
         operations,

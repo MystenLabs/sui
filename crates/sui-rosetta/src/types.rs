@@ -346,6 +346,7 @@ pub enum OperationType {
     MergeCoins,
     SplitCoin,
     // Readonly
+    TransferObject,
     Publish,
     MoveCall,
     EpochChange,

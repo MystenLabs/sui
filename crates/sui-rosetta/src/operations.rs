@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::ops::Neg;
 
 use anyhow::anyhow;
@@ -13,11 +12,12 @@ use sui_core::authority::AuthorityState;
 use sui_types::base_types::{ObjectID, ObjectRef, SuiAddress};
 use sui_types::coin::{COIN_JOIN_FUNC_NAME, COIN_MODULE_NAME, COIN_SPLIT_VEC_FUNC_NAME};
 use sui_types::error::SuiError;
+use sui_types::gas_coin::GasCoin;
 use sui_types::messages::{
-    CallArg, ChangeEpoch, MoveCall, ObjectArg, SingleTransactionKind, TransactionData,
-    TransactionEffects,
+    CallArg, MoveCall, ObjectArg, SingleTransactionKind, TransactionData, TransactionEffects,
 };
 use sui_types::move_package::disassemble_modules;
+use sui_types::object::PastObjectRead::VersionFound;
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
 
 use crate::types::{
@@ -47,23 +47,28 @@ pub struct Operation {
 }
 
 impl Operation {
-    pub fn from_data_and_effect(
+    pub async fn from_data_and_effect(
         data: &TransactionData,
         effects: Option<&TransactionEffects>,
+        state: &AuthorityState,
     ) -> Result<Vec<Operation>, anyhow::Error> {
         let budget = data.gas_budget;
         let gas = data.gas();
         let sender = data.signer();
         let status = effects.map(|effect| OperationStatus::from(&effect.status).to_string());
-        Ok(data
-            .kind
-            .single_transactions()
-            .flat_map(|tx| parse_operations(tx, budget, gas, sender, status.clone(), effects))
-            .flatten()
-            .collect::<Vec<_>>())
+
+        Ok(futures::future::try_join_all(
+            data.kind.single_transactions().map(|tx| {
+                parse_operations(tx, budget, gas, sender, status.clone(), effects, state)
+            }),
+        )
+        .await?
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>())
     }
 
-    pub async fn parse_operations(
+    pub async fn parse_transaction_data(
         operations: Vec<Operation>,
         state: &AuthorityState,
     ) -> Result<TransactionData, Error> {
@@ -104,13 +109,14 @@ impl Operation {
     }
 }
 
-fn parse_operations(
+async fn parse_operations(
     tx: &SingleTransactionKind,
     budget: u64,
     gas: ObjectRef,
     sender: SuiAddress,
     status: Option<String>,
     effects: Option<&TransactionEffects>,
+    state: &AuthorityState,
 ) -> Result<Vec<Operation>, anyhow::Error> {
     Ok(match tx {
         SingleTransactionKind::TransferSui(tx) => transfer_sui_operations(
@@ -122,15 +128,19 @@ fn parse_operations(
             status,
             effects,
         ),
-        SingleTransactionKind::TransferObject(tx) => transfer_coin_operations(
-            budget,
-            tx.object_ref,
-            gas,
-            sender,
-            tx.recipient,
-            status,
-            effects,
-        ),
+        SingleTransactionKind::TransferObject(tx) => {
+            transfer_object_operations(
+                budget,
+                tx.object_ref,
+                gas,
+                sender,
+                tx.recipient,
+                status,
+                effects,
+                state,
+            )
+            .await?
+        }
         SingleTransactionKind::Call(c) => parse_move_call(sender, gas, budget, c, status, effects)?,
         SingleTransactionKind::Publish(p) => {
             let disassembled = disassemble_modules(p.modules.iter())?;
@@ -221,33 +231,85 @@ fn transfer_sui_operations(
     ]
 }
 
-fn transfer_coin_operations(
+async fn transfer_object_operations(
     budget: u64,
-    coin: ObjectRef,
+    object_id: ObjectRef,
     gas: ObjectRef,
     sender: SuiAddress,
     recipient: SuiAddress,
     status: Option<String>,
     effects: Option<&TransactionEffects>,
-) -> Vec<Operation> {
-    vec![
+    state: &AuthorityState,
+) -> Result<Vec<Operation>, anyhow::Error> {
+    let object = if let Ok(VersionFound(_, o, _)) =
+        state.get_past_object_read(&object_id.0, object_id.1).await
+    {
+        o
+    } else {
+        return Err(anyhow!(
+            "Cannot find input object {}:{}",
+            object_id.0,
+            object_id.1
+        ));
+    };
+    let coin = GasCoin::try_from(&object).ok();
+    let type_ = if coin.is_some() {
+        OperationType::TransferCoin
+    } else {
+        OperationType::TransferObject
+    };
+    let sender_coin_change = if coin.is_some() {
+        Some(CoinChange {
+            coin_identifier: CoinIdentifier {
+                identifier: object_id.into(),
+            },
+            coin_action: CoinAction::CoinSpent,
+        })
+    } else {
+        None
+    };
+
+    let recipient_coin_change = if coin.is_some() {
+        effects
+            .and_then(|effect| {
+                effect
+                    .mutated
+                    .iter()
+                    .find(|((id, _, _), _)| id == &object_id.0)
+            })
+            .map(|(oref, _)| CoinChange {
+                coin_identifier: CoinIdentifier {
+                    identifier: (*oref).into(),
+                },
+                coin_action: CoinAction::CoinCreated,
+            })
+    } else {
+        None
+    };
+
+    let sender_amount = coin.as_ref().map(|coin| Amount {
+        value: SignedValue::neg(coin.value()),
+        currency: SUI.clone(),
+    });
+
+    let recipient_amount = coin.map(|coin| Amount {
+        value: SignedValue::from(coin.value()),
+        currency: SUI.clone(),
+    });
+
+    Ok(vec![
         Operation {
             operation_identifier: OperationIdentifier {
                 index: 0,
                 network_index: None,
             },
             related_operations: vec![],
-            type_: OperationType::TransferCoin,
+            type_,
             status: status.clone(),
             account: Some(AccountIdentifier { address: sender }),
-            amount: None,
-            coin_change: Some(CoinChange {
-                coin_identifier: CoinIdentifier {
-                    identifier: coin.into(),
-                },
-                coin_action: CoinAction::CoinSpent,
-            }),
-            metadata: None,
+            amount: sender_amount,
+            coin_change: sender_coin_change,
+            metadata: Some(json!({"object_type": object.type_()})),
         },
         Operation {
             operation_identifier: OperationIdentifier {
@@ -255,15 +317,15 @@ fn transfer_coin_operations(
                 network_index: None,
             },
             related_operations: vec![],
-            type_: OperationType::TransferCoin,
+            type_,
             status: status.clone(),
             account: Some(AccountIdentifier { address: recipient }),
-            amount: None,
-            coin_change: None,
-            metadata: None,
+            amount: recipient_amount,
+            coin_change: recipient_coin_change,
+            metadata: Some(json!({"object_type": object.type_()})),
         },
         Operation::gas(2, budget, status, gas, sender, effects),
-    ]
+    ])
 }
 
 fn split_coin_operations(
@@ -561,22 +623,6 @@ enum SuiAction {
         gas: ObjectID,
         sender: SuiAddress,
     },
-    MoveCall {
-        budget: u64,
-        gas: ObjectID,
-        sender: SuiAddress,
-        package: ObjectID,
-        module: String,
-        function: String,
-        arguments: Vec<Value>,
-    },
-    Publish {
-        budget: u64,
-        gas: ObjectID,
-        sender: SuiAddress,
-        disassembled: BTreeMap<String, Value>,
-    },
-    EpochChange(ChangeEpoch),
 }
 
 impl SuiAction {
@@ -654,12 +700,6 @@ impl SuiAction {
                     ],
                     budget,
                 )
-            }
-            SuiAction::MoveCall { .. } | SuiAction::Publish { .. } | SuiAction::EpochChange(_) => {
-                return Err(Error::new_with_msg(
-                    UnsupportedOperation,
-                    format!("Unsupported Operation [{self:?}]").as_str(),
-                ))
             }
         })
     }
@@ -758,7 +798,8 @@ impl TryInto<SuiAction> for Vec<Operation> {
                         builder.add_split_amount(amount.value.abs());
                     }
                 }
-                OperationType::Genesis
+                OperationType::TransferObject
+                | OperationType::Genesis
                 | OperationType::MoveCall
                 | OperationType::Publish
                 | OperationType::EpochChange => return Err(Error::unsupported_operation(op.type_)),
