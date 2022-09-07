@@ -227,7 +227,7 @@ impl SuiNode {
             None
         };
         let execute_driver_handle = active_authority.clone().spawn_execute_process().await;
-        let checkpoint_process_handle = if config.enable_checkpoint {
+        let checkpoint_process_handle = if config.enable_checkpoint && is_validator {
             Some(
                 active_authority
                     .clone()
