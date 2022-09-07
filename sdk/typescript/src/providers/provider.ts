@@ -158,7 +158,7 @@ export abstract class Provider {
    * @param module Move module name
    * @param count max result count
    * @param options.startTime start of time range
-   * @param options.endTime end of time range
+   * @param endTime end of time range
    */
   abstract getEventsByTransactionModule(
     package_: ObjectId,                   // 'package' is reserved word
@@ -173,7 +173,7 @@ export abstract class Provider {
    * @param moveEventStructName Move struct type name
    * @param count max result count
    * @param startTime start of time range to search
-   * @param options.endTime end of time range
+   * @param endTime end of time range
    */
   abstract getEventsByMoveEventStructName(
     moveEventStructName: string,
@@ -187,7 +187,7 @@ export abstract class Provider {
    * @param sender Sui address of the sender of the transaction that generated the event
    * @param count max result count
    * @param startTime start of time range to search
-   * @param options.endTime end of time range
+   * @param endTime end of time range
    */
   abstract getEventsBySender(
     sender: SuiAddress,
@@ -201,7 +201,7 @@ export abstract class Provider {
    * @param recipient object owner that received the transaction that generated the event
    * @param count max result count
    * @param startTime start of time range to search
-   * @param options.endTime end of time range
+   * @param endTime end of time range
    */
   abstract getEventsByRecipient(
     recipient: ObjectOwner,
@@ -215,7 +215,7 @@ export abstract class Provider {
    * @param object object id created, mutated, or deleted in events
    * @param count max result count
    * @param startTime start of time range to search
-   * @param options.endTime end of time range
+   * @param endTime end of time range
    */
   abstract getEventsByObject(
     object: ObjectId,
@@ -228,7 +228,7 @@ export abstract class Provider {
    * Get all events within the given time span
    * @param count max result count
    * @param startTime start of time range to search
-   * @param options.endTime end of time range
+   * @param endTime end of time range
    */
   abstract getEventsByTimeRange(
     count: number,
