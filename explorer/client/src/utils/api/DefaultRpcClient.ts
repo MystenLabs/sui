@@ -7,7 +7,6 @@ import { getEndpoint, Network } from './rpcSetting';
 
 export { Network, getEndpoint };
 
-
 const defaultRpcMap: Map<Network | string, JsonRpcProvider> = new Map();
 export const DefaultRpcClient = (network: Network | string) => {
     const existingClient = defaultRpcMap.get(network);
