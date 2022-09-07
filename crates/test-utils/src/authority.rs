@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::TEST_COMMITTEE_SIZE;
+use prometheus::Registry;
 use rand::{prelude::StdRng, SeedableRng};
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -51,8 +52,8 @@ pub fn test_and_configure_authority_configs(committee_size: usize) -> NetworkCon
     configs
 }
 
-pub async fn start_node(config: &NodeConfig) -> SuiNode {
-    SuiNode::start(config).await.unwrap()
+pub async fn start_node(config: &NodeConfig, prom_registry: Registry) -> SuiNode {
+    SuiNode::start(config, prom_registry).await.unwrap()
 }
 
 /// Spawn all authorities in the test committee into a separate tokio task.
@@ -62,7 +63,8 @@ where
 {
     let mut handles = Vec::new();
     for validator in config.validator_configs() {
-        let node = start_node(validator).await;
+        let prom_registry = Registry::new();
+        let node = start_node(validator, prom_registry).await;
         let state = node.state();
 
         for o in objects.clone() {

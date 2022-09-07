@@ -7,10 +7,11 @@ use multiaddr::Multiaddr;
 use std::path::PathBuf;
 use std::time::Duration;
 use sui_config::{Config, NodeConfig};
+use sui_node::metrics;
 use sui_telemetry::send_telemetry_event;
 use tokio::task;
 use tokio::time::sleep;
-use tracing::warn;
+use tracing::{info, warn};
 
 #[derive(Parser)]
 #[clap(rename_all = "kebab-case", version)]
@@ -43,15 +44,21 @@ const PROF_DUMP: &[u8] = b"prof.dump\0";
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = Args::parse();
+    let mut config = NodeConfig::load(&args.config_path)?;
+
+    let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
+    info!(
+        "Started Prometheus HTTP endpoint at {}",
+        config.metrics_address
+    );
+
     // Initialize logging
     let (_guard, filter_handle) =
         telemetry_subscribers::TelemetryConfig::new(env!("CARGO_BIN_NAME"))
             .with_env()
+            .with_prom_registry(&prometheus_registry)
             .init();
-
-    let args = Args::parse();
-
-    let mut config = NodeConfig::load(&args.config_path)?;
 
     if let Some(listen_address) = args.listen_address {
         config.network_address = listen_address;
@@ -124,7 +131,7 @@ async fn main() -> Result<()> {
 
     sui_node::admin::start_admin_server(config.admin_interface_port, filter_handle);
 
-    let node = sui_node::SuiNode::start(&config).await?;
+    let node = sui_node::SuiNode::start(&config, prometheus_registry).await?;
     node.wait().await?;
 
     Ok(())

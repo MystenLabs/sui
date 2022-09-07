@@ -60,6 +60,7 @@ jemalloc-ctl = "^0.5"
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.23"
+prometheus = "0.13.1"
 
 typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e"}
 typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e"}
