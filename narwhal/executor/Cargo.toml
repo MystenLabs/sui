@@ -28,9 +28,9 @@ storage = { path = "../storage" }
 itertools = "0.10.3"
 
 types = { path = "../types" }
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "44ef8a4dfd773038ff331c3034239a6a121b3242" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "352091e92070c2ecfcccad444361a78249ecfe59" }
 
-store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "44ef8a4dfd773038ff331c3034239a6a121b3242" }
+store = { git = "https://github.com/mystenlabs/mysten-infra.git", package = "typed-store", rev = "352091e92070c2ecfcccad444361a78249ecfe59" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 match_opt = "0.1.2"
 
@@ -41,4 +41,4 @@ tempfile = "3.3.0"
 primary = { path = "../primary" }
 test_utils = { path = "../test_utils" }
 types = { path = "../types" }
-telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "44ef8a4dfd773038ff331c3034239a6a121b3242" }
+telemetry-subscribers = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "352091e92070c2ecfcccad444361a78249ecfe59" }

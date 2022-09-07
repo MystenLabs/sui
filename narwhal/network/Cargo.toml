@@ -24,7 +24,7 @@ types = { path = "../types" }
 crypto = { path = "../crypto" }
 
 serde = "1.0.144"
-mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "44ef8a4dfd773038ff331c3034239a6a121b3242" }
+mysten-network = { git = "https://github.com/mystenlabs/mysten-infra.git", rev = "352091e92070c2ecfcccad444361a78249ecfe59" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 eyre = "0.6.8"
 
