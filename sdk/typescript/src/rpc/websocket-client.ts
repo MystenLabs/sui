@@ -82,6 +82,9 @@ export const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
 const SUBSCRIBE_EVENT_METHOD = 'sui_subscribeEvent';
 const UNSUBSCRIBE_EVENT_METHOD = 'sui_unsubscribeEvent';
 
+/**
+ * Interface with a Sui node's websocket capabilities
+ */
 export class WebsocketClient {
   protected rpcClient: WsRpcClient;
   protected connectionState: ConnectionState = ConnectionState.NotConnected;
@@ -90,6 +93,12 @@ export class WebsocketClient {
 
   protected eventSubscriptions: Map<SubscriptionId, SubscriptionData> = new Map();
 
+  /**
+   * @param endpoint Sui node endpoint to connect to (accepts websocket & http)
+   * @param skipValidation If `true`, the rpc client will not check if the responses
+   * from the RPC server conform to the schema defined in the TypeScript SDK
+   * @param options Configuration options, such as timeouts & connection behavior
+   */
   constructor(
     public endpoint: string,
     public skipValidation: boolean,
