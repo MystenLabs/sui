@@ -299,6 +299,7 @@ module sui::coin {
 
     /// Transforms and transfers each specified amount to corresponding recipient in vector index 
     /// If we were unable to create enough coins, then we terminate the transfers
+    /// See `transform` function for explanation
     public entry fun transform_and_transfer_to_multiple<T>(coins: vector<Coin<T>>, amounts: vector<u64>, recipients: vector<address>, ctx: &mut TxContext){
         assert!(vector::length(&amounts) == vector::length(&recipients), EVecLenMismatch);
         let output = transform_internal(coins, amounts, ctx);
@@ -317,12 +318,14 @@ module sui::coin {
         vector::destroy_empty(output);
     }
 
-    /// Transforms and sender retains ownership
+    /// Transforms and transfers to sender (self)
+    /// See `transform` function for explanation
     public entry fun transform<T>(coins: vector<Coin<T>>, amounts: vector<u64>, ctx: &mut TxContext){
         transform_and_transfer_to_single(coins, amounts, tx_context::sender(ctx), ctx);
     }
 
     /// Transforms and transfers all coins to single recipient
+    /// See `transform` function for explanation
     public entry fun transform_and_transfer_to_single<T>(coins: vector<Coin<T>>, amounts: vector<u64>, recipient: address, ctx: &mut TxContext){
         let output = transform_internal(coins, amounts, ctx);
         let output_coin_item_counter = 0;
