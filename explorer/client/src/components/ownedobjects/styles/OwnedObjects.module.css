@@ -20,7 +20,7 @@
 }
 
 .objectbox {
-    @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] max-h-[72px] flex items-center;
+    @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] h-fit flex items-center;
 }
 
 .ownedobjectheader {
