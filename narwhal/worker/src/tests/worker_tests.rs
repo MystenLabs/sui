@@ -9,8 +9,8 @@ use prometheus::Registry;
 use std::time::Duration;
 use store::rocks;
 use test_utils::{
-    batch, digest_batch, resolve_name_committee_and_worker_cache, serialize_batch_message,
-    temp_dir, WorkerToPrimaryMockServer, WorkerToWorkerMockServer,
+    batch, digest_batch, serialize_batch_message, temp_dir, CommitteeFixture,
+    WorkerToPrimaryMockServer, WorkerToWorkerMockServer,
 };
 use types::{
     serialized_batch_digest, TransactionsClient, WorkerPrimaryMessage, WorkerToWorkerClient,
@@ -18,7 +18,10 @@ use types::{
 
 #[tokio::test]
 async fn handle_clients_transactions() {
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
@@ -90,7 +93,10 @@ async fn handle_clients_transactions() {
 #[tokio::test]
 async fn handle_client_batch_request() {
     let id = 0;
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().next().unwrap().public_key();
     let parameters = Parameters {
         max_header_delay: Duration::from_millis(100_000), // Ensure no batches are created.
         ..Parameters::default()

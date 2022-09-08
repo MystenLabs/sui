@@ -3,13 +3,16 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::worker::WorkerMessage;
-use test_utils::{batch, resolve_name_committee_and_worker_cache, WorkerToWorkerMockServer};
+use test_utils::{batch, CommitteeFixture, WorkerToWorkerMockServer};
 
 #[tokio::test]
 async fn wait_for_quorum() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_batch, mut rx_batch) = test_utils::test_channel!(1);
-    let (myself, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let myself = fixture.authorities().next().unwrap().public_key();
 
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));

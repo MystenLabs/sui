@@ -5,7 +5,7 @@ use super::*;
 use crate::worker::WorkerMessage;
 use fastcrypto::Hash;
 use store::rocks;
-use test_utils::{batch, committee, temp_dir};
+use test_utils::{batch, temp_dir, CommitteeFixture};
 
 #[tokio::test]
 async fn hash_and_store_our_batch() {
@@ -13,7 +13,8 @@ async fn hash_and_store_our_batch() {
     let (tx_batch, rx_batch) = test_utils::test_channel!(1);
     let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
 
-    let committee = committee(None).clone();
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
@@ -66,7 +67,8 @@ async fn hash_and_store_others_batch() {
     let (tx_batch, rx_batch) = test_utils::test_channel!(1);
     let (tx_digest, mut rx_digest) = test_utils::test_channel!(1);
 
-    let committee = committee(None).clone();
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 

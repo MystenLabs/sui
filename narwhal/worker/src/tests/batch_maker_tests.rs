@@ -3,11 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use prometheus::Registry;
-use test_utils::{committee, transaction};
+use test_utils::transaction;
+use test_utils::CommitteeFixture;
 
 #[tokio::test]
 async fn make_batch() {
-    let committee = committee(None).clone();
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_transaction, rx_transaction) = test_utils::test_channel!(1);
@@ -39,7 +41,8 @@ async fn make_batch() {
 
 #[tokio::test]
 async fn batch_timeout() {
-    let committee = committee(None).clone();
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_transaction, rx_transaction) = test_utils::test_channel!(1);

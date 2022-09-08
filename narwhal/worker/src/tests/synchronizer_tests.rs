@@ -3,12 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use arc_swap::ArcSwap;
-use fastcrypto::traits::KeyPair;
 use prometheus::Registry;
 use test_utils::{
-    batch, batch_digest, batches, committee, keys, open_batch_store, pure_committee_from_keys,
-    resolve_name_committee_and_worker_cache, serialize_batch_message,
-    shared_worker_cache_from_keys, WorkerToWorkerMockServer,
+    batch, batch_digest, batches, open_batch_store, serialize_batch_message, CommitteeFixture,
+    WorkerToWorkerMockServer,
 };
 use tokio::time::timeout;
 use types::serialized_batch_digest;
@@ -18,10 +16,10 @@ async fn synchronize() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, _) = test_utils::test_channel!(1);
 
-    let mut keys = keys(None);
-    let committee = pure_committee_from_keys(&keys);
-    let worker_cache = shared_worker_cache_from_keys(&keys);
-    let name = keys.pop().unwrap().public().clone();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
 
     let (tx_reconfiguration, _rx_reconfiguration) =
@@ -51,7 +49,7 @@ async fn synchronize() {
     );
 
     // Spawn a listener to receive our batch requests.
-    let target = keys.pop().unwrap().public().clone();
+    let target = fixture.authorities().nth(1).unwrap().public_key();
     let address = worker_cache
         .load()
         .worker(&target, &id)
@@ -75,12 +73,12 @@ async fn synchronize_when_batch_exists() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
 
-    let mut keys = keys(None);
-    let worker_cache = shared_worker_cache_from_keys(&keys);
-    let name = keys.pop().unwrap().public().clone();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
 
-    let committee = committee(None);
     let (tx_reconfiguration, _rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
@@ -108,7 +106,7 @@ async fn synchronize_when_batch_exists() {
     );
 
     // Spawn a listener to receive our batch requests.
-    let target = keys.pop().unwrap().public().clone();
+    let target = fixture.authorities().nth(1).unwrap().public_key();
     let address = worker_cache
         .load()
         .worker(&target, &id)
@@ -148,7 +146,10 @@ async fn test_successful_request_batch() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
 
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
 
     let (tx_reconfiguration, _rx_reconfiguration) =
@@ -210,7 +211,10 @@ async fn test_request_batch_not_found() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
 
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
 
     let (tx_reconfiguration, _rx_reconfiguration) =
@@ -271,7 +275,10 @@ async fn test_successful_batch_delete() {
     let (tx_message, rx_message) = test_utils::test_channel!(1);
     let (tx_primary, mut rx_primary) = test_utils::test_channel!(1);
 
-    let (name, committee, worker_cache) = resolve_name_committee_and_worker_cache();
+    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let committee = fixture.committee();
+    let worker_cache = fixture.shared_worker_cache();
+    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
 
     let (tx_reconfiguration, _rx_reconfiguration) =
