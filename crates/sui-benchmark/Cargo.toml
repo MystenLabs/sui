@@ -22,7 +22,7 @@ rocksdb = "0.19.0"
 serde_with = { version = "1.14.0", features = ["hex"] }
 tracing = "0.1.36"
 tracing-subscriber = { version = "0.3.15", features = ["time", "registry", "env-filter"] }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
+telemetry-subscribers = "0.1.0"
 clap = { version = "3.1.17", features = ["derive"] }
 prometheus = "0.13.1"
 multiaddr = "0.14.0"
@@ -40,7 +40,7 @@ sui-quorum-driver = { path = "../sui-quorum-driver" }
 sui-node = { path = "../sui-node" }
 sui-json-rpc-types = { path = "../sui-json-rpc-types" }
 
-move-core-types = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2", features = ["address20"] }
+move-core-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", features = ["address20"] }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "842a611a0a58dd378a904d85f79b4edbbbc7b137", package = "node" }
 workspace-hack = { path = "../workspace-hack"}
 test-utils = { path = "../test-utils" }
