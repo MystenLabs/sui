@@ -34,7 +34,7 @@ async fn test_start_stop_batch_subsystem() {
     let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
-    let server = Arc::new(AuthorityServer::new(
+    let server = Arc::new(AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/999/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
@@ -66,14 +66,14 @@ async fn test_simple_request() {
     let consensus_address = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
-    let server = AuthorityServer::new(
+    let server = AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
         tx_consensus_listener,
     );
 
-    let server_handle = server.spawn().await.unwrap();
+    let server_handle = server.spawn_for_test().await.unwrap();
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
@@ -101,7 +101,7 @@ async fn test_subscription() {
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
     // Start the batch server
-    let mut server = AuthorityServer::new(
+    let mut server = AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/0/http".parse().unwrap(),
         Arc::new(authority_state),
         consensus_address,
@@ -115,7 +115,7 @@ async fn test_subscription() {
     let db3 = server.state.db().clone();
     let state = server.state.clone();
 
-    let server_handle = server.spawn().await.unwrap();
+    let server_handle = server.spawn_for_test().await.unwrap();
 
     let client = NetworkAuthorityClient::connect(
         server_handle.address(),
@@ -298,7 +298,7 @@ async fn test_subscription_safe_client() {
 
     // Start the batch server
     let state = Arc::new(authority_state);
-    let server = Arc::new(AuthorityServer::new(
+    let server = Arc::new(AuthorityServer::new_for_test(
         "/ip4/127.0.0.1/tcp/998/http".parse().unwrap(),
         state.clone(),
         consensus_address,
