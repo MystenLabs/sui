@@ -1,13 +1,23 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { take } from 'rxjs';
+
 import { PortStream } from '_messaging/PortStream';
 import { WindowMessageStream } from '_messaging/WindowMessageStream';
 
-function createPort(windowMsgStream: WindowMessageStream) {
+import type { Message } from '_src/shared/messaging/messages';
+
+function createPort(
+    windowMsgStream: WindowMessageStream,
+    currentMsg?: Message
+) {
     const port = PortStream.connectToBackgroundService(
         'sui_content<->background'
     );
+    if (currentMsg) {
+        port.sendMessage(currentMsg);
+    }
     port.onMessage.subscribe((msg) => {
         windowMsgStream.send(msg);
     });
@@ -25,5 +35,7 @@ export function setupMessagesProxy() {
         'sui_content-script',
         'sui_in-page'
     );
-    createPort(windowMsgStream);
+    windowMsgStream.messages.pipe(take(1)).subscribe((msg) => {
+        createPort(windowMsgStream, msg);
+    });
 }
