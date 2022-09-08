@@ -11,7 +11,7 @@ publish = false
 anyhow = "1.0.64"
 bimap = "0.6.2"
 clap = { version = "3.1.8", features = ["derive"] }
-once_cell = "1.13.1"
+once_cell = "1.14.0"
 rand = "0.8.5"
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
