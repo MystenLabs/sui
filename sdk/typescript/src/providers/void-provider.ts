@@ -16,6 +16,9 @@ import {
   SuiMoveNormalizedStruct,
   SuiMoveNormalizedModule,
   SuiMoveNormalizedModules,
+  SuiEventFilter,
+  SuiEventEnvelope,
+  SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
 } from '../types';
@@ -121,6 +124,17 @@ export class VoidProvider extends Provider {
 
   async syncAccountState(_address: string): Promise<any> {
     throw this.newError('syncAccountState');
+  }
+
+  async subscribeEvent(
+    _filter: SuiEventFilter,
+    _onMessage: (event: SuiEventEnvelope) => void
+  ): Promise<SubscriptionId> {
+      throw this.newError('subscribeEvent');
+  }
+
+  async unsubscribeEvent(_id: SubscriptionId): Promise<boolean> {
+    throw this.newError('unsubscribeEvent');
   }
 
   private newError(operation: string): Error {

@@ -1,8 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { SuiAddress, ObjectOwner } from "./common";
+import { SuiAddress, ObjectOwner, TransactionDigest } from "./common";
 import { ObjectId, SequenceNumber } from "./objects";
+import { SuiJsonValue } from "./transactions";
 
 
 // event types mirror those in "sui-json-rpc-types/lib.rs"
@@ -11,7 +12,7 @@ export type MoveEvent = {
     transactionModule: string;
     sender: SuiAddress;
     type: string;
-    fields: { [key: string]: any; }; // TODO - better type
+    fields: { [key: string]: any; };
     bcs: string;
 };
 
@@ -54,3 +55,40 @@ export type SuiEvent =
     | { newObject: NewObjectEvent }
     | { epochChange: bigint }
     | { checkpoint: bigint };
+
+export type MoveEventField = {
+    path: string,
+    value: SuiJsonValue
+}
+
+export type EventType =
+    | "MoveEvent"
+    | "Publish"
+    | "TransferObject"
+    | "DeleteObject"
+    | "NewObject"
+    | "EpochChange"
+    | "Checkpoint";
+
+// mirrors sui_json_rpc_types::SuiEventFilter
+export type SuiEventFilter =
+    | { "Package" : ObjectId }
+    | { "Module" : string }
+    | { "MoveEventType" : string }
+    | { "MoveEventField" : MoveEventField }
+    | { "SenderAddress" : SuiAddress }
+    | { "EventType" : EventType }
+    | { "All" : SuiEventFilter[] }
+    | { "Any" : SuiEventFilter[] }
+    | { "And" : [SuiEventFilter, SuiEventFilter] }
+    | { "Or" : [SuiEventFilter, SuiEventFilter] };
+
+export type SuiEventEnvelope = {
+    timestamp:  number,
+    txDigest: TransactionDigest,
+    event: SuiEvent
+}
+
+export type SubscriptionId = number;
+
+export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };

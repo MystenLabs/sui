@@ -30,16 +30,22 @@ import {
   SuiObjectRef,
   getObjectReference,
   Coin,
+  SuiEventFilter,
+  SuiEventEnvelope,
+  SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
+import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
 const isAny = (_val: any): _val is any => true;
 
+
 export class JsonRpcProvider extends Provider {
   protected client: JsonRpcClient;
+  protected wsClient: WebsocketClient;
   /**
    * Establish a connection to a Sui RPC endpoint
    *
@@ -54,10 +60,13 @@ export class JsonRpcProvider extends Provider {
    */
   constructor(
     public endpoint: string,
-    public skipDataValidation: boolean = false
+    public skipDataValidation: boolean = false,
+    public socketOptions: WebsocketClientOptions = DEFAULT_CLIENT_OPTIONS
   ) {
     super();
+
     this.client = new JsonRpcClient(endpoint);
+    this.wsClient = new WebsocketClient(endpoint, skipDataValidation, socketOptions);
   }
 
   // Move info
@@ -420,5 +429,16 @@ export class JsonRpcProvider extends Provider {
         `Error sync account address for address: ${address} with error: ${err}`
       );
     }
+  }
+
+  async subscribeEvent(
+    filter: SuiEventFilter,
+    onMessage: (event: SuiEventEnvelope) => void
+  ): Promise<SubscriptionId> {
+    return this.wsClient.subscribeEvent(filter, onMessage);
+  }
+
+  async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
+    return this.wsClient.unsubscribeEvent(id);
   }
 }

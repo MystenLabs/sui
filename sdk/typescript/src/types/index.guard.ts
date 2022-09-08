@@ -7,7 +7,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
+import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventType, SuiEventFilter, SuiEventEnvelope, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
 
 export function isTransactionDigest(obj: any, _argumentName?: string): obj is TransactionDigest {
     return (
@@ -497,6 +497,110 @@ export function isSuiEvent(obj: any, _argumentName?: string): obj is SuiEvent {
     )
 }
 
+export function isMoveEventField(obj: any, _argumentName?: string): obj is MoveEventField {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isTransactionDigest(obj.path) as boolean &&
+        isSuiJsonValue(obj.value) as boolean
+    )
+}
+
+export function isEventType(obj: any, _argumentName?: string): obj is EventType {
+    return (
+        (obj === "MoveEvent" ||
+            obj === "Publish" ||
+            obj === "TransferObject" ||
+            obj === "DeleteObject" ||
+            obj === "NewObject" ||
+            obj === "EpochChange" ||
+            obj === "Checkpoint")
+    )
+}
+
+export function isSuiEventFilter(obj: any, _argumentName?: string): obj is SuiEventFilter {
+    return (
+        ((obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+            isTransactionDigest(obj.Package) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.Module) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.MoveEventType) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isMoveEventField(obj.MoveEventField) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.SenderAddress) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isEventType(obj.EventType) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            Array.isArray(obj.All) &&
+            obj.All.every((e: any) =>
+                isSuiEventFilter(e) as boolean
+            ) ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            Array.isArray(obj.Any) &&
+            obj.Any.every((e: any) =>
+                isSuiEventFilter(e) as boolean
+            ) ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            Array.isArray(obj.And) &&
+            isSuiEventFilter(obj.And[0]) as boolean &&
+            isSuiEventFilter(obj.And[1]) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            Array.isArray(obj.Or) &&
+            isSuiEventFilter(obj.Or[0]) as boolean &&
+            isSuiEventFilter(obj.Or[1]) as boolean)
+    )
+}
+
+export function isSuiEventEnvelope(obj: any, _argumentName?: string): obj is SuiEventEnvelope {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isSuiMoveTypeParameterIndex(obj.timestamp) as boolean &&
+        isTransactionDigest(obj.txDigest) as boolean &&
+        isSuiEvent(obj.event) as boolean
+    )
+}
+
+export function isSubscriptionId(obj: any, _argumentName?: string): obj is SubscriptionId {
+    return (
+        typeof obj === "number"
+    )
+}
+
+export function isSubscriptionEvent(obj: any, _argumentName?: string): obj is SubscriptionEvent {
+    return (
+        (obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+        isSuiMoveTypeParameterIndex(obj.subscription) as boolean &&
+        isSuiEventEnvelope(obj.result) as boolean
+    )
+}
+
 export function isTransferObject(obj: any, _argumentName?: string): obj is TransferObject {
     return (
         (obj !== null &&
@@ -539,8 +643,8 @@ export function isExecuteTransactionRequestType(obj: any, _argumentName?: string
 
 export function isTransactionKindName(obj: any, _argumentName?: string): obj is TransactionKindName {
     return (
-        (obj === "TransferObject" ||
-            obj === "Publish" ||
+        (obj === "Publish" ||
+            obj === "TransferObject" ||
             obj === "Call" ||
             obj === "TransferSui" ||
             obj === "ChangeEpoch")
