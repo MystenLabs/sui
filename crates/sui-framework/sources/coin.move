@@ -298,9 +298,10 @@ module sui::coin {
     }
 
     /// Transforms and transfers each specified amount to corresponding recipient in vector index 
-    /// If we were unable to create enough coins, then we terminate the transfers
+    /// If we were unable to create enough coins, then we stop the transfer where we can.
+    /// This will not abort if we cannot fulfill the transfers
     /// See `transform` function for explanation
-    public entry fun transform_and_transfer_to_multiple<T>(coins: vector<Coin<T>>, amounts: vector<u64>, recipients: vector<address>, ctx: &mut TxContext){
+    public entry fun transform_and_transfer_to_multiple_best_effort<T>(coins: vector<Coin<T>>, amounts: vector<u64>, recipients: vector<address>, ctx: &mut TxContext){
         assert!(vector::length(&amounts) == vector::length(&recipients), EVecLenMismatch);
         let output = transform_internal(coins, amounts, ctx);
         let coins_to_transfer_counter = 0;
@@ -315,6 +316,27 @@ module sui::coin {
         };
 
         // If we ran out of coins to transfer, do nothing
+        vector::destroy_empty(output);
+    }
+
+    /// Transforms and transfers each specified amount to corresponding recipient in vector index 
+    /// If we were unable to create enough coins, then we abort 
+    /// See `transform` function for explanation
+    public entry fun transform_and_transfer_to_multiple_all_or_nothing<T>(coins: vector<Coin<T>>, amounts: vector<u64>, recipients: vector<address>, ctx: &mut TxContext){
+        assert!(vector::length(&amounts) == vector::length(&recipients), EVecLenMismatch);
+        let output = transform_internal(coins, amounts, ctx);
+        let coins_to_transfer_counter = 0;
+        let rec_len = vector::length(&recipients);
+        let out_len = vector::length(&output);
+
+        assert!(rec_len == out_len, EVecLenTooBig);
+
+        // For vector pop efficiency, transfer in reverse order via pop
+        while (coins_to_transfer_counter < rec_len) {
+            transfer::transfer(vector::pop_back(&mut output), vector::pop_back(&mut recipients));
+            coins_to_transfer_counter  = coins_to_transfer_counter + 1;
+        };
+
         vector::destroy_empty(output);
     }
 
