@@ -37,7 +37,7 @@ crypto = { path = "../crypto" }
 executor = { path = "../executor" }
 network = { path = "../network" }
 primary = { path = "../primary" }
-prometheus = "0.13.1"
+prometheus = "0.13.2"
 storage = { path = "../storage" }
 types = { path = "../types" }
 worker = { path = "../worker" }
