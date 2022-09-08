@@ -257,15 +257,18 @@ module sui::validator_set {
             i = i + 1;
         };
         // Build a priority queue that will pop entries with gas price from the highest to the lowest.
-        let pq = pq::new(entries);
+        let pq = pq::new(entries, false);
         let sum = 0;
         let threshold = (total_validator_stake(self) + total_delegation_stake(self)) / 3;
         let result = 0;
         while (sum < threshold) {
-            let (gas_price, stake) = pq::pop_max(&mut pq);
+            let (gas_price, stake) = pq::pop(&mut pq);
             result = gas_price;
             sum = sum + stake;
         };
+
+        // Drain leftovers in the pq
+        let _ = pq::drain(pq);
         result
     }
 
