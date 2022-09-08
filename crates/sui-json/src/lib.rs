@@ -30,6 +30,8 @@ pub enum SuiJsonCallArg {
     Object(ObjectID),
     // pure value, bcs encoded
     Pure(Vec<u8>),
+    // a vector of objects
+    ObjVec(Vec<ObjectID>),
 }
 
 #[derive(Eq, PartialEq, Clone, Deserialize, Serialize, JsonSchema)]
@@ -286,9 +288,9 @@ fn make_prim_move_type_layout(param: &SignatureToken) -> Result<MoveTypeLayout, 
     })
 }
 
-fn resolve_object_arg(idx: usize, arg: &SuiJsonValue) -> Result<ObjectID, anyhow::Error> {
+fn resolve_object_arg(idx: usize, arg: &JsonValue) -> Result<ObjectID, anyhow::Error> {
     // Every elem has to be a string convertible to a ObjectID
-    match arg.to_json_value() {
+    match arg {
         JsonValue::String(s) => {
             let s = s.trim().to_lowercase();
             if !s.starts_with(HEX_PREFIX) {
@@ -297,11 +299,31 @@ fn resolve_object_arg(idx: usize, arg: &SuiJsonValue) -> Result<ObjectID, anyhow
             Ok(ObjectID::from_hex_literal(&s)?)
         }
         _ => Err(anyhow!(
-            "Unable to parse arg {:?} as ObjectID at pos {}. Expected {:?} byte hex string \
+            "Unable to parse arg {:?} as ObjectID at pos {}. Expected {:?}-byte hex string \
                 prefixed with 0x.",
-            ObjectID::LENGTH,
+            arg,
             idx,
+            ObjectID::LENGTH,
+        )),
+    }
+}
+
+fn resolve_object_vec_arg(idx: usize, arg: &SuiJsonValue) -> Result<Vec<ObjectID>, anyhow::Error> {
+    // Every elem has to be a string convertible to a ObjectID
+    match arg.to_json_value() {
+        JsonValue::Array(a) => {
+            let mut object_ids = vec![];
+            for id in a {
+                object_ids.push(resolve_object_arg(idx, &id)?);
+            }
+            Ok(object_ids)
+        }
+        _ => Err(anyhow!(
+            "Unable to parse arg {:?} as vector of ObjectIDs at pos {}. \
+             Expected a vector of {:?}-byte hex strings prefixed with 0x.",
             arg.to_json_value(),
+            idx,
+            ObjectID::LENGTH,
         )),
     }
 }
@@ -316,15 +338,26 @@ fn resolve_call_arg(
         | SignatureToken::U8
         | SignatureToken::U64
         | SignatureToken::U128
-        | SignatureToken::Address
-        | SignatureToken::Vector(_) => SuiJsonCallArg::Pure(resolve_primtive_arg(arg, param)?),
+        | SignatureToken::Address => SuiJsonCallArg::Pure(resolve_primtive_arg(arg, param)?),
 
         SignatureToken::Struct(_)
         | SignatureToken::StructInstantiation(_, _)
         | SignatureToken::TypeParameter(_)
         | SignatureToken::Reference(_)
         | SignatureToken::MutableReference(_) => {
-            SuiJsonCallArg::Object(resolve_object_arg(idx, arg)?)
+            SuiJsonCallArg::Object(resolve_object_arg(idx, &arg.to_json_value())?)
+        }
+
+        SignatureToken::Vector(inner) => {
+            match **inner {
+                // in terms of non-primitive vectors we only currently support vectors of objects
+                // (but not, for example, vectors of references), so vector content are either
+                // objects of we assume that they are primitive (and throw an error if not)
+                SignatureToken::Struct(_) => {
+                    SuiJsonCallArg::ObjVec(resolve_object_vec_arg(idx, arg)?)
+                }
+                _ => SuiJsonCallArg::Pure(resolve_primtive_arg(arg, param)?),
+            }
         }
 
         SignatureToken::Signer => unreachable!(),

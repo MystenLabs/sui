@@ -475,6 +475,45 @@ fn test_basic_args_linter_top_level() {
         args[1],
         SuiJsonCallArg::Pure(bcs::to_bytes(&AccountAddress::from(address)).unwrap())
     );
+
+    // Test with object vector  args
+    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../sui-core/src/unit_tests/data/entry_point_vector");
+    let compiled_modules =
+        sui_framework::build_and_verify_package(&path, move_package::BuildConfig::default())
+            .unwrap();
+    let example_package = Object::new_package(compiled_modules, TransactionDigest::genesis());
+    let example_package = example_package.data.try_as_package().unwrap();
+
+    let module = Identifier::new("entry_point_vector").unwrap();
+    let function = Identifier::new("two_obj_vec_destroy").unwrap();
+
+    /*
+    Function signature:
+            public entry fun two_obj_vec_destroy(v: vector<Obj>, _: &mut TxContext)
+     */
+    let object_id_raw1 = ObjectID::random();
+    let object_id_raw2 = ObjectID::random();
+    let object_id1 = json!(format!("0x{:02x}", object_id_raw1));
+    let object_id2 = json!(format!("0x{:02x}", object_id_raw2));
+
+    let args = vec![SuiJsonValue::new(Value::Array(vec![object_id1, object_id2])).unwrap()];
+
+    let args = resolve_move_function_args(example_package, module, function, args).unwrap();
+
+    assert!(matches!(args[0], SuiJsonCallArg::ObjVec { .. }));
+
+    if let SuiJsonCallArg::ObjVec(vec) = &args[0] {
+        assert!(vec.len() == 2);
+        assert_eq!(
+            vec[0],
+            ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw1)).unwrap()
+        );
+        assert_eq!(
+            vec[1],
+            ObjectID::from_hex_literal(&format!("0x{:02x}", object_id_raw2)).unwrap()
+        );
+    }
 }
 
 #[test]
