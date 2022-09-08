@@ -139,19 +139,19 @@ async fn create_response_sample() -> Result<
     let address = context.keystore.addresses().first().cloned().unwrap();
 
     context
-        .gateway
+        .client
         .wallet_sync_api()
         .sync_account_state(address)
         .await?;
 
     // Create coin response
     let coins = context
-        .gateway
+        .client
         .read_api()
         .get_objects_owned_by_address(address)
         .await?;
     let coin = context
-        .gateway
+        .client
         .read_api()
         .get_parsed_object(coins.first().unwrap().object_id)
         .await?;
@@ -226,7 +226,7 @@ async fn create_package_object_response(
     .await?;
     if let SuiClientCommandResult::Publish(response) = result {
         let object = context
-            .gateway
+            .client
             .read_api()
             .get_parsed_object(
                 response
@@ -337,7 +337,7 @@ async fn create_hero_response(
         if let SuiClientCommandResult::Call(_, effect) = result {
             let hero = effect.created.first().unwrap();
             let object = context
-                .gateway
+                .client
                 .read_api()
                 .get_parsed_object(hero.reference.object_id)
                 .await?;
@@ -448,7 +448,7 @@ async fn get_nft_response(
 
     if let SuiClientCommandResult::Call(certificate, effects) = result {
         let object = context
-            .gateway
+            .client
             .read_api()
             .get_parsed_object(effects.created.first().unwrap().reference.object_id)
             .await?;

@@ -68,7 +68,7 @@ Or enter a custom URL to connect to a server hosted elsewhere.
 If you have used the Sui client before with a local network, you will have an existing `client.yaml` configuration
 file needing update. Change the configured RPC server URL to Devnet by using:
 ```shell
-$ sui client switch --gateway https://gateway.devnet.sui.io:443
+$ sui client switch --rpc https://gateway.devnet.sui.io:443
 ```
 
 > **Tip:** If you run into issues, reset the Sui configuration by removing its directory, by default located at `~/.sui/sui_config`. Then reinstall [Sui binaries](../build/install.md#binaries).

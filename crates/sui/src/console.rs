@@ -1,19 +1,24 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::client_commands::SwitchResponse;
-use crate::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
-use crate::shell::{
-    install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
-};
+use std::io::{stderr, Write};
+use std::ops::Deref;
+
 use async_trait::async_trait;
 use clap::Command;
 use clap::CommandFactory;
 use clap::FromArgMatches;
 use clap::Parser;
 use colored::Colorize;
-use std::io::{stderr, Write};
-use std::ops::Deref;
+
+use sui_sdk::ClientType;
+
+use crate::client_commands::SwitchResponse;
+use crate::client_commands::{SuiClientCommandResult, SuiClientCommands, WalletContext};
+use crate::shell::{
+    install_shell_plugins, AsyncHandler, CacheKey, CommandStructure, CompletionCache, Shell,
+};
+
 const SUI: &str = "   _____       _    ______                       __   
   / ___/__  __(_)  / ____/___  ____  _________  / /__ 
   \\__ \\/ / / / /  / /   / __ \\/ __ \\/ ___/ __ \\/ / _ \\
@@ -45,6 +50,42 @@ pub async fn start_console(
     writeln!(out, "--- Sui Console {version} ---")?;
     writeln!(out)?;
     writeln!(out, "{}", context.config.deref())?;
+
+    if let ClientType::RPC { .. } = context.config.client_type {
+        writeln!(out)?;
+        if context.client.is_gateway() {
+            writeln!(
+                out,
+                "Connecting to Sui Gateway. API version {}",
+                context.client.api_version()
+            )?;
+        } else {
+            writeln!(
+                out,
+                "Connecting to Sui Fullnode. API version {}",
+                context.client.api_version()
+            )?;
+        }
+    }
+
+    if !context.client.available_rpc_methods().is_empty() {
+        writeln!(out)?;
+        writeln!(
+            out,
+            "Available RPC methods: {:?}",
+            context.client.available_rpc_methods()
+        )?;
+    }
+    if !context.client.available_subscriptions().is_empty() {
+        writeln!(out)?;
+        writeln!(
+            out,
+            "Available Subscriptions: {:?}",
+            context.client.available_subscriptions()
+        )?;
+    }
+
+    writeln!(out)?;
     writeln!(out, "Welcome to the Sui interactive console.")?;
     writeln!(out)?;
 
@@ -119,15 +160,12 @@ async fn handle_command(
     }
     result.print(!wallet_opts.json);
 
-    // Quit shell after gateway switch
+    // Quit shell after RPC switch
     if matches!(
         result,
-        SuiClientCommandResult::Switch(SwitchResponse {
-            gateway: Some(_),
-            ..
-        })
+        SuiClientCommandResult::Switch(SwitchResponse { rpc: Some(_), .. })
     ) {
-        println!("Gateway switch completed, please restart Sui console.");
+        println!("RPC server switch completed, please restart Sui console.");
         return Ok(true);
     }
     Ok(false)
