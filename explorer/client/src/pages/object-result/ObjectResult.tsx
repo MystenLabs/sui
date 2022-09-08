@@ -48,6 +48,20 @@ function getObjectDataWithPackageAddress(objID: string, network: string) {
         .getObject(objID as string)
         .then((objState) => {
             const resp: DataType = translate(objState) as DataType;
+
+            const GENESIS_TX_DIGEST =
+                'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
+            if (
+                resp.data.tx_digest &&
+                resp.data.tx_digest === GENESIS_TX_DIGEST
+            ) {
+                return {
+                    ...resp,
+                    publisherAddress: 'Genesis',
+                };
+            }
+
             if (resp.objType === 'Move Package' && resp.data.tx_digest) {
                 return rpc(network)
                     .getTransactionWithEffects(resp.data.tx_digest)
@@ -59,13 +73,7 @@ function getObjectDataWithPackageAddress(objID: string, network: string) {
                     }))
                     .catch((err) => {
                         console.log(err);
-                        // TODO: Not sure if I should show Genesis as Package Publisher or ignore it
-                        return {
-                            ...(resp.owner === 'Immutable'
-                                ? { publisherAddress: 'Genesis' }
-                                : {}),
-                            ...resp,
-                        };
+                        return resp;
                     });
             }
             return resp;
