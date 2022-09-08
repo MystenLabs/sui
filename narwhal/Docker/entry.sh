@@ -13,7 +13,8 @@ fi
 
 # Environment variables to use on the script
 NODE_BIN="./bin/node"
-KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/key.json"}
+PRIMARY_KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/primary-key.json"}
+WORKER_KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/worker-key.json"}
 COMMITTEE_PATH=${COMMITTEE_PATH:="/validators/committee.json"}
 WORKERS_PATH=${WORKERS_PATH:="/validators/workers.json"}
 PARAMETERS_PATH=${PARAMETERS_PATH:="/validators/parameters.json"}
@@ -36,7 +37,8 @@ if [[ "$NODE_TYPE" = "primary" ]]; then
   echo "Bootstrapping primary node"
 
   $NODE_BIN $LOG_LEVEL run \
-  --keys $KEYS_PATH \
+  --primary-keys $PRIMARY_KEYS_PATH \
+  --worker-keys $WORKER_KEYS_PATH \
   --committee $COMMITTEE_PATH \
   --workers $WORKERS_PATH \
   --store "${DATA_PATH}/validator-$VALIDATOR_ID/db-primary" \
@@ -46,7 +48,8 @@ elif [[ "$NODE_TYPE" = "worker" ]]; then
   echo "Bootstrapping new worker node with id $WORKER_ID"
 
   $NODE_BIN $LOG_LEVEL run \
-  --keys $KEYS_PATH \
+  --primary-keys $PRIMARY_KEYS_PATH \
+  --worker-keys $WORKER_KEYS_PATH \
   --committee $COMMITTEE_PATH \
   --workers $WORKERS_PATH \
   --store "${DATA_PATH}/validator-$VALIDATOR_ID/db-worker-$WORKER_ID" \

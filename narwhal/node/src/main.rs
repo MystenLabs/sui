@@ -49,7 +49,8 @@ async fn main() -> Result<(), eyre::Report> {
         .subcommand(
             SubCommand::with_name("run")
                 .about("Run a node")
-                .args_from_usage("--keys=<FILE> 'The file containing the node keys'")
+                .args_from_usage("--primary-keys=<FILE> 'The file containing the node's primary keys'")
+                .args_from_usage("--worker-keys=<FILE> 'The file containing the node's worker keys'")
                 .args_from_usage("--committee=<FILE> 'The file containing committee information'")
                 .args_from_usage("--workers=<FILE> 'The file containing worker information'")
                 .args_from_usage("--parameters=[FILE] 'The file containing the node parameters'")
@@ -93,10 +94,14 @@ async fn main() -> Result<(), eyre::Report> {
                 .context("Failed to generate key pair")?
         }
         ("run", Some(sub_matches)) => {
-            let key_file = sub_matches.value_of("keys").unwrap();
-            let keypair = KeyPair::import(key_file).context("Failed to load the node's keypair")?;
+            let primary_key_file = sub_matches.value_of("primary-keys").unwrap();
+            let primary_keypair = KeyPair::import(primary_key_file)
+                .context("Failed to load the node's primary keypair")?;
+            let worker_key_file = sub_matches.value_of("worker-keys").unwrap();
+            let worker_keypair = KeyPair::import(worker_key_file)
+                .context("Failed to load the node's worker keypair")?;
             let registry = match sub_matches.subcommand() {
-                ("primary", _) => primary_metrics_registry(keypair.public().clone()),
+                ("primary", _) => primary_metrics_registry(primary_keypair.public().clone()),
                 ("worker", Some(worker_matches)) => {
                     let id = worker_matches
                         .value_of("id")
@@ -104,7 +109,7 @@ async fn main() -> Result<(), eyre::Report> {
                         .parse::<WorkerId>()
                         .context("The worker id must be a positive integer")?;
 
-                    worker_metrics_registry(id, keypair.public().clone())
+                    worker_metrics_registry(id, primary_keypair.public().clone())
                 }
                 _ => unreachable!(),
             };
@@ -118,7 +123,7 @@ async fn main() -> Result<(), eyre::Report> {
                     let _guard = setup_telemetry(tracing_level, network_tracing_level, Some(&registry));
                 }
             }
-            run(sub_matches, keypair, registry).await?
+            run(sub_matches, primary_keypair, worker_keypair, registry).await?
         }
         _ => unreachable!(),
     }
@@ -175,7 +180,8 @@ fn setup_benchmark_telemetry(
 // Runs either a worker or a primary.
 async fn run(
     matches: &ArgMatches<'_>,
-    keypair: Ed25519KeyPair,
+    primary_keypair: Ed25519KeyPair,
+    worker_keypair: Ed25519KeyPair,
     registry: Registry,
 ) -> Result<(), eyre::Report> {
     let committee_file = matches.value_of("committee").unwrap();
@@ -211,7 +217,7 @@ async fn run(
         // Spawn the primary and consensus core.
         ("primary", Some(sub_matches)) => {
             Node::spawn_primary(
-                keypair,
+                primary_keypair,
                 committee,
                 worker_cache,
                 &store,
@@ -233,9 +239,9 @@ async fn run(
                 .context("The worker id must be a positive integer")?;
 
             Node::spawn_workers(
-                /* name */
-                keypair.public().clone(),
-                vec![id],
+                /* primary_name */
+                primary_keypair.public().clone(),
+                vec![(id, worker_keypair)],
                 committee,
                 worker_cache,
                 &store,

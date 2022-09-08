@@ -42,9 +42,14 @@ class PathMaker:
         return '.parameters.json'
 
     @staticmethod
-    def key_file(i):
+    def primary_key_file(i):
         assert isinstance(i, int) and i >= 0
-        return f'.node-{i}.json'
+        return f'.primary-{i}-key.json'
+
+    @staticmethod
+    def worker_key_file(i):
+        assert isinstance(i, int) and i >= 0
+        return f'.worker-{i}-key.json'
 
     @staticmethod
     def db_path(i, j=None):

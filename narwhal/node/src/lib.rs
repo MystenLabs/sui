@@ -361,9 +361,9 @@ impl Node {
     /// Spawn a specified number of workers.
     pub fn spawn_workers(
         // The public key of this authority.
-        name: PublicKey,
-        // The ids of the validators to spawn.
-        ids: Vec<WorkerId>,
+        primary_name: PublicKey,
+        // The ids & keypairs of the workers to spawn.
+        ids_and_keypairs: Vec<(WorkerId, KeyPair)>,
         // The committee information.
         committee: SharedCommittee,
         // The worker information cache.
@@ -379,9 +379,10 @@ impl Node {
 
         let metrics = initialise_metrics(registry);
 
-        for id in ids {
+        for (id, keypair) in ids_and_keypairs {
             let worker_handles = Worker::spawn(
-                name.clone(),
+                primary_name.clone(),
+                keypair,
                 id,
                 committee.clone(),
                 worker_cache.clone(),

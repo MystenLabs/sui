@@ -17,13 +17,22 @@ fn test_primary_no_consensus() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let keys_file_path = format!("{config_path}/smoke_test_keys.json");
+    let primary_keys_file_path = format!("{config_path}/smoke_test_primary_keys.json");
     fixture
         .authorities()
         .next()
         .unwrap()
         .keypair()
-        .export(&keys_file_path)
+        .export(&primary_keys_file_path)
+        .unwrap();
+    let worker_keys_file_path = format!("{config_path}/smoke_test_worker_keys.json");
+    fixture
+        .authorities()
+        .next()
+        .unwrap()
+        .worker(0)
+        .keypair()
+        .export(&worker_keys_file_path)
         .unwrap();
 
     let committee_file_path = format!("{config_path}/smoke_test_committee.json");
@@ -41,8 +50,10 @@ fn test_primary_no_consensus() {
             &committee_file_path,
             "--workers",
             &workers_file_path,
-            "--keys",
-            &keys_file_path,
+            "--primary-keys",
+            &primary_keys_file_path,
+            "--worker-keys",
+            &worker_keys_file_path,
             "--store",
             &db_path,
             "primary",
@@ -79,13 +90,22 @@ fn test_primary_with_consensus() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let keys_file_path = format!("{config_path}/smoke_test_keys.json");
+    let primary_keys_file_path = format!("{config_path}/smoke_test_primary_keys.json");
     fixture
         .authorities()
         .next()
         .unwrap()
         .keypair()
-        .export(&keys_file_path)
+        .export(&primary_keys_file_path)
+        .unwrap();
+    let worker_keys_file_path = format!("{config_path}/smoke_test_worker_keys.json");
+    fixture
+        .authorities()
+        .next()
+        .unwrap()
+        .worker(0)
+        .keypair()
+        .export(&worker_keys_file_path)
         .unwrap();
 
     let committee_file_path = format!("{config_path}/smoke_test_committee.json");
@@ -103,8 +123,10 @@ fn test_primary_with_consensus() {
             &committee_file_path,
             "--workers",
             &workers_file_path,
-            "--keys",
-            &keys_file_path,
+            "--primary-keys",
+            &primary_keys_file_path,
+            "--worker-keys",
+            &worker_keys_file_path,
             "--store",
             &db_path,
             "primary",

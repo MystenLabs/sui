@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{Node, NodeStorage};
 use arc_swap::ArcSwap;
-use config::{Committee, Parameters, SharedWorkerCache};
+use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use crypto::KeyPair;
 use executor::{ExecutionState, ExecutorOutput};
 use fastcrypto::traits::KeyPair as _;
@@ -19,13 +19,14 @@ pub struct NodeRestarter;
 
 impl NodeRestarter {
     pub async fn watch<State>(
-        keypair: KeyPair,
+        primary_keypair: KeyPair,
+        worker_ids_and_keypairs: Vec<(WorkerId, KeyPair)>,
         committee: &Committee,
         worker_cache: SharedWorkerCache,
         storage_base_path: PathBuf,
         execution_state: Arc<State>,
         parameters: Parameters,
-        mut rx_reconfigure: Receiver<(KeyPair, Committee)>,
+        mut rx_reconfigure: Receiver<(KeyPair, Committee, Vec<(WorkerId, KeyPair)>, WorkerCache)>,
         tx_output: Sender<ExecutorOutput<State>>,
         registry: &Registry,
     ) where
@@ -33,8 +34,9 @@ impl NodeRestarter {
         State::Outcome: Send + 'static,
         State::Error: Debug,
     {
-        let mut keypair = keypair;
-        let mut name = keypair.public().clone();
+        let mut primary_keypair = primary_keypair;
+        let mut name = primary_keypair.public().clone();
+        let mut worker_ids_and_keypairs = worker_ids_and_keypairs;
         let mut committee = committee.clone();
 
         let mut handles = Vec::new();
@@ -52,7 +54,7 @@ impl NodeRestarter {
 
             // Restart the relevant components.
             let primary_handles = Node::spawn_primary(
-                keypair,
+                primary_keypair,
                 Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
                 worker_cache.clone(),
                 &store,
@@ -67,7 +69,7 @@ impl NodeRestarter {
 
             let worker_handles = Node::spawn_workers(
                 name.clone(),
-                /* worker_ids */ vec![0],
+                worker_ids_and_keypairs,
                 Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
                 worker_cache.clone(),
                 &store,
@@ -79,10 +81,11 @@ impl NodeRestarter {
             handles.extend(worker_handles);
 
             // Wait for a committee change.
-            let (new_keypair, new_committee) = match rx_reconfigure.recv().await {
-                Some(x) => x,
-                None => break,
-            };
+            let (new_keypair, new_committee, new_worker_ids_and_keypairs, new_worker_cache) =
+                match rx_reconfigure.recv().await {
+                    Some(x) => x,
+                    None => break,
+                };
             tracing::info!("Starting reconfiguration with committee {committee}");
 
             // Shutdown all relevant components.
@@ -125,9 +128,11 @@ impl NodeRestarter {
             tracing::debug!("Epoch E{} terminated", committee.epoch());
 
             // Update the settings for the next epoch.
-            keypair = new_keypair;
-            name = keypair.public().clone();
+            primary_keypair = new_keypair;
+            name = primary_keypair.public().clone();
+            worker_ids_and_keypairs = new_worker_ids_and_keypairs;
             committee = new_committee;
+            worker_cache.swap(Arc::new(new_worker_cache));
         }
     }
 }

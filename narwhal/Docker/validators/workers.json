@@ -2,6 +2,7 @@
     "workers": {
         "Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=": {
             "0": {
+                "name": "hgeabM6XVJdIJQJjas05IiZAm2VFhtxwqIz0gDMYyjw=",
                 "primary_to_worker": "/dns/worker_0/tcp/4000/http",
                 "transactions": "/dns/worker_0/tcp/4001/http",
                 "worker_to_worker": "/dns/worker_0/tcp/4002/http"
@@ -9,6 +10,7 @@
         },
         "fbhvgLnet2HdE0NUITUpekQxdRRWKxbZczM6Qg55sP8=": {
             "0": {
+                "name": "7o+0AxuS4muiCYxLOMT9pzdLug2LmrAzB7yLE7TrxwA=",
                 "primary_to_worker": "/dns/worker_1/tcp/4000/http",
                 "transactions": "/dns/worker_1/tcp/4001/http",
                 "worker_to_worker": "/dns/worker_1/tcp/4002/http"
@@ -16,6 +18,7 @@
         },
         "noDjBFfXGqQioHTf6jEIPYthhUWCMsC12ZJ9DMh7Ujk=": {
             "0": {
+                "name": "63HCaWWXpqB8fhrGgBSNy7XfbSpakrILoXA5DaaYx1o=",
                 "primary_to_worker": "/dns/worker_2/tcp/4000/http",
                 "transactions": "/dns/worker_2/tcp/4001/http",
                 "worker_to_worker": "/dns/worker_2/tcp/4002/http"
@@ -23,6 +26,7 @@
         },
         "Z+K3OEI/eldyTTdp27mQFDdBPqjkss9wOkN6RceDTuM=": {
             "0": {
+                "name": "cJbSCbB7f3l/Tmeix4Ts3Th8xS3TTh4ohnakHKhObmc=",
                 "primary_to_worker": "/dns/worker_3/tcp/4000/http",
                 "transactions": "/dns/worker_3/tcp/4001/http",
                 "worker_to_worker": "/dns/worker_3/tcp/4002/http"

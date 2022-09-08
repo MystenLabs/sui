@@ -31,40 +31,43 @@ class CommandMaker:
         return f'./node generate_keys --filename {filename}'
 
     @staticmethod
-    def run_primary(keys, committee, workers, store, parameters, debug=False):
-        assert isinstance(keys, str)
+    def run_primary(primary_keys, worker_keys, committee, workers, store, parameters, debug=False):
+        assert isinstance(primary_keys, str)
+        assert isinstance(worker_keys, str)
         assert isinstance(committee, str)
         assert isinstance(workers, str)
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'./node {v} run --keys {keys} --committee {committee} '
-                f'--workers {workers} --store {store} --parameters {parameters} '
-                f'primary')
+        return (f'./node {v} run --primary-keys {primary_keys} --worker-keys {worker_keys} '
+                f'--committee {committee} --workers {workers} --store {store} '
+                f'--parameters {parameters} primary')
 
     @staticmethod
-    def run_no_consensus_primary(keys, committee, workers, store, parameters, debug=False):
-        assert isinstance(keys, str)
+    def run_no_consensus_primary(primary_keys, worker_keys, committee, workers, store, parameters, debug=False):
+        assert isinstance(primary_keys, str)
+        assert isinstance(worker_keys, str)
         assert isinstance(committee, str)
         assert isinstance(workers, str)
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'./node {v} run --keys {keys} --committee {committee} '
-                f'--workers {workers} --store {store} --parameters {parameters} '
-                f'primary --consensus-disabled')
+        return (f'./node {v} run --primary-keys {primary_keys} --worker-keys {worker_keys} '
+                f'--committee {committee} --workers {workers} --store {store} '
+                f'--parameters {parameters} primary --consensus-disabled')
 
     @staticmethod
-    def run_worker(keys, committee, workers, store, parameters, id, debug=False):
-        assert isinstance(keys, str)
+    def run_worker(primary_keys, worker_keys, committee, workers, store, parameters, id, debug=False):
+        assert isinstance(primary_keys, str)
+        assert isinstance(worker_keys, str)
         assert isinstance(committee, str)
         assert isinstance(workers, str)
         assert isinstance(parameters, str)
         assert isinstance(debug, bool)
         v = '-vvv' if debug else '-vv'
-        return (f'./node {v} run --keys {keys} --committee {committee} '
-                f'--workers {workers} --store {store} --parameters {parameters} '
-                f'worker --id {id}')
+        return (f'./node {v} run --primary-keys {primary_keys} --worker-keys {worker_keys} '
+                f'--committee {committee} --workers {workers} --store {store} '
+                f'--parameters {parameters} worker --id {id}')
 
     @staticmethod
     def run_client(address, size, rate, nodes):

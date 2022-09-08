@@ -24,8 +24,9 @@ class Key:
 class WorkerCache:
     ''' The worker cache looks as follows:
         "workers: {
-            "name": {
+            "primary_name": {
                 "0": {
+                    "worker_name": "worker_name"
                     "primary_to_worker": x.x.x.x:x,
                     "worker_to_worker": x.x.x.x:x,
                     "transactions": x.x.x.x:x
@@ -36,38 +37,45 @@ class WorkerCache:
         },
     '''
 
-    def __init__(self, addresses, base_port):
-        ''' The `addresses` field looks as follows:
+    def __init__(self, workers, base_port):
+        ''' The `workers` field looks as follows:
             {
-                "name": ["host", "host", ...],
+                "primary_name": {
+                    worker_name: ["host", "host", ...]
+                    },
                 ...
             }
         '''
-        assert isinstance(addresses, OrderedDict)
-        assert all(isinstance(x, str) for x in addresses.keys())
+        assert isinstance(workers, OrderedDict)
+        assert all(isinstance(x, str) for x in workers.keys())
         assert all(
-            isinstance(x, list) and len(x) >= 1 for x in addresses.values()
+            isinstance(x, OrderedDict) for x in workers.values()
         )
+        assert all(isinstance(x, str)
+                   for y in workers.values() for x in y.keys())
+        assert all(isinstance(x, list) and len(x) >=
+                   1 for y in workers.values() for x in y.values())
         assert all(
-            isinstance(x, str) for y in addresses.values() for x in y
+            isinstance(x, str) for z in workers.values() for y in z.values() for x in y
         )
-        assert len({len(x) for x in addresses.values()}) == 1
+        assert len({len(x) for y in workers.values()
+                   for x in y.values()}) == 1
         assert isinstance(base_port, int) and base_port > 1024
 
         port = base_port
         self.json = {'workers': OrderedDict(), 'epoch': 0}
-        for name, hosts in addresses.items():
-            workers_addr = OrderedDict()
-            for j, host in enumerate(hosts):
-                hosts.pop(0)
-                workers_addr[j] = {
-                    'primary_to_worker': f'/ip4/{host}/tcp/{port}/http',
-                    'transactions': f'/ip4/{host}/tcp/{port + 1}/http',
-                    'worker_to_worker': f'/ip4/{host}/tcp/{port + 2}/http',
-                }
-                port += 3
-
-            self.json['workers'][name] = workers_addr
+        for primary_name, worker_info in workers.items():
+            for worker_key, hosts in worker_info.items():
+                workers_addr = OrderedDict()
+                for j, host in enumerate(hosts):
+                    workers_addr[j] = {
+                        'name': worker_key,
+                        'primary_to_worker': f'/ip4/{host}/tcp/{port}/http',
+                        'transactions': f'/ip4/{host}/tcp/{port + 1}/http',
+                        'worker_to_worker': f'/ip4/{host}/tcp/{port + 2}/http',
+                    }
+                    port += 3
+                self.json['workers'][primary_name] = workers_addr
 
     def workers_addresses(self, faults=0):
         ''' Returns an ordered list of list of workers' addresses. '''
@@ -124,13 +132,18 @@ class WorkerCache:
 
 
 class LocalWorkerCache(WorkerCache):
-    def __init__(self, names, port, workers):
-        assert isinstance(names, list)
-        assert all(isinstance(x, str) for x in names)
+    def __init__(self, primary_names, worker_names, port, workers):
+        assert isinstance(primary_names, list)
+        assert all(isinstance(x, str) for x in primary_names)
+        assert isinstance(worker_names, list)
+        assert all(isinstance(x, str) for x in worker_names)
         assert isinstance(port, int)
         assert isinstance(workers, int) and workers > 0
-        addresses = OrderedDict((x, ['127.0.0.1']*(1+workers)) for x in names)
-        super().__init__(addresses, port)
+        workers = OrderedDict(
+            (x, OrderedDict(
+                (worker_names[i*workers + y], ['127.0.0.1']*workers) for y in range(workers))
+             ) for i, x in enumerate(primary_names))
+        super().__init__(workers, port)
 
 
 class Committee:

@@ -298,6 +298,8 @@ impl Parameters {
 
 #[derive(Clone, Serialize, Deserialize, Eq, Hash, PartialEq, Debug)]
 pub struct WorkerInfo {
+    /// The public key of this worker.
+    pub name: PublicKey,
     /// Address to receive client transactions (WAN).
     pub transactions: Multiaddr,
     /// Address to receive messages from other workers (WAN).

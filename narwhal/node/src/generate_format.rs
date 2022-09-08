@@ -89,6 +89,7 @@ fn get_registry() -> Result<Registry> {
         vec![(
             0,
             WorkerInfo {
+                name: pk.clone(),
                 primary_to_worker: "/ip4/127.0.0.1/tcp/300/http".to_string().parse().unwrap(),
                 transactions: "/ip4/127.0.0.1/tcp/400/http".to_string().parse().unwrap(),
                 worker_to_worker: "/ip4/127.0.0.1/tcp/500/http".to_string().parse().unwrap(),

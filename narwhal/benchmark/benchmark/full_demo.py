@@ -74,20 +74,32 @@ class Demo:
             subprocess.run([cmd], shell=True)
 
             # Generate configuration files.
-            keys = []
-            key_files = [PathMaker.key_file(i) for i in range(nodes)]
-            for filename in key_files:
+            primary_keys = []
+            primary_key_files = [
+                PathMaker.primary_key_file(i) for i in range(nodes)]
+            for filename in primary_key_files:
                 cmd = CommandMaker.generate_key(filename).split()
                 subprocess.run(cmd, check=True)
-                keys += [Key.from_file(filename)]
+                primary_keys += [Key.from_file(filename)]
 
-            names = [x.name for x in keys]
-            committee = LocalCommittee(names, self.BASE_PORT)
+            primary_names = [x.name for x in primary_keys]
+            committee = LocalCommittee(primary_names, self.BASE_PORT)
             committee.print(PathMaker.committee_file())
+
+            worker_keys = []
+            worker_key_files = [PathMaker.worker_key_file(
+                i) for i in range(self.workers*nodes)]
+            for filename in worker_key_files:
+                cmd = CommandMaker.generate_key(filename).split()
+                subprocess.run(cmd, check=True)
+                worker_keys += [Key.from_file(filename)]
+            worker_names = [x.name for x in worker_keys]
 
             # 2 ports used per authority so add 2 * num authorities to base port
             worker_cache = LocalWorkerCache(
-                names, self.BASE_PORT + (2 * len(names)), self.workers)
+                primary_names, worker_names, self.BASE_PORT +
+                (2 * len(primary_names)),
+                self.workers)
             worker_cache.print(PathMaker.workers_file())
 
             self.node_parameters.print(PathMaker.parameters_file())
@@ -109,7 +121,8 @@ class Demo:
             # Run the primaries (except the faulty ones).
             for i, address in enumerate(committee.primary_addresses(self.faults)):
                 cmd = CommandMaker.run_no_consensus_primary(
-                    PathMaker.key_file(i),
+                    PathMaker.primary_key_file(i),
+                    PathMaker.worker_key_file(0),
                     PathMaker.committee_file(),
                     PathMaker.workers_file(),
                     PathMaker.db_path(i),
@@ -123,7 +136,8 @@ class Demo:
             for i, addresses in enumerate(workers_addresses):
                 for (id, address) in addresses:
                     cmd = CommandMaker.run_worker(
-                        PathMaker.key_file(i),
+                        PathMaker.primary_key_file(i),
+                        PathMaker.worker_key_file(i*self.workers + id),
                         PathMaker.committee_file(),
                         PathMaker.workers_file(),
                         PathMaker.db_path(i, id),
@@ -148,7 +162,7 @@ class Demo:
             ports = [int(port) for port in port_logs.grpc_ports]
             sleep(self.duration)
 
-            cmd = CommandMaker.run_demo_client(names,  ports)
+            cmd = CommandMaker.run_demo_client(primary_names,  ports)
             self.demo_log_path = PathMaker.demo_client_log_file()
             self._background_run_with_stdout(cmd, self.demo_log_path)
             # ironically, it takes a *while* to get data from gRPC

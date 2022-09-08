@@ -179,44 +179,72 @@ class Bench:
         subprocess.run([cmd], shell=True)
 
         # Generate configuration files.
-        keys = []
-        key_files = [PathMaker.key_file(i) for i in range(len(hosts))]
-        for filename in key_files:
+        primary_keys = []
+        primary_key_files = [PathMaker.primary_key_file(
+            i) for i in range(len(hosts))]
+        for filename in primary_key_files:
             cmd = CommandMaker.generate_key(filename).split()
             subprocess.run(cmd, check=True)
-            keys += [Key.from_file(filename)]
+            primary_keys += [Key.from_file(filename)]
 
-        names = [x.name for x in keys]
+        primary_names = [x.name for x in primary_keys]
 
         if bench_parameters.collocate:
-            workers = bench_parameters.workers
             addresses = OrderedDict(
-                (x, [y] * (workers + 1)) for x, y in zip(names, hosts)
+                (x, [y] * (bench_parameters.workers + 1)) for x, y in zip(primary_names, hosts)
             )
         else:
             addresses = OrderedDict(
-                (x, y) for x, y in zip(names, hosts)
+                (x, y) for x, y in zip(primary_names, hosts)
             )
         committee = Committee(addresses, self.settings.base_port)
         committee.print(PathMaker.committee_file())
 
+        worker_keys = []
+        worker_key_files = [PathMaker.worker_key_file(
+            i) for i in range(bench_parameters.workers*len(hosts))]
+        for filename in worker_key_files:
+            cmd = CommandMaker.generate_key(filename).split()
+            subprocess.run(cmd, check=True)
+            worker_keys += [Key.from_file(filename)]
+        worker_names = [x.name for x in worker_keys]
+
+        if bench_parameters.collocate:
+            workers = OrderedDict(
+                (x, OrderedDict(
+                    (worker_names[i*bench_parameters.workers + y],
+                     [h] * (bench_parameters.workers))
+                    for y in range(bench_parameters.workers))
+                 ) for i, (x, h) in enumerate(zip(primary_names, hosts))
+            )
+        else:
+            workers = OrderedDict(
+                (x, OrderedDict(
+                    (worker_names[i*bench_parameters.workers + y], h) for y in range(workers))
+                 ) for i, (x, h) in enumerate(zip(primary_names, hosts))
+            )
+
         # 2 ports used per authority so add 2 * num authorities to base port
         worker_cache = WorkerCache(
-            addresses, self.settings.base_port + (2 * len(names)))
+            workers, self.settings.base_port + (2 * len(primary_names)))
         worker_cache.print(PathMaker.workers_file())
-
         node_parameters.print(PathMaker.parameters_file())
 
         # Cleanup all nodes and upload configuration files.
-        names = names[:len(names)-bench_parameters.faults]
-        progress = progress_bar(names, prefix='Uploading config files:')
+        primary_names = primary_names[:len(
+            primary_names)-bench_parameters.faults]
+        progress = progress_bar(
+            primary_names, prefix='Uploading config files:')
         for i, name in enumerate(progress):
             for ip in list(committee.ips(name) | worker_cache.ips(name)):
                 c = Connection(ip, user='ubuntu', connect_kwargs=self.connect)
                 c.run(f'{CommandMaker.cleanup()} || true', hide=True)
                 c.put(PathMaker.committee_file(), '.')
                 c.put(PathMaker.workers_file(), '.')
-                c.put(PathMaker.key_file(i), '.')
+                c.put(PathMaker.primary_key_file(i), '.')
+                for j in range(bench_parameters.workers):
+                    c.put(PathMaker.worker_key_file(
+                        i*bench_parameters.workers + j), '.')
                 c.put(PathMaker.parameters_file(), '.')
 
         return (committee, worker_cache)
@@ -251,7 +279,8 @@ class Bench:
         for i, address in enumerate(committee.primary_addresses(faults)):
             host = address.split(':')[1].strip("/")
             cmd = CommandMaker.run_primary(
-                PathMaker.key_file(i),
+                PathMaker.primary_key_file(i),
+                PathMaker.worker_key_file(i),
                 PathMaker.committee_file(),
                 PathMaker.workers_file(),
                 PathMaker.db_path(i),
@@ -267,7 +296,8 @@ class Bench:
             for (id, address) in addresses:
                 host = address.split(':')[1].strip("/")
                 cmd = CommandMaker.run_worker(
-                    PathMaker.key_file(i),
+                    PathMaker.primary_key_file(i),
+                    PathMaker.worker_key_file(i*bench_parameters.workers + id),
                     PathMaker.committee_file(),
                     PathMaker.workers_file(),
                     PathMaker.db_path(i, id),

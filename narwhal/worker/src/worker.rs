@@ -9,7 +9,7 @@ use crate::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
-use crypto::PublicKey;
+use crypto::{KeyPair, PublicKey};
 use futures::{Stream, StreamExt};
 use multiaddr::{Multiaddr, Protocol};
 use network::{metrics::WorkerNetworkMetrics, WorkerNetwork};
@@ -43,8 +43,12 @@ pub use types::WorkerMessage;
 
 pub struct Worker {
     /// The public key of this authority.
-    name: PublicKey,
-    /// The id of this worker.
+    primary_name: PublicKey,
+    // The private-public key pair of this worker.
+    // TODO: utilize keypair in network communication
+    #[allow(dead_code)]
+    keypair: KeyPair,
+    /// The id of this worker used for index-based lookup by other NW nodes.
     id: WorkerId,
     /// The committee information.
     committee: SharedCommittee,
@@ -60,7 +64,8 @@ const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
 impl Worker {
     pub fn spawn(
-        name: PublicKey,
+        primary_name: PublicKey,
+        keypair: KeyPair,
         id: WorkerId,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
@@ -70,7 +75,8 @@ impl Worker {
     ) -> Vec<JoinHandle<()>> {
         // Define a worker instance.
         let worker = Self {
-            name: name.clone(),
+            primary_name: primary_name.clone(),
+            keypair,
             id,
             committee: committee.clone(),
             worker_cache,
@@ -113,7 +119,8 @@ impl Worker {
         );
 
         // The `PrimaryConnector` allows the worker to send messages to its primary.
-        let handle = PrimaryConnector::spawn(name, initial_committee, rx_reconfigure, rx_primary);
+        let handle =
+            PrimaryConnector::spawn(primary_name, initial_committee, rx_reconfigure, rx_primary);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -122,7 +129,7 @@ impl Worker {
             worker
                 .worker_cache
                 .load()
-                .worker(&worker.name, &worker.id)
+                .worker(&worker.primary_name, &worker.id)
                 .expect("Our public key or worker id is not in the worker cache")
                 .transactions
         );
@@ -150,7 +157,7 @@ impl Worker {
         let address = self
             .worker_cache
             .load()
-            .worker(&self.name, &self.id)
+            .worker(&self.primary_name, &self.id)
             .expect("Our public key or worker id is not in the worker cache")
             .primary_to_worker;
         let address = address
@@ -166,7 +173,7 @@ impl Worker {
             "synchronizer".to_string(),
         ));
         let handle = Synchronizer::spawn(
-            self.name.clone(),
+            self.primary_name.clone(),
             self.id,
             self.committee.clone(),
             self.worker_cache.clone(),
@@ -210,7 +217,7 @@ impl Worker {
         let address = self
             .worker_cache
             .load()
-            .worker(&self.name, &self.id)
+            .worker(&self.primary_name, &self.id)
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;
         let address = address
@@ -242,7 +249,7 @@ impl Worker {
             "quorum_waiter".to_string(),
         ));
         let quorum_waiter_handle = QuorumWaiter::spawn(
-            self.name.clone(),
+            self.primary_name.clone(),
             self.id,
             (*(*(*self.committee).load()).clone()).clone(),
             self.worker_cache.clone(),
@@ -295,7 +302,7 @@ impl Worker {
         let address = self
             .worker_cache
             .load()
-            .worker(&self.name, &self.id)
+            .worker(&self.primary_name, &self.id)
             .expect("Our public key or worker id is not in the worker cache")
             .worker_to_worker;
         let address = address
