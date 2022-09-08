@@ -207,12 +207,11 @@ pub struct ConsensusAdapter {
     committee: Committee,
     /// A channel to notify the consensus listener to take action for a transactions.
     tx_consensus_listener: Sender<ConsensusListenerMessage>,
-    /// The maximum duration to wait from consensus before aborting the transaction. After
-    /// this delay passed, the client will be notified that its transaction was probably not
-    /// sequence and it should try to resubmit its transaction.
-    max_delay: Duration,
+    /// Additional amount on top of delay_ms to calculate consensus timeout
+    /// Worst case consensus timeout grows linearly by adding delay_step every timeout
+    delay_step: Duration,
 
-    /// Estimation of the conensus delay, to use to dynamically adjust the delay
+    /// Estimation of the consensus delay, to use to dynamically adjust the delay
     /// before we time out, so that we do not spam the consensus adapter with the
     /// same transaction.
     delay_ms: AtomicU64,
@@ -227,7 +226,7 @@ impl ConsensusAdapter {
         consensus_address: Multiaddr,
         committee: Committee,
         tx_consensus_listener: Sender<ConsensusListenerMessage>,
-        max_delay: Duration,
+        delay_step: Duration,
         opt_metrics: OptArcConsensusAdapterMetrics,
     ) -> Self {
         let consensus_client = TransactionsClient::new(
@@ -238,8 +237,8 @@ impl ConsensusAdapter {
             consensus_client,
             committee,
             tx_consensus_listener,
-            max_delay,
-            delay_ms: AtomicU64::new(max_delay.as_millis() as u64),
+            delay_step,
+            delay_ms: AtomicU64::new(delay_step.as_millis() as u64),
             opt_metrics,
         }
     }
@@ -310,7 +309,7 @@ impl ConsensusAdapter {
         // client to retry if we timeout without hearing back from consensus (this module does not
         // handle retries). The best timeout value depends on the consensus protocol.
         let back_off_delay =
-            self.max_delay + Duration::from_millis(self.delay_ms.load(Ordering::Relaxed));
+            self.delay_step + Duration::from_millis(self.delay_ms.load(Ordering::Relaxed));
         let result = match timeout(back_off_delay, waiter.wait_for_result()).await {
             Ok(_) => {
                 // Increment the attempted certificate sequencing success
@@ -345,7 +344,7 @@ impl ConsensusAdapter {
             // but all we really need here is some max so that we do not wait for ever
             // in case consensus if dead.
             let new_delay =
-                new_delay.min((self.max_delay.as_millis() as u64) * MAX_DELAY_MULTIPLIER);
+                new_delay.min((self.delay_step.as_millis() as u64) * MAX_DELAY_MULTIPLIER);
 
             // Store the latest latency
             self.opt_metrics.as_ref().map(|metrics| {
