@@ -53,6 +53,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "anemo"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=6278d0fa78147a49ff2cb9dd2e45e763886be0a0#6278d0fa78147a49ff2cb9dd2e45e763886be0a0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bincode",
+ "bytes",
+ "ed25519",
+ "futures",
+ "http",
+ "matchit",
+ "pkcs8",
+ "quinn",
+ "rand 0.8.5",
+ "rcgen",
+ "rustls",
+ "serde 1.0.144",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+ "tokio-util",
+ "tower",
+ "tracing",
+ "webpki",
+ "x509-parser",
+]
+
+[[package]]
+name = "anemo-build"
+version = "0.0.0"
+source = "git+https://github.com/mystenlabs/anemo.git?rev=6278d0fa78147a49ff2cb9dd2e45e763886be0a0#6278d0fa78147a49ff2cb9dd2e45e763886be0a0"
+dependencies = [
+ "prettyplease",
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
+]
+
+[[package]]
 name = "ansi_term"
 version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -258,6 +298,45 @@ name = "arrayvec"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8da52d66c7071e2e3fa2a1e5c6d088fec47b593032b254f5e980de8ea54454d6"
+
+[[package]]
+name = "asn1-rs"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cf6690c370453db30743b373a60ba498fc0d6d83b11f4abfd87a84a075db5dd4"
+dependencies = [
+ "asn1-rs-derive",
+ "asn1-rs-impl",
+ "displaydoc",
+ "nom 7.1.1",
+ "num-traits 0.2.15",
+ "rusticata-macros",
+ "thiserror",
+ "time 0.3.9",
+]
+
+[[package]]
+name = "asn1-rs-derive"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "726535892e8eae7e70657b4c8ea93d26b8553afb1ce617caee529ef96d7dee6c"
+dependencies = [
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
+ "synstructure",
+]
+
+[[package]]
+name = "asn1-rs-impl"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2777730b2039ac0f95f093556e61b6d26cebed5393ca6f152717777cec3a42ed"
+dependencies = [
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
+]
 
 [[package]]
 name = "async-lock"
@@ -734,6 +813,9 @@ name = "bytes"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
+dependencies = [
+ "serde 1.0.144",
+]
 
 [[package]]
 name = "bzip2-sys"
@@ -1054,7 +1136,7 @@ dependencies = [
 [[package]]
 name = "config"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
  "arc-swap",
  "crypto",
@@ -1066,7 +1148,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tracing",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -1088,7 +1170,7 @@ dependencies = [
 [[package]]
 name = "consensus"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
  "arc-swap",
  "bincode",
@@ -1109,7 +1191,7 @@ dependencies = [
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=9deac015fbf66e24b6da9699630e06750eaa094a)",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -1376,7 +1458,7 @@ dependencies = [
 [[package]]
 name = "crypto"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
  "base64ct",
  "blake2",
@@ -1399,7 +1481,7 @@ dependencies = [
  "serde_with 2.0.0",
  "signature",
  "tokio",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
  "zeroize",
 ]
 
@@ -1512,7 +1594,7 @@ dependencies = [
 [[package]]
 name = "dag"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
  "arc-swap",
  "dashmap",
@@ -1523,7 +1605,7 @@ dependencies = [
  "rayon",
  "serde 1.0.144",
  "thiserror",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -1640,6 +1722,20 @@ checksum = "13dd2ae565c0a381dde7fade45fce95984c568bdcb4700a4fdbe3175e0380b2f"
 dependencies = [
  "const-oid",
  "zeroize",
+]
+
+[[package]]
+name = "der-parser"
+version = "8.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42d4bc9b0db0a0df9ae64634ac5bdefb7afcb534e182275ca0beadbe486701c1"
+dependencies = [
+ "asn1-rs",
+ "displaydoc",
+ "nom 7.1.1",
+ "num-bigint",
+ "num-traits 0.2.15",
+ "rusticata-macros",
 ]
 
 [[package]]
@@ -1840,6 +1936,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "displaydoc"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf95dc3f046b9da4f2d51833c0d3547d8564ef6910f5c1ed130306a75b92886"
+dependencies = [
+ "proc-macro2 1.0.43",
+ "quote 1.0.21",
+ "syn 1.0.99",
+]
+
+[[package]]
 name = "dissimilar"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1884,8 +1991,10 @@ version = "1.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e9c280362032ea4203659fc489832d0204ef09f247a0506f170dafcac08c369"
 dependencies = [
+ "pkcs8",
  "serde 1.0.144",
  "signature",
+ "zeroize",
 ]
 
 [[package]]
@@ -2036,7 +2145,7 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 [[package]]
 name = "executor"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
  "async-trait",
  "backoff",
@@ -2062,7 +2171,7 @@ dependencies = [
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=9deac015fbf66e24b6da9699630e06750eaa094a)",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -2358,6 +2467,15 @@ dependencies = [
  "pin-project-lite",
  "pin-utils",
  "slab",
+]
+
+[[package]]
+name = "fxhash"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c31b6d751ae2c7f11320402d34e41349dd1016f8d5d45e48c4312bc8625af50c"
+dependencies = [
+ "byteorder",
 ]
 
 [[package]]
@@ -4386,11 +4504,14 @@ checksum = "ca2b420f638f07fe83056b55ea190bb815f609ec5a35e7017884a10f78839c9e"
 [[package]]
 name = "network"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
+ "anemo",
+ "anyhow",
  "async-trait",
  "backoff",
  "bytes",
+ "crypto",
  "eyre",
  "fastcrypto",
  "futures",
@@ -4405,7 +4526,7 @@ dependencies = [
  "tonic",
  "tracing",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -4464,7 +4585,7 @@ dependencies = [
 [[package]]
 name = "node"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
  "arc-swap",
  "async-trait",
@@ -4500,7 +4621,7 @@ dependencies = [
  "types",
  "url",
  "worker",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -4681,6 +4802,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "21158b2c33aa6d4561f1c0a6ea283ca92bc54802a93b263e910746d679a7eb53"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "oid-registry"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d4bda43fd1b844cbc6e6e54b5444e2b1bc7838bce59ad205902cccbb26d6761"
+dependencies = [
+ "asn1-rs",
 ]
 
 [[package]]
@@ -4954,6 +5084,15 @@ name = "peeking_take_while"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "19b17cddbe7ec3f8bc800887bab5e717348c95ea2ca0b1bf0837fb964dc67099"
+
+[[package]]
+name = "pem"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "03c64931a1a212348ec4f3b4362585eca7159d0d09cbdf4a7f74f02173596fd4"
+dependencies = [
+ "base64",
+]
 
 [[package]]
 name = "percent-encoding"
@@ -5238,8 +5377,10 @@ dependencies = [
 [[package]]
 name = "primary"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
+ "anemo",
+ "anyhow",
  "async-recursion",
  "async-trait",
  "base64",
@@ -5273,7 +5414,7 @@ dependencies = [
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=9deac015fbf66e24b6da9699630e06750eaa094a)",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -5471,6 +5612,58 @@ name = "quick-error"
 version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a993555f31e5a609f617c12db6250dedcac1b0a85076912c436e6fc9b2c8e6a3"
+
+[[package]]
+name = "quinn"
+version = "0.8.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5b435e71d9bfa0d8889927231970c51fb89c58fa63bffcab117c9c7a41e5ef8f"
+dependencies = [
+ "bytes",
+ "futures-channel",
+ "futures-util",
+ "fxhash",
+ "quinn-proto",
+ "quinn-udp",
+ "rustls",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "webpki",
+]
+
+[[package]]
+name = "quinn-proto"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fce546b9688f767a57530652488420d419a8b1f44a478b451c3d1ab6d992a55"
+dependencies = [
+ "bytes",
+ "fxhash",
+ "rand 0.8.5",
+ "ring",
+ "rustls",
+ "rustls-pemfile 0.2.1",
+ "slab",
+ "thiserror",
+ "tinyvec",
+ "tracing",
+ "webpki",
+]
+
+[[package]]
+name = "quinn-udp"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f832d8958db3e84d2ec93b5eb2272b45aa23cf7f8fe6e79f578896f4e6c231b"
+dependencies = [
+ "futures-util",
+ "libc",
+ "quinn-proto",
+ "socket2",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "quote"
@@ -5727,6 +5920,18 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
  "num_cpus",
+]
+
+[[package]]
+name = "rcgen"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6413f3de1edee53342e6138e75b56d32e7bc6e332b3bd62d497b1929d4cfbcdd"
+dependencies = [
+ "pem",
+ "ring",
+ "time 0.3.9",
+ "yasna",
 ]
 
 [[package]]
@@ -6004,6 +6209,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusticata-macros"
+version = "4.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "faf0c4a6ece9950b9abdb62b1cfcf2a68b3b67a10ba445b3bb85be2a293d0632"
+dependencies = [
+ "nom 7.1.1",
+]
+
+[[package]]
 name = "rustix"
 version = "0.34.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6036,9 +6250,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0167bac7a9f490495f3c33013e7722b53cb087ecbe082fb0c6387c96f634ea50"
 dependencies = [
  "openssl-probe",
- "rustls-pemfile",
+ "rustls-pemfile 1.0.0",
  "schannel",
  "security-framework",
+]
+
+[[package]]
+name = "rustls-pemfile"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5eebeaeb360c87bfb72e84abdb3447159c0eaececf1bef2aecd65a8be949d1c9"
+dependencies = [
+ "base64",
 ]
 
 [[package]]
@@ -6768,7 +6991,7 @@ dependencies = [
  "paste",
  "percent-encoding",
  "rustls",
- "rustls-pemfile",
+ "rustls-pemfile 1.0.0",
  "sha2 0.10.2",
  "smallvec",
  "sqlformat",
@@ -6825,7 +7048,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "storage"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
  "dashmap",
  "fastcrypto",
@@ -6837,7 +7060,7 @@ dependencies = [
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=9deac015fbf66e24b6da9699630e06750eaa094a)",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -8108,7 +8331,14 @@ dependencies = [
  "libc",
  "num_threads",
  "serde 1.0.144",
+ "time-macros",
 ]
+
+[[package]]
+name = "time-macros"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42657b1a6f4d817cda8e7a0ace261fe0cc946cf3a80314390b22cc61ae080792"
 
 [[package]]
 name = "tint"
@@ -8302,7 +8532,7 @@ dependencies = [
  "pin-project",
  "prost",
  "prost-derive",
- "rustls-pemfile",
+ "rustls-pemfile 1.0.0",
  "tokio",
  "tokio-rustls",
  "tokio-stream",
@@ -8677,8 +8907,10 @@ checksum = "dcf81ac59edc17cc8697ff311e8f5ef2d99fcbd9817b34cec66f90b6c3dfd987"
 [[package]]
 name = "types"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
+ "anemo",
+ "anemo-build",
  "base64",
  "bincode",
  "blake2",
@@ -8709,7 +8941,7 @@ dependencies = [
  "tonic-build 0.7.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=9deac015fbf66e24b6da9699630e06750eaa094a)",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -9259,7 +9491,7 @@ dependencies = [
 [[package]]
 name = "worker"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
  "async-trait",
  "bincode",
@@ -9285,7 +9517,7 @@ dependencies = [
  "tracing",
  "typed-store 0.1.0 (git+https://github.com/mystenlabs/mysten-infra.git?rev=9deac015fbf66e24b6da9699630e06750eaa094a)",
  "types",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
 ]
 
 [[package]]
@@ -9297,6 +9529,8 @@ dependencies = [
  "adler",
  "ahash",
  "aho-corasick",
+ "anemo",
+ "anemo-build",
  "ansi_term",
  "anyhow",
  "arc-swap",
@@ -9316,6 +9550,9 @@ dependencies = [
  "arrayref",
  "arrayvec 0.5.2",
  "arrayvec 0.7.2",
+ "asn1-rs",
+ "asn1-rs-derive",
+ "asn1-rs-impl",
  "async-lock",
  "async-recursion",
  "async-stream",
@@ -9433,6 +9670,7 @@ dependencies = [
  "datatest-stable",
  "debug-ignore",
  "der",
+ "der-parser",
  "derivative",
  "derive-syn-parse",
  "derive_builder",
@@ -9453,6 +9691,7 @@ dependencies = [
  "dirs-next",
  "dirs-sys",
  "dirs-sys-next",
+ "displaydoc",
  "dissimilar",
  "dotenvy",
  "downcast",
@@ -9496,6 +9735,7 @@ dependencies = [
  "futures-task",
  "futures-timer",
  "futures-util",
+ "fxhash",
  "generic-array",
  "gethostname",
  "getrandom 0.1.16",
@@ -9663,6 +9903,7 @@ dependencies = [
  "num_enum_derive",
  "object 0.28.4",
  "object 0.29.0",
+ "oid-registry",
  "once_cell",
  "oorandom",
  "opaque-debug",
@@ -9685,6 +9926,7 @@ dependencies = [
  "paste",
  "pathdiff",
  "peeking_take_while",
+ "pem",
  "percent-encoding",
  "pest",
  "pest_derive",
@@ -9732,6 +9974,9 @@ dependencies = [
  "ptree",
  "quick-error 1.2.3",
  "quick-error 2.0.1",
+ "quinn",
+ "quinn-proto",
+ "quinn-udp",
  "quote 0.6.13",
  "quote 1.0.21",
  "radix_trie",
@@ -9755,6 +10000,7 @@ dependencies = [
  "rand_xoshiro",
  "rayon",
  "rayon-core",
+ "rcgen",
  "read-write-set",
  "read-write-set-dynamic",
  "readonly",
@@ -9777,9 +10023,11 @@ dependencies = [
  "rustc_version 0.2.3",
  "rustc_version 0.3.3",
  "rustc_version 0.4.0",
+ "rusticata-macros",
  "rustls",
  "rustls-native-certs",
- "rustls-pemfile",
+ "rustls-pemfile 0.2.1",
+ "rustls-pemfile 1.0.0",
  "rustversion",
  "rusty-fork",
  "rustyline",
@@ -9887,6 +10135,7 @@ dependencies = [
  "thrift",
  "time 0.1.43",
  "time 0.3.9",
+ "time-macros",
  "tint",
  "tinytemplate",
  "tinyvec",
@@ -9978,9 +10227,11 @@ dependencies = [
  "which",
  "whoami",
  "worker",
- "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137)",
+ "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc)",
+ "x509-parser",
  "yaml-rust",
  "yansi",
+ "yasna",
  "zeroize",
  "zeroize_derive",
  "zstd-sys",
@@ -9989,12 +10240,14 @@ dependencies = [
 [[package]]
 name = "workspace-hack"
 version = "0.1.0"
-source = "git+https://github.com/MystenLabs/narwhal?rev=842a611a0a58dd378a904d85f79b4edbbbc7b137#842a611a0a58dd378a904d85f79b4edbbbc7b137"
+source = "git+https://github.com/MystenLabs/narwhal?rev=c969da55ca1812be2360c1a1e730d03d4b867bcc#c969da55ca1812be2360c1a1e730d03d4b867bcc"
 dependencies = [
  "addr2line",
  "adler",
  "ahash",
  "aho-corasick",
+ "anemo",
+ "anemo-build",
  "ansi_term",
  "anyhow",
  "arc-swap",
@@ -10013,6 +10266,9 @@ dependencies = [
  "ark-std",
  "arrayref",
  "arrayvec 0.7.2",
+ "asn1-rs",
+ "asn1-rs-derive",
+ "asn1-rs-impl",
  "async-recursion",
  "async-stream",
  "async-stream-impl",
@@ -10082,6 +10338,7 @@ dependencies = [
  "dashmap",
  "data-encoding",
  "der",
+ "der-parser",
  "derivative",
  "derive_builder",
  "derive_builder_core",
@@ -10091,8 +10348,10 @@ dependencies = [
  "difflib",
  "digest 0.10.3",
  "digest 0.9.0",
+ "displaydoc",
  "downcast",
  "ecdsa",
+ "ed25519",
  "ed25519-consensus",
  "either",
  "elliptic-curve",
@@ -10116,6 +10375,7 @@ dependencies = [
  "futures-sink",
  "futures-task",
  "futures-util",
+ "fxhash",
  "generic-array",
  "gethostname",
  "getrandom 0.1.16",
@@ -10190,6 +10450,7 @@ dependencies = [
  "num-traits 0.2.15",
  "num_cpus",
  "object 0.29.0",
+ "oid-registry",
  "once_cell",
  "oorandom",
  "opaque-debug",
@@ -10204,6 +10465,7 @@ dependencies = [
  "parking_lot_core 0.9.3",
  "paste",
  "peeking_take_while",
+ "pem",
  "percent-encoding",
  "pest",
  "petgraph 0.6.2",
@@ -10240,6 +10502,9 @@ dependencies = [
  "protobuf",
  "quick-error 1.2.3",
  "quick-error 2.0.1",
+ "quinn",
+ "quinn-proto",
+ "quinn-udp",
  "quote 0.6.13",
  "quote 1.0.21",
  "rand 0.7.3",
@@ -10250,6 +10515,7 @@ dependencies = [
  "rand_xorshift 0.3.0",
  "rayon",
  "rayon-core",
+ "rcgen",
  "readonly",
  "regex",
  "regex-automata",
@@ -10264,8 +10530,10 @@ dependencies = [
  "rustc-hash",
  "rustc_version 0.2.3",
  "rustc_version 0.3.3",
+ "rusticata-macros",
  "rustls",
- "rustls-pemfile",
+ "rustls-pemfile 0.2.1",
+ "rustls-pemfile 1.0.0",
  "rustversion",
  "rusty-fork",
  "ryu",
@@ -10328,6 +10596,7 @@ dependencies = [
  "threadpool",
  "thrift",
  "time 0.3.9",
+ "time-macros",
  "tinytemplate",
  "tinyvec",
  "tinyvec_macros",
@@ -10379,8 +10648,10 @@ dependencies = [
  "want",
  "webpki",
  "which",
+ "x509-parser",
  "yaml-rust",
  "yansi",
+ "yasna",
  "zeroize",
  "zeroize_derive",
  "zstd-sys",
@@ -10397,6 +10668,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "x509-parser"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0ecbeb7b67ce215e40e3cc7f2ff902f94a223acf44995934763467e7b1febc8"
+dependencies = [
+ "asn1-rs",
+ "base64",
+ "data-encoding",
+ "der-parser",
+ "lazy_static 1.4.0",
+ "nom 7.1.1",
+ "oid-registry",
+ "rusticata-macros",
+ "thiserror",
+ "time 0.3.9",
+]
+
+[[package]]
 name = "yaml-rust"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10410,6 +10699,15 @@ name = "yansi"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
+
+[[package]]
+name = "yasna"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "346d34a236c9d3e5f3b9b74563f238f955bbd05fa0b8b4efa53c130c43982f4c"
+dependencies = [
+ "time 0.3.9",
+]
 
 [[package]]
 name = "zeroize"
