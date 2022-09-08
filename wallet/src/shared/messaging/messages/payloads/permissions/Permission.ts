@@ -13,4 +13,5 @@ export interface Permission {
     permissions: PermissionType[];
     createdDate: string;
     responseDate: string | null;
+    requestMsgID: string;
 }

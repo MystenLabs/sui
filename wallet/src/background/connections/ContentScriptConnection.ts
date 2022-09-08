@@ -20,6 +20,7 @@ import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
 import type {
     HasPermissionsResponse,
     AcquirePermissionsResponse,
+    Permission,
 } from '_payloads/permissions';
 import type { ExecuteTransactionResponse } from '_payloads/transactions';
 import type { Runtime } from 'webextension-polyfill';
@@ -69,19 +70,14 @@ export class ContentScriptConnection extends Connection {
             );
         } else if (isAcquirePermissionsRequest(payload)) {
             try {
-                const permission = await Permissions.acquirePermissions(
+                const permission = await Permissions.startRequestPermissions(
                     payload.permissions,
-                    this
+                    this,
+                    msg.id
                 );
-                this.send(
-                    createMessage<AcquirePermissionsResponse>(
-                        {
-                            type: 'acquire-permissions-response',
-                            result: !!permission.allowed,
-                        },
-                        msg.id
-                    )
-                );
+                if (permission) {
+                    this.permissionReply(permission, msg.id);
+                }
             } catch (e) {
                 this.sendError(
                     {
@@ -122,6 +118,33 @@ export class ContentScriptConnection extends Connection {
             } else {
                 this.sendNotAllowedError(msg.id);
             }
+        }
+    }
+
+    public permissionReply(permission: Permission, msgID?: string) {
+        if (permission.origin !== this.origin) {
+            return;
+        }
+        const requestMsgID = msgID || permission.requestMsgID;
+        if (permission.allowed) {
+            this.send(
+                createMessage<AcquirePermissionsResponse>(
+                    {
+                        type: 'acquire-permissions-response',
+                        result: !!permission.allowed,
+                    },
+                    requestMsgID
+                )
+            );
+        } else {
+            this.sendError(
+                {
+                    error: true,
+                    message: 'Permission rejected',
+                    code: -1,
+                },
+                requestMsgID
+            );
         }
     }
 

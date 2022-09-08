@@ -3,6 +3,7 @@
 
 import Browser from 'webextension-polyfill';
 
+import Permissions from './Permissions';
 import { Connections } from './connections';
 import { openInNewTab } from '_shared/utils';
 
@@ -12,4 +13,10 @@ Browser.runtime.onInstalled.addListener((details) => {
     }
 });
 
-new Connections();
+const connections = new Connections();
+
+Permissions.permissionReply.subscribe((permission) => {
+    if (permission) {
+        connections.notifyForPermissionReply(permission);
+    }
+});
