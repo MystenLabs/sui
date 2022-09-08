@@ -32,6 +32,9 @@ module.exports = {
                         40: '#F7F8F8',
                         35: '#FEFEFE',
                     },
+                    blue: {
+                        steel: '#A0B6C3',
+                    },
                 },
                 issue: {
                     dark: '#EB5A29',
