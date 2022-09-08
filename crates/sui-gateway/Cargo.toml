@@ -27,7 +27,7 @@ sui-node = { path = "../sui-node" }
 
 
 mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
-move-package = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
+move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]
