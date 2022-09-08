@@ -1151,6 +1151,21 @@ where
         }))
     }
 
+    async fn get_object_arg(
+        &self,
+        id: ObjectID,
+        objects: &mut BTreeMap<ObjectID, Object>,
+    ) -> Result<ObjectArg, anyhow::Error> {
+        let obj = self.get_object_internal(&id).await?;
+        let arg = if obj.is_shared() {
+            ObjectArg::SharedObject(id)
+        } else {
+            ObjectArg::ImmOrOwnedObject(obj.compute_object_reference())
+        };
+        objects.insert(id, obj);
+        Ok(arg)
+    }
+
     async fn create_move_call_transaction_kind(
         &self,
         params: MoveCallParams,
@@ -1181,16 +1196,16 @@ where
         for json_arg in json_args {
             args.push(match json_arg {
                 SuiJsonCallArg::Object(id) => {
-                    let obj = self.get_object_internal(&id).await?;
-                    let arg = if obj.is_shared() {
-                        CallArg::Object(ObjectArg::SharedObject(id))
-                    } else {
-                        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj.compute_object_reference()))
-                    };
-                    objects.insert(id, obj);
-                    arg
+                    CallArg::Object(self.get_object_arg(id, &mut objects).await?)
                 }
                 SuiJsonCallArg::Pure(bytes) => CallArg::Pure(bytes),
+                SuiJsonCallArg::ObjVec(v) => {
+                    let mut object_ids = vec![];
+                    for id in v {
+                        object_ids.push(self.get_object_arg(id, &mut objects).await?);
+                    }
+                    CallArg::ObjVec(object_ids)
+                }
             })
         }
 

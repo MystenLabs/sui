@@ -959,6 +959,19 @@ Note the third argument to the `transfer` function representing
 is a required argument for all functions callable from Sui and is
 auto-injected by the platform at the point of a function call.
 
+> **Important:** When specifying arguments of vector type, you may have to enclose them in single
+> quotes (e.g., `'[7,42]'`) as in some cases (e.g., when using the `zsh` shell) square
+> brackets are treated as special characters on the command line.
+>
+> Additionally, when specifying a vector of object IDs, you need to enclose the IDs in double quotes
+> (e.g.,
+> `'["0x471c8e241d0473c34753461529b70f9c4ed3151b","0x53b50e3020a01e1fd6acf832a871feee240183f0"]'`
+
+To gain a deeper view into the object, include the
+> `--json` flag in the `sui client` command to see the raw JSON representation
+> of the object.
+
+
 The output of the call command is a bit verbose, but the important
 information that should be printed at the end indicates objects
 changes as a result of the function call:
