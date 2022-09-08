@@ -99,7 +99,7 @@ struct Stats {
 
 type RetryType = Box<(TransactionEnvelope<EmptySignInfo>, Box<dyn Payload>)>;
 enum NextOp {
-    Response(Option<(Instant, Box<dyn Payload>)>),
+    Response(Option<(Duration, Box<dyn Payload>)>),
     Retry(RetryType),
 }
 
@@ -200,11 +200,11 @@ impl Driver<()> for BenchDriver {
                                     debug!("Failed to update stat!");
                                 }
                                 num_success = 0;
-                            num_error = 0;
-                            num_no_gas = 0;
-                            num_submitted = 0;
-                            min_latency = Duration::MAX;
-                            max_latency = Duration::ZERO;
+                                num_error = 0;
+                                num_no_gas = 0;
+                                num_submitted = 0;
+                                min_latency = Duration::MAX;
+                                max_latency = Duration::ZERO;
                         }
                         _ = request_interval.tick() => {
 
@@ -215,6 +215,7 @@ impl Driver<()> for BenchDriver {
                                 num_submitted += 1;
                                 metrics_cloned.num_submitted.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
                                 let metrics_cloned = metrics_cloned.clone();
+                                let start = Instant::now();
                                 let res = qd
                                     .execute_transaction(ExecuteTransactionRequest {
                                         transaction: b.0.clone(),
@@ -227,8 +228,12 @@ impl Driver<()> for BenchDriver {
                                                 let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
                                                     object_ref.0 == b.1.get_object_id()
                                                 }).map(|x| x.0).unwrap();
+                                                let latency = start.elapsed();
+                                                metrics_cloned.latency_s.with_label_values(&[&b.1.get_workload_type().to_string()]).observe(latency.as_secs_f64());
+                                                metrics_cloned.num_success.with_label_values(&[&b.1.get_workload_type().to_string()]).inc();
+                                                metrics_cloned.num_in_flight.with_label_values(&[&b.1.get_workload_type().to_string()]).dec();
                                                 NextOp::Response(Some((
-                                                    Instant::now(),
+                                                    latency,
                                                     b.1.make_new_payload(new_version, effects.effects.gas_object.0),
                                                 ),
                                                 ))
@@ -273,8 +278,12 @@ impl Driver<()> for BenchDriver {
                                             let new_version = effects.effects.mutated.iter().find(|(object_ref, _)| {
                                                 object_ref.0 == payload.get_object_id()
                                             }).map(|x| x.0).unwrap();
+                                            let latency = start.elapsed();
+                                            metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
+                                            metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
+                                            metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
                                             NextOp::Response(Some((
-                                                start,
+                                                latency,
                                                 payload.make_new_payload(new_version, effects.effects.gas_object.0),
                                             )))
                                         }
@@ -298,14 +307,10 @@ impl Driver<()> for BenchDriver {
                                 NextOp::Retry(b) => {
                                     retry_queue.push_back(b);
                                 }
-                                NextOp::Response(Some((start, payload))) => {
-                                    let latency = start.elapsed();
+                                NextOp::Response(Some((latency, new_payload))) => {
                                     num_success += 1;
                                     num_in_flight -= 1;
-                                    metrics_cloned.latency_s.with_label_values(&[&payload.get_workload_type().to_string()]).observe(latency.as_secs_f64());
-                                    metrics_cloned.num_success.with_label_values(&[&payload.get_workload_type().to_string()]).inc();
-                                    metrics_cloned.num_in_flight.with_label_values(&[&payload.get_workload_type().to_string()]).dec();
-                                    free_pool.push(payload);
+                                    free_pool.push(new_payload);
                                     if latency > max_latency {
                                         max_latency = latency;
                                     }
