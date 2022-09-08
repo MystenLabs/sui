@@ -99,6 +99,7 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
+comfy-table = { version = "6", features = ["crossterm", "tty"] }
 config-df9ed7b29d513bb1 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "aa0cc2d693572d197531a1054e0e3e417d2b7404", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "aa0cc2d693572d197531a1054e0e3e417d2b7404", features = ["benchmark", "rand"] }
@@ -108,6 +109,7 @@ constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
+crc32fast = { version = "1", features = ["std"] }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
@@ -178,6 +180,7 @@ ff = { version = "0.12", default-features = false }
 fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
+flate2 = { version = "1", features = ["miniz_oxide", "rust_backend"] }
 flexstr = { version = "0.9", features = ["std"] }
 float-cmp = { version = "0.9", features = ["num-traits", "ratio"] }
 flume = { version = "0.10", default-features = false, features = ["async", "futures-core", "futures-sink", "pin-project"] }
@@ -217,7 +220,7 @@ half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
-hdrhistogram = { version = "7", default-features = false }
+hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 hex = { version = "0.4", features = ["alloc", "std"] }
 hkdf = { version = "0.12", default-features = false, features = ["std"] }
@@ -719,6 +722,7 @@ collectable = { version = "0.0.2", default-features = false }
 colored = { version = "2", default-features = false }
 colored-diff = { version = "0.2", default-features = false }
 combine = { version = "4", features = ["alloc", "bytes", "std"] }
+comfy-table = { version = "6", features = ["crossterm", "tty"] }
 config-df9ed7b29d513bb1 = { package = "config", git = "https://github.com/MystenLabs/narwhal", rev = "aa0cc2d693572d197531a1054e0e3e417d2b7404", default-features = false }
 config-a6292c17cd707f01 = { package = "config", version = "0.11", features = ["hjson", "ini", "json", "rust-ini", "serde-hjson", "serde_json", "toml", "yaml", "yaml-rust"] }
 consensus = { git = "https://github.com/MystenLabs/narwhal", rev = "aa0cc2d693572d197531a1054e0e3e417d2b7404", features = ["benchmark", "rand"] }
@@ -728,6 +732,7 @@ constant_time_eq = { version = "0.1", default-features = false }
 core2 = { version = "0.4", default-features = false, features = ["alloc"] }
 crc = { version = "3", default-features = false }
 crc-catalog = { version = "2", default-features = false }
+crc32fast = { version = "1", features = ["std"] }
 criterion = { version = "0.3", features = ["cargo_bench_support"] }
 criterion-plot = { version = "0.4", default-features = false }
 crossbeam = { version = "0.8", features = ["alloc", "crossbeam-channel", "crossbeam-deque", "crossbeam-epoch", "crossbeam-queue", "std"] }
@@ -810,6 +815,7 @@ ff = { version = "0.12", default-features = false }
 fiat-crypto = { version = "0.1", features = ["std"] }
 fixedbitset-6f8ce4dd05d13bba = { package = "fixedbitset", version = "0.2", default-features = false }
 fixedbitset-9fbad63c4bcf4a8f = { package = "fixedbitset", version = "0.4", default-features = false }
+flate2 = { version = "1", features = ["miniz_oxide", "rust_backend"] }
 flexstr = { version = "0.9", features = ["std"] }
 float-cmp = { version = "0.9", features = ["num-traits", "ratio"] }
 flume = { version = "0.10", default-features = false, features = ["async", "futures-core", "futures-sink", "pin-project"] }
@@ -850,7 +856,7 @@ half = { version = "1", default-features = false }
 hashbrown-a6292c17cd707f01 = { package = "hashbrown", version = "0.11", features = ["ahash", "inline-more"] }
 hashbrown-5ef9efb8ec2df382 = { package = "hashbrown", version = "0.12", features = ["ahash", "inline-more", "raw"] }
 hashlink = { version = "0.8", default-features = false }
-hdrhistogram = { version = "7", default-features = false }
+hdrhistogram = { version = "7", features = ["base64", "crossbeam-channel", "flate2", "nom", "serialization", "sync"] }
 heck-468e82937335b1c9 = { package = "heck", version = "0.3", default-features = false }
 heck-9fbad63c4bcf4a8f = { package = "heck", version = "0.4", features = ["unicode", "unicode-segmentation"] }
 hex = { version = "0.4", features = ["alloc", "std"] }

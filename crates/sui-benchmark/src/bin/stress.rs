@@ -14,6 +14,8 @@ use std::time::Duration;
 use strum_macros::EnumString;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
+use sui_benchmark::drivers::BenchmarkCmp;
+use sui_benchmark::drivers::BenchmarkStats;
 use sui_benchmark::drivers::Interval;
 use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
 use sui_benchmark::workloads::transfer_object::TransferObjectWorkload;
@@ -125,6 +127,12 @@ struct Opts {
     /// "10000"
     #[clap(long, global = true, default_value = "unbounded")]
     pub run_duration: Interval,
+    /// Path where benchmark stats is stored
+    #[clap(long, default_value = "/tmp/bench_result", global = true)]
+    pub benchmark_stats_path: String,
+    /// Path where previous benchmark stats is stored to use for comparison
+    #[clap(long, default_value = "", global = true)]
+    pub compare_with: String,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]
@@ -322,10 +330,10 @@ fn make_transfer_object_workload(
 /// --num-server-threads 10 \
 /// --num-transfer-accounts 2 \
 /// bench \
-/// --target-qps 20 \
+/// --target-qps 100 \
 /// --in-flight-ratio 2 \
-/// --shared-counter 10 \
-/// --transfer-object 10```
+/// --shared-counter 50 \
+/// --transfer-object 50```
 /// To point the traffic to an already running cluster,
 /// use it something like:
 /// ```cargo run  --release  --package sui-benchmark --bin stress -- --num-client-threads 12 \
@@ -334,10 +342,10 @@ fn make_transfer_object_workload(
 /// --primary-gas-id 0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f \
 /// --gateway-config-path /tmp/gateway.yaml \
 /// --keystore-path /tmp/sui.keystore bench \
-/// --target-qps 1 \
+/// --target-qps 100 \
 /// --in-flight-ratio 2 \
-/// --shared-counter 10 \
-/// --transfer-object 10```
+/// --shared-counter 50 \
+/// --transfer-object 50```
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut config = telemetry_subscribers::TelemetryConfig::new("stress");
@@ -501,6 +509,8 @@ async fn main() -> Result<()> {
         .worker_threads(opts.num_client_threads as usize)
         .build()
         .unwrap();
+    let prev_benchmark_stats_path = opts.compare_with.clone();
+    let curr_benchmark_stats_path = opts.benchmark_stats_path.clone();
     let handle = std::thread::spawn(move || {
         client_runtime.block_on(async move {
             let committee = GatewayState::make_committee(&gateway_config).unwrap();
@@ -584,7 +594,7 @@ async fn main() -> Result<()> {
                         workloads
                     };
                     let interval = opts.run_duration;
-                    // We only show the progress in stderr
+                    // We only show continuous progress in stderr
                     // if benchmark is running in unbounded mode,
                     // otherwise summarized benchmark results are
                     // published in the end
@@ -601,6 +611,28 @@ async fn main() -> Result<()> {
     if let Err(err) = joined {
         Err(anyhow!("Failed to join client runtime: {:?}", err))
     } else {
-        joined.unwrap()
+        let stats: BenchmarkStats = joined.unwrap().unwrap();
+        let table = stats.to_table();
+        eprintln!("Benchmark Report:");
+        eprintln!("{}", table);
+        if !prev_benchmark_stats_path.is_empty() {
+            let data = std::fs::read_to_string(&prev_benchmark_stats_path)?;
+            let prev_stats: BenchmarkStats = serde_json::from_str(&data)?;
+            let cmp = BenchmarkCmp {
+                new: &stats,
+                old: &prev_stats,
+            };
+            let cmp_table = cmp.to_table();
+            eprintln!(
+                "Benchmark Comparison Report[{}]:",
+                prev_benchmark_stats_path
+            );
+            eprintln!("{}", cmp_table);
+        }
+        if !curr_benchmark_stats_path.is_empty() {
+            let serialized = serde_json::to_string(&stats)?;
+            std::fs::write(curr_benchmark_stats_path, serialized)?;
+        }
+        Ok(())
     }
 }
