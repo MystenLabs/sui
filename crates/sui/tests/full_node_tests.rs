@@ -369,7 +369,20 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-#[sui_test]
+fn bimodal() -> sui_simulator::Config {
+    sui_simulator::Config {
+        net: sui_simulator::net::Config {
+            packet_loss_rate: 0.0,
+            send_latency: sui_simulator::net::LatencyDistribution::bimodal(
+                Duration::from_millis(75)..Duration::from_millis(90),
+                Duration::from_millis(500)..Duration::from_millis(1000),
+                0.001,
+            ),
+        },
+    }
+}
+
+#[sim_test(configure_network = "bimodal()")]
 async fn test_full_node_sync_flood() -> Result<(), anyhow::Error> {
     let (swarm, context, _) = setup_network_and_wallet().await?;
 
