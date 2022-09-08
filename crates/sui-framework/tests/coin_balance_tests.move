@@ -136,4 +136,97 @@ module sui::test_coin {
         coin::destroy_for_testing(coin1);
         coin::destroy_for_testing(coin2);
     }
+
+    #[test]
+    public entry fun test_transform() {
+        let coin_vec = vector::empty<Coin<SUI>>();
+        let amount_vec = vector::empty<u64>();
+
+        let scenario = &mut test_scenario::begin(&TEST_SENDER_ADDR);
+        let ctx = test_scenario::ctx(scenario);
+
+        let total_amount = 0;
+        let i = 0u64;
+
+        // More coins out then in
+        while (i < 3) {
+            vector::push_back(&mut coin_vec, coin::mint_for_testing(i*50 + 100, ctx));
+            total_amount = total_amount + i*50 + 100;
+          //  vector::push_back(&mut amount_vec, i*20);
+            i = i + 1;
+        };
+        vector::push_back(&mut amount_vec, 10);
+        vector::push_back(&mut amount_vec, 20);
+        vector::push_back(&mut amount_vec, 30);
+        vector::push_back(&mut amount_vec, 30);
+        vector::push_back(&mut amount_vec, 30);
+
+        let ret = coin::transform(coin_vec, amount_vec, ctx);
+
+        // Expected flow
+        // amount_vec: [10, 20, 30, 30, 30]
+        // coin_vec: [100, 150, 200]
+        // -----------------------------------
+        // for the first 4  coins of total val 90, we repeatedly split off coin_vec[0] since 90 < 100
+        // This leaves coin[0] with 10 units
+        // for the last coin of value 30, we cannot use this value so we use merge coin[0] + coin[1] = 160
+        // We split off 30 and are left with 130
+        // 
+
+        let i = 0;
+        let len = vector::length(&amount_vec);
+
+        let seen_amount = 0;
+        // Check that all the amounts we want are present in result
+        while (i < len) {
+            let coin = vector::remove(&mut ret, 0);
+            let expected_amount = vector::borrow(&amount_vec, i);
+            assert!(coin::value(&coin) == *expected_amount, 0);
+            seen_amount = seen_amount + *expected_amount;
+            coin::destroy_for_testing(coin);
+            i = i + 1;
+        };
+
+        // Left over coins from splitting off 5 coins
+        assert!(vector::length(&ret) == 2, 0);
+
+        let coin = vector::pop_back(&mut ret);
+        seen_amount = seen_amount + coin::value(&coin);
+        coin::destroy_for_testing(coin);
+        let coin = vector::pop_back(&mut ret);
+        seen_amount = seen_amount + coin::value(&coin);
+        coin::destroy_for_testing(coin);
+        vector::destroy_empty(ret);
+        assert!(seen_amount == total_amount, 0);
+
+
+        // let coin_vec = vector::empty<Coin<SUI>>();
+        // let amount_vec = vector::empty<u64>();
+
+        // let scenario = &mut test_scenario::begin(&TEST_SENDER_ADDR);
+        // let ctx = test_scenario::ctx(scenario);
+
+        // let i = 0u64;
+        // while (i < 100) {
+        //     vector::push_back(&mut coin_vec, coin::mint_for_testing(i*50, ctx));
+        //     vector::push_back(&mut amount_vec, i*60);
+        //     i = i + 1;
+        // };
+        // vector::push_back(&mut amount_vec, 1);
+        // vector::push_back(&mut amount_vec, 2);
+        // vector::push_back(&mut amount_vec, 3);
+
+        // let ret = coin::transform(coin_vec, amount_vec, ctx);
+        // let i = 0;
+        // let len = vector::length(&ret);
+
+        // while (i < len) {
+        //     let c = vector::pop_back(&mut ret);
+        //     coin::destroy_for_testing(c);
+        //     i = i + 1;
+        // };
+
+        // vector::destroy_empty(ret);
+
+    }
 }

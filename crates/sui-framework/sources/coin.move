@@ -10,6 +10,7 @@ module sui::coin {
     use sui::transfer;
     use sui::tx_context::{Self, TxContext};
     use std::vector;
+    use sui::priority_queue;
 
     /// For when a type passed to create_supply is not a one-time witness.
     const EBadWitness: u64 = 0;
@@ -19,6 +20,9 @@ module sui::coin {
 
     /// For when trying to split a coin more times than its balance allows.
     const ENotEnough: u64 = 2;
+
+    /// For when specifying a vector too big
+    const EVecLenTooBig: u64 = 3;
 
     /// A coin of type `T` worth `value`. Transferable and storable
     struct Coin<phantom T> has key, store {
@@ -125,7 +129,7 @@ module sui::coin {
         let i = 0;
         let len = vector::length(&coins);
         while (i < len) {
-            let coin = vector::remove(&mut coins, i);
+            let coin = vector::pop_back(&mut coins);
             join(self, coin);
             i = i + 1
         };
@@ -261,6 +265,116 @@ module sui::coin {
             split(self, *vector::borrow(&split_amounts, i), ctx);
             i = i + 1;
         };
+    }
+
+
+    // Transforms a vector of coins to another with the specified amounts
+    // 1. Heapify the coin list in ascending order
+    public fun transform<T>(coins: vector<Coin<T>>, amounts: vector<u64>, ctx: &mut TxContext): vector<Coin<T>> {
+        let input_coins_len = vector::length(&coins);
+        let amount_len = vector::length(&amounts);
+        assert!(input_coins_len < (1<<63), EVecLenTooBig);
+
+        if (amount_len == 0) {
+            // Nothing to do
+            return coins
+        };
+
+        let result = vector::empty<Coin<T>>();
+
+        // Create entries and heapify the coin vector in increasing balance order
+        let pq_entries = vector::empty();
+        // Do in reverse for perf of vec pop
+        let i = 0u64;
+        while (i < input_coins_len) {
+            let coin = vector::pop_back(&mut coins);
+            vector::push_back(&mut pq_entries, priority_queue::new_entry(value(&coin), coin));
+            i = i + 1;
+        };
+        vector::destroy_empty(coins);
+
+        // Heapify in ascending order
+        let min_pq = priority_queue::new(pq_entries, true);
+
+        // For each amount, combine or split coins to create the valid coin
+        let i = 0u64;
+        while ((i < amount_len) && !priority_queue::empty(&min_pq)) {
+            // Get the amount we need to create
+            let desired_amount = vector::borrow(&amounts, i);
+            // Increase width to allow for temp overflow and calc ease
+            let desired_amount = ((*desired_amount) as u128);
+
+            // Create the zero coin where we will put the amount
+            let curr_coin = zero(ctx);
+
+            // Coins to modify
+            let coins_to_be_merged = vector::empty<Coin<T>>();
+
+            // Amount we have so far from coins to modify
+            // Using u128 as it might temporarily overflow
+            let amount_so_far = 0u128;
+
+            // Keep popping values from coins till we can meet the required amount
+            // If we cannot meet the required amount, queue will be emptied and we will eventually terminate
+            while (!priority_queue::empty(&min_pq) && (amount_so_far < desired_amount)) {
+                let (coin_amt, coin_obj) = priority_queue::pop(&mut min_pq);
+                let coin_amt = (coin_amt as u128);
+
+                // If the new amount will push us over, we split the coin and take only what we need
+                // Ensure no underflow or overflow 
+                if (coin_amt + amount_so_far > desired_amount) {
+                    let needed_difference = desired_amount - amount_so_far;
+                    let surplus = coin_amt + amount_so_far - desired_amount;
+
+                    // We want to include the smaller coin in our merge so we minimize dust
+                    // Split off a coin with the larger difference
+                    let amount_to_split_off = if (needed_difference > surplus) needed_difference else surplus;
+                    let coin_to_heap = take(&mut coin_obj.balance, (amount_to_split_off as u64), ctx);
+
+                    let coin_to_merge = coin_obj;
+
+                    // Put the larger coin back in the heap
+                    priority_queue::insert(&mut min_pq, value(&coin_to_heap), coin_to_heap);
+                    // Coin amount has changed
+                    coin_amt = (value(&coin_to_merge) as u128);
+
+                    // Track the coins used to reach this amount
+                    vector::push_back(&mut coins_to_be_merged, coin_to_merge);
+                } else {
+                    // Merge this coin since it contributes to total amount
+                    vector::push_back(&mut coins_to_be_merged, coin_obj);
+                };
+
+                // Incr the total amount seen
+                amount_so_far = amount_so_far + coin_amt;
+            };
+            assert!(amount_so_far <= desired_amount, 0);
+
+            // Merge all the coins we used to get the desired amount
+            // Curr amount must be the amount needed or less
+            join_vec(&mut curr_coin, coins_to_be_merged);
+            // Save this
+            vector::push_back(&mut result, curr_coin);
+    
+            i = i + 1;
+        };
+
+        // `result` now contains the desired coins
+        // However there might be left over coins in the heap
+        // We need to drain the items in the heap if left over
+        let left_over = priority_queue::drain(min_pq);
+
+        let len = vector::length(&left_over);
+
+        let i = 0u64;
+        while (i < len) {
+            let coin = vector::pop_back(&mut left_over);
+            vector::push_back(&mut result, coin);
+            i = i + 1;
+        };
+        vector::destroy_empty(left_over);
+
+        result
     }
 
     // === Test-only code ===
