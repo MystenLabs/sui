@@ -959,9 +959,7 @@ Note the third argument to the `transfer` function representing
 is a required argument for all functions callable from Sui and is
 auto-injected by the platform at the point of a function call.
 
-> **Important:** When specifying arguments of vector type, you may have to enclose them in single
-> quotes (e.g., `'[7,42]'`) as in some cases (e.g., when using the `zsh` shell) square
-> brackets are treated as special characters on the command line.
+> **Important:** If you use a shell that interprets square brackets ([ ]) as special characters (such as the `zsh` shell), you must enclose the brackets in single quotes. For example, instead of `[7,42]` you must use `'[7,42]'`. 
 >
 > Additionally, when specifying a vector of object IDs, you need to enclose the IDs in double quotes
 > (e.g.,
