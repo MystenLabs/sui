@@ -1,6 +1,6 @@
 .copy16,
 .copy24 {
-    @apply cursor-pointer stroke-sui-blue-steel leading-[100%] self-end;
+    @apply cursor-pointer stroke-sui-blue-steel leading-[100%] self-start sm:self-end;
 }
 
 .copy16 {
@@ -8,7 +8,7 @@
 }
 
 .copied {
-    @apply text-green-600 text-sm;
+    @apply text-green-600 text-sm self-start sm:self-center;
 }
 
 .copied span {
