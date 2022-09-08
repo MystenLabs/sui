@@ -25,8 +25,6 @@ export type DataType = {
     ethAddress?: string;
     ethTokenId?: string;
     publisherAddress?: string;
-    module?: string;
-    package?: string;
     contract_id?: { bytes: string };
     data: {
         contents: {
