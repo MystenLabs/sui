@@ -213,12 +213,13 @@ impl ValidatorService {
 
         let metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
 
+        let delay_step = consensus_config.delay_step.unwrap_or(15_000);
         // The consensus adapter allows the authority to send user certificates through consensus.
         let consensus_adapter = ConsensusAdapter::new(
             consensus_config.address().to_owned(),
             state.clone_committee(),
             tx_sui_to_consensus.clone(),
-            /* max_delay */ Duration::from_millis(5_000),
+            Duration::from_millis(delay_step),
             metrics.clone(),
         );
 

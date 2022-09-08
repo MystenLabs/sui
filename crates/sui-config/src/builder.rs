@@ -180,6 +180,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 let consensus_config = ConsensusConfig {
                     consensus_address,
                     consensus_db_path,
+                    delay_step: Some(15_000),
                     narwhal_config: Default::default(),
                 };
 
