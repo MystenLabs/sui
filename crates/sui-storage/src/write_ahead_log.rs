@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use sui_types::base_types::TransactionDigest;
 use typed_store::traits::TypedStoreDebug;
-use typed_store_macros::DBMapUtils;
+use typed_store_derive::DBMapUtils;
 
 use sui_types::error::{SuiError, SuiResult};
 

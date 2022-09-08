@@ -6,7 +6,7 @@
 
 use rocksdb::Options;
 use serde::{de::DeserializeOwned, Serialize};
-use typed_store_macros::DBMapUtils;
+use typed_store_derive::DBMapUtils;
 
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
