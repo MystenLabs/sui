@@ -1,6 +1,6 @@
 .copy16,
 .copy24 {
-    @apply cursor-pointer mr-2 stroke-sui-blue-steel leading-[100%];
+    @apply cursor-pointer stroke-sui-blue-steel leading-[100%];
 }
 
 .copy16 {
@@ -8,7 +8,7 @@
 }
 
 .copied {
-    @apply text-green-600 ml-1 text-sm;
+    @apply text-green-600 text-sm;
 }
 
 .copied span {
@@ -17,7 +17,7 @@
 
 .longtext,
 .longtext > a {
-    @apply no-underline text-sui-dark hover:text-[#1F6493] cursor-pointer break-all inline mr-2;
+    @apply no-underline text-sui-dark hover:text-[#1F6493] cursor-pointer break-all inline;
 }
 
 .linktext {
@@ -25,5 +25,5 @@
 }
 
 .longtextwrapper {
-    @apply flex items-center min-w-fit;
+    @apply flex items-center gap-[6px] min-w-fit mr-2;
 }
