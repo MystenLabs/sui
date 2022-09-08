@@ -58,7 +58,7 @@ narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "842a611a0
 
 fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b"}
 workspace-hack = { path = "../workspace-hack"}
-thiserror = "1.0.32"
+thiserror = "1.0.34"
 eyre = "0.6.8"
 
 [dev-dependencies]
