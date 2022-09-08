@@ -20,7 +20,7 @@ proptest = "1.0.0"
 proptest-derive = "0.3.0"
 prost = "0.10.4"
 rand = "0.8.5"
-roaring = "0.10.0"
+roaring = "0.10.1"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_with = "2.0.0"
 signature = "1.6.0"
