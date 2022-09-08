@@ -7,7 +7,7 @@ status-level = "skip"
 # Do not cancel the test run on the first failure.
 fail-fast = false
 # Retry failing tests in order to not block builds on flaky tests
-retries = 2
+retries = 5
 
 [profile.ci.junit]
 path = "junit.xml"
