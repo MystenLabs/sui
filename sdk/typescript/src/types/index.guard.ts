@@ -524,27 +524,27 @@ export function isSuiEventFilter(obj: any, _argumentName?: string): obj is SuiEv
         ((obj !== null &&
             typeof obj === "object" ||
             typeof obj === "function") &&
-            isTransactionDigest(obj.package) as boolean ||
+            isTransactionDigest(obj.Package) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isTransactionDigest(obj.module) as boolean ||
+            isTransactionDigest(obj.Module) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isTransactionDigest(obj.moveEventType) as boolean ||
+            isTransactionDigest(obj.MoveEventType) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isMoveEventField(obj.moveEventField) as boolean ||
+            isMoveEventField(obj.MoveEventField) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isTransactionDigest(obj.senderAddress) as boolean ||
+            isTransactionDigest(obj.SenderAddress) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
-            isEventType(obj.eventType) as boolean ||
+            isEventType(obj.EventType) as boolean ||
             (obj !== null &&
                 typeof obj === "object" ||
                 typeof obj === "function") &&
