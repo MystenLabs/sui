@@ -1,10 +1,10 @@
-.copy {
-    @apply cursor-pointer mr-2 stroke-sui-blue-steel;
+.copy16,
+.copy24 {
+    @apply cursor-pointer mr-2 stroke-sui-blue-steel leading-[100%];
+}
 
-    /* fix some weird vertical spacing svg with copy 16px is the high of svg */
-    font-size: 16px !important;
-    vertical-align: middle;
-    line-height: 100%;
+.copy16 {
+    @apply hidden sm:block;
 }
 
 .copied {
@@ -21,5 +21,5 @@
 }
 
 .longtextwrapper {
-    @apply inline md:block min-w-fit;
+    @apply flex items-center min-w-fit;
 }

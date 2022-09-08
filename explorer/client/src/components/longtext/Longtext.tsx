@@ -51,16 +51,21 @@ function Longtext({
 
     if (copyButton !== 'none') {
         if (pleaseWait) {
-            icon = <span className={styles.copied}>&#8987; Please Wait</span>;
+            icon = <div className={styles.copied}>&#8987; Please Wait</div>;
         } else if (isCopyIcon) {
             icon = (
-                <span className={styles.copy} onClick={handleCopyEvent}>
+                <div
+                    className={
+                        copyButton === '16' ? styles.copy16 : styles.copy24
+                    }
+                    onClick={handleCopyEvent}
+                >
                     {copyButton === '16' ? (
                         <ContentCopyIcon16 />
                     ) : (
                         <ContentCopyIcon24 />
                     )}
-                </span>
+                </div>
             );
         } else {
             icon = <span className={styles.copied}>&#10003; Copied</span>;
@@ -93,9 +98,9 @@ function Longtext({
     if (isLink) {
         if (category === 'unknown') {
             textComponent = (
-                <span className={styles.longtext} onClick={navigateUnknown}>
+                <div className={styles.longtext} onClick={navigateUnknown}>
                     {alttext ? alttext : text}
-                </span>
+                </div>
             );
         } else if (category === 'ethAddress') {
             textComponent = (
@@ -107,17 +112,19 @@ function Longtext({
             );
         } else {
             textComponent = (
-                <Link
-                    className={styles.longtext}
-                    to={`/${category}/${encodeURIComponent(text)}`}
-                >
-                    {alttext ? alttext : text} {iconButton}
-                </Link>
+                <div>
+                    <Link
+                        className={styles.longtext}
+                        to={`/${category}/${encodeURIComponent(text)}`}
+                    >
+                        {alttext ? alttext : text} {iconButton}
+                    </Link>
+                </div>
             );
         }
     } else {
         textComponent = (
-            <span className={styles.linktext}>{alttext ? alttext : text}</span>
+            <div className={styles.linktext}>{alttext ? alttext : text}</div>
         );
     }
 
