@@ -209,6 +209,7 @@ async fn test_rounds_return_successful_response() {
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
     let (mut certificates, _next_parents) = make_optimal_certificates(
+        &committee,
         1..=4,
         &genesis,
         &committee

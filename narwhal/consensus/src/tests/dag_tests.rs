@@ -1,35 +1,30 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use super::{Dag, ValidatorDagError};
+use crate::metrics::ConsensusMetrics;
+use dag::node_dag::NodeDagError;
+use fastcrypto::Hash;
 use indexmap::IndexMap;
 use prometheus::Registry;
 use std::collections::BTreeSet;
-
-use dag::node_dag::NodeDagError;
-use fastcrypto::{traits::KeyPair, Hash};
 use std::sync::Arc;
-use test_utils::make_optimal_certificates;
+use test_utils::{make_optimal_certificates, CommitteeFixture};
 use types::Certificate;
-
-use crate::metrics::ConsensusMetrics;
-use test_utils::mock_committee;
-
-use super::{Dag, ValidatorDagError};
 
 #[tokio::test]
 async fn inner_dag_insert_one() {
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = test_utils::keys(None)
-        .into_iter()
-        .map(|kp| kp.public().clone())
-        .collect();
-    let committee = mock_committee(&keys.clone()[..]);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
+    let (mut certificates, _next_parents) =
+        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
 
     // set up a Dag
     let (tx_cert, rx_cert) = test_utils::test_channel!(1);
@@ -44,17 +39,16 @@ async fn inner_dag_insert_one() {
 #[tokio::test]
 async fn test_dag_read_notify() {
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = test_utils::keys(None)
-        .into_iter()
-        .map(|kp| kp.public().clone())
-        .collect();
-    let committee = mock_committee(&keys.clone()[..]);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
+    let (mut certificates, _next_parents) =
+        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
     let certs = certificates.clone().into_iter().map(|c| (c.digest(), c));
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
@@ -80,11 +74,9 @@ async fn test_dag_read_notify() {
 
 #[tokio::test]
 async fn test_dag_new_has_genesis_and_its_not_live() {
-    let keys: Vec<_> = test_utils::keys(None)
-        .into_iter()
-        .map(|kp| kp.public().clone())
-        .collect();
-    let committee = mock_committee(&keys.clone()[..]);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -101,7 +93,8 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
     }
 
     // But the genesis does not come out in read_causal, as is is compressed the moment we add more nodes
-    let (certificates, _next_parents) = make_optimal_certificates(1..=1, &genesis, &keys);
+    let (certificates, _next_parents) =
+        make_optimal_certificates(&committee, 1..=1, &genesis, &keys);
     let mut certs_to_insert = certificates.clone();
 
     // Feed the additional certificates to the Dag
@@ -131,11 +124,9 @@ async fn test_dag_new_has_genesis_and_its_not_live() {
 // check the invariants are the same
 #[tokio::test]
 async fn test_dag_compresses_empty_blocks() {
-    let keys: Vec<_> = test_utils::keys(None)
-        .into_iter()
-        .map(|kp| kp.public().clone())
-        .collect();
-    let committee = mock_committee(&keys.clone()[..]);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -149,7 +140,7 @@ async fn test_dag_compresses_empty_blocks() {
 
     // insert one round of empty certificates
     let (mut certificates, next_parents) =
-        make_optimal_certificates(1..=1, &genesis.clone(), &keys);
+        make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &keys);
     // make those empty
     for mut cert in certificates.iter_mut() {
         cert.header.payload = IndexMap::new();
@@ -168,7 +159,7 @@ async fn test_dag_compresses_empty_blocks() {
 
     // Add one round of non-empty certificates
     let (additional_certificates, _next_parents) =
-        make_optimal_certificates(2..=2, &next_parents, &keys);
+        make_optimal_certificates(&committee, 2..=2, &next_parents, &keys);
     // Feed the additional certificates to the Dag
     let mut additional_certs_to_insert = additional_certificates.clone();
     while let Some(certificate) = additional_certs_to_insert.pop_front() {
@@ -199,11 +190,9 @@ async fn test_dag_compresses_empty_blocks() {
 
 #[tokio::test]
 async fn test_dag_rounds_after_compression() {
-    let keys: Vec<_> = test_utils::keys(None)
-        .into_iter()
-        .map(|kp| kp.public().clone())
-        .collect();
-    let committee = mock_committee(&keys.clone()[..]);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
@@ -217,7 +206,7 @@ async fn test_dag_rounds_after_compression() {
 
     // insert one round of empty certificates
     let (mut certificates, next_parents) =
-        make_optimal_certificates(1..=1, &genesis.clone(), &keys);
+        make_optimal_certificates(&committee, 1..=1, &genesis.clone(), &keys);
     // make those empty
     for mut cert in certificates.iter_mut() {
         cert.header.payload = IndexMap::new();
@@ -231,7 +220,7 @@ async fn test_dag_rounds_after_compression() {
 
     // Add one round of non-empty certificates
     let (additional_certificates, _next_parents) =
-        make_optimal_certificates(2..=2, &next_parents, &keys);
+        make_optimal_certificates(&committee, 2..=2, &next_parents, &keys);
     // Feed the additional certificates to the Dag
     let mut additional_certs_to_insert = additional_certificates.clone();
     while let Some(certificate) = additional_certs_to_insert.pop_front() {
@@ -248,17 +237,16 @@ async fn test_dag_rounds_after_compression() {
 #[tokio::test]
 async fn dag_mutation_failures() {
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = test_utils::keys(None)
-        .into_iter()
-        .map(|kp| kp.public().clone())
-        .collect();
-    let committee = mock_committee(&keys.clone()[..]);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
+    let (certificates, _next_parents) =
+        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
@@ -317,17 +305,16 @@ async fn dag_mutation_failures() {
 #[tokio::test]
 async fn dag_insert_one_and_rounds_node_read() {
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = test_utils::keys(None)
-        .into_iter()
-        .map(|kp| kp.public().clone())
-        .collect();
-    let committee = mock_committee(&keys.clone()[..]);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
+    let (certificates, _next_parents) =
+        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);
@@ -365,17 +352,16 @@ async fn dag_insert_one_and_rounds_node_read() {
 #[tokio::test]
 async fn dag_insert_and_remove_reads() {
     // Make certificates for rounds 1 to 4.
-    let keys: Vec<_> = test_utils::keys(None)
-        .into_iter()
-        .map(|kp| kp.public().clone())
-        .collect();
-    let committee = mock_committee(&keys.clone()[..]);
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
     let mut genesis_certs = Certificate::genesis(&committee);
     let genesis = genesis_certs
         .iter()
         .map(|x| x.digest())
         .collect::<BTreeSet<_>>();
-    let (mut certificates, _next_parents) = make_optimal_certificates(1..=4, &genesis, &keys);
+    let (mut certificates, _next_parents) =
+        make_optimal_certificates(&committee, 1..=4, &genesis, &keys);
 
     // set up a Dag
     let (_tx_cert, rx_cert) = test_utils::test_channel!(1);

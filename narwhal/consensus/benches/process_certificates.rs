@@ -8,11 +8,11 @@ use consensus::{
 use criterion::{
     criterion_group, criterion_main, BenchmarkId, Criterion, SamplingMode, Throughput,
 };
-use fastcrypto::{traits::KeyPair, Hash};
+use fastcrypto::Hash;
 use pprof::criterion::{Output, PProfProfiler};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc};
-use test_utils::{keys, make_consensus_store, make_optimal_certificates, mock_committee, temp_dir};
+use test_utils::{make_consensus_store, make_optimal_certificates, temp_dir, CommitteeFixture};
 use types::{Certificate, Round};
 
 pub fn process_certificates(c: &mut Criterion) {
@@ -21,28 +21,27 @@ pub fn process_certificates(c: &mut Criterion) {
 
     static BATCH_SIZES: [u64; 4] = [100, 500, 1000, 5000];
 
+    let fixture = CommitteeFixture::builder().build();
+    let committee = fixture.committee();
+    let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
+
     for size in &BATCH_SIZES {
         let gc_depth = 12;
         let rounds: Round = *size;
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = keys(None)
-            .into_iter()
-            .map(|kp| kp.public().clone())
-            .collect();
-        let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+        let genesis = Certificate::genesis(&committee)
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
-        let (certificates, _next_parents) = make_optimal_certificates(1..=rounds, &genesis, &keys);
-        let committee = mock_committee(&keys);
+        let (certificates, _next_parents) =
+            make_optimal_certificates(&committee, 1..=rounds, &genesis, &keys);
 
         let store_path = temp_dir();
         let store = make_consensus_store(&store_path);
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state =
-            ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
+        let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
 
         let data_size: usize = certificates
             .iter()
@@ -51,7 +50,7 @@ pub fn process_certificates(c: &mut Criterion) {
         consensus_group.throughput(Throughput::Bytes(data_size as u64));
 
         let mut ordering_engine = Bullshark {
-            committee,
+            committee: committee.clone(),
             store,
             gc_depth,
         };

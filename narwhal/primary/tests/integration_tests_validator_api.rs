@@ -687,6 +687,7 @@ async fn test_read_causal_unsigned_certificates() {
         .collect::<BTreeSet<_>>();
 
     let (certificates, _next_parents) = make_optimal_certificates(
+        &committee,
         1..=4,
         &genesis,
         &committee

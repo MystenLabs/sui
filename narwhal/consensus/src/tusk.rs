@@ -173,11 +173,11 @@ mod tests {
     use super::*;
     use crate::metrics::ConsensusMetrics;
     use arc_swap::ArcSwap;
-    use fastcrypto::traits::KeyPair;
     use prometheus::Registry;
     use rand::Rng;
     use std::collections::BTreeSet;
-    use test_utils::{make_consensus_store, mock_committee};
+    use test_utils::make_consensus_store;
+    use test_utils::CommitteeFixture;
     use types::Certificate;
 
     #[test]
@@ -186,18 +186,16 @@ mod tests {
         let rounds: Round = rand::thread_rng().gen_range(10..100);
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = test_utils::keys(None)
-            .into_iter()
-            .map(|kp| kp.public().clone())
-            .collect();
+        let fixture = CommitteeFixture::builder().build();
+        let committee = fixture.committee();
+        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
 
-        let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+        let genesis = Certificate::genesis(&committee)
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
         let (certificates, _next_parents) =
-            test_utils::make_optimal_certificates(1..=rounds, &genesis, &keys);
-        let committee = mock_committee(&keys);
+            test_utils::make_optimal_certificates(&committee, 1..=rounds, &genesis, &keys);
 
         let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
@@ -205,8 +203,7 @@ mod tests {
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
         let consensus_index = 0;
-        let mut state =
-            ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
+        let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
         let mut tusk = Tusk::new(committee, store, gc_depth);
         for certificate in certificates {
             tusk.process_certificate(&mut state, consensus_index, certificate)
@@ -233,29 +230,27 @@ mod tests {
         let rounds: Round = rand::thread_rng().gen_range(10..100);
 
         // process certificates for rounds, check we don't grow the dag too much
-        let keys: Vec<_> = test_utils::keys(None)
-            .into_iter()
-            .map(|kp| kp.public().clone())
-            .collect();
+        let fixture = CommitteeFixture::builder().build();
+        let committee = fixture.committee();
+        let keys: Vec<_> = fixture.authorities().map(|a| a.public_key()).collect();
 
-        let genesis = Certificate::genesis(&mock_committee(&keys[..]))
+        let genesis = Certificate::genesis(&committee)
             .iter()
             .map(|x| x.digest())
             .collect::<BTreeSet<_>>();
         // TODO: evidence that this test fails when `failure_probability` parameter >= 1/3
         let (certificates, _next_parents) =
-            test_utils::make_certificates(1..=rounds, &genesis, &keys, 0.333);
-        let committee = Arc::new(ArcSwap::from_pointee(mock_committee(&keys)));
+            test_utils::make_certificates(&committee, 1..=rounds, &genesis, &keys, 0.333);
+        let arc_committee = Arc::new(ArcSwap::from_pointee(committee.clone()));
 
         let store_path = test_utils::temp_dir();
         let store = make_consensus_store(&store_path);
 
         let metrics = Arc::new(ConsensusMetrics::new(&Registry::new()));
 
-        let mut state =
-            ConsensusState::new(Certificate::genesis(&mock_committee(&keys[..])), metrics);
+        let mut state = ConsensusState::new(Certificate::genesis(&committee), metrics);
         let consensus_index = 0;
-        let mut tusk = Tusk::new((**committee.load()).clone(), store, gc_depth);
+        let mut tusk = Tusk::new((**arc_committee.load()).clone(), store, gc_depth);
 
         for certificate in certificates {
             tusk.process_certificate(&mut state, consensus_index, certificate)
