@@ -28,7 +28,7 @@ sui-node = { path = "../sui-node" }
 sui-json-rpc-types= { path = "../sui-json-rpc-types" }
 sui-types = { path = "../sui-types" }
 sui-config = { path = "../sui-config" }
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
+telemetry-subscribers = "0.1.0"
 workspace-hack = { path = "../workspace-hack"}
 
 [dev-dependencies]

@@ -12,13 +12,13 @@ tokio = { version = "1.20.1", features = ["full"] }
 tracing = "0.1.36"
 clap = { version = "3.2.17", features = ["derive"] }
 
-telemetry-subscribers = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
-mysten-network = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e" }
+telemetry-subscribers = "0.1.0"
+mysten-network = "0.1.0"
 textwrap = "0.15"
 futures = "0.3.23"
 rocksdb = "0.19.0"
-typed-store = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e"}
-typed-store-macros = { git = "https://github.com/MystenLabs/mysten-infra", rev = "d96230a9272c322a7eefac49708aadfff1eed77e"}
+typed-store = "0.1.0"
+typed-store-derive = "0.1.0"
 tempfile = "3.3.0"
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "842a611a0a58dd378a904d85f79b4edbbbc7b137", package = "executor" }
 serde_with = { version = "1.14.0", features = ["hex"] }
