@@ -11,6 +11,10 @@
     @apply text-green-600 ml-1 text-sm;
 }
 
+.copied span {
+    @apply block sm:inline w-[20vw] text-center;
+}
+
 .longtext,
 .longtext > a {
     @apply no-underline text-sui-dark hover:text-[#1F6493] cursor-pointer break-all inline mr-2;

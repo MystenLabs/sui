@@ -68,7 +68,11 @@ function Longtext({
                 </div>
             );
         } else {
-            icon = <span className={styles.copied}>&#10003; Copied</span>;
+            icon = (
+                <span className={styles.copied}>
+                    <span>&#10003;</span> <span>Copied</span>
+                </span>
+            );
         }
     } else {
         icon = <></>;
