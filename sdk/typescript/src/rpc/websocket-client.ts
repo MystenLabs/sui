@@ -90,6 +90,7 @@ export class WebsocketClient {
   protected connectionState: ConnectionState = ConnectionState.NotConnected;
   protected connectionTimeout: number | null = null;
   protected isSetup: boolean = false;
+  private connectionPromise: Promise<void> | null = null;
 
   protected eventSubscriptions: Map<SubscriptionId, SubscriptionData> = new Map();
 
@@ -160,6 +161,8 @@ export class WebsocketClient {
   }
 
   private async connect(): Promise<void> {
+    // if the last attempt to connect hasn't finished, wait on it
+    if (this.connectionPromise) return this.connectionPromise;
     if (this.connectionState === ConnectionState.Connected)
       return Promise.resolve();
 
@@ -168,16 +171,23 @@ export class WebsocketClient {
     this.connectionState = ConnectionState.Connecting;
 
     return new Promise<void>((resolve, reject) => {
-      this.connectionTimeout = setTimeout(
-        () => reject(new Error('timeout')),
-        this.options.connectTimeout
-      ) as any as number;
+      this.connectionPromise = new Promise<void>((resolve, reject) => {
+        this.connectionTimeout = setTimeout(
+          () => reject(new Error('timeout')),
+          this.options.connectTimeout
+        ) as any as number;
 
-      this.rpcClient.once('open', () => {
-        this.refreshSubscriptions();
-        resolve();
+        this.rpcClient.once('open', () => {
+          this.refreshSubscriptions();
+          this.connectionPromise = null;
+          resolve();
+        });
+        this.rpcClient.once('error', (err) => {
+          this.connectionPromise = null;
+          reject(err);
+        });
       });
-      this.rpcClient.once('error', reject);
+      return this.connectionPromise;
     });
   }
 

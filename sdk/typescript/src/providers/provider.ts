@@ -238,8 +238,8 @@ export abstract class Provider {
 
   /**
    * Subscribe to get notifications whenever an event matching the filter occurs
-   * @param filter filter describing the subset of events to follow
-   * @param onMessage function to run when we receive a notification of a new event matching the filter
+   * @param filter - filter describing the subset of events to follow
+   * @param onMessage - function to run when we receive a notification of a new event matching the filter
    */
   abstract subscribeEvent(
     filter: SuiEventFilter,

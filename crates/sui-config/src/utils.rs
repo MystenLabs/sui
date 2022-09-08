@@ -33,7 +33,7 @@ fn get_ephemeral_port() -> ::std::io::Result<u16> {
 }
 
 pub fn new_network_address() -> multiaddr::Multiaddr {
-    format!("/dns/localhost/tcp/{}/http", get_available_port())
+    format!("/ip4/127.0.0.1/tcp/{}/http", get_available_port())
         .parse()
         .unwrap()
 }
