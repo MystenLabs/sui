@@ -22,7 +22,12 @@ function ObjAddressHeader({ data }: { data: ObjHeaderData }) {
                 <ObjIcon /> {data.objKind}
             </div>
             <div className={resultheaderstyle.address}>
-                <Longtext text={data.objId} category="objects" isLink={false} />
+                <Longtext
+                    text={data.objId}
+                    category="objects"
+                    isLink={false}
+                    copyButton="24"
+                />
             </div>
             {data.objName && (
                 <div className={styles.objname}>{data.objName}</div>

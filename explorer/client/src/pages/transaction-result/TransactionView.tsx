@@ -212,6 +212,7 @@ function ItemView({ data }: { data: TxItemView }) {
                                         text={item.value as string}
                                         category={item.category as Category}
                                         isLink={true}
+                                        copyButton="16"
                                     />
                                 ) : item.href ? (
                                     <Link
@@ -267,12 +268,7 @@ function TransactionView({ txdata }: { txdata: DataType }) {
 
     let eventTitlesDisplay = eventTitles.map((et) => (
         <div key={et} className={styles.eventtitle}>
-            <Longtext
-                text={et}
-                category={'unknown'}
-                isCopyButton={false}
-                isLink={false}
-            />
+            <Longtext text={et} category={'unknown'} isLink={false} />
         </div>
     ));
 

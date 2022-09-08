@@ -4,7 +4,8 @@
 import { useCallback, useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-import { ReactComponent as ContentCopyIcon } from '../../assets/SVGIcons/Copy.svg';
+import { ReactComponent as ContentCopyIcon16 } from '../../assets/SVGIcons/16px/Copy.svg';
+import { ReactComponent as ContentCopyIcon24 } from '../../assets/SVGIcons/24px/Copy.svg';
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
@@ -17,7 +18,7 @@ function Longtext({
     category = 'unknown',
     isLink = true,
     alttext = '',
-    isCopyButton = true,
+    copyButton = 'none',
     showIconButton = false,
 }: {
     text: string;
@@ -30,7 +31,7 @@ function Longtext({
         | 'unknown';
     isLink?: boolean;
     alttext?: string;
-    isCopyButton?: boolean;
+    copyButton?: '16' | '24' | 'none';
     showIconButton?: boolean;
 }) {
     const [isCopyIcon, setCopyIcon] = useState(true);
@@ -48,13 +49,17 @@ function Longtext({
     let icon;
     let iconButton = <></>;
 
-    if (isCopyButton) {
+    if (copyButton !== 'none') {
         if (pleaseWait) {
             icon = <span className={styles.copied}>&#8987; Please Wait</span>;
         } else if (isCopyIcon) {
             icon = (
                 <span className={styles.copy} onClick={handleCopyEvent}>
-                    <ContentCopyIcon />
+                    {copyButton === '16' ? (
+                        <ContentCopyIcon16 />
+                    ) : (
+                        <ContentCopyIcon24 />
+                    )}
                 </span>
             );
         } else {

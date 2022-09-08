@@ -39,6 +39,7 @@ function AddressResult() {
                             text={addressID}
                             category="addresses"
                             isLink={false}
+                            copyButton="24"
                         />
                     </div>
                 </div>

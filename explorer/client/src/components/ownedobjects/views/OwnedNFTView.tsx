@@ -23,7 +23,6 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
                             <Longtext
                                 text={entryObj.id}
                                 category="objects"
-                                isCopyButton={false}
                                 alttext={alttextgen(entryObj.id)}
                             />
                         </div>

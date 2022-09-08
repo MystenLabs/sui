@@ -56,6 +56,7 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
                         text={data.txId}
                         category="addresses"
                         isLink={false}
+                        copyButton="24"
                     />
                     <div
                         className={cl([

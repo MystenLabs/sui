@@ -98,7 +98,6 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                     alttext={truncate(validator.address, 14)}
                     category={'addresses'}
                     isLink={true}
-                    isCopyButton={false}
                 />
             ),
             pubkeyBytes: (
@@ -107,7 +106,6 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
                     alttext={truncate(validator.pubkeyBytes, 14)}
                     category={'addresses'}
                     isLink={false}
-                    isCopyButton={false}
                 />
             ),
         })),

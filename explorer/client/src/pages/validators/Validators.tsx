@@ -185,7 +185,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                         alttext={truncate(validator.pubkeyBytes, 14)}
                         category={'addresses'}
                         isLink={false}
-                        isCopyButton={false}
                     />
                 ),
             };
@@ -222,7 +221,6 @@ function ValidatorsPage({ state }: { state: ValidatorState }): JSX.Element {
                             text=""
                             category="validators"
                             isLink={false}
-                            isCopyButton={false}
                             alttext=""
                         />
                     </TabFooter>
