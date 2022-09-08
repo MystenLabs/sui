@@ -8,7 +8,7 @@ edition = "2021"
 
 [dependencies]
 arc-swap = "1.5.1"
-fastcrypto = { version = "0.1.1" }
+fastcrypto = "0.1.2"
 dashmap = "5.4.0"
 either = "1.8.0"
 itertools = "0.10.3"

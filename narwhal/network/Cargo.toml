@@ -10,7 +10,7 @@ publish = false
 async-trait = "0.1.57"
 backoff = { version = "0.4.0", features = ["tokio"] }
 bytes = "1.2.1"
-fastcrypto = { version = "0.1.1" }
+fastcrypto = "0.1.2"
 futures = "0.3.24"
 multiaddr = "0.14.0"
 prometheus = "0.13.1"

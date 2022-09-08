@@ -12,7 +12,7 @@ blake2 = "0.9"
 bytes = "1.2.1"
 config = { path = "../config" }
 consensus = { path = "../consensus" }
-fastcrypto = { version = "0.1.1" }
+fastcrypto = "0.1.2"
 futures = "0.3.24"
 multiaddr = "0.14.0"
 primary = { path = "../primary" }

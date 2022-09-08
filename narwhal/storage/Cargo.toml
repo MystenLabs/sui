@@ -8,7 +8,7 @@ publish = false
 
 [dependencies]
 dashmap = "5.4.0"
-fastcrypto = { version = "0.1.1" }
+fastcrypto = "0.1.2"
 futures = "0.3.24"
 store = { version = "0.1.0", package = "typed-store" }
 thiserror = "1.0.34"
