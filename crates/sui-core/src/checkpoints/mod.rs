@@ -34,7 +34,7 @@ use typed_store::{
     rocks::{DBBatch, DBMap},
     Map,
 };
-use typed_store_macros::DBMapUtils;
+use typed_store_derive::DBMapUtils;
 
 use crate::checkpoints::causal_order_effects::CausalOrder;
 use crate::{
