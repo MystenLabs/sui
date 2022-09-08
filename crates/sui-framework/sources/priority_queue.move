@@ -24,6 +24,7 @@ module sui::priority_queue {
     }
 
     /// Create a new priority queue from the entries in ascending/descending order.
+    /// Since the inner vec might hold some values, one has to call `drain` to get the remainders
     public fun new<T>(entries: vector<Entry<T>>, ascending: bool) : PriorityQueue<T> {
         let len = vector::length(&entries);
 
@@ -56,6 +57,7 @@ module sui::priority_queue {
     }
 
     /// Drains the pq and inner vec and returns the items
+    /// This is needed because we do not enforce `drop` on T
     public fun drain<T>(pq: PriorityQueue<T>) : vector<T> {
         let len = vector::length(&pq.entries);
         let i = 0;
