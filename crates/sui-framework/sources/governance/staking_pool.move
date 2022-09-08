@@ -11,14 +11,18 @@ module sui::staking_pool {
     use sui::object::{Self, UID};
     use sui::locked_coin;
     use sui::coin;
+    use sui::vec_map::{Self, VecMap};
 
     friend sui::validator;
 
-    const DELEGATION_ALREADY_ACTIVATED: u64 = 0; 
-    const DELEGATION_NOT_YET_ACTIVATED: u64 = 1;
-    const CANNOT_ACTIVATE_DELEGATION: u64 = 2;
-    const INSUFFICIENT_POOL_TOKEN_BALANCE: u64 = 3;
-    const WRONG_POOL: u64 = 4;
+    
+    const EINSUFFICIENT_POOL_TOKEN_BALANCE: u64 = 0;
+    const EWRONG_POOL: u64 = 1;
+    const EWITHDRAW_AMOUNT_CANNOT_BE_ZERO: u64 = 2;
+    const EINSUFFICIENT_SUI_TOKEN_BALANCE: u64 = 3;
+    const EINSUFFICIENT_REWARDS_POOL_BALANCE: u64 = 4;
+    const EDESTROY_NON_ZERO_BALANCE: u64 = 5;
+    const ETOKEN_TIME_LOCK_IS_SOME: u64 = 6;
 
     /// A staking pool embedded in each validator struct in the system state object.
     struct StakingPool has store {
@@ -26,6 +30,8 @@ module sui::staking_pool {
         validator_address: address,
         /// The epoch at which this pool started operating. Should be the epoch at which the validator became active.
         starting_epoch: u64,
+        /// The total number of SUI tokens in this pool at the beginning of the current epoch.
+        epoch_starting_sui_balance: u64,
         /// The total number of SUI tokens in this pool, including the SUI in the rewards_pool, as well as in all the principal
         /// in the `Delegation` object.
         sui_balance: u64,
@@ -34,13 +40,16 @@ module sui::staking_pool {
         /// The number of delegation pool tokens we have issued so far. This number should equal the sum of
         /// pool token balance in all the `Delegation` objects delegated to this pool.
         delegation_token_supply: Supply<DelegationToken>,
-        // TODO: add fields for implementing bonding periods if necessary
+        /// Delegations requested during the current epoch. We will activate these delegation at the end of current epoch
+        /// and distribute staking pool tokens at the end-of-epoch exchange rate after the rewards for the current epoch
+        /// have been deposited.
+        pending_delegations: VecMap<address, u64>,
     }
 
     /// An inactive staking pool associated with an inactive validator.
     /// Only withdraws can be made from this pool.
     struct InactiveStakingPool has key {
-        id: UID,
+        id: UID, // TODO: inherit an ID from active staking pool?
         pool: StakingPool,
     }
 
@@ -55,16 +64,21 @@ module sui::staking_pool {
         validator_address: address,
         /// The epoch at which the staking pool started operating.
         pool_starting_epoch: u64,
-        /// The ealiest epoch at which this delegation can be activated.
-        earliest_activation_epoch: u64,
+        /// The pool tokens representing the amount of rewards the delegator can get back when they withdraw
+        /// from the pool. If this field is `none`, that means the delegation hasn't been activated yet.
+        pool_tokens: Balance<DelegationToken>,
+        /// Number of SUI token staked originally.
+        principal_sui_amount: u64,
+    }
+
+    /// A self-custodial object holding the staked SUI tokens.
+    struct StakedSui has key {
+        id: UID,
         /// The staked SUI tokens.
         principal: Balance<SUI>,
         /// If the stake comes from a Coin<SUI>, this field is None. If it comes from a LockedCoin<SUI>, this
         /// field will record the original lock expiration epoch, to be used when unstaking.
         sui_token_lock: Option<EpochTimeLock>,
-        /// The pool tokens representing the amount of rewards the delegator can get back when they withdraw
-        /// from the pool. If this field is `none`, that means the delegation hasn't been activated yet.
-        pool_tokens: Option<Balance<DelegationToken>>,
     }
 
     /// Create a new, empty staking pool.
@@ -72,96 +86,126 @@ module sui::staking_pool {
         StakingPool {
             validator_address,
             starting_epoch,
+            epoch_starting_sui_balance: 0,
             sui_balance: 0,
             rewards_pool: balance::zero(),
             delegation_token_supply: balance::create_supply(DelegationToken {}),
+            pending_delegations: vec_map::empty(),
         }
     }
 
-    /// Add rewards (in SUI) to the staking pool. 
-    /// Notice here we add SUI tokens but do not mint new pool tokens. Thus the exchange rate between SUI and pool tokens goes up.
-    public(friend) fun add_rewards(pool: &mut StakingPool, rewards: Balance<SUI>) {
+    /// Called at epoch advancement times to add rewards (in SUI) to the staking pool, and distribute new delegation tokens. 
+    public(friend) fun advance_epoch(pool: &mut StakingPool, rewards: Balance<SUI>, ctx: &mut TxContext) {
         pool.sui_balance = pool.sui_balance + balance::value(&rewards);
         balance::join(&mut pool.rewards_pool, rewards);
-        // TODO: implement potential bonding period related bookkeeping
+        
+        // distribute pool tokens at new exchange rate.
+        while (!vec_map::is_empty(&pool.pending_delegations)) {
+            let (delegator, sui_amount) = vec_map::pop(&mut pool.pending_delegations);
+            distribute_delegation_tokens(pool, delegator, sui_amount, ctx);
+            pool.sui_balance = pool.sui_balance + sui_amount
+        };
+
+        // Record the epoch starting balance.
+        pool.epoch_starting_sui_balance = pool.sui_balance;
     }
 
-    /// Request to delegate to a staking pool. The delegation doesn't get activated and the delegator doesn't get
-    /// the pool tokens until they activate the delegation on or after the `earliest_activation_epoch`.
-    public(friend) fun request_add_delegation(pool: &mut StakingPool, stake: Balance<SUI>, sui_token_lock: Option<EpochTimeLock>, ctx: &mut TxContext) {
-        assert!(balance::value(&stake) > 0, 0);
-        let delegation = Delegation {
+    /// Request to delegate to a staking pool. The delegation gets counted at the beginning of the next epoch,
+    /// when the delegation object containing the pool tokens is distributed to the delegator.
+    public(friend) fun request_add_delegation(
+        pool: &mut StakingPool, 
+        stake: Balance<SUI>, 
+        sui_token_lock: Option<EpochTimeLock>, 
+        ctx: &mut TxContext
+    ) {
+        let sui_amount = balance::value(&stake);
+        assert!(sui_amount > 0, 0);
+        let delegator = tx_context::sender(ctx);
+        // insert delegation info into the vec map. 
+        let idx_opt = vec_map::get_idx_opt(&pool.pending_delegations, &delegator);
+        if (option::is_some(&idx_opt)) {
+            let (_, entry_mut_ref) = 
+                vec_map::get_entry_by_idx_mut(&mut pool.pending_delegations, option::extract(&mut idx_opt));
+            *entry_mut_ref = *entry_mut_ref + sui_amount;
+        } else {
+            vec_map::insert(&mut pool.pending_delegations, delegator, sui_amount);
+        };
+        let staked_sui = StakedSui {
             id: object::new(ctx),
-            validator_address: pool.validator_address,
-            pool_starting_epoch: pool.starting_epoch,
-            earliest_activation_epoch: tx_context::epoch(ctx) + 1, // TODO: with bonding period this should be the epoch
-                                                                   // at which the bonding period ends
             principal: stake,
             sui_token_lock,
-            pool_tokens: option::none(),
         };
-        transfer::transfer(delegation, tx_context::sender(ctx));
+        transfer::transfer(staked_sui, delegator);
     }
 
     /// Activate a delegation. New pool tokens are minted at the current exchange rate and put into the
     /// `pool_tokens` field of the delegation object.
     /// After activation, the delegation officially counts toward the staking power of the validator.
     /// Aborts if the pool mismatches, the delegation is already activated, or the delegation cannot be activated yet. 
-    public(friend) fun activate_delegation(pool: &mut StakingPool, delegation: &mut Delegation, ctx: &mut TxContext) {
-        assert!(
-            delegation.validator_address == pool.validator_address &&
-            delegation.pool_starting_epoch == pool.starting_epoch,
-            WRONG_POOL
-        );
-        assert!(!is_delegation_activated(delegation), DELEGATION_ALREADY_ACTIVATED);
-
-        assert!(tx_context::epoch(ctx) >= delegation.earliest_activation_epoch, CANNOT_ACTIVATE_DELEGATION); 
-
-        let sui_amount = balance::value(&delegation.principal);
+    public(friend) fun distribute_delegation_tokens(
+        pool: &mut StakingPool, 
+        delegator: address, 
+        sui_amount: u64, 
+        ctx: &mut TxContext
+    ) {
         let new_pool_token_amount = get_token_amount(pool, sui_amount);   
 
         // Mint new pool tokens at the current exchange rate.
         let pool_tokens = balance::increase_supply(&mut pool.delegation_token_supply, new_pool_token_amount);
 
-        // Put the newly minted pool tokens into the delegation object to activate it.
-        option::fill(&mut delegation.pool_tokens, pool_tokens);
+        let delegation = Delegation {
+            id: object::new(ctx),
+            validator_address: pool.validator_address,
+            pool_starting_epoch: pool.starting_epoch,
+            pool_tokens,
+            principal_sui_amount: sui_amount,
+        };
 
-        pool.sui_balance = pool.sui_balance + sui_amount;
+        transfer::transfer(delegation, delegator);
     }
 
     /// Withdraw `withdraw_pool_token_amount` worth of delegated stake from a staking pool. A proportional amount of principal and rewards
-    /// in SUI will be withdrawn and transferred back to the delegator. 
-    public(friend) fun withdraw_stake(pool: &mut StakingPool, delegation: &mut Delegation, withdraw_pool_token_amount: u64, ctx: &mut TxContext) {
+    /// in SUI will be withdrawn and transferred to the delegator. 
+    public(friend) fun withdraw_stake(
+        pool: &mut StakingPool,  
+        delegation: &mut Delegation, 
+        staked_sui: &mut StakedSui,
+        withdraw_pool_token_amount: u64, 
+        ctx: &mut TxContext
+    ) {
         assert!(
             delegation.validator_address == pool.validator_address &&
             delegation.pool_starting_epoch == pool.starting_epoch,
-            WRONG_POOL
+            EWRONG_POOL
         );
-        assert!(is_delegation_activated(delegation), DELEGATION_NOT_YET_ACTIVATED);
 
-        let pool_tokens_ref = option::borrow_mut(&mut delegation.pool_tokens);
-        let pool_token_balance = balance::value(pool_tokens_ref);
-        assert!(pool_token_balance >= withdraw_pool_token_amount, INSUFFICIENT_POOL_TOKEN_BALANCE);
+        assert!(withdraw_pool_token_amount > 0, EWITHDRAW_AMOUNT_CANNOT_BE_ZERO);
+
+        let pool_token_balance = balance::value(&delegation.pool_tokens);
+        assert!(pool_token_balance >= withdraw_pool_token_amount, EINSUFFICIENT_POOL_TOKEN_BALANCE);
 
         // Calculate the amount of SUI tokens that should be withdrawn from the pool using the current exchange rate.
         let sui_withdraw_amount = get_sui_amount(pool, withdraw_pool_token_amount);
 
-        let sui_principal_amount = balance::value(&delegation.principal);
-
         // Calculate the amounts if SUI to be withdrawn from the principal component and the rewards component.
-        let sui_withdraw_from_principal = (sui_principal_amount as u128) * (withdraw_pool_token_amount as u128) / (pool_token_balance as u128);
+        // We already checked that pool_token_balance is greater than zero.
+        let sui_withdraw_from_principal = 
+            (delegation.principal_sui_amount as u128) * (withdraw_pool_token_amount as u128) / (pool_token_balance as u128);
         let sui_withdraw_from_rewards = sui_withdraw_amount - (sui_withdraw_from_principal as u64); 
 
         // burn the pool tokens
         balance::decrease_supply(
             &mut pool.delegation_token_supply, 
-            balance::split(pool_tokens_ref, withdraw_pool_token_amount)
+            balance::split(&mut delegation.pool_tokens, withdraw_pool_token_amount)
         );
 
-        // TODO: implement withdraw bonding period here.
-        withdraw_from_principal(delegation, (sui_withdraw_from_principal as u64), ctx);
+        // withdraw SUI tokens from principal and transfer back to the delegator
+        withdraw_from_principal(delegation, staked_sui, (sui_withdraw_from_principal as u64), ctx);
 
+        // withdraw the rewards component from rewards pool and transfer it to the delegator.
+        assert!(balance::value(&pool.rewards_pool) >= sui_withdraw_from_rewards, EINSUFFICIENT_REWARDS_POOL_BALANCE);
         let reward_withdraw = balance::split(&mut pool.rewards_pool, sui_withdraw_from_rewards);
+
         // TODO: implement withdraw bonding period here.
         transfer::transfer(coin::from_balance(reward_withdraw, ctx), tx_context::sender(ctx));
 
@@ -173,18 +217,18 @@ module sui::staking_pool {
     /// After this pool deactivation, the pool stops earning rewards. Only delegation withdraws can be made to the pool.
     public(friend) fun deactivate_staking_pool(pool: StakingPool, ctx: &mut TxContext) {
         let inactive_pool = InactiveStakingPool { id: object::new(ctx), pool};
-        // TODO: emit events here with the id of the inactive pool.
         transfer::share_object(inactive_pool);
     }
 
     /// Withdraw delegation from an inactive pool.
     public entry fun withdraw_from_inactive_pool(
         inactive_pool: &mut InactiveStakingPool, 
+        staked_sui: &mut StakedSui, 
         delegation: &mut Delegation, 
         withdraw_amount: u64, 
         ctx: &mut TxContext
     ) {
-        withdraw_stake(&mut inactive_pool.pool, delegation, withdraw_amount, ctx);
+        withdraw_stake(&mut inactive_pool.pool, delegation, staked_sui, withdraw_amount, ctx);
     }
 
     /// Destroy an empty delegation that no longer contains any SUI or pool tokens.
@@ -193,44 +237,52 @@ module sui::staking_pool {
             id,
             validator_address: _,
             pool_starting_epoch: _,
-            earliest_activation_epoch: _,
-            principal,
-            sui_token_lock,
             pool_tokens,
+            principal_sui_amount: _,
         } = delegation;
         object::delete(id);
-        balance::destroy_zero(principal);
-        option::destroy_none(sui_token_lock);
-        if (option::is_some(&pool_tokens)) {
-            balance::destroy_zero(option::extract(&mut pool_tokens));
-        };
-        option::destroy_none(pool_tokens);
+        assert!(balance::value(&pool_tokens) == 0, EDESTROY_NON_ZERO_BALANCE);
+        balance::destroy_zero(pool_tokens);
     }
 
-    public fun sui_balance(pool: &StakingPool) : u64 { pool.sui_balance }
+    /// Destroy an empty delegation that no longer contains any SUI or pool tokens.
+    public entry fun destroy_empty_staked_sui(staked_sui: StakedSui) {
+        let StakedSui {
+            id,
+            principal,
+            sui_token_lock
+        } = staked_sui;
+        object::delete(id);
+        assert!(balance::value(&principal) == 0, EDESTROY_NON_ZERO_BALANCE);
+        balance::destroy_zero(principal);
+        assert!(option::is_none(&sui_token_lock), ETOKEN_TIME_LOCK_IS_SOME);
+        option::destroy_none(sui_token_lock);
+    }
+
+    public fun sui_balance(pool: &StakingPool) : u64 { pool.epoch_starting_sui_balance }
 
     public fun validator_address(delegation: &Delegation) : address { delegation.validator_address }
 
-    public fun delegation_sui_amount(delegation: &Delegation): u64 { balance::value(&delegation.principal) }
+    public fun staked_sui_amount(staked_sui: &StakedSui): u64 { balance::value(&staked_sui.principal) }
 
-    public fun is_delegation_activated(delegation: &Delegation) : bool {
-        option::is_some(&delegation.pool_tokens)
-    }
+    public fun delegation_token_amount(delegation: &Delegation): u64 { balance::value(&delegation.pool_tokens) }
 
     /// Withdraw `withdraw_amount` of SUI tokens from the delegation and give it back to the delegator
     /// in the original state of the tokens.
-    fun withdraw_from_principal(delegation: &mut Delegation, withdraw_amount: u64, ctx: &mut TxContext) {
+    fun withdraw_from_principal(delegation: &mut Delegation, staked_sui: &mut StakedSui, withdraw_amount: u64, ctx: &mut TxContext) {
         let delegator = tx_context::sender(ctx);
-        let principal_withdraw = balance::split(&mut delegation.principal, withdraw_amount);
-        if (option::is_some(&delegation.sui_token_lock)) {
+        assert!(balance::value(&staked_sui.principal) >= withdraw_amount, EINSUFFICIENT_SUI_TOKEN_BALANCE);
+        let principal_withdraw = balance::split(&mut staked_sui.principal, withdraw_amount);
+        if (option::is_some(&staked_sui.sui_token_lock)) {
             let time_lock = 
-                if (balance::value(&delegation.principal) == 0) {option::extract(&mut delegation.sui_token_lock)}
-                else *option::borrow(&delegation.sui_token_lock);
+                if (balance::value(&staked_sui.principal) == 0) {option::extract(&mut staked_sui.sui_token_lock)}
+                else *option::borrow(&staked_sui.sui_token_lock);
             locked_coin::new_from_balance(principal_withdraw, time_lock, delegator, ctx);
 
         } else {
             transfer::transfer(coin::from_balance(principal_withdraw, ctx), delegator);
         };
+        delegation.principal_sui_amount = delegation.principal_sui_amount - withdraw_amount;
     }
 
     fun get_sui_amount(pool: &StakingPool, token_amount: u64): u64 {

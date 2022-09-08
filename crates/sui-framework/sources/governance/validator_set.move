@@ -10,7 +10,7 @@ module sui::validator_set {
     use sui::tx_context::{Self, TxContext};
     use sui::validator::{Self, Validator, ValidatorMetadata};
     use sui::stake::Stake;
-    use sui::staking_pool::{Self, Delegation};
+    use sui::staking_pool::{Self, Delegation, StakedSui};
     use sui::epoch_time_lock::EpochTimeLock;
     use sui::priority_queue as pq;
 
@@ -151,22 +151,6 @@ module sui::validator_set {
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
-    public(friend) fun request_activate_delegation(
-        self: &mut ValidatorSet,
-        delegation: &mut Delegation,
-        ctx: &mut TxContext,
-    ) {
-        let validator_address = staking_pool::validator_address(delegation);
-        let validator_index_opt = find_validator(&self.active_validators, validator_address);
-
-        assert!(option::is_some(&validator_index_opt), 0); 
-        
-        let validator_index = option::extract(&mut validator_index_opt);
-        let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
-        validator::request_activate_delegation(validator, delegation, ctx);
-        self.next_epoch_validators = derive_next_epoch_validators(self);
-    }
-
     public(friend) fun request_set_gas_price(
         self: &mut ValidatorSet,
         new_gas_price: u64,
@@ -181,6 +165,7 @@ module sui::validator_set {
     public(friend) fun request_withdraw_delegation(
         self: &mut ValidatorSet,
         delegation: &mut Delegation,
+        staked_sui: &mut StakedSui,
         withdraw_amount: u64,
         ctx: &mut TxContext,
     ) {
@@ -191,7 +176,7 @@ module sui::validator_set {
         
         let validator_index = option::extract(&mut validator_index_opt);
         let validator = vector::borrow_mut(&mut self.active_validators, validator_index);
-        validator::request_remove_delegation(validator, delegation, withdraw_amount, ctx);
+        validator::request_withdraw_delegation(validator, delegation, staked_sui, withdraw_amount, ctx);
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
@@ -476,7 +461,7 @@ module sui::validator_set {
             let delegator_reward_amount = *vector::borrow(delegator_reward_amounts, i);
             let delegator_reward = balance::split(delegator_rewards, delegator_reward_amount);
             // Add rewards to delegation staking pool to auto compound for delegators.
-            validator::add_delegation_rewards_to_staking_pool(validator, delegator_reward);
+            validator::distribute_rewards_and_new_delegations(validator, delegator_reward, ctx);
             i = i + 1;
         }
     }
