@@ -3,6 +3,7 @@
 import cl from 'classnames';
 
 import { ReactComponent as CallTypeIcon } from '../../assets/SVGIcons/Call.svg';
+import { ReactComponent as InfoIcon } from '../../assets/SVGIcons/Info.svg';
 import { ReactComponent as PublishTypeIcon } from '../../assets/SVGIcons/Publish.svg';
 import { ReactComponent as TransferObjectTypeIcon } from '../../assets/SVGIcons/TransferObject.svg';
 import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/failed.svg';
@@ -62,19 +63,15 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
                             styles[statusName],
                         ])}
                     >
-                        {' '}
-                        <TxResultStatus /> {statusName}
+                        <TxResultStatus />
+                        <span>
+                            {statusName === 'failed' ? 'failure' : 'success'}
+                        </span>
                     </div>
                 </div>
                 {data.error && (
-                    <div
-                        className={cl([
-                            styles.txresulttype,
-                            styles.failed,
-                            styles.error,
-                        ])}
-                    >
-                        {data.error}
+                    <div className={cl([styles.failed, styles.explain])}>
+                        <InfoIcon /> <span>{data.error}</span>
                     </div>
                 )}
             </div>

@@ -88,8 +88,10 @@ function TopValidatorsCard({ state }: { state: ValidatorState }): JSX.Element {
     );
 
     // map the above data to match the table - combine stake and stake percent
+    // limit number validators to 5
+    // TODO: add sorting
     const tableData = {
-        data: validatorsData.map((validator) => ({
+        data: validatorsData.splice(0, 5).map((validator) => ({
             name: validator.name,
             position: validator.position,
             address: (

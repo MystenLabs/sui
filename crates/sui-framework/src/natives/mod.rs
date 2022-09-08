@@ -12,7 +12,7 @@ mod types;
 use crate::make_native;
 use move_binary_format::errors::{PartialVMError, PartialVMResult};
 use move_core_types::{account_address::AccountAddress, identifier::Identifier};
-use move_stdlib::natives::GasParameters;
+use move_stdlib::natives::{GasParameters, NurseryGasParameters};
 use move_vm_runtime::native_functions::{NativeFunction, NativeFunctionTable};
 use move_vm_types::{
     natives::function::NativeResult,
@@ -161,6 +161,11 @@ pub fn all_natives(
             move_stdlib_addr,
             // TODO: tune gas params
             GasParameters::zeros(),
+        ))
+        .chain(move_stdlib::natives::nursery_natives(
+            move_stdlib_addr,
+            // TODO: tune gas params
+            NurseryGasParameters::zeros(),
         ))
         .collect()
 }

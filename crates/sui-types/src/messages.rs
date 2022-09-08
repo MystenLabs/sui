@@ -51,7 +51,8 @@ pub enum CallArg {
     Pure(Vec<u8>),
     // an object
     Object(ObjectArg),
-    // TODO support more than one object (object vector of some sort)
+    // a vector of objects
+    ObjVec(Vec<ObjectArg>),
 }
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone, Serialize, Deserialize)]
@@ -134,12 +135,26 @@ impl SingleTransactionKind {
 
     pub fn shared_input_objects(&self) -> impl Iterator<Item = &ObjectID> {
         match &self {
-            Self::Call(MoveCall { arguments, .. }) => {
-                Either::Left(arguments.iter().filter_map(|arg| match arg {
-                    CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
-                    CallArg::Object(ObjectArg::SharedObject(id)) => Some(id),
-                }))
-            }
+            Self::Call(MoveCall { arguments, .. }) => Either::Left(
+                arguments
+                    .iter()
+                    .filter_map(|arg| match arg {
+                        CallArg::Pure(_) | CallArg::Object(ObjectArg::ImmOrOwnedObject(_)) => None,
+                        CallArg::Object(ObjectArg::SharedObject(id)) => Some(vec![id]),
+                        CallArg::ObjVec(vec) => Some(
+                            vec.iter()
+                                .filter_map(|obj_arg| {
+                                    if let ObjectArg::SharedObject(id) = obj_arg {
+                                        Some(id)
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect(),
+                        ),
+                    })
+                    .flatten(),
+            ),
             _ => Either::Right(std::iter::empty()),
         }
     }
@@ -167,12 +182,25 @@ impl SingleTransactionKind {
                 .filter_map(|arg| match arg {
                     CallArg::Pure(_) => None,
                     CallArg::Object(ObjectArg::ImmOrOwnedObject(object_ref)) => {
-                        Some(InputObjectKind::ImmOrOwnedMoveObject(*object_ref))
+                        Some(vec![InputObjectKind::ImmOrOwnedMoveObject(*object_ref)])
                     }
                     CallArg::Object(ObjectArg::SharedObject(id)) => {
-                        Some(InputObjectKind::SharedMoveObject(*id))
+                        Some(vec![InputObjectKind::SharedMoveObject(*id)])
                     }
+                    CallArg::ObjVec(vec) => Some(
+                        vec.iter()
+                            .map(|obj_arg| match obj_arg {
+                                ObjectArg::ImmOrOwnedObject(object_ref) => {
+                                    InputObjectKind::ImmOrOwnedMoveObject(*object_ref)
+                                }
+                                ObjectArg::SharedObject(id) => {
+                                    InputObjectKind::SharedMoveObject(*id)
+                                }
+                            })
+                            .collect(),
+                    ),
                 })
+                .flatten()
                 .chain([InputObjectKind::MovePackage(package.0)])
                 .collect(),
             Self::Publish(MoveModulePublish { modules }) => {

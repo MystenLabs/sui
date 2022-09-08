@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 workspace-hack = { path = "../workspace-hack"}
 sui-types = {path = "../sui-types"}
-anyhow = { version = "1.0.58", features = ["backtrace"] }
+anyhow = { version = "1.0.64", features = ["backtrace"] }
 tokio = { version = "1.20.1", features = ["full"] }
 serde = { version = "1.0.144", features = ["derive"] }
 strum = { version = "0.24", features = ["derive"] }
@@ -21,6 +21,6 @@ serde_json = "1.0.83"
 insta = { version = "1.17.1", features = ["redactions", "json"] }
 test-utils = { path = "../test-utils" }
 sui-config = {path = "../sui-config"}
-move-cli = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
-move-disassembler = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
-move-package = { git = "https://github.com/move-language/move", rev = "70b34a66473c34ad30d101290b249f2db3c847a2" }
+move-cli = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-disassembler = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
+move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }

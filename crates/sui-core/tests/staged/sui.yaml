@@ -45,6 +45,11 @@ CallArg:
       Object:
         NEWTYPE:
           TYPENAME: ObjectArg
+    2:
+      ObjVec:
+        NEWTYPE:
+          SEQ:
+            TYPENAME: ObjectArg
 ChangeEpoch:
   STRUCT:
     - epoch: U64

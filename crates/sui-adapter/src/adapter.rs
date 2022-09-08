@@ -9,6 +9,7 @@ use std::{
 };
 
 use anyhow::Result;
+use leb128;
 use move_binary_format::{
     access::ModuleAccess,
     binary_views::BinaryIndexedView,
@@ -78,9 +79,25 @@ pub fn execute<
             CallArg::Pure(_) => None,
             CallArg::Object(ObjectArg::ImmOrOwnedObject((id, _, _)))
             | CallArg::Object(ObjectArg::SharedObject(id)) => {
-                Some((*id, state_view.read_object(id)?))
+                Some(vec![(*id, state_view.read_object(id)?)])
+            }
+            CallArg::ObjVec(vec) => {
+                if vec.is_empty() {
+                    return None;
+                }
+                Some(
+                    vec.iter()
+                        .filter_map(|obj_arg| match obj_arg {
+                            ObjectArg::ImmOrOwnedObject((id, _, _))
+                            | ObjectArg::SharedObject(id) => {
+                                Some((*id, state_view.read_object(id)?))
+                            }
+                        })
+                        .collect(),
+                )
             }
         })
+        .flatten()
         .collect();
     let module = vm.load_module(&module_id, state_view)?;
     let is_genesis = ctx.digest() == TransactionDigest::genesis();
@@ -983,7 +1000,7 @@ pub fn resolve_and_type_check(
         .map(|(idx, arg)| {
             let param_type = &parameters[idx];
             let idx = idx as LocalIndex;
-            let object_kind = match arg {
+            let object_arg = match arg {
                 CallArg::Pure(arg) => {
                     if !is_primitive(view, type_args, param_type) {
                         let msg = format!(
@@ -1002,135 +1019,66 @@ pub fn resolve_and_type_check(
                     return Ok(arg);
                 }
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
-                    InputObjectKind::ImmOrOwnedMoveObject(ref_)
+                    let (o, arg_type, param_type) = serialize_object(
+                        InputObjectKind::ImmOrOwnedMoveObject(ref_),
+                        idx,
+                        param_type,
+                        objects,
+                        &mut object_data,
+                        &mut mutable_ref_objects,
+                        &mut by_value_objects,
+                        &mut object_type_map,
+                    )?;
+                    type_check_struct(view, type_args, idx, arg_type, param_type)?;
+                    o
                 }
                 CallArg::Object(ObjectArg::SharedObject(id)) => {
-                    InputObjectKind::SharedMoveObject(id)
+                    let (o, arg_type, param_type) = serialize_object(
+                        InputObjectKind::SharedMoveObject(id),
+                        idx,
+                        param_type,
+                        objects,
+                        &mut object_data,
+                        &mut mutable_ref_objects,
+                        &mut by_value_objects,
+                        &mut object_type_map,
+                    )?;
+                    type_check_struct(view, type_args, idx, arg_type, param_type)?;
+                    o
+                }
+                CallArg::ObjVec(vec) => {
+                    if vec.is_empty() {
+                        // bcs representation of the empty vector
+                        return Ok(vec![0]);
+                    }
+                    // write length of the vector as uleb128 as it is encoded in BCS and then append
+                    // all (already serialized) object content data
+                    let mut res = vec![];
+                    leb128::write::unsigned(&mut res, vec.len() as u64).unwrap();
+                    for arg in vec {
+                        let object_kind = match arg {
+                            ObjectArg::ImmOrOwnedObject(ref_) => {
+                                InputObjectKind::ImmOrOwnedMoveObject(ref_)
+                            }
+                            ObjectArg::SharedObject(id) => InputObjectKind::SharedMoveObject(id),
+                        };
+                        let (o, arg_type, param_type) = serialize_object(
+                            object_kind,
+                            idx,
+                            param_type,
+                            objects,
+                            &mut object_data,
+                            &mut mutable_ref_objects,
+                            &mut by_value_objects,
+                            &mut object_type_map,
+                        )?;
+                        type_check_struct(view, type_args, idx, arg_type, param_type)?;
+                        res.extend(o);
+                    }
+                    res
                 }
             };
 
-            let id = object_kind.object_id();
-            let object = match objects.get(&id) {
-                Some(object) => object.borrow(),
-                None => {
-                    debug_assert!(
-                        false,
-                        "Object map not populated for arg {} with id {}",
-                        idx, id
-                    );
-                    return Err(ExecutionErrorKind::InvariantViolation.into());
-                }
-            };
-            match object_kind {
-                InputObjectKind::ImmOrOwnedMoveObject(_) if object.is_shared() => {
-                    let error = format!(
-                        "Argument at index {} populated with shared object id {} \
-                        but an immutable or owned object was expected",
-                        idx, id
-                    );
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::entry_argument_error(
-                            idx,
-                            EntryArgumentErrorKind::ObjectKindMismatch,
-                        ),
-                        error,
-                    ));
-                }
-                InputObjectKind::SharedMoveObject(_) if !object.is_shared() => {
-                    let error = format!(
-                        "Argument at index {} populated with an immutable or owned object id {} \
-                        but an shared object was expected",
-                        idx, id
-                    );
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::entry_argument_error(
-                            idx,
-                            EntryArgumentErrorKind::ObjectKindMismatch,
-                        ),
-                        error,
-                    ));
-                }
-                _ => (),
-            }
-
-            let move_object = match &object.data {
-                Data::Move(m) => m,
-                Data::Package(_) => {
-                    let error = format!(
-                        "Found module argument, but function expects {:?}",
-                        param_type
-                    );
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::entry_argument_error(
-                            idx,
-                            EntryArgumentErrorKind::TypeMismatch,
-                        ),
-                        error,
-                    ));
-                }
-            };
-            object_data.insert(
-                id,
-                (object.owner, object.version(), move_object.child_count()),
-            );
-            let object_arg = move_object.contents().to_vec();
-            // check that m.type_ matches the parameter types of the function
-            let inner_param_type = match &param_type {
-                SignatureToken::Reference(inner_t) => &**inner_t,
-                SignatureToken::MutableReference(inner_t) => {
-                    if object.is_immutable() {
-                        let error = format!(
-                            "Argument {} is expected to be mutable, immutable object found",
-                            idx
-                        );
-                        return Err(ExecutionError::new_with_source(
-                            ExecutionErrorKind::entry_argument_error(
-                                idx,
-                                EntryArgumentErrorKind::InvalidObjectByMuteRef,
-                            ),
-                            error,
-                        ));
-                    }
-                    mutable_ref_objects.insert(idx as LocalIndex, id);
-                    &**inner_t
-                }
-                t @ SignatureToken::Struct(_)
-                | t @ SignatureToken::StructInstantiation(_, _)
-                | t @ SignatureToken::TypeParameter(_) => {
-                    match &object.owner {
-                        Owner::AddressOwner(_) | Owner::ObjectOwner(_) => (),
-                        Owner::Shared | Owner::Immutable => {
-                            return Err(ExecutionError::new_with_source(
-                                ExecutionErrorKind::entry_argument_error(
-                                    idx,
-                                    EntryArgumentErrorKind::InvalidObjectByValue,
-                                ),
-                                format!(
-                                    "Immutable and shared objects cannot be passed by-value, \
-                                    violation found in argument {}",
-                                    idx
-                                ),
-                            ));
-                        }
-                    }
-                    by_value_objects.insert(id);
-                    t
-                }
-                t => {
-                    return Err(ExecutionError::new_with_source(
-                        ExecutionErrorKind::entry_argument_error(
-                            idx,
-                            EntryArgumentErrorKind::TypeMismatch,
-                        ),
-                        format!(
-                            "Found object argument {}, but function expects {:?}",
-                            move_object.type_, t
-                        ),
-                    ));
-                }
-            };
-            type_check_struct(view, type_args, idx, &move_object.type_, inner_param_type)?;
-            object_type_map.insert(id, move_object.type_.module_id());
             Ok(object_arg)
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -1150,6 +1098,173 @@ pub fn resolve_and_type_check(
         args: bcs_args,
         has_ctx_arg,
     })
+}
+
+/// Serialize object with ID encoded in object_kind and also verify if various object properties are
+/// correct.
+fn serialize_object<'a>(
+    object_kind: InputObjectKind,
+    idx: LocalIndex,
+    param_type: &'a SignatureToken,
+    objects: &'a BTreeMap<ObjectID, impl Borrow<Object>>,
+    object_data: &mut BTreeMap<ObjectID, (Owner, SequenceNumber, Option<u32>)>,
+    mutable_ref_objects: &mut BTreeMap<u8, ObjectID>,
+    by_value_objects: &mut BTreeSet<ObjectID>,
+    object_type_map: &mut BTreeMap<ObjectID, ModuleId>,
+) -> Result<(Vec<u8>, &'a StructTag, &'a SignatureToken), ExecutionError> {
+    let object_id = object_kind.object_id();
+    let object = match objects.get(&object_id) {
+        Some(object) => object.borrow(),
+        None => {
+            debug_assert!(
+                false,
+                "Object map not populated for arg {} with id {}",
+                idx, object_id
+            );
+            return Err(ExecutionErrorKind::InvariantViolation.into());
+        }
+    };
+
+    match object_kind {
+        InputObjectKind::ImmOrOwnedMoveObject(_) if object.is_shared() => {
+            let error = format!(
+                "Argument at index {} populated with shared object id {} \
+                        but an immutable or owned object was expected",
+                idx, object_id
+            );
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::entry_argument_error(
+                    idx,
+                    EntryArgumentErrorKind::ObjectKindMismatch,
+                ),
+                error,
+            ));
+        }
+        InputObjectKind::SharedMoveObject(_) if !object.is_shared() => {
+            let error = format!(
+                "Argument at index {} populated with an immutable or owned object id {} \
+                        but an shared object was expected",
+                idx, object_id
+            );
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::entry_argument_error(
+                    idx,
+                    EntryArgumentErrorKind::ObjectKindMismatch,
+                ),
+                error,
+            ));
+        }
+        _ => (),
+    }
+
+    let move_object = match &object.data {
+        Data::Move(m) => m,
+        Data::Package(_) => {
+            let for_vector = matches!(param_type, SignatureToken::Vector { .. });
+            let error = format!(
+                "Found module {} argument, but function expects {:?}",
+                if for_vector { "element in vector" } else { "" },
+                param_type
+            );
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
+                error,
+            ));
+        }
+    };
+
+    // check that m.type_ matches the parameter types of the function
+    let inner_param_type = inner_param_type(
+        object,
+        object_id,
+        idx,
+        param_type,
+        &move_object.type_,
+        mutable_ref_objects,
+        by_value_objects,
+    )?;
+
+    object_type_map.insert(object_id, move_object.type_.module_id());
+    object_data.insert(
+        object_id,
+        (object.owner, object.version(), move_object.child_count()),
+    );
+    Ok((
+        move_object.contents().to_vec(),
+        &move_object.type_,
+        inner_param_type,
+    ))
+}
+
+/// Get "inner" type of an object passed as argument (e.g., an inner type of a reference or of a
+/// vector) and also verify if various object properties are correct.
+fn inner_param_type<'a>(
+    object: &Object,
+    object_id: ObjectID,
+    idx: LocalIndex,
+    param_type: &'a SignatureToken,
+    arg_type: &StructTag,
+    mutable_ref_objects: &mut BTreeMap<u8, ObjectID>,
+    by_value_objects: &mut BTreeSet<ObjectID>,
+) -> Result<&'a SignatureToken, ExecutionError> {
+    match &param_type {
+        SignatureToken::Reference(inner_t) => Ok(&**inner_t),
+        SignatureToken::MutableReference(inner_t) => {
+            if object.is_immutable() {
+                let error = format!(
+                    "Argument {} is expected to be mutable, immutable object found",
+                    idx
+                );
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::entry_argument_error(
+                        idx,
+                        EntryArgumentErrorKind::InvalidObjectByMuteRef,
+                    ),
+                    error,
+                ));
+            }
+            mutable_ref_objects.insert(idx as LocalIndex, object_id);
+            Ok(&**inner_t)
+        }
+        SignatureToken::Vector(inner_t) => inner_param_type(
+            object,
+            object_id,
+            idx,
+            inner_t,
+            arg_type,
+            mutable_ref_objects,
+            by_value_objects,
+        ),
+        t @ SignatureToken::Struct(_)
+        | t @ SignatureToken::StructInstantiation(_, _)
+        | t @ SignatureToken::TypeParameter(_) => {
+            match &object.owner {
+                Owner::AddressOwner(_) | Owner::ObjectOwner(_) => (),
+                Owner::Shared | Owner::Immutable => {
+                    return Err(ExecutionError::new_with_source(
+                        ExecutionErrorKind::entry_argument_error(
+                            idx,
+                            EntryArgumentErrorKind::InvalidObjectByValue,
+                        ),
+                        format!(
+                            "Immutable and shared objects cannot be passed by-value, \
+                                    violation found in argument {}",
+                            idx
+                        ),
+                    ));
+                }
+            }
+            by_value_objects.insert(object_id);
+            Ok(t)
+        }
+        t => Err(ExecutionError::new_with_source(
+            ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
+            format!(
+                "Found object argument {}, but function expects {:?}",
+                arg_type, t
+            ),
+        )),
+    }
 }
 
 /// Check rules for shared object + by-value child rules and rules for by-value shared object rules:

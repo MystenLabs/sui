@@ -20,9 +20,7 @@ pub mod natives;
 
 pub use sui_framework_build::build_move_stdlib_modules as get_move_stdlib_modules;
 pub use sui_framework_build::verify_modules;
-use sui_framework_build::{
-    build_move_package_with_deps, filter_package_modules, move_stdlib_module_denylist,
-};
+use sui_framework_build::{build_move_package_with_deps, filter_package_modules};
 use sui_types::sui_serde::{Base64, Encoding};
 
 // Move unit tests will halt after executing this many steps. This is a protection to avoid divergence
@@ -193,7 +191,6 @@ fn verify_framework_version(pkg: &CompiledPackage) -> SuiResult<()> {
     let dep_stdlib: Vec<&CompiledModule> = dep_stdlib_modules
         .iter()
         .filter(|m| *m.self_id().address() == MOVE_STDLIB_ADDRESS)
-        .filter(|m| !move_stdlib_module_denylist().contains(&m.self_id().name().to_string()))
         .collect();
 
     let stdlib_modules = Modules::new(get_move_stdlib().iter()).iter_modules_owned();

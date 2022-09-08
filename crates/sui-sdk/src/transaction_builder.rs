@@ -171,6 +171,23 @@ impl TransactionBuilder {
         }))
     }
 
+    async fn get_object_arg(
+        &self,
+        id: ObjectID,
+        objects: &mut BTreeMap<ObjectID, Object>,
+    ) -> Result<ObjectArg, anyhow::Error> {
+        let response = self.0.get_object(id).await?;
+        let obj: Object = response.into_object()?.try_into()?;
+        let obj_ref = obj.compute_object_reference();
+        let owner = obj.owner;
+        objects.insert(id, obj);
+        Ok(if owner.is_shared() {
+            ObjectArg::SharedObject(id)
+        } else {
+            ObjectArg::ImmOrOwnedObject(obj_ref)
+        })
+    }
+
     async fn resolve_and_checks_json_args(
         &self,
         package_id: ObjectID,
@@ -193,19 +210,17 @@ impl TransactionBuilder {
         let mut objects = BTreeMap::new();
         for arg in json_args {
             args.push(match arg {
-                SuiJsonCallArg::Object(o) => {
-                    let response = self.0.get_object(o).await?;
-                    let obj: Object = response.into_object()?.try_into()?;
-                    let obj_ref = obj.compute_object_reference();
-                    let owner = obj.owner;
-                    objects.insert(o, obj);
-                    if owner.is_shared() {
-                        CallArg::Object(ObjectArg::SharedObject(o))
-                    } else {
-                        CallArg::Object(ObjectArg::ImmOrOwnedObject(obj_ref))
-                    }
+                SuiJsonCallArg::Object(id) => {
+                    CallArg::Object(self.get_object_arg(id, &mut objects).await?)
                 }
                 SuiJsonCallArg::Pure(p) => CallArg::Pure(p),
+                SuiJsonCallArg::ObjVec(v) => {
+                    let mut object_ids = vec![];
+                    for id in v {
+                        object_ids.push(self.get_object_arg(id, &mut objects).await?);
+                    }
+                    CallArg::ObjVec(object_ids)
+                }
             })
         }
         let compiled_module = package.deserialize_module(module)?;

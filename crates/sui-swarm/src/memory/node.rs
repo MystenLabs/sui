@@ -4,6 +4,7 @@
 use anyhow::anyhow;
 use anyhow::Result;
 use futures::FutureExt;
+use prometheus::Registry;
 use std::thread;
 use sui_config::NodeConfig;
 use sui_node::SuiNode;
@@ -177,9 +178,8 @@ impl Container {
                 }
             };
             let runtime = builder.enable_all().build().unwrap();
-
             runtime.block_on(async move {
-                let _server = SuiNode::start(&config).await.unwrap();
+                let _server = SuiNode::start(&config, Registry::new()).await.unwrap();
                 // Notify that we've successfully started the node
                 let _ = startup_sender.send(());
                 // run until canceled

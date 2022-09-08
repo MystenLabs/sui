@@ -16,14 +16,18 @@ import {
     checkIsPropertyType,
     extractName,
 } from '../../../utils/objectUtils';
-import { trimStdLibPrefix, genFileTypeMsg } from '../../../utils/stringUtils';
+import {
+    trimStdLibPrefix,
+    genFileTypeMsg,
+    normalizeSuiAddress,
+} from '../../../utils/stringUtils';
 import { type DataType } from '../ObjectResultType';
 
 import styles from './ObjectView.module.css';
 function TokenView({ data }: { data: DataType }) {
     const viewedData = {
         ...data,
-        objType: trimStdLibPrefix(data.objType),
+        objType: data.objType,
         tx_digest: data.data.tx_digest,
         owner: getOwnerStr(data.owner),
         url: parseImageURL(data.data.contents),
@@ -65,7 +69,11 @@ function TokenView({ data }: { data: DataType }) {
         setImageFullScreen(true);
     }, []);
 
-    const href = `/objects/${viewedData.package}?module=${viewedData.module}`;
+    const genhref = (objType: string) => {
+        const metadataarr = objType.split('::');
+        const address = normalizeSuiAddress(metadataarr[0]);
+        return `/objects/${address}?module=${metadataarr[1]}`;
+    };
 
     return (
         <div>
@@ -76,22 +84,14 @@ function TokenView({ data }: { data: DataType }) {
                         <tbody>
                             <tr>
                                 <td>Type</td>
-                                {viewedData.package && viewedData.module ? (
-                                    <td>
-                                        <Link
-                                            to={href}
-                                            className={styles.objecttypelink}
-                                        >
-                                            {trimStdLibPrefix(
-                                                viewedData.objType
-                                            )}
-                                        </Link>
-                                    </td>
-                                ) : (
-                                    <td>
+                                <td>
+                                    <Link
+                                        to={genhref(viewedData.objType)}
+                                        className={styles.objecttypelink}
+                                    >
                                         {trimStdLibPrefix(viewedData.objType)}
-                                    </td>
-                                )}
+                                    </Link>
+                                </td>
                             </tr>
                             <tr>
                                 <td>Object ID</td>

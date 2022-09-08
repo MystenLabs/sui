@@ -2,11 +2,11 @@
 # Copyright (c) 2022, Mysten Labs, Inc.
 # SPDX-License-Identifier: Apache-2.0
 
+# shellcheck disable=SC2181
 # This script attempts to update the Narwhal pointer in Sui
 # It is expected to fail in cases 
 set -e
 set -eo pipefail
-set -x
 
 DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 TOPLEVEL="${DIR}/../"

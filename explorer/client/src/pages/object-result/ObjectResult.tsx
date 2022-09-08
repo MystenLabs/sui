@@ -1,12 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import {
-    getObjectId,
-    getTransactions,
-    getTransactionSender,
-    getMoveCallTransaction,
-} from '@mysten/sui.js';
+import { getTransactionSender } from '@mysten/sui.js';
 import * as Sentry from '@sentry/react';
 import React, { useEffect, useState, useContext } from 'react';
 import { useLocation, useParams } from 'react-router-dom';
@@ -47,53 +42,38 @@ const Fail = ({ objID }: { objID: string | undefined }): JSX.Element => {
     );
 };
 
-// Get the data for the object ID and either:
-// address that publishes a Package or
-// module and package associated with token
+// Get the data for the object ID and address that publishes a Package:
 function getObjectDataWithPackageAddress(objID: string, network: string) {
     return rpc(network)
         .getObject(objID as string)
         .then((objState) => {
             const resp: DataType = translate(objState) as DataType;
-            if (resp.data.tx_digest) {
+
+            const GENESIS_TX_DIGEST =
+                'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
+
+            if (
+                resp.data.tx_digest &&
+                resp.data.tx_digest === GENESIS_TX_DIGEST
+            ) {
+                return {
+                    ...resp,
+                    publisherAddress: 'Genesis',
+                };
+            }
+
+            if (resp.objType === 'Move Package' && resp.data.tx_digest) {
                 return rpc(network)
                     .getTransactionWithEffects(resp.data.tx_digest)
-                    .then((txEff) => {
-                        if (resp.objType === 'Move Package') {
-                            // If Package, then extract publisher address
-                            return {
-                                ...resp,
-                                publisherAddress: getTransactionSender(
-                                    txEff.certificate
-                                ),
-                            };
-                        } else {
-                            // If Token, then extract the module and package
-                            const movecall = getMoveCallTransaction(
-                                getTransactions(txEff.certificate)[0]
-                            );
-                            if (!movecall) return resp;
-                            return {
-                                ...resp,
-                                module: movecall.module,
-                                package: getObjectId(movecall.package),
-                            };
-                        }
-                    })
+                    .then((txEff) => ({
+                        ...resp,
+                        publisherAddress: getTransactionSender(
+                            txEff.certificate
+                        ),
+                    }))
                     .catch((err) => {
                         console.log(err);
-                        // TODO: Not sure if I should show Genesis as Package Publisher or ignore it
-
-                        if (resp.objType === 'Move Package') {
-                            return {
-                                ...(resp.owner === 'Immutable'
-                                    ? { publisherAddress: 'Genesis' }
-                                    : {}),
-                                ...resp,
-                            };
-                        } else {
-                            return resp;
-                        }
+                        return resp;
                     });
             }
             return resp;
