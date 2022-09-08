@@ -122,10 +122,11 @@ async fn main() -> Result<()> {
         });
     }
 
-    task::spawn(async {
+    let is_validator = config.consensus_config().is_some();
+    task::spawn(async move {
         loop {
             sleep(Duration::from_secs(3600)).await;
-            send_telemetry_event().await;
+            send_telemetry_event(is_validator).await;
         }
     });
 
