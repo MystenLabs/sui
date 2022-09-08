@@ -168,8 +168,7 @@ event-listener = { version = "2", default-features = false }
 executor = { git = "https://github.com/MystenLabs/narwhal", rev = "2d2f46c6e4dfc13c94f0adfc7e0a7c42b50bb974", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto-c26118f729b75657 = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b", features = ["copy_key"] }
-fastcrypto-c65f7effa3be6d31 = { package = "fastcrypto", version = "0.1", features = ["copy_key"] }
+fastcrypto = { version = "0.1", features = ["copy_key"] }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }
@@ -792,8 +791,7 @@ event-listener = { version = "2", default-features = false }
 executor = { git = "https://github.com/MystenLabs/narwhal", rev = "2d2f46c6e4dfc13c94f0adfc7e0a7c42b50bb974", default-features = false }
 eyre = { version = "0.6", features = ["auto-install", "track-caller"] }
 fail = { version = "0.4", default-features = false }
-fastcrypto-c26118f729b75657 = { package = "fastcrypto", git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b", features = ["copy_key"] }
-fastcrypto-c65f7effa3be6d31 = { package = "fastcrypto", version = "0.1", features = ["copy_key"] }
+fastcrypto = { version = "0.1", features = ["copy_key"] }
 fastrand = { version = "1", default-features = false }
 fd-lock = { version = "3", default-features = false }
 fdlimit = { version = "0.2", default-features = false }

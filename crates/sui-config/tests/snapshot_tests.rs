@@ -19,7 +19,6 @@
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 
-use fastcrypto::traits::KeyPair;
 use insta::assert_yaml_snapshot;
 use multiaddr::Multiaddr;
 use rand::rngs::StdRng;
@@ -29,7 +28,7 @@ use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-    AuthorityPublicKeyBytes,
+    AuthorityPublicKeyBytes, KeypairTraits,
 };
 
 #[test]

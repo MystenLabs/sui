@@ -56,7 +56,7 @@ narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "2d2f4
 narwhal-types = { git = "https://github.com/MystenLabs/narwhal", rev = "2d2f46c6e4dfc13c94f0adfc7e0a7c42b50bb974", package = "types" }
 narwhal-node = { git = "https://github.com/MystenLabs/narwhal", rev = "2d2f46c6e4dfc13c94f0adfc7e0a7c42b50bb974", package = "node" }
 
-fastcrypto = { git = "https://github.com/MystenLabs/fastcrypto", rev = "c022a2ae23ca7cc2778293fd3b1db42e8cd02d3b"}
+fastcrypto = { version = "0.1", features = ["copy_key"] }
 workspace-hack = { path = "../workspace-hack"}
 thiserror = "1.0.34"
 eyre = "0.6.8"
