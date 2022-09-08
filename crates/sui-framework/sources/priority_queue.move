@@ -137,6 +137,7 @@ module sui::priority_queue {
         }
     }
 
+    // TODO: improve with iterative version
     fun max_heapify_recursive<T>(v: &mut vector<Entry<T>>, len: u64, i: u64) {
         if (len == 0) {
             return
