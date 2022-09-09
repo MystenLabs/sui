@@ -147,7 +147,8 @@ export class WebsocketClient {
     this.isSetup = true;
   }
 
-  private execAnyOnMessage<TFilter, TOnMessageInput, TParams extends MinimumSubscriptionMessage>(
+  // find the associated callback for a subscription response & run it
+  private execOnMessage<TFilter, TOnMessageInput, TParams extends MinimumSubscriptionMessage>(
     map: Map<SubscriptionId, FilterCallbackPair<TFilter, TOnMessageInput>>,
     params: TParams,
     isMessageInput: (o: any) => o is TOnMessageInput
@@ -163,20 +164,17 @@ export class WebsocketClient {
   // called for every message received from the node over websocket
   private onSocketMessage(rawMessage: string): void {
     const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
-    const params = msg.params;
+    if (!isMinimumSubscriptionMessage(msg.params))
+      return;
 
     switch (msg.method) {
       case SUBSCRIBE_TRANSACTION_METHOD:
-        if (isMinimumSubscriptionMessage(params)) {
-          const dataValidator = this.skipValidation ? isAny : isSuiTransactionResponse;
-          this.execAnyOnMessage(this.txSubscriptions, params, dataValidator);
-        }
+          const txTypeGuard = this.skipValidation ? isAny : isSuiTransactionResponse;
+          this.execOnMessage(this.txSubscriptions, msg.params, txTypeGuard);
         break;
       case SUBSCRIBE_EVENT_METHOD:
-        if (isMinimumSubscriptionMessage(params)) {
-          const dataValidator = this.skipValidation ? isAny : isSuiEventEnvelope;
-          this.execAnyOnMessage(this.eventSubscriptions, params, dataValidator);
-        }
+          const eventTypeGuard = this.skipValidation ? isAny : isSuiEventEnvelope;
+          this.execOnMessage(this.eventSubscriptions, msg.params, eventTypeGuard);
         break;
     }
   }
