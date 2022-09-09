@@ -8,6 +8,7 @@ use crate::{
     checkpoints::CheckpointStore,
     event_handler::EventHandler,
     execution_engine,
+    metrics::start_timer,
     query_helpers::QueryHelpers,
     transaction_input_checker,
     transaction_streamer::TransactionStreamer,
@@ -459,11 +460,8 @@ impl AuthorityState {
         let transaction_digest = *transaction.digest();
         debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
         let start_ts = Instant::now();
-        let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
-            metrics
-                .handle_transaction_latency
-                .observe(start_ts.elapsed().as_secs_f64());
-        });
+        let _metrics_guard =
+            start_timer!(self.metrics.handle_transaction_latency.clone(), &start_ts);
 
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
@@ -502,12 +500,10 @@ impl AuthorityState {
         signed_effects: SignedTransactionEffects,
     ) -> SuiResult {
         let start_ts = Instant::now();
-        let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
-            metrics
-                .handle_node_sync_certificate_latency
-                .observe(start_ts.elapsed().as_secs_f64());
-        });
-
+        let _metrics_guard = start_timer!(
+            self.metrics.handle_node_sync_certificate_latency.clone(),
+            &start_ts
+        );
         let digest = *certificate.digest();
         debug!(?digest, "handle_node_sync_transaction");
         fp_ensure!(
@@ -552,11 +548,8 @@ impl AuthorityState {
         certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
         let start_ts = Instant::now();
-        let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
-            metrics
-                .handle_certificate_latency
-                .observe(start_ts.elapsed().as_secs_f64());
-        });
+        let _metrics_guard =
+            start_timer!(self.metrics.handle_certificate_latency.clone(), &start_ts);
 
         self.metrics.total_cert_attempts.inc();
         if self.is_fullnode() {
@@ -1727,11 +1720,9 @@ impl AuthorityState {
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
         let start_ts = Instant::now();
-        let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
-            metrics
-                .commit_certificate_latency
-                .observe(start_ts.elapsed().as_secs_f64());
-        });
+        let _metrics_guard =
+            start_timer!(self.metrics.commit_certificate_latency.clone(), &start_ts);
+
         if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?

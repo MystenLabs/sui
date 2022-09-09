@@ -8,6 +8,7 @@ use crate::{
         CheckpointConsensusAdapter, CheckpointSender, ConsensusAdapter, ConsensusAdapterMetrics,
         ConsensusListener, ConsensusListenerMessage,
     },
+    metrics::start_timer,
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -330,22 +331,16 @@ impl ValidatorService {
         let is_consensus_tx = transaction.contains_shared_object();
 
         let start_ts = Instant::now();
-        let _metrics_guard = scopeguard::guard(metrics.clone(), |metrics| {
+        let _metrics_guard = start_timer!(
             if is_consensus_tx {
-                metrics
-                    .handle_transaction_consensus_latency
-                    .observe(start_ts.elapsed().as_secs_f64());
+                metrics.handle_transaction_consensus_latency.clone()
             } else {
-                metrics
-                    .handle_transaction_non_consensus_latency
-                    .observe(start_ts.elapsed().as_secs_f64());
-            }
-        });
-        let tx_verif_metrics_guard = scopeguard::guard(metrics.clone(), |metrics| {
-            metrics
-                .tx_verification_latency
-                .observe(start_ts.elapsed().as_secs_f64());
-        });
+                metrics.handle_transaction_non_consensus_latency.clone()
+            },
+            &start_ts
+        );
+        let tx_verif_metrics_guard =
+            start_timer!(metrics.tx_verification_latency.clone(), &start_ts);
 
         transaction
             .verify()
@@ -381,23 +376,19 @@ impl ValidatorService {
         let mut certificate = request.into_inner();
         let is_consensus_tx = certificate.contains_shared_object();
         let start_ts = Instant::now();
-        let _metrics_guard = scopeguard::guard(metrics.clone(), |metrics| {
+        let _metrics_guard = start_timer!(
             if is_consensus_tx {
-                metrics
-                    .handle_certificate_consensus_latency
-                    .observe(start_ts.elapsed().as_secs_f64());
+                metrics.handle_certificate_consensus_latency.clone()
             } else {
-                metrics
-                    .handle_certificate_non_consensus_latency
-                    .observe(start_ts.elapsed().as_secs_f64());
-            }
-        });
+                metrics.handle_certificate_non_consensus_latency.clone()
+            },
+            &start_ts
+        );
+
         // 1) Verify certificate
-        let cert_verif_metrics_guard = scopeguard::guard(metrics.clone(), |metrics| {
-            metrics
-                .cert_verification_latency
-                .observe(start_ts.elapsed().as_secs_f64());
-        });
+        let cert_verif_metrics_guard =
+            start_timer!(metrics.cert_verification_latency.clone(), &start_ts);
+
         certificate
             .verify(&state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
@@ -424,11 +415,7 @@ impl ValidatorService {
                 .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
             let start_ts = Instant::now();
-            let _metrics_guard = scopeguard::guard(metrics.clone(), |metrics| {
-                metrics
-                    .consensus_latency
-                    .observe(start_ts.elapsed().as_secs_f64());
-            });
+            let _metrics_guard = start_timer!(metrics.consensus_latency.clone(), &start_ts);
             consensus_adapter
                 .submit(&state.name, &certificate)
                 .await

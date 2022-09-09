@@ -4,6 +4,7 @@
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::epoch::epoch_store::EpochStore;
+use crate::metrics::start_timer;
 use futures::StreamExt;
 use prometheus::core::{GenericCounter, GenericGauge};
 use prometheus::{
@@ -462,9 +463,7 @@ where
         let digest = *transaction.digest();
         let start_ts = Instant::now();
         let _metrics_guard =
-            scopeguard::guard(self.metrics_handle_transaction_latency.clone(), |metrics| {
-                metrics.observe(start_ts.elapsed().as_secs_f64());
-            });
+            start_timer!(self.metrics_handle_transaction_latency.clone(), &start_ts);
         let transaction_info = self
             .authority_client
             .handle_transaction(transaction)
@@ -500,9 +499,7 @@ where
         let digest = *certificate.digest();
         let start_ts = Instant::now();
         let _metrics_guard =
-            scopeguard::guard(self.metrics_handle_certificate_latency.clone(), |metrics| {
-                metrics.observe(start_ts.elapsed().as_secs_f64());
-            });
+            start_timer!(self.metrics_handle_certificate_latency.clone(), &start_ts);
         let transaction_info = self
             .authority_client
             .handle_certificate(certificate)
@@ -531,11 +528,8 @@ where
         self.metrics_total_requests_handle_object_info_request.inc();
 
         let start_ts = Instant::now();
-        let _metrics_guard =
-            scopeguard::guard(self.metrics_handle_obj_info_latency.clone(), |metrics| {
-                metrics.observe(start_ts.elapsed().as_secs_f64());
-            });
 
+        let _metrics_guard = start_timer!(self.metrics_handle_obj_info_latency.clone(), &start_ts);
         let response = self
             .authority_client
             .handle_object_info_request(request.clone())
@@ -559,10 +553,7 @@ where
         let digest = request.transaction_digest;
 
         let start_ts = Instant::now();
-        let _metrics_guard =
-            scopeguard::guard(self.metrics_handle_tx_info_latency.clone(), |metrics| {
-                metrics.observe(start_ts.elapsed().as_secs_f64());
-            });
+        let _metrics_guard = start_timer!(self.metrics_handle_tx_info_latency.clone(), &start_ts);
 
         let transaction_info = self
             .authority_client
