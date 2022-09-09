@@ -159,6 +159,8 @@ export abstract class Provider {
 
   /**
    * Subscribe to get notifications whenever a new transaction is seen by the node
+   * @param filter - filter describing the subset of transactions to follow
+   * @param onMessage - function to run when we receive a notification of a new transaction matching the filter
    */
   abstract subscribeTransaction(
     filter: SuiTransactionFilter,
@@ -167,6 +169,7 @@ export abstract class Provider {
 
   /**
    * Unsubscribe from node transaction notifications
+   * @param id - subscription id to unsubscribe from (previously received from subscribeTransaction)
    */
   abstract unsubscribeTransaction(id: SubscriptionId): Promise<boolean>;
 
