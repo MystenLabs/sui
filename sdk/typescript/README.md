@@ -77,6 +77,26 @@ const txn = await provider.getTransaction(
 );
 ```
 
+Fetch transaction events from a transaction digest:
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:443');
+const txEvents = await provider.getEventsByTransaction(
+  '6mn5W1CczLwitHCO9OIUbqirNrQ0cuKdyxaNe16SAME='
+);
+```
+
+Fetch events by sender address:
+
+```typescript
+import { JsonRpcProvider } from '@mysten/sui.js';
+const provider = new JsonRpcProvider('https://gateway.devnet.sui.io:443');
+const senderEvents = await provider.getEventsBySender(
+  '0xbff6ccc8707aa517b4f1b95750a2a8c666012df3'
+);
+```
+
 For any operations that involves signing or submitting transactions, you should use the `Signer` API. For example:
 
 To transfer a `0x2::coin::Coin<SUI>`:
