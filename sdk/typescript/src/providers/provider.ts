@@ -158,7 +158,7 @@ export abstract class Provider {
    * @param module Move module name
    * @param count max result count
    * @param startTime start of time range
-   * @param endTime end of time range
+   * @param endTime end of time range, exclusive
    */
   abstract getEventsByModule(
     package_: ObjectId,                   // 'package' is reserved word
