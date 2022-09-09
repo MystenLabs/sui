@@ -7,10 +7,11 @@ use std::str::FromStr;
 use anyhow::{anyhow, Error};
 use base64ct::Encoding;
 use digest::Digest;
-use fastcrypto::ed25519::{
-    Ed25519AggregateSignature, Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey,
-    Ed25519Signature,
+use fastcrypto::bls12381::{
+    BLS12381AggregateSignature, BLS12381KeyPair, BLS12381PrivateKey, BLS12381PublicKey,
+    BLS12381Signature,
 };
+use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey, Ed25519Signature};
 use fastcrypto::secp256k1::{
     Secp256k1KeyPair, Secp256k1PrivateKey, Secp256k1PublicKey, Secp256k1Signature,
 };
@@ -32,21 +33,25 @@ use signature::Signer;
 use crate::base_types::{AuthorityName, SuiAddress};
 use crate::committee::{Committee, EpochId};
 use crate::error::{SuiError, SuiResult};
-use crate::sui_serde::{Base64, Readable, SuiBitmap};
+use crate::sui_serde::{AggrAuthSignature, Base64, Readable, SuiBitmap};
 pub use enum_dispatch::enum_dispatch;
 
 // Authority Objects
-pub type AuthorityKeyPair = Ed25519KeyPair;
-pub type AuthorityPrivateKey = Ed25519PrivateKey;
-pub type AuthorityPublicKey = Ed25519PublicKey;
-pub type AuthoritySignature = Ed25519Signature;
-pub type AggregateAuthoritySignature = Ed25519AggregateSignature;
+pub type AuthorityKeyPair = BLS12381KeyPair;
+pub type AuthorityPrivateKey = BLS12381PrivateKey;
+pub type AuthorityPublicKey = BLS12381PublicKey;
+pub type AuthoritySignature = BLS12381Signature;
+pub type AggregateAuthoritySignature = BLS12381AggregateSignature;
 
 // TODO(joyqvq): prefix these types with Default, DefaultAccountKeyPair etc
 pub type AccountKeyPair = Ed25519KeyPair;
 pub type AccountPublicKey = Ed25519PublicKey;
 pub type AccountPrivateKey = Ed25519PrivateKey;
 pub type AccountSignature = Ed25519Signature;
+
+pub type NetworkKeyPair = Ed25519KeyPair;
+pub type NetworkPublicKey = Ed25519PublicKey;
+pub type NetworkPrivateKey = Ed25519PrivateKey;
 
 pub const PROOF_OF_POSSESSION_DOMAIN: &[u8] = b"kosk";
 
@@ -61,6 +66,14 @@ pub fn generate_proof_of_possession<K: KeypairTraits>(
     domain_with_pk.extend_from_slice(address.as_ref());
     keypair.sign(&domain_with_pk[..])
 }
+
+///////////////////////////////////////////////
+/// Account Keys
+///
+/// * The following section defines the keypairs that are used by
+/// * accounts to interact with Sui.
+/// * Currently we support eddsa and ecdsa on Sui.
+///
 
 #[allow(clippy::large_enum_variant)]
 #[derive(Debug)]
@@ -281,10 +294,8 @@ impl PublicKey {
     }
 }
 
-//
-// Define Bytes representation of the Authority's PublicKey
-//
-
+/// Defines the compressed version of the public key that we pass around
+/// in Sui
 #[serde_as]
 #[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct AuthorityPublicKeyBytes(
@@ -343,7 +354,7 @@ impl ToFromBytes for AuthorityPublicKeyBytes {
 }
 
 impl AuthorityPublicKeyBytes {
-    pub const ZERO: Self = Self::new([0u8; AccountPublicKey::LENGTH]);
+    pub const ZERO: Self = Self::new([0u8; AuthorityPublicKey::LENGTH]);
 
     /// This ensures it's impossible to construct an instance with other than registered lengths
     pub const fn new(bytes: [u8; AuthorityPublicKey::LENGTH]) -> AuthorityPublicKeyBytes
@@ -495,6 +506,7 @@ where
             let (addr, key_pair): (_, Ed25519KeyPair) = get_key_pair_from_rng(csprng);
             Ok((addr, SuiKeyPair::Ed25519SuiKeyPair(key_pair)))
         }
+        _ => Err(anyhow::anyhow!("Invalid signature scheme passed")),
     }
 }
 
@@ -610,6 +622,14 @@ impl std::fmt::Debug for Signature {
         write!(f, "{flag}@{s}@{p}")?;
         Ok(())
     }
+}
+
+//
+// BLS Port
+//
+
+impl SuiPublicKey for BLS12381PublicKey {
+    const SIGNATURE_SCHEME: SignatureScheme = SignatureScheme::BLS12381;
 }
 
 //
@@ -953,6 +973,7 @@ impl PartialEq for AuthoritySignInfo {
 pub struct AuthorityQuorumSignInfo<const STRONG_THRESHOLD: bool> {
     pub epoch: EpochId,
     #[schemars(with = "Base64")]
+    #[serde_as(as = "AggrAuthSignature")]
     pub signature: AggregateAuthoritySignature,
     #[schemars(with = "Base64")]
     #[serde_as(as = "SuiBitmap")]
@@ -1220,6 +1241,7 @@ impl ToObligationSignature for AuthoritySignature {
 // Careful, the implementation may be overlapping with the AuthoritySignature implementation. Be sure to fix it if it does:
 // TODO: Change all these into macros.
 impl ToObligationSignature for Secp256k1Signature {}
+impl ToObligationSignature for Ed25519Signature {}
 
 #[derive(Default)]
 pub struct VerificationObligation {
@@ -1281,10 +1303,7 @@ impl VerificationObligation {
 
     pub fn verify_all(self) -> SuiResult<()> {
         AggregateAuthoritySignature::batch_verify(
-            &self
-                .signatures
-                .iter()
-                .collect::<Vec<&Ed25519AggregateSignature>>(),
+            &self.signatures.iter().collect::<Vec<_>>()[..],
             self.public_keys
                 .iter()
                 .map(|x| x.iter())
@@ -1328,6 +1347,7 @@ pub mod bcs_signable_test {
 pub enum SignatureScheme {
     ED25519,
     Secp256k1,
+    BLS12381,
 }
 
 impl SignatureScheme {
@@ -1335,6 +1355,7 @@ impl SignatureScheme {
         match self {
             SignatureScheme::ED25519 => 0x00,
             SignatureScheme::Secp256k1 => 0x01,
+            SignatureScheme::BLS12381 => 0xff,
         }
     }
 
@@ -1358,6 +1379,7 @@ impl FromStr for SignatureScheme {
         match s {
             "ed25519" => Ok(SignatureScheme::ED25519),
             "secp256k1" => Ok(SignatureScheme::Secp256k1),
+            "bls12381" => Ok(SignatureScheme::BLS12381),
             _ => Err(SuiError::KeyConversionError(
                 "Invalid key scheme".to_string(),
             )),
@@ -1370,6 +1392,7 @@ impl ToString for SignatureScheme {
         match self {
             SignatureScheme::ED25519 => "ed25519".to_string(),
             SignatureScheme::Secp256k1 => "secp256k1".to_string(),
+            SignatureScheme::BLS12381 => "bls12381".to_string(),
         }
     }
 }

@@ -254,7 +254,8 @@ impl ValidatorService {
         let consensus_config = config
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
-        let consensus_keypair = config.protocol_key_pair().copy();
+        let consensus_primary_keypair = config.protocol_key_pair().copy();
+        let consensus_primary_network_keypair = config.network_key_pair().copy();
         let consensus_worker_keypair = config.worker_key_pair().copy();
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
@@ -265,7 +266,8 @@ impl ValidatorService {
         let registry = prometheus_registry.clone();
         tokio::spawn(async move {
             narwhal_node::restarter::NodeRestarter::watch(
-                consensus_keypair,
+                consensus_primary_keypair,
+                consensus_primary_network_keypair,
                 vec![(0, consensus_worker_keypair)],
                 &consensus_committee,
                 consensus_worker_cache,

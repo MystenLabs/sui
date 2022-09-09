@@ -218,7 +218,7 @@
               "certificate": {
                 "authSignInfo": {
                   "epoch": 0,
-                  "signature": [],
+                  "signature": "",
                   "signers_map": [
                     58,
                     48,
@@ -1650,7 +1650,7 @@
               "certificate": {
                 "authSignInfo": {
                   "epoch": 0,
-                  "signature": [],
+                  "signature": "",
                   "signers_map": [
                     58,
                     48,
@@ -3945,7 +3945,8 @@
         "type": "string",
         "enum": [
           "ED25519",
-          "Secp256k1"
+          "Secp256k1",
+          "BLS12381"
         ]
       },
       "SuiAddress": {

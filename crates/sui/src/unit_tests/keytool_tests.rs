@@ -15,7 +15,6 @@ use sui_types::crypto::get_key_pair_from_rng;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::Ed25519SuiSignature;
 use sui_types::crypto::EncodeDecodeBase64;
-use sui_types::crypto::KeypairTraits;
 use sui_types::crypto::Secp256k1SuiSignature;
 use sui_types::crypto::Signature;
 use sui_types::crypto::SuiKeyPair;
@@ -119,13 +118,7 @@ fn test_read_write_keystore_with_flag() {
 
     // read from file as AuthorityKeyPair success
     let kp_ed_read = read_authority_keypair_from_file(fp_ed_2);
-    assert!(kp_ed_read.is_ok());
-
-    // AuthorityKeyPair wrote into file is the same as read
-    assert_eq!(
-        kp_ed_read.unwrap().public().as_ref(),
-        kp_ed.public().as_ref()
-    );
+    assert!(kp_ed_read.is_err());
 }
 
 #[test]

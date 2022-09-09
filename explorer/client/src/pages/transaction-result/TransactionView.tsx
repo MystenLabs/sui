@@ -284,12 +284,14 @@ function TransactionView({ txdata }: { txdata: DataType }) {
     };
 
     const validatorSignatureData = {
-        title: 'Validator Signatures',
-        content: txdata.authSignInfo.signature.map((validatorSign, index) => ({
-            label: `Signature #${index + 1}`,
-            value: validatorSign,
-            monotypeClass: true,
-        })),
+        title: 'Aggregated Validator Signature',
+        content: [
+            {
+                label: `Signature`,
+                value: txdata.authSignInfo.signature,
+                monotypeClass: true,
+            },
+        ],
     };
 
     const createdMutateData = generateMutatedCreated(txdata);

@@ -63,6 +63,7 @@ impl Genesis {
         )
     }
 
+    #[allow(clippy::mutable_key_type)]
     pub fn narwhal_committee(&self) -> narwhal_config::SharedCommittee {
         let narwhal_committee = self
             .validator_set
@@ -73,6 +74,7 @@ impl Genesis {
                 // construct narwhal Committee struct.
                 let name = narwhal_crypto::PublicKey::from_bytes(validator.protocol_key().as_ref())
                     .expect("Can't get narwhal public key");
+                let network_key = validator.network_key().clone();
                 let primary = narwhal_config::PrimaryAddresses {
                     primary_to_primary: validator.narwhal_primary_to_primary.clone(),
                     worker_to_primary: validator.narwhal_worker_to_primary.clone(),
@@ -80,6 +82,7 @@ impl Genesis {
                 let authority = narwhal_config::Authority {
                     stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer
                     primary,
+                    network_key,
                 };
 
                 (name, authority)
@@ -91,6 +94,7 @@ impl Genesis {
         }))
     }
 
+    #[allow(clippy::mutable_key_type)]
     pub fn narwhal_worker_cache(&self) -> narwhal_config::SharedWorkerCache {
         let workers = self
             .validator_set
@@ -101,10 +105,7 @@ impl Genesis {
                 let workers = [(
                     0, // worker_id
                     narwhal_config::WorkerInfo {
-                        name: validator
-                            .worker_key()
-                            .try_into()
-                            .expect("Can't get narwhal worker public key"),
+                        name: validator.worker_key().clone(),
                         primary_to_worker: validator.narwhal_primary_to_worker.clone(),
                         transactions: validator.narwhal_consensus_address.clone(),
                         worker_to_worker: validator.narwhal_worker_to_worker.clone(),
@@ -597,7 +598,7 @@ mod test {
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
     use sui_types::crypto::{
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        KeypairTraits,
+        NetworkKeyPair,
     };
 
     #[test]
@@ -619,15 +620,15 @@ mod test {
             .unwrap();
 
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
-        let worker_key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let account_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let network_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
             protocol_key: key.public().into(),
-            worker_key: worker_key.public().into(),
+            worker_key: worker_key.public().clone(),
             account_key: account_key.public().clone().into(),
-            network_key: network_key.public().clone().into(),
+            network_key: network_key.public().clone(),
             stake: 1,
             delegation: 0,
             gas_price: 1,
