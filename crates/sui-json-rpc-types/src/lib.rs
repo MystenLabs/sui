@@ -796,7 +796,7 @@ impl SuiParsedMoveObject {
 
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(rename = "RawMoveObject")]
+#[serde(rename = "RawMoveObject", rename_all = "camelCase")]
 pub struct SuiRawMoveObject {
     #[serde(rename = "type")]
     pub type_: String,
@@ -848,7 +848,7 @@ impl SuiRawMoveObject {
 
 #[serde_as]
 #[derive(Debug, Deserialize, Serialize, JsonSchema, Clone, Eq, PartialEq)]
-#[serde(rename = "RawMovePackage")]
+#[serde(rename = "RawMovePackage", rename_all = "camelCase")]
 pub struct SuiRawMovePackage {
     pub id: ObjectID,
     #[schemars(with = "BTreeMap<String, Base64>")]

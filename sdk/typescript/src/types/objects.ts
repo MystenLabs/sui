@@ -28,6 +28,10 @@ export type SuiData = { dataType: ObjectType } & (
   | SuiMovePackage
 );
 
+export type SuiRawData =
+  ({ dataType: 'moveObject' } & SuiRawMoveObject) |
+  ({ dataType: 'package' } & SuiRawMovePackage);
+
 export type SuiMoveObject = {
   /** Move type (e.g., "0x2::coin::Coin<0x2::sui::SUI>") */
   type: string;
@@ -142,20 +146,23 @@ export type GetObjectDataResponse = {
   details: SuiObject | ObjectId | SuiObjectRef;
 };
 
+type SuiRawMoveObject = {
+  type: string,
+  hasPublicTransfer: boolean,
+  version: number,
+  childCount?: number,
+  bcsBytes: string
+}
+
+type SuiRawMovePackage = {
+  id: ObjectId,
+  moduleMap: { [key: string]: string; }
+}
+
 export type GetRawObjectResponse = {
   status: ObjectStatus;
   details: {
-    data: {
-      dataType: "moveObject"
-      type: string,
-      has_public_transfer: boolean,
-      version: number,
-      bcs_bytes: string
-    } | {
-      dataType: "package",
-      id: ObjectId,
-      module_map: { [key: string]: string; }
-    },
+    data: SuiRawData
     owner: ObjectOwner,
     previousTransaction: TransactionDigest,
     storageRebate: number,

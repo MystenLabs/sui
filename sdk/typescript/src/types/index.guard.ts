@@ -7,7 +7,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, GetRawObjectResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventType, SuiEventFilter, SuiEventEnvelope, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
+import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiRawData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, GetRawObjectResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventType, SuiEventFilter, SuiEventEnvelope, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
 
 export function isTransactionDigest(obj: any, _argumentName?: string): obj is TransactionDigest {
     return (
@@ -96,6 +96,35 @@ export function isSuiData(obj: any, _argumentName?: string): obj is SuiData {
                 typeof obj === "function") &&
             isObjectType(obj.dataType) as boolean &&
             isSuiMovePackage(obj) as boolean)
+    )
+}
+
+export function isSuiRawData(obj: any, _argumentName?: string): obj is SuiRawData {
+    return (
+        ((obj !== null &&
+            typeof obj === "object" ||
+            typeof obj === "function") &&
+            obj.dataType === "moveObject" &&
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.type) as boolean &&
+            typeof obj.hasPublicTransfer === "boolean" &&
+            isSuiMoveTypeParameterIndex(obj.version) as boolean &&
+            (typeof obj.childCount === "undefined" ||
+                isSuiMoveTypeParameterIndex(obj.childCount) as boolean) &&
+            isTransactionDigest(obj.bcsBytes) as boolean ||
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            obj.dataType === "package" &&
+            (obj !== null &&
+                typeof obj === "object" ||
+                typeof obj === "function") &&
+            isTransactionDigest(obj.id) as boolean &&
+            (obj.moduleMap !== null &&
+                typeof obj.moduleMap === "object" ||
+                typeof obj.moduleMap === "function"))
     )
 }
 
@@ -388,22 +417,7 @@ export function isGetRawObjectResponse(obj: any, _argumentName?: string): obj is
             (obj.details !== null &&
                 typeof obj.details === "object" ||
                 typeof obj.details === "function") &&
-            ((obj.details.data !== null &&
-                typeof obj.details.data === "object" ||
-                typeof obj.details.data === "function") &&
-                obj.details.data.dataType === "moveObject" &&
-                isTransactionDigest(obj.details.data.type) as boolean &&
-                typeof obj.details.data.has_public_transfer === "boolean" &&
-                isSuiMoveTypeParameterIndex(obj.details.data.version) as boolean &&
-                isTransactionDigest(obj.details.data.bcs_bytes) as boolean ||
-                (obj.details.data !== null &&
-                    typeof obj.details.data === "object" ||
-                    typeof obj.details.data === "function") &&
-                obj.details.data.dataType === "package" &&
-                isTransactionDigest(obj.details.data.id) as boolean &&
-                (obj.details.data.module_map !== null &&
-                    typeof obj.details.data.module_map === "object" ||
-                    typeof obj.details.data.module_map === "function")) &&
+            isSuiRawData(obj.details.data) as boolean &&
             isObjectOwner(obj.details.owner) as boolean &&
             isTransactionDigest(obj.details.previousTransaction) as boolean &&
             isSuiMoveTypeParameterIndex(obj.details.storageRebate) as boolean &&
