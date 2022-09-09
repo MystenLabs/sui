@@ -8,6 +8,7 @@ use crate::{
         CheckpointConsensusAdapter, CheckpointSender, ConsensusAdapter, ConsensusAdapterMetrics,
         ConsensusListener, ConsensusListenerMessage,
     },
+    metrics::start_timer,
 };
 use anyhow::anyhow;
 use anyhow::Result;
@@ -17,7 +18,7 @@ use fastcrypto::traits::KeyPair;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
 use narwhal_config::Committee as ConsensusCommittee;
-use prometheus::Registry;
+use prometheus::{register_histogram_with_registry, Histogram, Registry};
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
 use sui_network::{
@@ -29,6 +30,7 @@ use sui_types::{error::*, messages::*};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
+    time::Instant,
 };
 
 use sui_types::messages_checkpoint::CheckpointRequest;
@@ -82,7 +84,7 @@ pub struct AuthorityServer {
 }
 
 impl AuthorityServer {
-    pub fn new(
+    pub fn new_for_test(
         address: Multiaddr,
         state: Arc<AuthorityState>,
         consensus_address: Multiaddr,
@@ -123,12 +125,12 @@ impl AuthorityServer {
         Ok(_batch_join_handle)
     }
 
-    pub async fn spawn(self) -> Result<AuthorityServerHandle, io::Error> {
+    pub async fn spawn_for_test(self) -> Result<AuthorityServerHandle, io::Error> {
         let address = self.address.clone();
-        self.spawn_with_bind_address(address).await
+        self.spawn_with_bind_address_for_test(address).await
     }
 
-    pub async fn spawn_with_bind_address(
+    pub async fn spawn_with_bind_address_for_test(
         self,
         address: Multiaddr,
     ) -> Result<AuthorityServerHandle, io::Error> {
@@ -143,6 +145,7 @@ impl AuthorityServer {
                 state: self.state,
                 consensus_adapter: Arc::new(self.consensus_adapter),
                 _checkpoint_consensus_handle: None,
+                metrics: Arc::new(ValidatorServiceMetrics::new_for_tests()),
             }))
             .bind(&address)
             .await
@@ -158,10 +161,75 @@ impl AuthorityServer {
     }
 }
 
+pub struct ValidatorServiceMetrics {
+    pub tx_verification_latency: Histogram,
+    pub cert_verification_latency: Histogram,
+    pub consensus_latency: Histogram,
+    pub handle_transaction_consensus_latency: Histogram,
+    pub handle_transaction_non_consensus_latency: Histogram,
+    pub handle_certificate_consensus_latency: Histogram,
+    pub handle_certificate_non_consensus_latency: Histogram,
+}
+
+impl ValidatorServiceMetrics {
+    pub fn new(registry: &Registry) -> Self {
+        Self {
+            tx_verification_latency: register_histogram_with_registry!(
+                "validator_service_tx_verification_latency",
+                "Latency of verifying a transaction",
+                registry,
+            )
+            .unwrap(),
+            cert_verification_latency: register_histogram_with_registry!(
+                "validator_service_cert_verification_latency",
+                "Latency of verifying a certificate",
+                registry,
+            )
+            .unwrap(),
+            consensus_latency: register_histogram_with_registry!(
+                "validator_service_consensus_latency",
+                "Time spent between submitting a shared obj txn to consensus and getting result",
+                registry,
+            )
+            .unwrap(),
+            handle_transaction_consensus_latency: register_histogram_with_registry!(
+                "validator_service_handle_transaction_consensus_latency",
+                "Latency of handling a consensus transaction",
+                registry,
+            )
+            .unwrap(),
+            handle_transaction_non_consensus_latency: register_histogram_with_registry!(
+                "validator_service_handle_transaction_non_consensus_latency",
+                "Latency of handling a non-consensus transaction",
+                registry,
+            )
+            .unwrap(),
+            handle_certificate_consensus_latency: register_histogram_with_registry!(
+                "validator_service_handle_certificate_consensus_latency",
+                "Latency of handling a consensus transaction certificate",
+                registry,
+            )
+            .unwrap(),
+            handle_certificate_non_consensus_latency: register_histogram_with_registry!(
+                "validator_service_handle_certificate_non_consensus_latency",
+                "Latency of handling a non-consensus transaction certificate",
+                registry,
+            )
+            .unwrap(),
+        }
+    }
+
+    pub fn new_for_tests() -> Self {
+        let registry = prometheus::Registry::new();
+        Self::new(&registry)
+    }
+}
+
 pub struct ValidatorService {
     state: Arc<AuthorityState>,
     consensus_adapter: Arc<ConsensusAdapter>,
     _checkpoint_consensus_handle: Option<JoinHandle<()>>,
+    metrics: Arc<ValidatorServiceMetrics>,
 }
 
 impl ValidatorService {
@@ -211,7 +279,7 @@ impl ValidatorService {
             /* max_pending_transactions */ 1_000_000,
         );
 
-        let metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
+        let ca_metrics = ConsensusAdapterMetrics::new(&prometheus_registry);
 
         let delay_step = consensus_config.delay_step.unwrap_or(15_000);
         // The consensus adapter allows the authority to send user certificates through consensus.
@@ -220,7 +288,7 @@ impl ValidatorService {
             state.clone_committee(),
             tx_sui_to_consensus.clone(),
             Duration::from_millis(delay_step),
-            metrics.clone(),
+            ca_metrics.clone(),
         );
 
         // Update the checkpoint store with a consensus client.
@@ -238,7 +306,7 @@ impl ValidatorService {
                 /* checkpoint_locals */ checkpoint_store,
                 /* retry_delay */ Duration::from_millis(5_000),
                 /* max_pending_transactions */ 10_000,
-                metrics,
+                ca_metrics,
             )
             .spawn();
             Some(handle)
@@ -250,18 +318,34 @@ impl ValidatorService {
             state,
             consensus_adapter: Arc::new(consensus_adapter),
             _checkpoint_consensus_handle: checkpoint_consensus_handle,
+            metrics: Arc::new(ValidatorServiceMetrics::new(&prometheus_registry)),
         })
     }
 
     async fn handle_transaction(
         state: Arc<AuthorityState>,
         request: tonic::Request<Transaction>,
+        metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut transaction = request.into_inner();
+        let is_consensus_tx = transaction.contains_shared_object();
+
+        let start_ts = Instant::now();
+        let _metrics_guard = start_timer!(
+            if is_consensus_tx {
+                metrics.handle_transaction_consensus_latency.clone()
+            } else {
+                metrics.handle_transaction_non_consensus_latency.clone()
+            },
+            &start_ts
+        );
+        let tx_verif_metrics_guard =
+            start_timer!(metrics.tx_verification_latency.clone(), &start_ts);
 
         transaction
             .verify()
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        drop(tx_verif_metrics_guard);
         //TODO This is really really bad, we should have different types for signature-verified transactions
         transaction.is_verified = true;
 
@@ -269,7 +353,7 @@ impl ValidatorService {
 
         // Enable Trace Propagation across spans/processes using tx_digest
         let span = tracing::debug_span!(
-            "process_tx",
+            "validator_state_process_tx",
             ?tx_digest,
             tx_kind = transaction.signed_data.data.kind_as_str()
         );
@@ -287,19 +371,35 @@ impl ValidatorService {
         state: Arc<AuthorityState>,
         consensus_adapter: Arc<ConsensusAdapter>,
         request: tonic::Request<CertifiedTransaction>,
+        metrics: Arc<ValidatorServiceMetrics>,
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut certificate = request.into_inner();
+        let is_consensus_tx = certificate.contains_shared_object();
+        let start_ts = Instant::now();
+        let _metrics_guard = start_timer!(
+            if is_consensus_tx {
+                metrics.handle_certificate_consensus_latency.clone()
+            } else {
+                metrics.handle_certificate_non_consensus_latency.clone()
+            },
+            &start_ts
+        );
+
         // 1) Verify certificate
+        let cert_verif_metrics_guard =
+            start_timer!(metrics.cert_verification_latency.clone(), &start_ts);
+
         certificate
             .verify(&state.committee.load())
             .map_err(|e| tonic::Status::invalid_argument(e.to_string()))?;
+        drop(cert_verif_metrics_guard);
         //TODO This is really really bad, we should have different types for signature verified transactions
         certificate.is_verified = true;
 
         // 2) Check idempotency
-        let digest = certificate.digest();
+        let tx_digest = certificate.digest();
         if let Some(response) = state
-            .check_tx_already_executed(digest)
+            .check_tx_already_executed(tx_digest)
             .await
             .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
@@ -308,12 +408,14 @@ impl ValidatorService {
 
         // 3) If it's a shared object transaction and requires consensus, we need to do so.
         // This will wait until either timeout or we have heard back from consensus.
-        if certificate.contains_shared_object()
+        if is_consensus_tx
             && !state
                 .transaction_shared_locks_exist(&certificate)
                 .await
                 .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
+            let start_ts = Instant::now();
+            let _metrics_guard = start_timer!(metrics.consensus_latency.clone(), &start_ts);
             consensus_adapter
                 .submit(&state.name, &certificate)
                 .await
@@ -321,9 +423,8 @@ impl ValidatorService {
         }
 
         // 4) Execute the certificate.
-        let tx_digest = certificate.digest();
         let span = tracing::debug_span!(
-            "execute_transaction",
+            "validator_state_process_cert",
             ?tx_digest,
             tx_kind = certificate.signed_data.data.kind_as_str()
         );
@@ -348,7 +449,8 @@ impl Validator for ValidatorService {
 
         // Spawns a task which handles the transaction. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
-        tokio::spawn(async move { Self::handle_transaction(state, request).await })
+        let metrics = self.metrics.clone();
+        tokio::spawn(async move { Self::handle_transaction(state, request, metrics).await })
             .await
             .unwrap()
     }
@@ -362,9 +464,10 @@ impl Validator for ValidatorService {
 
         // Spawns a task which handles the certificate. The task will unconditionally continue
         // processing in the event that the client connection is dropped.
-        tokio::spawn(
-            async move { Self::handle_certificate(state, consensus_adapter, request).await },
-        )
+        let metrics = self.metrics.clone();
+        tokio::spawn(async move {
+            Self::handle_certificate(state, consensus_adapter, request, metrics).await
+        })
         .await
         .unwrap()
     }

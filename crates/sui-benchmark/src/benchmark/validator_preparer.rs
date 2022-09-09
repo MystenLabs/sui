@@ -3,7 +3,7 @@
 
 #![allow(clippy::large_enum_variant)]
 use crate::benchmark::bench_types::RunningMode;
-use crate::benchmark::load_generator::spawn_authority_server;
+use crate::benchmark::load_generator::spawn_authority_server_for_test;
 use sui_config::genesis_config::ObjectConfig;
 use sui_config::NetworkConfig;
 
@@ -158,7 +158,7 @@ impl ValidatorPreparer {
                     thread::spawn(move || {
                         info!("Spawning a validator thread...");
                         get_multithread_runtime().block_on(async move {
-                            let server = spawn_authority_server(address, state).await;
+                            let server = spawn_authority_server_for_test(address, state).await;
                             if let Err(e) = server.join().await {
                                 error!("Server ended with an error: {e}");
                             }
