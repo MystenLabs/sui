@@ -106,6 +106,85 @@ fn compare_transaction_info_responses(o1: &TransactionInfoResponse, o2: &Transac
     }
 }
 
+async fn construct_shared_object_transaction_with_sequence_number(
+    sequence_number: SequenceNumber,
+) -> (AuthorityState, Transaction, ObjectID, ObjectID) {
+    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
+
+    // Initialize an authority with a (owned) gas object and a shared object.
+    let gas_object_id = ObjectID::random();
+    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
+    let gas_object_ref = gas_object.compute_object_reference();
+
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        use sui_types::gas_coin::GasCoin;
+        use sui_types::object::MoveObject;
+
+        let content = GasCoin::new(shared_object_id, 10);
+        let obj = MoveObject::new_gas_coin(sequence_number, content.to_bcs_bytes());
+        Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
+    };
+    let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
+
+    // Make a sample transaction.
+    let module = "object_basics";
+    let function = "create";
+    let package_object_ref = authority.get_framework_object_ref().await.unwrap();
+
+    let data = TransactionData::new_move_call(
+        sender,
+        package_object_ref,
+        ident_str!(module).to_owned(),
+        ident_str!(function).to_owned(),
+        /* type_args */ vec![],
+        gas_object_ref,
+        /* args */
+        vec![
+            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
+            CallArg::Pure(16u64.to_le_bytes().to_vec()),
+            CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
+        ],
+        MAX_GAS,
+    );
+    let signature = Signature::new(&data, &keypair);
+    (
+        authority,
+        Transaction::new(data, signature),
+        gas_object_id,
+        shared_object_id,
+    )
+}
+
+#[tokio::test]
+async fn test_dry_run_transaction() {
+    let (authority, transaction, gas_object_id, shared_object_id) =
+        construct_shared_object_transaction_with_sequence_number(SequenceNumber::MIN).await;
+
+    let transaction_digest = *transaction.digest();
+
+    let response = authority
+        .dry_run_transaction(&transaction, transaction_digest)
+        .await;
+    assert!(response.is_ok());
+
+    // Make sure that objects are not mutated after dry run.
+    let gas_object_version = authority
+        .get_object(&gas_object_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .version();
+    assert_eq!(gas_object_version, SequenceNumber::new());
+    let shared_object_version = authority
+        .get_object(&shared_object_id)
+        .await
+        .unwrap()
+        .unwrap()
+        .version();
+    assert_eq!(shared_object_version, SequenceNumber::MIN);
+}
+
 #[tokio::test]
 async fn test_handle_transfer_transaction_bad_signature() {
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
@@ -213,46 +292,8 @@ async fn test_handle_transfer_transaction_with_max_sequence_number() {
 
 #[tokio::test]
 async fn test_handle_shared_object_with_max_sequence_number() {
-    let (sender, keypair): (_, AccountKeyPair) = get_key_pair();
-
-    // Initialize an authority with a (owned) gas object and a shared object.
-    let gas_object_id = ObjectID::random();
-    let gas_object = Object::with_id_owner_for_testing(gas_object_id, sender);
-    let gas_object_ref = gas_object.compute_object_reference();
-
-    let shared_object_id = ObjectID::random();
-    let shared_object = {
-        use sui_types::gas_coin::GasCoin;
-        use sui_types::object::MoveObject;
-
-        let content = GasCoin::new(shared_object_id, 10);
-        let obj = MoveObject::new_gas_coin(SequenceNumber::MAX, content.to_bcs_bytes());
-        Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
-    };
-    let authority = init_state_with_objects(vec![gas_object, shared_object]).await;
-
-    // Make a sample transaction.
-    let module = "object_basics";
-    let function = "create";
-    let package_object_ref = authority.get_framework_object_ref().await.unwrap();
-
-    let data = TransactionData::new_move_call(
-        sender,
-        package_object_ref,
-        ident_str!(module).to_owned(),
-        ident_str!(function).to_owned(),
-        /* type_args */ vec![],
-        gas_object_ref,
-        /* args */
-        vec![
-            CallArg::Object(ObjectArg::SharedObject(shared_object_id)),
-            CallArg::Pure(16u64.to_le_bytes().to_vec()),
-            CallArg::Pure(bcs::to_bytes(&AccountAddress::from(sender)).unwrap()),
-        ],
-        MAX_GAS,
-    );
-    let signature = Signature::new(&data, &keypair);
-    let transaction = Transaction::new(data, signature);
+    let (authority, transaction, _, _) =
+        construct_shared_object_transaction_with_sequence_number(SequenceNumber::MAX).await;
     // Submit the transaction and assemble a certificate.
     let response = authority.handle_transaction(transaction.clone()).await;
     assert!(response.is_err());

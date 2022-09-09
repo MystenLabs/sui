@@ -10,8 +10,8 @@ use sui_json_rpc_types::{
     GatewayTxSeqNumber, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
     MoveFunctionArgType, RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter,
     SuiExecuteTransactionResponse, SuiGasCostSummary, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionFilter,
-    SuiTransactionResponse, SuiTypeTag, TransactionBytes,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects,
+    SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc_macros::open_rpc;
 use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
@@ -117,6 +117,15 @@ pub trait RpcReadApi {
 #[open_rpc(namespace = "sui", tag = "Full Node API")]
 #[rpc(server, client, namespace = "sui")]
 pub trait RpcFullNodeReadApi {
+    #[method(name = "dryRunTransaction")]
+    async fn dry_run_transaction(
+        &self,
+        tx_bytes: Base64,
+        sig_scheme: SignatureScheme,
+        signature: Base64,
+        pub_key: Base64,
+    ) -> RpcResult<SuiTransactionEffects>;
+
     /// Return the argument types of a Move function,
     /// based on normalized Type.
     #[method(name = "getMoveFunctionArgTypes")]
