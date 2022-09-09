@@ -119,6 +119,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                         i,
                         (
                             get_key_pair_from_rng(&mut rng).1,
+                            get_key_pair_from_rng(&mut rng).1,
                             get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
                                 .1
                                 .into(),
@@ -129,11 +130,17 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     )
                 })
                 .map(
-                    |(i, (key_pair, account_key_pair, network_key_pair)): (
+                    |(i, (key_pair, worker_key_pair, account_key_pair, network_key_pair)): (
                         _,
-                        (AuthorityKeyPair, SuiKeyPair, SuiKeyPair),
+                        (AuthorityKeyPair, AuthorityKeyPair, SuiKeyPair, SuiKeyPair),
                     )| {
-                        self.build_validator(i, key_pair, account_key_pair, network_key_pair)
+                        self.build_validator(
+                            i,
+                            key_pair,
+                            worker_key_pair,
+                            account_key_pair,
+                            network_key_pair,
+                        )
                     },
                 )
                 .collect::<Vec<_>>(),
@@ -147,12 +154,14 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         &self,
         index: usize,
         key_pair: AuthorityKeyPair,
+        worker_key_pair: AuthorityKeyPair,
         account_key_pair: SuiKeyPair,
         network_key_pair: SuiKeyPair,
     ) -> ValidatorGenesisInfo {
         match self.validator_ip_sel {
             ValidatorIpSelection::Localhost => ValidatorGenesisInfo::from_localhost_for_testing(
                 key_pair,
+                worker_key_pair,
                 account_key_pair,
                 network_key_pair,
             ),
@@ -167,6 +176,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
                 ValidatorGenesisInfo::from_base_ip(
                     key_pair,
+                    worker_key_pair,
                     account_key_pair,
                     network_key_pair,
                     ip,
@@ -187,6 +197,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .map(|(i, validator)| {
                 let name = format!("validator-{i}");
                 let protocol_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
+                let worker_key: AuthorityPublicKeyBytes = validator.worker_key_pair.public().into();
                 let account_key: PublicKey = validator.account_key_pair.public();
                 let network_key: PublicKey = validator.network_key_pair.public();
                 let stake = validator.stake;
@@ -200,6 +211,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                     ValidatorInfo {
                         name,
                         protocol_key,
+                        worker_key,
                         network_key,
                         account_key,
                         stake,
@@ -255,6 +267,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
 
                 NodeConfig {
                     protocol_key_pair: Arc::new(validator.key_pair),
+                    worker_key_pair: Arc::new(validator.worker_key_pair),
                     account_key_pair: Arc::new(validator.account_key_pair),
                     network_key_pair: Arc::new(validator.network_key_pair),
                     db_path,

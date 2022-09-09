@@ -5,6 +5,7 @@ expression: genesis.validator_set()
 - name: "0"
   account-key: ALnG7hYw7z5xEUSmSNsGu7IoT3J0z77lP/zuUDzBpJIA
   protocol-key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
+  worker-key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
   network-key: ALnG7hYw7z5xEUSmSNsGu7IoT3J0z77lP/zuUDzBpJIA
   stake: 1
   delegation: 0
@@ -15,4 +16,3 @@ expression: genesis.validator_set()
   narwhal-primary-to-worker: ""
   narwhal-worker-to-worker: ""
   narwhal-consensus-address: ""
-

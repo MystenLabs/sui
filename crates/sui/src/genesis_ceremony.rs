@@ -49,6 +49,8 @@ pub enum CeremonyCommand {
         #[clap(long)]
         validator_key_file: PathBuf,
         #[clap(long)]
+        worker_key_file: PathBuf,
+        #[clap(long)]
         account_key_file: PathBuf,
         #[clap(long)]
         network_key_file: PathBuf,
@@ -102,6 +104,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         CeremonyCommand::AddValidator {
             name,
             validator_key_file,
+            worker_key_file,
             account_key_file,
             network_key_file,
             network_address,
@@ -113,6 +116,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
         } => {
             let mut builder = Builder::load(&dir)?;
             let keypair: AuthorityKeyPair = read_authority_keypair_from_file(validator_key_file)?;
+            let worker_keypair: AuthorityKeyPair =
+                read_authority_keypair_from_file(worker_key_file)?;
             let account_keypair: SuiKeyPair = read_keypair_from_file(account_key_file)?;
             let network_keypair: SuiKeyPair = read_keypair_from_file(network_key_file)?;
             let pop = generate_proof_of_possession(&keypair, (&account_keypair.public()).into());
@@ -120,6 +125,7 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                 sui_config::ValidatorInfo {
                     name,
                     protocol_key: keypair.public().into(),
+                    worker_key: worker_keypair.public().into(),
                     account_key: account_keypair.public(),
                     network_key: network_keypair.public(),
                     stake: 1,
@@ -278,6 +284,8 @@ mod test {
         let validators = (0..10)
             .map(|i| {
                 let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+                let worker_keypair: AuthorityKeyPair =
+                    get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
                 let network_keypair: AccountKeyPair =
                     get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
                 let account_keypair: AccountKeyPair =
@@ -285,6 +293,7 @@ mod test {
                 let info = ValidatorInfo {
                     name: format!("validator-{i}"),
                     protocol_key: keypair.public().into(),
+                    worker_key: worker_keypair.public().into(),
                     account_key: account_keypair.public().clone().into(),
                     network_key: network_keypair.public().clone().into(),
                     stake: 1,
@@ -300,6 +309,13 @@ mod test {
                 let key_file = dir.path().join(format!("{}.key", info.name));
                 write_keypair_to_file(&SuiKeyPair::Ed25519SuiKeyPair(keypair), &key_file).unwrap();
 
+                let worker_key_file = dir.path().join(format!("{}.key", info.name));
+                write_keypair_to_file(
+                    &SuiKeyPair::Ed25519SuiKeyPair(worker_keypair),
+                    &worker_key_file,
+                )
+                .unwrap();
+
                 let network_key_file = dir.path().join(format!("{}.key", info.name));
                 write_keypair_to_file(
                     &SuiKeyPair::Ed25519SuiKeyPair(network_keypair),
@@ -314,7 +330,13 @@ mod test {
                 )
                 .unwrap();
 
-                (key_file, network_key_file, account_key_file, info)
+                (
+                    key_file,
+                    worker_key_file,
+                    network_key_file,
+                    account_key_file,
+                    info,
+                )
             })
             .collect::<Vec<_>>();
 
@@ -326,12 +348,15 @@ mod test {
         command.run()?;
 
         // Add the validators
-        for (key_file, network_key_file, account_key_file, validator) in &validators {
+        for (key_file, worker_key_file, network_key_file, account_key_file, validator) in
+            &validators
+        {
             let command = Ceremony {
                 path: Some(dir.path().into()),
                 command: CeremonyCommand::AddValidator {
                     name: validator.name().to_owned(),
-                    validator_key_file: key_file.into(),
+                    validator_key_file: worker_key_file.into(),
+                    worker_key_file: key_file.into(),
                     network_key_file: network_key_file.into(),
                     account_key_file: account_key_file.into(),
                     network_address: validator.network_address().to_owned(),
@@ -353,7 +378,7 @@ mod test {
         command.run()?;
 
         // Have all the validators verify and sign genesis
-        for (key, _network_key, _account_key, _validator) in &validators {
+        for (key, _worker_key, _network_key, _account_key, _validator) in &validators {
             let command = Ceremony {
                 path: Some(dir.path().into()),
                 command: CeremonyCommand::VerifyAndSign {

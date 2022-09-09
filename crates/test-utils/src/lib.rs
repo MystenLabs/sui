@@ -20,11 +20,12 @@ use sui_types::{
 pub const TEST_COMMITTEE_SIZE: usize = 4;
 
 /// Generate `COMMITTEE_SIZE` test cryptographic key pairs.
-pub fn test_validator_keys() -> Vec<(AuthorityKeyPair, SuiKeyPair, SuiKeyPair)> {
+pub fn test_validator_keys() -> Vec<(AuthorityKeyPair, AuthorityKeyPair, SuiKeyPair, SuiKeyPair)> {
     let mut rng = StdRng::from_seed([0; 32]);
     (0..TEST_COMMITTEE_SIZE)
         .map(|_| {
             (
+                get_key_pair_from_rng(&mut rng).1,
                 get_key_pair_from_rng(&mut rng).1,
                 get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
                     .1
@@ -54,7 +55,7 @@ pub fn test_committee() -> Committee {
         0,
         test_validator_keys()
             .into_iter()
-            .map(|(key, _, _)| {
+            .map(|(key, _, _, _)| {
                 (
                     AuthorityPublicKeyBytes::from(key.public()),
                     /* voting right */ 1,

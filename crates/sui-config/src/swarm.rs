@@ -70,6 +70,7 @@ impl NetworkConfig {
     ) -> NodeConfig {
         let protocol_key_pair: Arc<AuthorityKeyPair> =
             Arc::new(get_key_pair_from_rng(&mut OsRng).1);
+        let worker_key_pair: Arc<AuthorityKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
         let account_key_pair: Arc<SuiKeyPair> = Arc::new(
             get_key_pair_from_rng::<AccountKeyPair, _>(&mut OsRng)
                 .1
@@ -93,6 +94,7 @@ impl NetworkConfig {
 
         NodeConfig {
             protocol_key_pair,
+            worker_key_pair,
             account_key_pair,
             network_key_pair,
             db_path: db_path.join(fullnode_db_dir.unwrap_or(FULL_NODE_DB_PATH)),

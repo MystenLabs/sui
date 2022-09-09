@@ -90,6 +90,7 @@ impl GenesisConfig {
 pub struct ValidatorGenesisInfo {
     #[serde_as(as = "KeyPairBase64")]
     pub key_pair: AuthorityKeyPair,
+    pub worker_key_pair: AuthorityKeyPair,
     pub account_key_pair: SuiKeyPair,
     pub network_key_pair: SuiKeyPair,
     pub network_address: Multiaddr,
@@ -105,11 +106,13 @@ pub struct ValidatorGenesisInfo {
 impl ValidatorGenesisInfo {
     pub fn from_localhost_for_testing(
         key_pair: AuthorityKeyPair,
+        worker_key_pair: AuthorityKeyPair,
         account_key_pair: SuiKeyPair,
         network_key_pair: SuiKeyPair,
     ) -> Self {
         Self {
             key_pair,
+            worker_key_pair,
             account_key_pair,
             network_key_pair,
             network_address: utils::new_network_address(),
@@ -125,6 +128,7 @@ impl ValidatorGenesisInfo {
 
     pub fn from_base_ip(
         key_pair: AuthorityKeyPair,
+        worker_key_pair: AuthorityKeyPair,
         account_key_pair: SuiKeyPair,
         network_key_pair: SuiKeyPair,
         ip: String,
@@ -139,6 +143,7 @@ impl ValidatorGenesisInfo {
 
         ValidatorGenesisInfo {
             key_pair,
+            worker_key_pair,
             account_key_pair,
             network_key_pair,
             network_address: make_addr(1000 + port_offset),

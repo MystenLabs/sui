@@ -50,11 +50,14 @@ pub async fn init_local_authorities(
     for i in 0..committee_size {
         let key_pair: AuthorityKeyPair = get_key_pair().1;
         let authority_name = key_pair.public().into();
+        let worker_key_pair: AuthorityKeyPair = get_key_pair().1;
+        let worker_name = worker_key_pair.public().into();
         let account_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
         let network_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
         let validator_info = ValidatorInfo {
             name: format!("validator-{i}"),
             protocol_key: authority_name,
+            worker_key: worker_name,
             account_key: account_key_pair.public(),
             network_key: network_key_pair.public(),
             stake: 1,

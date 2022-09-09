@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::{
-    authority::AuthorityState,
+    authority::{AuthorityState, ReconfigConsensusMessage},
     consensus_adapter::{
         CheckpointConsensusAdapter, CheckpointSender, ConsensusAdapter, ConsensusAdapterMetrics,
         ConsensusListener, ConsensusListenerMessage,
@@ -13,11 +13,9 @@ use crate::{
 use anyhow::anyhow;
 use anyhow::Result;
 use async_trait::async_trait;
-use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
 use futures::{stream::BoxStream, TryStreamExt};
 use multiaddr::Multiaddr;
-use narwhal_config::Committee as ConsensusCommittee;
 use prometheus::{register_histogram_with_registry, Histogram, Registry};
 use std::{io, sync::Arc, time::Duration};
 use sui_config::NodeConfig;
@@ -239,7 +237,7 @@ impl ValidatorService {
         config: &NodeConfig,
         state: Arc<AuthorityState>,
         prometheus_registry: Registry,
-        rx_reconfigure_consensus: Receiver<(ConsensusKeyPair, ConsensusCommittee)>,
+        rx_reconfigure_consensus: Receiver<ReconfigConsensusMessage>,
     ) -> Result<Self> {
         let (tx_consensus_to_sui, rx_consensus_to_sui) = channel(1_000);
         let (tx_sui_to_consensus, rx_sui_to_consensus) = channel(1_000);
@@ -249,6 +247,7 @@ impl ValidatorService {
             .consensus_config()
             .ok_or_else(|| anyhow!("Validator is missing consensus config"))?;
         let consensus_keypair = config.protocol_key_pair().copy();
+        let consensus_worker_keypair = config.worker_key_pair().copy();
         let consensus_committee = config.genesis()?.narwhal_committee().load();
         let consensus_worker_cache = config.genesis()?.narwhal_worker_cache();
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
@@ -259,6 +258,7 @@ impl ValidatorService {
         tokio::spawn(async move {
             narwhal_node::restarter::NodeRestarter::watch(
                 consensus_keypair,
+                vec![(0, consensus_worker_keypair)],
                 &consensus_committee,
                 consensus_worker_cache,
                 consensus_storage_base_path,
