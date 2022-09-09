@@ -142,6 +142,27 @@ export type GetObjectDataResponse = {
   details: SuiObject | ObjectId | SuiObjectRef;
 };
 
+export type GetRawObjectResponse = {
+  status: ObjectStatus;
+  details: {
+    data: {
+      dataType: "moveObject"
+      type: string,
+      has_public_transfer: boolean,
+      version: number,
+      bcs_bytes: string
+    } | {
+      dataType: "package",
+      id: ObjectId,
+      module_map: { [key: string]: string; }
+    },
+    owner: ObjectOwner,
+    previousTransaction: TransactionDigest,
+    storageRebate: number,
+    reference: SuiObjectRef
+  } | string
+};
+
 export type ObjectDigest = string;
 export type ObjectId = string;
 export type SequenceNumber = number;

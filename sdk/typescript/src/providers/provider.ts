@@ -19,6 +19,8 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
+  ObjectId,
+  GetRawObjectResponse,
 } from '../types';
 
 ///////////////////////////////
@@ -49,6 +51,12 @@ export abstract class Provider {
    * @param objectId
    */
   abstract getObjectRef(objectId: string): Promise<SuiObjectRef | undefined>;
+
+  /**
+   * Get the raw BCS serialized move object bytes for a specified object.
+   * @param objectId object identifier
+   */
+  abstract getRawObject(objectId: ObjectId): Promise<GetRawObjectResponse>;
 
   // Transactions
   /**

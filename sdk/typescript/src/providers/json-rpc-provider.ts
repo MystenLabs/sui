@@ -14,6 +14,7 @@ import {
   isSuiMoveNormalizedFunction,
   isSuiMoveNormalizedStruct,
   isSuiExecuteTransactionResponse,
+  isGetRawObjectResponse,
 } from '../types/index.guard';
 import {
   GatewayTxSeqNumber,
@@ -35,6 +36,8 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
+  GetRawObjectResponse,
+  ObjectId,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
@@ -230,6 +233,19 @@ export class JsonRpcProvider extends Provider {
       );
     } catch (err) {
       throw new Error(`Error fetching object info: ${err} for id ${objectIds}`);
+    }
+  }
+
+  async getRawObject(objectId: ObjectId): Promise<GetRawObjectResponse> {
+    try {
+      return await this.client.requestWithType(
+        'sui_getRawObject',
+        [objectId],
+        isGetRawObjectResponse,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(`Error fetching raw object info: ${err} for id ${objectId}`);
     }
   }
 

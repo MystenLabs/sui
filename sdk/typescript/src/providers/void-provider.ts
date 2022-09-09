@@ -21,6 +21,7 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
+  GetRawObjectResponse,
 } from '../types';
 import { Provider } from './provider';
 
@@ -42,6 +43,10 @@ export class VoidProvider extends Provider {
 
   async getObjectRef(_objectId: string): Promise<SuiObjectRef | undefined> {
     throw this.newError('getObjectRef');
+  }
+
+  async getRawObject(_objectId: string): Promise<GetRawObjectResponse> {
+    throw this.newError('getRawObject');
   }
 
   // Transactions
