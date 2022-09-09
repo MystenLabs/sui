@@ -31,7 +31,7 @@ use sui_types::base_types::{ObjectRef, TransactionDigest};
 use sui_types::batch::TxSequenceNumber;
 use sui_types::error::{SuiError, SuiResult};
 
-use crate::{default_db_options, exec_client_future};
+use crate::{block_on_future_in_sim, default_db_options};
 
 /// Commands to send to the LockService (for mutating lock state)
 // TODO: use smallvec as an optimization
@@ -488,9 +488,8 @@ impl LockService {
         refs: Vec<ObjectRef>,
         tx_digest: TransactionDigest,
     ) -> SuiResult {
-        exec_client_future(async move {
+        block_on_future_in_sim(async move {
             let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
-            // NOTE: below is blocking, switch to Tokio channels which are async?
             self.inner
                 .sender()
                 .send(LockServiceCommands::Acquire {
@@ -512,7 +511,7 @@ impl LockService {
     /// Otherwise, if the lock already exists and is locked to a transaction, then return TransactionLockExists
     /// Only the gateway could set is_force_reset to true.
     pub async fn initialize_locks(&self, refs: &[ObjectRef], is_force_reset: bool) -> SuiResult {
-        exec_client_future(async move {
+        block_on_future_in_sim(async move {
             let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
             self.inner
                 .sender()
@@ -535,7 +534,7 @@ impl LockService {
     /// * Some(None) - lock exists and is initialized, but not locked to a particular transaction
     /// * Some(Some(tx_digest)) - lock exists and set to transaction
     pub async fn get_lock(&self, object: ObjectRef) -> SuiLockResult {
-        exec_client_future(async move {
+        block_on_future_in_sim(async move {
             let (os_sender, os_receiver) = oneshot::channel::<SuiLockResult>();
             self.inner
                 .query_sender()
@@ -553,7 +552,7 @@ impl LockService {
     }
 
     pub async fn create_locks_for_genesis_objects(&self, objects: Vec<ObjectRef>) -> SuiResult {
-        exec_client_future(async move {
+        block_on_future_in_sim(async move {
             let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
             self.inner
                 .sender()
@@ -588,7 +587,7 @@ impl LockService {
         inputs: Vec<ObjectRef>,
         outputs: Vec<ObjectRef>,
     ) -> SuiResult<TxSequenceNumber> {
-        exec_client_future(async move {
+        block_on_future_in_sim(async move {
             let (os_sender, os_receiver) = oneshot::channel::<SuiResult<TxSequenceNumber>>();
             self.inner
                 .sender()
@@ -611,7 +610,7 @@ impl LockService {
     /// Checks multiple object locks exist.
     /// Returns Err(TransactionLockDoesNotExist) if at least one object lock is not initialized.
     pub async fn locks_exist(&self, objects: Vec<ObjectRef>) -> SuiResult {
-        exec_client_future(async move {
+        block_on_future_in_sim(async move {
             let (os_sender, os_receiver) = oneshot::channel::<SuiResult>();
             self.inner
                 .query_sender()
