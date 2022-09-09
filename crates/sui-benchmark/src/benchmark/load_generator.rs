@@ -280,7 +280,7 @@ impl FixedRateLoadGenerator {
     }
 }
 
-pub async fn spawn_authority_server(
+pub async fn spawn_authority_server_for_test(
     listen_address: Multiaddr,
     state: AuthorityState,
 ) -> AuthorityServerHandle {
@@ -288,13 +288,13 @@ pub async fn spawn_authority_server(
     let consensus_address = "/dns/localhost/tcp/0/http".parse().unwrap();
     let (tx_consensus_listener, _rx_consensus_listener) = tokio::sync::mpsc::channel(1);
 
-    let server = AuthorityServer::new(
+    let server = AuthorityServer::new_for_test(
         listen_address,
         Arc::new(state),
         consensus_address,
         tx_consensus_listener,
     );
-    server.spawn().await.unwrap()
+    server.spawn_for_test().await.unwrap()
 }
 
 pub fn calculate_throughput(num_items: usize, elapsed_time_us: u128) -> f64 {
