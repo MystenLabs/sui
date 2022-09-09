@@ -12,7 +12,7 @@
 }
 
 .txresulttype {
-    @apply capitalize py-[4px] px-[8px] flex items-center gap-[6px] mt-[8px] lg:ml-[6px] lg:mt-0  rounded-[6px] w-fit;
+    @apply capitalize pt-[4px] pb-[5px] px-[8px] flex items-center gap-[6px] mt-[8px] lg:ml-[6px] lg:mt-0  rounded-[6px] w-fit;
 }
 
 .explain > span,
