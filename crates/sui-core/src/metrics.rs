@@ -1,14 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-#[macro_export]
-macro_rules! start_timer {
-    ($metrics: expr, $start_ts: expr) => {{
-        let metrics = $metrics;
-        let start_ts = $start_ts;
-        scopeguard::guard(metrics, |metrics| {
-            metrics.observe(start_ts.elapsed().as_secs_f64());
-        })
-    }};
+use prometheus::Histogram;
+use tokio::time::Instant;
+
+pub fn start_timer(metrics: Histogram) -> impl Drop {
+    let start_ts = Instant::now();
+    scopeguard::guard((metrics, start_ts), |(metrics, start_ts)| {
+        metrics.observe(start_ts.elapsed().as_secs_f64());
+    })
 }
-pub use start_timer;

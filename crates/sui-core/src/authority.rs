@@ -459,9 +459,7 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
-        let start_ts = Instant::now();
-        let _metrics_guard =
-            start_timer!(self.metrics.handle_transaction_latency.clone(), &start_ts);
+        let _metrics_guard = start_timer(self.metrics.handle_transaction_latency.clone());
 
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
@@ -499,11 +497,7 @@ impl AuthorityState {
         // byzantine validator from giving us incorrect effects.
         signed_effects: SignedTransactionEffects,
     ) -> SuiResult {
-        let start_ts = Instant::now();
-        let _metrics_guard = start_timer!(
-            self.metrics.handle_node_sync_certificate_latency.clone(),
-            &start_ts
-        );
+        let _metrics_guard = start_timer(self.metrics.handle_node_sync_certificate_latency.clone());
         let digest = *certificate.digest();
         debug!(?digest, "handle_node_sync_transaction");
         fp_ensure!(
@@ -547,9 +541,7 @@ impl AuthorityState {
         &self,
         certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
-        let start_ts = Instant::now();
-        let _metrics_guard =
-            start_timer!(self.metrics.handle_certificate_latency.clone(), &start_ts);
+        let _metrics_guard = start_timer(self.metrics.handle_certificate_latency.clone());
 
         self.metrics.total_cert_attempts.inc();
         if self.is_fullnode() {
@@ -1719,9 +1711,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
-        let start_ts = Instant::now();
-        let _metrics_guard =
-            start_timer!(self.metrics.commit_certificate_latency.clone(), &start_ts);
+        let _metrics_guard = start_timer(self.metrics.commit_certificate_latency.clone());
 
         if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
