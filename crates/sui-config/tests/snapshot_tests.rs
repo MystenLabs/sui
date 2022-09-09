@@ -16,16 +16,13 @@
 // 1. Run `cargo insta test --review` under `./sui-config`.
 // 2. Review, accept or reject changes.
 
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use std::path::PathBuf;
-
 use fastcrypto::traits::KeyPair;
 use insta::assert_yaml_snapshot;
 use multiaddr::Multiaddr;
 use rand::rngs::StdRng;
 use rand::SeedableRng;
+use sui_config::ValidatorInfo;
 use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
-use sui_config::{NetworkConfig, ValidatorInfo};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
@@ -99,7 +96,12 @@ fn populated_genesis_snapshot_matches() {
 }
 
 #[test]
+#[cfg_attr(msim, ignore)]
 fn network_config_snapshot_matches() {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+    use std::path::PathBuf;
+    use sui_config::NetworkConfig;
+
     let temp_dir = tempfile::tempdir().unwrap();
     let committee_size = 7;
     let rng = StdRng::from_seed([0; 32]);

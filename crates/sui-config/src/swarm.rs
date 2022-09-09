@@ -85,6 +85,12 @@ impl NetworkConfig {
         let mut db_path = validator_config.db_path.clone();
         db_path.pop();
 
+        // The EventStore uses a non-deterministic async pool which breaks determinism in
+        // the simulator.
+        // TODO: In the simulator, we can run event store in a separate thread and make
+        // blocking calls to it to fix this.
+        let enable_event_processing = !cfg!(msim);
+
         NodeConfig {
             protocol_key_pair,
             account_key_pair,
@@ -100,7 +106,7 @@ impl NetworkConfig {
                 None
             },
             consensus_config: None,
-            enable_event_processing: true,
+            enable_event_processing,
             enable_gossip: true,
             enable_checkpoint: true,
             enable_reconfig: false,

@@ -8,6 +8,7 @@ use crate::{
     checkpoints::CheckpointStore,
     event_handler::EventHandler,
     execution_engine,
+    metrics::start_timer,
     query_helpers::QueryHelpers,
     transaction_input_checker,
     transaction_streamer::TransactionStreamer,
@@ -64,6 +65,8 @@ use tap::TapFallible;
 use thiserror::Error;
 use tokio::sync::broadcast::error::RecvError;
 use tokio::sync::mpsc::Sender;
+use tokio::time::Instant;
+use tracing::Instrument;
 use tracing::{debug, error, instrument, warn};
 use typed_store::Map;
 
@@ -121,6 +124,12 @@ pub struct AuthorityMetrics {
     num_input_objs: Histogram,
     num_shared_objects: Histogram,
     batch_size: Histogram,
+
+    prepare_certificate_latency: Histogram,
+    commit_certificate_latency: Histogram,
+    handle_transaction_latency: Histogram,
+    handle_certificate_latency: Histogram,
+    handle_node_sync_certificate_latency: Histogram,
 
     total_consensus_txns: IntCounter,
 
@@ -216,6 +225,36 @@ impl AuthorityMetrics {
                 "batch_size",
                 "Distribution of size of transaction batch",
                 POSITIVE_INT_BUCKETS.to_vec(),
+                registry,
+            )
+            .unwrap(),
+            prepare_certificate_latency: register_histogram_with_registry!(
+                "validator_prepare_certificate_latency",
+                "Latency of preparing certificate",
+                registry,
+            )
+            .unwrap(),
+            commit_certificate_latency: register_histogram_with_registry!(
+                "validator_commit_certificate_latency",
+                "Latency of committing certificate",
+                registry,
+            )
+            .unwrap(),
+            handle_transaction_latency: register_histogram_with_registry!(
+                "validator_handle_transaction_latency",
+                "Latency of committing certificate",
+                registry,
+            )
+            .unwrap(),
+            handle_certificate_latency: register_histogram_with_registry!(
+                "validator_handle_certificate_latency",
+                "Latency of handling certificate",
+                registry,
+            )
+            .unwrap(),
+            handle_node_sync_certificate_latency: register_histogram_with_registry!(
+                "fullnode_handle_node_sync_certificate_latency",
+                "Latency of fullnode handling certificate from node sync",
                 registry,
             )
             .unwrap(),
@@ -420,6 +459,10 @@ impl AuthorityState {
     ) -> Result<TransactionInfoResponse, SuiError> {
         let transaction_digest = *transaction.digest();
         debug!(tx_digest=?transaction_digest, "handle_transaction. Tx data: {:?}", transaction.signed_data.data);
+        let start_ts = Instant::now();
+        let _metrics_guard =
+            start_timer!(self.metrics.handle_transaction_latency.clone(), &start_ts);
+
         self.metrics.tx_orders.inc();
         // Check the sender's signature.
         transaction.verify().map_err(|e| {
@@ -456,6 +499,11 @@ impl AuthorityState {
         // byzantine validator from giving us incorrect effects.
         signed_effects: SignedTransactionEffects,
     ) -> SuiResult {
+        let start_ts = Instant::now();
+        let _metrics_guard = start_timer!(
+            self.metrics.handle_node_sync_certificate_latency.clone(),
+            &start_ts
+        );
         let digest = *certificate.digest();
         debug!(?digest, "handle_node_sync_transaction");
         fp_ensure!(
@@ -499,6 +547,10 @@ impl AuthorityState {
         &self,
         certificate: CertifiedTransaction,
     ) -> SuiResult<TransactionInfoResponse> {
+        let start_ts = Instant::now();
+        let _metrics_guard =
+            start_timer!(self.metrics.handle_certificate_latency.clone(), &start_ts);
+
         self.metrics.total_cert_attempts.inc();
         if self.is_fullnode() {
             return Err(SuiError::GenericStorageError(
@@ -506,8 +558,8 @@ impl AuthorityState {
             ));
         }
 
-        let digest = certificate.digest();
-        debug!(?digest, "handle_confirmation_transaction");
+        let tx_digest = certificate.digest();
+        debug!(?tx_digest, "handle_confirmation_transaction");
 
         // This acquires a lock on the tx digest to prevent multiple concurrent executions of the
         // same tx. While we don't need this for safety (tx sequencing is ultimately atomic), it is
@@ -519,11 +571,20 @@ impl AuthorityState {
         // to do this, since the false contention can be made arbitrarily low (no cost for 1.0 -
         // epsilon of txes) while solutions without false contention have slightly higher cost
         // for every tx.
-        let tx_guard = self.database.acquire_tx_guard(&certificate).await?;
+        let span = tracing::debug_span!(
+            "validator_acquire_tx_guard",
+            ?tx_digest,
+            tx_kind = certificate.signed_data.data.kind_as_str()
+        );
+        let tx_guard = self
+            .database
+            .acquire_tx_guard(&certificate)
+            .instrument(span)
+            .await?;
 
         self.process_certificate(tx_guard, &certificate)
             .await
-            .tap_err(|e| debug!(?digest, "process_certificate failed: {}", e))
+            .tap_err(|e| debug!(?tx_digest, "process_certificate failed: {}", e))
     }
 
     #[instrument(level = "trace", skip_all)]
@@ -678,6 +739,7 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         transaction_digest: TransactionDigest,
     ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
+        let start_ts = Instant::now();
         let (gas_status, input_objects) =
             transaction_input_checker::check_transaction_input(&self.database, certificate).await?;
 
@@ -717,7 +779,9 @@ impl AuthorityState {
 
         // TODO: Distribute gas charge and rebate, which can be retrieved from effects.
         let signed_effects = effects.to_sign_effects(self.epoch(), &self.name, &*self.secret);
-
+        self.metrics
+            .prepare_certificate_latency
+            .observe(start_ts.elapsed().as_secs_f64());
         Ok((inner_temp_store, signed_effects))
     }
 
@@ -1714,6 +1778,10 @@ impl AuthorityState {
         certificate: &CertifiedTransaction,
         signed_effects: &SignedTransactionEffects,
     ) -> SuiResult {
+        let start_ts = Instant::now();
+        let _metrics_guard =
+            start_timer!(self.metrics.commit_certificate_latency.clone(), &start_ts);
+
         if self.is_halted() && !certificate.signed_data.data.kind.is_system_tx() {
             // TODO: Here we should allow consensus transaction to continue.
             // TODO: Do we want to include the new validator set?

@@ -31,6 +31,7 @@ narwhal-config = { git = "https://github.com/MystenLabs/narwhal", rev = "c969da5
 
 sui-framework = { path = "../sui-framework" }
 sui-adapter = { path = "../sui-adapter" }
+sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }
 workspace-hack = { path = "../workspace-hack"}
 sha3 = "0.10.2"
