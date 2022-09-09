@@ -24,7 +24,6 @@ use sui_types::{
     messages::*,
 };
 use tap::TapFallible;
-use tokio::time::Instant;
 use tracing::info;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
@@ -461,9 +460,7 @@ where
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let digest = *transaction.digest();
-        let start_ts = Instant::now();
-        let _metrics_guard =
-            start_timer!(self.metrics_handle_transaction_latency.clone(), &start_ts);
+        let _metrics_guard = start_timer(self.metrics_handle_transaction_latency.clone());
         let transaction_info = self
             .authority_client
             .handle_transaction(transaction)
@@ -497,9 +494,7 @@ where
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let digest = *certificate.digest();
-        let start_ts = Instant::now();
-        let _metrics_guard =
-            start_timer!(self.metrics_handle_certificate_latency.clone(), &start_ts);
+        let _metrics_guard = start_timer(self.metrics_handle_certificate_latency.clone());
         let transaction_info = self
             .authority_client
             .handle_certificate(certificate)
@@ -527,9 +522,7 @@ where
     ) -> Result<ObjectInfoResponse, SuiError> {
         self.metrics_total_requests_handle_object_info_request.inc();
 
-        let start_ts = Instant::now();
-
-        let _metrics_guard = start_timer!(self.metrics_handle_obj_info_latency.clone(), &start_ts);
+        let _metrics_guard = start_timer(self.metrics_handle_obj_info_latency.clone());
         let response = self
             .authority_client
             .handle_object_info_request(request.clone())
@@ -552,8 +545,7 @@ where
             .inc();
         let digest = request.transaction_digest;
 
-        let start_ts = Instant::now();
-        let _metrics_guard = start_timer!(self.metrics_handle_tx_info_latency.clone(), &start_ts);
+        let _metrics_guard = start_timer(self.metrics_handle_tx_info_latency.clone());
 
         let transaction_info = self
             .authority_client
