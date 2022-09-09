@@ -20,10 +20,6 @@
     @apply no-underline text-sui-dark hover:text-[#1F6493] cursor-pointer break-all inline;
 }
 
-.linktext {
-    @apply mr-2;
-}
-
 .longtextwrapper {
-    @apply flex items-center gap-[6px] min-w-fit mr-2;
+    @apply flex items-center gap-[6px] min-w-fit;
 }
