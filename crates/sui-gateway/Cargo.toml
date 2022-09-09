@@ -13,7 +13,7 @@ serde = { version = "1.0.144", features = ["derive"] }
 tracing = "0.1.36"
 tokio = { version = "1.20.1", features = ["full"] }
 futures = "0.3.23"
-prometheus = "0.13.1"
+prometheus = "0.13.2"
 clap = { version = "3.2.17", features = ["derive"] }
 telemetry-subscribers = "0.1.0"
 
