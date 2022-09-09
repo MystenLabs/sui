@@ -38,7 +38,7 @@ use sui_storage::{
 };
 use sui_types::messages::{CertifiedTransaction, CertifiedTransactionEffects};
 use tokio::sync::mpsc::channel;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 use crate::metrics::GrpcMetrics;
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
@@ -287,7 +287,7 @@ impl SuiNode {
             tokio::spawn(server.serve().map_err(Into::into))
         };
 
-        let (json_rpc_service, ws_subscription_service) = build_node_server(
+        let (json_rpc_service, ws_subscription_service) = build_http_servers(
             state.clone(),
             &quorum_driver_handler,
             config,
@@ -347,7 +347,7 @@ impl SuiNode {
     }
 }
 
-pub async fn build_node_server(
+pub async fn build_http_servers(
     state: Arc<AuthorityState>,
     quorum_driver_handler: &Option<QuorumDriverHandler<NetworkAuthorityClient>>,
     config: &NodeConfig,
@@ -357,6 +357,14 @@ pub async fn build_node_server(
     if config.consensus_config().is_some() {
         return Ok((None, None));
     }
+
+    if cfg!(msim) {
+        // jsonrpsee uses difficult-to-support features such as TcpSocket::from_raw_fd(), so we
+        // can't yet run it in the simulator.
+        warn!("disabling http servers in simulator");
+        return Ok((None, None));
+    }
+
     let mut server = JsonRpcServerBuilder::new(false, prometheus_registry)?;
 
     server.register_module(ReadApi::new(state.clone()))?;

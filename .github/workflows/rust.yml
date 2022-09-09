@@ -82,6 +82,19 @@ jobs:
       - run: scripts/changed-files.sh
         shell: bash
 
+  simtest:
+    needs: diff
+    if: needs.diff.outputs.isRust == 'true'
+    timeout-minutes: 45
+    runs-on: [ubuntu-ghcloud]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - uses: taiki-e/install-action@nextest
+      - name: cargo simtest
+        run: |
+          scripts/simtest/cargo-simtest simtest
+
   # This is a no-op job that allows the resulting action names to line up when
   # there are no rust changes in a given PR/commit. This ensures that we can
   # continue to block on the rust tests passing in the case of rust changes and

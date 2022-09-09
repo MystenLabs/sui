@@ -19,6 +19,7 @@ prometheus = "0.13.1"
 
 sui-config = { path = "../sui-config" }
 sui-node = { path = "../sui-node" }
+sui-simulator = { path = "../sui-simulator" }
 sui-types = { path = "../sui-types" }
 
 mysten-network = "0.1.0"

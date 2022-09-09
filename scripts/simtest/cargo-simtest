@@ -1,0 +1,59 @@
+#!/bin/bash
+# Copyright (c) 2022, Mysten Labs, Inc.
+# SPDX-License-Identifier: Apache-2.0
+
+if [ "$1" != "simtest" ]; then
+  echo "expected to be invoked via \`cargo simtest\`"
+  exit 1
+fi
+
+# consume simtest arg
+shift
+
+# cargo does not export $CARGO_MANIFEST_DIR to subcommands so we have to find it
+# ourselves.
+STARTING_DIR=$(pwd)
+MANIFEST_DIR="$STARTING_DIR"
+while true; do
+  if grep -q '^\[workspace\]$' Cargo.toml 2> /dev/null; then
+    break
+  fi
+  cd ..
+  MANIFEST_DIR=$(pwd)
+done
+
+cd "$MANIFEST_DIR"
+if ! git diff --quiet Cargo.lock; then
+  echo "Please commit or revert your changes to Cargo.lock before running cargo simtest"
+  exit 1
+fi
+cd "$STARTING_DIR"
+
+cleanup () {
+  cd "$MANIFEST_DIR"
+  git checkout Cargo.lock > /dev/null
+  cd "$STARTING_DIR"
+}
+
+trap cleanup SIGINT
+
+if [ -z "$MSIM_TEST_SEED" ]; then
+  export MSIM_TEST_SEED=1
+else
+  echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED from the environment"
+fi
+
+cargo nextest run \
+  --cargo-profile simulator \
+  --config 'build.rustflags = ["--cfg", "msim"]' \
+  --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"' \
+  --config 'patch.crates-io.tokio.rev = "15dff80e8e69218bc20b08a5ef91a4f156e626ac"' \
+  --config 'patch.crates-io.hyper.git = "https://github.com/mystenmark/hyper-madsim-fork.git"' \
+  --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"' \
+  "$@"
+
+STATUS=$?
+
+cleanup
+
+exit $STATUS

@@ -17,12 +17,14 @@ members = [
     "crates/sui-json",
     "crates/sui-json-rpc",
     "crates/sui-json-rpc-types",
+    "crates/sui-macros",
     "crates/sui-network",
     "crates/sui-node",
     "crates/sui-open-rpc",
     "crates/sui-open-rpc-macros",
     "crates/sui-quorum-driver",
     "crates/sui-sdk",
+    "crates/sui-simulator",
     "crates/sui-storage",
     "crates/sui-swarm",
     "crates/sui-telemetry",
@@ -47,3 +49,11 @@ strip = 'debuginfo'
 # Do not strip any debug info.  This helps the widest set of profiling tools
 debug = true
 strip = 'none'
+
+[profile.simulator]
+inherits = "test"
+debug = true
+debug-assertions = true
+overflow-checks = true
+# opt-level 1 gives >5x speedup for simulator tests without slowing down build times very much.
+opt-level = 1

@@ -56,8 +56,8 @@ impl<P: Display, S: Send, H: AsyncHandler<S>> Shell<P, S, H> {
 
     pub async fn run_async(
         &mut self,
-        out: &mut dyn Write,
-        err: &mut dyn Write,
+        out: &mut (dyn Write + Send),
+        err: &mut (dyn Write + Send),
     ) -> Result<(), anyhow::Error> {
         let config = Config::builder()
             .auto_add_history(true)
