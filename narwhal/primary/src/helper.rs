@@ -4,7 +4,7 @@
 use crate::{primary::PrimaryMessage, PayloadToken};
 use config::{Committee, WorkerId};
 use crypto::PublicKey;
-use network::{PrimaryNetwork, UnreliableNetwork2};
+use network::{P2pNetwork, UnreliableNetwork2};
 use storage::CertificateStore;
 use store::{Store, StoreError};
 use thiserror::Error;
@@ -43,7 +43,7 @@ pub struct Helper {
     /// Input channel to receive requests.
     rx_primaries: Receiver<PrimaryMessage>,
     /// A network sender to reply to the sync requests.
-    primary_network: PrimaryNetwork,
+    primary_network: P2pNetwork,
 }
 
 impl Helper {
@@ -55,7 +55,7 @@ impl Helper {
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         rx_committee: watch::Receiver<ReconfigureNotification>,
         rx_primaries: Receiver<PrimaryMessage>,
-        primary_network: PrimaryNetwork,
+        primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {

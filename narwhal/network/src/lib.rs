@@ -18,7 +18,7 @@ mod worker;
 
 pub use crate::{
     bounded_executor::BoundedExecutor,
-    primary::{PrimaryNetwork, PrimaryToWorkerNetwork},
+    primary::{P2pNetwork, PrimaryToWorkerNetwork},
     retry::RetryConfig,
     traits::{
         Lucky, LuckyNetwork, LuckyNetwork2, ReliableNetwork, ReliableNetwork2, UnreliableNetwork,

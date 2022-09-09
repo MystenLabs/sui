@@ -29,7 +29,7 @@ use fastcrypto::{
     SignatureService,
 };
 use multiaddr::{Multiaddr, Protocol};
-use network::{metrics::Metrics, PrimaryNetwork, PrimaryToWorkerNetwork};
+use network::{metrics::Metrics, P2pNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
 use storage::CertificateStore;
@@ -260,7 +260,7 @@ impl Primary {
         let signature_service = SignatureService::new(signer);
 
         // The `Core` receives and handles headers, votes, and certificates from the other primaries.
-        let core_primary_network = PrimaryNetwork::new(network.clone());
+        let core_primary_network = P2pNetwork::new(network.clone());
         let core_handle = Core::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -339,7 +339,7 @@ impl Primary {
 
         // Responsible for finding missing blocks (certificates) and fetching
         // them from the primary peers by synchronizing also their batches.
-        let block_synchronizer_network = PrimaryNetwork::new(network.clone());
+        let block_synchronizer_network = P2pNetwork::new(network.clone());
         let block_synchronizer_handle = BlockSynchronizer::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -357,7 +357,7 @@ impl Primary {
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
         // batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and
         // re-schedule execution of the header once we have all missing data.
-        let header_waiter_primary_network = PrimaryNetwork::new(network.clone());
+        let header_waiter_primary_network = P2pNetwork::new(network.clone());
         let header_waiter_worker_network =
             PrimaryToWorkerNetwork::new(Metrics::new(network_metrics, "header_waiter".to_string()));
         let header_waiter_handle = HeaderWaiter::spawn(
@@ -409,7 +409,7 @@ impl Primary {
 
         // The `Helper` is dedicated to reply to certificates & payload availability requests
         // from other primaries.
-        let helper_primary_network = PrimaryNetwork::new(network);
+        let helper_primary_network = P2pNetwork::new(network);
         let helper_handle = Helper::spawn(
             name.clone(),
             (**committee.load()).clone(),

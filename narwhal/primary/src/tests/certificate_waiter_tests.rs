@@ -9,7 +9,7 @@ use crate::{
     synchronizer::Synchronizer,
 };
 use fastcrypto::{traits::KeyPair, Hash, SignatureService};
-use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
+use network::{P2pNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use test_utils::CommitteeFixture;
@@ -87,7 +87,7 @@ async fn process_certificate_missing_parents_in_reverse() {
         rx_sync_headers,
         tx_headers_loopback,
         metrics.clone(),
-        PrimaryNetwork::new(network.clone()),
+        P2pNetwork::new(network.clone()),
         PrimaryToWorkerNetwork::default(),
     );
 
@@ -122,7 +122,7 @@ async fn process_certificate_missing_parents_in_reverse() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
     );
 
     // Generate headers in successive rounds
@@ -241,7 +241,7 @@ async fn process_certificate_check_gc_fires() {
         rx_sync_headers,
         tx_headers_loopback,
         metrics.clone(),
-        PrimaryNetwork::new(network.clone()),
+        P2pNetwork::new(network.clone()),
         PrimaryToWorkerNetwork::default(),
     );
 
@@ -276,7 +276,7 @@ async fn process_certificate_check_gc_fires() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
     );
 
     // Generate headers in successive rounds

@@ -17,7 +17,7 @@ use futures::{
     stream::FuturesUnordered,
     FutureExt, StreamExt,
 };
-use network::{PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2};
+use network::{P2pNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2};
 use rand::{rngs::SmallRng, SeedableRng};
 use std::{
     collections::{HashMap, HashSet},
@@ -185,7 +185,7 @@ pub struct BlockSynchronizer {
         HashMap<RequestID, Sender<PayloadAvailabilityResponse>>,
 
     /// Send network requests
-    primary_network: PrimaryNetwork,
+    primary_network: P2pNetwork,
     worker_network: PrimaryToWorkerNetwork,
 
     /// The store that holds the certificates
@@ -214,7 +214,7 @@ impl BlockSynchronizer {
         rx_commands: metered_channel::Receiver<Command>,
         rx_certificate_responses: metered_channel::Receiver<CertificatesResponse>,
         rx_payload_availability_responses: metered_channel::Receiver<PayloadAvailabilityResponse>,
-        network: PrimaryNetwork,
+        network: P2pNetwork,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         certificate_store: CertificateStore,
         parameters: BlockSynchronizerParameters,

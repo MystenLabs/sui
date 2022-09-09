@@ -8,7 +8,7 @@ use crate::{
 };
 
 use fastcrypto::{traits::KeyPair, Hash};
-use network::{PrimaryNetwork, PrimaryToWorkerNetwork};
+use network::{P2pNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
 use test_utils::{fixture_payload, CommitteeFixture};
@@ -57,7 +57,7 @@ async fn successfully_synchronize_batches() {
         rx_synchronizer,
         tx_core,
         metrics,
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
         PrimaryToWorkerNetwork::default(),
     );
 

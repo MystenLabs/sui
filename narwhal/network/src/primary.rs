@@ -166,7 +166,7 @@ impl ReliableNetwork for PrimaryToWorkerNetwork {
     }
 }
 
-pub struct PrimaryNetwork {
+pub struct P2pNetwork {
     network: anemo::Network,
     retry_config: RetryConfig,
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
@@ -175,7 +175,7 @@ pub struct PrimaryNetwork {
     executors: HashMap<anemo::PeerId, BoundedExecutor>,
 }
 
-impl PrimaryNetwork {
+impl P2pNetwork {
     pub fn new(network: anemo::Network) -> Self {
         let retry_config = RetryConfig {
             // Retry forever
@@ -199,45 +199,34 @@ impl PrimaryNetwork {
         // not be necessary with the new networking stack so we'll need to revisit if this function
         // is even needed. For now do nothing.
     }
-}
 
-#[async_trait]
-impl UnreliableNetwork2<PrimaryMessage> for PrimaryNetwork {
-    async fn unreliable_send(
-        &mut self,
-        peer: NetworkPublicKey,
-        message: &PrimaryMessage,
-    ) -> JoinHandle<()> {
+    async fn unreliable_send<F, Fut, O>(&mut self, peer: NetworkPublicKey, f: F) -> JoinHandle<()>
+    where
+        F: FnOnce(anemo::Peer) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = O> + Send,
+    {
         let network = self.network.clone();
         let peer_id = PeerId(peer.0.to_bytes());
-        let message = message.to_owned();
         self.executors
             .entry(peer_id)
             .or_insert_with(default_executor)
             .spawn(async move {
                 if let Some(peer) = network.peer(peer_id) {
-                    let _ = PrimaryToPrimaryClient::new(peer)
-                        .send_message(message)
-                        .await;
+                    let _ = f(peer).await;
                 }
             })
             .await
     }
-}
 
-impl Lucky for PrimaryNetwork {
-    fn rng(&mut self) -> &mut SmallRng {
-        &mut self.rng
-    }
-}
-
-#[async_trait]
-impl ReliableNetwork2<PrimaryMessage> for PrimaryNetwork {
-    async fn send(
+    async fn send<F, Fut>(
         &mut self,
         peer: NetworkPublicKey,
-        message: &PrimaryMessage,
-    ) -> CancelOnDropHandler<anyhow::Result<anemo::Response<()>>> {
+        f: F,
+    ) -> CancelOnDropHandler<anyhow::Result<anemo::Response<()>>>
+    where
+        F: Fn(anemo::Peer) -> Fut + Send + Sync + 'static + Clone,
+        Fut: std::future::Future<Output = Result<anemo::Response<()>, anemo::rpc::Status>> + Send,
+    {
         // Safety
         // Since this spawns an unbounded task, this should be called in a time-restricted fashion.
         // Here the callers are [`PrimaryNetwork::broadcast`] and [`PrimaryNetwork::send`],
@@ -247,21 +236,17 @@ impl ReliableNetwork2<PrimaryMessage> for PrimaryNetwork {
 
         let network = self.network.clone();
         let peer_id = PeerId(peer.0.to_bytes());
-        let message = message.to_owned();
         let message_send = move || {
             let network = network.clone();
-            let message = message.clone();
+            let f = f.clone();
 
             async move {
                 if let Some(peer) = network.peer(peer_id) {
-                    PrimaryToPrimaryClient::new(peer)
-                        .send_message(message)
-                        .await
-                        .map_err(|e| {
-                            // this returns a backoff::Error::Transient
-                            // so that if anemo::Status is returned, we retry
-                            backoff::Error::transient(anyhow::anyhow!("RPC error: {e:?}"))
-                        })
+                    f(peer).await.map_err(|e| {
+                        // this returns a backoff::Error::Transient
+                        // so that if anemo::Status is returned, we retry
+                        backoff::Error::transient(anyhow::anyhow!("RPC error: {e:?}"))
+                    })
                 } else {
                     Err(backoff::Error::transient(anyhow::anyhow!(
                         "not connected to peer {peer_id}"
@@ -277,6 +262,50 @@ impl ReliableNetwork2<PrimaryMessage> for PrimaryNetwork {
             .spawn_with_retries(self.retry_config, message_send);
 
         CancelOnDropHandler(handle)
+    }
+}
+
+#[async_trait]
+impl UnreliableNetwork2<PrimaryMessage> for P2pNetwork {
+    async fn unreliable_send(
+        &mut self,
+        peer: NetworkPublicKey,
+        message: &PrimaryMessage,
+    ) -> JoinHandle<()> {
+        let message = message.to_owned();
+        let f = move |peer| async move {
+            PrimaryToPrimaryClient::new(peer)
+                .send_message(message)
+                .await
+        };
+        self.unreliable_send(peer, f).await
+    }
+}
+
+impl Lucky for P2pNetwork {
+    fn rng(&mut self) -> &mut SmallRng {
+        &mut self.rng
+    }
+}
+
+#[async_trait]
+impl ReliableNetwork2<PrimaryMessage> for P2pNetwork {
+    async fn send(
+        &mut self,
+        peer: NetworkPublicKey,
+        message: &PrimaryMessage,
+    ) -> CancelOnDropHandler<anyhow::Result<anemo::Response<()>>> {
+        let message = message.to_owned();
+        let f = move |peer| {
+            let message = message.clone();
+            async move {
+                PrimaryToPrimaryClient::new(peer)
+                    .send_message(message)
+                    .await
+            }
+        };
+
+        self.send(peer, f).await
     }
 }
 

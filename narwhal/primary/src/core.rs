@@ -11,7 +11,7 @@ use async_recursion::async_recursion;
 use config::{Committee, Epoch, SharedWorkerCache};
 use crypto::{PublicKey, Signature};
 use fastcrypto::{Hash as _, SignatureService};
-use network::{CancelOnDropHandler, PrimaryNetwork, ReliableNetwork2};
+use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork2};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -80,7 +80,7 @@ pub struct Core {
     /// Aggregates certificates to use as parents for new headers.
     certificates_aggregators: HashMap<Round, Box<CertificatesAggregator>>,
     /// A network sender to send the batches to the other workers.
-    network: PrimaryNetwork,
+    network: P2pNetwork,
     /// Keeps the cancel handlers of the messages we sent.
     cancel_handlers: HashMap<Round, Vec<CancelOnDropHandler<anyhow::Result<anemo::Response<()>>>>>,
     /// Metrics handler
@@ -108,7 +108,7 @@ impl Core {
         tx_consensus: Sender<Certificate>,
         tx_proposer: Sender<(Vec<Certificate>, Round, Epoch)>,
         metrics: Arc<PrimaryMetrics>,
-        primary_network: PrimaryNetwork,
+        primary_network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {

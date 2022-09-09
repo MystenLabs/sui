@@ -101,7 +101,7 @@ async fn process_header() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
     );
 
     // Send a header to the core.
@@ -194,7 +194,7 @@ async fn process_header_missing_parent() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
     );
 
     // Send a header to the core.
@@ -283,7 +283,7 @@ async fn process_header_missing_payload() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
     );
 
     // Send a header that another node has created to the core.
@@ -383,7 +383,7 @@ async fn process_votes() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
     );
 
     // Make the certificate we expect to receive.
@@ -496,7 +496,7 @@ async fn process_certificates() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         metrics.clone(),
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
     );
 
     // Send enough certificates to the core.
@@ -614,7 +614,7 @@ async fn shutdown_core() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         Arc::new(PrimaryMetrics::new(&Registry::new())),
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
     );
 
     // Shutdown the core.
@@ -713,7 +713,7 @@ async fn reconfigure_core() {
         tx_consensus,
         /* tx_proposer */ tx_parents,
         Arc::new(PrimaryMetrics::new(&Registry::new())),
-        PrimaryNetwork::new(network),
+        P2pNetwork::new(network),
     );
 
     // Change committee

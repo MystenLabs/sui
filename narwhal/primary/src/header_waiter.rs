@@ -9,7 +9,7 @@ use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use futures::future::{try_join_all, BoxFuture};
 use network::{
-    LuckyNetwork2, PrimaryNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2,
+    LuckyNetwork2, P2pNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2,
 };
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
@@ -77,7 +77,7 @@ pub struct HeaderWaiter {
     tx_core: Sender<Header>,
 
     /// Network driver allowing to send messages.
-    primary_network: PrimaryNetwork,
+    primary_network: P2pNetwork,
     worker_network: PrimaryToWorkerNetwork,
     /// Keeps the digests of the all certificates for which we sent a sync request,
     /// along with a time stamp (`u128`) indicating when we sent the request.
@@ -114,7 +114,7 @@ impl HeaderWaiter {
         rx_synchronizer: Receiver<WaiterMessage>,
         tx_core: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
-        primary_network: PrimaryNetwork,
+        primary_network: P2pNetwork,
         worker_network: PrimaryToWorkerNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
