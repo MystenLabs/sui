@@ -67,7 +67,8 @@ function objectContent(label: string, id: ObjectId) {
     };
 }
 
-function fieldsContent(fields: { [key: string]: any }) {
+function fieldsContent(fields: { [key: string]: any } | undefined) {
+    if (!fields) return [];
     return Object.keys(fields).map((k) => {
         return {
             label: k,

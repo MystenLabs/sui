@@ -12,7 +12,7 @@ export type MoveEvent = {
     transactionModule: string;
     sender: SuiAddress;
     type: string;
-    fields: { [key: string]: any; };
+    fields?: { [key: string]: any; };
     bcs: string;
 };
 
@@ -89,6 +89,13 @@ export type SuiEventEnvelope = {
     event: SuiEvent
 }
 
+export type SuiEvents = SuiEventEnvelope[];
+
 export type SubscriptionId = number;
 
 export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
+
+// mirrors the value defined in https://github.com/MystenLabs/sui/blob/e12f8c58ef7ba17205c4caf5ad2c350cbb01656c/crates/sui-json-rpc/src/api.rs#L27
+export const EVENT_QUERY_MAX_LIMIT = 100;
+export const DEFAULT_START_TIME = 0;
+export const DEFAULT_END_TIME = Number.MAX_SAFE_INTEGER;
