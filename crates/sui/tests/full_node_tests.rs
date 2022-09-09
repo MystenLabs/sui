@@ -9,11 +9,11 @@ use jsonrpsee::ws_client::WsClientBuilder;
 use move_core_types::account_address::AccountAddress;
 use move_core_types::identifier::Identifier;
 use move_core_types::language_storage::ModuleId;
+use move_core_types::value::MoveStructLayout;
 use prometheus::Registry;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::{collections::BTreeMap, sync::Arc};
-use move_core_types::value::MoveStructLayout;
 use sui_sdk::{ClientType, SuiClient};
 use sui_types::base_types::{ObjectRef, SequenceNumber};
 use sui_types::event::TransferType;
@@ -49,34 +49,6 @@ use sui_types::{
 use test_utils::messages::make_transactions_with_wallet_context;
 use test_utils::network::setup_network_and_wallet;
 use test_utils::transaction::{wait_for_all_txes, wait_for_tx};
-
-async fn emit_move_events(
-    context: &mut WalletContext,
-) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
-    let (sender, gas_objects) = get_account_and_gas_coins(context).await?.swap_remove(0);
-    let gas_object = gas_objects.get(0).unwrap().id();
-
-    let res = SuiClientCommands::CreateExampleNFT {
-        name: Some("example_nft_name".into()),
-        description: Some("example_nft_desc".into()),
-        url: Some("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg".into()),
-        gas: Some(*gas_object),
-        gas_budget: Some(50000),
-    }
-    .execute(context)
-    .await?;
-
-    let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(
-        SuiObjectRead::Exists(obj),
-    ) = res
-    {
-        (obj.reference.object_id, obj.previous_transaction)
-    } else {
-        panic!("CreateExampleNFT command did not return WalletCommandResult::CreateExampleNFT(SuiObjectRead::Exists, got {:?}", res);
-    };
-
-    Ok((sender, object_id, digest))
-}
 
 #[tokio::test]
 async fn test_full_node_follows_txes() -> Result<(), anyhow::Error> {
@@ -319,12 +291,10 @@ async fn test_full_node_cold_sync() -> Result<(), anyhow::Error> {
     telemetry_subscribers::init_for_testing();
 
     let (swarm, mut context, _) = setup_network_and_wallet().await?;
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
-    let receiver = context.keystore.addresses().get(1).cloned().unwrap();
-    let (_, _) = transfer_coin(&mut context, sender, receiver).await?;
-    let (_, _) = transfer_coin(&mut context, sender, receiver).await?;
-    let (_, _) = transfer_coin(&mut context, sender, receiver).await?;
-    let (_transferred_object, digest) = transfer_coin(&mut context, sender, receiver).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_, _, _, _) = transfer_coin(&mut context).await?;
+    let (_transferred_object, _, _, digest) = transfer_coin(&mut context).await?;
 
     // Make sure the validators are quiescent before bringing up the node.
     sleep(Duration::from_millis(1000)).await;
@@ -495,10 +465,8 @@ async fn test_full_node_transaction_streaming_basic() -> Result<(), anyhow::Erro
         .await
         .unwrap();
     let mut digests = Vec::with_capacity(3);
-    let sender = context.keystore.addresses().get(0).cloned().unwrap();
-    let receiver = context.keystore.addresses().get(1).cloned().unwrap();
     for _i in 0..3 {
-        let (_, digest) = transfer_coin(&mut context, sender, receiver).await?;
+        let (_, _, _, digest) = transfer_coin(&mut context).await?;
         digests.push(digest);
     }
     wait_for_all_txes(digests.clone(), node.state().clone()).await;
@@ -625,7 +593,7 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
     let (node, jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
     let sender = context.keystore.addresses().get(0).cloned().unwrap();
     let receiver = context.keystore.addresses().get(1).cloned().unwrap();
-    let (transferred_object, digest) = transfer_coin(&mut context, sender, receiver).await?;
+    let (transferred_object, _, _, digest) = transfer_coin(&mut context).await?;
 
     wait_for_tx(digest, node.state().clone()).await;
 
@@ -1009,7 +977,7 @@ async fn test_get_objects_read() -> Result<(), anyhow::Error> {
     let (object_ref_v1, object_v1, _) = get_obj_read_from_node(&node, object_id, None).await?;
 
     // Transfer some SUI to recipient
-    transfer_coin(&mut context, sender, recipient)
+    transfer_coin(&mut context)
         .await
         .expect("Failed to transfer coins to recipient");
     // Transfer the object from sender to recipient

@@ -706,7 +706,7 @@ impl PastObjectRead {
             Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::VersionFound(_, o, _) => Ok(o),
             Self::VersionNotFound(object_id, version) => {
-                Err(SuiError::PastObjectNotFound { object_id, version })
+                Err(SuiError::ObjectVersionNotFound { object_id, version })
             }
             Self::VersionTooHigh {
                 object_id,

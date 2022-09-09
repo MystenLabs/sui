@@ -222,42 +222,7 @@ pub async fn create_devnet_nft(
     Ok((sender, object_id, digest))
 }
 
-// pub async fn transfer_coin(
-//     context: &mut WalletContext,
-//     sender: SuiAddress,
-//     receiver: SuiAddress,
-// ) -> Result<(ObjectID, TransactionDigest), anyhow::Error> {
-//     let object_refs = context
-//         .gateway
-//         .read_api()
-//         .get_objects_owned_by_address(sender)
-//         .await?;
-//     let object_to_send = object_refs.get(1).unwrap().object_id;
-
-//     // Send an object
-//     info!(
-//         "transferring coin {:?} from {:?} -> {:?}",
-//         object_to_send, sender, receiver
-//     );
-//     let res = SuiClientCommands::Transfer {
-//         to: receiver,
-//         object_id: object_to_send,
-//         gas: None,
-//         gas_budget: 50000,
-//     }
-//     .execute(context)
-//     .await?;
-
-//     let digest = if let SuiClientCommandResult::Transfer(_, cert, _) = res {
-//         cert.transaction_digest
-//     } else {
-//         panic!("transfer command did not return WalletCommandResult::Transfer");
-//     };
-
-//     Ok((object_to_send, digest))
-// }
-
-async fn transfer_coin(
+pub async fn transfer_coin(
     context: &mut WalletContext,
 ) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
     let sender = context.keystore.addresses().get(0).cloned().unwrap();
@@ -317,7 +282,7 @@ pub async fn delete_devnet_nft(
     let tx = Transaction::new(data, signature);
 
     context
-        .gateway
+        .client
         .quorum_driver()
         .execute_transaction(tx)
         .await

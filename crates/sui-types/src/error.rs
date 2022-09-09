@@ -279,7 +279,7 @@ pub enum SuiError {
         object_id,
         version
     )]
-    PastObjectNotFound {
+    ObjectVersionNotFound {
         object_id: ObjectID,
         version: SequenceNumber,
     },

@@ -1441,84 +1441,6 @@
       ]
     },
     {
-      "name": "sui_getPastObjectMaybe",
-      "tags": [
-        {
-          "name": "Read API"
-        }
-      ],
-      "description": "Note there is no software-level guarantee/SLA that objects with past versions can be retrieved with this API, even if the object and version exists/existed. The result may vary across nodes depending on their pruning policies. Return the object information for a specified version",
-      "params": [
-        {
-          "name": "object_id",
-          "description": "the ID of the queried object",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/ObjectID"
-          }
-        },
-        {
-          "name": "version",
-          "description": "the version of the queried object. If None, default to the latest known version",
-          "required": true,
-          "schema": {
-            "$ref": "#/components/schemas/SequenceNumber"
-          }
-        }
-      ],
-      "result": {
-        "name": "GetPastObjectDataResponse",
-        "required": true,
-        "schema": {
-          "$ref": "#/components/schemas/ObjectRead"
-        }
-      },
-      "examples": [
-        {
-          "name": "Get Past Object data",
-          "params": [
-            {
-              "name": "object_id",
-              "value": "0x818dd7234e049913233eb918c11638af89d575be"
-            },
-            {
-              "name": "version",
-              "value": 4
-            }
-          ],
-          "result": {
-            "name": "Result",
-            "value": {
-              "details": {
-                "data": {
-                  "dataType": "moveObject",
-                  "fields": {
-                    "balance": 10000,
-                    "id": {
-                      "id": "0x818dd7234e049913233eb918c11638af89d575be"
-                    }
-                  },
-                  "has_public_transfer": true,
-                  "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>"
-                },
-                "owner": {
-                  "AddressOwner": "0xb99003d30a245ac74a02e26e45cb80ee1b9c00a9"
-                },
-                "previousTransaction": "M0XOXxK+qf/gR0jWaWwwYxc1GTrqlbj5CCwQYgwNbj8=",
-                "reference": {
-                  "digest": "yVlrRTjQ3CS+w3G7PkY0Vh+IkuYEAhq5a2Mur6Ip7D0=",
-                  "objectId": "0x818dd7234e049913233eb918c11638af89d575be",
-                  "version": 4
-                },
-                "storageRebate": 100
-              },
-              "status": "VersionFound"
-            }
-          }
-        }
-      ]
-    },
-    {
       "name": "sui_getRawObject",
       "tags": [
         {
@@ -2790,6 +2712,84 @@
           "$ref": "#/components/schemas/TransactionBytes"
         }
       }
+    },
+    {
+      "name": "sui_tryGetPastObject",
+      "tags": [
+        {
+          "name": "Full Node API"
+        }
+      ],
+      "description": "Note there is no software-level guarantee/SLA that objects with past versions can be retrieved by this API, even if the object and version exists/existed. The result may vary across nodes depending on their pruning policies. Return the object information for a specified version",
+      "params": [
+        {
+          "name": "object_id",
+          "description": "the ID of the queried object",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/ObjectID"
+          }
+        },
+        {
+          "name": "version",
+          "description": "the version of the queried object. If None, default to the latest known version",
+          "required": true,
+          "schema": {
+            "$ref": "#/components/schemas/SequenceNumber"
+          }
+        }
+      ],
+      "result": {
+        "name": "GetPastObjectDataResponse",
+        "required": true,
+        "schema": {
+          "$ref": "#/components/schemas/ObjectRead"
+        }
+      },
+      "examples": [
+        {
+          "name": "Get Past Object data",
+          "params": [
+            {
+              "name": "object_id",
+              "value": "0x818dd7234e049913233eb918c11638af89d575be"
+            },
+            {
+              "name": "version",
+              "value": 4
+            }
+          ],
+          "result": {
+            "name": "Result",
+            "value": {
+              "details": {
+                "data": {
+                  "dataType": "moveObject",
+                  "fields": {
+                    "balance": 10000,
+                    "id": {
+                      "id": "0x818dd7234e049913233eb918c11638af89d575be"
+                    }
+                  },
+                  "has_public_transfer": true,
+                  "type": "0x2::coin::Coin<0x2::coin::Coin<0x2::sui::SUI>>"
+                },
+                "owner": {
+                  "AddressOwner": "0xb99003d30a245ac74a02e26e45cb80ee1b9c00a9"
+                },
+                "previousTransaction": "M0XOXxK+qf/gR0jWaWwwYxc1GTrqlbj5CCwQYgwNbj8=",
+                "reference": {
+                  "digest": "yVlrRTjQ3CS+w3G7PkY0Vh+IkuYEAhq5a2Mur6Ip7D0=",
+                  "objectId": "0x818dd7234e049913233eb918c11638af89d575be",
+                  "version": 4
+                },
+                "storageRebate": 100
+              },
+              "status": "VersionFound"
+            }
+          }
+        }
+      ]
     }
   ],
   "components": {

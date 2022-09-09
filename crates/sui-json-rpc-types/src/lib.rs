@@ -1025,7 +1025,7 @@ impl<T: SuiData> SuiPastObjectRead<T> {
             }),
             Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound { object_id: *id }),
             Self::VersionFound(o) => Ok(o),
-            Self::VersionNotFound(id, seq_num) => Err(SuiError::PastObjectNotFound {
+            Self::VersionNotFound(id, seq_num) => Err(SuiError::ObjectVersionNotFound {
                 object_id: *id,
                 version: *seq_num,
             }),
@@ -1050,7 +1050,7 @@ impl<T: SuiData> SuiPastObjectRead<T> {
             Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
             Self::VersionFound(o) => Ok(o),
             Self::VersionNotFound(object_id, version) => {
-                Err(SuiError::PastObjectNotFound { object_id, version })
+                Err(SuiError::ObjectVersionNotFound { object_id, version })
             }
             Self::VersionTooHigh {
                 object_id,
