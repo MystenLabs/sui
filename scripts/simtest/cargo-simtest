@@ -43,8 +43,13 @@ else
   echo "Using MSIM_TEST_SEED=$MSIM_TEST_SEED from the environment"
 fi
 
-cargo nextest run \
-  --cargo-profile simulator \
+CARGO_COMMAND=(nextest run --cargo-profile simulator)
+if [ "$1" = "build" ]; then
+  shift
+  CARGO_COMMAND=(build --profile simulator)
+fi
+
+cargo ${CARGO_COMMAND[@]} \
   --config 'build.rustflags = ["--cfg", "msim"]' \
   --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"' \
   --config 'patch.crates-io.tokio.rev = "15dff80e8e69218bc20b08a5ef91a4f156e626ac"' \
