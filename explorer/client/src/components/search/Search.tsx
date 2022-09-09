@@ -49,34 +49,36 @@ function Search() {
 
     const handleKeyPress = useCallback(
         (event: KeyboardEvent): void => {
-            // If event already done, then do nothing
-            if (event.defaultPrevented) {
-                return;
-            }
+            if (resultOpen) {
+                // If event already done, then do nothing
+                if (event.defaultPrevented) {
+                    return;
+                }
 
-            // Press Down Key or Tab
-            if (['ArrowDown', 'Down', 'Tab'].includes(event.key)) {
-                event.preventDefault();
-                setResultIndex((prevIndex) =>
-                    result?.length && prevIndex < result.length - 1
-                        ? prevIndex + 1
-                        : 0
-                );
-            }
+                // Press Down Key
+                if (['ArrowDown', 'Down'].includes(event.key)) {
+                    event.preventDefault();
+                    setResultIndex((prevIndex) =>
+                        result?.length && prevIndex < result.length - 1
+                            ? prevIndex + 1
+                            : 0
+                    );
+                }
 
-            // Press Up Key
-            if (['ArrowUp', 'Up'].includes(event.key)) {
-                event.preventDefault();
-                setResultIndex((prevIndex) =>
-                    prevIndex > 0
-                        ? prevIndex - 1
-                        : result?.length && result.length > 1
-                        ? result.length - 1
-                        : prevIndex
-                );
+                // Press Up Key
+                if (['ArrowUp', 'Up'].includes(event.key)) {
+                    event.preventDefault();
+                    setResultIndex((prevIndex) =>
+                        prevIndex > 0
+                            ? prevIndex - 1
+                            : result?.length && result.length > 1
+                            ? result.length - 1
+                            : prevIndex
+                    );
+                }
             }
         },
-        [result]
+        [result, resultOpen]
     );
 
     // Clicking Outside the Search Bar and Results should clear the search
@@ -166,6 +168,7 @@ function Search() {
                     autoFocus
                     type="text"
                     autoComplete="off"
+                    aria-label="search text"
                 />
                 <input
                     className={styles.searchtextmobile}
@@ -177,11 +180,13 @@ function Search() {
                     autoFocus
                     type="text"
                     autoComplete="off"
+                    aria-label="search text"
                 />
                 <button
                     id="searchBtn"
                     type="submit"
                     className={styles.searchbtn}
+                    aria-label="submit"
                 >
                     <SearchIcon className={styles.searchicon} />
                 </button>
