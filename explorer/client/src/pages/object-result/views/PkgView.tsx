@@ -48,7 +48,6 @@ function PkgView({ data }: { data: DataType }) {
                                         text={viewedData.id}
                                         category="objects"
                                         isLink={false}
-                                        isCopyButton={false}
                                     />
                                 </td>
                             </tr>
@@ -66,7 +65,6 @@ function PkgView({ data }: { data: DataType }) {
                                             text={viewedData.publisherAddress}
                                             category="addresses"
                                             isLink={!isPublisherGenesis}
-                                            isCopyButton={false}
                                         />
                                     </td>
                                 </tr>

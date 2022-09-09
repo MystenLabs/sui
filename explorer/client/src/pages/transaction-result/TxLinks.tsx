@@ -39,6 +39,7 @@ function TxLinks({ data }: { data: Addresslist }) {
                                     text={objId}
                                     category={data?.category as Category}
                                     isLink={true}
+                                    copyButton="16"
                                 />
                             </li>
                         ))}

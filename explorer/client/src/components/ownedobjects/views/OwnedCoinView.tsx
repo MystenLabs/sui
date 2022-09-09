@@ -65,7 +65,6 @@ function SingleCoinView({
                                     <Longtext
                                         text={subObj.id}
                                         category="objects"
-                                        isCopyButton={false}
                                     />
                                 </div>
                                 <div />

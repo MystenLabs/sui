@@ -4,7 +4,8 @@
 import { useCallback, useState, useContext } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
-import { ReactComponent as ContentCopyIcon } from '../../assets/SVGIcons/Copy.svg';
+import { ReactComponent as ContentCopyIcon16 } from '../../assets/SVGIcons/16px/Copy.svg';
+import { ReactComponent as ContentCopyIcon24 } from '../../assets/SVGIcons/24px/Copy.svg';
 import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
 import { NetworkContext } from '../../context';
 import { navigateWithUnknown } from '../../utils/searchUtil';
@@ -17,7 +18,7 @@ function Longtext({
     category = 'unknown',
     isLink = true,
     alttext = '',
-    isCopyButton = true,
+    copyButton = 'none',
     showIconButton = false,
 }: {
     text: string;
@@ -30,7 +31,7 @@ function Longtext({
         | 'unknown';
     isLink?: boolean;
     alttext?: string;
-    isCopyButton?: boolean;
+    copyButton?: '16' | '24' | 'none';
     showIconButton?: boolean;
 }) {
     const [isCopyIcon, setCopyIcon] = useState(true);
@@ -48,17 +49,30 @@ function Longtext({
     let icon;
     let iconButton = <></>;
 
-    if (isCopyButton) {
+    if (copyButton !== 'none') {
         if (pleaseWait) {
-            icon = <span className={styles.copied}>&#8987; Please Wait</span>;
+            icon = <div className={styles.copied}>&#8987; Please Wait</div>;
         } else if (isCopyIcon) {
             icon = (
-                <span className={styles.copy} onClick={handleCopyEvent}>
-                    <ContentCopyIcon />
-                </span>
+                <div
+                    className={
+                        copyButton === '16' ? styles.copy16 : styles.copy24
+                    }
+                    onClick={handleCopyEvent}
+                >
+                    {copyButton === '16' ? (
+                        <ContentCopyIcon16 />
+                    ) : (
+                        <ContentCopyIcon24 />
+                    )}
+                </div>
             );
         } else {
-            icon = <span className={styles.copied}>&#10003; Copied</span>;
+            icon = (
+                <span className={styles.copied}>
+                    <span>&#10003;</span> <span>Copied</span>
+                </span>
+            );
         }
     } else {
         icon = <></>;
@@ -88,9 +102,9 @@ function Longtext({
     if (isLink) {
         if (category === 'unknown') {
             textComponent = (
-                <span className={styles.longtext} onClick={navigateUnknown}>
+                <div className={styles.longtext} onClick={navigateUnknown}>
                     {alttext ? alttext : text}
-                </span>
+                </div>
             );
         } else if (category === 'ethAddress') {
             textComponent = (
@@ -102,17 +116,19 @@ function Longtext({
             );
         } else {
             textComponent = (
-                <Link
-                    className={styles.longtext}
-                    to={`/${category}/${encodeURIComponent(text)}`}
-                >
-                    {alttext ? alttext : text} {iconButton}
-                </Link>
+                <div>
+                    <Link
+                        className={styles.longtext}
+                        to={`/${category}/${encodeURIComponent(text)}`}
+                    >
+                        {alttext ? alttext : text} {iconButton}
+                    </Link>
+                </div>
             );
         }
     } else {
         textComponent = (
-            <span className={styles.linktext}>{alttext ? alttext : text}</span>
+            <div className={styles.linktext}>{alttext ? alttext : text}</div>
         );
     }
 

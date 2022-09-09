@@ -6,7 +6,7 @@ Cypress.config('baseUrl', 'http://localhost:8080');
 // Standardized CSS Selectors
 const mainBodyCSS = 'main > section > div';
 const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num}) a`;
-const ownerButton = 'td#owner span:first-child';
+const ownerButton = 'td#owner > div > div';
 
 // Standardized expectations:
 const expectHome = () => {

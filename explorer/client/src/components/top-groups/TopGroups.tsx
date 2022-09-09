@@ -125,7 +125,6 @@ function TopGroupsCard() {
                             text=""
                             category="transactions"
                             isLink={true}
-                            isCopyButton={false}
                             showIconButton={true}
                             alttext="More NFT Collections"
                         />

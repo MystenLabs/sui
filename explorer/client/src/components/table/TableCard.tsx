@@ -66,7 +66,7 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
                         alttext={itm.name}
                         category={(itm.category as Category) || 'unknown'}
                         isLink={itm?.isLink}
-                        isCopyButton={itm?.copy}
+                        copyButton={itm?.copy ? '16' : 'none'}
                     />
                     {idx !== content.length - 1 && <ContentForwardArrow />}
                 </div>

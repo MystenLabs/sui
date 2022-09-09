@@ -1,25 +1,25 @@
-.copy {
-    @apply cursor-pointer mr-2;
+.copy16,
+.copy24 {
+    @apply cursor-pointer stroke-sui-blue-steel leading-[100%] self-start sm:self-end;
+}
 
-    /* fix some wiered vertical spacing svg with copy 16px is the high of svg */
-    font-size: 16px !important;
-    vertical-align: middle;
-    line-height: 100%;
+.copy16 {
+    @apply hidden sm:block;
 }
 
 .copied {
-    @apply text-green-600 ml-1 text-sm;
+    @apply text-green-600 text-sm self-start sm:self-center;
+}
+
+.copied span {
+    @apply block sm:inline w-[20vw] text-center;
 }
 
 .longtext,
 .longtext > a {
-    @apply no-underline text-sui-dark hover:text-[#1F6493] cursor-pointer break-all inline mr-2;
-}
-
-.linktext {
-    @apply mr-2;
+    @apply no-underline text-sui-dark hover:text-[#1F6493] cursor-pointer break-all inline;
 }
 
 .longtextwrapper {
-    @apply inline md:block min-w-fit;
+    @apply flex items-center gap-[6px] min-w-fit;
 }

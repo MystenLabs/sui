@@ -100,7 +100,6 @@ function TokenView({ data }: { data: DataType }) {
                                         text={viewedData.id}
                                         category="objects"
                                         isLink={false}
-                                        isCopyButton={false}
                                     />
                                 </td>
                             </tr>
@@ -113,7 +112,6 @@ function TokenView({ data }: { data: DataType }) {
                                             text={viewedData.tx_digest}
                                             category="transactions"
                                             isLink={true}
-                                            isCopyButton={false}
                                         />
                                     </td>
                                 </tr>
@@ -138,7 +136,6 @@ function TokenView({ data }: { data: DataType }) {
                                             viewedData.owner !== 'Immutable' &&
                                             viewedData.owner !== 'Shared'
                                         }
-                                        isCopyButton={false}
                                     />
                                 </td>
                             </tr>
