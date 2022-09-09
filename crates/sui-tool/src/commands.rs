@@ -537,13 +537,34 @@ impl ToolCommand {
                 }))
                 .await;
 
-                let responses = responses.iter().group_by(|(_name, _addr, resp, _ts)| {
-                    resp.as_ref().map(|ok_result| {
-                        (ok_result.signed_effects)
+                let responses = responses
+                    .iter()
+                    .sorted_by(|(_, _, resp_a, _), (_, _, resp_b, _)| {
+                        let sort_key_a = resp_a
                             .as_ref()
-                            .map(|effects| (&effects.effects, *effects.digest()))
+                            .map(|ok_result| {
+                                (ok_result.signed_effects)
+                                    .as_ref()
+                                    .map(|effects| *effects.digest())
+                            })
+                            .ok();
+                        let sort_key_b = resp_b
+                            .as_ref()
+                            .map(|ok_result| {
+                                (ok_result.signed_effects)
+                                    .as_ref()
+                                    .map(|effects| *effects.digest())
+                            })
+                            .ok();
+                        Ord::cmp(&sort_key_a, &sort_key_b)
                     })
-                });
+                    .group_by(|(_name, _addr, resp, _ts)| {
+                        resp.as_ref().map(|ok_result| {
+                            (ok_result.signed_effects)
+                                .as_ref()
+                                .map(|effects| (&effects.effects, *effects.digest()))
+                        })
+                    });
                 for (i, (st, group)) in (&responses).into_iter().enumerate() {
                     match st {
                         Ok(Some((effects, effect_digest))) => {
@@ -566,6 +587,7 @@ impl ToolCommand {
                             res.3
                         );
                     }
+                    println!();
                 }
             }
             ToolCommand::DbTool { db_path, cmd } => {
