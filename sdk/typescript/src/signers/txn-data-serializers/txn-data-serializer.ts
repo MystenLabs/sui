@@ -49,30 +49,28 @@ export interface MoveCallTransaction {
   gasBudget: number;
 }
 
+/**
+ * Transaction type used for publishing Move modules to the Sui.
+ *
+ * Use the util methods defined in [utils/publish.ts](../../utils/publish.ts)
+ * to get `compiledModules` bytes by leveraging the sui
+ * command line tool.
+ *
+ * ```
+ * const { execSync } = require('child_process');
+ * const modulesInBase64 = JSON.parse(execSync(
+ *   `${cliPath} move build --dump-bytecode-as-base64 --path ${packagePath}`,
+ *   { encoding: 'utf-8' }
+ * ));
+ *
+ * // Include the following line if you are using `LocalTxnDataSerializer`, skip
+ * // if you are using `RpcTxnDataSerializer`
+ * // const modulesInBytes = modules.map((m) => Array.from(new Base64DataBuffer(m).getData()));
+ * // ... publish logic ...
+ * ```
+ *
+ */
 export interface PublishTransaction {
-  /**
-   * Transaction type used for publishing Move modules to the Sui.
-   * Should be already compiled using `sui-move`, example:
-   * ```
-   * $ sui move build
-   * $ cat build/project_name/bytecode_modules/module.mv
-   * ```
-   * In JS:
-   *
-   * ```
-   * // If you are using `RpcTxnDataSerializer`,
-   * let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv', 'base64');
-   * let compiledModules = [file.toString()]
-   *
-   * // If you are using `LocalTxnDataSerializer`,
-   * let file = fs.readFileSync('./move/build/project_name/bytecode_modules/module.mv');
-   * let modules = [ Array.from(file) ];
-   *
-   * // ... publish logic ...
-   * ```
-   *
-   * Each module should be represented as a sequence of bytes.
-   */
   compiledModules: ArrayLike<string> | ArrayLike<ArrayLike<number>>;
   gasPayment?: ObjectId;
   gasBudget: number;

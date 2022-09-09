@@ -174,6 +174,10 @@ export abstract class SignerWithProvider implements Signer {
     return await this.signAndExecuteTransaction(txBytes);
   }
 
+  /**
+   * Publish a Move package on chain
+   * @param transaction See {@link PublishTransaction}
+   */
   async publish(
     transaction: PublishTransaction
   ): Promise<SuiTransactionResponse> {
