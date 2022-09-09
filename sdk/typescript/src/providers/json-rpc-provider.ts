@@ -40,7 +40,7 @@ import {
   ObjectOwner,
   ObjectId,
   SuiEvents,
-  DEFAULT_RESULT_COUNT,
+  EVENT_QUERY_MAX_LIMIT,
   DEFAULT_START_TIME,
   DEFAULT_END_TIME,
 } from '../types';
@@ -443,7 +443,7 @@ export class JsonRpcProvider extends Provider {
 
   async getEventsByTransaction(
     digest: TransactionDigest,
-    count: number = DEFAULT_RESULT_COUNT
+    count: number = EVENT_QUERY_MAX_LIMIT
   ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
@@ -462,7 +462,7 @@ export class JsonRpcProvider extends Provider {
   async getEventsByModule(
     package_: string,
     module: string,
-    count: number = DEFAULT_RESULT_COUNT,
+    count: number = EVENT_QUERY_MAX_LIMIT,
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
@@ -482,7 +482,7 @@ export class JsonRpcProvider extends Provider {
 
   async getEventsByMoveEventStructName(
     moveEventStructName: string,
-    count: number = DEFAULT_RESULT_COUNT,
+    count: number = EVENT_QUERY_MAX_LIMIT,
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
@@ -502,7 +502,7 @@ export class JsonRpcProvider extends Provider {
 
   async getEventsBySender(
     sender: SuiAddress,
-    count: number = DEFAULT_RESULT_COUNT,
+    count: number = EVENT_QUERY_MAX_LIMIT,
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
@@ -522,7 +522,7 @@ export class JsonRpcProvider extends Provider {
 
   async getEventsByRecipient(
     recipient: ObjectOwner,
-    count: number = DEFAULT_RESULT_COUNT,
+    count: number = EVENT_QUERY_MAX_LIMIT,
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
@@ -542,7 +542,7 @@ export class JsonRpcProvider extends Provider {
 
   async getEventsByObject(
     object: ObjectId,
-    count: number = DEFAULT_RESULT_COUNT,
+    count: number = EVENT_QUERY_MAX_LIMIT,
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
@@ -561,7 +561,7 @@ export class JsonRpcProvider extends Provider {
   }
 
   async getEventsByTimeRange(
-    count: number = DEFAULT_RESULT_COUNT,
+    count: number = EVENT_QUERY_MAX_LIMIT,
     startTime: number = DEFAULT_START_TIME,
     endTime: number = DEFAULT_END_TIME
   ): Promise<SuiEvents> {
