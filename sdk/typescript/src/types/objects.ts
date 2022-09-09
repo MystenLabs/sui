@@ -173,15 +173,26 @@ export type GetRawObjectResponse = {
 export type ObjectVersionStatus =
   'VersionFound' | 'ObjectNotExists' | 'ObjectDeleted' | 'VersionNotFound' | 'VersionTooHigh';
 
-export type GetPastObjectResponse = {
-  status: ObjectVersionStatus,
-  details: SuiObject | ObjectId | SuiObjectRef | any | /* TODO - better type */
-    {
+export type GetPastObjectResponse =
+  { status: 'ObjectDeleted', details: { objectRef: SuiObjectRef } }|
+  { status: 'ObjectNotExists', details: ObjectId } |
+  { status: 'VersionFound', details: SuiObject } |
+  {
+    status: 'VersionNotFound',
+    details: {
+      objectId: ObjectId,
+      version: SequenceNumber
+    }
+  } |
+  {
+    status: 'VersionTooHigh',
+    details: {
       objectId: ObjectId,
       askedVersion: SequenceNumber
       latestVersion: SequenceNumber
     }
-}
+  } |
+  { status: 'VersionFound', details: SuiObject };
 
 export type ObjectDigest = string;
 export type ObjectId = string;
