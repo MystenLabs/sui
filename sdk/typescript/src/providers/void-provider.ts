@@ -134,7 +134,7 @@ export class VoidProvider extends Provider {
     throw this.newError('getEventsByTransaction');
   }
 
-  async getEventsByTransactionModule(
+  async getEventsByModule(
     _package: string,
     _module: string,
     _count: number,

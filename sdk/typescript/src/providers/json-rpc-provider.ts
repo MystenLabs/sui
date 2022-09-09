@@ -459,7 +459,7 @@ export class JsonRpcProvider extends Provider {
     }
   }
 
-  async getEventsByTransactionModule(
+  async getEventsByModule(
     package_: string,
     module: string,
     count: number = DEFAULT_RESULT_COUNT,
@@ -468,7 +468,7 @@ export class JsonRpcProvider extends Provider {
   ): Promise<SuiEvents> {
     try {
       return await this.client.requestWithType(
-        'sui_getEventsByTransactionModule',
+        'sui_getEventsByModule',
         [package_, module, count, startTime, endTime],
         isSuiEvents,
         this.skipDataValidation

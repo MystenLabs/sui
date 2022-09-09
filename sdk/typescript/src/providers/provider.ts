@@ -160,7 +160,7 @@ export abstract class Provider {
    * @param startTime start of time range
    * @param endTime end of time range
    */
-  abstract getEventsByTransactionModule(
+  abstract getEventsByModule(
     package_: ObjectId,                   // 'package' is reserved word
     module: string,
     count: number,
