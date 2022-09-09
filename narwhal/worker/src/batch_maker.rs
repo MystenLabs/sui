@@ -131,53 +131,49 @@ impl BatchMaker {
 
         #[cfg(feature = "benchmark")]
         {
-            let message = types::WorkerMessage::Batch(batch.clone());
-            let serialized =
-                bincode::serialize(&message).expect("Failed to serialize our own batch");
+            use fastcrypto::Hash;
+            let digest = batch.digest();
 
-            // NOTE: This is one extra hash that is only needed to print the following log entries.
-            if let Ok(digest) = types::serialized_batch_digest(&serialized) {
-                // Look for sample txs (they all start with 0) and gather their txs id (the next 8 bytes).
-                let tx_ids: Vec<_> = batch
-                    .0
-                    .iter()
-                    .filter(|tx| tx[0] == 0u8 && tx.len() > 8)
-                    .filter_map(|tx| tx[1..9].try_into().ok())
-                    .collect();
+            // Look for sample txs (they all start with 0) and gather their txs id (the next 8 bytes).
+            let tx_ids: Vec<_> = batch
+                .0
+                .iter()
+                .filter(|tx| tx[0] == 0u8 && tx.len() > 8)
+                .filter_map(|tx| tx[1..9].try_into().ok())
+                .collect();
 
-                for id in tx_ids {
-                    // NOTE: This log entry is used to compute performance.
-                    tracing::info!(
-                        "Batch {:?} contains sample tx {}",
-                        digest,
-                        u64::from_be_bytes(id)
-                    );
-                }
-
-                // The first 8 bytes of each transaction message is reserved for an identifier
-                // that's useful for debugging and tracking the lifetime of messages between
-                // Narwhal and clients.
-                let tracking_ids: Vec<_> = batch
-                    .0
-                    .iter()
-                    .map(|tx| {
-                        let len = tx.len();
-                        if len >= 8 {
-                            (&tx[0..8]).read_u64::<BigEndian>().unwrap_or_default()
-                        } else {
-                            0
-                        }
-                    })
-                    .collect();
-                tracing::debug!(
-                    "Tracking IDs of transactions in the Batch {:?}: {:?}",
-                    digest,
-                    tracking_ids
-                );
-
+            for id in tx_ids {
                 // NOTE: This log entry is used to compute performance.
-                tracing::info!("Batch {:?} contains {} B", digest, size);
+                tracing::info!(
+                    "Batch {:?} contains sample tx {}",
+                    digest,
+                    u64::from_be_bytes(id)
+                );
             }
+
+            // The first 8 bytes of each transaction message is reserved for an identifier
+            // that's useful for debugging and tracking the lifetime of messages between
+            // Narwhal and clients.
+            let tracking_ids: Vec<_> = batch
+                .0
+                .iter()
+                .map(|tx| {
+                    let len = tx.len();
+                    if len >= 8 {
+                        (&tx[0..8]).read_u64::<BigEndian>().unwrap_or_default()
+                    } else {
+                        0
+                    }
+                })
+                .collect();
+            tracing::debug!(
+                "Tracking IDs of transactions in the Batch {:?}: {:?}",
+                digest,
+                tracking_ids
+            );
+
+            // NOTE: This log entry is used to compute performance.
+            tracing::info!("Batch {:?} contains {} B", digest, size);
         }
 
         let reason = if timeout { "timeout" } else { "size_reached" };

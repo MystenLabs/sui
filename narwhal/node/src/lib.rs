@@ -31,7 +31,7 @@ use tokio::{
 use tracing::{debug, info};
 use types::{
     metered_channel, Batch, BatchDigest, Certificate, CertificateDigest, ConsensusStore, Header,
-    HeaderDigest, ReconfigureNotification, Round, SequenceNumber, SerializedBatchMessage,
+    HeaderDigest, ReconfigureNotification, Round, SequenceNumber,
 };
 use worker::{metrics::initialise_metrics, Worker};
 
@@ -44,7 +44,7 @@ pub struct NodeStorage {
     pub header_store: Store<HeaderDigest, Header>,
     pub certificate_store: CertificateStore,
     pub payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    pub batch_store: Store<BatchDigest, SerializedBatchMessage>,
+    pub batch_store: Store<BatchDigest, Batch>,
     pub consensus_store: Arc<ConsensusStore>,
     pub temp_batch_store: Store<(CertificateDigest, BatchDigest), Batch>,
 }
@@ -92,7 +92,7 @@ impl NodeStorage {
             Self::CERTIFICATES_CF;<CertificateDigest, Certificate>,
             Self::CERTIFICATE_ID_BY_ROUND_CF;<(Round, CertificateDigest), CertificateToken>,
             Self::PAYLOAD_CF;<(BatchDigest, WorkerId), PayloadToken>,
-            Self::BATCHES_CF;<BatchDigest, SerializedBatchMessage>,
+            Self::BATCHES_CF;<BatchDigest, Batch>,
             Self::LAST_COMMITTED_CF;<PublicKey, Round>,
             Self::SEQUENCE_CF;<SequenceNumber, CertificateDigest>,
             Self::TEMP_BATCH_CF;<(CertificateDigest, BatchDigest), Batch>

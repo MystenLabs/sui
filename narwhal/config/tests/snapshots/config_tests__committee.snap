@@ -4,13 +4,13 @@ expression: committee
 ---
 {
   "authorities": {
-    "imU9ZewykCt0OOx70OkQCqKzj1TbVdD9nLqdCSutEIvSrtOWllaN9v/8w4B6dyrRE/Gacj+Cx/q5L15FycCX1spJIWMrt54HVB4beTy/MsgwvN6XZS6B4O4jCHbSqqiJ": {
+    "i9DpjC/kZbDd57csSg7qWFMF3uTECO2jBD3M5BOXU8T7AebTrMO+9D5IbnUI8N7lFhmjEiKFhwUOlFGbx1jkdP212PR/XvnayHxDaJuMkytxACBnshi9TrbZiZP10tqL": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/0/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/0/http"
       },
-      "network_key": "u8qKILpUof274Kfj23GlMvka4OUUaYoRt2i/pigwivY="
+      "network_key": "+oKq7VFT0pAQvjlvEti2YUw5fHXEYT/bs21P9wTlAKs="
     },
     "jGbcLB6p5T8JhcF7TnrxmRK208QODFkgpaElCbTrNhn14H7Fbqd/CzBim6HMctdbE5RgeCpfDi+J+0xCtLil+uPSYBAiIOY9B1Tn4YRt7v05iOreTtN/E4VDfRneGhYY": {
       "stake": 1,
@@ -20,21 +20,21 @@ expression: committee
       },
       "network_key": "rvP0pLjsod/DQzYb+OQ2vULeklnAS4MU644gVN1ugqs="
     },
-    "qFBJ9C1pDBTCGNrGZTsHjiByNT1f4Shn++FfLXahY9V972gwsu8Qil1Kx1uDCuCPAkErNvcm91//7LK1bZKtwxxFIB0oibvW8UQwAVmbdQT0ZwCaJv02t25Zkpw0j9Kx": {
+    "ld89LijKV9Ra6U/hkj6PnWKgcDbW4IgHAy1sHOLjHNvxLDoMQYJhDA5yb3+rOIfRBm91BOK0aSlGEtfdAZOB5af1kfxciSrnzDAHDKw1eCMo92nMEHWj5bpJbSlnySf7": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/0/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/0/http"
       },
-      "network_key": "fBEBLo4XV9uxBFd2fOjqDAkLzwJJ4sBIDtEayytwO7A="
+      "network_key": "r7SQXpVQz0YqggB4JKBV2XWuk0RwxHfZ3bttKyZMNvo="
     },
-    "tOu6CCUfQFvA7Oo9IQsi6Q25ThGDmgcTXMYn4QVX8D8HeuI1DBmnctVFka/y0GijF5oKKOglBJNWsPz6LaE5YczKopYHmwm2kIxBwYHPdj186+KU8QfuvlZpHn/OnuCS": {
+    "teRXk6Iq1Pod0UgOcrvBrvVvs8ZpM0bUgbZNL7YpH4n06TvGuiaId9SfpuYe+JOOF4rXiNzQv7CW6npbn3SVZMv9NzwYJcz5RL6F3gAMpNx+o9YM5+gqNtn/OGArUTCC": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/0/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/0/http"
       },
-      "network_key": "hkGX9Mxcq2yO3Ut5xIXvuaVVcYt1tgPi6LmPVewN4mc="
+      "network_key": "Kt9mRluFkBunwfq2VREQbBXuSYGOsFo95bA/PIrvVhc="
     }
   },
   "epoch": 0

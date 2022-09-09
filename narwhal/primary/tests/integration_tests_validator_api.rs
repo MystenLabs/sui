@@ -27,11 +27,11 @@ use types::{
     Batch, BatchDigest, Certificate, CertificateDigest, CertificateDigestProto,
     CollectionRetrievalResult, Empty, GetCollectionsRequest, Header, HeaderDigest,
     ReadCausalRequest, ReconfigureNotification, RemoveCollectionsRequest, RetrievalResult,
-    SerializedBatchMessage, Transaction, ValidatorClient,
+    Transaction, ValidatorClient,
 };
 use worker::{
     metrics::{Metrics, WorkerChannelMetrics, WorkerEndpointMetrics, WorkerMetrics},
-    Worker, WorkerMessage,
+    Worker,
 };
 
 #[tokio::test]
@@ -93,12 +93,7 @@ async fn test_get_collections() {
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            let message = WorkerMessage::Batch(batch.clone());
-            let serialized_batch = bincode::serialize(&message).unwrap();
-            store
-                .batch_store
-                .write(batch.digest(), serialized_batch)
-                .await;
+            store.batch_store.write(batch.digest(), batch.clone()).await;
         } else {
             missing_block = block_id;
         }
@@ -295,12 +290,7 @@ async fn test_remove_collections() {
             .expect("couldn't store batches");
         if n != 4 {
             // Add batches to the workers store
-            let message = WorkerMessage::Batch(batch.clone());
-            let serialized_batch = bincode::serialize(&message).unwrap();
-            store
-                .batch_store
-                .write(batch.digest(), serialized_batch)
-                .await;
+            store.batch_store.write(batch.digest(), batch.clone()).await;
         }
     }
 
@@ -1091,13 +1081,11 @@ async fn fixture_certificate(
     header_store: Store<HeaderDigest, Header>,
     certificate_store: CertificateStore,
     payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
-    batch_store: Store<BatchDigest, SerializedBatchMessage>,
+    batch_store: Store<BatchDigest, Batch>,
 ) -> (Certificate, Batch) {
     let batch = fixture_batch_with_transactions(10);
     let worker_id = 0;
 
-    let message = WorkerMessage::Batch(batch.clone());
-    let serialized_batch = bincode::serialize(&message).unwrap();
     let batch_digest = batch.digest();
 
     let mut payload = IndexMap::new();
@@ -1124,7 +1112,7 @@ async fn fixture_certificate(
         .expect("couldn't store batches");
 
     // Add a batch to the workers store
-    batch_store.write(batch_digest, serialized_batch).await;
+    batch_store.write(batch_digest, batch.clone()).await;
 
     (certificate, batch)
 }

@@ -24,7 +24,7 @@ pub use crate::{
         Lucky, LuckyNetwork, LuckyNetwork2, ReliableNetwork, ReliableNetwork2, UnreliableNetwork,
         UnreliableNetwork2,
     },
-    worker::{WorkerNetwork, WorkerToPrimaryNetwork},
+    worker::WorkerToPrimaryNetwork,
 };
 
 // the result of our network messages

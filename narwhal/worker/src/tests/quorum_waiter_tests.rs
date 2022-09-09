@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::worker::WorkerMessage;
-use test_utils::{batch, CommitteeFixture, WorkerToWorkerMockServer};
+use test_utils::{batch, mock_network, CommitteeFixture, WorkerToWorkerMockServer};
 
 #[tokio::test]
 async fn wait_for_quorum() {
@@ -12,49 +12,55 @@ async fn wait_for_quorum() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let myself = fixture.authorities().next().unwrap().public_key();
+    let my_primary = fixture.authorities().next().unwrap().public_key();
+    let myself = fixture.authorities().next().unwrap().worker(0);
 
     let (_tx_reconfiguration, rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
+    // setup network
+    let network = mock_network(myself.keypair(), &myself.info().worker_to_worker);
     // Spawn a `QuorumWaiter` instance.
     let _quorum_waiter_handler = QuorumWaiter::spawn(
-        myself.clone(),
+        my_primary.clone(),
         /* worker_id */ 0,
         committee.clone(),
         worker_cache.clone(),
         rx_reconfiguration,
         rx_message,
         tx_batch,
-        WorkerNetwork::default(),
+        P2pNetwork::new(network.clone()),
     );
 
     // Make a batch.
     let batch = batch();
     let message = WorkerMessage::Batch(batch.clone());
-    let serialized = bincode::serialize(&message).unwrap();
 
     // Spawn enough listeners to acknowledge our batches.
-    let mut names = Vec::new();
-    let mut addresses = Vec::new();
     let mut listener_handles = Vec::new();
-    for (name, address) in worker_cache.load().others_workers(&myself, /* id */ &0) {
-        let address = address.worker_to_worker;
-        let handle = WorkerToWorkerMockServer::spawn(address.clone());
-        names.push(name);
-        addresses.push(address);
+    for worker in fixture.authorities().skip(1).map(|a| a.worker(0)) {
+        let handle = WorkerToWorkerMockServer::spawn(
+            worker.keypair(),
+            worker.info().worker_to_worker.clone(),
+        );
         listener_handles.push(handle);
+
+        // ensure that the networks are connected
+        network
+            .connect(network::multiaddr_to_address(&worker.info().worker_to_worker).unwrap())
+            .await
+            .unwrap();
     }
 
     // Forward the batch along with the handlers to the `QuorumWaiter`.
-    tx_message.send(batch).await.unwrap();
+    tx_message.send(batch.clone()).await.unwrap();
 
     // Wait for the `QuorumWaiter` to gather enough acknowledgements and output the batch.
     let output = rx_batch.recv().await.unwrap();
-    assert_eq!(output, serialized);
+    assert_eq!(output, batch);
 
     // Ensure the other listeners correctly received the batch.
-    for mut handle in listener_handles {
-        assert_eq!(handle.recv().await.unwrap().payload, serialized);
+    for (mut handle, _network) in listener_handles {
+        assert_eq!(handle.recv().await.unwrap(), message);
     }
 }

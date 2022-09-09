@@ -18,7 +18,7 @@ use tonic::transport::Channel;
 use tracing::error;
 use types::{
     BincodeEncodedPayload, PrimaryMessage, PrimaryToPrimaryClient, PrimaryToWorkerClient,
-    PrimaryWorkerMessage,
+    PrimaryWorkerMessage, WorkerMessage, WorkerToWorkerClient,
 };
 
 fn default_executor() -> BoundedExecutor {
@@ -265,6 +265,16 @@ impl P2pNetwork {
     }
 }
 
+impl Lucky for P2pNetwork {
+    fn rng(&mut self) -> &mut SmallRng {
+        &mut self.rng
+    }
+}
+
+//
+// Primary-to-Primary
+//
+
 #[async_trait]
 impl UnreliableNetwork2<PrimaryMessage> for P2pNetwork {
     async fn unreliable_send(
@@ -279,12 +289,6 @@ impl UnreliableNetwork2<PrimaryMessage> for P2pNetwork {
                 .await
         };
         self.unreliable_send(peer, f).await
-    }
-}
-
-impl Lucky for P2pNetwork {
-    fn rng(&mut self) -> &mut SmallRng {
-        &mut self.rng
     }
 }
 
@@ -303,6 +307,41 @@ impl ReliableNetwork2<PrimaryMessage> for P2pNetwork {
                     .send_message(message)
                     .await
             }
+        };
+
+        self.send(peer, f).await
+    }
+}
+
+//
+// Worker-to-Worker
+//
+
+#[async_trait]
+impl UnreliableNetwork2<WorkerMessage> for P2pNetwork {
+    async fn unreliable_send(
+        &mut self,
+        peer: NetworkPublicKey,
+        message: &WorkerMessage,
+    ) -> JoinHandle<()> {
+        let message = message.to_owned();
+        let f =
+            move |peer| async move { WorkerToWorkerClient::new(peer).send_message(message).await };
+        self.unreliable_send(peer, f).await
+    }
+}
+
+#[async_trait]
+impl ReliableNetwork2<WorkerMessage> for P2pNetwork {
+    async fn send(
+        &mut self,
+        peer: NetworkPublicKey,
+        message: &WorkerMessage,
+    ) -> CancelOnDropHandler<anyhow::Result<anemo::Response<()>>> {
+        let message = message.to_owned();
+        let f = move |peer| {
+            let message = message.clone();
+            async move { WorkerToWorkerClient::new(peer).send_message(message).await }
         };
 
         self.send(peer, f).await

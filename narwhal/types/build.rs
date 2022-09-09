@@ -54,9 +54,23 @@ fn build_anemo_services(out_dir: &Path) {
         )
         .build();
 
+    let worker_to_worker = anemo_build::manual::Service::builder()
+        .name("WorkerToWorker")
+        .package("narwhal")
+        .method(
+            anemo_build::manual::Method::builder()
+                .name("send_message")
+                .route_name("SendMessage")
+                .request_type("crate::WorkerMessage")
+                .response_type("()")
+                .codec_path("anemo::rpc::codec::BincodeCodec")
+                .build(),
+        )
+        .build();
+
     anemo_build::manual::Builder::new()
         .out_dir(out_dir)
-        .compile(&[primary_to_primary]);
+        .compile(&[primary_to_primary, worker_to_worker]);
 }
 
 #[rustversion::nightly]

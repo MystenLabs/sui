@@ -3,14 +3,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use config::WorkerId;
+use fastcrypto::Hash;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
-use tracing::error;
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    serialized_batch_digest, BatchDigest, ReconfigureNotification, SerializedBatchMessage,
-    WorkerPrimaryMessage,
+    Batch, BatchDigest, ReconfigureNotification, WorkerPrimaryMessage,
 };
 
 #[cfg(test)]
@@ -26,11 +25,11 @@ impl Processor {
         // Our worker's id.
         id: WorkerId,
         // The persistent storage.
-        store: Store<BatchDigest, SerializedBatchMessage>,
+        store: Store<BatchDigest, Batch>,
         // Receive reconfiguration signals.
         mut rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         // Input channel to receive batches.
-        mut rx_batch: Receiver<SerializedBatchMessage>,
+        mut rx_batch: Receiver<Batch>,
         // Output channel to send out batches' digests.
         tx_digest: Sender<WorkerPrimaryMessage>,
         // Whether we are processing our own batches or the batches of other nodes.
@@ -41,29 +40,22 @@ impl Processor {
                 tokio::select! {
                     Some(batch) = rx_batch.recv() => {
                         // Hash the batch.
-                        let res_digest = serialized_batch_digest(&batch);
+                        let digest = batch.digest();
 
-                        match res_digest {
-                            Ok(digest) => {
-                                // Store the batch.
-                                store.write(digest, batch).await;
+                        // Store the batch.
+                        store.write(digest, batch).await;
 
-                                // Deliver the batch's digest.
-                                let message = match own_digest {
-                                    true => WorkerPrimaryMessage::OurBatch(digest, id),
-                                    false => WorkerPrimaryMessage::OthersBatch(digest, id),
-                                };
-                                if tx_digest
-                                    .send(message)
-                                    .await
-                                    .is_err() {
-                                    tracing::debug!("{}", DagError::ShuttingDown);
-                                };
-                            }
-                            Err(error) => {
-                                error!("Received invalid batch, serialization failure: {error}");
-                            }
-                        }
+                        // Deliver the batch's digest.
+                        let message = match own_digest {
+                            true => WorkerPrimaryMessage::OurBatch(digest, id),
+                            false => WorkerPrimaryMessage::OthersBatch(digest, id),
+                        };
+                        if tx_digest
+                            .send(message)
+                            .await
+                            .is_err() {
+                            tracing::debug!("{}", DagError::ShuttingDown);
+                        };
                     },
 
                     // Trigger reconfigure.

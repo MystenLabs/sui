@@ -3,7 +3,7 @@
 use fastcrypto::Hash;
 use proptest::arbitrary::Arbitrary;
 use serde_test::{assert_tokens, Token};
-use types::{serialized_batch_digest, Batch, WorkerMessage};
+use types::{Batch, WorkerMessage};
 
 #[test]
 fn test_serde_batch() {
@@ -82,18 +82,4 @@ fn test_bincode_serde_batch_message() {
         "received {}",
         hex::encode(txes_bytes)
     );
-}
-
-proptest::proptest! {
-
-    #[test]
-    fn test_batch_and_serialized(
-        batch in Batch::arbitrary()
-    ) {
-        let digest = batch.digest();
-        let message = WorkerMessage::Batch(batch);
-        let serialized = bincode::serialize(&message).expect("Failed to serialize our own batch");
-        let digest_from_serialized = serialized_batch_digest(&serialized).expect("Failed to hash serialized batch");
-        assert_eq!(digest, digest_from_serialized);
-    }
 }

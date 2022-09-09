@@ -5,7 +5,7 @@ use crate::metrics::WorkerMetrics;
 use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerId, WorkerIndex};
 use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use network::{LuckyNetwork, UnreliableNetwork, WorkerNetwork};
+use network::{LuckyNetwork2, P2pNetwork, UnreliableNetwork2};
 use primary::PrimaryWorkerMessage;
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -23,8 +23,8 @@ use tracing::{debug, error, trace, warn};
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    BatchDigest, ReconfigureNotification, Round, SerializedBatchMessage, WorkerMessage,
-    WorkerPrimaryError, WorkerPrimaryMessage,
+    Batch, BatchDigest, ReconfigureNotification, Round, WorkerMessage, WorkerPrimaryError,
+    WorkerPrimaryMessage,
 };
 
 #[cfg(test)]
@@ -45,7 +45,7 @@ pub struct Synchronizer {
     /// The worker information cache.
     worker_cache: SharedWorkerCache,
     // The persistent storage.
-    store: Store<BatchDigest, SerializedBatchMessage>,
+    store: Store<BatchDigest, Batch>,
     /// The depth of the garbage collection.
     gc_depth: Round,
     /// The delay to wait before re-trying to send sync requests.
@@ -56,7 +56,7 @@ pub struct Synchronizer {
     /// Input channel to receive the commands from the primary.
     rx_message: Receiver<PrimaryWorkerMessage>,
     /// A network sender to send requests to the other workers.
-    network: WorkerNetwork,
+    network: P2pNetwork,
     /// Loosely keep track of the primary's round number (only used for cleanup).
     round: Round,
     /// Keeps the digests (of batches) that are waiting to be processed by the primary. Their
@@ -78,7 +78,7 @@ impl Synchronizer {
         id: WorkerId,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
-        store: Store<BatchDigest, SerializedBatchMessage>,
+        store: Store<BatchDigest, Batch>,
         gc_depth: Round,
         sync_retry_delay: Duration,
         sync_retry_nodes: usize,
@@ -86,7 +86,7 @@ impl Synchronizer {
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         metrics: Arc<WorkerMetrics>,
-        network: WorkerNetwork,
+        network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -115,7 +115,7 @@ impl Synchronizer {
     /// and then delivers its digest.
     async fn waiter(
         missing: BatchDigest,
-        store: Store<BatchDigest, SerializedBatchMessage>,
+        store: Store<BatchDigest, Batch>,
         deliver: BatchDigest,
         mut handler: mpsc::Receiver<()>,
     ) -> Result<Option<BatchDigest>, StoreError> {
@@ -198,18 +198,18 @@ impl Synchronizer {
 
                             // Send sync request to a single node. If this fails, we will send it
                             // to other nodes when a timer times out.
-                            let address = match self.worker_cache.load().worker(&target, &self.id) {
-                                Ok(address) => address.worker_to_worker,
+                            let worker_name = match self.worker_cache.load().worker(&target, &self.id) {
+                                Ok(worker_info) => worker_info.name,
                                 Err(e) => {
                                     error!("The primary asked us to sync with an unknown node: {e}");
                                     continue;
                                 }
                             };
 
-                            debug!("Sending BatchRequest message to {} for missing batches {:?}", address, missing.clone());
+                            debug!("Sending BatchRequest message to {} for missing batches {:?}", worker_name, missing.clone());
 
                             let message = WorkerMessage::BatchRequest(missing.into_iter().collect::<Vec<_>>(), self.name.clone());
-                            self.network.unreliable_send(address, &message).await;
+                            self.network.unreliable_send(worker_name, &message).await;
                         } else {
                             debug!("All batches are already available {:?} nothing to request from peers", digests);
                         }
@@ -339,14 +339,14 @@ impl Synchronizer {
                         }
                     }
                     if !retry.is_empty() {
-                        let addresses = self.worker_cache.load()
+                        let names = self.worker_cache.load()
                             .others_workers(&self.name, &self.id)
                             .into_iter()
-                            .map(|(_, address)| address.worker_to_worker)
+                            .map(|(_, info)| info.name)
                             .collect();
                         let message = WorkerMessage::BatchRequest(retry, self.name.clone());
                         self.network
-                            .lucky_broadcast(addresses, &message, self.sync_retry_nodes)
+                            .lucky_broadcast(names, &message, self.sync_retry_nodes)
                             .await;
                     }
 
@@ -364,15 +364,7 @@ impl Synchronizer {
 
     async fn handle_request_batch(&mut self, digest: BatchDigest) {
         let message = match self.store.read(digest).await {
-            Ok(Some(batch_serialised)) => {
-                let batch = match bincode::deserialize(&batch_serialised).unwrap() {
-                    WorkerMessage::Batch(batch) => batch,
-                    _ => {
-                        panic!("Wrong type has been stored!");
-                    }
-                };
-                WorkerPrimaryMessage::RequestedBatch(digest, batch)
-            }
+            Ok(Some(batch)) => WorkerPrimaryMessage::RequestedBatch(digest, batch),
             _ => WorkerPrimaryMessage::Error(WorkerPrimaryError::RequestedBatchNotFound(digest)),
         };
 

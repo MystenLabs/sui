@@ -5,6 +5,7 @@ mod narwhal {
     tonic::include_proto!("narwhal");
 
     include!(concat!(env!("OUT_DIR"), "/narwhal.PrimaryToPrimary.rs"));
+    include!(concat!(env!("OUT_DIR"), "/narwhal.WorkerToWorker.rs"));
 }
 
 use std::{array::TryFromSliceError, ops::Deref};

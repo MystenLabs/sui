@@ -2,7 +2,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
-use crate::worker::WorkerMessage;
 use fastcrypto::Hash;
 use store::rocks;
 use test_utils::{batch, temp_dir, CommitteeFixture};
@@ -34,14 +33,12 @@ async fn hash_and_store_our_batch() {
 
     // Send a batch to the `Processor`.
     let batch = batch();
-    let message = WorkerMessage::Batch(batch.clone());
-    let serialized = bincode::serialize(&message).unwrap();
 
     // the process should be idempotent - no matter how many times we write
     // the same batch it should be stored and output the message to the tx_digest channel
     for _ in 0..3 {
         // WHEN
-        tx_batch.send(serialized.clone()).await.unwrap();
+        tx_batch.send(batch.clone()).await.unwrap();
 
         // THEN
         // Ensure the `Processor` outputs the batch's digest.
@@ -57,7 +54,7 @@ async fn hash_and_store_our_batch() {
         // Ensure the `Processor` correctly stored the batch.
         let stored_batch = store.read(digest).await.unwrap();
         assert!(stored_batch.is_some(), "The batch is not in the store");
-        assert_eq!(stored_batch.unwrap(), serialized);
+        assert_eq!(stored_batch.unwrap(), batch);
     }
 }
 
@@ -88,12 +85,10 @@ async fn hash_and_store_others_batch() {
 
     // Send a batch to the `Processor`.
     let batch = batch();
-    let message = WorkerMessage::Batch(batch.clone());
-    let serialized = bincode::serialize(&message).unwrap();
 
     for _ in 0..3 {
         // WHEN
-        tx_batch.send(serialized.clone()).await.unwrap();
+        tx_batch.send(batch.clone()).await.unwrap();
 
         // THEN
         // Ensure the `Processor` outputs the batch's digest.
@@ -109,16 +104,11 @@ async fn hash_and_store_others_batch() {
         // Ensure the `Processor` correctly stored the batch.
         let stored_batch = store.read(digest).await.unwrap();
         assert!(stored_batch.is_some(), "The batch is not in the store");
-        assert_eq!(stored_batch.unwrap(), serialized);
+        assert_eq!(stored_batch.unwrap(), batch);
     }
 }
 
-fn create_batches_store() -> Store<BatchDigest, SerializedBatchMessage> {
-    let db = rocks::DBMap::<BatchDigest, SerializedBatchMessage>::open(
-        temp_dir(),
-        None,
-        Some("batches"),
-    )
-    .unwrap();
+fn create_batches_store() -> Store<BatchDigest, Batch> {
+    let db = rocks::DBMap::<BatchDigest, Batch>::open(temp_dir(), None, Some("batches")).unwrap();
     Store::new(db)
 }

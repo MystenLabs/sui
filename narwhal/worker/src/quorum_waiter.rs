@@ -4,12 +4,12 @@
 use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use network::{CancelOnDropHandler, MessageResult, ReliableNetwork, WorkerNetwork};
+use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork2};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     error::DagError,
     metered_channel::{Receiver, Sender},
-    Batch, ReconfigureNotification, SerializedBatchMessage, WorkerMessage,
+    Batch, ReconfigureNotification, WorkerMessage,
 };
 
 #[cfg(test)]
@@ -31,9 +31,9 @@ pub struct QuorumWaiter {
     /// Input Channel to receive commands.
     rx_message: Receiver<Batch>,
     /// Channel to deliver batches for which we have enough acknowledgments.
-    tx_batch: Sender<SerializedBatchMessage>,
+    tx_batch: Sender<Batch>,
     /// A network sender to broadcast the batches to the other workers.
-    network: WorkerNetwork,
+    network: P2pNetwork,
 }
 
 impl QuorumWaiter {
@@ -46,8 +46,8 @@ impl QuorumWaiter {
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_message: Receiver<Batch>,
-        tx_batch: Sender<Vec<u8>>,
-        network: WorkerNetwork,
+        tx_batch: Sender<Batch>,
+        network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -66,7 +66,10 @@ impl QuorumWaiter {
     }
 
     /// Helper function. It waits for a future to complete and then delivers a value.
-    async fn waiter(wait_for: CancelOnDropHandler<MessageResult>, deliver: Stake) -> Stake {
+    async fn waiter(
+        wait_for: CancelOnDropHandler<anemo::Result<anemo::Response<()>>>,
+        deliver: Stake,
+    ) -> Stake {
         let _ = wait_for.await;
         deliver
     }
@@ -77,21 +80,19 @@ impl QuorumWaiter {
             tokio::select! {
                 Some(batch) = self.rx_message.recv() => {
                     // Broadcast the batch to the other workers.
-                    let workers_addresses: Vec<_> = self
+                    let workers: Vec<_> = self
                         .worker_cache
                         .load()
                         .others_workers(&self.name, &self.id)
                         .into_iter()
-                        .map(|(name, addresses)| (name, addresses.worker_to_worker))
+                        .map(|(name, info)| (name, info.name))
                         .collect();
-                    let (names, addresses): (Vec<_>, _) = workers_addresses.iter().cloned().unzip();
-                    let message = WorkerMessage::Batch(batch);
-                    let serialized =
-                        bincode::serialize(&message).expect("Failed to serialize our own batch");
-                    let handlers = self.network.broadcast(addresses, &message).await;
+                    let (primary_names, worker_names): (Vec<_>, _) = workers.into_iter().unzip();
+                    let message = WorkerMessage::Batch(batch.clone());
+                    let handlers = self.network.broadcast(worker_names, &message).await;
 
                     // Collect all the handlers to receive acknowledgements.
-                    let mut wait_for_quorum: FuturesUnordered<_> = names
+                    let mut wait_for_quorum: FuturesUnordered<_> = primary_names
                         .into_iter()
                         .zip(handlers.into_iter())
                         .map(|(name, handler)| {
@@ -110,7 +111,7 @@ impl QuorumWaiter {
                             Some(stake) = wait_for_quorum.next() => {
                                 total_stake += stake;
                                 if total_stake >= threshold {
-                                    if self.tx_batch.send(serialized).await.is_err() {
+                                    if self.tx_batch.send(batch).await.is_err() {
                                         tracing::debug!("{}", DagError::ShuttingDown);
                                     }
                                     break;

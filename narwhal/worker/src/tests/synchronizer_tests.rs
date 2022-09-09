@@ -3,13 +3,12 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use arc_swap::ArcSwap;
+use fastcrypto::Hash;
 use prometheus::Registry;
 use test_utils::{
-    batch, batch_digest, batches, open_batch_store, serialize_batch_message, CommitteeFixture,
-    WorkerToWorkerMockServer,
+    batch, batches, mock_network, open_batch_store, CommitteeFixture, WorkerToWorkerMockServer,
 };
 use tokio::time::timeout;
-use types::serialized_batch_digest;
 
 #[tokio::test]
 async fn synchronize() {
@@ -19,8 +18,9 @@ async fn synchronize() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
+    let my_primary = fixture.authorities().next().unwrap();
+    let myself = my_primary.worker(id);
 
     let (tx_reconfiguration, _rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -30,9 +30,10 @@ async fn synchronize() {
 
     let metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
+    let network = mock_network(myself.keypair(), &myself.info().worker_to_worker);
     // Spawn a `Synchronizer` instance.
     let _synchronizer_handle = Synchronizer::spawn(
-        name.clone(),
+        my_primary.public_key(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
@@ -45,27 +46,32 @@ async fn synchronize() {
         tx_reconfiguration,
         tx_primary,
         metrics,
-        WorkerNetwork::default(),
+        P2pNetwork::new(network.clone()),
     );
 
     // Spawn a listener to receive our batch requests.
-    let target = fixture.authorities().nth(1).unwrap().public_key();
-    let address = worker_cache
-        .load()
-        .worker(&target, &id)
-        .unwrap()
-        .worker_to_worker;
-    let missing = vec![batch_digest()];
-    let message = WorkerMessage::BatchRequest(missing.clone(), name.clone());
-    let serialized = bincode::serialize(&message).unwrap();
-    let mut handle = WorkerToWorkerMockServer::spawn(address);
+    let target_primary = fixture.authorities().nth(1).unwrap();
+    let target_worker = target_primary.worker(id);
+    let target = target_primary.public_key();
+    let missing = vec![batch().digest()];
+    let expected = WorkerMessage::BatchRequest(missing.clone(), my_primary.public_key());
+    let (mut handle, _network) = WorkerToWorkerMockServer::spawn(
+        target_worker.keypair(),
+        target_worker.info().worker_to_worker.clone(),
+    );
+
+    // ensure that the networks are connected
+    network
+        .connect(network::multiaddr_to_address(&target_worker.info().worker_to_worker).unwrap())
+        .await
+        .unwrap();
 
     // Send a sync request.
     let message = PrimaryWorkerMessage::Synchronize(missing, target);
     tx_message.send(message).await.unwrap();
 
     // Ensure the target receives the sync request.
-    assert_eq!(handle.recv().await.unwrap().payload, serialized);
+    assert_eq!(handle.recv().await.unwrap(), expected);
 }
 
 #[tokio::test]
@@ -76,8 +82,9 @@ async fn synchronize_when_batch_exists() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
+    let my_primary = fixture.authorities().next().unwrap();
+    let myself = my_primary.worker(id);
 
     let (tx_reconfiguration, _rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -87,9 +94,10 @@ async fn synchronize_when_batch_exists() {
 
     let metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
+    let network = mock_network(myself.keypair(), &myself.info().worker_to_worker);
     // Spawn a `Synchronizer` instance.
     let _synchronizer_handle = Synchronizer::spawn(
-        name.clone(),
+        my_primary.public_key(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
@@ -102,24 +110,30 @@ async fn synchronize_when_batch_exists() {
         tx_reconfiguration,
         tx_primary,
         metrics,
-        WorkerNetwork::default(),
+        P2pNetwork::new(network.clone()),
     );
 
     // Spawn a listener to receive our batch requests.
-    let target = fixture.authorities().nth(1).unwrap().public_key();
-    let address = worker_cache
-        .load()
-        .worker(&target, &id)
-        .unwrap()
-        .worker_to_worker;
-    let batch_id = batch_digest();
+    let target_primary = fixture.authorities().nth(1).unwrap();
+    let target_worker = target_primary.worker(id);
+    let target = target_primary.public_key();
+    let (mut handle, _network) = WorkerToWorkerMockServer::spawn(
+        target_worker.keypair(),
+        target_worker.info().worker_to_worker.clone(),
+    );
+
+    // ensure that the networks are connected
+    network
+        .connect(network::multiaddr_to_address(&target_worker.info().worker_to_worker).unwrap())
+        .await
+        .unwrap();
+
+    let batch = batch();
+    let batch_id = batch.digest();
     let missing = vec![batch_id];
 
     // now store the batch
-    let payload = vec![10u8];
-    store.write(batch_id, payload).await;
-
-    let mut handle = WorkerToWorkerMockServer::spawn(address);
+    store.write(batch_id, batch).await;
 
     // Send a sync request.
     let message = PrimaryWorkerMessage::Synchronize(missing, target);
@@ -149,8 +163,9 @@ async fn test_successful_request_batch() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
+    let my_primary = fixture.authorities().next().unwrap();
+    let myself = my_primary.worker(id);
 
     let (tx_reconfiguration, _rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -160,9 +175,10 @@ async fn test_successful_request_batch() {
 
     let metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
+    let network = mock_network(myself.keypair(), &myself.info().worker_to_worker);
     // Spawn a `Synchronizer` instance.
     let _synchronizer_handle = Synchronizer::spawn(
-        name.clone(),
+        my_primary.public_key(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache,
@@ -175,14 +191,13 @@ async fn test_successful_request_batch() {
         tx_reconfiguration,
         tx_primary,
         metrics,
-        WorkerNetwork::default(),
+        P2pNetwork::new(network),
     );
 
     // Create a dummy batch and store
     let expected_batch = batch();
-    let batch_serialised = serialize_batch_message(expected_batch.clone());
-    let expected_digest = serialized_batch_digest(&batch_serialised.clone()).unwrap();
-    store.write(expected_digest, batch_serialised.clone()).await;
+    let expected_digest = expected_batch.digest();
+    store.write(expected_digest, expected_batch.clone()).await;
 
     // WHEN we send a message to retrieve the batch
     let message = PrimaryWorkerMessage::RequestBatch(expected_digest);
@@ -214,8 +229,9 @@ async fn test_request_batch_not_found() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
+    let my_primary = fixture.authorities().next().unwrap();
+    let myself = my_primary.worker(id);
 
     let (tx_reconfiguration, _rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -225,9 +241,10 @@ async fn test_request_batch_not_found() {
 
     let metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
+    let network = mock_network(myself.keypair(), &myself.info().worker_to_worker);
     // Spawn a `Synchronizer` instance.
     let _synchronizer_handle = Synchronizer::spawn(
-        name.clone(),
+        my_primary.public_key(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache,
@@ -240,7 +257,7 @@ async fn test_request_batch_not_found() {
         tx_reconfiguration,
         tx_primary,
         metrics,
-        WorkerNetwork::default(),
+        P2pNetwork::new(network),
     );
 
     // The non existing batch id
@@ -278,8 +295,9 @@ async fn test_successful_batch_delete() {
     let fixture = CommitteeFixture::builder().randomize_ports(true).build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().next().unwrap().public_key();
     let id = 0;
+    let my_primary = fixture.authorities().next().unwrap();
+    let myself = my_primary.worker(id);
 
     let (tx_reconfiguration, _rx_reconfiguration) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -289,9 +307,10 @@ async fn test_successful_batch_delete() {
 
     let metrics = Arc::new(WorkerMetrics::new(&Registry::new()));
 
+    let network = mock_network(myself.keypair(), &myself.info().worker_to_worker);
     // Spawn a `Synchronizer` instance.
     let _synchronizer_handle = Synchronizer::spawn(
-        name.clone(),
+        my_primary.public_key(),
         id,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache,
@@ -304,7 +323,7 @@ async fn test_successful_batch_delete() {
         tx_reconfiguration,
         tx_primary,
         metrics,
-        WorkerNetwork::default(),
+        P2pNetwork::new(network),
     );
 
     // Create dummy batches and store them
@@ -312,12 +331,11 @@ async fn test_successful_batch_delete() {
     let mut batch_digests = Vec::new();
 
     for batch in expected_batches.clone() {
-        let s = serialize_batch_message(batch);
-        let digest = serialized_batch_digest(&s.clone()).unwrap();
+        let digest = batch.digest();
 
         batch_digests.push(digest);
 
-        store.write(digest, s.clone()).await;
+        store.write(digest, batch).await;
     }
 
     // WHEN we send a message to delete batches
@@ -342,8 +360,7 @@ async fn test_successful_batch_delete() {
 
     // AND batches should be deleted
     for batch in expected_batches {
-        let s = serialize_batch_message(batch);
-        let digest = serialized_batch_digest(&s.clone()).unwrap();
+        let digest = batch.digest();
 
         let result = store.read(digest).await;
         assert!(result.as_ref().is_ok());

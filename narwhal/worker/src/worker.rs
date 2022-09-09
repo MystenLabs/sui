@@ -6,12 +6,13 @@ use crate::{
     primary_connector::PrimaryConnector, processor::Processor, quorum_waiter::QuorumWaiter,
     synchronizer::Synchronizer,
 };
+use anemo::{types::PeerInfo, PeerId};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
-use crypto::{NetworkKeyPair, PublicKey};
+use crypto::{traits::KeyPair as _, NetworkKeyPair, PublicKey};
 use futures::StreamExt;
 use multiaddr::{Multiaddr, Protocol};
-use network::{metrics::WorkerNetworkMetrics, WorkerNetwork};
+use network::P2pNetwork;
 use primary::PrimaryWorkerMessage;
 use std::{net::Ipv4Addr, sync::Arc};
 use store::Store;
@@ -21,9 +22,9 @@ use tracing::info;
 use types::{
     error::DagError,
     metered_channel::{channel, Sender},
-    BatchDigest, BincodeEncodedPayload, Empty, PrimaryToWorker, PrimaryToWorkerServer,
-    ReconfigureNotification, SerializedBatchMessage, Transaction, TransactionProto, Transactions,
-    TransactionsServer, WorkerPrimaryMessage, WorkerToWorker, WorkerToWorkerServer,
+    Batch, BatchDigest, BincodeEncodedPayload, Empty, PrimaryToWorker, PrimaryToWorkerServer,
+    ReconfigureNotification, Transaction, TransactionProto, Transactions, TransactionsServer,
+    WorkerPrimaryMessage, WorkerToWorker, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -52,7 +53,7 @@ pub struct Worker {
     /// The configuration parameters
     parameters: Parameters,
     /// The persistent storage.
-    store: Store<BatchDigest, SerializedBatchMessage>,
+    store: Store<BatchDigest, Batch>,
 }
 
 const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
@@ -65,7 +66,7 @@ impl Worker {
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
-        store: Store<BatchDigest, SerializedBatchMessage>,
+        store: Store<BatchDigest, Batch>,
         metrics: Metrics,
     ) -> Vec<JoinHandle<()>> {
         // Define a worker instance.
@@ -81,7 +82,6 @@ impl Worker {
 
         let node_metrics = Arc::new(metrics.worker_metrics.unwrap());
         let endpoint_metrics = metrics.endpoint_metrics.unwrap();
-        let network_metrics = Arc::new(metrics.network_metrics.unwrap());
         let channel_metrics: Arc<WorkerChannelMetrics> = Arc::new(metrics.channel_metrics.unwrap());
 
         // Spawn all worker tasks.
@@ -91,26 +91,75 @@ impl Worker {
         let (tx_reconfigure, rx_reconfigure) =
             watch::channel(ReconfigureNotification::NewEpoch(initial_committee.clone()));
 
+        let (tx_worker_helper, rx_worker_helper) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_helper);
+        let (tx_worker_processor, rx_worker_processor) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_processor);
+
+        let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
+            tx_worker_helper,
+            tx_processor: tx_worker_processor,
+        });
+
+        // Receive incoming messages from other workers.
+        let address = worker
+            .worker_cache
+            .load()
+            .worker(&primary_name, &id)
+            .expect("Our public key or worker id is not in the worker cache")
+            .worker_to_worker;
+        let address = address
+            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
+            .unwrap();
+        let addr = network::multiaddr_to_address(&address).unwrap();
+
+        // Set up anemo Network.
+        let routes = anemo::Router::new().add_rpc_service(worker_service);
+        let network = anemo::Network::bind(addr)
+            .server_name("narwhal")
+            .private_key(worker.keypair.copy().private().0.to_bytes())
+            .start(routes)
+            .unwrap();
+
+        info!("Worker {} listening to worker messages on {}", id, address);
+
+        // add other workers we want to talk with to the known peers set
+        for (_primary_pubkey, worker_info) in worker
+            .worker_cache
+            .load()
+            .others_workers(&primary_name, &id)
+        {
+            let peer_id = PeerId(worker_info.name.0.to_bytes());
+            let address = network::multiaddr_to_address(&worker_info.worker_to_worker).unwrap();
+            let peer_info = PeerInfo {
+                peer_id,
+                affinity: anemo::types::PeerAffinity::High,
+                address: vec![address],
+            };
+            network.known_peers().insert(peer_info);
+        }
+
         let client_flow_handles = worker.handle_clients_transactions(
             &tx_reconfigure,
             tx_primary.clone(),
             node_metrics.clone(),
             channel_metrics.clone(),
             endpoint_metrics,
-            network_metrics.clone(),
+            network.clone(),
         );
         let worker_flow_handles = worker.handle_workers_messages(
             &tx_reconfigure,
             tx_primary.clone(),
-            channel_metrics.clone(),
-            network_metrics.clone(),
+            rx_worker_helper,
+            rx_worker_processor,
+            network.clone(),
         );
         let primary_flow_handles = worker.handle_primary_messages(
             tx_reconfigure,
             tx_primary,
             node_metrics,
             channel_metrics,
-            network_metrics,
+            network,
         );
 
         // The `PrimaryConnector` allows the worker to send messages to its primary.
@@ -143,7 +192,7 @@ impl Worker {
         tx_primary: Sender<WorkerPrimaryMessage>,
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
-        network_metrics: Arc<WorkerNetworkMetrics>,
+        network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
         let (tx_synchronizer, rx_synchronizer) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_synchronizer);
@@ -163,10 +212,6 @@ impl Worker {
 
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
-        let worker_network = WorkerNetwork::new(network::metrics::Metrics::new(
-            network_metrics,
-            "synchronizer".to_string(),
-        ));
         let handle = Synchronizer::spawn(
             self.primary_name.clone(),
             self.id,
@@ -180,7 +225,7 @@ impl Worker {
             tx_reconfigure,
             tx_primary,
             node_metrics,
-            worker_network,
+            P2pNetwork::new(network),
         );
 
         info!(
@@ -199,7 +244,7 @@ impl Worker {
         node_metrics: Arc<WorkerMetrics>,
         channel_metrics: Arc<WorkerChannelMetrics>,
         endpoint_metrics: WorkerEndpointMetrics,
-        network_metrics: Arc<WorkerNetworkMetrics>,
+        network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
         let (tx_batch_maker, rx_batch_maker) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_batch_maker);
@@ -239,10 +284,6 @@ impl Worker {
 
         // The `QuorumWaiter` waits for 2f authorities to acknowledge reception of the batch. It then forwards
         // the batch to the `Processor`.
-        let worker_network = WorkerNetwork::new(network::metrics::Metrics::new(
-            network_metrics,
-            "quorum_waiter".to_string(),
-        ));
         let quorum_waiter_handle = QuorumWaiter::spawn(
             self.primary_name.clone(),
             self.id,
@@ -251,7 +292,7 @@ impl Worker {
             tx_reconfigure.subscribe(),
             /* rx_message */ rx_quorum_waiter,
             /* tx_batch */ tx_client_processor,
-            worker_network,
+            P2pNetwork::new(network),
         );
 
         // The `Processor` hashes and stores the batch. It then forwards the batch's digest to the `PrimaryConnector`
@@ -283,47 +324,19 @@ impl Worker {
         &self,
         tx_reconfigure: &watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
-        channel_metrics: Arc<WorkerChannelMetrics>,
-        network_metrics: Arc<WorkerNetworkMetrics>,
+        rx_worker_request: types::metered_channel::Receiver<(Vec<BatchDigest>, PublicKey)>,
+        rx_worker_processor: types::metered_channel::Receiver<Batch>,
+        network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
-        let (tx_worker_helper, rx_worker_helper) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_helper);
-        let (tx_worker_processor, rx_worker_processor) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_processor);
-
-        // Receive incoming messages from other workers.
-        let address = self
-            .worker_cache
-            .load()
-            .worker(&self.primary_name, &self.id)
-            .expect("Our public key or worker id is not in the worker cache")
-            .worker_to_worker;
-        let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
-            .unwrap();
-        let worker_handle = WorkerReceiverHandler {
-            tx_worker_helper,
-            tx_processor: tx_worker_processor,
-        }
-        .spawn(
-            address.clone(),
-            self.parameters.max_concurrent_requests,
-            tx_reconfigure.subscribe(),
-        );
-
         // The `Helper` is dedicated to reply to batch requests from other workers.
-        let worker_network = WorkerNetwork::new(network::metrics::Metrics::new(
-            network_metrics,
-            "worker_helper".to_string(),
-        ));
         let helper_handle = Helper::spawn(
             self.id,
             (*(*(*self.committee).load()).clone()).clone(),
             self.worker_cache.clone(),
             self.store.clone(),
             tx_reconfigure.subscribe(),
-            /* rx_worker_request */ rx_worker_helper,
-            worker_network,
+            rx_worker_request,
+            P2pNetwork::new(network),
         );
 
         // This `Processor` hashes and stores the batches we receive from the other workers. It then forwards the
@@ -337,12 +350,7 @@ impl Worker {
             /* own_batch */ false,
         );
 
-        info!(
-            "Worker {} listening to worker messages on {}",
-            self.id, address
-        );
-
-        vec![helper_handle, processor_handle, worker_handle]
+        vec![helper_handle, processor_handle]
     }
 }
 
@@ -425,60 +433,20 @@ impl Transactions for TxReceiverHandler {
 #[derive(Clone)]
 struct WorkerReceiverHandler {
     tx_worker_helper: Sender<(Vec<BatchDigest>, PublicKey)>,
-    tx_processor: Sender<SerializedBatchMessage>,
-}
-
-impl WorkerReceiverHandler {
-    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
-        loop {
-            let result = rx_reconfigure.changed().await;
-            result.expect("Committee channel dropped");
-            let message = rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::Shutdown = message {
-                break;
-            }
-        }
-    }
-
-    #[must_use]
-    fn spawn(
-        self,
-        address: Multiaddr,
-        max_concurrent_requests: usize,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    ) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            let mut config = mysten_network::config::Config::new();
-            config.concurrency_limit_per_connection = Some(max_concurrent_requests);
-            tokio::select! {
-                _result = config
-                .server_builder()
-                .add_service(WorkerToWorkerServer::new(self))
-                .bind(&address)
-                .await
-                .unwrap()
-                .serve() => (),
-
-                () = Self::wait_for_shutdown(rx_reconfigure) => ()
-            }
-        })
-    }
+    tx_processor: Sender<Batch>,
 }
 
 #[async_trait]
 impl WorkerToWorker for WorkerReceiverHandler {
     async fn send_message(
         &self,
-        request: Request<BincodeEncodedPayload>,
-    ) -> Result<Response<Empty>, Status> {
-        let message: WorkerMessage = request
-            .get_ref()
-            .deserialize()
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        request: anemo::Request<types::WorkerMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
         match message {
-            WorkerMessage::Batch(..) => self
+            WorkerMessage::Batch(batch) => self
                 .tx_processor
-                .send(request.get_ref().payload.to_vec())
+                .send(batch)
                 .await
                 .map_err(|_| DagError::ShuttingDown),
 
@@ -488,9 +456,8 @@ impl WorkerToWorker for WorkerReceiverHandler {
                 .await
                 .map_err(|_| DagError::ShuttingDown),
         }
-        .map_err(|e| Status::not_found(e.to_string()))?;
-
-        Ok(Response::new(Empty {}))
+        .map(|_| anemo::Response::new(()))
+        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
     }
 }
 
