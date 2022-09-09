@@ -435,7 +435,9 @@ where
 
         match self.state.handle_certificate(cert.clone()).await {
             Ok(_) => Ok(SyncStatus::CertExecuted),
-            Err(SuiError::ObjectNotFound { .. }) | Err(SuiError::ObjectErrors { .. }) => {
+            Err(SuiError::ObjectNotFound { .. })
+            | Err(SuiError::ObjectErrors { .. })
+            | Err(SuiError::SharedObjectLockNotSetObject) => {
                 debug!(?digest, "cert execution failed due to missing parents");
 
                 let effects = self.get_true_effects(&cert).await?;
