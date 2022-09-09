@@ -104,6 +104,10 @@ impl Genesis {
                 let workers = [(
                     0, // worker_id
                     narwhal_config::WorkerInfo {
+                        name: validator
+                            .worker_key()
+                            .try_into()
+                            .expect("Can't get narwhal worker public key"),
                         primary_to_worker: validator.narwhal_primary_to_worker.clone(),
                         transactions: validator.narwhal_consensus_address.clone(),
                         worker_to_worker: validator.narwhal_worker_to_worker.clone(),
@@ -618,11 +622,13 @@ mod test {
             .unwrap();
 
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let worker_key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let account_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let network_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
             protocol_key: key.public().into(),
+            worker_key: worker_key.public().into(),
             account_key: account_key.public().clone().into(),
             network_key: network_key.public().clone().into(),
             stake: 1,

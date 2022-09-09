@@ -5,7 +5,9 @@ expression: genesis.narwhal_worker_cache()
 workers:
   ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=:
     0:
+      name: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
       transactions: ""
       worker_to_worker: ""
       primary_to_worker: ""
 epoch: 0
+

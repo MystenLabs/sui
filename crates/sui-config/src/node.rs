@@ -33,6 +33,10 @@ pub struct NodeConfig {
     #[serde(default = "default_key_pair")]
     #[serde_as(as = "Arc<KeyPairBase64>")]
     pub protocol_key_pair: Arc<AuthorityKeyPair>,
+    /// The keypair that is used by the narwhal worker.
+    #[serde(default = "default_worker_key_pair")]
+    #[serde_as(as = "Arc<KeyPairBase64>")]
+    pub worker_key_pair: Arc<AuthorityKeyPair>,
     /// The keypair that the authority uses to receive payments
     #[serde(default = "default_sui_key_pair")]
     pub account_key_pair: Arc<SuiKeyPair>,
@@ -79,6 +83,10 @@ fn default_key_pair() -> Arc<AuthorityKeyPair> {
     Arc::new(sui_types::crypto::get_key_pair().1)
 }
 
+fn default_worker_key_pair() -> Arc<AuthorityKeyPair> {
+    Arc::new(sui_types::crypto::get_key_pair().1)
+}
+
 fn default_sui_key_pair() -> Arc<SuiKeyPair> {
     Arc::new((sui_types::crypto::get_key_pair::<AccountKeyPair>().1).into())
 }
@@ -120,6 +128,10 @@ impl Config for NodeConfig {}
 impl NodeConfig {
     pub fn protocol_key_pair(&self) -> &AuthorityKeyPair {
         &self.protocol_key_pair
+    }
+
+    pub fn worker_key_pair(&self) -> &AuthorityKeyPair {
+        &self.worker_key_pair
     }
 
     pub fn protocol_public_key(&self) -> AuthorityPublicKeyBytes {
@@ -180,6 +192,7 @@ pub struct ValidatorInfo {
     pub name: String,
     pub account_key: AccountsPublicKey,
     pub protocol_key: AuthorityPublicKeyBytes,
+    pub worker_key: AuthorityPublicKeyBytes,
     pub network_key: AccountsPublicKey,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
@@ -205,6 +218,10 @@ impl ValidatorInfo {
 
     pub fn protocol_key(&self) -> AuthorityPublicKeyBytes {
         self.protocol_key
+    }
+
+    pub fn worker_key(&self) -> AuthorityPublicKeyBytes {
+        self.worker_key
     }
 
     pub fn network_key(&self) -> &AccountsPublicKey {

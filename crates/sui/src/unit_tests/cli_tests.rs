@@ -108,6 +108,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir().unwrap();
     let working_dir = temp_dir.path();
     let keypair: AuthorityKeyPair = get_key_pair().1;
+    let worker_keypair: AuthorityKeyPair = get_key_pair().1;
     let account_keypair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
 
     let wallet_config = SuiClientConfig {
@@ -117,6 +118,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             validator_set: vec![ValidatorInfo {
                 name: "0".into(),
                 protocol_key: keypair.public().into(),
+                worker_key: worker_keypair.public().into(),
                 account_key: account_keypair.public(),
                 network_key: get_key_pair::<AccountKeyPair>().1.public().clone().into(),
                 stake: 1,

@@ -391,7 +391,7 @@ pub fn make_tx_certs_and_signed_effects(
     for tx in transactions {
         let mut signed_tx_aggregator =
             SignatureAggregator::try_new(tx.clone(), &committee).unwrap();
-        for (key, _, _) in test_validator_keys() {
+        for (key, _, _, _) in test_validator_keys() {
             let vote =
                 SignedTransaction::new(/* epoch */ 0, tx.clone(), key.public().into(), &key);
 

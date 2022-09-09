@@ -22,7 +22,10 @@ use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
 use move_vm_runtime::{move_vm::MoveVM, native_functions::NativeFunctionTable};
-use narwhal_config::Committee as ConsensusCommittee;
+use narwhal_config::{
+    Committee as ConsensusCommittee, WorkerCache as ConsensusWorkerCache,
+    WorkerId as ConsensusWorkerId,
+};
 use narwhal_executor::ExecutionStateError;
 use narwhal_executor::{ExecutionIndices, ExecutionState};
 use parking_lot::Mutex;
@@ -110,6 +113,13 @@ const BROADCAST_CAPACITY: usize = 10_000;
 
 pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
+
+pub type ReconfigConsensusMessage = (
+    ConsensusKeyPair,
+    ConsensusCommittee,
+    Vec<(ConsensusWorkerId, ConsensusKeyPair)>,
+    ConsensusWorkerCache,
+);
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
 pub struct AuthorityMetrics {
@@ -382,7 +392,7 @@ pub struct AuthorityState {
     latest_checkpoint_num: AtomicU64,
 
     /// A channel to tell consensus to reconfigure.
-    tx_reconfigure_consensus: Sender<(ConsensusKeyPair, ConsensusCommittee)>,
+    tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
 }
 
 /// The authority state encapsulates all state, drives execution, and ensures safety.
@@ -1146,7 +1156,7 @@ impl AuthorityState {
         checkpoints: Option<Arc<Mutex<CheckpointStore>>>,
         genesis: &Genesis,
         prometheus_registry: &prometheus::Registry,
-        tx_reconfigure_consensus: Sender<(ConsensusKeyPair, ConsensusCommittee)>,
+        tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let (tx, _rx) = tokio::sync::broadcast::channel(BROADCAST_CAPACITY);
         let native_functions =
@@ -1256,7 +1266,7 @@ impl AuthorityState {
         store_base_path: Option<PathBuf>,
         genesis: Option<&Genesis>,
         consensus_sender: Option<Box<dyn ConsensusSender>>,
-        tx_reconfigure_consensus: Sender<(ConsensusKeyPair, ConsensusCommittee)>,
+        tx_reconfigure_consensus: Sender<ReconfigConsensusMessage>,
     ) -> Self {
         let secret = Arc::pin(key.copy());
         let path = match store_base_path {
@@ -1960,7 +1970,7 @@ impl ExecutionState for AuthorityState {
                     // ```
                     //  self
                     //      .tx_reconfigure_consensus
-                    //      .send((new_keypair, new_committee))
+                    //      .send((new_keypair, new_committee, new_worker_ids_and_keypairs, new_worker_cache))
                     //      .await
                     //      .expect("Failed to reconfigure consensus");
                     // ```
