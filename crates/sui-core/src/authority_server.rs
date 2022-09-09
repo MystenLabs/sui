@@ -169,48 +169,57 @@ pub struct ValidatorServiceMetrics {
     pub handle_certificate_non_consensus_latency: Histogram,
 }
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[0.001, 0.01, 0.1, 1., 2., 3., 5., 10., 20., 30., 60., 180.];
+
 impl ValidatorServiceMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
             tx_verification_latency: register_histogram_with_registry!(
                 "validator_service_tx_verification_latency",
                 "Latency of verifying a transaction",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             cert_verification_latency: register_histogram_with_registry!(
                 "validator_service_cert_verification_latency",
                 "Latency of verifying a certificate",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             consensus_latency: register_histogram_with_registry!(
                 "validator_service_consensus_latency",
                 "Time spent between submitting a shared obj txn to consensus and getting result",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             handle_transaction_consensus_latency: register_histogram_with_registry!(
                 "validator_service_handle_transaction_consensus_latency",
                 "Latency of handling a consensus transaction",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             handle_transaction_non_consensus_latency: register_histogram_with_registry!(
                 "validator_service_handle_transaction_non_consensus_latency",
                 "Latency of handling a non-consensus transaction",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             handle_certificate_consensus_latency: register_histogram_with_registry!(
                 "validator_service_handle_certificate_consensus_latency",
                 "Latency of handling a consensus transaction certificate",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             handle_certificate_non_consensus_latency: register_histogram_with_registry!(
                 "validator_service_handle_certificate_non_consensus_latency",
                 "Latency of handling a non-consensus transaction certificate",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

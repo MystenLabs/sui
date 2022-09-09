@@ -162,6 +162,8 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
     1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
 ];
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[0.001, 0.01, 0.1, 1., 2., 3., 5., 10., 20., 30., 60., 180.];
+
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
         // buckets are: 100, 10k, 1M, 100M, 10B, 1T, 100T, 10Q
@@ -241,30 +243,35 @@ impl AuthorityMetrics {
             prepare_certificate_latency: register_histogram_with_registry!(
                 "validator_prepare_certificate_latency",
                 "Latency of preparing certificate",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             commit_certificate_latency: register_histogram_with_registry!(
                 "validator_commit_certificate_latency",
                 "Latency of committing certificate",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             handle_transaction_latency: register_histogram_with_registry!(
                 "validator_handle_transaction_latency",
                 "Latency of committing certificate",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             handle_certificate_latency: register_histogram_with_registry!(
                 "validator_handle_certificate_latency",
                 "Latency of handling certificate",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             handle_node_sync_certificate_latency: register_histogram_with_registry!(
                 "fullnode_handle_node_sync_certificate_latency",
                 "Latency of fullnode handling certificate from node sync",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
