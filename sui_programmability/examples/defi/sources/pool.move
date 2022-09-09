@@ -9,6 +9,24 @@
 /// - Fees are customizable per Pool.
 /// - Max stored value for both tokens is: U64_MAX / 10_000
 ///
+/// To publish a new pool, a type is required. Eg:
+/// ```
+/// module me::my_pool {
+///   use defi::pool;
+///
+///   struct POOL_TEAM has drop {}
+///
+///   entry fun create_pool<T>(
+///     token: Coin<T>,
+///     sui: Coin<SUI>,
+///     fee_percent: u64,
+///     ctx: &mut TxContext
+///   ) {
+///     pool::create_pool(POOL_TEAM {}, token, sui, fee_percent, ctx)
+///   }
+/// }
+/// ```
+///
 /// This solution is rather simple and is based on the example from the Move repo:
 /// https://github.com/move-language/move/blob/main/language/documentation/examples/experimental/coin-swap/sources/CoinSwap.move
 module defi::pool {
@@ -67,21 +85,6 @@ module defi::pool {
     /// Module initializer is empty - to publish a new Pool one has
     /// to create a type which will mark LSPs.
     fun init(_: &mut TxContext) {}
-
-    /// Entrypoint for the `create_pool` method.
-    entry fun create_pool_<P: drop, T>(
-        witness: P,
-        token: Coin<T>,
-        sui: Coin<SUI>,
-        // share: u64,
-        fee_percent: u64,
-        ctx: &mut TxContext
-    ) {
-        transfer::transfer(
-            create_pool(witness, token, sui, /* share, */ fee_percent, ctx),
-            tx_context::sender(ctx)
-        )
-    }
 
     /// Create new `Pool` for token `T`. Each Pool holds a `Coin<T>`
     /// and a `Coin<SUI>`. Swaps are available in both directions.
