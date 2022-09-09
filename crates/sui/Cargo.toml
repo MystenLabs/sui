@@ -61,7 +61,7 @@ jemalloc-ctl = "^0.5"
 [dev-dependencies]
 tempfile = "3.3.0"
 futures = "0.3.23"
-prometheus = "0.13.1"
+prometheus = "0.13.2"
 
 typed-store = "0.1.0"
 typed-store-derive = "0.1.0"
