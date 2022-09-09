@@ -146,7 +146,7 @@ impl ConsensusState {
             self.dag.retain(|r, authorities| {
                 // We purge certificates for `name` prior to its latest commit
                 if r < round {
-                    authorities.retain(|n, _| n != name);
+                    authorities.remove(name);
                 }
                 !authorities.is_empty()
             });
