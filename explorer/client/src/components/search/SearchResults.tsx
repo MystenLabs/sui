@@ -24,13 +24,26 @@ function SearchResults({
 
     if (!result) return <></>;
     return (
-        <div className={styles.results}>
+        <div
+            className={styles.results}
+            id="SearchResults"
+            aria-label="search results"
+            role="listbox"
+        >
             {result.length === 0 && (
-                <p className={styles.noresults}>No Results</p>
+                <p className={styles.noresults} role="alert">
+                    No Results
+                </p>
             )}
             {result.map((el, index) => (
                 <dl key={index}>
-                    <dt>{categoryLabels[el.category]}</dt>
+                    <dt
+                        id={`SearchResultsOption${index}`}
+                        role="option"
+                        aria-selected={index === resultIndex}
+                    >
+                        {categoryLabels[el.category]}
+                    </dt>
                     <dd
                         className={
                             index === resultIndex ? styles.selectedoption : ''
