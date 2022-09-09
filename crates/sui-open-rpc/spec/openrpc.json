@@ -2857,17 +2857,17 @@
           {
             "type": "object",
             "required": [
-              "bcs_bytes",
+              "bcsBytes",
               "dataType",
-              "has_public_transfer",
+              "hasPublicTransfer",
               "type",
               "version"
             ],
             "properties": {
-              "bcs_bytes": {
+              "bcsBytes": {
                 "$ref": "#/components/schemas/Base64"
               },
-              "child_count": {
+              "childCount": {
                 "type": [
                   "integer",
                   "null"
@@ -2881,7 +2881,7 @@
                   "moveObject"
                 ]
               },
-              "has_public_transfer": {
+              "hasPublicTransfer": {
                 "type": "boolean"
               },
               "type": {
@@ -2897,7 +2897,7 @@
             "required": [
               "dataType",
               "id",
-              "module_map"
+              "moduleMap"
             ],
             "properties": {
               "dataType": {
@@ -2909,7 +2909,7 @@
               "id": {
                 "$ref": "#/components/schemas/ObjectID"
               },
-              "module_map": {
+              "moduleMap": {
                 "type": "object",
                 "additionalProperties": {
                   "$ref": "#/components/schemas/Base64"
