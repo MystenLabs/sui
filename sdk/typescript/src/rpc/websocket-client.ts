@@ -170,25 +170,23 @@ export class WebsocketClient {
     this.rpcClient.connect();
     this.connectionState = ConnectionState.Connecting;
 
-    return new Promise<void>((resolve, reject) => {
-      this.connectionPromise = new Promise<void>((resolve, reject) => {
-        this.connectionTimeout = setTimeout(
-          () => reject(new Error('timeout')),
-          this.options.connectTimeout
-        ) as any as number;
+    this.connectionPromise = new Promise<void>((resolve, reject) => {
+      this.connectionTimeout = setTimeout(
+        () => reject(new Error('timeout')),
+        this.options.connectTimeout
+      ) as any as number;
 
-        this.rpcClient.once('open', () => {
-          this.refreshSubscriptions();
-          this.connectionPromise = null;
-          resolve();
-        });
-        this.rpcClient.once('error', (err) => {
-          this.connectionPromise = null;
-          reject(err);
-        });
+      this.rpcClient.once('open', () => {
+        this.refreshSubscriptions();
+        this.connectionPromise = null;
+        resolve();
       });
-      return this.connectionPromise;
+      this.rpcClient.once('error', (err) => {
+        this.connectionPromise = null;
+        reject(err);
+      });
     });
+    return this.connectionPromise;
   }
 
   /**
