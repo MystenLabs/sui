@@ -161,7 +161,7 @@ export abstract class Provider {
    * @param endTime end of time range, exclusive
    */
   abstract getEventsByModule(
-    package_: ObjectId,                   // 'package' is reserved word
+    packageId: ObjectId, 
     module: string,
     count: number,
     startTime: number,
