@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -653,10 +653,10 @@ where
         );
 
         // Download the latest content of every mutated object from the authorities.
-        let mutated_object_refs: BTreeSet<_> = effects
+        let mutated_object_refs: BTreeMap<_, _> = effects
             .effects
             .all_mutated()
-            .map(|(obj_ref, _)| *obj_ref)
+            .map(|(obj_ref, _, kind)| (*obj_ref, kind))
             .collect();
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
@@ -816,25 +816,35 @@ where
         Ok(result)
     }
 
-    async fn download_objects_from_authorities(
+    async fn download_objects_from_authorities<T: std::fmt::Debug>(
         &self,
-        // TODO: HashSet probably works here just fine.
-        object_refs: BTreeSet<ObjectRef>,
-    ) -> Result<HashMap<ObjectRef, Object>, SuiError> {
+        mut object_refs: BTreeMap<ObjectRef, T>,
+    ) -> Result<BTreeMap<ObjectRef, (Object, T)>, SuiError> {
         let mut receiver = self
             .authorities
-            .fetch_objects_from_authorities(object_refs.clone());
+            .fetch_objects_from_authorities(object_refs.keys().copied().collect());
 
-        let mut objects = HashMap::new();
+        let mut objects = BTreeMap::new();
         while let Some(resp) = receiver.recv().await {
             if let Ok(o) = resp {
                 // TODO: Make fetch_objects_from_authorities also return object ref
                 // to avoid recomputation here.
-                objects.insert(o.compute_object_reference(), o);
+                let obj_ref = o.compute_object_reference();
+                let v_opt = object_refs.remove(&obj_ref);
+                fp_ensure!(
+                    v_opt.is_some(),
+                    SuiError::InconsistentGatewayResult {
+                        error: format!(
+                            "Fetched object {:?} that was not present in the queried refs",
+                            obj_ref
+                        )
+                    }
+                );
+                objects.insert(obj_ref, (o, v_opt.unwrap()));
             }
         }
         fp_ensure!(
-            object_refs.len() == objects.len(),
+            object_refs.is_empty(),
             SuiError::InconsistentGatewayResult {
                 error: "Failed to download some objects after transaction succeeded".to_owned(),
             }
@@ -913,13 +923,13 @@ where
         let mutated_objects = self.store.get_objects(
             &effects
                 .all_mutated()
-                .map(|((object_id, _, _), _)| *object_id)
+                .map(|((object_id, _, _), _, _)| *object_id)
                 .collect::<Vec<_>>(),
         )?;
         let mut updated_gas = None;
         let mut package = None;
         let mut created_objects = vec![];
-        for ((obj_ref, _), object) in effects.all_mutated().zip(mutated_objects) {
+        for ((obj_ref, _, _), object) in effects.all_mutated().zip(mutated_objects) {
             let object = object.ok_or(SuiError::InconsistentGatewayResult {
                 error: format!(
                     "Crated/Updated object doesn't exist in the store: {:?}",

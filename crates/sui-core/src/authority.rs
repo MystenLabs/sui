@@ -866,7 +866,10 @@ impl AuthorityState {
                 .input_objects()?
                 .iter()
                 .map(|o| o.object_id()),
-            effects.effects.all_mutated(),
+            effects
+                .effects
+                .all_mutated()
+                .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.signed_data
                 .data
                 .move_calls()

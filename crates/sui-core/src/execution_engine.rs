@@ -5,7 +5,7 @@ use move_core_types::ident_str;
 use move_core_types::identifier::Identifier;
 use std::{collections::BTreeSet, sync::Arc};
 use sui_adapter::temporary_store::InnerTemporaryStore;
-use sui_types::storage::ParentSync;
+use sui_types::storage::{ParentSync, WriteKind};
 
 use crate::authority::TemporaryStore;
 use move_core_types::language_storage::ModuleId;
@@ -246,7 +246,7 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
         gas_object = temporary_store.read_object(&gas_object_id).unwrap().clone();
         gas::deduct_gas(&mut gas_object, gas_used, gas_rebate);
         trace!(gas_used, gas_obj_id =? gas_object.id(), gas_obj_ver =? gas_object.version(), "Updated gas object");
-        temporary_store.write_object(gas_object);
+        temporary_store.write_object(gas_object, WriteKind::Mutate);
     }
 
     let cost_summary = gas_status.summary(result.is_ok());
@@ -273,7 +273,7 @@ fn transfer_object<S>(
         type_: TransferType::Coin,
         amount,
     });
-    temporary_store.write_object(object);
+    temporary_store.write_object(object, WriteKind::Mutate);
     Ok(())
 }
 
@@ -318,11 +318,7 @@ fn transfer_sui<S>(
             Owner::AddressOwner(recipient),
             tx_ctx.digest(),
         );
-        temporary_store.write_object(new_object);
-
-        // This is necessary for the temporary store to know this new object is not unwrapped.
-        let newly_generated_ids = tx_ctx.recreate_all_ids();
-        temporary_store.set_create_object_ids(newly_generated_ids);
+        temporary_store.write_object(new_object, WriteKind::Create);
         Some(amount)
     } else {
         // If amount is not specified, we simply transfer the entire coin object.
@@ -345,7 +341,7 @@ fn transfer_sui<S>(
     #[cfg(debug_assertions)]
     assert_eq!(object.version(), version);
 
-    temporary_store.write_object(object);
+    temporary_store.write_object(object, WriteKind::Mutate);
 
     Ok(())
 }
