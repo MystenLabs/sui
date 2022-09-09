@@ -95,6 +95,7 @@ export type SubscriptionId = number;
 
 export type SubscriptionEvent = { subscription: SubscriptionId, result: SuiEventEnvelope };
 
-export const DEFAULT_RESULT_COUNT = 1000;
+// mirrors the value defined in https://github.com/MystenLabs/sui/blob/e12f8c58ef7ba17205c4caf5ad2c350cbb01656c/crates/sui-json-rpc/src/api.rs#L27
+export const EVENT_QUERY_MAX_LIMIT = 100;
 export const DEFAULT_START_TIME = 0;
 export const DEFAULT_END_TIME = Number.MAX_SAFE_INTEGER;
