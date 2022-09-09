@@ -179,10 +179,20 @@ fn verify_framework_version(pkg: &CompiledPackage) -> SuiResult<()> {
     let framework: Vec<&CompiledModule> = framework_modules.iter().collect();
 
     if dep_framework != framework {
+        // note: this advice is overfitted to the most common failure modes we see:
+        // user is trying to publish to testnet, but has a `sui` binary and Sui Framework
+        // sources that are not in sync. the first part of the advice ensures that the
+        // user's project is always pointing at the devnet copy of the `Sui` Framework.
+        // the second ensures that the `sui` binary matches the devnet framework
         return Err(SuiError::ModuleVerificationFailure {
             error: "Sui framework version mismatch detected.\
-                    Make sure that the sui command line tool and the Sui framework code\
-                    used as a dependency correspond to the same git commit"
+		    Make sure that you are using a GitHub dep in your Move.toml:\
+		    \
+                    [dependencies]
+                    Sui = { git = \"https://github.com/MystenLabs/sui.git\", subdir = \"crates/sui-framework\", rev = \"devnet\" }
+`                   \
+                    If that does not fix the issue, your `sui` binary is likely out of date--try\
+                    cargo install --locked --git https://github.com/MystenLabs/sui.git --branch devnet sui"
                 .to_string(),
         });
     }
