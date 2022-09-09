@@ -1479,9 +1479,9 @@
             "value": {
               "details": {
                 "data": {
-                  "bcs_bytes": "fS/zdMP4cPNvtyirQYeDEgbRUYEQJwAAAAAAAA==",
+                  "bcsBytes": "fS/zdMP4cPNvtyirQYeDEgbRUYEQJwAAAAAAAA==",
                   "dataType": "moveObject",
-                  "has_public_transfer": true,
+                  "hasPublicTransfer": true,
                   "type": "0x2::coin::Coin<0x2::sui::SUI>",
                   "version": 1
                 },
