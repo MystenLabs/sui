@@ -21,6 +21,8 @@ import {
   SuiExecuteTransactionResponse,
   ObjectId,
   GetRawObjectResponse,
+  SequenceNumber,
+  GetPastObjectResponse,
 } from '../types';
 
 ///////////////////////////////
@@ -57,6 +59,15 @@ export abstract class Provider {
    * @param objectId object identifier
    */
   abstract getRawObject(objectId: ObjectId): Promise<GetRawObjectResponse>;
+
+  /**
+   * Try to get past versions of an object. Note, there is no guarantee past versions
+   * can be retrieved, and results may vary across nodes depending on pruning policies.
+   * @param objectId object identifier
+   * @param version past version's sequence number
+   */
+  abstract tryGetPastObject(objectId: ObjectId, version: SequenceNumber)
+    : Promise<GetPastObjectResponse>;
 
   // Transactions
   /**

@@ -15,6 +15,7 @@ import {
   isSuiMoveNormalizedStruct,
   isSuiExecuteTransactionResponse,
   isGetRawObjectResponse,
+  isGetPastObjectResponse,
 } from '../types/index.guard';
 import {
   GatewayTxSeqNumber,
@@ -38,6 +39,8 @@ import {
   SuiExecuteTransactionResponse,
   GetRawObjectResponse,
   ObjectId,
+  SequenceNumber,
+  GetPastObjectResponse,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
@@ -246,6 +249,22 @@ export class JsonRpcProvider extends Provider {
       );
     } catch (err) {
       throw new Error(`Error fetching raw object info: ${err} for id ${objectId}`);
+    }
+  }
+
+  async tryGetPastObject(objectId: ObjectId, version: SequenceNumber): Promise<GetPastObjectResponse> {
+    if (version < 0)
+      throw new Error(`object version must be non-negative, got ${version}`);
+
+    try {
+      return await this.client.requestWithType(
+        'sui_tryGetPastObject',
+        [objectId, version],
+        isGetPastObjectResponse,
+        this.skipDataValidation
+      );
+    } catch (err) {
+      throw new Error(`Error fetching past object info: ${err} for id ${objectId}`);
     }
   }
 

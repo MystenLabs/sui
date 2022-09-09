@@ -22,6 +22,9 @@ import {
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
   GetRawObjectResponse,
+  ObjectId,
+  SequenceNumber,
+  GetPastObjectResponse,
 } from '../types';
 import { Provider } from './provider';
 
@@ -47,6 +50,10 @@ export class VoidProvider extends Provider {
 
   async getRawObject(_objectId: string): Promise<GetRawObjectResponse> {
     throw this.newError('getRawObject');
+  }
+
+  async tryGetPastObject(_objectId: ObjectId, _version: SequenceNumber): Promise<GetPastObjectResponse> {
+    throw this.newError('tryGetPastObject');
   }
 
   // Transactions

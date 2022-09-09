@@ -170,6 +170,19 @@ export type GetRawObjectResponse = {
   } | string
 };
 
+export type ObjectVersionStatus =
+  'VersionFound' | 'ObjectNotExists' | 'ObjectDeleted' | 'VersionNotFound' | 'VersionTooHigh';
+
+export type GetPastObjectResponse = {
+  status: ObjectVersionStatus,
+  details: SuiObject | ObjectId | SuiObjectRef | any | /* TODO - better type */
+    {
+      objectId: ObjectId,
+      askedVersion: SequenceNumber
+      latestVersion: SequenceNumber
+    }
+}
+
 export type ObjectDigest = string;
 export type ObjectId = string;
 export type SequenceNumber = number;
