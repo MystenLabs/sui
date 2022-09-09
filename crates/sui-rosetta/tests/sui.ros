@@ -1,0 +1,71 @@
+create_account(1){
+  create_account{
+    network = {"network":"mainnet", "blockchain":"sui"};
+    key = generate_key({"curve_type":"edwards25519"});
+    account = derive({
+      "network_identifier": {{network}},
+      "public_key": {{key.public_key}}
+    });
+    save_account({
+      "account_identifier": {{account.account_identifier}},
+      "keypair": {{key}}
+    });
+  }
+}
+
+transfer(10){
+  transfer{
+    transfer.network = {"network":"mainnet", "blockchain":"sui"};
+    currency = {"symbol":"SUI", "decimals":8};
+    sender = find_balance({
+      "minimum_balance":{
+        "value": "100000",
+        "currency": {{currency}}
+      },
+      "require_coin": true
+    });
+
+    // Set the recipient_amount as some value <= sender.balance-max_fee
+    max_fee = "1000";
+    available_amount = "100000";
+    recipient_amount = random_number({"minimum": "1", "maximum": {{available_amount}}});
+    print_message({"recipient_amount":{{recipient_amount}}});
+
+    // Find recipient and construct operations
+    sender_amount = 0 - {{recipient_amount}};
+    recipient = find_balance({
+      "not_account_identifier":[{{sender.account_identifier}}],
+      "minimum_balance":{
+        "value": "0",
+        "currency": {{currency}}
+      },
+      "create_limit": 100,
+      "create_probability": 50
+    });
+    transfer.confirmation_depth = "1";
+    transfer.operations = [
+      {
+        "operation_identifier":{"index":0},
+        "type":"TransferSUI",
+        "account":{{sender.account_identifier}},
+        "amount":{
+          "value":{{sender_amount}},
+          "currency":{{currency}}
+        },
+        "coin_change":{"coin_action":"coin_spent", "coin_identifier":{{sender.coin}}},
+        "metadata":{
+          "budget": 1000
+        }
+      },
+      {
+        "operation_identifier":{"index":1},
+        "type":"TransferSUI",
+        "account":{{recipient.account_identifier}},
+        "amount":{
+          "value":{{recipient_amount}},
+          "currency":{{currency}}
+        }
+      }
+    ];
+  }
+}

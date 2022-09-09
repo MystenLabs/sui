@@ -78,7 +78,6 @@ impl Operation {
 
     pub fn gas(
         index: u64,
-        budget: u64,
         status: Option<String>,
         gas: ObjectRef,
         sender: SuiAddress,
@@ -104,7 +103,7 @@ impl Operation {
                 },
                 coin_action: CoinAction::CoinSpent,
             }),
-            metadata: Some(json!({ "budget": budget })),
+            metadata: None,
         }
     }
 }
@@ -158,7 +157,7 @@ async fn parse_operations(
                     coin_change: None,
                     metadata: Some(json!(disassembled)),
                 },
-                Operation::gas(1, budget, status, gas, sender, effects),
+                Operation::gas(1, status, gas, sender, effects),
             ]
         }
         SingleTransactionKind::ChangeEpoch(change) => vec![Operation {
@@ -209,7 +208,7 @@ fn transfer_sui_operations(
                 currency: SUI.clone(),
             }),
             coin_change: None,
-            metadata: None,
+            metadata: Some(json!({ "budget": budget })),
         },
         Operation {
             operation_identifier: OperationIdentifier {
@@ -227,7 +226,7 @@ fn transfer_sui_operations(
             coin_change,
             metadata: None,
         },
-        Operation::gas(2, budget, status, coin, sender, effects),
+        Operation::gas(2, status, coin, sender, effects),
     ]
 }
 
@@ -309,7 +308,7 @@ async fn transfer_object_operations(
             account: Some(AccountIdentifier { address: sender }),
             amount: sender_amount,
             coin_change: sender_coin_change,
-            metadata: Some(json!({"object_type": object.type_()})),
+            metadata: Some(json!({"object_type": object.type_(), "budget": budget})),
         },
         Operation {
             operation_identifier: OperationIdentifier {
@@ -324,7 +323,7 @@ async fn transfer_object_operations(
             coin_change: recipient_coin_change,
             metadata: Some(json!({"object_type": object.type_()})),
         },
-        Operation::gas(2, budget, status, gas, sender, effects),
+        Operation::gas(2, status, gas, sender, effects),
     ])
 }
 
@@ -355,7 +354,7 @@ fn split_coin_operations(
             },
             coin_action: CoinAction::CoinSpent,
         }),
-        metadata: None,
+        metadata: Some(json!({ "budget": budget })),
     }];
 
     for amount in split_amount {
@@ -375,7 +374,6 @@ fn split_coin_operations(
     }
     ops.push(Operation::gas(
         ops.len() as u64,
-        budget,
         status,
         gas,
         sender,
@@ -444,7 +442,7 @@ fn merge_coin_operations(
                 },
                 coin_action: CoinAction::CoinSpent,
             }),
-            metadata: None,
+            metadata: Some(json!({ "budget": budget })),
         },
         Operation {
             operation_identifier: OperationIdentifier {
@@ -467,7 +465,6 @@ fn merge_coin_operations(
     ];
     ops.push(Operation::gas(
         ops.len() as u64,
-        budget,
         status,
         gas,
         sender,
@@ -500,13 +497,14 @@ fn move_call_operations(
             amount: None,
             coin_change: None,
             metadata: Some(json!({
+                "budget": budget,
                 "package": package,
                 "module": module,
                 "function": function,
                 "arguments": arguments,
             })),
         },
-        Operation::gas(1, budget, status, gas, sender, effects),
+        Operation::gas(1, status, gas, sender, effects),
     ]
 }
 
@@ -729,13 +727,17 @@ impl TryInto<SuiAction> for Vec<Operation> {
                     builder.operation_type = Some(op.type_);
                     if let Some(amount) = op.amount.as_ref() {
                         if amount.value.is_negative() {
-                            let coin = op
-                                .coin_change
-                                .as_ref()
-                                .ok_or_else(|| Error::missing_input("operation.coin_change"))?;
                             builder.sender = Some(address);
                             builder.send_amount = Some(amount.value.abs());
-                            builder.coin = Some(coin.coin_identifier.identifier.id);
+                            if let Some(coin) = op.coin_change.as_ref() {
+                                builder.gas = Some(coin.coin_identifier.identifier.id);
+                            }
+                            let amount = op
+                                .metadata
+                                .and_then(|v| v.pointer("/budget").cloned())
+                                .and_then(|v| v.as_u64())
+                                .ok_or_else(|| Error::missing_input("gas budget"))?;
+                            builder.gas_budget = Some(amount);
                         } else {
                             builder.recipient = Some(address);
                         }
@@ -746,19 +748,6 @@ impl TryInto<SuiAction> for Vec<Operation> {
                     } else {
                         builder.recipient = Some(address);
                     }
-                }
-                OperationType::Gas => {
-                    // Coin object id is optional
-                    if let Some(coin) = op.coin_change.as_ref() {
-                        builder.gas = Some(coin.coin_identifier.identifier.id);
-                    }
-                    let amount = op
-                        .metadata
-                        .and_then(|v| v.pointer("/budget").cloned())
-                        .and_then(|v| v.as_u64())
-                        .ok_or_else(|| Error::missing_input("gas budget"))?;
-
-                    builder.gas_budget = Some(amount);
                 }
                 OperationType::TransferCoin => {
                     let account = &op
@@ -799,6 +788,7 @@ impl TryInto<SuiAction> for Vec<Operation> {
                     }
                 }
                 OperationType::TransferObject
+                | OperationType::Gas
                 | OperationType::Genesis
                 | OperationType::MoveCall
                 | OperationType::Publish
@@ -833,13 +823,13 @@ impl SuiActionBuilder {
                 let recipient = self
                     .recipient
                     .ok_or_else(|| Error::missing_input("recipient"))?;
-                let coin = self.coin.ok_or_else(|| Error::missing_input("coin"))?;
+                let gas = self.gas.ok_or_else(|| Error::missing_input("gas"))?;
                 let budget = self
                     .gas_budget
                     .ok_or_else(|| Error::missing_input("gas_budget"))?;
                 Ok(SuiAction::TransferSui {
                     budget,
-                    coin,
+                    coin: gas,
                     sender,
                     recipient,
                     amount: self.send_amount,

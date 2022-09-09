@@ -73,7 +73,7 @@ pub struct BlockIdentifier {
     pub hash: BlockHash,
 }
 #[serde_as]
-#[derive(Serialize, Deserialize, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Eq, PartialEq, Debug)]
 pub struct BlockHash(
     #[serde_as(as = "Readable<Base64, _>")] pub(crate) [u8; TRANSACTION_DIGEST_LENGTH],
 );
@@ -340,8 +340,9 @@ impl IntoResponse for ConstructionDeriveResponse {
 #[derive(Deserialize)]
 pub struct ConstructionPayloadsRequest {
     pub network_identifier: NetworkIdentifier,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operations: Vec<Operation>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub public_keys: Vec<PublicKey>,
@@ -397,7 +398,7 @@ impl IntoResponse for ConstructionPayloadsResponse {
 #[derive(Serialize, Deserialize)]
 pub struct SigningPayload {
     pub account_identifier: AccountIdentifier,
-    pub hex_bytes: Hex,
+    pub hex_bytes: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature_type: Option<SignatureType>,
 }
@@ -462,8 +463,11 @@ pub struct TransactionIdentifier {
 pub struct ConstructionPreprocessRequest {
     pub network_identifier: NetworkIdentifier,
     pub operations: Vec<Operation>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<Value>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub max_fee: Vec<Amount>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub suggested_fee_multiplier: Option<u64>,
 }
 
@@ -497,7 +501,7 @@ pub struct ConstructionMetadataRequest {
 #[derive(Serialize)]
 pub struct ConstructionMetadataResponse {
     pub metadata: Value,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[serde(default)]
     pub suggested_fee: Vec<Amount>,
 }
 
@@ -729,14 +733,17 @@ impl IntoResponse for BlockResponse {
         Json(self).into_response()
     }
 }
-#[derive(Deserialize)]
+#[derive(Deserialize, Default, Debug)]
 pub struct PartialBlockIdentifier {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub index: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hash: Option<BlockHash>,
 }
 #[derive(Deserialize)]
 pub struct BlockRequest {
     pub network_identifier: NetworkIdentifier,
+    #[serde(default)]
     pub block_identifier: PartialBlockIdentifier,
 }
 

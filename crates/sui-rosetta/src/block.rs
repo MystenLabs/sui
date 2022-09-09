@@ -4,6 +4,7 @@
 use std::sync::Arc;
 
 use axum::{Extension, Json};
+use tracing::info;
 
 use crate::operations::Operation;
 use crate::types::{
@@ -18,6 +19,8 @@ pub async fn block(
 ) -> Result<BlockResponse, Error> {
     state.checks_network_identifier(&payload.network_identifier)?;
     let blocks = state.blocks();
+
+    info!("{:?}", payload.block_identifier);
 
     if let Some(index) = payload.block_identifier.index {
         blocks.get_block_by_index(index).await

@@ -1,0 +1,94 @@
+{
+  "network": {
+    "blockchain": "sui",
+    "network": "devnet"
+  },
+  "online_url": "http://192.168.1.97:9002",
+  "data_directory": "data",
+  "http_timeout": 10,
+  "max_retries": 5,
+  "retry_elapsed_time": 0,
+  "max_online_connections": 120,
+  "max_sync_concurrency": 64,
+  "tip_delay": 300,
+  "max_reorg_depth": 100,
+  "log_configuration": false,
+  "compression_disabled": false,
+  "memory_limit_disabled": false,
+  "all_in_memory_enabled": false,
+  "error_stack_trace_disabled": false,
+  "coin_supported": true,
+  "construction": {
+    "constructor_dsl_file": "sui.ros",
+    "end_conditions": {
+      "create_account": 10,
+      "transfer": 20
+    },
+    "prefunded_accounts": [
+      {
+        "privkey": "dc6d8271b987d0440c5523a84b92a28409972a67a52c8d57df20202d21515a3e",
+        "account_identifier": {
+          "address": "0x13177aa37db35f12ac15979f73d2bbbaef4be28b"
+        },
+        "curve_type": "edwards25519",
+        "currency": {
+          "symbol": "SUI",
+          "decimals": 8
+        }
+      },
+      {
+        "privkey": "2f8818fd56cc0e1887401de07c8a1b74649594e83e4495f4b8ab4aced70584d2",
+        "account_identifier": {
+          "address": "0x15ec508011bac2f79ab8e1abb234299358acc8ec"
+        },
+        "curve_type": "edwards25519",
+        "currency": {
+          "symbol": "SUI",
+          "decimals": 8
+        }
+      },
+      {
+        "privkey": "1b39e2f82120170bbfdda5c22ce8f7df22902bea2bb0f5221bc9aec088ebc93f",
+        "account_identifier": {
+          "address": "0x158cb319d7afb8263795394c9c31f132434b0c0e"
+        },
+        "curve_type": "edwards25519",
+        "currency": {
+          "symbol": "SUI",
+          "decimals": 8
+        }
+      }
+    ]
+  },
+  "data": {
+    "active_reconciliation_concurrency": 16,
+    "inactive_reconciliation_concurrency": 4,
+    "inactive_reconciliation_frequency": 250,
+    "log_blocks": false,
+    "log_transactions": false,
+    "log_balance_changes": false,
+    "log_reconciliations": false,
+    "ignore_reconciliation_error": false,
+    "historical_balance_disabled": false,
+    "exempt_accounts": "",
+    "bootstrap_balances": "",
+    "interesting_accounts": "",
+    "reconciliation_disabled": false,
+    "reconciliation_drain_disabled": false,
+    "inactive_discrepancy_search_disabled": false,
+    "balance_tracking_disabled": false,
+    "coin_tracking_disabled": false,
+    "status_port": 9090,
+    "results_output_file": "",
+    "pruning_disabled": false,
+    "initial_balance_fetch_disabled": false,
+    "end_conditions": {
+      "tip": true,
+      "reconciliation_coverage": {
+        "coverage": 0.95,
+        "tip": true
+      }
+    }
+  },
+  "perf": null
+}

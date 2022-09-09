@@ -7,12 +7,13 @@ use std::sync::Arc;
 use axum::routing::post;
 use axum::{Extension, Router};
 use once_cell::sync::Lazy;
+use tokio::task::JoinHandle;
+use tracing::info;
+
 use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_quorum_driver::QuorumDriver;
-use tokio::task::JoinHandle;
-use tracing::info;
 
 use crate::errors::{Error, ErrorType};
 use crate::state::{BookKeeper, PseudoBlockProvider, ServerContext};
@@ -62,7 +63,7 @@ impl RosettaServer {
             .route("/block", post(block::block))
             .route("/block/transaction", post(block::transaction))
             .route("/construction/derive", post(construction::derive))
-            .route("/construction/payload", post(construction::payload))
+            .route("/construction/payloads", post(construction::payloads))
             .route("/construction/combine", post(construction::combine))
             .route("/construction/submit", post(construction::submit))
             .route("/construction/preprocess", post(construction::preprocess))
@@ -76,5 +77,50 @@ impl RosettaServer {
         let server = axum::Server::bind(&addr).serve(app.into_make_service());
         info!("Sui Rosetta server listening on {}", server.local_addr());
         tokio::spawn(server)
+    }
+}
+
+#[test]
+fn get_key() {
+    use std::collections::BTreeMap;
+    use std::fs::File;
+    use std::io::BufReader;
+    use std::path::PathBuf;
+    use sui_config::{sui_config_dir, SUI_KEYSTORE_FILENAME};
+    use sui_sdk::crypto::{KeystoreType, SuiKeystore};
+    use sui_types::base_types::SuiAddress;
+    use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
+    use sui_types::sui_serde::{Encoding, Hex};
+
+    let path = sui_config_dir().unwrap().join(SUI_KEYSTORE_FILENAME);
+
+    let reader = BufReader::new(File::open(path).unwrap());
+    let kp_strings: Vec<String> = serde_json::from_reader(reader).unwrap();
+    let keys = kp_strings
+        .iter()
+        .map(|kpstr| {
+            let key = SuiKeyPair::decode_base64(kpstr);
+            key.map(|k| (Into::<SuiAddress>::into(&k.public()), k))
+        })
+        .collect::<Result<BTreeMap<_, _>, _>>()
+        .unwrap();
+
+    for (address, key) in keys {
+        match key {
+            SuiKeyPair::Ed25519SuiKeyPair(k) => {
+                println!(
+                    "{}: {}: ed25519",
+                    address,
+                    Hex::encode(k.private().as_bytes())
+                )
+            }
+            SuiKeyPair::Secp256k1SuiKeyPair(k) => {
+                println!(
+                    "{}: {}: secp256k1",
+                    address,
+                    Hex::encode(k.private().as_bytes())
+                )
+            }
+        };
     }
 }

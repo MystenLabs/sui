@@ -4,10 +4,12 @@
 use std::sync::Arc;
 
 use axum::{Extension, Json};
+use serde_json::json;
+use tracing::info;
 
-use sui_types::base_types::SuiAddress;
+use sui_types::base_types::{encode_bytes_hex, SuiAddress};
 use sui_types::crypto;
-use sui_types::crypto::{SignableBytes, ToFromBytes};
+use sui_types::crypto::{SignableBytes, SignatureScheme, ToFromBytes};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     Transaction, TransactionData,
@@ -24,7 +26,7 @@ use crate::types::{
     ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
     SignatureType, SigningPayload, TransactionIdentifier, TransactionIdentifierResponse,
 };
-use crate::ErrorType::{InternalError, MissingInput};
+use crate::ErrorType::InternalError;
 use crate::ServerContext;
 
 pub async fn derive(
@@ -38,32 +40,14 @@ pub async fn derive(
     })
 }
 
-pub async fn payload(
+pub async fn payloads(
     Json(payload): Json<ConstructionPayloadsRequest>,
     Extension(context): Extension<Arc<ServerContext>>,
 ) -> Result<ConstructionPayloadsResponse, Error> {
+    info!("payload");
     context.checks_network_identifier(&payload.network_identifier)?;
     let data = Operation::parse_transaction_data(payload.operations, &context.state).await?;
-
-    let signer = data.signer();
-    let hex_bytes = payload
-        .public_keys
-        .into_iter()
-        .find_map(|pub_key| {
-            let key_hex = pub_key.hex_bytes.clone();
-            let address: SuiAddress = pub_key.try_into().ok()?;
-            if address == signer {
-                Some(key_hex)
-            } else {
-                None
-            }
-        })
-        .ok_or_else(|| {
-            Error::new_with_msg(
-                MissingInput,
-                format!("Public key for address [{signer}] not found.").as_str(),
-            )
-        })?;
+    let hex_bytes = encode_bytes_hex(data.to_bytes());
 
     Ok(ConstructionPayloadsResponse {
         unsigned_transaction: Hex::from_bytes(&data.to_bytes()),
@@ -84,8 +68,19 @@ pub async fn combine(
     state.checks_network_identifier(&payload.network_identifier)?;
     let unsigned_tx = payload.unsigned_transaction.to_vec()?;
     let data = TransactionData::from_signable_bytes(&unsigned_tx)?;
-    let sig = payload.signatures.first().unwrap().hex_bytes.to_vec()?;
-    let signed_tx = Transaction::new(data, crypto::Signature::from_bytes(&sig)?);
+    let sig = payload.signatures.first().unwrap();
+    let sig_bytes = sig.hex_bytes.to_vec()?;
+    let pub_key = sig.public_key.hex_bytes.to_vec()?;
+    let flag = vec![match sig.signature_type {
+        SignatureType::Ed25519 => SignatureScheme::ED25519,
+        SignatureType::Ecdsa => SignatureScheme::Secp256k1,
+    }
+    .flag()];
+
+    let signed_tx = Transaction::new(
+        data,
+        crypto::Signature::from_bytes(&[&*flag, &*sig_bytes, &*pub_key].concat())?,
+    );
     signed_tx.verify_sender_signature()?;
     let signed_tx_bytes = bcs::to_bytes(&signed_tx)?;
 
@@ -129,7 +124,7 @@ pub async fn preprocess(
     let data = Operation::parse_transaction_data(payload.operations, &context.state).await?;
     let signer = data.signer();
     Ok(ConstructionPreprocessResponse {
-        options: None,
+        options: Some(json!({})),
         required_public_keys: vec![AccountIdentifier { address: signer }],
     })
 }
@@ -153,7 +148,7 @@ pub async fn metadata(
 ) -> Result<ConstructionMetadataResponse, Error> {
     state.checks_network_identifier(&payload.network_identifier)?;
     Ok(ConstructionMetadataResponse {
-        metadata: Default::default(),
+        metadata: json!({}),
         suggested_fee: vec![],
     })
 }
@@ -171,12 +166,18 @@ pub async fn parse(
     } else {
         TransactionData::from_signable_bytes(&payload.transaction.to_vec()?)?
     };
-    let address = data.signer();
+    let account_identifier_signers = if payload.signed {
+        vec![AccountIdentifier {
+            address: data.signer(),
+        }]
+    } else {
+        vec![]
+    };
     let operations = Operation::from_data_and_effect(&data, None, &context.state).await?;
 
     Ok(ConstructionParseResponse {
         operations,
-        account_identifier_signers: vec![AccountIdentifier { address }],
+        account_identifier_signers,
         metadata: None,
     })
 }
