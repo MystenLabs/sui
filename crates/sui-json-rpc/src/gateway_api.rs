@@ -1,17 +1,15 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::api::{
+    RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, WalletSyncApiServer,
+};
+use crate::SuiRpcModule;
 use anyhow::anyhow;
 use async_trait::async_trait;
 use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use signature::Signature;
-use tracing::debug;
-
-use crate::api::{
-    RpcGatewayApiServer, RpcReadApiServer, RpcTransactionBuilderServer, WalletSyncApiServer,
-};
-use crate::SuiRpcModule;
 use sui_core::gateway_state::{GatewayClient, GatewayTxSeqNumber};
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
@@ -27,6 +25,7 @@ use sui_types::{
     crypto::SignableBytes,
     messages::{Transaction, TransactionData},
 };
+use tracing::debug;
 
 pub struct RpcGatewayImpl {
     client: GatewayClient,

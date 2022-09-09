@@ -17,9 +17,9 @@ use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
     GatewayTxSeqNumber, MoveCallParams, OwnedObjectRef, RPCTransactionRequestParams,
     SuiCertifiedTransaction, SuiData, SuiEvent, SuiEventEnvelope, SuiExecutionStatus,
-    SuiGasCostSummary, SuiObject, SuiObjectRead, SuiObjectRef, SuiParsedData, SuiRawData,
-    SuiRawMoveObject, SuiTransactionData, SuiTransactionEffects, SuiTransactionResponse,
-    TransactionBytes, TransferObjectParams,
+    SuiGasCostSummary, SuiObject, SuiObjectRead, SuiObjectRef, SuiParsedData, SuiPastObjectRead,
+    SuiRawData, SuiRawMoveObject, SuiTransactionData, SuiTransactionEffects,
+    SuiTransactionResponse, TransactionBytes, TransferObjectParams,
 };
 use sui_open_rpc::ExamplePairing;
 use sui_types::base_types::{
@@ -67,6 +67,7 @@ impl RpcExampleProvider {
             self.batch_transaction_examples(),
             self.execute_transaction_example(),
             self.get_object_example(),
+            self.get_past_object_example(),
             self.get_objects_owned_by_address(),
             self.get_objects_owned_by_object(),
             self.get_raw_object(),
@@ -223,6 +224,38 @@ impl RpcExampleProvider {
             )],
         )
     }
+
+    fn get_past_object_example(&mut self) -> Examples {
+        let object_id = ObjectID::new(self.rng.gen());
+
+        let coin = GasCoin::new(object_id, 10000);
+
+        let result = SuiPastObjectRead::VersionFound(SuiObject {
+            data: SuiParsedData::try_from_object(
+                coin.to_object(SequenceNumber::from_u64(1)),
+                GasCoin::layout(),
+            )
+            .unwrap(),
+            owner: Owner::AddressOwner(SuiAddress::from(ObjectID::new(self.rng.gen()))),
+            previous_transaction: TransactionDigest::new(self.rng.gen()),
+            storage_rebate: 100,
+            reference: SuiObjectRef::from((
+                object_id,
+                SequenceNumber::from_u64(4),
+                ObjectDigest::new(self.rng.gen()),
+            )),
+        });
+
+        Examples::new(
+            "sui_tryGetPastObject",
+            vec![ExamplePairing::new(
+                "Get Past Object data",
+                vec![("object_id", json!(object_id)), ("version", json!(4))],
+                json!(result),
+            )],
+        )
+    }
+
     fn get_objects_owned_by_address(&mut self) -> Examples {
         let owner = SuiAddress::from(ObjectID::new(self.rng.gen()));
         let result = (0..4)

@@ -274,6 +274,21 @@ pub enum SuiError {
     TransactionNotFound { digest: TransactionDigest },
     #[error("Could not find the referenced object {:?}.", object_id)]
     ObjectNotFound { object_id: ObjectID },
+    #[error(
+        "Could not find the referenced object {:?} at version {:?}",
+        object_id,
+        version
+    )]
+    ObjectVersionNotFound {
+        object_id: ObjectID,
+        version: SequenceNumber,
+    },
+    #[error("Could not find the referenced object {:?} as the asked version {:?} is higher than the latest {:?}", object_id, asked_version, latest_version)]
+    ObjectSequenceNumberTooHigh {
+        object_id: ObjectID,
+        asked_version: SequenceNumber,
+        latest_version: SequenceNumber,
+    },
     #[error("Object deleted at reference {:?}.", object_ref)]
     ObjectDeleted { object_ref: ObjectRef },
     #[error("Object ID did not have the expected type")]

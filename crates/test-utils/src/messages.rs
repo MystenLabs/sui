@@ -65,12 +65,25 @@ pub async fn get_account_and_gas_coins(
     Ok(res)
 }
 
+/// get one available gas ObjectRef
+pub async fn get_gas_object_with_wallet_context(
+    context: &WalletContext,
+    address: &SuiAddress,
+) -> Option<ObjectRef> {
+    let mut res = get_gas_objects_with_wallet_context(context, address).await;
+    if res.is_empty() {
+        None
+    } else {
+        Some(res.swap_remove(0).to_object_ref())
+    }
+}
+
 pub async fn get_gas_objects_with_wallet_context(
     context: &WalletContext,
-    address: SuiAddress,
+    address: &SuiAddress,
 ) -> Vec<SuiObjectInfo> {
     context
-        .gas_objects(address)
+        .gas_objects(*address)
         .await
         .unwrap()
         .into_iter()
@@ -88,7 +101,7 @@ pub async fn get_account_and_gas_objects(
             .keystore
             .addresses()
             .iter()
-            .map(|account| get_gas_objects_with_wallet_context(context, *account)),
+            .map(|account| get_gas_objects_with_wallet_context(context, account)),
     )
     .await;
     context
@@ -255,6 +268,18 @@ pub fn make_transfer_object_transaction(
     let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
     let signature = Signature::new(&data, keypair);
     Transaction::new(data, signature)
+}
+
+pub fn make_transfer_object_transaction_with_wallet_context(
+    object_ref: ObjectRef,
+    gas_object: ObjectRef,
+    context: &WalletContext,
+    sender: SuiAddress,
+    recipient: SuiAddress,
+) -> Transaction {
+    let data = TransactionData::new_transfer(recipient, object_ref, sender, gas_object, MAX_GAS);
+    let sig = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+    Transaction::new(data, sig)
 }
 
 pub fn make_publish_basics_transaction(gas_object: ObjectRef) -> Transaction {

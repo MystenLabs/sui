@@ -15,11 +15,12 @@ use std::sync::Arc;
 use sui_core::authority::AuthorityState;
 use sui_core::gateway_state::GatewayTxSeqNumber;
 use sui_json_rpc_types::{
-    GetObjectDataResponse, MoveFunctionArgType, ObjectValueKind, SuiMoveNormalizedFunction,
-    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionEffects,
-    SuiTransactionResponse,
+    GetObjectDataResponse, GetPastObjectDataResponse, MoveFunctionArgType, ObjectValueKind,
+    SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo,
+    SuiTransactionEffects, SuiTransactionResponse,
 };
 use sui_open_rpc::Module;
+use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
@@ -276,6 +277,19 @@ impl RpcFullNodeReadApiServer for FullNodeApi {
         addr: SuiAddress,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>> {
         Ok(self.state.get_transactions_to_addr(addr).await?)
+    }
+
+    async fn try_get_past_object(
+        &self,
+        object_id: ObjectID,
+        version: SequenceNumber,
+    ) -> RpcResult<GetPastObjectDataResponse> {
+        Ok(self
+            .state
+            .get_past_object_read(&object_id, version)
+            .await
+            .map_err(|e| anyhow!("{e}"))?
+            .try_into()?)
     }
 }
 

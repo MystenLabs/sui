@@ -677,3 +677,76 @@ impl Display for ObjectRead {
         }
     }
 }
+
+#[allow(clippy::large_enum_variant)]
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(tag = "status", content = "details")]
+pub enum PastObjectRead {
+    /// The object does not exist
+    ObjectNotExists(ObjectID),
+    /// The object is found to be deleted with this version
+    ObjectDeleted(ObjectRef),
+    /// The object exists and is found with this version
+    VersionFound(ObjectRef, Object, Option<MoveStructLayout>),
+    /// The object exists but not found with this version
+    VersionNotFound(ObjectID, SequenceNumber),
+    /// The asked object version is higher than the latest
+    VersionTooHigh {
+        object_id: ObjectID,
+        asked_version: SequenceNumber,
+        latest_version: SequenceNumber,
+    },
+}
+
+impl PastObjectRead {
+    /// Returns the object value if there is any, otherwise an Err
+    pub fn into_object(self) -> Result<Object, SuiError> {
+        match self {
+            Self::ObjectDeleted(oref) => Err(SuiError::ObjectDeleted { object_ref: oref }),
+            Self::ObjectNotExists(id) => Err(SuiError::ObjectNotFound { object_id: id }),
+            Self::VersionFound(_, o, _) => Ok(o),
+            Self::VersionNotFound(object_id, version) => {
+                Err(SuiError::ObjectVersionNotFound { object_id, version })
+            }
+            Self::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            } => Err(SuiError::ObjectSequenceNumberTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            }),
+        }
+    }
+}
+
+impl Display for PastObjectRead {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ObjectDeleted(oref) => {
+                write!(f, "PastObjectRead::ObjectDeleted ({:?})", oref)
+            }
+            Self::ObjectNotExists(id) => {
+                write!(f, "PastObjectRead::ObjectNotExists ({:?})", id)
+            }
+            Self::VersionFound(oref, _, _) => {
+                write!(f, "PastObjectRead::VersionFound ({:?})", oref)
+            }
+            Self::VersionNotFound(object_id, version) => {
+                write!(
+                    f,
+                    "PastObjectRead::VersionNotFound ({:?}, asked sequence number {:?})",
+                    object_id, version
+                )
+            }
+            Self::VersionTooHigh {
+                object_id,
+                asked_version,
+                latest_version,
+            } => {
+                write!(f, "PastObjectRead::VersionTooHigh ({:?}, asked sequence number {:?}, latest sequence number {:?})", object_id, asked_version, latest_version)
+            }
+        }
+    }
+}

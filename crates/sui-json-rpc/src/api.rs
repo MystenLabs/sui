@@ -7,13 +7,14 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_proc_macros::rpc;
 use sui_json::SuiJsonValue;
 use sui_json_rpc_types::{
-    GatewayTxSeqNumber, GetObjectDataResponse, GetRawObjectDataResponse, MoveFunctionArgType,
-    RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter, SuiExecuteTransactionResponse,
-    SuiGasCostSummary, SuiMoveNormalizedFunction, SuiMoveNormalizedModule, SuiMoveNormalizedStruct,
-    SuiObjectInfo, SuiTransactionFilter, SuiTransactionResponse, SuiTypeTag, TransactionBytes,
+    GatewayTxSeqNumber, GetObjectDataResponse, GetPastObjectDataResponse, GetRawObjectDataResponse,
+    MoveFunctionArgType, RPCTransactionRequestParams, SuiEventEnvelope, SuiEventFilter,
+    SuiExecuteTransactionResponse, SuiGasCostSummary, SuiMoveNormalizedFunction,
+    SuiMoveNormalizedModule, SuiMoveNormalizedStruct, SuiObjectInfo, SuiTransactionFilter,
+    SuiTransactionResponse, SuiTypeTag, TransactionBytes,
 };
 use sui_open_rpc_macros::open_rpc;
-use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::base_types::{ObjectID, SequenceNumber, SuiAddress, TransactionDigest};
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::ExecuteTransactionRequestType;
 use sui_types::object::Owner;
@@ -202,6 +203,19 @@ pub trait RpcFullNodeReadApi {
         /// the recipient's Sui address
         addr: SuiAddress,
     ) -> RpcResult<Vec<(GatewayTxSeqNumber, TransactionDigest)>>;
+
+    /// Note there is no software-level guarantee/SLA that objects with past versions
+    /// can be retrieved by this API, even if the object and version exists/existed.
+    /// The result may vary across nodes depending on their pruning policies.
+    /// Return the object information for a specified version
+    #[method(name = "tryGetPastObject")]
+    async fn try_get_past_object(
+        &self,
+        /// the ID of the queried object
+        object_id: ObjectID,
+        /// the version of the queried object. If None, default to the latest known version
+        version: SequenceNumber,
+    ) -> RpcResult<GetPastObjectDataResponse>;
 }
 
 #[open_rpc(namespace = "sui", tag = "Transaction Builder API")]

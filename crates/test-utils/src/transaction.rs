@@ -1,7 +1,10 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::authority::get_client;
-use crate::messages::{create_publish_move_package_transaction, make_tx_certs_and_signed_effects};
+use crate::messages::{
+    create_publish_move_package_transaction, get_account_and_gas_coins,
+    get_gas_object_with_wallet_context, make_tx_certs_and_signed_effects, MAX_GAS,
+};
 use crate::test_account_keys;
 use futures::StreamExt;
 use move_package::BuildConfig;
@@ -10,9 +13,11 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 use sui::client_commands::WalletContext;
+use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
 use sui_config::ValidatorInfo;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::AuthorityAPI;
+use sui_json_rpc_types::SuiObjectRead;
 use sui_json_rpc_types::{SuiParsedTransactionResponse, SuiTransactionResponse};
 use sui_sdk::json::SuiJsonValue;
 use sui_types::base_types::ObjectRef;
@@ -20,8 +25,8 @@ use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
 use sui_types::batch::UpdateItem;
 use sui_types::error::SuiResult;
 use sui_types::messages::{
-    BatchInfoRequest, BatchInfoResponseItem, ObjectInfoRequest, ObjectInfoResponse, Transaction,
-    TransactionEffects, TransactionInfoResponse,
+    BatchInfoRequest, BatchInfoResponseItem, CallArg, ObjectArg, ObjectInfoRequest,
+    ObjectInfoResponse, Transaction, TransactionData, TransactionEffects, TransactionInfoResponse,
 };
 use sui_types::object::{Object, Owner};
 use sui_types::SUI_FRAMEWORK_OBJECT_ID;
@@ -187,6 +192,101 @@ pub async fn increment_counter(
         gas_object,
     )
     .await
+}
+
+pub async fn create_devnet_nft(
+    context: &mut WalletContext,
+) -> Result<(SuiAddress, ObjectID, TransactionDigest), anyhow::Error> {
+    let (sender, gas_objects) = get_account_and_gas_coins(context).await?.swap_remove(0);
+    let gas_object = gas_objects.get(0).unwrap().id();
+
+    let res = SuiClientCommands::CreateExampleNFT {
+        name: Some("example_nft_name".into()),
+        description: Some("example_nft_desc".into()),
+        url: Some("https://sui.io/_nuxt/img/sui-logo.8d3c44e.svg".into()),
+        gas: Some(*gas_object),
+        gas_budget: Some(50000),
+    }
+    .execute(context)
+    .await?;
+
+    let (object_id, digest) = if let SuiClientCommandResult::CreateExampleNFT(
+        SuiObjectRead::Exists(obj),
+    ) = res
+    {
+        (obj.reference.object_id, obj.previous_transaction)
+    } else {
+        panic!("CreateExampleNFT command did not return WalletCommandResult::CreateExampleNFT(SuiObjectRead::Exists, got {:?}", res);
+    };
+
+    Ok((sender, object_id, digest))
+}
+
+pub async fn transfer_coin(
+    context: &mut WalletContext,
+) -> Result<(ObjectID, SuiAddress, SuiAddress, TransactionDigest), anyhow::Error> {
+    let sender = context.keystore.addresses().get(0).cloned().unwrap();
+    let receiver = context.keystore.addresses().get(1).cloned().unwrap();
+
+    let object_refs = context
+        .client
+        .read_api()
+        .get_objects_owned_by_address(sender)
+        .await?;
+    let object_to_send = object_refs.get(1).unwrap().object_id;
+
+    // Send an object
+    info!(
+        "transferring coin {:?} from {:?} -> {:?}",
+        object_to_send, sender, receiver
+    );
+    let res = SuiClientCommands::Transfer {
+        to: receiver,
+        object_id: object_to_send,
+        gas: None,
+        gas_budget: 50000,
+    }
+    .execute(context)
+    .await?;
+
+    let digest = if let SuiClientCommandResult::Transfer(_, cert, _) = res {
+        cert.transaction_digest
+    } else {
+        panic!("transfer command did not return WalletCommandResult::Transfer");
+    };
+
+    Ok((object_to_send, sender, receiver, digest))
+}
+
+pub async fn delete_devnet_nft(
+    context: &mut WalletContext,
+    sender: &SuiAddress,
+    nft_to_delete: ObjectRef,
+    package_ref: ObjectRef,
+) -> SuiTransactionResponse {
+    let gas = get_gas_object_with_wallet_context(context, sender)
+        .await
+        .unwrap_or_else(|| panic!("Expect {sender} to have at least one gas object"));
+    let data = TransactionData::new_move_call(
+        *sender,
+        package_ref,
+        "devnet_nft".parse().unwrap(),
+        "burn".parse().unwrap(),
+        Vec::new(),
+        gas,
+        vec![CallArg::Object(ObjectArg::ImmOrOwnedObject(nft_to_delete))],
+        MAX_GAS,
+    );
+
+    let signature = context.keystore.sign(sender, &data.to_bytes()).unwrap();
+    let tx = Transaction::new(data, signature);
+
+    context
+        .client
+        .quorum_driver()
+        .execute_transaction(tx)
+        .await
+        .unwrap()
 }
 
 /// Submit a certificate containing only owned-objects to all authorities.
