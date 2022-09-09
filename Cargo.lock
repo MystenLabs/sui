@@ -74,7 +74,7 @@ dependencies = [
  "serde_json",
  "tokio",
  "tokio-stream",
- "tokio-util",
+ "tokio-util 0.7.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "tower",
  "tracing",
  "webpki",
