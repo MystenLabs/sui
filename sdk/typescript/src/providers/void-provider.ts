@@ -21,6 +21,7 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
+  SuiTransactionFilter,
 } from '../types';
 import { Provider } from './provider';
 
@@ -135,6 +136,17 @@ export class VoidProvider extends Provider {
 
   async unsubscribeEvent(_id: SubscriptionId): Promise<boolean> {
     throw this.newError('unsubscribeEvent');
+  }
+
+  async subscribeTransaction(
+    _filter: SuiTransactionFilter,
+    _onMessage: (tx: SuiTransactionResponse) => void
+  ): Promise<SubscriptionId> {
+    throw this.newError('subscribeTransaction');
+  }
+
+  async unsubscribeTransaction(_id: SubscriptionId): Promise<boolean> {
+    throw this.newError('unsubscribeTransaction');
   }
 
   private newError(operation: string): Error {

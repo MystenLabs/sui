@@ -397,3 +397,5 @@ export function getNewlyCreatedCoinRefsAfterSplit(
   }
   return undefined;
 }
+
+export type SuiTransactionFilter = "Any";

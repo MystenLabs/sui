@@ -1,13 +1,16 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { isSubscriptionEvent } from '../types/index.guard';
+import { isSuiEventEnvelope, isSuiTransactionResponse } from '../types/index.guard';
 import {
   SuiEventFilter,
   SuiEventEnvelope,
   SubscriptionId,
+  SuiTransactionFilter,
+  SuiTransactionResponse,
 } from '../types';
 import { Client as WsRpcClient} from 'rpc-websockets';
+import { isAny } from '../providers/json-rpc-provider';
 
 
 export const getWebsocketUrl = (httpUrl: string, port?: number): string => {
@@ -29,16 +32,19 @@ type JsonRpcMethodMessage<T> = {
   params: T
 }
 
-type FilterSubHandler = {
+type FilterSubHandler<TFilter, TResponse> = {
   id: SubscriptionId,
-  onMessage: (event: SuiEventEnvelope) => void,
-  filter: SuiEventFilter
+  onMessage: (msg: TResponse) => void,
+  filter: TFilter
 };
 
-type SubscriptionData = {
-  filter: SuiEventFilter,
-  onMessage: (event: SuiEventEnvelope) => void
+type FilterCallbackPair<TFilter, TOnMessageInput> = {
+  filter: TFilter,
+  onMessage: (tx: TOnMessageInput) => void
 }
+
+type EventSubscriptionData = FilterCallbackPair<SuiEventFilter, SuiEventEnvelope>;
+type TransactionSubscriptionData = FilterCallbackPair<SuiTransactionFilter, SuiTransactionResponse>;
 
 type MinimumSubscriptionMessage = {
   subscription: SubscriptionId,
@@ -81,6 +87,8 @@ export const DEFAULT_CLIENT_OPTIONS: WebsocketClientOptions = {
 
 const SUBSCRIBE_EVENT_METHOD = 'sui_subscribeEvent';
 const UNSUBSCRIBE_EVENT_METHOD = 'sui_unsubscribeEvent';
+const SUBSCRIBE_TRANSACTION_METHOD = 'sui_subscribeTransaction';
+const UNSUBSCRIBE_TRANSACTION_METHOD = 'sui_unsubscribeTransaction';
 
 /**
  * Interface with a Sui node's websocket capabilities
@@ -92,7 +100,8 @@ export class WebsocketClient {
   protected isSetup: boolean = false;
   private connectionPromise: Promise<void> | null = null;
 
-  protected eventSubscriptions: Map<SubscriptionId, SubscriptionData> = new Map();
+  protected eventSubscriptions: Map<SubscriptionId, EventSubscriptionData> = new Map();
+  protected txSubscriptions: Map<SubscriptionId, TransactionSubscriptionData> = new Map();
 
   /**
    * @param endpoint Sui node endpoint to connect to (accepts websocket & http)
@@ -138,25 +147,37 @@ export class WebsocketClient {
     this.isSetup = true;
   }
 
+  private execAnyOnMessage<TFilter, TOnMessageInput, TParams extends MinimumSubscriptionMessage>(
+    map: Map<SubscriptionId, FilterCallbackPair<TFilter, TOnMessageInput>>,
+    params: TParams,
+    isMessageInput: (o: any) => o is TOnMessageInput
+  ) {
+    if (isMessageInput(params.result)) {
+      const sub = map.get(params.subscription);
+      if (sub)
+        // call any registered handler for the message's subscription
+        sub.onMessage(params.result);
+    }
+  }
+
   // called for every message received from the node over websocket
   private onSocketMessage(rawMessage: string): void {
     const msg: JsonRpcMethodMessage<object> = JSON.parse(rawMessage);
-
     const params = msg.params;
-    if (msg.method === SUBSCRIBE_EVENT_METHOD) {
-      // even with validation off, we must ensure a few properties at minimum in a message
-      if (this.skipValidation && isMinimumSubscriptionMessage(params)) {
-        const sub = this.eventSubscriptions.get(params.subscription);
-        if (sub)
-          // cast to bypass type validation of 'result'
-          (sub.onMessage as (m: any) => void)(params.result);
-      }
-      else if (isSubscriptionEvent(params)) {
-        // call any registered handler for the message's subscription
-        const sub = this.eventSubscriptions.get(params.subscription);
-        if (sub)
-          sub.onMessage(params.result);
-      }
+
+    switch (msg.method) {
+      case SUBSCRIBE_TRANSACTION_METHOD:
+        if (isMinimumSubscriptionMessage(params)) {
+          const dataValidator = this.skipValidation ? isAny : isSuiTransactionResponse;
+          this.execAnyOnMessage(this.txSubscriptions, params, dataValidator);
+        }
+        break;
+      case SUBSCRIBE_EVENT_METHOD:
+        if (isMinimumSubscriptionMessage(params)) {
+          const dataValidator = this.skipValidation ? isAny : isSuiEventEnvelope;
+          this.execAnyOnMessage(this.eventSubscriptions, params, dataValidator);
+        }
+        break;
     }
   }
 
@@ -177,7 +198,7 @@ export class WebsocketClient {
       ) as any as number;
 
       this.rpcClient.once('open', () => {
-        this.refreshSubscriptions();
+        this.refreshAllSubscriptions();
         this.connectionPromise = null;
         resolve();
       });
@@ -194,15 +215,18 @@ export class WebsocketClient {
     calling multiple times on the same connection will result
     in multiple message handlers firing each time
   */
-  private async refreshSubscriptions() {
-    if (this.eventSubscriptions.size === 0)
-      return;
+  private async refreshSubscriptions<TFilter, TResponse>(
+    subMap: Map<SubscriptionId, FilterCallbackPair<TFilter, TResponse>>,
+    subscribeMethod: (f: TFilter, onMsg: (m: TResponse) => void) => Promise<SubscriptionId>
+  ) {
+    if (subMap.size === 0)
+      return subMap;
 
     try {
-      let newSubs: Map<SubscriptionId, SubscriptionData> = new Map();
+      let newSubs: Map<SubscriptionId, FilterCallbackPair<TFilter, TResponse>> = new Map();
 
-      let newSubsArr: (FilterSubHandler | null)[] = await Promise.all(
-        Array.from(this.eventSubscriptions.values())
+      let newSubsArr: (FilterSubHandler<TFilter, TResponse> | null)[] = await Promise.all(
+        Array.from(subMap.values())
         .map(async sub => {
           const onMessage = sub.onMessage;
           const filter = sub.filter;
@@ -214,7 +238,7 @@ export class WebsocketClient {
               * we assume this is being called after a reconnection
               * the node keys subscriptions with a combo of connection id & subscription id
           */
-          const id = await this.subscribeEvent(filter, onMessage);
+          const id = await subscribeMethod(filter, onMessage);
           return { id, onMessage, filter };
         })
       );
@@ -226,10 +250,15 @@ export class WebsocketClient {
         newSubs.set(entry.id, { filter, onMessage });
       });
 
-      this.eventSubscriptions = newSubs;
+      return newSubs;
     } catch (err) {
-      throw new Error(`error refreshing event subscriptions: ${err}`);
+      throw new Error(`error refreshing subscriptions: ${err}`);
     }
+  }
+
+  private async refreshAllSubscriptions() {
+    this.eventSubscriptions = await this.refreshSubscriptions(this.eventSubscriptions, this.subscribeEvent.bind(this));
+    this.txSubscriptions = await this.refreshSubscriptions(this.txSubscriptions, this.subscribeTransaction.bind(this));
   }
 
   async subscribeEvent(
@@ -276,6 +305,48 @@ export class WebsocketClient {
     } catch (err) {
       throw new Error(
         `Error unsubscribing from event: ${err}, subscription: ${id}}`
+      );
+    }
+  }
+
+  async subscribeTransaction(
+    filter: SuiTransactionFilter,
+    onMessage: (tx: SuiTransactionResponse) => void
+  ): Promise<SubscriptionId> {
+    try {
+      if (this.connectionState != ConnectionState.Connected)
+        await this.connect();
+
+      let subId = await this.rpcClient.call(
+        SUBSCRIBE_TRANSACTION_METHOD,
+        [filter],
+        this.options.callTimeout
+      ) as SubscriptionId;
+
+      this.txSubscriptions.set(subId, { filter, onMessage });
+      return subId;
+    } catch (err) {
+      throw new Error(
+        `Error subscribing to transactions: ${JSON.stringify(err)}`
+      );
+    }
+  }
+
+  async unsubscribeTransaction(id: SubscriptionId): Promise<boolean> {
+    try {
+      if (this.connectionState != ConnectionState.Connected)
+        await this.connect();
+
+      let removedOnNode = await this.rpcClient.call(
+        UNSUBSCRIBE_TRANSACTION_METHOD,
+        [id],
+        this.options.callTimeout
+      ) as boolean;
+
+      return this.txSubscriptions.delete(id) || removedOnNode;
+    } catch (err) {
+      throw new Error(
+        `Error unsubscribing from transactions: ${JSON.stringify(err)}`
       );
     }
   }

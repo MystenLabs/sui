@@ -7,7 +7,7 @@
  * Generated type guards for "index.ts".
  * WARNING: Do not manually change this file.
  */
-import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventType, SuiEventFilter, SuiEventEnvelope, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
+import { TransactionDigest, SuiAddress, ObjectOwner, SuiObjectRef, SuiObjectInfo, ObjectContentFields, MovePackageContent, SuiData, SuiMoveObject, SuiMovePackage, SuiMoveFunctionArgTypesResponse, SuiMoveFunctionArgType, SuiMoveFunctionArgTypes, SuiMoveNormalizedModules, SuiMoveNormalizedModule, SuiMoveModuleId, SuiMoveNormalizedStruct, SuiMoveStructTypeParameter, SuiMoveNormalizedField, SuiMoveNormalizedFunction, SuiMoveVisibility, SuiMoveTypeParameterIndex, SuiMoveAbilitySet, SuiMoveNormalizedType, SuiMoveNormalizedTypeParameterType, SuiMoveNormalizedStructType, SuiObject, ObjectStatus, ObjectType, GetOwnedObjectsResponse, GetObjectDataResponse, ObjectDigest, ObjectId, SequenceNumber, MoveEvent, PublishEvent, TransferObjectEvent, DeleteObjectEvent, NewObjectEvent, SuiEvent, MoveEventField, EventType, SuiEventFilter, SuiEventEnvelope, SubscriptionId, SubscriptionEvent, TransferObject, SuiTransferSui, SuiChangeEpoch, ExecuteTransactionRequestType, TransactionKindName, SuiTransactionKind, SuiTransactionData, EpochId, AuthorityQuorumSignInfo, CertifiedTransaction, GasCostSummary, ExecutionStatusType, ExecutionStatus, OwnedObjectRef, TransactionEffects, SuiTransactionResponse, SuiCertifiedTransactionEffects, SuiExecuteTransactionResponse, GatewayTxSeqNumber, GetTxnDigestsResponse, MoveCall, SuiJsonValue, EmptySignInfo, AuthorityName, AuthoritySignature, TransactionBytes, SuiParsedMergeCoinResponse, SuiParsedSplitCoinResponse, SuiParsedPublishResponse, SuiPackage, SuiParsedTransactionResponse, SuiTransactionFilter, DelegationData, DelegationSuiObject, TransferObjectTx, TransferSuiTx, PublishTx, ObjectArg, CallArg, StructTag, TypeTag, MoveCallTx, Transaction, TransactionKind, TransactionData } from "./index";
 
 export function isTransactionDigest(obj: any, _argumentName?: string): obj is TransactionDigest {
     return (
@@ -1013,6 +1013,12 @@ export function isSuiParsedTransactionResponse(obj: any, _argumentName?: string)
                 typeof obj === "object" ||
                 typeof obj === "function") &&
             isSuiParsedPublishResponse(obj.Publish) as boolean)
+    )
+}
+
+export function isSuiTransactionFilter(obj: any, _argumentName?: string): obj is SuiTransactionFilter {
+    return (
+        obj === "Any"
     )
 }
 

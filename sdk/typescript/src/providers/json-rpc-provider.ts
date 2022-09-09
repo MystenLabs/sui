@@ -35,12 +35,13 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
+  SuiTransactionFilter,
 } from '../types';
 import { SignatureScheme } from '../cryptography/publickey';
 import { DEFAULT_CLIENT_OPTIONS, WebsocketClient, WebsocketClientOptions } from '../rpc/websocket-client';
 
 const isNumber = (val: any): val is number => typeof val === 'number';
-const isAny = (_val: any): _val is any => true;
+export const isAny = (_val: any): _val is any => true;
 
 
 export class JsonRpcProvider extends Provider {
@@ -67,6 +68,8 @@ export class JsonRpcProvider extends Provider {
 
     this.client = new JsonRpcClient(endpoint);
     this.wsClient = new WebsocketClient(endpoint, skipDataValidation, socketOptions);
+
+    console.log(this);
   }
 
   // Move info
@@ -440,5 +443,16 @@ export class JsonRpcProvider extends Provider {
 
   async unsubscribeEvent(id: SubscriptionId): Promise<boolean> {
     return this.wsClient.unsubscribeEvent(id);
+  }
+
+  async subscribeTransaction(
+    filter: SuiTransactionFilter,
+    onMessage: (tx: SuiTransactionResponse) => void
+  ): Promise<SubscriptionId> {
+    return this.wsClient.subscribeTransaction(filter, onMessage);
+  }
+
+  async unsubscribeTransaction(id: SubscriptionId): Promise<boolean> {
+    return this.wsClient.unsubscribeTransaction(id);
   }
 }

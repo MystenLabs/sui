@@ -19,6 +19,7 @@ import {
   SubscriptionId,
   ExecuteTransactionRequestType,
   SuiExecuteTransactionResponse,
+  SuiTransactionFilter,
 } from '../types';
 
 ///////////////////////////////
@@ -155,5 +156,19 @@ export abstract class Provider {
    * @param id - subscription id to unsubscribe from (previously received from subscribeEvent)
    */
   abstract unsubscribeEvent(id: SubscriptionId): Promise<boolean>;
+
+  /**
+   * Subscribe to get notifications whenever a new transaction is seen by the node
+   */
+  abstract subscribeTransaction(
+    filter: SuiTransactionFilter,
+    onMessage: (tx: SuiTransactionResponse) => void
+  ): Promise<SubscriptionId>;
+
+  /**
+   * Unsubscribe from node transaction notifications
+   */
+  abstract unsubscribeTransaction(id: SubscriptionId): Promise<boolean>;
+
   // TODO: add more interface methods
 }
