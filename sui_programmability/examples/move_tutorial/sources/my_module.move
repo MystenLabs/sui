@@ -1,22 +1,25 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-module my_first_package::m1 {
+module my_first_package::my_module {
+    // Part 1: imports
     use sui::object::{Self, UID};
+    use sui::transfer;
     use sui::tx_context::TxContext;
 
+    // Part 2: struct definitions
     struct Sword has key, store {
         id: UID,
         magic: u64,
         strength: u64,
     }
 
-    struct Forge has key, store {
+    struct Forge has key {
         id: UID,
         swords_created: u64,
     }
 
-    // module initializer to be executed when this module is published
+    // Part 3: module initializer to be executed when this module is published
     fun init(ctx: &mut TxContext) {
         use sui::transfer;
         use sui::tx_context;
@@ -25,14 +28,10 @@ module my_first_package::m1 {
             swords_created: 0,
         };
         // transfer the forge object to the module/package publisher
-        // (presumably the game admin)
         transfer::transfer(admin, tx_context::sender(ctx));
     }
 
-    public fun swords_created(self: &Forge): u64 {
-        self.swords_created
-    }
-
+    // Part 4: accessors required to read the struct attributes
     public fun magic(self: &Sword): u64 {
         self.magic
     }
@@ -41,8 +40,12 @@ module my_first_package::m1 {
         self.strength
     }
 
+    public fun swords_created(self: &Forge): u64 {
+        self.swords_created
+    }
+
+    // Part 5: entry functions to create and transfer swords
     public entry fun sword_create(forge: &mut Forge, magic: u64, strength: u64, recipient: address, ctx: &mut TxContext) {
-        use sui::transfer;
         // create a sword
         let sword = Sword {
             id: object::new(ctx),
@@ -54,12 +57,7 @@ module my_first_package::m1 {
         forge.swords_created = forge.swords_created + 1;
     }
 
-    public entry fun sword_transfer(sword: Sword, recipient: address) {
-        use sui::transfer;
-        // transfer the sword
-        transfer::transfer(sword, recipient);
-    }
-
+    // Part 6: tests
     #[test]
     public fun test_module_init() {
         use sui::test_scenario;
@@ -113,7 +111,7 @@ module my_first_package::m1 {
             // extract the sword owned by the initial owner
             let sword = test_scenario::take_owned<Sword>(scenario);
             // transfer the sword to the final owner
-            sword_transfer(sword, final_owner);
+            transfer::transfer(sword, final_owner);
         };
         // fourth transaction executed by the final sword owner
         test_scenario::next_tx(scenario, &final_owner);
@@ -131,7 +129,6 @@ module my_first_package::m1 {
 
     #[test]
     public fun test_sword_create() {
-        use sui::transfer;
         use sui::tx_context;
 
         // create a dummy TxContext for testing
@@ -151,5 +148,4 @@ module my_first_package::m1 {
         let dummy_address = @0xCAFE;
         transfer::transfer(sword, dummy_address);
     }
-
 }
