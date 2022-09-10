@@ -14,7 +14,7 @@ expression: params
     "certificates_synchronize_timeout": "2000ms",
     "payload_synchronize_timeout": "3000ms",
     "payload_availability_timeout": "4000ms",
-    "handler_certificate_deliver_timeout": "1000ms"
+    "handler_certificate_deliver_timeout": "30000ms"
   },
   "consensus_api_grpc": {
     "socket_addr": "/ip4/127.0.0.1/tcp/0/http",

@@ -170,8 +170,7 @@ fn parameters_import_snapshot_matches() {
          "block_synchronizer": {
              "certificates_synchronize_timeout": "2s",
              "payload_synchronize_timeout": "3_000ms",
-             "payload_availability_timeout": "4_000ms",
-             "handler_certificate_deliver_timeout": "1_000ms"
+             "payload_availability_timeout": "4_000ms"
          },
          "consensus_api_grpc": {
              "socket_addr": "/ip4/127.0.0.1/tcp/0/http",

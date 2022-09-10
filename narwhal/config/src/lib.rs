@@ -178,17 +178,27 @@ impl Default for ConsensusAPIGrpcParameters {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(default)]
 pub struct BlockSynchronizerParameters {
     /// The timeout configuration when requesting certificates from peers.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "BlockSynchronizerParameters::default_certificates_synchronize_timeout"
+    )]
     pub certificates_synchronize_timeout: Duration,
     /// Timeout when has requested the payload for a certificate and is
     /// waiting to receive them.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "BlockSynchronizerParameters::default_payload_synchronize_timeout"
+    )]
     pub payload_synchronize_timeout: Duration,
     /// The timeout configuration when for when we ask the other peers to
     /// discover who has the payload available for the dictated certificates.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "BlockSynchronizerParameters::default_payload_availability_timeout"
+    )]
     pub payload_availability_timeout: Duration,
     /// When a certificate is fetched on the fly from peers, it is submitted
     /// from the block synchronizer handler for further processing to core
@@ -196,17 +206,39 @@ pub struct BlockSynchronizerParameters {
     /// complete. This property is the timeout while we wait for core to
     /// perform this processes and the certificate to become available to
     /// the handler to consume.
-    #[serde(with = "duration_format")]
+    #[serde(
+        with = "duration_format",
+        default = "BlockSynchronizerParameters::default_handler_certificate_deliver_timeout"
+    )]
     pub handler_certificate_deliver_timeout: Duration,
+}
+
+impl BlockSynchronizerParameters {
+    fn default_certificates_synchronize_timeout() -> Duration {
+        Duration::from_secs(30)
+    }
+    fn default_payload_synchronize_timeout() -> Duration {
+        Duration::from_secs(30)
+    }
+    fn default_payload_availability_timeout() -> Duration {
+        Duration::from_secs(30)
+    }
+    fn default_handler_certificate_deliver_timeout() -> Duration {
+        Duration::from_secs(30)
+    }
 }
 
 impl Default for BlockSynchronizerParameters {
     fn default() -> Self {
         Self {
-            certificates_synchronize_timeout: Duration::from_millis(2_000),
-            payload_synchronize_timeout: Duration::from_millis(2_000),
-            payload_availability_timeout: Duration::from_millis(2_000),
-            handler_certificate_deliver_timeout: Duration::from_millis(2_000),
+            certificates_synchronize_timeout:
+                BlockSynchronizerParameters::default_certificates_synchronize_timeout(),
+            payload_synchronize_timeout:
+                BlockSynchronizerParameters::default_payload_synchronize_timeout(),
+            payload_availability_timeout:
+                BlockSynchronizerParameters::default_payload_availability_timeout(),
+            handler_certificate_deliver_timeout:
+                BlockSynchronizerParameters::default_handler_certificate_deliver_timeout(),
         }
     }
 }
@@ -248,22 +280,22 @@ impl Parameters {
             self.max_batch_delay.as_millis()
         );
         info!(
-            "Synchronize certificates timeout set to {} ms",
+            "Synchronize certificates timeout set to {} s",
             self.block_synchronizer
                 .certificates_synchronize_timeout
-                .as_millis()
+                .as_secs()
         );
         info!(
-            "Payload (batches) availability timeout set to {} ms",
+            "Payload (batches) availability timeout set to {} s",
             self.block_synchronizer
                 .payload_availability_timeout
-                .as_millis()
+                .as_secs()
         );
         info!(
-            "Synchronize payload (batches) timeout set to {} ms",
+            "Synchronize payload (batches) timeout set to {} s",
             self.block_synchronizer
                 .payload_synchronize_timeout
-                .as_millis()
+                .as_secs()
         );
         info!(
             "Consensus API gRPC Server set to listen on on {}",
@@ -280,10 +312,10 @@ impl Parameters {
                 .as_millis()
         );
         info!(
-            "Handler certificate deliver timeout set to {} ms",
+            "Handler certificate deliver timeout set to {} s",
             self.block_synchronizer
                 .handler_certificate_deliver_timeout
-                .as_millis()
+                .as_secs()
         );
         info!(
             "Max concurrent requests set to {}",
@@ -664,17 +696,15 @@ mod tests {
         assert!(logs_contain("Sync retry nodes set to 3 nodes"));
         assert!(logs_contain("Batch size set to 500000 B"));
         assert!(logs_contain("Max batch delay set to 100 ms"));
+        assert!(logs_contain("Synchronize certificates timeout set to 30 s"));
         assert!(logs_contain(
-            "Synchronize certificates timeout set to 2000 ms"
+            "Payload (batches) availability timeout set to 30 s"
         ));
         assert!(logs_contain(
-            "Payload (batches) availability timeout set to 2000 ms"
+            "Synchronize payload (batches) timeout set to 30 s"
         ));
         assert!(logs_contain(
-            "Synchronize payload (batches) timeout set to 2000 ms"
-        ));
-        assert!(logs_contain(
-            "Handler certificate deliver timeout set to 2000 ms"
+            "Handler certificate deliver timeout set to 30 s"
         ));
         assert!(logs_contain(
             "Consensus API gRPC Server set to listen on on /ip4/127.0.0.1/tcp"

@@ -20,7 +20,7 @@ bench_params = {
     'tx_size': 512,
     'faults': 0,
     'duration': 300,
-    'mem_profiling': False    
+    'mem_profiling': False
 }
 ```
 They specify the number of primaries (`nodes`) and workers per primary (`workers`) to deploy, the input rate (transactions per second, or tx/s) at which the clients submit transactions to the system (`rate`), the size of each transaction in bytes (`tx_size`), the number of faulty nodes ('faults`), and the duration of the benchmark in seconds (`duration`). The minimum transaction size is 9 bytes; this ensures the transactions of a client are all different.
@@ -38,10 +38,10 @@ node_params = {
     'batch_size': 500_000,
     'max_batch_delay': '100ms',
     'block_synchronizer': {
-        'certificates_synchronize_timeout': '2000ms',
-        'payload_synchronize_timeout': '2000ms',
-        'payload_availability_timeout': '2000ms',
-        'handler_certificate_deliver_timeout': '2_000ms'
+        'certificates_synchronize_timeout': '30s',
+        'payload_synchronize_timeout': '30s',
+        'payload_availability_timeout': '30s',
+        'handler_certificate_deliver_timeout': '30s'
     },
     "consensus_api_grpc": {
         "socket_addr": "/ip4/127.0.0.1/tcp/0/http",
@@ -65,8 +65,8 @@ They are defined as follows:
 * `socket_addr`: The socket address the consensus api gRPC server should be listening to.
 * `get_collections_timeout`: The timeout configuration when requesting batches from workers.
 * `remove_collections_timeout`: The timeout configuration when removing batches from workers.
-* `handler_certificate_deliver_timeout`: When a certificate is fetched on the fly from peers, it is submitted from the block synchronizer handler for further processing to core 
-to validate and ensure parents are available and history is causal complete. This property is the timeout while we wait for core to perform this processes and the certificate to become 
+* `handler_certificate_deliver_timeout`: When a certificate is fetched on the fly from peers, it is submitted from the block synchronizer handler for further processing to core
+to validate and ensure parents are available and history is causal complete. This property is the timeout while we wait for core to perform this processes and the certificate to become
 available to the handler to consume.
 * `max_concurrent_requests`: The maximum number of concurrent requests for primary-to-primary and worker-to-worker messages.
 
@@ -120,7 +120,7 @@ to be turned on.  To enable memory profiling mode, set the following benchmark o
 * `'mem_profiling': True`
 * `duration`: This should be set to 5 minutes or longer
 
-`dhat-heap-*.json` files will be written to the benchmark dir, one for each primary.  
+`dhat-heap-*.json` files will be written to the benchmark dir, one for each primary.
 You might not get files for all primaries as some primaries might die with a panic (see https://github.com/nnethercote/dhat-rs/issues/19).
 
 To view the profiling information, use the [hosted viewer](https://nnethercote.github.io/dh_view/dh_view.html) or see [the viewing instructions](https://docs.rs/dhat/latest/dhat/index.html#viewing) for details.
@@ -148,7 +148,7 @@ If you don't have an SSH key, you can create one through Amazon or by using [ssh
 $ ssh-keygen -t ed25519 -f ~/.ssh/aws
 ```
 
-Then follow the instructions for [Amazon EC2 key pairs and Linux instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) to import the public key to Amazon EC2 (using the *Actions > Import key pair* function). 
+Then follow the instructions for [Amazon EC2 key pairs and Linux instances](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html) to import the public key to Amazon EC2 (using the *Actions > Import key pair* function).
 
 This operation is manual (AWS exposes APIs to manipulate keys) and needs to be repeated for each AWS region that you plan to use. Upon importing your key, AWS requires you to choose a 'name' for your key; ensure you set the same name on all AWS regions. This SSH key will be used by the Python scripts to execute commands and upload/download files to your AWS instances.
 

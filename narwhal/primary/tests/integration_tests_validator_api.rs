@@ -1,7 +1,7 @@
 use arc_swap::ArcSwap;
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Committee, Parameters, WorkerId};
+use config::{BlockSynchronizerParameters, Committee, Parameters, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
 use crypto::PublicKey;
 use fastcrypto::{traits::KeyPair as _, Hash};
@@ -864,6 +864,12 @@ async fn test_get_collections_with_missing_certificates() {
 
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
+        block_synchronizer: BlockSynchronizerParameters {
+            certificates_synchronize_timeout: Duration::from_secs(1),
+            payload_synchronize_timeout: Duration::from_secs(1),
+            payload_availability_timeout: Duration::from_secs(1),
+            handler_certificate_deliver_timeout: Duration::from_secs(1),
+        },
         ..Parameters::default()
     };
 

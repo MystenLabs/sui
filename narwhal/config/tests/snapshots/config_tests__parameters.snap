@@ -11,10 +11,10 @@ expression: parameters
   "batch_size": 500000,
   "max_batch_delay": "100ms",
   "block_synchronizer": {
-    "certificates_synchronize_timeout": "2000ms",
-    "payload_synchronize_timeout": "2000ms",
-    "payload_availability_timeout": "2000ms",
-    "handler_certificate_deliver_timeout": "2000ms"
+    "certificates_synchronize_timeout": "30000ms",
+    "payload_synchronize_timeout": "30000ms",
+    "payload_availability_timeout": "30000ms",
+    "handler_certificate_deliver_timeout": "30000ms"
   },
   "consensus_api_grpc": {
     "socket_addr": "/ip4/127.0.0.1/tcp/8081/http",

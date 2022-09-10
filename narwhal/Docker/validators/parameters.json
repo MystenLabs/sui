@@ -1,11 +1,5 @@
 {
     "batch_size": 500000,
-    "block_synchronizer": {
-        "certificates_synchronize_timeout": "2_000ms",
-        "handler_certificate_deliver_timeout": "2_000ms",
-        "payload_availability_timeout": "2_000ms",
-        "payload_synchronize_timeout": "2_000ms"
-    },
     "consensus_api_grpc": {
         "get_collections_timeout": "5_000ms",
         "remove_collections_timeout": "5_000ms",
