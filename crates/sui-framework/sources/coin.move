@@ -29,8 +29,14 @@ module sui::coin {
     /// Capability allowing the bearer to mint and burn
     /// coins of type `T`. Transferable
     struct TreasuryCap<phantom T> has key, store {
-        id: UID,
-        total_supply: Supply<T>
+        id: UID,                
+        /// Number of coins in circulation
+        total_supply: Supply<T>, 
+        /// Number of decimal places the coin uses. 
+        /// A coin with `value ` N and `decimals` D should be shown as N / 10^D
+        /// E.g., a coin with `value` 7002  and decimals 3 should be displayed as 7.002
+        /// This is metadata for display usage only.
+        decimals: u8,
     }
 
     // === Supply <-> TreasuryCap morphing and accessors  ===
@@ -40,12 +46,17 @@ module sui::coin {
         balance::supply_value(&cap.total_supply)
     }
 
+    /// Return the number of decimal places used by this coin
+    public fun decimals<T>(cap: &TreasuryCap<T>): u8 {
+        cap.decimals
+    }
+
     /// Unwrap `TreasuryCap` getting the `Supply`.
     ///
     /// Operation is irreversible. Supply cannot be converted into a `TreasuryCap` due
     /// to different security guarantees (TreasuryCap can be created only once for a type)
     public fun treasury_into_supply<T>(treasury: TreasuryCap<T>): Supply<T> {
-        let TreasuryCap { id, total_supply } = treasury;
+        let TreasuryCap { id, total_supply, decimals: _ } = treasury;
         object::delete(id);
         total_supply
     }
@@ -153,6 +164,7 @@ module sui::coin {
     /// type, ensuring that there's only one `TreasuryCap` per `T`.
     public fun create_currency<T: drop>(
         witness: T,
+        decimals: u8,
         ctx: &mut TxContext
     ): TreasuryCap<T> {
         // Make sure there's only one instance of the type T
@@ -160,7 +172,8 @@ module sui::coin {
 
         TreasuryCap {
             id: object::new(ctx),
-            total_supply: balance::create_supply(witness)
+            total_supply: balance::create_supply(witness),
+            decimals
         }
     }
 
