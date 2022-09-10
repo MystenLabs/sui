@@ -8,7 +8,7 @@ use crypto::{KeyPair, PublicKey};
 use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
-use network::{PrimaryToWorkerNetwork, ReliableNetwork, UnreliableNetwork, WorkerToPrimaryNetwork};
+use network::{PrimaryToWorkerNetwork, ReliableNetwork, WorkerToPrimaryNetwork};
 use node::{restarter::NodeRestarter, Node, NodeStorage};
 use primary::PrimaryWorkerMessage;
 use prometheus::Registry;
@@ -326,9 +326,7 @@ async fn epoch_change() {
                 let message = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(
                     committee.clone(),
                 ));
-                let worker_cancel_handles = worker_network
-                    .unreliable_broadcast(addresses, &message)
-                    .await;
+                let worker_cancel_handles = worker_network.broadcast(addresses, &message).await;
 
                 // Ensure the message has been received.
                 primary_cancel_handle.await.unwrap();

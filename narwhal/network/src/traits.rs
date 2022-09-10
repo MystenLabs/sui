@@ -20,17 +20,15 @@ pub trait BaseNetwork {
 
 #[async_trait]
 pub trait UnreliableNetwork: BaseNetwork {
+    /// Sends a serialized message to a network destination
+    /// Implementations of this method must not block on I/O.
     async fn unreliable_send_message(
         &mut self,
         address: Multiaddr,
         message: BincodeEncodedPayload,
-    ) -> JoinHandle<()>;
+    ) -> ();
 
-    async fn unreliable_send(
-        &mut self,
-        address: Multiaddr,
-        message: &Self::Message,
-    ) -> JoinHandle<()> {
+    async fn unreliable_send(&mut self, address: Multiaddr, message: &Self::Message) -> () {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
         self.unreliable_send_message(address, message).await
@@ -42,15 +40,13 @@ pub trait UnreliableNetwork: BaseNetwork {
         &mut self,
         addresses: Vec<Multiaddr>,
         message: &Self::Message,
-    ) -> Vec<JoinHandle<()>> {
+    ) -> () {
         let message =
             BincodeEncodedPayload::try_from(message).expect("Failed to serialize payload");
-        let mut handlers = Vec::new();
         for address in addresses {
-            let handle = { self.unreliable_send_message(address, message.clone()).await };
-            handlers.push(handle);
+            // this is ok assuming implementations make unreliable_send_message non-blocking
+            self.unreliable_send_message(address, message.clone()).await
         }
-        handlers
     }
 }
 
@@ -65,7 +61,7 @@ pub trait LuckyNetwork: UnreliableNetwork {
         mut addresses: Vec<Multiaddr>,
         message: &Self::Message,
         nodes: usize,
-    ) -> Vec<JoinHandle<()>> {
+    ) -> () {
         addresses.shuffle(self.rng());
         addresses.truncate(nodes);
         self.unreliable_broadcast(addresses, message).await

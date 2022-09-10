@@ -7,7 +7,7 @@ use crypto::KeyPair;
 use executor::{ExecutionState, ExecutorOutput};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
-use network::{PrimaryToWorkerNetwork, ReliableNetwork, UnreliableNetwork, WorkerToPrimaryNetwork};
+use network::{PrimaryToWorkerNetwork, ReliableNetwork, WorkerToPrimaryNetwork};
 use prometheus::Registry;
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -104,9 +104,7 @@ impl NodeRestarter {
                 .map(|x| x.primary_to_worker)
                 .collect();
             let message = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::Shutdown);
-            let worker_cancel_handles = worker_network
-                .unreliable_broadcast(addresses, &message)
-                .await;
+            let worker_cancel_handles = worker_network.broadcast(addresses, &message).await;
 
             // Ensure the message has been received.
             primary_cancel_handle

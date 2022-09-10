@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use multiaddr::Multiaddr;
 use rand::{rngs::SmallRng, SeedableRng as _};
 use std::collections::HashMap;
-use tokio::{runtime::Handle, task::JoinHandle};
+use tokio::runtime::Handle;
 use tonic::{transport::Channel, Code};
 use tracing::error;
 use types::{
@@ -23,6 +23,7 @@ pub struct WorkerNetwork {
     retry_config: RetryConfig,
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
+    concurrency_limit_per_client: usize,
     executors: HashMap<Multiaddr, BoundedExecutor>,
     metrics: Option<Metrics<WorkerNetworkMetrics>>,
 }
@@ -44,6 +45,7 @@ impl Default for WorkerNetwork {
             config: Default::default(),
             retry_config,
             rng: SmallRng::from_entropy(),
+            concurrency_limit_per_client: MAX_TASK_CONCURRENCY,
             executors: HashMap::new(),
             metrics: None,
         }
@@ -55,6 +57,15 @@ impl WorkerNetwork {
         Self {
             metrics: Some(Metrics::from(metrics, "worker".to_string())),
             ..Default::default()
+        }
+    }
+
+    // used for testing non-blocking behavior
+    #[cfg(test)]
+    fn new_with_concurrency_limit(concurrency_limit: usize) -> Self {
+        Self {
+            concurrency_limit_per_client: concurrency_limit,
+            ..Self::default()
         }
     }
 
@@ -107,19 +118,18 @@ impl UnreliableNetwork for WorkerNetwork {
         &mut self,
         address: Multiaddr,
         message: BincodeEncodedPayload,
-    ) -> JoinHandle<()> {
+    ) -> () {
         let mut client = self.client(address.clone());
-        let handler = self
-            .executors
+        self.executors
             .entry(address)
-            .or_insert_with(default_executor)
-            .spawn(async move {
+            .or_insert_with(|| {
+                BoundedExecutor::new(self.concurrency_limit_per_client, Handle::current())
+            })
+            .try_spawn(async move {
                 let _ = client.send_message(message).await;
             })
-            .await;
+            .ok();
         self.update_metrics();
-
-        handler
     }
 }
 
@@ -270,5 +280,39 @@ impl ReliableNetwork for WorkerToPrimaryNetwork {
             .spawn_with_retries(self.retry_config, message_send);
 
         CancelOnDropHandler(handle)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use types::Batch;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn unreliable_send_doesnt_block() {
+        let test_concurrency_limit = 2;
+        let mut p2p = WorkerNetwork::new_with_concurrency_limit(test_concurrency_limit);
+        // send those messages to localhost. THey won't actually land
+        let addr: Multiaddr = "/ip4/127.0.0.1/tcp/0/http".parse().unwrap();
+        let serialized_msg =
+            BincodeEncodedPayload::try_from(&WorkerMessage::Batch(Batch::default())).unwrap();
+
+        let blast_a_few = async move {
+            for _i in 0..test_concurrency_limit * 2 {
+                let addr = addr.clone();
+                let msg = serialized_msg.clone();
+                p2p.unreliable_send_message(addr, msg).await
+            }
+        };
+
+        // beware: if we happen to set a default connect timeout
+        // (we don't at the time of writing) then the following delay needs to be smaller
+        let blast_timeout = Duration::from_millis(100);
+        tokio::time::timeout(blast_timeout, blast_a_few)
+            .await
+            .expect("The unreliable sends should all have completed instantly!");
     }
 }

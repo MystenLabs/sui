@@ -86,7 +86,7 @@ impl Helper {
                     for digest in digests {
                         match self.store.read(digest).await {
                             Ok(Some(data)) => {
-                                let _ = self.network.unreliable_send_message(address.clone(), Bytes::from(data).into()).await;
+                                self.network.unreliable_send_message(address.clone(), Bytes::from(data).into()).await;
                             }
                             Ok(None) => {
                                 trace!("No Batches found for requested digests {:?}", digest);
