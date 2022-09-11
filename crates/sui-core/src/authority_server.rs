@@ -28,7 +28,6 @@ use sui_types::{error::*, messages::*};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     task::JoinHandle,
-    time::Instant,
 };
 
 use sui_types::messages_checkpoint::CheckpointRequest;
@@ -339,17 +338,12 @@ impl ValidatorService {
         let mut transaction = request.into_inner();
         let is_consensus_tx = transaction.contains_shared_object();
 
-        let start_ts = Instant::now();
-        let _metrics_guard = start_timer!(
-            if is_consensus_tx {
-                metrics.handle_transaction_consensus_latency.clone()
-            } else {
-                metrics.handle_transaction_non_consensus_latency.clone()
-            },
-            &start_ts
-        );
-        let tx_verif_metrics_guard =
-            start_timer!(metrics.tx_verification_latency.clone(), &start_ts);
+        let _metrics_guard = start_timer(if is_consensus_tx {
+            metrics.handle_transaction_consensus_latency.clone()
+        } else {
+            metrics.handle_transaction_non_consensus_latency.clone()
+        });
+        let tx_verif_metrics_guard = start_timer(metrics.tx_verification_latency.clone());
 
         transaction
             .verify()
@@ -384,19 +378,14 @@ impl ValidatorService {
     ) -> Result<tonic::Response<TransactionInfoResponse>, tonic::Status> {
         let mut certificate = request.into_inner();
         let is_consensus_tx = certificate.contains_shared_object();
-        let start_ts = Instant::now();
-        let _metrics_guard = start_timer!(
-            if is_consensus_tx {
-                metrics.handle_certificate_consensus_latency.clone()
-            } else {
-                metrics.handle_certificate_non_consensus_latency.clone()
-            },
-            &start_ts
-        );
+        let _metrics_guard = start_timer(if is_consensus_tx {
+            metrics.handle_certificate_consensus_latency.clone()
+        } else {
+            metrics.handle_certificate_non_consensus_latency.clone()
+        });
 
         // 1) Verify certificate
-        let cert_verif_metrics_guard =
-            start_timer!(metrics.cert_verification_latency.clone(), &start_ts);
+        let cert_verif_metrics_guard = start_timer(metrics.cert_verification_latency.clone());
 
         certificate
             .verify(&state.committee.load())
@@ -423,8 +412,7 @@ impl ValidatorService {
                 .await
                 .map_err(|e| tonic::Status::internal(e.to_string()))?
         {
-            let start_ts = Instant::now();
-            let _metrics_guard = start_timer!(metrics.consensus_latency.clone(), &start_ts);
+            let _metrics_guard = start_timer(metrics.consensus_latency.clone());
             consensus_adapter
                 .submit(&state.name, &certificate)
                 .await
