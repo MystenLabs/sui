@@ -1,4 +1,4 @@
-name: auto-merge
+name: auto-merge & finishing steps for dependabot
 
 on:
   pull_request_target:
@@ -6,19 +6,45 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
+  pull-requests: write
 
 jobs:
-  # Merge pull requests from dependabot that upgrade a minor version number and pass CI
-  auto-merge:
-    permissions:
-      contents: none
+  dependabot:
     runs-on: ubuntu-latest
-    if: github.actor == 'dependabot[bot]'
+    if: ${{ github.actor == 'dependabot[bot]' }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: ahmadnassri/action-dependabot-auto-merge@v2.6
+      - name: Dependabot metadata
+        id: metadata
+        uses: dependabot/fetch-metadata@v1.1.1
         with:
-          github-token: ${{ secrets.AUTOMERGE_TOKEN }}
-          command: 'squash and merge'
-          target: minor
+          github-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Enable auto-merge for Dependabot PRs on patch versions
+        if: ${{steps.metadata.outputs.update-type == 'version-update:semver-patch'}}
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+      - uses: actions-rs/toolchain@v1
+      - name: Install cargo-hakari, and cache the binary
+        uses: baptiste0928/cargo-install@v1
+        with:
+          crate: cargo-hakari
+          locked: true
+      - name: run cargo-hakari
+        run: |
+          cargo hakari generate
+      - name: Check for modified files
+        id: git-check
+        run: echo ::set-output name=modified::$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)
+      - name: Push changes
+        if: steps.git-check.outputs.modified == 'true'
+        run: |
+          git config --global user.name 'Francois Garillot'
+          git config --global user.email 'francois@mystenlabs.com'
+          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git commit -am "chore(deps): cargo hakari"
+          git push
