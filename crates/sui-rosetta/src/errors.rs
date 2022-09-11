@@ -36,6 +36,7 @@ pub enum ErrorType {
     UnimplementedTransactionType,
     BlockNotFound,
     MalformedOperationError,
+    BalanceNotFound,
 }
 
 #[derive(Debug)]

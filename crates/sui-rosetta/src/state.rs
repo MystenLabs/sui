@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::str::FromStr;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -13,7 +14,9 @@ use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_quorum_driver::QuorumDriver;
-use sui_types::base_types::{SequenceNumber, TransactionDigest, TRANSACTION_DIGEST_LENGTH};
+use sui_types::base_types::{
+    SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
+};
 use sui_types::gas_coin::GasCoin;
 
 use crate::operations::Operation;
@@ -57,11 +60,14 @@ pub trait BlockProvider {
     fn genesis_block_identifier(&self) -> BlockIdentifier;
     async fn oldest_block_identifier(&self) -> Result<BlockIdentifier, Error>;
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error>;
+    async fn get_balance_at_block(&self, addr: SuiAddress, block_height: u64)
+        -> Result<u64, Error>;
 }
 
 #[derive(Clone)]
 pub struct PseudoBlockProvider {
     blocks: Arc<RwLock<Vec<BlockResponse>>>,
+    balance: Arc<RwLock<BTreeMap<SuiAddress, BTreeMap<u64, u64>>>>,
 }
 
 #[async_trait]
@@ -124,12 +130,35 @@ impl BlockProvider for PseudoBlockProvider {
     async fn current_block_identifier(&self) -> Result<BlockIdentifier, Error> {
         self.current_block().await.map(|b| b.block.block_identifier)
     }
+
+    async fn get_balance_at_block(
+        &self,
+        addr: SuiAddress,
+        block_height: u64,
+    ) -> Result<u64, Error> {
+        if let Some(balances) = self.balance.read().await.get(&addr) {
+            for (blk_idx, balance) in balances.iter().rev() {
+                if blk_idx <= &block_height {
+                    return Ok(*balance);
+                }
+            }
+        };
+        Ok(0)
+    }
 }
 
 impl PseudoBlockProvider {
     pub fn spawn(state: Arc<AuthorityState>, genesis: &Genesis) -> Self {
+        let genesis = genesis_block(genesis);
+        let genesis_txs = genesis
+            .block
+            .transactions
+            .iter()
+            .flat_map(|tx| tx.operations.clone())
+            .collect();
         let blocks = Self {
-            blocks: Arc::new(RwLock::new(vec![genesis_block(genesis)])),
+            blocks: Arc::new(RwLock::new(vec![genesis])),
+            balance: Arc::new(Default::default()),
         };
 
         let block_interval = option_env!("SUI_BLOCK_INTERVAL")
@@ -140,6 +169,7 @@ impl PseudoBlockProvider {
 
         let f = blocks.clone();
         tokio::spawn(async move {
+            f.update_balance(0, genesis_txs).await;
             loop {
                 if let Err(e) = f.create_next_block(state.clone()).await {
                     error!("Error creating block, cause: {e:?}")
@@ -183,7 +213,13 @@ impl PseudoBlockProvider {
                     },
                     other_transactions: vec![TransactionIdentifier { hash: digest }],
                 };
+
+                // update balance
+                let (tx, effect) = state.get_transaction(digest).await?;
+                let ops = Operation::from_data_and_effect(&tx.signed_data.data, &effect)?;
+
                 self.blocks.write().await.push(new_block);
+                self.update_balance(index, ops).await;
                 parent_block_identifier = block_identifier
             }
         } else {
@@ -192,6 +228,49 @@ impl PseudoBlockProvider {
 
         Ok(())
     }
+
+    async fn update_balance(&self, block_height: u64, ops: Vec<Operation>) {
+        let balance_changes = extract_balance_changes_from_ops(ops);
+
+        let mut balances = self.balance.write().await;
+
+        for (addr, value) in balance_changes {
+            let balance = balances.entry(addr).or_default();
+            let current_balance = balance.iter().last().map(|(_, b)| *b).unwrap_or_default();
+            let new_balance = if value.is_negative() {
+                assert!(
+                    current_balance >= value.abs(),
+                    "Account gas value fall below 0 at block {}, address: [{}]",
+                    block_height,
+                    addr
+                );
+                current_balance - value.abs()
+            } else {
+                current_balance + value.abs()
+            };
+            balance.insert(block_height, new_balance);
+        }
+    }
+}
+
+fn extract_balance_changes_from_ops(ops: Vec<Operation>) -> BTreeMap<SuiAddress, SignedValue> {
+    let mut changes: BTreeMap<SuiAddress, SignedValue> = BTreeMap::new();
+    for op in ops {
+        match op.type_ {
+            OperationType::TransferSUI | OperationType::GasSpent | OperationType::Genesis => {
+                let addr = op
+                    .account
+                    .unwrap_or_else(|| panic!("Account address cannot be null for {:?}", op.type_))
+                    .address;
+                let amount = op
+                    .amount
+                    .unwrap_or_else(|| panic!("Amount cannot be null for {:?}", op.type_));
+                changes.entry(addr).or_default().add(&amount.value)
+            }
+            _ => {}
+        }
+    }
+    changes
 }
 
 fn genesis_block(genesis: &Genesis) -> BlockResponse {

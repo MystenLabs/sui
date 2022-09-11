@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use axum::{Extension, Json};
-use tracing::info;
+use tracing::debug;
 
 use crate::operations::Operation;
 use crate::types::{
@@ -18,11 +18,9 @@ pub async fn block(
     Extension(state): Extension<Arc<OnlineServerContext>>,
     Extension(env): Extension<SuiEnv>,
 ) -> Result<BlockResponse, Error> {
+    debug!("Called /block endpoint: {:?}", payload.block_identifier);
     env.check_network_identifier(&payload.network_identifier)?;
     let blocks = state.blocks();
-
-    info!("{:?}", payload.block_identifier);
-
     if let Some(index) = payload.block_identifier.index {
         blocks.get_block_by_index(index).await
     } else if let Some(hash) = payload.block_identifier.hash {

@@ -23,13 +23,33 @@ pub async fn balance(
     Extension(env): Extension<SuiEnv>,
 ) -> Result<AccountBalanceResponse, Error> {
     env.check_network_identifier(&payload.network_identifier)?;
-    let gas_coins = get_coins(&context.state, payload.account_identifier.address).await?;
-    let amount: u64 = gas_coins.iter().map(|coin| coin.amount.value.abs()).sum();
 
-    Ok(AccountBalanceResponse {
-        block_identifier: context.blocks().current_block_identifier().await?,
-        balances: vec![Amount::new(amount.into())],
-    })
+    let block_id = if let Some(index) = payload.block_identifier.index {
+        context.blocks().get_block_by_index(index).await.ok()
+    } else if let Some(hash) = payload.block_identifier.hash {
+        context.blocks().get_block_by_hash(hash).await.ok()
+    } else {
+        None
+    }
+    .map(|b| b.block.block_identifier);
+
+    if let Some(block_identifier) = block_id {
+        context
+            .blocks()
+            .get_balance_at_block(payload.account_identifier.address, block_identifier.index)
+            .await
+            .map(|balance| AccountBalanceResponse {
+                block_identifier,
+                balances: vec![Amount::new(balance.into())],
+            })
+    } else {
+        let gas_coins = get_coins(&context.state, payload.account_identifier.address).await?;
+        let amount: u64 = gas_coins.iter().map(|coin| coin.amount.value.abs()).sum();
+        Ok(AccountBalanceResponse {
+            block_identifier: context.blocks().current_block_identifier().await?,
+            balances: vec![Amount::new(amount.into())],
+        })
+    }
 }
 
 pub async fn coins(

@@ -72,6 +72,10 @@ pub struct Currency {
 pub struct AccountBalanceRequest {
     pub network_identifier: NetworkIdentifier,
     pub account_identifier: AccountIdentifier,
+    #[serde(default)]
+    pub block_identifier: PartialBlockIdentifier,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub currencies: Vec<Currency>,
 }
 #[derive(Serialize)]
 pub struct AccountBalanceResponse {
@@ -113,7 +117,7 @@ pub struct Amount {
     pub currency: Currency,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct SignedValue {
     negative: bool,
     value: u64,
@@ -150,6 +154,19 @@ impl SignedValue {
 
     pub fn abs(&self) -> u64 {
         self.value
+    }
+
+    pub fn add(&mut self, other: &Self) {
+        if self.negative ^ other.negative {
+            if self.value > other.value {
+                self.value -= other.value;
+            } else {
+                self.value = other.value - self.value;
+                self.negative = !self.negative;
+            }
+        } else {
+            self.value += other.value
+        }
     }
 }
 

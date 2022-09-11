@@ -26,9 +26,9 @@
     },
     "prefunded_accounts": [
       {
-        "privkey": "fa25ed9db5f601649aa9923f4ae78a888e490c9222b34733c36e46099f0dfcdd",
+        "privkey": "dcb5b15390d98afd2058d49c7c22fce330b2f79e379df14ef97f8e7d8b8b36a2",
         "account_identifier": {
-          "address": "0x883092bb592c53860ff7d3cb4b630a58e146c8a5"
+          "address": "0x06dbd62fc5f786aaa777403e763aabf7a5e3521d"
         },
         "curve_type": "edwards25519",
         "currency": {
@@ -37,9 +37,9 @@
         }
       },
       {
-        "privkey": "9d6118ac41edfe9030944de5410c5b058dc154ea8b0faaaf48aec66cee183e12",
+        "privkey": "420e52be9da51ff67b2b1d655b63580cddeb4c5ed263e699f681fba549349d49",
         "account_identifier": {
-          "address": "0x8c4710b4a21954c9c451fceadf85f523090fab45"
+          "address": "0x86d78cbf90387724c072b0f1804b3d2a6034cf9e"
         },
         "curve_type": "edwards25519",
         "currency": {
@@ -48,9 +48,9 @@
         }
       },
       {
-        "privkey": "ac2d0846ec651c5bea3496b209348602b1543b6167c5ac1df9c7a903a34cb774",
+        "privkey": "479f17345ae81f26b6401ef72f7dccbc60707f602776d14810f9ca66e8199540",
         "account_identifier": {
-          "address": "0x97f72977411cabff8f26e9a13cc29372d50d4afe"
+          "address": "0x9d1d83fa8b8adeb4c812e2aa499136ba48c42d40"
         },
         "curve_type": "edwards25519",
         "currency": {
@@ -69,7 +69,7 @@
     "log_balance_changes": false,
     "log_reconciliations": false,
     "ignore_reconciliation_error": false,
-    "historical_balance_disabled": true,
+    "historical_balance_disabled": false,
     "exempt_accounts": "",
     "bootstrap_balances": "",
     "interesting_accounts": "",
