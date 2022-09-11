@@ -13,9 +13,7 @@ use sui_config::genesis::Genesis;
 use sui_core::authority::AuthorityState;
 use sui_core::authority_client::NetworkAuthorityClient;
 use sui_quorum_driver::QuorumDriver;
-use sui_types::base_types::{
-    SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
-};
+use sui_types::base_types::{SequenceNumber, TransactionDigest, TRANSACTION_DIGEST_LENGTH};
 use sui_types::gas_coin::GasCoin;
 
 use crate::operations::Operation;
@@ -25,91 +23,32 @@ use crate::types::{
     SignedValue, Transaction, TransactionIdentifier,
 };
 use crate::ErrorType::{BlockNotFound, InternalError};
-use crate::{Error, NetworkIdentifier, SuiEnv, UnsupportedBlockchain, UnsupportedNetwork, SUI};
+use crate::{Error, SUI};
 
-pub struct ServerContext {
-    pub env: SuiEnv,
+pub struct OnlineServerContext {
     pub state: Arc<AuthorityState>,
     pub quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
     block_provider: Arc<dyn BlockProvider + Send + Sync>,
-    book_keeper: BookKeeper,
 }
 
-impl ServerContext {
+impl OnlineServerContext {
     pub fn new(
-        env: SuiEnv,
         state: Arc<AuthorityState>,
         quorum_driver: Arc<QuorumDriver<NetworkAuthorityClient>>,
         block_provider: Arc<dyn BlockProvider + Send + Sync>,
-        book_keeper: BookKeeper,
     ) -> Self {
         Self {
-            env,
             state,
             quorum_driver,
             block_provider,
-            book_keeper,
         }
-    }
-}
-
-pub struct BookKeeper {
-    pub state: Arc<AuthorityState>,
-    pub blocks: Arc<dyn BlockProvider + Send + Sync>,
-}
-
-impl BookKeeper {
-    pub async fn get_balance(&self, address: &SuiAddress, block_height: u64) -> Result<u64, Error> {
-        let current_block = self.blocks.current_block().await?;
-
-        Ok(0)
-    }
-
-    async fn get_current_balance(&self, address: &SuiAddress) -> Result<u64, Error> {
-        let new_txs = self.get_uncheckpointed_tx().await?;
-        //let txs = self.get_balance_changing_txs(new_txs, address).await?;
-
-        Ok(0)
-    }
-
-    async fn get_uncheckpointed_tx(&self) -> Result<Vec<TransactionDigest>, Error> {
-        let all_tx = self.state.get_total_transaction_number()?;
-        let current_block = self.blocks.current_block().await?;
-
-        Ok(if current_block.block.block_identifier.index < all_tx {
-            self.state
-                .get_transactions_in_range(current_block.block.block_identifier.index, all_tx)?
-                .into_iter()
-                .map(|(_, digest)| digest)
-                .collect()
-        } else {
-            vec![]
-        })
-    }
-}
-
-impl ServerContext {
-    pub fn checks_network_identifier(
-        &self,
-        network_identifier: &NetworkIdentifier,
-    ) -> Result<(), Error> {
-        if &network_identifier.blockchain != "sui" {
-            return Err(Error::new(UnsupportedBlockchain));
-        }
-        if self.env != network_identifier.network {
-            return Err(Error::new(UnsupportedNetwork));
-        }
-        Ok(())
     }
 
     pub fn blocks(&self) -> &(dyn BlockProvider + Sync + Send) {
         &*self.block_provider
     }
-
-    pub fn book_keeper(&self) -> &BookKeeper {
-        &self.book_keeper
-    }
 }
+
 #[async_trait]
 pub trait BlockProvider {
     async fn get_block_by_index(&self, index: u64) -> Result<BlockResponse, Error>;
@@ -223,7 +162,7 @@ impl PseudoBlockProvider {
             let mut index = current_block.index;
             let mut parent_block_identifier = current_block;
 
-            for (seq, digest) in tx_digests {
+            for (_, digest) in tx_digests {
                 index += 1;
                 let block_identifier = BlockIdentifier {
                     index,
@@ -277,7 +216,7 @@ fn genesis_block(genesis: &Genesis) -> BlockResponse {
             },
             related_operations: vec![],
             type_: OperationType::Genesis,
-            status: Some(OperationStatus::Success.to_string()),
+            status: Some(OperationStatus::Success),
             account: Some(AccountIdentifier { address }),
             amount: Some(Amount {
                 value: SignedValue::from(coin.value()),
@@ -287,7 +226,7 @@ fn genesis_block(genesis: &Genesis) -> BlockResponse {
                 coin_identifier: CoinIdentifier {
                     identifier: CoinID {
                         id: *coin.id(),
-                        version: Some(SequenceNumber::new()),
+                        version: SequenceNumber::new(),
                     },
                 },
                 coin_action: CoinAction::CoinCreated,

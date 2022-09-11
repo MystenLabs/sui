@@ -7,14 +7,13 @@ use std::num::TryFromIntError;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
-use itertools::Itertools;
 use serde::Serialize;
 use serde::{Deserialize, Serializer};
 use serde_json::{json, Value};
 use signature::Error as SignatureError;
 use strum_macros::EnumIter;
 
-use sui_types::base_types::ObjectIDParseError;
+use sui_types::base_types::{ObjectID, ObjectIDParseError};
 use sui_types::error::SuiError;
 
 use crate::types::OperationType;
@@ -26,6 +25,7 @@ pub enum ErrorType {
     UnsupportedNetwork,
     InvalidInput,
     MissingInput,
+    MissingMetadata,
     InternalError,
     DataError,
     UnsupportedOperation,
@@ -55,6 +55,10 @@ impl Error {
         Error::new_with_detail(ErrorType::MissingInput, Some(json!({ "input": input })))
     }
 
+    pub fn missing_metadata(input: &ObjectID) -> Self {
+        Error::new_with_detail(ErrorType::MissingMetadata, Some(json!({ "input": input })))
+    }
+
     pub fn unsupported_operation(type_: OperationType) -> Self {
         Error::new_with_detail(
             ErrorType::UnsupportedOperation,
@@ -78,16 +82,7 @@ impl Serialize for Error {
     {
         let retriable = false;
         let error_code = self.type_ as u32;
-        // Add space before upper case char, are there better ways?
-        let message = format!("{:?}", &self.type_)
-            .chars()
-            .rev()
-            .collect::<String>()
-            .split_inclusive(char::is_uppercase)
-            .join(" ")
-            .chars()
-            .rev()
-            .collect::<String>();
+        let message = format!("{:?}", &self.type_);
 
         if let Some(details) = &self.detail {
             json![{

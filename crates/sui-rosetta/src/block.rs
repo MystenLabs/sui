@@ -11,13 +11,14 @@ use crate::types::{
     BlockRequest, BlockResponse, BlockTransactionRequest, BlockTransactionResponse, Transaction,
     TransactionIdentifier,
 };
-use crate::{Error, ServerContext};
+use crate::{Error, OnlineServerContext, SuiEnv};
 
 pub async fn block(
     Json(payload): Json<BlockRequest>,
-    Extension(state): Extension<Arc<ServerContext>>,
+    Extension(state): Extension<Arc<OnlineServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<BlockResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
     let blocks = state.blocks();
 
     info!("{:?}", payload.block_identifier);
@@ -33,14 +34,15 @@ pub async fn block(
 
 pub async fn transaction(
     Json(payload): Json<BlockTransactionRequest>,
-    Extension(context): Extension<Arc<ServerContext>>,
+    Extension(context): Extension<Arc<OnlineServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<BlockTransactionResponse, Error> {
-    context.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
     let digest = payload.transaction_identifier.hash;
     let (cert, effects) = context.state.get_transaction(digest).await?;
     let hash = *cert.digest();
     let data = cert.signed_data.data;
-    let operations = Operation::from_data_and_effect(&data, Some(&effects), &context.state).await?;
+    let operations = Operation::from_data_and_effect(&data, &effects)?;
 
     let transaction = Transaction {
         transaction_identifier: TransactionIdentifier { hash },

@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -9,12 +10,13 @@ use axum::Json;
 use serde::de::Error as DeError;
 use serde::{Deserialize, Serializer};
 use serde::{Deserializer, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use serde_with::serde_as;
 use strum_macros::EnumIter;
 
 use sui_types::base_types::{
-    ObjectID, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest, TRANSACTION_DIGEST_LENGTH,
+    ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
+    TRANSACTION_DIGEST_LENGTH,
 };
 use sui_types::crypto::SignatureScheme;
 use sui_types::messages::ExecutionStatus;
@@ -24,7 +26,7 @@ use sui_types::sui_serde::Readable;
 
 use crate::errors::Error;
 use crate::operations::Operation;
-use crate::{ErrorType, SUI};
+use crate::{ErrorType, UnsupportedBlockchain, UnsupportedNetwork, SUI};
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct NetworkIdentifier {
@@ -39,6 +41,22 @@ pub enum SuiEnv {
     MainNet,
     DevNet,
     TestNet,
+    LocalNet,
+}
+
+impl SuiEnv {
+    pub fn check_network_identifier(
+        &self,
+        network_identifier: &NetworkIdentifier,
+    ) -> Result<(), Error> {
+        if &network_identifier.blockchain != "sui" {
+            return Err(Error::new(UnsupportedBlockchain));
+        }
+        if &network_identifier.network != self {
+            return Err(Error::new(UnsupportedNetwork));
+        }
+        Ok(())
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -212,7 +230,7 @@ pub struct CoinIdentifier {
 #[derive(Clone)]
 pub struct CoinID {
     pub id: ObjectID,
-    pub version: Option<SequenceNumber>,
+    pub version: SequenceNumber,
 }
 
 impl Serialize for CoinID {
@@ -220,12 +238,7 @@ impl Serialize for CoinID {
     where
         S: Serializer,
     {
-        if let Some(version) = self.version {
-            format!("{}:{}", self.id, version.value())
-        } else {
-            format!("{}", self.id)
-        }
-        .serialize(serializer)
+        format!("{}:{}", self.id, self.version.value()).serialize(serializer)
     }
 }
 
@@ -235,18 +248,16 @@ impl<'de> Deserialize<'de> for CoinID {
         D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
-        Ok(if let Some(i) = s.find(':') {
-            let (id, version) = s.split_at(i);
-            let version = version.trim_start_matches(':');
-            let id = ObjectID::from_hex_literal(id).map_err(D::Error::custom)?;
-            let version = Some(SequenceNumber::from_u64(
-                u64::from_str(version).map_err(D::Error::custom)?,
-            ));
-            Self { id, version }
-        } else {
-            let id = ObjectID::from_hex_literal(&s).map_err(D::Error::custom)?;
-            Self { id, version: None }
-        })
+
+        let (id, version) = s.split_at(
+            s.find(':')
+                .ok_or_else(|| D::Error::custom(format!("Malformed Coin id [{s}].")))?,
+        );
+        let version = version.trim_start_matches(':');
+        let id = ObjectID::from_hex_literal(id).map_err(D::Error::custom)?;
+        let version = SequenceNumber::from_u64(u64::from_str(version).map_err(D::Error::custom)?);
+
+        Ok(Self { id, version })
     }
 }
 
@@ -255,7 +266,7 @@ fn test_coin_id_serde() {
     let id = ObjectID::random();
     let coin_id = CoinID {
         id,
-        version: Some(SequenceNumber::from_u64(10)),
+        version: SequenceNumber::from_u64(10),
     };
     let s = serde_json::to_string(&coin_id).unwrap();
     assert_eq!(format!("\"{}:{}\"", id, 10), s);
@@ -263,15 +274,12 @@ fn test_coin_id_serde() {
     let deserialized: CoinID = serde_json::from_str(&s).unwrap();
 
     assert_eq!(id, deserialized.id);
-    assert_eq!(Some(SequenceNumber::from_u64(10)), deserialized.version)
+    assert_eq!(SequenceNumber::from_u64(10), deserialized.version)
 }
 
 impl From<ObjectRef> for CoinID {
     fn from((id, version, _): ObjectRef) -> Self {
-        Self {
-            id,
-            version: Some(version),
-        }
+        Self { id, version }
     }
 }
 
@@ -343,19 +351,20 @@ pub struct ConstructionPayloadsRequest {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub operations: Vec<Operation>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub metadata: Option<Value>,
+    pub metadata: Option<ConstructionMetadata>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub public_keys: Vec<PublicKey>,
 }
 
 #[derive(Deserialize, Serialize, Copy, Clone, Debug, EnumIter)]
 pub enum OperationType {
-    Gas,
+    GasBudget,
     TransferSUI,
     TransferCoin,
     MergeCoins,
     SplitCoin,
     // Readonly
+    GasSpent,
     TransferObject,
     Publish,
     MoveCall,
@@ -474,10 +483,16 @@ pub struct ConstructionPreprocessRequest {
 #[derive(Serialize)]
 pub struct ConstructionPreprocessResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub options: Option<Value>,
+    pub options: Option<MetadataOptions>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub required_public_keys: Vec<AccountIdentifier>,
 }
+
+#[derive(Serialize, Deserialize)]
+pub struct MetadataOptions {
+    pub input_objects: Vec<ObjectID>,
+}
+
 impl IntoResponse for ConstructionPreprocessResponse {
     fn into_response(self) -> Response {
         Json(self).into_response()
@@ -493,16 +508,29 @@ pub struct ConstructionHashRequest {
 pub struct ConstructionMetadataRequest {
     pub network_identifier: NetworkIdentifier,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub options: Option<Value>,
+    pub options: Option<MetadataOptions>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub public_keys: Vec<PublicKey>,
 }
 
 #[derive(Serialize)]
 pub struct ConstructionMetadataResponse {
-    pub metadata: Value,
+    pub metadata: ConstructionMetadata,
     #[serde(default)]
     pub suggested_fee: Vec<Amount>,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct ConstructionMetadata {
+    pub input_objects: BTreeMap<ObjectID, ObjectInfo>,
+}
+
+impl ConstructionMetadata {
+    pub fn try_get_info(&self, id: &ObjectID) -> Result<&ObjectInfo, Error> {
+        self.input_objects
+            .get(id)
+            .ok_or_else(|| Error::missing_metadata(id))
+    }
 }
 
 impl IntoResponse for ConstructionMetadataResponse {
@@ -599,7 +627,7 @@ pub struct Version {
 
 #[derive(Serialize)]
 pub struct Allow {
-    pub operation_statuses: Vec<OperationStatus>,
+    pub operation_statuses: Vec<Value>,
     pub operation_types: Vec<OperationType>,
     pub errors: Vec<Error>,
     pub historical_balance_lookup: bool,
@@ -614,28 +642,11 @@ pub struct Allow {
     pub transaction_hash_case: Option<Case>,
 }
 
-#[derive(EnumIter)]
+#[derive(Copy, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum OperationStatus {
     Success,
     Failure,
-}
-
-impl Display for OperationStatus {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            OperationStatus::Success => write!(f, "SUCCESS"),
-            OperationStatus::Failure => write!(f, "FAILURE"),
-        }
-    }
-}
-
-impl OperationStatus {
-    fn is_successful(&self) -> bool {
-        match self {
-            OperationStatus::Success => true,
-            OperationStatus::Failure => false,
-        }
-    }
 }
 
 impl From<&ExecutionStatus> for OperationStatus {
@@ -644,16 +655,6 @@ impl From<&ExecutionStatus> for OperationStatus {
             ExecutionStatus::Success => OperationStatus::Success,
             ExecutionStatus::Failure { .. } => OperationStatus::Failure,
         }
-    }
-}
-
-impl Serialize for OperationStatus {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        json!({ "status" : format!("{self}").to_uppercase(), "successful" : self.is_successful() })
-            .serialize(serializer)
     }
 }
 
@@ -762,5 +763,18 @@ pub struct BlockTransactionResponse {
 impl IntoResponse for BlockTransactionResponse {
     fn into_response(self) -> Response {
         Json(self).into_response()
+    }
+}
+
+#[derive(Default)]
+pub struct IndexCounter {
+    index: u64,
+}
+
+impl IndexCounter {
+    pub fn next_idx(&mut self) -> u64 {
+        let next = self.index;
+        self.index += 1;
+        next
     }
 }

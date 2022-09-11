@@ -1,25 +1,10 @@
-create_account(1){
-  create_account{
-    network = {"network":"mainnet", "blockchain":"sui"};
-    key = generate_key({"curve_type":"edwards25519"});
-    account = derive({
-      "network_identifier": {{network}},
-      "public_key": {{key.public_key}}
-    });
-    save_account({
-      "account_identifier": {{account.account_identifier}},
-      "keypair": {{key}}
-    });
-  }
-}
-
-transfer(10){
+transfer(1){
   transfer{
-    transfer.network = {"network":"mainnet", "blockchain":"sui"};
-    currency = {"symbol":"SUI", "decimals":8};
+    transfer.network = {"network":"localnet", "blockchain":"sui"};
+    currency = {"symbol":"SUI", "decimals":9};
     sender = find_balance({
       "minimum_balance":{
-        "value": "100000",
+        "value": "1000000",
         "currency": {{currency}}
       },
       "require_coin": true
@@ -38,9 +23,7 @@ transfer(10){
       "minimum_balance":{
         "value": "0",
         "currency": {{currency}}
-      },
-      "create_limit": 100,
-      "create_probability": 50
+      }
     });
     transfer.confirmation_depth = "1";
     transfer.operations = [
@@ -52,10 +35,7 @@ transfer(10){
           "value":{{sender_amount}},
           "currency":{{currency}}
         },
-        "coin_change":{"coin_action":"coin_spent", "coin_identifier":{{sender.coin}}},
-        "metadata":{
-          "budget": 1000
-        }
+        "coin_change":{"coin_action":"coin_spent", "coin_identifier":{{sender.coin}}}
       },
       {
         "operation_identifier":{"index":1},
@@ -65,7 +45,15 @@ transfer(10){
           "value":{{recipient_amount}},
           "currency":{{currency}}
         }
-      }
-    ];
+      },
+      {
+        "operation_identifier":{"index":2},
+        "type":"GasBudget",
+        "account":{{sender.account_identifier}},
+        "coin_change":{"coin_action":"coin_spent", "coin_identifier":{{sender.coin}}},
+        "metadata":{
+          "budget": "1000"
+        }
+      }];
   }
 }

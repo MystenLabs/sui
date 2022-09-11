@@ -1,39 +1,40 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use axum::{Extension, Json};
-use serde_json::json;
-use tracing::info;
 
-use sui_types::base_types::{encode_bytes_hex, SuiAddress};
+use sui_types::base_types::{encode_bytes_hex, ObjectInfo, SuiAddress};
 use sui_types::crypto;
 use sui_types::crypto::{SignableBytes, SignatureScheme, ToFromBytes};
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,
     Transaction, TransactionData,
 };
+use sui_types::object::ObjectRead;
 use sui_types::sui_serde::Hex;
 
 use crate::errors::Error;
-use crate::operations::Operation;
+use crate::operations::{Operation, SuiAction};
 use crate::types::{
     AccountIdentifier, ConstructionCombineRequest, ConstructionCombineResponse,
     ConstructionDeriveRequest, ConstructionDeriveResponse, ConstructionHashRequest,
-    ConstructionMetadataRequest, ConstructionMetadataResponse, ConstructionParseRequest,
-    ConstructionParseResponse, ConstructionPayloadsRequest, ConstructionPayloadsResponse,
-    ConstructionPreprocessRequest, ConstructionPreprocessResponse, ConstructionSubmitRequest,
-    SignatureType, SigningPayload, TransactionIdentifier, TransactionIdentifierResponse,
+    ConstructionMetadata, ConstructionMetadataRequest, ConstructionMetadataResponse,
+    ConstructionParseRequest, ConstructionParseResponse, ConstructionPayloadsRequest,
+    ConstructionPayloadsResponse, ConstructionPreprocessRequest, ConstructionPreprocessResponse,
+    ConstructionSubmitRequest, MetadataOptions, SignatureType, SigningPayload,
+    TransactionIdentifier, TransactionIdentifierResponse,
 };
 use crate::ErrorType::InternalError;
-use crate::ServerContext;
+use crate::{ErrorType, OnlineServerContext, SuiEnv};
 
 pub async fn derive(
     Json(payload): Json<ConstructionDeriveRequest>,
-    Extension(state): Extension<Arc<ServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionDeriveResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
     let address: SuiAddress = payload.public_key.try_into()?;
     Ok(ConstructionDeriveResponse {
         account_identifier: AccountIdentifier { address },
@@ -42,11 +43,13 @@ pub async fn derive(
 
 pub async fn payloads(
     Json(payload): Json<ConstructionPayloadsRequest>,
-    Extension(context): Extension<Arc<ServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionPayloadsResponse, Error> {
-    info!("payload");
-    context.checks_network_identifier(&payload.network_identifier)?;
-    let data = Operation::parse_transaction_data(payload.operations, &context.state).await?;
+    env.check_network_identifier(&payload.network_identifier)?;
+    let metadata = payload
+        .metadata
+        .ok_or_else(|| Error::new(ErrorType::MissingMetadata))?;
+    let data = Operation::parse_transaction_data(payload.operations, metadata).await?;
     let hex_bytes = encode_bytes_hex(data.to_bytes());
 
     Ok(ConstructionPayloadsResponse {
@@ -63,9 +66,9 @@ pub async fn payloads(
 
 pub async fn combine(
     Json(payload): Json<ConstructionCombineRequest>,
-    Extension(state): Extension<Arc<ServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionCombineResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
     let unsigned_tx = payload.unsigned_transaction.to_vec()?;
     let data = TransactionData::from_signable_bytes(&unsigned_tx)?;
     let sig = payload.signatures.first().unwrap();
@@ -91,9 +94,10 @@ pub async fn combine(
 
 pub async fn submit(
     Json(payload): Json<ConstructionSubmitRequest>,
-    Extension(context): Extension<Arc<ServerContext>>,
+    Extension(context): Extension<Arc<OnlineServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<TransactionIdentifierResponse, Error> {
-    context.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
     let signed_tx: Transaction = bcs::from_bytes(&payload.signed_transaction.to_vec()?)?;
     signed_tx.verify_sender_signature()?;
     let hash = *signed_tx.digest();
@@ -118,22 +122,25 @@ pub async fn submit(
 
 pub async fn preprocess(
     Json(payload): Json<ConstructionPreprocessRequest>,
-    Extension(context): Extension<Arc<ServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionPreprocessResponse, Error> {
-    context.checks_network_identifier(&payload.network_identifier)?;
-    let data = Operation::parse_transaction_data(payload.operations, &context.state).await?;
-    let signer = data.signer();
+    env.check_network_identifier(&payload.network_identifier)?;
+    let action: SuiAction = payload.operations.try_into()?;
     Ok(ConstructionPreprocessResponse {
-        options: Some(json!({})),
-        required_public_keys: vec![AccountIdentifier { address: signer }],
+        options: Some(MetadataOptions {
+            input_objects: action.input_objects(),
+        }),
+        required_public_keys: vec![AccountIdentifier {
+            address: action.signer(),
+        }],
     })
 }
 
 pub async fn hash(
     Json(payload): Json<ConstructionHashRequest>,
-    Extension(state): Extension<Arc<ServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<TransactionIdentifierResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
     let tx_bytes = payload.signed_transaction.to_vec()?;
     let tx: Transaction = bcs::from_bytes(&tx_bytes)?;
 
@@ -144,11 +151,25 @@ pub async fn hash(
 }
 pub async fn metadata(
     Json(payload): Json<ConstructionMetadataRequest>,
-    Extension(state): Extension<Arc<ServerContext>>,
+    Extension(context): Extension<Arc<OnlineServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionMetadataResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
+
+    let input_objects = if let Some(option) = payload.options {
+        let mut input_objects = BTreeMap::new();
+        for id in option.input_objects {
+            if let ObjectRead::Exists(oref, o, _) = context.state.get_object_read(&id).await? {
+                input_objects.insert(id, ObjectInfo::new(&oref, &o));
+            };
+        }
+        input_objects
+    } else {
+        Default::default()
+    };
+
     Ok(ConstructionMetadataResponse {
-        metadata: json!({}),
+        metadata: ConstructionMetadata { input_objects },
         suggested_fee: vec![],
     })
 }
@@ -156,9 +177,9 @@ pub async fn metadata(
 #[axum_macros::debug_handler]
 pub async fn parse(
     Json(payload): Json<ConstructionParseRequest>,
-    Extension(context): Extension<Arc<ServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<ConstructionParseResponse, Error> {
-    context.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
 
     let data = if payload.signed {
         let tx: Transaction = bcs::from_bytes(&payload.transaction.to_vec()?)?;
@@ -173,7 +194,7 @@ pub async fn parse(
     } else {
         vec![]
     };
-    let operations = Operation::from_data_and_effect(&data, None, &context.state).await?;
+    let operations = Operation::from_data(&data)?;
 
     Ok(ConstructionParseResponse {
         operations,

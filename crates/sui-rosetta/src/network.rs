@@ -18,24 +18,23 @@ use crate::types::{
     NetworkStatusResponse, OperationStatus, OperationType, Peer, Version,
 };
 use crate::ErrorType::InternalError;
-use crate::{ErrorType, ServerContext};
+use crate::{ErrorType, OnlineServerContext, SuiEnv};
 
-pub async fn list(
-    Extension(context): Extension<Arc<ServerContext>>,
-) -> Result<NetworkListResponse, Error> {
+pub async fn list(Extension(env): Extension<SuiEnv>) -> Result<NetworkListResponse, Error> {
     Ok(NetworkListResponse {
         network_identifiers: vec![NetworkIdentifier {
             blockchain: "sui".to_string(),
-            network: context.env,
+            network: env,
         }],
     })
 }
 
 pub async fn status(
     Json(payload): Json<NetworkRequest>,
-    Extension(context): Extension<Arc<ServerContext>>,
+    Extension(context): Extension<Arc<OnlineServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<NetworkStatusResponse, Error> {
-    context.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
     let object = context
         .state
         .get_object_read(&SUI_SYSTEM_STATE_OBJECT_ID)
@@ -77,11 +76,15 @@ pub async fn status(
 
 pub async fn options(
     Json(payload): Json<NetworkRequest>,
-    Extension(state): Extension<Arc<ServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<NetworkOptionsResponse, Error> {
-    state.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
 
     let errors = ErrorType::iter().map(Error::new).collect();
+    let operation_statuses = vec![
+        json!({"status": OperationStatus::Success, "successful" : true}),
+        json!({"status": OperationStatus::Failure, "successful" : false}),
+    ];
 
     Ok(NetworkOptionsResponse {
         version: Version {
@@ -91,7 +94,7 @@ pub async fn options(
             metadata: None,
         },
         allow: Allow {
-            operation_statuses: OperationStatus::iter().collect(),
+            operation_statuses,
             operation_types: OperationType::iter().collect(),
             errors,
             historical_balance_lookup: false,

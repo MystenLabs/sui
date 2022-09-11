@@ -15,13 +15,14 @@ use crate::types::{
     AccountBalanceRequest, AccountBalanceResponse, AccountCoinsRequest, AccountCoinsResponse,
     Amount, Coin, CoinID, CoinIdentifier, SignedValue,
 };
-use crate::{ErrorType, ServerContext, SUI};
+use crate::{ErrorType, OnlineServerContext, SuiEnv, SUI};
 
 pub async fn balance(
     Json(payload): Json<AccountBalanceRequest>,
-    Extension(context): Extension<Arc<ServerContext>>,
+    Extension(context): Extension<Arc<OnlineServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<AccountBalanceResponse, Error> {
-    context.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
     let gas_coins = get_coins(&context.state, payload.account_identifier.address).await?;
     let amount: u64 = gas_coins.iter().map(|coin| coin.amount.value.abs()).sum();
 
@@ -33,9 +34,10 @@ pub async fn balance(
 
 pub async fn coins(
     Json(payload): Json<AccountCoinsRequest>,
-    Extension(context): Extension<Arc<ServerContext>>,
+    Extension(context): Extension<Arc<OnlineServerContext>>,
+    Extension(env): Extension<SuiEnv>,
 ) -> Result<AccountCoinsResponse, Error> {
-    context.checks_network_identifier(&payload.network_identifier)?;
+    env.check_network_identifier(&payload.network_identifier)?;
     let coins = get_coins(&context.state, payload.account_identifier.address).await?;
     Ok(AccountCoinsResponse {
         block_identifier: context.blocks().current_block_identifier().await?,
@@ -61,7 +63,7 @@ async fn get_coins(state: &AuthorityState, address: SuiAddress) -> Result<Vec<Co
                 coin_identifier: CoinIdentifier {
                     identifier: CoinID {
                         id: o.id(),
-                        version: Some(o.version()),
+                        version: o.version(),
                     },
                 },
                 amount: Amount {
