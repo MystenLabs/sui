@@ -372,15 +372,15 @@ impl From<BLS12377PrivateKey> for BLS12377KeyPair {
 }
 
 impl EncodeDecodeBase64 for BLS12377KeyPair {
-    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
-        keypair_decode_base64(value)
-    }
-
     fn encode_base64(&self) -> String {
         let mut bytes: Vec<u8> = Vec::new();
         bytes.extend_from_slice(self.secret.as_ref());
         bytes.extend_from_slice(self.name.as_ref());
         base64ct::Base64::encode_string(&bytes[..])
+    }
+
+    fn decode_base64(value: &str) -> Result<Self, eyre::Report> {
+        keypair_decode_base64(value)
     }
 }
 
@@ -389,19 +389,19 @@ impl KeyPair for BLS12377KeyPair {
     type PrivKey = BLS12377PrivateKey;
     type Sig = BLS12377Signature;
 
-    fn copy(&self) -> Self {
-        BLS12377KeyPair {
-            name: self.name.clone(),
-            secret: BLS12377PrivateKey::from_bytes(self.secret.as_ref()).unwrap(),
-        }
-    }
-
     fn public(&'_ self) -> &'_ Self::PubKey {
         &self.name
     }
 
     fn private(self) -> Self::PrivKey {
         BLS12377PrivateKey::from_bytes(self.secret.as_ref()).unwrap()
+    }
+
+    fn copy(&self) -> Self {
+        BLS12377KeyPair {
+            name: self.name.clone(),
+            secret: BLS12377PrivateKey::from_bytes(self.secret.as_ref()).unwrap(),
+        }
     }
 
     fn generate<R: rand::CryptoRng + rand::RngCore>(rng: &mut R) -> Self {
@@ -483,9 +483,9 @@ impl Default for BLS12377AggregateSignature {
 }
 
 impl AggregateAuthenticator for BLS12377AggregateSignature {
-    type PrivKey = BLS12377PrivateKey;
-    type PubKey = BLS12377PublicKey;
     type Sig = BLS12377Signature;
+    type PubKey = BLS12377PublicKey;
+    type PrivKey = BLS12377PrivateKey;
 
     /// Parse a key from its byte representation
     fn aggregate(signatures: Vec<Self::Sig>) -> Result<Self, signature::Error> {
