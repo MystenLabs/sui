@@ -29,7 +29,7 @@ module defi::flash_lender_tests {
 
             let (loan, receipt) = flash_lender::loan(lender, 10, ctx);
             // in practice, borrower does something (e.g., arbitrage) to make a profit from the loan.
-            // simulate this by min ting the borrower 5 coins.
+            // simulate this by minting the borrower 5 coins.
             let profit = coin::mint_for_testing<SUI>(5, ctx);
             coin::join(&mut profit, loan);
             let to_keep = coin::take(coin::balance_mut(&mut profit), 4, ctx);
