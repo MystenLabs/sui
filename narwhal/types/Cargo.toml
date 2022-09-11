@@ -53,3 +53,7 @@ anemo-build = { git = "https://github.com/mystenlabs/anemo.git", rev = "6278d0fa
 [features]
 default = []
 test = []
+
+[[bench]]
+name = "batch_digest"
+harness = false
