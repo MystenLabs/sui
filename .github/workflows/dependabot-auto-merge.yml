@@ -19,12 +19,6 @@ jobs:
         uses: dependabot/fetch-metadata@v1.3.3
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Enable auto-merge for Dependabot PRs on patch versions
-        if: ${{steps.metadata.outputs.update-type == 'version-update:semver-patch'}}
-        run: gh pr merge --auto --squash "$PR_URL"
-        env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
@@ -42,10 +36,11 @@ jobs:
         run: echo ::set-output name=modified::$(if git diff-index --quiet HEAD --; then echo "false"; else echo "true"; fi)
       - name: Push changes
         if: steps.git-check.outputs.modified == 'true'
+        # using secrets.AUTOMERGE_TOKEN in the below is key to re-trigger CI
         run: |
           git config --global user.name 'Francois Garillot'
           git config --global user.email 'francois@mystenlabs.com'
-          git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+          git remote set-url origin https://x-access-token:${{ secrets.AUTOMERGE_TOKEN }}@github.com/${{ github.repository }}
           git commit -am "chore(deps): cargo hakari"
           git push
       - uses: ahmadnassri/action-dependabot-auto-merge@v2.6
@@ -53,4 +48,10 @@ jobs:
           github-token: ${{ secrets.AUTOMERGE_TOKEN }}
           command: 'squash and merge'
           target: minor
+      - name: Enable auto-merge for Dependabot PRs on patch versions
+        if: ${{steps.metadata.outputs.update-type == 'version-update:semver-patch'}}
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
