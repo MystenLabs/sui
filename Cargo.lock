@@ -2977,16 +2977,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "idna"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e14ddfc70884202db2244c223200c204c2bda1bc6e0998d11b5e024d657209e6"
-dependencies = [
- "unicode-bidi",
- "unicode-normalization",
-]
-
-[[package]]
 name = "if_chain"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9182,7 +9172,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507c383b2d33b5fc35d1861e77e6b383d158b2da5e14fe51b83dfedf6fd578c"
 dependencies = [
  "form_urlencoded",
- "idna 0.2.3",
+ "idna",
  "matches",
  "percent-encoding",
 ]
@@ -9802,7 +9792,7 @@ dependencies = [
  "hyper-timeout",
  "iana-time-zone",
  "ident_case",
- "idna 0.3.0",
+ "idna",
  "if_chain",
  "ignore",
  "im",
@@ -10423,7 +10413,7 @@ dependencies = [
  "hyper",
  "hyper-timeout",
  "ident_case",
- "idna 0.2.3",
+ "idna",
  "indenter",
  "indexmap",
  "insta",

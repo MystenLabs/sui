@@ -230,7 +230,7 @@ hyper = { version = "0.14", features = ["client", "full", "h2", "http1", "http2"
 hyper-rustls = { version = "0.23", features = ["http1", "log", "logging", "native-tokio", "rustls-native-certs", "tls12", "tokio-runtime", "webpki-roots", "webpki-tokio"] }
 hyper-timeout = { version = "0.4", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
-idna = { version = "0.3", default-features = false }
+idna = { version = "0.2", default-features = false }
 ignore = { version = "0.4", default-features = false }
 im = { version = "15", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
@@ -858,7 +858,7 @@ hyper-rustls = { version = "0.23", features = ["http1", "log", "logging", "nativ
 hyper-timeout = { version = "0.4", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 ident_case = { version = "1", default-features = false }
-idna = { version = "0.3", default-features = false }
+idna = { version = "0.2", default-features = false }
 if_chain = { version = "1", default-features = false }
 ignore = { version = "0.4", default-features = false }
 im = { version = "15", default-features = false }
