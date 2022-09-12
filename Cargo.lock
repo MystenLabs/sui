@@ -7373,6 +7373,7 @@ dependencies = [
  "bcs",
  "camino",
  "config 0.1.0",
+ "crypto",
  "digest 0.10.3",
  "dirs",
  "fastcrypto",
