@@ -76,7 +76,7 @@ where
         request: ExecuteTransactionRequest,
     ) -> SuiResult<ExecuteTransactionResponse> {
         let tx_digest = request.transaction.digest();
-        debug!("Receive tranasction execution request {tx_digest:?}");
+        debug!(?tx_digest, "Receive tranasction execution request");
         self.metrics.current_requests_in_flight.inc();
         let _metrics_guard = scopeguard::guard(self.metrics.clone(), |metrics| {
             metrics.current_requests_in_flight.dec();
@@ -246,6 +246,8 @@ where
         quorum_driver: Arc<QuorumDriver<A>>,
         mut task_receiver: Receiver<QuorumTask<A>>,
     ) {
+        // TODO https://github.com/MystenLabs/sui/issues/4565
+        // spawn a tokio task for each job for higher concurrency
         loop {
             if let Some(task) = task_receiver.recv().await {
                 match task {

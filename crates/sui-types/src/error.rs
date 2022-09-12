@@ -343,6 +343,9 @@ pub enum SuiError {
     #[error("Failed to deserialize fields into JSON: {error:?}")]
     ExtraFieldFailedToDeserialize { error: String },
 
+    #[error("Failed to execute transaction locally by Orchestrator: {error:?}")]
+    TransactionOrchestratorLocalExecutionError { error: String },
+
     #[error(
     "Failed to achieve quorum between authorities, cause by : {:#?}",
     errors.iter().map(| e | ToString::to_string(&e)).collect::<Vec<String>>()

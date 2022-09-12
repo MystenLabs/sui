@@ -18,6 +18,7 @@ pub mod quorum_driver;
 pub mod safe_client;
 pub mod streamer;
 pub mod transaction_input_checker;
+pub mod transaction_orchestrator;
 pub mod transaction_streamer;
 
 pub mod test_utils;
