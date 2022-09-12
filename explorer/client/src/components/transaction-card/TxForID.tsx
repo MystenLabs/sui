@@ -74,8 +74,10 @@ function TxForIDStatic({
 }
 
 function TxForIDAPI({ id, category }: { id: string; category: categoryType }) {
-    const [showData, setData] =
-        useState<{ data?: TxnData[]; loadState: string }>(DATATYPE_DEFAULT);
+    const [showData, setData] = useState<{
+        data?: TxnData[];
+        loadState: string;
+    }>(DATATYPE_DEFAULT);
     const [network] = useContext(NetworkContext);
     useEffect(() => {
         getTx(id, network, category).then((transactions) => {
