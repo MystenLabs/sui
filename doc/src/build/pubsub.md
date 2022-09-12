@@ -161,7 +161,7 @@ We provide a few operators for combining filters:
 ### Subscribe
 Here is an example of subscribing to a stream of `MoveEvent` emitted by the `0x2::devnet_nft` package, which is created by the [Sui CLI client](cli-client.md#creating-example-nfts) `create-example-nft` command:
 ```shell
->> {"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[{"EventType":"MoveEvent"}, {"Package":"0x2"}, {"Module":"devnet_nft"}]}}
+>> {"jsonrpc":"2.0", "id": 1, "method": "sui_subscribeEvent", "params": [{"All":[{"EventType":"MoveEvent"}, {"Package":"0x2"}, {"Module":"devnet_nft"}]}]}
 << {"jsonrpc":"2.0","result":3121662727959200,"id":1}
 ```
 
