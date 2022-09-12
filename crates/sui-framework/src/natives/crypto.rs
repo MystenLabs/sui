@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+use crate::{legacy_emit_cost, legacy_empty_cost};
 use curve25519_dalek_ng::scalar::Scalar;
 use fastcrypto::{
     bls12381::{BLS12381PublicKey, BLS12381Signature},
@@ -16,8 +17,7 @@ use move_vm_types::{
 };
 use smallvec::smallvec;
 use std::collections::VecDeque;
-
-use crate::{legacy_emit_cost, legacy_empty_cost};
+use sui_types::error::SuiError;
 
 pub const FAIL_TO_RECOVER_PUBKEY: u64 = 0;
 pub const INVALID_SIGNATURE: u64 = 1;
@@ -25,6 +25,7 @@ pub const INVALID_BULLETPROOF: u64 = 2;
 pub const INVALID_RISTRETTO_GROUP_ELEMENT: u64 = 3;
 pub const INVALID_RISTRETTO_SCALAR: u64 = 4;
 pub const BULLETPROOFS_VERIFICATION_FAILED: u64 = 5;
+pub const INVALID_PUBKEY: u64 = 6;
 
 pub const BP_DOMAIN: &[u8] = b"mizu";
 
@@ -41,15 +42,53 @@ pub fn ecrecover(
     let signature = pop_arg!(args, Vec<u8>);
     // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
     let cost = legacy_empty_cost();
+    match recover_pubkey(signature, hashed_msg) {
+        Ok(pubkey) => Ok(NativeResult::ok(
+            cost,
+            smallvec![Value::vector_u8(pubkey.as_bytes().to_vec())],
+        )),
+        Err(SuiError::InvalidSignature { error: _ }) => {
+            Ok(NativeResult::err(cost, INVALID_SIGNATURE))
+        }
+        Err(_) => Ok(NativeResult::err(cost, FAIL_TO_RECOVER_PUBKEY)),
+    }
+}
+
+fn recover_pubkey(signature: Vec<u8>, hashed_msg: Vec<u8>) -> Result<Secp256k1PublicKey, SuiError> {
     match <Secp256k1Signature as ToFromBytes>::from_bytes(&signature) {
         Ok(signature) => match signature.recover(&hashed_msg) {
-            Ok(pubkey) => Ok(NativeResult::ok(
-                cost,
-                smallvec![Value::vector_u8(pubkey.as_bytes().to_vec())],
-            )),
-            Err(_) => Ok(NativeResult::err(cost, FAIL_TO_RECOVER_PUBKEY)),
+            Ok(pubkey) => Ok(pubkey),
+            Err(e) => Err(SuiError::KeyConversionError(e.to_string())),
         },
-        Err(_) => Ok(NativeResult::err(cost, INVALID_SIGNATURE)),
+        Err(e) => Err(SuiError::InvalidSignature {
+            error: e.to_string(),
+        }),
+    }
+}
+
+/// Convert a compressed 33-bytes Secp256k1 pubkey to an 65-bytes uncompressed one.
+pub fn decompress_pubkey(
+    _context: &mut NativeContext,
+    ty_args: Vec<Type>,
+    mut args: VecDeque<Value>,
+) -> PartialVMResult<NativeResult> {
+    debug_assert!(ty_args.is_empty());
+    debug_assert!(args.len() == 1);
+
+    let pubkey = pop_arg!(args, Vec<u8>);
+
+    // TODO: implement native gas cost estimation https://github.com/MystenLabs/sui/issues/3593
+    let cost = legacy_empty_cost();
+
+    match Secp256k1PublicKey::from_bytes(&pubkey) {
+        Ok(pubkey) => {
+            let uncompressed = &pubkey.pubkey.serialize_uncompressed();
+            Ok(NativeResult::ok(
+                cost,
+                smallvec![Value::vector_u8(uncompressed.to_vec())],
+            ))
+        }
+        Err(_) => Ok(NativeResult::err(cost, INVALID_PUBKEY)),
     }
 }
 
@@ -68,7 +107,7 @@ pub fn keccak256(
     Ok(NativeResult::ok(
         cost,
         smallvec![Value::vector_u8(
-            <sha3::Keccak256 as sha3::digest::Digest>::digest(msg)
+            <sha3::Keccak256 as sha3::digest::Digest>::digest(&msg)
                 .as_slice()
                 .to_vec()
         )],
