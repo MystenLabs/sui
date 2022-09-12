@@ -13,7 +13,7 @@ axum-macros = "0.2.3"
 anyhow = { version = "1.0.58", features = ["backtrace"] }
 tracing = "0.1.36"
 serde = "1.0.143"
-serde_json = "1.0.83"
+serde_json = { version = "1.0.83", features = ["preserve_order"] }
 tower = { version = "0.4.12", features = ["util", "timeout", "load-shed", "limit"] }
 tower-http = { version = "0.3.4", features = ["cors"] }
 tokio = "1.20.1"
@@ -25,6 +25,7 @@ hyper = "0.14.20"
 strum = "0.24.1"
 strum_macros = "0.24.3"
 async-trait = "0.1.57"
+clap = { version = "3.2.17", features = ["derive"] }
 
 sui-types = { path = "../sui-types" }
 sui-core = { path = "../sui-core" }
@@ -37,10 +38,10 @@ typed-store = "0.1.0"
 typed-store-derive = "0.1.0"
 telemetry-subscribers = "0.1.0"
 
-workspace-hack = { path = "../workspace-hack"}
+workspace-hack = { path = "../workspace-hack" }
 
 [dev-dependencies]
 sui-sdk = { path = "../sui-sdk" }
-
+tempfile = "3.3.0"
 
 

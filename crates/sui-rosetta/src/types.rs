@@ -13,6 +13,7 @@ use serde::{Deserializer, Serialize};
 use serde_json::Value;
 use serde_with::serde_as;
 use strum_macros::EnumIter;
+use strum_macros::EnumString;
 
 use sui_types::base_types::{
     ObjectID, ObjectInfo, ObjectRef, SequenceNumber, SuiAddress, TransactionDigest,
@@ -34,9 +35,11 @@ pub struct NetworkIdentifier {
     pub network: SuiEnv,
 }
 
-#[derive(Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug, Clone, Copy)]
+#[derive(
+    Serialize, Deserialize, Ord, PartialOrd, Eq, PartialEq, Debug, Clone, Copy, EnumString,
+)]
+#[strum(serialize_all = "lowercase")]
 #[serde(rename_all = "lowercase")]
-#[allow(clippy::enum_variant_names)]
 pub enum SuiEnv {
     MainNet,
     DevNet,
@@ -334,21 +337,27 @@ impl TryInto<SuiAddress> for PublicKey {
 
     fn try_into(self) -> Result<SuiAddress, Self::Error> {
         let key_bytes = self.hex_bytes.to_vec()?;
-        let curve = match self.curve_type {
-            CurveType::Secp256k1 => SignatureScheme::Secp256k1,
-            CurveType::Edwards25519 => SignatureScheme::ED25519,
-        };
-        let pub_key = sui_types::crypto::PublicKey::try_from_bytes(curve, &key_bytes)
-            .map_err(|e| Error::new_with_cause(ErrorType::ParsingError, e))?;
+        let pub_key =
+            sui_types::crypto::PublicKey::try_from_bytes(self.curve_type.into(), &key_bytes)
+                .map_err(|e| Error::new_with_cause(ErrorType::ParsingError, e))?;
         Ok((&pub_key).into())
     }
 }
 
-#[derive(Deserialize, Copy, Clone)]
+#[derive(Deserialize, Serialize, Copy, Clone)]
 #[serde(rename_all = "lowercase")]
 pub enum CurveType {
     Secp256k1,
     Edwards25519,
+}
+
+impl Into<SignatureScheme> for CurveType {
+    fn into(self) -> SignatureScheme {
+        match self {
+            CurveType::Secp256k1 => SignatureScheme::Secp256k1,
+            CurveType::Edwards25519 => SignatureScheme::ED25519,
+        }
+    }
 }
 
 #[derive(Serialize)]
@@ -794,4 +803,12 @@ impl IndexCounter {
         self.index += 1;
         next
     }
+}
+
+#[derive(Serialize, Clone)]
+pub struct PrefundedAccount {
+    pub privkey: String,
+    pub account_identifier: AccountIdentifier,
+    pub curve_type: CurveType,
+    pub currency: Currency,
 }

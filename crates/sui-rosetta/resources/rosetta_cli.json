@@ -3,7 +3,7 @@
     "blockchain": "sui",
     "network": "localnet"
   },
-  "online_url": "http://192.168.1.97:9002",
+  "online_url": "http://0.0.0.0:9002",
   "data_directory": "data",
   "http_timeout": 10,
   "max_retries": 5,
@@ -19,46 +19,12 @@
   "error_stack_trace_disabled": false,
   "coin_supported": true,
   "construction": {
-    "offline_url": "http://192.168.1.97:9003",
+    "offline_url": "http://0.0.0.0:9003",
     "constructor_dsl_file": "sui.ros",
     "end_conditions": {
       "transfer": 10
     },
-    "prefunded_accounts": [
-      {
-        "privkey": "dcb5b15390d98afd2058d49c7c22fce330b2f79e379df14ef97f8e7d8b8b36a2",
-        "account_identifier": {
-          "address": "0x06dbd62fc5f786aaa777403e763aabf7a5e3521d"
-        },
-        "curve_type": "edwards25519",
-        "currency": {
-          "symbol": "SUI",
-          "decimals": 9
-        }
-      },
-      {
-        "privkey": "420e52be9da51ff67b2b1d655b63580cddeb4c5ed263e699f681fba549349d49",
-        "account_identifier": {
-          "address": "0x86d78cbf90387724c072b0f1804b3d2a6034cf9e"
-        },
-        "curve_type": "edwards25519",
-        "currency": {
-          "symbol": "SUI",
-          "decimals": 9
-        }
-      },
-      {
-        "privkey": "479f17345ae81f26b6401ef72f7dccbc60707f602776d14810f9ca66e8199540",
-        "account_identifier": {
-          "address": "0x9d1d83fa8b8adeb4c812e2aa499136ba48c42d40"
-        },
-        "curve_type": "edwards25519",
-        "currency": {
-          "symbol": "SUI",
-          "decimals": 9
-        }
-      }
-    ]
+    "prefunded_accounts": []
   },
   "data": {
     "active_reconciliation_concurrency": 16,
