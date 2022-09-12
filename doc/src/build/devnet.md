@@ -75,6 +75,8 @@ $ sui client switch --rpc https://gateway.devnet.sui.io:443
 
 ## Basic testing
 
+Note that in the following sections, the object ID's, addresses, and authority signatures used are example values only. Sui generates unique values for each of these, so you see different values when you run the commands.
+
 ### Request gas tokens
 
 1. Join [Discord](https://discord.gg/sui) If you haven’t already.
@@ -152,7 +154,7 @@ Publish a sample Move package containing code developed in the [Sui Move tutoria
 $ sui client publish --path <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
 ```
 
-You will see this output:
+The response resembles the following:
 ```shell
 ----- Certificate ----
 Signed Authorities : [k#2266186afd9da10a43dd3ed73d1039c6793d2d8514db6a2407fcf835132e863b, k#1d47ad34e2bc5589882c500345c953b5837e30d6649d315c61690ba7a1e28d23, k#e9599283c0da1ac2eedeb89a56fc49cd8f3c0d8d4ddba9b0a0a5054fe7df3ffd]
@@ -165,7 +167,7 @@ List of objects created by running module initializers:
 ID: 898922A9CABE93C6C38C55BBE047BFB0A8C864BF
 Version: 1
 Owner: Account Address ( F16A5AEDCDF9F2A9C2BD0F077279EC3D5FF0DFEE )
-Type: 0x689e58788c875e9c354f359792cec016da0a1b0::M1::Forge
+Type: 0x689e58788c875e9c354f359792cec016da0a1b0::my_module::Forge
 
 Updated Gas : Coin { id: 58C4DAA98694266F4DF47BA436CD99659B6A5342, value: 49552 }
 ```
@@ -192,13 +194,13 @@ Which yields output resembling:
 Created new keypair for address with flag 0: [0x19de019c19fc800a6aeba4eb4133f6db91ca7c2c]
 ```
 
-In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/m1.move#L44) in the `M1` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/m1.move#L4) of the package we previously published.
+In order to create a sword and transfer it to another player, we use the following command to call the `sword_create` [function](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L47) in the `my_module` [module](https://github.com/MystenLabs/sui/blob/main/sui_programmability/examples/move_tutorial/sources/my_module.move#L4) of the package we previously published.
 
 > **Important:** Note placeholders on the command line and formatting of function parameters as it is important to follow the same pattern.
 
 Now run:
 ```shell
-$ sui client call --function sword_create --module M1 --package 0x<PACKAGE_ID> --args \"0x<FORGE_ID>\" 42 7 \"0x<PLAYER_ADDRESS>\" --gas-budget 30000
+$ sui client call --function sword_create --module my_module --package 0x<PACKAGE_ID> --args \"0x<FORGE_ID>\" 42 7 \"0x<PLAYER_ADDRESS>\" --gas-budget 30000
 ```
 
 And receive output like:
@@ -207,7 +209,7 @@ And receive output like:
 Signed Authorities : [k#2266186afd9da10a43dd3ed73d1039c6793d2d8514db6a2407fcf835132e863b, k#1d47ad34e2bc5589882c500345c953b5837e30d6649d315c61690ba7a1e28d23, k#e9599283c0da1ac2eedeb89a56fc49cd8f3c0d8d4ddba9b0a0a5054fe7df3ffd]
 Transaction Kind : Call
 Package ID : 0x689e58788c875e9c354f359792cec016da0a1b0
-Module : M1
+Module : my_module
 Function : sword_create
 Arguments : [ImmOrOwnedObject((898922A9CABE93C6C38C55BBE047BFB0A8C864BF, SequenceNumber(1), o#9f12d4390e4fc8de3834c4960c6f265a78eca7c2b916ac1be66c1f00e1b47c68)), Pure([42, 0, 0, 0, 0, 0, 0, 0]), Pure([7, 0, 0, 0, 0, 0, 0, 0]), Pure([45, 50, 237, 113, 56, 27, 239, 127, 61, 140, 87, 180, 141, 248, 33, 35, 89, 54, 114, 170])]
 Type Arguments : []
