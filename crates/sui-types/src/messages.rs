@@ -1684,6 +1684,16 @@ impl CertifiedTransactionEffects {
             auth_signature: EmptySignInfo {},
         }
     }
+
+    // pub fn to_signed_effects(self) -> SignedTransactionEffects {
+    //     let sigs = self.auth_signature.signature.0.get(0).unwrap();
+    //     self.auth_signature
+    //     SignedTransactionEffects {
+    //         transaction_effects_digest: self.transaction_effects_digest,
+    //         effects: self.effects,
+    //         auth_signature: AuthoritySignInfo {},
+    //     }
+    // }
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]

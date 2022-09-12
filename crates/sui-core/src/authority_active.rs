@@ -252,6 +252,10 @@ impl<A> ActiveAuthority<A> {
         let entry = lock.entry(name).or_default();
         entry.can_initiate_contact_now()
     }
+
+    pub fn clone_node_sync_state(&self) -> Arc<NodeSyncState<A>> {
+        self.node_sync_state.clone()
+    }
 }
 
 impl<A> Clone for ActiveAuthority<A> {
@@ -351,13 +355,9 @@ where
         self.respawn_node_sync_process_impl(lock_guard).await
     }
 
-    async fn respawn_node_sync_process_impl(
-        self: Arc<Self>,
-        mut lock_guard: MutexGuard<'_, Option<NodeSyncProcessHandle>>,
+    async fn cancel_node_sync_process_impl(
+        lock_guard: &mut MutexGuard<'_, Option<NodeSyncProcessHandle>>,
     ) {
-        let epoch = self.state.committee.load().epoch;
-        info!(?epoch, "respawn_node_sync_process");
-
         if let Some(NodeSyncProcessHandle(join_handle, cancel_sender)) = lock_guard.take() {
             info!("sending cancel request to node sync task");
             let _ = cancel_sender
@@ -377,6 +377,14 @@ where
                 let _ = join_handle.await;
             }
         }
+    }
+
+    async fn respawn_node_sync_process_impl(
+        &self,
+        mut lock_guard: MutexGuard<'_, Option<NodeSyncProcessHandle>>,
+    ) {
+        info!(epoch = ?self.state.committee.load().epoch, "respawn_node_sync_process");
+        Self::cancel_node_sync_process_impl(&mut lock_guard).await;
 
         let (cancel_sender, cancel_receiver) = oneshot::channel();
         let aggregator = self.net();
@@ -394,6 +402,12 @@ where
         ));
 
         *lock_guard = Some(NodeSyncProcessHandle(join_handle, cancel_sender));
+    }
+
+    #[cfg(test)]
+    pub async fn cancel_node_sync_process(&self) {
+        let mut lock_guard = self.node_sync_process.lock().await;
+        Self::cancel_node_sync_process_impl(&mut lock_guard).await;
     }
 
     /// Spawn pending certificate execution process
