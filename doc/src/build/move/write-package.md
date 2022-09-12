@@ -51,7 +51,7 @@ module my_first_package::my_module {
     // Part 1: imports
     use sui::object::{Self, UID};
     use sui::transfer;
-    use sui::tx_context::TxContext;
+    use sui::tx_context::{Self, TxContext};
 
     // Part 2: struct definitions
     struct Sword has key, store {
