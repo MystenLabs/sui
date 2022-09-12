@@ -1,3 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 @import 'vanilla-cookieconsent/dist/cookieconsent.css';
 @font-face {
     font-family: Inter;
