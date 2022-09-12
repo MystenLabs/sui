@@ -230,7 +230,8 @@ hyper = { version = "0.14", features = ["client", "full", "h2", "http1", "http2"
 hyper-rustls = { version = "0.23", features = ["http1", "log", "logging", "native-tokio", "rustls-native-certs", "tls12", "tokio-runtime", "webpki-roots", "webpki-tokio"] }
 hyper-timeout = { version = "0.4", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
-idna = { version = "0.2", default-features = false }
+idna-6f8ce4dd05d13bba = { package = "idna", version = "0.2", default-features = false }
+idna-468e82937335b1c9 = { package = "idna", version = "0.3", default-features = false }
 ignore = { version = "0.4", default-features = false }
 im = { version = "15", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
@@ -364,7 +365,7 @@ parking_lot_core-c38e5c1d305a1b54 = { package = "parking_lot_core", version = "0
 parking_lot_core-274715c4dabd11b0 = { package = "parking_lot_core", version = "0.9", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
 pem = { version = "1", default-features = false }
-percent-encoding = { version = "2", default-features = false }
+percent-encoding = { version = "2", features = ["alloc"] }
 pest = { version = "2", features = ["std", "thiserror"] }
 petgraph-d8f496e17d97b5cb = { package = "petgraph", version = "0.5", features = ["graphmap", "matrix_graph", "stable_graph"] }
 petgraph-3b31131e45eafb45 = { package = "petgraph", version = "0.6", features = ["graphmap", "matrix_graph", "stable_graph"] }
@@ -581,7 +582,7 @@ unicode-width = { version = "0.1" }
 unicode_categories = { version = "0.1", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted = { version = "0.7", default-features = false }
-url = { version = "2", default-features = false }
+url = { version = "2" }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "private_getrandom", "private_rand", "rng", "std", "v4"] }
 vec_map = { version = "0.8", default-features = false }
@@ -858,7 +859,8 @@ hyper-rustls = { version = "0.23", features = ["http1", "log", "logging", "nativ
 hyper-timeout = { version = "0.4", default-features = false }
 iana-time-zone = { version = "0.1", default-features = false, features = ["fallback"] }
 ident_case = { version = "1", default-features = false }
-idna = { version = "0.2", default-features = false }
+idna-6f8ce4dd05d13bba = { package = "idna", version = "0.2", default-features = false }
+idna-468e82937335b1c9 = { package = "idna", version = "0.3", default-features = false }
 if_chain = { version = "1", default-features = false }
 ignore = { version = "0.4", default-features = false }
 im = { version = "15", default-features = false }
@@ -1007,7 +1009,7 @@ paste = { version = "1", default-features = false }
 pathdiff = { version = "0.2", default-features = false, features = ["camino"] }
 peeking_take_while = { version = "0.1", default-features = false }
 pem = { version = "1", default-features = false }
-percent-encoding = { version = "2", default-features = false }
+percent-encoding = { version = "2", features = ["alloc"] }
 pest = { version = "2", features = ["std", "thiserror"] }
 pest_derive = { version = "2", features = ["std"] }
 pest_generator = { version = "2", default-features = false, features = ["std"] }
@@ -1280,7 +1282,7 @@ unicode_categories = { version = "0.1", default-features = false }
 unsigned-varint = { version = "0.7", default-features = false, features = ["std"] }
 untrusted = { version = "0.7", default-features = false }
 unzip-n = { version = "0.1", default-features = false }
-url = { version = "2", default-features = false }
+url = { version = "2" }
 utf8parse = { version = "0.2" }
 uuid = { version = "1", features = ["fast-rng", "private_getrandom", "private_rand", "rng", "std", "v4"] }
 variant_count = { version = "1", default-features = false }
