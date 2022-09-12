@@ -406,7 +406,7 @@ impl ConsensusListener {
         if len > 8 {
             // The first 8 bytes are the tracking id, and we don't want to hash that so that
             // certificates submitted by different validators are considered the same message.
-            (&serialized[8..]).hash(&mut hasher);
+            (serialized[8..]).hash(&mut hasher);
         } else {
             // If somehow the length is <= 8 (which is invalid), we just don't care and hash
             // the whole thing.
