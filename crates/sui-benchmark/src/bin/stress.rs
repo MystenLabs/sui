@@ -277,11 +277,11 @@ async fn main() -> Result<()> {
             })?;
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
         let committee = GatewayState::make_committee(&config)?;
+        let registry = prometheus::Registry::new();
         let authority_clients = GatewayState::make_authority_clients(
             &config,
-            NetworkAuthorityClientMetrics::new_for_tests(),
+            NetworkAuthorityClientMetrics::new(&registry),
         );
-        let registry = prometheus::Registry::new();
         let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
         let aggregator = AuthorityAggregator::new(
             committee,
@@ -345,15 +345,16 @@ async fn main() -> Result<()> {
     let handle = std::thread::spawn(move || {
         client_runtime.block_on(async move {
             let committee = GatewayState::make_committee(&gateway_config).unwrap();
-            let authority_clients = GatewayState::make_authority_clients(
-                &gateway_config,
-                NetworkAuthorityClientMetrics::new_for_tests(),
-            );
             let registry: Registry = metrics::start_prometheus_server(
                 format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
                     .parse()
                     .unwrap(),
             );
+            let authority_clients = GatewayState::make_authority_clients(
+                &gateway_config,
+                NetworkAuthorityClientMetrics::new(&registry),
+            );
+
             let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
             let aggregator = AuthorityAggregator::new(
                 committee,
