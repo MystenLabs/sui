@@ -21,7 +21,7 @@ jobs:
           fetch-depth: 0
 
       - name: Protobuf format
-        uses: jidicula/clang-format-action@v4.8.0
+        uses: jidicula/clang-format-action@v4.9.0
         with:
           clang-format-version: '14'
   
