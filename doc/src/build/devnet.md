@@ -75,6 +75,8 @@ $ sui client switch --rpc https://gateway.devnet.sui.io:443
 
 ## Basic testing
 
+Note that in the following sections, the object ID's, addresses, and authority signatures used are example values only. Sui generates unique values for each of these, so you see different values when you run the commands.
+
 ### Request gas tokens
 
 1. Join [Discord](https://discord.gg/sui) If you haven’t already.
@@ -152,7 +154,7 @@ Publish a sample Move package containing code developed in the [Sui Move tutoria
 $ sui client publish --path <your-sui-repo>/sui_programmability/examples/move_tutorial --gas-budget 30000
 ```
 
-You will see this output:
+The response resembles the following:
 ```shell
 ----- Certificate ----
 Signed Authorities : [k#2266186afd9da10a43dd3ed73d1039c6793d2d8514db6a2407fcf835132e863b, k#1d47ad34e2bc5589882c500345c953b5837e30d6649d315c61690ba7a1e28d23, k#e9599283c0da1ac2eedeb89a56fc49cd8f3c0d8d4ddba9b0a0a5054fe7df3ffd]
