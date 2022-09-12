@@ -19,12 +19,6 @@ jobs:
         uses: dependabot/fetch-metadata@v1.3.3
         with:
           github-token: "${{ secrets.GITHUB_TOKEN }}"
-      - name: Enable auto-merge for Dependabot PRs on patch versions
-        if: ${{steps.metadata.outputs.update-type == 'version-update:semver-patch'}}
-        run: gh pr merge --auto --squash "$PR_URL"
-        env:
-          PR_URL: ${{github.event.pull_request.html_url}}
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
       - uses: actions/checkout@v3
         with:
           ref: ${{ github.head_ref }}
@@ -48,3 +42,15 @@ jobs:
           git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
           git commit -am "chore(deps): cargo hakari"
           git push
+      - uses: ahmadnassri/action-dependabot-auto-merge@v2.6
+        with:
+          github-token: ${{ secrets.AUTOMERGE_TOKEN }}
+          command: 'squash and merge'
+          target: minor
+      - name: Enable auto-merge for Dependabot PRs on patch versions
+        if: ${{steps.metadata.outputs.update-type == 'version-update:semver-patch'}}
+        run: gh pr merge --auto --squash "$PR_URL"
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+
