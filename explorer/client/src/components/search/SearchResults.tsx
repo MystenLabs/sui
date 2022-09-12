@@ -55,13 +55,18 @@ function SearchResults({
                         id={`Option-${categoryLabels[el.category]}`}
                         role="option"
                         aria-selected={index === resultIndex}
-                        className={
-                            index === resultIndex ? styles.selectedoption : ''
-                        }
                         onClick={optionClick(el)}
                     >
                         <dt>{categoryLabels[el.category]}</dt>
-                        <dd>{el.input}</dd>
+                        <dd
+                            className={
+                                index === resultIndex
+                                    ? styles.selectedoption
+                                    : ''
+                            }
+                        >
+                            {el.input}
+                        </dd>
                     </dl>
                 ))}
             </div>
