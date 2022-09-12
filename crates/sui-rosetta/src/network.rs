@@ -63,15 +63,15 @@ pub async fn status(
         .collect();
     let blocks = context.blocks();
     let current_block = blocks.current_block().await?;
-
+    let index = current_block.block.block_identifier.index;
     Ok(NetworkStatusResponse {
         current_block_identifier: current_block.block.block_identifier,
         current_block_timestamp: current_block.block.timestamp,
         genesis_block_identifier: blocks.genesis_block_identifier(),
         oldest_block_identifier: Some(blocks.oldest_block_identifier().await?),
         sync_status: Some(SyncStatus {
-            current_index: None,
-            target_index: None,
+            current_index: Some(index),
+            target_index: Some(index),
             stage: None,
             synced: Some(true),
         }),
@@ -102,7 +102,7 @@ pub async fn options(
             operation_statuses,
             operation_types: OperationType::iter().collect(),
             errors,
-            historical_balance_lookup: false,
+            historical_balance_lookup: true,
             timestamp_start_index: None,
             call_methods: vec![],
             balance_exemptions: vec![],

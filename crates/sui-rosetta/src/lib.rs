@@ -62,7 +62,6 @@ impl RosettaOnlineServer {
             .route("/block/transaction", post(block::transaction))
             .route("/construction/submit", post(construction::submit))
             .route("/construction/metadata", post(construction::metadata))
-            .route("/construction/parse", post(construction::parse))
             .route("/network/status", post(network::status))
             .route("/network/list", post(network::list))
             .route("/network/options", post(network::options))
