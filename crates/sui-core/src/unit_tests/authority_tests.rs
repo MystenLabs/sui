@@ -1079,7 +1079,6 @@ async fn test_handle_certificate_interrupted_retry() {
     telemetry_subscribers::init_for_testing();
 
     let (sender, sender_key): (_, AccountKeyPair) = get_key_pair();
-    let recipient = dbg_addr(2);
     let gas_object_id = ObjectID::random();
 
     // We repeatedly timeout certs after a variety of delays, using LimitedPoll to ensure that we
@@ -1098,30 +1097,40 @@ async fn test_handle_certificate_interrupted_retry() {
 
     let authority_state = Arc::new(init_state_with_ids(objects.clone()).await);
 
+    let shared_object_id = ObjectID::random();
+    let shared_object = {
+        use sui_types::gas_coin::GasCoin;
+        use sui_types::object::MoveObject;
+
+        let content = GasCoin::new(shared_object_id, 10);
+        let obj = MoveObject::new_gas_coin(OBJECT_START_VERSION, content.to_bcs_bytes());
+        Object::new_move(obj, Owner::Shared, TransactionDigest::genesis())
+    };
+
+    authority_state.insert_genesis_object(shared_object).await;
+
     let mut interrupted_count = 0;
-    for (limit, (_, object_id)) in delays.iter().zip(objects) {
+    for (limit, _) in delays.iter().zip(objects) {
         info!("Testing with poll limit {}", limit);
-        let object = authority_state
-            .get_object(&object_id)
-            .await
-            .unwrap()
-            .unwrap();
         let gas_object = authority_state
             .get_object(&gas_object_id)
             .await
             .unwrap()
             .unwrap();
 
-        let certified_transfer_transaction = init_certified_transfer_transaction(
-            sender,
+        let shared_object_cert = make_test_transaction(
+            &sender,
             &sender_key,
-            recipient,
-            object.compute_object_reference(),
-            gas_object.compute_object_reference(),
-            &authority_state,
-        );
+            shared_object_id,
+            &gas_object.compute_object_reference(),
+            &[&authority_state],
+            16,
+        )
+        .await;
 
-        let clone1 = certified_transfer_transaction.clone();
+        send_consensus(&authority_state, &shared_object_cert).await;
+
+        let clone1 = shared_object_cert.clone();
         let state1 = authority_state.clone();
 
         let limited_fut = Box::pin(LimitedPoll::new(*limit, async move {
@@ -1137,7 +1146,7 @@ async fn test_handle_certificate_interrupted_retry() {
 
         let g = authority_state
             .database
-            .acquire_tx_guard(&certified_transfer_transaction)
+            .acquire_tx_guard(&shared_object_cert)
             .await
             .unwrap();
 
@@ -1147,7 +1156,7 @@ async fn test_handle_certificate_interrupted_retry() {
 
         // Now run the tx to completion
         let info = authority_state
-            .handle_certificate(certified_transfer_transaction.clone())
+            .handle_certificate(shared_object_cert.clone())
             .await
             .unwrap();
 
