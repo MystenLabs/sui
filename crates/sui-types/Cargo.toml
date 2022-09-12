@@ -52,7 +52,7 @@ move-vm-types = { git = "https://github.com/move-language/move", rev = "e1e647b7
 
 narwhal-executor = { git = "https://github.com/MystenLabs/narwhal", rev = "a383ad626355035cf5e388be6ee668fff17bb646", package = "executor" }
 
-fastcrypto = { version = "0.1.1", features = ["copy_key"] }
+fastcrypto = { version = "0.1.2", features = ["copy_key"] }
 
 sui-cost-tables = { path = "../sui-cost-tables"}
 workspace-hack = { path = "../workspace-hack"}

@@ -32,7 +32,7 @@ move-stdlib = { git = "https://github.com/move-language/move", rev = "e1e647b73d
 move-unit-test = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-vm-runtime = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-vm-types = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
-fastcrypto = { version = "0.1.1" }
+fastcrypto = "0.1.2"
 workspace-hack = { path = "../workspace-hack"}
 move-vm-test-utils = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 

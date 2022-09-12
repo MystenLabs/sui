@@ -20,7 +20,7 @@ multiaddr = "0.14.0"
 once_cell = "1.14.0"
 tracing = "0.1.36"
 
-fastcrypto = { version = "0.1.1" }
+fastcrypto = "0.1.2"
 
 move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
