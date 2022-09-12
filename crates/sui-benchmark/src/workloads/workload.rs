@@ -253,3 +253,10 @@ impl CombinationWorkload {
         Box::new(CombinationWorkload { workloads })
     }
 }
+
+pub struct WorkloadInfo {
+    pub target_qps: u64,
+    pub num_workers: u64,
+    pub max_in_flight_ops: u64,
+    pub workload: Box<dyn Workload<dyn Payload>>,
+}
