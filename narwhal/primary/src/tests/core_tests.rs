@@ -21,7 +21,7 @@ async fn process_header() {
 
     let header = author.header(&committee);
 
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let mut signature_service = SignatureService::new(primary.keypair().copy());
 
@@ -49,7 +49,7 @@ async fn process_header() {
         .unwrap()
         .primary_to_primary;
     let (mut handle, _network) =
-        PrimaryToPrimaryMockServer::spawn(author.keypair().copy(), address.clone());
+        PrimaryToPrimaryMockServer::spawn(author.network_keypair().copy(), address.clone());
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -74,8 +74,9 @@ async fn process_header() {
         .unwrap();
 
     let address = network::multiaddr_to_address(&address).unwrap();
+    let network_key = author.network_keypair().public();
     let peer_info = PeerInfo {
-        peer_id: PeerId(header.author.0.to_bytes()),
+        peer_id: PeerId(network_key.0.to_bytes()),
         affinity: anemo::types::PeerAffinity::High,
         address: vec![address],
     };
@@ -134,7 +135,7 @@ async fn process_header_missing_parent() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
@@ -223,7 +224,7 @@ async fn process_header_missing_payload() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
@@ -312,7 +313,7 @@ async fn process_votes() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
@@ -352,8 +353,8 @@ async fn process_votes() {
         .start(anemo::Router::new())
         .unwrap();
 
-    for (pubkey, addresses) in committee.others_primaries(&name) {
-        let peer_id = PeerId(pubkey.0.to_bytes());
+    for (_pubkey, addresses, network_pubkey) in committee.others_primaries(&name) {
+        let peer_id = PeerId(network_pubkey.0.to_bytes());
         let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
         let peer_info = PeerInfo {
             peer_id,
@@ -398,7 +399,7 @@ async fn process_votes() {
                 .primary(&a.public_key())
                 .unwrap()
                 .primary_to_primary;
-            PrimaryToPrimaryMockServer::spawn(a.keypair().copy(), address)
+            PrimaryToPrimaryMockServer::spawn(a.network_keypair().copy(), address)
         })
         .collect();
 
@@ -436,7 +437,7 @@ async fn process_certificates() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().last().unwrap();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
@@ -555,7 +556,7 @@ async fn shutdown_core() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
@@ -629,7 +630,7 @@ async fn reconfigure_core() {
     let worker_cache = fixture.shared_worker_cache();
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let mut signature_service = SignatureService::new(primary.keypair().copy());
 
@@ -663,7 +664,7 @@ async fn reconfigure_core() {
         .unwrap()
         .primary_to_primary;
     let (mut handle, _network) =
-        PrimaryToPrimaryMockServer::spawn(author.keypair().copy(), address.clone());
+        PrimaryToPrimaryMockServer::spawn(author.network_keypair().copy(), address.clone());
 
     // Make a synchronizer for the core.
     let synchronizer = Synchronizer::new(
@@ -685,8 +686,9 @@ async fn reconfigure_core() {
         .start(anemo::Router::new())
         .unwrap();
     let address = network::multiaddr_to_address(&address).unwrap();
+    let network_key = author.network_keypair();
     let peer_info = PeerInfo {
-        peer_id: PeerId(header.author.0.to_bytes()),
+        peer_id: PeerId(network_key.public().0.to_bytes()),
         affinity: anemo::types::PeerAffinity::High,
         address: vec![address],
     };

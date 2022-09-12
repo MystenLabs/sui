@@ -631,18 +631,18 @@ impl BlockSynchronizer {
     async fn broadcast_batch_request(&mut self, message: PrimaryMessage) -> Vec<PublicKey> {
         // Naively now just broadcast the request to all the primaries
 
-        let primaries_names: Vec<_> = self
+        let (keys, network_keys): (Vec<_>, Vec<_>) = self
             .committee
             .others_primaries(&self.name)
             .into_iter()
-            .map(|(name, _address)| name)
-            .collect();
+            .map(|(name, _address, network_key)| (name, network_key))
+            .unzip();
 
         self.primary_network
-            .unreliable_broadcast(primaries_names.clone(), &message)
+            .unreliable_broadcast(network_keys.clone(), &message)
             .await;
 
-        primaries_names
+        keys
     }
 
     #[instrument(level="trace", skip_all, fields(request_id = ?request_id))]

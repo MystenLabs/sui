@@ -276,7 +276,7 @@ impl HeaderWaiter {
                             }
                             if !requires_sync.is_empty() {
                                 let message = PrimaryMessage::CertificatesRequest(requires_sync, self.name.clone());
-                                self.primary_network.unreliable_send(author.clone(), &message).await;
+                                self.primary_network.unreliable_send(self.committee.network_key(&author).unwrap(), &message).await;
                             }
                         }
                     }
@@ -314,13 +314,13 @@ impl HeaderWaiter {
                     }
 
                     if !retry.is_empty() {
-                        let addresses = self.committee
+                        let network_keys = self.committee
                             .others_primaries(&self.name)
                             .into_iter()
-                            .map(|(pubkey, _x)| pubkey)
+                            .map(|(_, _, network_key)| network_key)
                             .collect();
                         let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());
-                        self.primary_network.lucky_broadcast(addresses, &message, self.sync_retry_nodes).await;
+                        self.primary_network.lucky_broadcast(network_keys, &message, self.sync_retry_nodes).await;
                     }
                     // Reschedule the timer.
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(TIMER_RESOLUTION));

@@ -1,5 +1,5 @@
 {
-  "type": "Ed25519KeyPair",
-  "name": "7o+0AxuS4muiCYxLOMT9pzdLug2LmrAzB7yLE7TrxwA=",
-  "secret": "a5IKgyaSAVRPtmzhvjGobSe5/gbFUi/2sF78DlLI/EE="
+  "type": "BLS12381KeyPair",
+  "name": "lEExVRsXRE2O5+Yhaunn0+yckZz249/OERxaTrCQZUIz7E4gmyGQWmKFEpBA2p8VCcAHvveCvupstx7Qp8/w1gpqo2kFRXqagO/IRDOfJiItmtVxzHWxlnSP/2XKSkZf",
+  "secret": "brYlYkS7Kl9Ew3xC7hl5Rv2hJU7xx1pTgvkThiNBIkU="
 }

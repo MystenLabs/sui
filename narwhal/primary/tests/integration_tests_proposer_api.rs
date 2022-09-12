@@ -36,6 +36,7 @@ async fn test_rounds_errors() {
 
     let author = fixture.authorities().last().unwrap();
     let keypair = author.keypair().copy();
+    let network_keypair = author.network_keypair().copy();
     let name = keypair.public().clone();
 
     struct TestCase {
@@ -96,7 +97,8 @@ async fn test_rounds_errors() {
 
     Primary::spawn(
         name.clone(),
-        keypair,
+        keypair.copy(),
+        network_keypair,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache,
         parameters.clone(),
@@ -180,7 +182,8 @@ async fn test_rounds_return_successful_response() {
 
     Primary::spawn(
         name.clone(),
-        keypair,
+        keypair.copy(),
+        author.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache,
         parameters.clone(),
@@ -332,7 +335,8 @@ async fn test_node_read_causal_signed_certificates() {
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
         name_1.clone(),
-        keypair_1,
+        keypair_1.copy(),
+        authority_1.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         primary_1_parameters.clone(),
@@ -371,7 +375,8 @@ async fn test_node_read_causal_signed_certificates() {
     // Spawn Primary 2
     Primary::spawn(
         name_2.clone(),
-        keypair_2,
+        keypair_2.copy(),
+        authority_2.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         primary_2_parameters.clone(),

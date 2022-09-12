@@ -11,10 +11,10 @@
 use arc_swap::ArcSwap;
 use clap::{crate_name, crate_version, App, AppSettings, ArgMatches, SubCommand};
 use config::{Committee, Import, Parameters, WorkerCache, WorkerId};
-use crypto::KeyPair;
+use crypto::{KeyPair, NetworkKeyPair};
 use executor::{SerializedTransaction, SubscriberResult};
 use eyre::Context;
-use fastcrypto::{ed25519::Ed25519KeyPair, generate_production_keypair, traits::KeyPair as _};
+use fastcrypto::{generate_production_keypair, traits::KeyPair as _};
 use futures::future::join_all;
 use node::{
     execution_state::SimpleExecutionState,
@@ -47,9 +47,15 @@ async fn main() -> Result<(), eyre::Report> {
                 .args_from_usage("--filename=<FILE> 'The file where to print the new key pair'"),
         )
         .subcommand(
+            SubCommand::with_name("generate_network_keys")
+                .about("Print a fresh network key pair (ed25519) to file")
+                .args_from_usage("--filename=<FILE> 'The file where to print the new network key pair'"),
+        )
+        .subcommand(
             SubCommand::with_name("run")
                 .about("Run a node")
                 .args_from_usage("--primary-keys=<FILE> 'The file containing the node's primary keys'")
+                .args_from_usage("--primary-network-keys=<FILE> 'The file containing the node's primary network keys'")
                 .args_from_usage("--worker-keys=<FILE> 'The file containing the node's worker keys'")
                 .args_from_usage("--committee=<FILE> 'The file containing committee information'")
                 .args_from_usage("--workers=<FILE> 'The file containing worker information'")
@@ -91,14 +97,23 @@ async fn main() -> Result<(), eyre::Report> {
             let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
             let kp = generate_production_keypair::<KeyPair>();
             config::Export::export(&kp, sub_matches.value_of("filename").unwrap())
-                .context("Failed to generate key pair")?
+                .context("Failed to generate key pair")?;
+        }
+        ("generate_network_keys", Some(sub_matches)) => {
+            let _guard = setup_telemetry(tracing_level, network_tracing_level, None);
+            let network_kp = generate_production_keypair::<NetworkKeyPair>();
+            config::Export::export(&network_kp, sub_matches.value_of("filename").unwrap())
+                .context("Failed to generate network key pair")?
         }
         ("run", Some(sub_matches)) => {
             let primary_key_file = sub_matches.value_of("primary-keys").unwrap();
             let primary_keypair = KeyPair::import(primary_key_file)
                 .context("Failed to load the node's primary keypair")?;
+            let primary_network_key_file = sub_matches.value_of("primary-network-keys").unwrap();
+            let primary_network_keypair = NetworkKeyPair::import(primary_network_key_file)
+                .context("Failed to load the node's primary network keypair")?;
             let worker_key_file = sub_matches.value_of("worker-keys").unwrap();
-            let worker_keypair = KeyPair::import(worker_key_file)
+            let worker_keypair = NetworkKeyPair::import(worker_key_file)
                 .context("Failed to load the node's worker keypair")?;
             let registry = match sub_matches.subcommand() {
                 ("primary", _) => primary_metrics_registry(primary_keypair.public().clone()),
@@ -123,7 +138,14 @@ async fn main() -> Result<(), eyre::Report> {
                     let _guard = setup_telemetry(tracing_level, network_tracing_level, Some(&registry));
                 }
             }
-            run(sub_matches, primary_keypair, worker_keypair, registry).await?
+            run(
+                sub_matches,
+                primary_keypair,
+                primary_network_keypair,
+                worker_keypair,
+                registry,
+            )
+            .await?
         }
         _ => unreachable!(),
     }
@@ -180,8 +202,9 @@ fn setup_benchmark_telemetry(
 // Runs either a worker or a primary.
 async fn run(
     matches: &ArgMatches<'_>,
-    primary_keypair: Ed25519KeyPair,
-    worker_keypair: Ed25519KeyPair,
+    primary_keypair: KeyPair,
+    primary_network_keypair: NetworkKeyPair,
+    worker_keypair: NetworkKeyPair,
     registry: Registry,
 ) -> Result<(), eyre::Report> {
     let committee_file = matches.value_of("committee").unwrap();
@@ -218,6 +241,7 @@ async fn run(
         ("primary", Some(sub_matches)) => {
             Node::spawn_primary(
                 primary_keypair,
+                primary_network_keypair,
                 committee,
                 worker_cache,
                 &store,

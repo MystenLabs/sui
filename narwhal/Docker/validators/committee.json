@@ -1,27 +1,31 @@
 {
     "authorities": {
-        "Zy82aSpF8QghKE4wWvyIoTWyLetCuUSfk2gxHEtwdbg=": {
+        "i9TwX9Z/CiFznIoO14nIUdJ9Wpo0o50o7tSGtmdhuB5hTK1h5WNvsmUOhc3pdgFaFfKhe1O1NNlTb+sraT0I+ZtOsJUrO5e5figU7XPj5tzRkTlJUoBPtjb1f3RbbXHj": {
+            "network_key": "TVvqbV9LvRfPslOSMFUNxm0w0PfH9ytSVkZuqKN0DtU=",
             "primary": {
                 "primary_to_primary": "/dns/primary_0/tcp/3000/http",
                 "worker_to_primary": "/dns/primary_0/tcp/3001/http"
             },
             "stake": 1
         },
-        "fbhvgLnet2HdE0NUITUpekQxdRRWKxbZczM6Qg55sP8=": {
+        "lEExVRsXRE2O5+Yhaunn0+yckZz249/OERxaTrCQZUIz7E4gmyGQWmKFEpBA2p8VCcAHvveCvupstx7Qp8/w1gpqo2kFRXqagO/IRDOfJiItmtVxzHWxlnSP/2XKSkZf": {
+            "network_key": "5EpwzXiTL8B2OuazfuHC9S9Hp0uRZFYElYj25ilVljM=",
             "primary": {
                 "primary_to_primary": "/dns/primary_1/tcp/3000/http",
                 "worker_to_primary": "/dns/primary_1/tcp/3001/http"
             },
             "stake": 1
         },
-        "noDjBFfXGqQioHTf6jEIPYthhUWCMsC12ZJ9DMh7Ujk=": {
+        "pF/T4zMSkvDcHkCuk4Q8jsjcS+vZb/yAj2d8/R7CLH10dP3UxQKjwIeTklXJk/nLDfUg3MN86jMPSO/+2JTqO46oE86XssCKK+SeQCjft+gL0EzdvNlBs5iEt1YGlsoK": {
+            "network_key": "Rd6StTmpiACXs/wN/pv5DtG9h+OImvplxD/xTU2sV0I=",
             "primary": {
                 "primary_to_primary": "/dns/primary_2/tcp/3000/http",
                 "worker_to_primary": "/dns/primary_2/tcp/3001/http"
             },
             "stake": 1
         },
-        "Z+K3OEI/eldyTTdp27mQFDdBPqjkss9wOkN6RceDTuM=": {
+        "ofwVakr2b+MoerCcQp+skTHfVVPOit575513sx443Cw7ESN6QxPcC6aWnhMUd/EwAI2mVImC4pKaE9G88vzA7B40X7SegLe1lFIJWE8Jyvds1yxWcnmESFF+L8ZLGI9i": {
+            "network_key": "6BHCB8duL285+IiyvcbLnozof/jElGmjYef5wHN9MXk=",
             "primary": {
                 "primary_to_primary": "/dns/primary_3/tcp/3000/http",
                 "worker_to_primary": "/dns/primary_3/tcp/3001/http"

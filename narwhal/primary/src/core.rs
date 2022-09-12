@@ -162,7 +162,7 @@ impl Core {
             .committee
             .others_primaries(&self.name)
             .into_iter()
-            .map(|(pubkey, _)| pubkey)
+            .map(|(_, _, network_key)| network_key)
             .collect();
 
         let message = PrimaryMessage::Header(header.clone());
@@ -287,7 +287,10 @@ impl Core {
             } else {
                 let handler = self
                     .network
-                    .send(header.author.clone(), &PrimaryMessage::Vote(vote))
+                    .send(
+                        self.committee.network_key(&header.author).unwrap(),
+                        &PrimaryMessage::Vote(vote),
+                    )
                     .await;
                 self.cancel_handlers
                     .entry(header.round)
@@ -311,14 +314,14 @@ impl Core {
             debug!("Assembled {:?}", certificate);
 
             // Broadcast the certificate.
-            let peers = self
+            let network_keys = self
                 .committee
                 .others_primaries(&self.name)
                 .into_iter()
-                .map(|(pubkey, _)| pubkey)
+                .map(|(_, _, network_key)| network_key)
                 .collect();
             let message = PrimaryMessage::Certificate(certificate.clone());
-            let handlers = self.network.broadcast(peers, &message).await;
+            let handlers = self.network.broadcast(network_keys, &message).await;
             self.cancel_handlers
                 .entry(certificate.round())
                 .or_insert_with(Vec::new)

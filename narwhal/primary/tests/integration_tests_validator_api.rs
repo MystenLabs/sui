@@ -115,7 +115,8 @@ async fn test_get_collections() {
 
     Primary::spawn(
         name.clone(),
-        signer,
+        signer.copy(),
+        author.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),
@@ -311,7 +312,8 @@ async fn test_remove_collections() {
 
     Primary::spawn(
         name.clone(),
-        signer,
+        signer.copy(),
+        author.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),
@@ -528,7 +530,8 @@ async fn test_read_causal_signed_certificates() {
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
         name_1.clone(),
-        keypair_1,
+        keypair_1.copy(),
+        authority_1.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         primary_1_parameters.clone(),
@@ -567,7 +570,8 @@ async fn test_read_causal_signed_certificates() {
     // Spawn Primary 2
     Primary::spawn(
         name_2.clone(),
-        keypair_2,
+        keypair_2.copy(),
+        authority_2.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         primary_2_parameters.clone(),
@@ -657,6 +661,7 @@ async fn test_read_causal_unsigned_certificates() {
         ..Parameters::default()
     };
     let keypair_2 = authority_2.keypair().copy();
+    let network_keypair_2 = authority_2.network_keypair().copy();
     let name_2 = authority_2.public_key();
 
     // Make the data store.
@@ -736,7 +741,8 @@ async fn test_read_causal_unsigned_certificates() {
     // Spawn Primary 1 that we will be interacting with.
     Primary::spawn(
         name_1.clone(),
-        keypair_1,
+        keypair_1.copy(),
+        authority_1.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         primary_1_parameters.clone(),
@@ -768,7 +774,8 @@ async fn test_read_causal_unsigned_certificates() {
     // Spawn Primary 2
     Primary::spawn(
         name_2.clone(),
-        keypair_2,
+        keypair_2.copy(),
+        network_keypair_2,
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         primary_2_parameters.clone(),
@@ -929,6 +936,7 @@ async fn test_get_collections_with_missing_certificates() {
     Primary::spawn(
         name_1.clone(),
         authority_1.keypair().copy(),
+        authority_1.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),
@@ -982,6 +990,7 @@ async fn test_get_collections_with_missing_certificates() {
     Primary::spawn(
         name_2.clone(),
         authority_2.keypair().copy(),
+        authority_2.network_keypair().copy(),
         Arc::new(ArcSwap::from_pointee(committee.clone())),
         worker_cache.clone(),
         parameters.clone(),

@@ -23,7 +23,7 @@ use anemo::{types::PeerInfo, PeerId};
 use async_trait::async_trait;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId, WorkerInfo};
 use consensus::dag::Dag;
-use crypto::{KeyPair, PublicKey};
+use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use fastcrypto::{
     traits::{EncodeDecodeBase64, KeyPair as _},
     SignatureService,
@@ -68,6 +68,7 @@ impl Primary {
     pub fn spawn(
         name: PublicKey,
         signer: KeyPair,
+        network_signer: NetworkKeyPair,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,
         parameters: Parameters,
@@ -199,7 +200,7 @@ impl Primary {
         let routes = anemo::Router::new().add_rpc_service(primary_service);
         let network = anemo::Network::bind(addr)
             .server_name("narwhal")
-            .private_key(signer.copy().private().0.to_bytes())
+            .private_key(network_signer.copy().private().0.to_bytes())
             .start(routes)
             .unwrap();
         info!(
@@ -208,8 +209,8 @@ impl Primary {
             address
         );
 
-        for (pubkey, addresses) in committee.load().others_primaries(&name) {
-            let peer_id = PeerId(pubkey.0.to_bytes());
+        for (_, addresses, network_pubkey) in committee.load().others_primaries(&name) {
+            let peer_id = PeerId(network_pubkey.0.to_bytes());
             let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
             let peer_info = PeerInfo {
                 peer_id,

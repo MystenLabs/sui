@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+#![allow(clippy::mutable_key_type)]
+
 // This file contains tests that detect changes in Narwhal configs and parameters.
 // If a PR breaks one or more tests here, the PR probably has a real impact
 // on a Narwhal configuration file. When test failure happens, the PR should

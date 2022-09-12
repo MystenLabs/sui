@@ -9,6 +9,7 @@ use thiserror::Error;
 use crate::{Batch, BatchDigest};
 
 /// The message exchanged between workers.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Serialize, Deserialize)]
 pub enum WorkerMessage {
     /// Used by workers to send a new batch or to reply to a batch request.

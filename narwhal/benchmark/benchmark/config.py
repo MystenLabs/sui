@@ -155,6 +155,7 @@ class Committee:
                     "primary_to_primary": x.x.x.x:x,
                     "worker_to_primary": x.x.x.x:x,
                 },
+                "network_key: NETWORK_KEY==
             },
             ...
         }
@@ -170,17 +171,17 @@ class Committee:
         assert isinstance(addresses, OrderedDict)
         assert all(isinstance(x, str) for x in addresses.keys())
         assert all(
-            isinstance(x, list) and len(x) >= 1 for x in addresses.values()
+            isinstance(address, list) and len(address) >= 1 for (_, address) in addresses.values()
         )
         assert all(
-            isinstance(x, str) for y in addresses.values() for x in y
+            isinstance(x, str) for (_, address) in addresses.values() for x in address
         )
         assert len({len(x) for x in addresses.values()}) == 1
         assert isinstance(base_port, int) and base_port > 1024
 
         port = base_port
         self.json = {'authorities': OrderedDict(), 'epoch': 0}
-        for name, hosts in addresses.items():
+        for name, (network_name, hosts) in addresses.items():
             host = hosts.pop(0)
             primary_addr = {
                 'primary_to_primary': f'/ip4/{host}/tcp/{port}/http',
@@ -190,7 +191,8 @@ class Committee:
 
             self.json['authorities'][name] = {
                 'stake': 1,
-                'primary': primary_addr
+                'primary': primary_addr,
+                'network_key': network_name
             }
 
     def primary_addresses(self, faults=0):
@@ -241,11 +243,12 @@ class Committee:
 
 
 class LocalCommittee(Committee):
-    def __init__(self, names, port):
+    def __init__(self, names, network_names, port):
         assert isinstance(names, list)
         assert all(isinstance(x, str) for x in names)
         assert isinstance(port, int)
-        addresses = OrderedDict((x, ['127.0.0.1']) for x in names)
+        assert len(names) == len(network_names)
+        addresses = OrderedDict((name, (network_name, ['127.0.0.1'])) for name, network_name in zip(names, network_names))
         super().__init__(addresses, port)
 
 

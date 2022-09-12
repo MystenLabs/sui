@@ -25,9 +25,16 @@ def main():
         k = open("{}/validator-{:02d}/key.json".format(args.d, i)).read()
         keys.append(json.loads(k))
 
+    network_keys = []
+    for i in range(args.n):
+        k = open("{}/validator-{:02d}/network-key.json".format(args.d, i)).read()
+        network_keys.append(json.loads(k))
+
+
     temp = {}
-    for i, k in enumerate(keys):
+    for i, (k, nk) in enumerate(zip(keys, network_keys)):
         temp[k['name']] = {
+            "network_key": nk['name'],
             "primary": {
                 "primary_to_primary": "/dns/primary_{:02d}/tcp/3000/http".format(i),
                 "worker_to_primary": "/dns/primary_{:02d}/tcp/3001/http".format(i)

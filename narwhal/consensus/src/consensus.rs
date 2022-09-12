@@ -1,6 +1,9 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
+#![allow(clippy::mutable_key_type)]
+
 use crate::{metrics::ConsensusMetrics, ConsensusOutput, SequenceNumber};
 use config::Committee;
 use crypto::PublicKey;
@@ -242,6 +245,7 @@ where
         Ok(ConsensusState::new(genesis, self.metrics.clone()))
     }
 
+    #[allow(clippy::mutable_key_type)]
     async fn run(
         &mut self,
         recover_last_committed: HashMap<PublicKey, Round>,

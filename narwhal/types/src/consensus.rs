@@ -1,5 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+#![allow(clippy::mutable_key_type)]
+
 use crate::{CertificateDigest, Round};
 use crypto::PublicKey;
 use std::{collections::HashMap, ops::RangeInclusive};

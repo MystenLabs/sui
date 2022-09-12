@@ -186,8 +186,16 @@ class Bench:
             cmd = CommandMaker.generate_key(filename).split()
             subprocess.run(cmd, check=True)
             primary_keys += [Key.from_file(filename)]
-
         primary_names = [x.name for x in primary_keys]
+
+        primary_network_keys = []
+        primary_network_key_files = [PathMaker.primary_network_key_file(
+            i) for i in range(len(hosts))]
+        for filename in primary_network_key_files:
+            cmd = CommandMaker.generate_network_key(filename).split()
+            subprocess.run(cmd, check=True)
+            primary_network_keys += [Key.from_file(filename)]
+        primary_network_names = [x.name for x in primary_network_keys]
 
         if bench_parameters.collocate:
             addresses = OrderedDict(
@@ -195,7 +203,7 @@ class Bench:
             )
         else:
             addresses = OrderedDict(
-                (x, y) for x, y in zip(primary_names, hosts)
+                (x, (y, z)) for x, y, z in zip(primary_names, primary_network_names, hosts)
             )
         committee = Committee(addresses, self.settings.base_port)
         committee.print(PathMaker.committee_file())
@@ -242,6 +250,7 @@ class Bench:
                 c.put(PathMaker.committee_file(), '.')
                 c.put(PathMaker.workers_file(), '.')
                 c.put(PathMaker.primary_key_file(i), '.')
+                c.put(PathMaker.primary_network_key_file(i), '.')
                 for j in range(bench_parameters.workers):
                     c.put(PathMaker.worker_key_file(
                         i*bench_parameters.workers + j), '.')
@@ -280,6 +289,7 @@ class Bench:
             host = address.split(':')[1].strip("/")
             cmd = CommandMaker.run_primary(
                 PathMaker.primary_key_file(i),
+                PathMaker.primary_network_key_file(i),
                 PathMaker.worker_key_file(i),
                 PathMaker.committee_file(),
                 PathMaker.workers_file(),
@@ -297,6 +307,7 @@ class Bench:
                 host = address.split(':')[1].strip("/")
                 cmd = CommandMaker.run_worker(
                     PathMaker.primary_key_file(i),
+                    PathMaker.primary_network_key_file(i),
                     PathMaker.worker_key_file(i*bench_parameters.workers + id),
                     PathMaker.committee_file(),
                     PathMaker.workers_file(),

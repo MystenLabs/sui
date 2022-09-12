@@ -25,6 +25,15 @@ fn test_primary_no_consensus() {
         .keypair()
         .export(&primary_keys_file_path)
         .unwrap();
+    let primary_network_keys_file_path =
+        format!("{config_path}/smoke_test_network_primary_keys.json");
+    fixture
+        .authorities()
+        .next()
+        .unwrap()
+        .network_keypair()
+        .export(&primary_network_keys_file_path)
+        .unwrap();
     let worker_keys_file_path = format!("{config_path}/smoke_test_worker_keys.json");
     fixture
         .authorities()
@@ -52,6 +61,8 @@ fn test_primary_no_consensus() {
             &workers_file_path,
             "--primary-keys",
             &primary_keys_file_path,
+            "--primary-network-keys",
+            &primary_network_keys_file_path,
             "--worker-keys",
             &worker_keys_file_path,
             "--store",
@@ -98,6 +109,15 @@ fn test_primary_with_consensus() {
         .keypair()
         .export(&primary_keys_file_path)
         .unwrap();
+    let primary_network_keys_file_path =
+        format!("{config_path}/smoke_test_network_primary_keys.json");
+    fixture
+        .authorities()
+        .next()
+        .unwrap()
+        .network_keypair()
+        .export(&primary_network_keys_file_path)
+        .unwrap();
     let worker_keys_file_path = format!("{config_path}/smoke_test_worker_keys.json");
     fixture
         .authorities()
@@ -125,6 +145,8 @@ fn test_primary_with_consensus() {
             &workers_file_path,
             "--primary-keys",
             &primary_keys_file_path,
+            "--primary-network-keys",
+            &primary_network_keys_file_path,
             "--worker-keys",
             &worker_keys_file_path,
             "--store",

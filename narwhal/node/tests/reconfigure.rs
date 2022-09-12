@@ -4,7 +4,7 @@ use arc_swap::ArcSwap;
 use bytes::Bytes;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
 use consensus::ConsensusOutput;
-use crypto::{KeyPair, PublicKey};
+use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
@@ -26,22 +26,37 @@ use types::{ReconfigureNotification, TransactionProto, TransactionsClient, Worke
 /// A simple/dumb execution engine.
 struct SimpleExecutionState {
     keypair: KeyPair,
-    worker_keypairs: Vec<KeyPair>,
+    network_keypair: NetworkKeyPair,
+    worker_keypairs: Vec<NetworkKeyPair>,
     worker_cache: WorkerCache,
     committee: Arc<Mutex<Committee>>,
-    tx_reconfigure: Sender<(KeyPair, Committee, Vec<(WorkerId, KeyPair)>, WorkerCache)>,
+    tx_reconfigure: Sender<(
+        KeyPair,
+        NetworkKeyPair,
+        Committee,
+        Vec<(WorkerId, NetworkKeyPair)>,
+        WorkerCache,
+    )>,
 }
 
 impl SimpleExecutionState {
     pub fn new(
         keypair: KeyPair,
-        worker_keypairs: Vec<KeyPair>,
+        network_keypair: NetworkKeyPair,
+        worker_keypairs: Vec<NetworkKeyPair>,
         worker_cache: WorkerCache,
         committee: Committee,
-        tx_reconfigure: Sender<(KeyPair, Committee, Vec<(WorkerId, KeyPair)>, WorkerCache)>,
+        tx_reconfigure: Sender<(
+            KeyPair,
+            NetworkKeyPair,
+            Committee,
+            Vec<(WorkerId, NetworkKeyPair)>,
+            WorkerCache,
+        )>,
     ) -> Self {
         Self {
             keypair,
+            network_keypair,
             worker_keypairs,
             worker_cache,
             committee: Arc::new(Mutex::new(committee)),
@@ -81,6 +96,7 @@ impl ExecutionState for SimpleExecutionState {
             self.tx_reconfigure
                 .send((
                     self.keypair.copy(),
+                    self.network_keypair.copy(),
                     new_committee,
                     worker_ids_and_keypairs,
                     self.worker_cache.clone(),
@@ -193,6 +209,7 @@ async fn restart() {
 
         let execution_state = Arc::new(SimpleExecutionState::new(
             a.keypair().copy(),
+            a.network_keypair().copy(),
             a.worker_keypairs(),
             fixture.worker_cache(),
             committee.clone(),
@@ -209,9 +226,11 @@ async fn restart() {
         let execution_state = execution_state.clone();
         let parameters = parameters.clone();
         let keypair = a.keypair().copy();
+        let network_keypair = a.network_keypair().copy();
         tokio::spawn(async move {
             NodeRestarter::watch(
                 keypair,
+                network_keypair,
                 worker_ids_and_keypairs,
                 &committee,
                 worker_cache,
@@ -292,6 +311,7 @@ async fn epoch_change() {
 
         let execution_state = Arc::new(SimpleExecutionState::new(
             a.keypair().copy(),
+            a.network_keypair().copy(),
             a.worker_keypairs(),
             fixture.worker_cache(),
             committee.clone(),
@@ -306,7 +326,7 @@ async fn epoch_change() {
             let mut primary_network = WorkerToPrimaryNetwork::default();
             let mut worker_network = PrimaryToWorkerNetwork::default();
 
-            while let Some((_, committee, _, _)) = rx_node_reconfigure.recv().await {
+            while let Some((_, _, committee, _, _)) = rx_node_reconfigure.recv().await {
                 let address = committee
                     .primary(&name_clone)
                     .expect("Our key is not in the committee")
@@ -336,6 +356,7 @@ async fn epoch_change() {
 
         let _primary_handles = Node::spawn_primary(
             a.keypair().copy(),
+            a.network_keypair().copy(),
             Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
             worker_cache.clone(),
             &store,

@@ -1,5 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
+
 use crypto::PublicKey;
 use fastcrypto::Hash;
 use rand::{prelude::SliceRandom as _, rngs::SmallRng};
@@ -74,6 +75,7 @@ impl<Value: Hash + Clone> Peers<Value> {
         }
     }
 
+    #[allow(clippy::mutable_key_type)]
     pub fn peers(&self) -> &HashMap<PublicKey, Peer<Value>> {
         &self.peers
     }
@@ -268,6 +270,7 @@ mod tests {
         }
     }
 
+    #[allow(clippy::mutable_key_type)]
     #[test]
     fn test_assign_certificates_to_peers_when_all_respond_uniquely() {
         struct TestCase {

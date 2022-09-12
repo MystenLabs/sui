@@ -3,7 +3,7 @@
 use crate::{Node, NodeStorage};
 use arc_swap::ArcSwap;
 use config::{Committee, Parameters, SharedWorkerCache, WorkerCache, WorkerId};
-use crypto::KeyPair;
+use crypto::{KeyPair, NetworkKeyPair};
 use executor::{ExecutionState, ExecutorOutput};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
@@ -20,13 +20,20 @@ pub struct NodeRestarter;
 impl NodeRestarter {
     pub async fn watch<State>(
         primary_keypair: KeyPair,
-        worker_ids_and_keypairs: Vec<(WorkerId, KeyPair)>,
+        primary_network_keypair: NetworkKeyPair,
+        worker_ids_and_keypairs: Vec<(WorkerId, NetworkKeyPair)>,
         committee: &Committee,
         worker_cache: SharedWorkerCache,
         storage_base_path: PathBuf,
         execution_state: Arc<State>,
         parameters: Parameters,
-        mut rx_reconfigure: Receiver<(KeyPair, Committee, Vec<(WorkerId, KeyPair)>, WorkerCache)>,
+        mut rx_reconfigure: Receiver<(
+            KeyPair,
+            NetworkKeyPair,
+            Committee,
+            Vec<(WorkerId, NetworkKeyPair)>,
+            WorkerCache,
+        )>,
         tx_output: Sender<ExecutorOutput<State>>,
         registry: &Registry,
     ) where
@@ -35,6 +42,7 @@ impl NodeRestarter {
         State::Error: Debug,
     {
         let mut primary_keypair = primary_keypair;
+        let mut primary_network_keypair = primary_network_keypair;
         let mut name = primary_keypair.public().clone();
         let mut worker_ids_and_keypairs = worker_ids_and_keypairs;
         let mut committee = committee.clone();
@@ -55,6 +63,7 @@ impl NodeRestarter {
             // Restart the relevant components.
             let primary_handles = Node::spawn_primary(
                 primary_keypair,
+                primary_network_keypair,
                 Arc::new(ArcSwap::new(Arc::new(committee.clone()))),
                 worker_cache.clone(),
                 &store,
@@ -81,11 +90,16 @@ impl NodeRestarter {
             handles.extend(worker_handles);
 
             // Wait for a committee change.
-            let (new_keypair, new_committee, new_worker_ids_and_keypairs, new_worker_cache) =
-                match rx_reconfigure.recv().await {
-                    Some(x) => x,
-                    None => break,
-                };
+            let (
+                new_keypair,
+                new_network_keypair,
+                new_committee,
+                new_worker_ids_and_keypairs,
+                new_worker_cache,
+            ) = match rx_reconfigure.recv().await {
+                Some(x) => x,
+                None => break,
+            };
             tracing::info!("Starting reconfiguration with committee {committee}");
 
             // Shutdown all relevant components.
@@ -127,6 +141,7 @@ impl NodeRestarter {
 
             // Update the settings for the next epoch.
             primary_keypair = new_keypair;
+            primary_network_keypair = new_network_keypair;
             name = primary_keypair.public().clone();
             worker_ids_and_keypairs = new_worker_ids_and_keypairs;
             committee = new_committee;

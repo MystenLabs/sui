@@ -9,7 +9,7 @@ use crate::{
 use async_trait::async_trait;
 use bytes::Bytes;
 use config::{Parameters, SharedCommittee, SharedWorkerCache, WorkerId};
-use crypto::{KeyPair, PublicKey};
+use crypto::{NetworkKeyPair, PublicKey};
 use futures::{Stream, StreamExt};
 use multiaddr::{Multiaddr, Protocol};
 use network::{metrics::WorkerNetworkMetrics, WorkerNetwork};
@@ -47,7 +47,7 @@ pub struct Worker {
     // The private-public key pair of this worker.
     // TODO: utilize keypair in network communication
     #[allow(dead_code)]
-    keypair: KeyPair,
+    keypair: NetworkKeyPair,
     /// The id of this worker used for index-based lookup by other NW nodes.
     id: WorkerId,
     /// The committee information.
@@ -65,7 +65,7 @@ const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 impl Worker {
     pub fn spawn(
         primary_name: PublicKey,
-        keypair: KeyPair,
+        keypair: NetworkKeyPair,
         id: WorkerId,
         committee: SharedCommittee,
         worker_cache: SharedWorkerCache,

@@ -81,7 +81,7 @@ pub struct DeleteBatchMessage {
 /// # use fastcrypto::Hash;
 /// # use std::env::temp_dir;
 /// # use fastcrypto::Digest;
-/// # use fastcrypto::ed25519::Ed25519PublicKey;
+/// # use crypto::PublicKey;
 /// # use config::{Committee, WorkerCache, SharedWorkerCache};
 /// # use consensus::dag::Dag;
 /// # use futures::future::join_all;
@@ -124,7 +124,7 @@ pub struct DeleteBatchMessage {
 ///     let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(1);
 ///     let (tx_delete_block_result, mut rx_delete_block_result) = channel(1);
 ///
-///     let name = Ed25519PublicKey::default();
+///     let name = PublicKey::default();
 ///     let committee = Committee{ epoch: 0, authorities: BTreeMap::new() };
 ///     let worker_cache: SharedWorkerCache = WorkerCache{ epoch: 0, workers: BTreeMap::new() }.into();
 ///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));

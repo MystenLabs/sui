@@ -4,6 +4,15 @@ Authority:
     - stake: U32
     - primary:
         TYPENAME: PrimaryAddresses
+    - network_key:
+        TYPENAME: Ed25519PublicKey
+BLS12381AggregateSignature:
+  STRUCT:
+    - sig:
+        OPTION: BYTES
+BLS12381Signature:
+  STRUCT:
+    - sig: BYTES
 Batch:
   NEWTYPESTRUCT:
     SEQ:
@@ -18,7 +27,7 @@ Certificate:
     - header:
         TYPENAME: Header
     - aggregated_signature:
-        TYPENAME: Ed25519AggregateSignature
+        TYPENAME: BLS12381AggregateSignature
     - signed_authorities: BYTES
 CertificateDigest:
   NEWTYPESTRUCT:
@@ -29,23 +38,15 @@ Committee:
   STRUCT:
     - authorities:
         MAP:
-          KEY:
-            TYPENAME: Ed25519PublicKey
+          KEY: STR
           VALUE:
             TYPENAME: Authority
     - epoch: U64
-Ed25519AggregateSignature:
-  NEWTYPESTRUCT:
-    SEQ: BYTES
 Ed25519PublicKey:
   NEWTYPESTRUCT: STR
-Ed25519Signature:
-  STRUCT:
-    - raw: BYTES
 Header:
   STRUCT:
-    - author:
-        TYPENAME: Ed25519PublicKey
+    - author: STR
     - round: U64
     - epoch: U64
     - payload:
@@ -59,7 +60,7 @@ Header:
     - id:
         TYPENAME: HeaderDigest
     - signature:
-        TYPENAME: Ed25519Signature
+        TYPENAME: BLS12381Signature
 HeaderDigest:
   NEWTYPESTRUCT:
     TUPLEARRAY:
@@ -76,7 +77,7 @@ PrimaryWorkerMessage:
         TUPLE:
           - SEQ:
               TYPENAME: BatchDigest
-          - TYPENAME: Ed25519PublicKey
+          - STR
     1:
       Cleanup:
         NEWTYPE: U64

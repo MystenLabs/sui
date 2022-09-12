@@ -80,7 +80,7 @@ async fn propose_payload() {
 
     // Send enough digests for the header payload.
     let mut name_bytes = [0u8; 32];
-    name_bytes.copy_from_slice(name.as_ref());
+    name_bytes.copy_from_slice(&name.as_ref()[..32]);
 
     let digest = BatchDigest(name_bytes);
     let worker_id = 0;

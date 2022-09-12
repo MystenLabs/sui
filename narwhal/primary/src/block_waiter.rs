@@ -124,8 +124,8 @@ type RequestKey = Vec<u8>;
 /// # use arc_swap::ArcSwap;
 /// # use fastcrypto::Hash;
 /// # use std::env::temp_dir;
-/// # use fastcrypto::ed25519::Ed25519PublicKey;
 /// # use config::{Committee, WorkerCache, SharedWorkerCache};
+/// # use crypto::PublicKey;
 /// # use std::collections::BTreeMap;
 /// # use types::Certificate;
 /// # use primary::{BlockWaiter, BlockHeader, BlockCommand, block_synchronizer::{BlockSynchronizeResult, handler::{Error, Handler}}};
@@ -164,7 +164,7 @@ type RequestKey = Vec<u8>;
 ///     let (tx_batches, rx_batches) = test_utils::test_channel!(1);
 ///     let (tx_get_block, mut rx_get_block) = oneshot::channel();
 ///
-///     let name = Ed25519PublicKey::default();
+///     let name = PublicKey::default();
 ///     let committee = Committee{ epoch: 0, authorities: BTreeMap::new() };
 ///     let worker_cache: SharedWorkerCache = WorkerCache{ epoch: 0, workers: BTreeMap::new() }.into();
 ///     let (_tx_reconfigure, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));

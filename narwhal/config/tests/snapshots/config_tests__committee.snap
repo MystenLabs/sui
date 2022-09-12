@@ -4,33 +4,37 @@ expression: committee
 ---
 {
   "authorities": {
-    "O6EMZUvkFG2rPW2rgLPOJM4323x0XCslMgXWL5Z7ALM=": {
+    "imU9ZewykCt0OOx70OkQCqKzj1TbVdD9nLqdCSutEIvSrtOWllaN9v/8w4B6dyrRE/Gacj+Cx/q5L15FycCX1spJIWMrt54HVB4beTy/MsgwvN6XZS6B4O4jCHbSqqiJ": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/0/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/0/http"
-      }
+      },
+      "network_key": "u8qKILpUof274Kfj23GlMvka4OUUaYoRt2i/pigwivY="
     },
-    "gznZnDM7s6J3/reAuNRsrDDNzZBQ2+I1+4zGe5HBsGo=": {
+    "jGbcLB6p5T8JhcF7TnrxmRK208QODFkgpaElCbTrNhn14H7Fbqd/CzBim6HMctdbE5RgeCpfDi+J+0xCtLil+uPSYBAiIOY9B1Tn4YRt7v05iOreTtN/E4VDfRneGhYY": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/0/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/0/http"
-      }
+      },
+      "network_key": "rvP0pLjsod/DQzYb+OQ2vULeklnAS4MU644gVN1ugqs="
     },
-    "nUdhahjfIDkwfwZCImAliLUqaq6qe2/oxrTZ66inh7E=": {
+    "qFBJ9C1pDBTCGNrGZTsHjiByNT1f4Shn++FfLXahY9V972gwsu8Qil1Kx1uDCuCPAkErNvcm91//7LK1bZKtwxxFIB0oibvW8UQwAVmbdQT0ZwCaJv02t25Zkpw0j9Kx": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/0/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/0/http"
-      }
+      },
+      "network_key": "fBEBLo4XV9uxBFd2fOjqDAkLzwJJ4sBIDtEayytwO7A="
     },
-    "ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=": {
+    "tOu6CCUfQFvA7Oo9IQsi6Q25ThGDmgcTXMYn4QVX8D8HeuI1DBmnctVFka/y0GijF5oKKOglBJNWsPz6LaE5YczKopYHmwm2kIxBwYHPdj186+KU8QfuvlZpHn/OnuCS": {
       "stake": 1,
       "primary": {
         "primary_to_primary": "/ip4/127.0.0.1/tcp/0/http",
         "worker_to_primary": "/ip4/127.0.0.1/tcp/0/http"
-      }
+      },
+      "network_key": "hkGX9Mxcq2yO3Ut5xIXvuaVVcYt1tgPi6LmPVewN4mc="
     }
   },
   "epoch": 0

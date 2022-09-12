@@ -39,7 +39,7 @@ async fn successfully_synchronize_batches() {
 
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
-        .private_key(primary.keypair().copy().private().0.to_bytes())
+        .private_key(primary.network_keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 

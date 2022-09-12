@@ -14,6 +14,7 @@ fi
 # Environment variables to use on the script
 NODE_BIN="./bin/node"
 PRIMARY_KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/primary-key.json"}
+PRIMARY_NETWORK_KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/network-key.json"}
 WORKER_KEYS_PATH=${KEYS_PATH:="/validators/validator-$VALIDATOR_ID/worker-key.json"}
 COMMITTEE_PATH=${COMMITTEE_PATH:="/validators/committee.json"}
 WORKERS_PATH=${WORKERS_PATH:="/validators/workers.json"}
@@ -38,6 +39,7 @@ if [[ "$NODE_TYPE" = "primary" ]]; then
 
   $NODE_BIN $LOG_LEVEL run \
   --primary-keys $PRIMARY_KEYS_PATH \
+  --primary-network-keys $PRIMARY_NETWORK_KEYS_PATH \
   --worker-keys $WORKER_KEYS_PATH \
   --committee $COMMITTEE_PATH \
   --workers $WORKERS_PATH \
@@ -49,6 +51,7 @@ elif [[ "$NODE_TYPE" = "worker" ]]; then
 
   $NODE_BIN $LOG_LEVEL run \
   --primary-keys $PRIMARY_KEYS_PATH \
+  --primary-network-keys $PRIMARY_NETWORK_KEYS_PATH \
   --worker-keys $WORKER_KEYS_PATH \
   --committee $COMMITTEE_PATH \
   --workers $WORKERS_PATH \

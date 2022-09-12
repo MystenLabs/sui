@@ -22,7 +22,7 @@ async fn process_certificate_missing_parents_in_reverse() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 
@@ -176,7 +176,7 @@ async fn process_certificate_check_gc_fires() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
     let name = primary.public_key();
     let signature_service = SignatureService::new(primary.keypair().copy());
 

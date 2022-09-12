@@ -99,6 +99,7 @@ do
     val=${target}/validator-${i}
     mkdir -p ${val}/{db-primary,db-worker-0,logs}
     ${node} generate_keys --filename ${val}/key.json
+    ${node} generate_network_keys --filename ${val}/network-key.json
 done
 
 cp validators/parameters.json ${target}/parameters.json

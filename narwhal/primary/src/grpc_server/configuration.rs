@@ -97,6 +97,7 @@ impl Configuration for NarwhalConfiguration {
         )))
     }
 
+    #[allow(clippy::mutable_key_type)]
     async fn new_network_info(
         &self,
         request: Request<NewNetworkInfoRequest>,

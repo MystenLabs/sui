@@ -466,9 +466,12 @@ impl Certificate {
             DagError::CertificateRequiresQuorum
         );
 
-        let aggregated_signature =
+        let aggregated_signature = if sigs.is_empty() {
+            AggregateSignature::default()
+        } else {
             AggregateSignature::aggregate(sigs.into_iter().map(|(_, sig)| sig).collect())
-                .map_err(DagError::InvalidSignature)?;
+                .map_err(DagError::InvalidSignature)?
+        };
 
         Ok(Certificate {
             header,
@@ -673,6 +676,7 @@ pub enum ReconfigureNotification {
 }
 
 /// The messages sent by the primary to its workers.
+#[allow(clippy::large_enum_variant)]
 #[derive(Debug, Serialize, Deserialize)]
 pub enum PrimaryWorkerMessage {
     /// The primary indicates that the worker need to sync the target missing batches.

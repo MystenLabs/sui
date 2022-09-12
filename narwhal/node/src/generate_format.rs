@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use config::{Authority, Committee, Epoch, PrimaryAddresses, WorkerIndex, WorkerInfo};
-use crypto::KeyPair;
+use crypto::{KeyPair, NetworkKeyPair};
 use fastcrypto::{
     traits::{KeyPair as _, Signer},
     Digest, Hash,
@@ -24,8 +24,18 @@ fn get_registry() -> Result<Registry> {
     // tracer.trace_value(&mut samples, ...)?;
     // with all the base types contained in messages, especially the ones with custom serializers;
     // or involving generics (see [serde_reflection documentation](https://docs.rs/serde-reflection/latest/serde_reflection/)).
+    // Trace the corresponding header
     let mut rng = StdRng::from_seed([0; 32]);
-    let kp = KeyPair::generate(&mut rng);
+    let (keys, network_keys): (Vec<_>, Vec<_>) = (0..4)
+        .map(|_| {
+            (
+                KeyPair::generate(&mut rng),
+                NetworkKeyPair::generate(&mut rng),
+            )
+        })
+        .unzip();
+
+    let kp = keys[0].copy();
     let pk = kp.public().clone();
 
     tracer.trace_value(&mut samples, &pk)?;
@@ -34,14 +44,13 @@ fn get_registry() -> Result<Registry> {
     let signature = kp.try_sign(msg).unwrap();
     tracer.trace_value(&mut samples, &signature)?;
 
-    // Trace the corresponding header
-    let keys: Vec<_> = (0..4).map(|_| KeyPair::generate(&mut rng)).collect();
     let committee = Committee {
         epoch: Epoch::default(),
         authorities: keys
             .iter()
+            .zip(network_keys.iter())
             .enumerate()
-            .map(|(i, kp)| {
+            .map(|(i, (kp, network_key))| {
                 let id = kp.public();
                 let primary = PrimaryAddresses {
                     primary_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 100 + i)
@@ -51,7 +60,14 @@ fn get_registry() -> Result<Registry> {
                         .parse()
                         .unwrap(),
                 };
-                (id.clone(), Authority { stake: 1, primary })
+                (
+                    id.clone(),
+                    Authority {
+                        stake: 1,
+                        primary,
+                        network_key: network_key.public().clone(),
+                    },
+                )
             })
             .collect(),
     };
@@ -73,7 +89,7 @@ fn get_registry() -> Result<Registry> {
         signature: kp.sign(Digest::from(header_digest).as_ref()),
         ..header
     };
-    let pk = keys[0].public().clone();
+    let worker_pk = network_keys[0].public().clone();
     let certificate = Certificate::new_unsigned(&committee, header.clone(), vec![]).unwrap();
     let signature = keys[0].sign(certificate.digest().as_ref());
     let certificate =
@@ -89,7 +105,7 @@ fn get_registry() -> Result<Registry> {
         vec![(
             0,
             WorkerInfo {
-                name: pk.clone(),
+                name: worker_pk,
                 primary_to_worker: "/ip4/127.0.0.1/tcp/300/http".to_string().parse().unwrap(),
                 transactions: "/ip4/127.0.0.1/tcp/400/http".to_string().parse().unwrap(),
                 worker_to_worker: "/ip4/127.0.0.1/tcp/500/http".to_string().parse().unwrap(),

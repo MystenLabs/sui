@@ -68,9 +68,18 @@ class LocalBench:
                 cmd = CommandMaker.generate_key(filename).split()
                 subprocess.run(cmd, check=True)
                 primary_keys += [Key.from_file(filename)]
-
             primary_names = [x.name for x in primary_keys]
-            committee = LocalCommittee(primary_names, self.BASE_PORT)
+
+            primary_network_keys = []
+            primary_network_key_files = [
+                PathMaker.primary_network_key_file(i) for i in range(nodes)]
+            for filename in primary_network_key_files:
+                cmd = CommandMaker.generate_network_key(filename).split()
+                subprocess.run(cmd, check=True)
+                primary_network_keys += [Key.from_file(filename)]
+            primary_network_names = [x.name for x in primary_network_keys]
+
+            committee = LocalCommittee(primary_names, primary_network_names, self.BASE_PORT)
             committee.print(PathMaker.committee_file())
 
             worker_keys = []
@@ -109,6 +118,7 @@ class LocalBench:
             for i, address in enumerate(committee.primary_addresses(self.faults)):
                 cmd = CommandMaker.run_primary(
                     PathMaker.primary_key_file(i),
+                    PathMaker.primary_network_key_file(i),
                     PathMaker.worker_key_file(0),
                     PathMaker.committee_file(),
                     PathMaker.workers_file(),
@@ -124,6 +134,7 @@ class LocalBench:
                 for (id, address) in addresses:
                     cmd = CommandMaker.run_worker(
                         PathMaker.primary_key_file(i),
+                        PathMaker.primary_network_key_file(i),
                         PathMaker.worker_key_file(i*self.workers + id),
                         PathMaker.committee_file(),
                         PathMaker.workers_file(),

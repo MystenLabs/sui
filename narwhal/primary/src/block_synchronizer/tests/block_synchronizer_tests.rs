@@ -26,7 +26,7 @@ use tokio::{
 };
 use types::ReconfigureNotification;
 
-use crypto::KeyPair;
+use crypto::NetworkKeyPair;
 use fastcrypto::traits::KeyPair as _;
 use tracing::debug;
 use types::{Certificate, CertificateDigest};
@@ -44,7 +44,7 @@ async fn test_successful_headers_synchronization() {
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -85,8 +85,8 @@ async fn test_successful_headers_synchronization() {
         .start(anemo::Router::new())
         .unwrap();
 
-    for (pubkey, addresses) in committee.others_primaries(&name) {
-        let peer_id = PeerId(pubkey.0.to_bytes());
+    for (_pubkey, addresses, network_pubkey) in committee.others_primaries(&name) {
+        let peer_id = PeerId(network_pubkey.0.to_bytes());
         let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
         let peer_info = PeerInfo {
             peer_id,
@@ -125,7 +125,7 @@ async fn test_successful_headers_synchronization() {
                 .unwrap()
                 .primary_to_primary;
             println!("New primary added: {:?}", address);
-            primary_listener(1, a.keypair().copy(), address)
+            primary_listener(1, a.network_keypair().copy(), address)
         })
         .collect();
 
@@ -244,7 +244,7 @@ async fn test_successful_payload_synchronization() {
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -286,8 +286,8 @@ async fn test_successful_payload_synchronization() {
         .start(anemo::Router::new())
         .unwrap();
 
-    for (pubkey, addresses) in committee.others_primaries(&name) {
-        let peer_id = PeerId(pubkey.0.to_bytes());
+    for (_pubkey, addresses, network_pubkey) in committee.others_primaries(&name) {
+        let peer_id = PeerId(network_pubkey.0.to_bytes());
         let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
         let peer_info = PeerInfo {
             peer_id,
@@ -326,7 +326,7 @@ async fn test_successful_payload_synchronization() {
                 .unwrap()
                 .primary_to_primary;
             println!("New primary added: {:?}", address);
-            primary_listener(1, a.keypair().copy(), address)
+            primary_listener(1, a.network_keypair().copy(), address)
         })
         .collect();
 
@@ -485,7 +485,7 @@ async fn test_multiple_overlapping_requests() {
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
@@ -618,7 +618,7 @@ async fn test_timeout_while_waiting_for_certificates() {
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
@@ -730,7 +730,7 @@ async fn test_reply_with_certificates_already_in_storage() {
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
@@ -838,7 +838,7 @@ async fn test_reply_with_payload_already_in_storage() {
     let author = fixture.authorities().next().unwrap();
     let primary = fixture.authorities().nth(1).unwrap();
     let name = primary.public_key();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
@@ -947,7 +947,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let primary = fixture.authorities().next().unwrap();
-    let network_key = primary.keypair().copy().private().0.to_bytes();
+    let network_key = primary.network_keypair().copy().private().0.to_bytes();
 
     // AND make sure the key used for our "own" primary is the one that will
     // be used to create the headers.
@@ -1044,11 +1044,11 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
 #[must_use]
 fn primary_listener(
     num_of_expected_responses: i32,
-    keypair: KeyPair,
+    network_keypair: NetworkKeyPair,
     address: multiaddr::Multiaddr,
 ) -> JoinHandle<Vec<PrimaryMessage>> {
     tokio::spawn(async move {
-        let (mut recv, _network) = PrimaryToPrimaryMockServer::spawn(keypair, address);
+        let (mut recv, _network) = PrimaryToPrimaryMockServer::spawn(network_keypair, address);
         let mut responses = Vec::new();
 
         loop {
