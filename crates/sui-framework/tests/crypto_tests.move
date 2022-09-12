@@ -5,12 +5,28 @@
 module sui::crypto_tests {
     use sui::crypto;
     use sui::elliptic_curve as ec;
+    use std::vector;
+
     #[test]
     fun test_ecrecover_pubkey() {
         // test case generated against https://docs.rs/secp256k1/latest/secp256k1/
         let hashed_msg = vector[87, 202, 161, 118, 175, 26, 192, 67, 60, 93, 243, 14, 141, 171, 205, 46, 193, 175, 30, 146, 162, 110, 206, 213, 247, 25, 184, 132, 88, 119, 124, 214];
         let sig = vector[132, 220, 128, 67, 151, 154, 45, 143, 50, 56, 176, 134, 137, 58, 223, 166, 191, 230, 178, 184, 123, 11, 19, 69, 59, 205, 72, 206, 153, 187, 184, 7, 16, 74, 73, 45, 38, 238, 81, 96, 138, 225, 235, 143, 95, 142, 185, 56, 99, 3, 97, 27, 66, 99, 79, 225, 139, 21, 67, 254, 78, 251, 176, 176, 0];
         let pubkey_bytes = vector[2, 2, 87, 224, 47, 124, 255, 117, 223, 91, 188, 190, 151, 23, 241, 173, 148, 107, 20, 103, 63, 155, 108, 151, 251, 152, 205, 205, 239, 71, 224, 86, 9];
+
+        let pubkey = crypto::ecrecover(sig, hashed_msg);
+        assert!(pubkey == pubkey_bytes, 0);
+    }
+
+    #[test]
+    fun test_ecrecover_pubkey_2() {
+        // Test case from go-ethereum: https://github.com/ethereum/go-ethereum/blob/master/crypto/signature_test.go#L37
+        // hashed_msg: 0xce0677bb30baa8cf067c88db9811f4333d131bf8bcf12fe7065d211dce971008
+        // sig: 0x90f27b8b488db00b00606796d2987f6a5f59ae62ea05effe84fef5b8b0e549984a691139ad57a3f0b906637673aa2f63d1f55cb1a69199d4009eea23ceaddc9301
+        // pubkey: 0x02e32df42865e97135acfb65f3bae71bdc86f4d49150ad6a440b6f15878109880a
+        let hashed_msg = vector[206, 6, 119, 187, 48, 186, 168, 207, 6, 124, 136, 219, 152, 17, 244, 51, 61, 19, 27, 248, 188, 241, 47, 231, 6, 93, 33, 29, 206, 151, 16, 8];
+        let sig = vector[144, 242, 123, 139, 72, 141, 176, 11, 0, 96, 103, 150, 210, 152, 127, 106, 95, 89, 174, 98, 234, 5, 239, 254, 132, 254, 245, 184, 176, 229, 73, 152, 74, 105, 17, 57, 173, 87, 163, 240, 185, 6, 99, 118, 115, 170, 47, 99, 209, 245, 92, 177, 166, 145, 153, 212, 0, 158, 234, 35, 206, 173, 220, 147, 1];
+        let pubkey_bytes = vector[2, 227, 45, 244, 40, 101, 233, 113, 53, 172, 251, 101, 243, 186, 231, 27, 220, 134, 244, 212, 145, 80, 173, 106, 68, 11, 111, 21, 135, 129, 9, 136, 10];
 
         let pubkey = crypto::ecrecover(sig, hashed_msg);
         assert!(pubkey == pubkey_bytes, 0);
@@ -239,5 +255,75 @@ module sui::crypto_tests {
         let sig = vector[156, 122, 114, 255, 30, 125, 177, 100, 107, 159, 148, 67, 203, 26, 53, 99, 170, 58, 99, 68, 228, 229, 19, 239, 185, 98, 88, 199, 103, 106, 196, 137, 89, 83, 98, 157, 64, 154, 131, 36, 114, 183, 16, 160, 40, 40, 93, 254, 196, 115, 58, 44, 27, 176, 162, 116, 158, 70, 90, 24, 41, 43, 139, 214, 1];
         let verify = crypto::secp256k1_verify(sig, pk, msg);
         assert!(verify == false, 0)
+    }
+
+    #[test]
+    fun test_ecrecover_eth_address() {
+        // Due to the lack of conversion tool in Move, here we convert hex to vector in python3: [x for x in bytearray.fromhex(hex_string[2:])]
+        // Test case from https://web3js.readthedocs.io/en/v1.7.5/web3-eth-accounts.html#recover
+        // signature: 0xb91467e570a6466aa9e9876cbcd013baba02900b8979d43fe208a4a4f339f5fd6007e74cd82e037b800186422fc2da167c747ef045e5d18a5f5d4300f8e1a0291c
+        // hashed_msg: 0x1da44b586eb0729ff70a73c326926f6ed5a25f5b056e7f47fbc6e58d86871655
+        // address: 0x2c7536e3605d9c16a7a3d7b1898e529396a65c23
+        let sig = vector[185, 20, 103, 229, 112, 166, 70, 106, 169, 233, 135, 108, 188, 208, 19, 186, 186, 2, 144, 11, 137, 121, 212, 63, 226, 8, 164, 164, 243, 57, 245, 253, 96, 7, 231, 76, 216, 46, 3, 123, 128, 1, 134, 66, 47, 194, 218, 22, 124, 116, 126, 240, 69, 229, 209, 138, 95, 93, 67, 0, 248, 225, 160, 41, 28];
+        let hashed_msg = vector[29, 164, 75, 88, 110, 176, 114, 159, 247, 10, 115, 195, 38, 146, 111, 110, 213, 162, 95, 91, 5, 110, 127, 71, 251, 198, 229, 141, 134, 135, 22, 85];
+        let addr1 = vector[44, 117, 54, 227, 96, 93, 156, 22, 167, 163, 215, 177, 137, 142, 82, 147, 150, 166, 92, 35];
+        let addr = ecrecover_eth_address(sig, hashed_msg);
+        assert!(addr == addr1, 0);
+
+        // Test case from https://etherscan.io/verifySig/9754
+        // sig: 0xcb614cba67d6a37b9cb90d21635d81ed035b8ccb99f0befe05495b819111119b17ecf0c0cb4bcc781de387206f6dfcd9f1b99e1b54b44c376412d8f5c919b1981b
+        // hashed_msg: 0x1da44b586eb0729ff70a73c326926f6ed5a25f5b056e7f47fbc6e58d86871655
+        // addr: 0x4cbf668fca6f10d01f161122534044436b80702e
+        let sig = vector[203, 97, 76, 186, 103, 214, 163, 123, 156, 185, 13, 33, 99, 93, 129, 237, 3, 91, 140, 203, 153, 240, 190, 254, 5, 73, 91, 129, 145, 17, 17, 155, 23, 236, 240, 192, 203, 75, 204, 120, 29, 227, 135, 32, 111, 109, 252, 217, 241, 185, 158, 27, 84, 180, 76, 55, 100, 18, 216, 245, 201, 25, 177, 152, 27];
+        let hashed_msg = vector[29, 164, 75, 88, 110, 176, 114, 159, 247, 10, 115, 195, 38, 146, 111, 110, 213, 162, 95, 91, 5, 110, 127, 71, 251, 198, 229, 141, 134, 135, 22, 85];
+        let addr1 = vector[76, 191, 102, 143, 202, 111, 16, 208, 31, 22, 17, 34, 83, 64, 68, 67, 107, 128, 112, 46];
+        let addr = ecrecover_eth_address(sig, hashed_msg);
+        assert!(addr == addr1, 0);
+
+        // Test case from https://goerli.etherscan.io/tx/0x18f72457b356f367db214de9dda07f5d253ebfeb5c426b0d9d5b346b4ba8d021
+        // sig: 0x8e809da5ca76e6371ba8dcaa748fc2973f0d9862f76ed08f55b869f5e73591dd24a7367f1ee9e6e3723d13bb0a7092fafb8851f7eecd4a8d34c977013e1551482e
+        // hashed_msg: 0x529283629f75203330f0acf68bdbc4e879047fe75da8071c079c495bbb9fb78a
+        // addr: 0x4cbf668fca6f10d01f161122534044436b80702e
+        let sig = vector[142, 128, 157, 165, 202, 118, 230, 55, 27, 168, 220, 170, 116, 143, 194, 151, 63, 13, 152, 98, 247, 110, 208, 143, 85, 184, 105, 245, 231, 53, 145, 221, 36, 167, 54, 127, 30, 233, 230, 227, 114, 61, 19, 187, 10, 112, 146, 250, 251, 136, 81, 247, 238, 205, 74, 141, 52, 201, 119, 1, 62, 21, 81, 72, 46];
+        let hashed_msg = vector[82, 146, 131, 98, 159, 117, 32, 51, 48, 240, 172, 246, 139, 219, 196, 232, 121, 4, 127, 231, 93, 168, 7, 28, 7, 156, 73, 91, 187, 159, 183, 138];
+        let addr1 = vector[76, 191, 102, 143, 202, 111, 16, 208, 31, 22, 17, 34, 83, 64, 68, 67, 107, 128, 112, 46];
+        let addr = ecrecover_eth_address(sig, hashed_msg);
+        assert!(addr == addr1, 0);
+    }
+
+    // Helper Move function to recover signature directly to an ETH address.
+    fun ecrecover_eth_address(sig: vector<u8>, hashed_msg: vector<u8>): vector<u8> {
+        // Normalize the last byte of the signature to be 0 or 1.
+        let v = vector::borrow_mut(&mut sig, 64);
+        if (*v == 27) {
+            *v = 0;
+        } else if (*v == 28) {
+            *v = 1;
+        } else if (*v > 35) {
+            *v = (*v - 1) % 2;
+        };
+
+        let pubkey = crypto::ecrecover(sig, hashed_msg);
+        let uncompressed = crypto::decompress_pubkey(pubkey);
+
+        // Take the last 64 bytes of the uncompressed pubkey.
+        let uncompressed_64 = vector::empty<u8>();
+        let i = 1;
+        while (i < 65) {
+            let value = vector::borrow(&uncompressed, i);
+            vector::push_back(&mut uncompressed_64, *value);
+            i = i + 1;
+        };
+
+        // Take the last 20 bytes of the hash of the 64-bytes uncompressed pubkey.
+        let hashed = crypto::keccak256(uncompressed_64);
+        let addr = vector::empty<u8>();
+        let i = 12;
+        while (i < 32) {
+            let value = vector::borrow(&hashed, i);
+            vector::push_back(&mut addr, *value);
+            i = i + 1;
+        };
+        addr
     }
 }

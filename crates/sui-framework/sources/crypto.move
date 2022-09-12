@@ -18,6 +18,12 @@ module sui::crypto {
     /// applied to Secp256k1 signatures.
     public native fun ecrecover(signature: vector<u8>, hashed_msg: vector<u8>): vector<u8>;
 
+    /// @param pubkey: A 33-bytes compressed public key, a prefix either 0x02 or 0x03 and a 256-bit integer.
+    /// 
+    /// If the compressed public key is valid, return the 65-bytes uncompressed public key,
+    /// otherwise throw error. 
+    public native fun decompress_pubkey(pubkey: vector<u8>): vector<u8>;
+
     /// @param data: arbitrary bytes data to hash
     /// Hash the input bytes using keccak256 and returns 32 bytes.
     public native fun keccak256(data: vector<u8>): vector<u8>;

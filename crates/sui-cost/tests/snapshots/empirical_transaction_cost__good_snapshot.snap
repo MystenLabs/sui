@@ -29,7 +29,7 @@ expression: common_costs
     "storage_rebate": 15
   },
   "SplitCoin": {
-    "computation_cost": 575,
+    "computation_cost": 576,
     "storage_cost": 80,
     "storage_rebate": 0
   },
