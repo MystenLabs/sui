@@ -3,8 +3,12 @@
 
 import BN from 'bn.js';
 import { Buffer } from 'buffer';
-import { sha3_256 } from 'js-sha3';
-import { checkPublicKeyData, PublicKeyInitData, SIGNATURE_SCHEME_TO_FLAG } from './publickey';
+import sha3 from 'js-sha3';
+import {
+  checkPublicKeyData,
+  PublicKeyInitData,
+  SIGNATURE_SCHEME_TO_FLAG,
+} from './publickey';
 
 const PUBLIC_KEY_SIZE = 32;
 
@@ -92,6 +96,6 @@ export class Ed25519PublicKey {
     let tmp = new Uint8Array(PUBLIC_KEY_SIZE + 1);
     tmp.set([SIGNATURE_SCHEME_TO_FLAG['ED25519']]);
     tmp.set(this.toBytes(), 1);
-    return sha3_256(tmp).slice(0, 40);
+    return sha3.sha3_256(tmp).slice(0, 40);
   }
 }
