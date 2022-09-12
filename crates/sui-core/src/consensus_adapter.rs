@@ -11,11 +11,11 @@ use narwhal_executor::SubscriberResult;
 use narwhal_types::TransactionProto;
 use narwhal_types::TransactionsClient;
 use parking_lot::Mutex;
-use prometheus::register_int_counter_with_registry;
 use prometheus::register_int_gauge_with_registry;
 use prometheus::IntCounter;
 use prometheus::IntGauge;
 use prometheus::Registry;
+use prometheus::{register_histogram_with_registry, register_int_counter_with_registry, Histogram};
 use std::collections::VecDeque;
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
@@ -71,8 +71,9 @@ pub struct ConsensusAdapterMetrics {
     pub sequencing_certificate_success: IntCounter,
     pub sequencing_certificate_timeouts: IntCounter,
     pub sequencing_certificate_control_delay: IntGauge,
+    pub sequencing_certificate_latency: Histogram,
 
-    // Certificate sequencing metrics
+    // Fragment sequencing metrics
     pub sequencing_fragment_attempt: IntCounter,
     pub sequencing_fragment_success: IntCounter,
     pub sequencing_fragment_timeouts: IntCounter,
@@ -110,6 +111,12 @@ impl ConsensusAdapterMetrics {
             sequencing_certificate_control_delay: register_int_gauge_with_registry!(
                 "sequencing_certificate_control_delay",
                 "The estimated latency for the certificate sequencer.",
+                registry,
+            )
+            .unwrap(),
+            sequencing_certificate_latency: register_histogram_with_registry!(
+                "sequencing_certificate_latency",
+                "The latency for certificate sequencing.",
                 registry,
             )
             .unwrap(),
@@ -351,6 +358,9 @@ impl ConsensusAdapter {
                 metrics
                     .sequencing_certificate_control_delay
                     .set(new_delay as i64);
+                metrics
+                    .sequencing_certificate_latency
+                    .observe(past_ms as f64);
             });
 
             self.delay_ms.store(new_delay, Ordering::Relaxed);
