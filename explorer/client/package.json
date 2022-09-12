@@ -24,7 +24,7 @@
         "preview": "vite preview",
         "storybook": "start-storybook --port 6007",
         "build-storybook": "build-storybook",
-        "preview-storybook": "http-server storybook-static --port 6007 --silent"
+        "preview-storybook": "pnpm dlx serve ./storybook-static -l 6007"
     },
     "dependencies": {
         "@mysten/sui.js": "workspace:*",
@@ -49,11 +49,9 @@
     },
     "devDependencies": {
         "@storybook/addon-a11y": "^6.5.10",
-        "@storybook/addon-docs": "^6.5.10",
         "@storybook/addon-essentials": "^6.5.10",
         "@storybook/builder-vite": "^0.2.2",
         "@storybook/react": "^6.5.10",
-        "@storybook/test-runner": "^0.7.0",
         "@testing-library/dom": "^8.17.1",
         "@testing-library/jest-dom": "^5.16.2",
         "@testing-library/react": "^13.3.0",
