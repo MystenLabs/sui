@@ -50,27 +50,19 @@ function SearchResults({
                 tabIndex={0}
             >
                 {result.map((el, index) => (
-                    <Fragment key={index}>
-                        <label
-                            htmlFor={`Option-${categoryLabels[el.category]}`}
-                        >
-                            <span>{categoryLabels[el.category]}</span>
-                            <span>{el.input}</span>
-                        </label>
-                        <input
-                            id={`Option-${categoryLabels[el.category]}`}
-                            type="radio"
-                            role="option"
-                            aria-selected={index === resultIndex}
-                            checked={index === resultIndex}
-                            className={
-                                index === resultIndex
-                                    ? styles.selectedoption
-                                    : ''
-                            }
-                            onClick={optionClick(el)}
-                        />
-                    </Fragment>
+                    <dl
+                        key={index}
+                        id={`Option-${categoryLabels[el.category]}`}
+                        role="option"
+                        aria-selected={index === resultIndex}
+                        className={
+                            index === resultIndex ? styles.selectedoption : ''
+                        }
+                        onClick={optionClick(el)}
+                    >
+                        <dt>{categoryLabels[el.category]}</dt>
+                        <dd>{el.input}</dd>
+                    </dl>
                 ))}
             </div>
         </div>
