@@ -7,6 +7,7 @@ module.exports = {
     content: ['./src/**/*.{js,jsx,ts,tsx}'],
     theme: {
         extend: {
+            // Line-heights that are found in the design:
             lineHeight: {
                 80: '0.8',
                 100: '1',
@@ -14,21 +15,21 @@ module.exports = {
             },
             fontSize: {
                 // Text sizes:
-                body: '14px',
-                bodySmall: '13px',
-                subtitle: '12px',
-                subtitleSmall: '11px',
-                subtitleSmallExtra: '10px',
-                caption: '12px',
-                captionSmall: '11px',
+                body: ['14px', '1'],
+                bodySmall: ['13px', '1'],
+                subtitle: ['12px', '1'],
+                subtitleSmall: ['11px', '1'],
+                subtitleSmallExtra: ['10px', '1'],
+                caption: ['12px', '1'],
+                captionSmall: ['11px', '1'],
 
                 // Heading sizes:
-                h1: '28px',
-                h2: '24px',
-                h3: '20px',
-                h4: '18px',
-                h5: '17px',
-                h6: '16px',
+                h1: ['28px', '0.8'],
+                h2: ['24px', '0.8'],
+                h3: ['20px', '1'],
+                h4: ['18px', '1'],
+                h5: ['17px', '1'],
+                h6: ['16px', '1'],
             },
             fontFamily: {
                 sans: ['Inter', ...defaultTheme.fontFamily.sans],

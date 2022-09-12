@@ -7,12 +7,12 @@ import { type ReactNode } from 'react';
 const headingStyles = cva(['font-sans'], {
     variants: {
         variant: {
-            h1: 'text-h1 leading-80',
-            h2: 'text-h2 leading-80',
-            h3: 'text-h3 leading-100',
-            h4: 'text-h4 leading-100',
-            h5: 'text-h5 leading-100',
-            h6: 'text-h6 leading-100',
+            heading1: 'text-h1',
+            heading2: 'text-h2',
+            heading3: 'text-h3',
+            heading4: 'text-h4',
+            heading5: 'text-h5',
+            heading6: 'text-h6',
         },
         weight: {
             medium: 'font-medium',
@@ -21,7 +21,7 @@ const headingStyles = cva(['font-sans'], {
         },
     },
     defaultVariants: {
-        variant: 'h1',
+        variant: 'heading1',
         weight: 'semibold',
     },
 });
