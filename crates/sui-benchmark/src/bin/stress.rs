@@ -4,6 +4,7 @@ use anyhow::{anyhow, Result};
 use clap::*;
 use futures::future::join_all;
 use futures::future::try_join_all;
+use futures::StreamExt;
 use prometheus::Registry;
 use rand::seq::SliceRandom;
 use std::collections::HashMap;
@@ -11,7 +12,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use strum_macros::EnumString;
-use sui_benchmark::benchmark::follow;
 use sui_benchmark::drivers::bench_driver::BenchDriver;
 use sui_benchmark::drivers::driver::Driver;
 use sui_benchmark::workloads::shared_counter::SharedCounterWorkload;
@@ -26,6 +26,8 @@ use sui_config::Config;
 use sui_config::PersistedConfig;
 use sui_core::authority_aggregator::AuthAggMetrics;
 use sui_core::authority_aggregator::AuthorityAggregator;
+use sui_core::authority_client::AuthorityAPI;
+use sui_core::authority_client::NetworkAuthorityClient;
 use sui_core::epoch::epoch_store::EpochStore;
 use sui_core::gateway_state::GatewayState;
 use sui_core::safe_client::SafeClientMetrics;
@@ -34,9 +36,14 @@ use sui_node::SuiNode;
 use sui_sdk::crypto::FileBasedKeystore;
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::SuiAddress;
+use sui_types::batch::UpdateItem;
 use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::SuiKeyPair;
+use sui_types::messages::BatchInfoRequest;
+use sui_types::messages::BatchInfoResponseItem;
+use sui_types::messages::TransactionInfoRequest;
+use tracing::log::info;
 
 use sui_core::authority_client::NetworkAuthorityClientMetrics;
 use test_utils::authority::spawn_test_authorities;
@@ -139,6 +146,58 @@ pub enum RunSpec {
     },
 }
 
+pub async fn follow(authority_client: NetworkAuthorityClient, download_txes: bool) {
+    let _batch_client_handle = tokio::task::spawn(async move {
+        let mut start = 0;
+
+        loop {
+            let receiver = authority_client
+                .handle_batch_stream(BatchInfoRequest {
+                    start: Some(start),
+                    length: 10_000,
+                })
+                .await;
+
+            if let Err(e) = &receiver {
+                error!("Listener error: {:?}", e);
+                break;
+            }
+            let mut receiver = receiver.unwrap();
+
+            info!("Start batch listener at sequence: {}.", start);
+            while let Some(item) = receiver.next().await {
+                match item {
+                    Ok(BatchInfoResponseItem(UpdateItem::Transaction((_tx_seq, tx_digest)))) => {
+                        if download_txes {
+                            authority_client
+                                .handle_transaction_info_request(TransactionInfoRequest::from(
+                                    tx_digest.transaction,
+                                ))
+                                .await
+                                .unwrap();
+                            info!(
+                                "Client downloaded TX with digest {:?}",
+                                tx_digest.transaction
+                            );
+                        }
+                        start = _tx_seq + 1;
+                    }
+                    Ok(BatchInfoResponseItem(UpdateItem::Batch(_signed_batch))) => {
+                        info!(
+                            "Client received batch up to sequence {}",
+                            _signed_batch.data().next_sequence_number
+                        );
+                    }
+                    Err(err) => {
+                        error!("{:?}", err);
+                        break;
+                    }
+                }
+            }
+        }
+    });
+}
+
 fn make_workload(
     primary_gas_id: ObjectID,
     primary_gas_account_owner: SuiAddress,
@@ -179,6 +238,30 @@ fn make_workload(
     CombinationWorkload::new_boxed(workloads)
 }
 
+/// To spin up a local cluster and direct some load
+/// at it with 50/50 shared and owned traffic, use
+/// it something like:
+/// ```cargo run  --release  --package sui-benchmark
+/// --bin stress -- --num-client-threads 12 \
+/// --num-server-threads 10 \
+/// --num-transfer-accounts 2 \
+/// bench \
+/// --target-qps 20 \
+/// --in-flight-ratio 2 \
+/// --shared-counter 10 \
+/// --transfer-object 10```
+/// To point the traffic to an already running cluster,
+/// use it something like:
+/// ```cargo run  --release  --package sui-benchmark --bin stress -- --num-client-threads 12 \
+/// --num-server-threads 10 \
+/// --num-transfer-accounts 2 \
+/// --primary-gas-id 0x59931dcac57ba20d75321acaf55e8eb5a2c47e9f \
+/// --gateway-config-path /tmp/gateway.yaml \
+/// --keystore-path /tmp/sui.keystore bench \
+/// --target-qps 1 \
+/// --in-flight-ratio 2 \
+/// --shared-counter 10 \
+/// --transfer-object 10```
 #[tokio::main]
 async fn main() -> Result<()> {
     let mut config = telemetry_subscribers::TelemetryConfig::new("stress");
@@ -277,11 +360,11 @@ async fn main() -> Result<()> {
             })?;
         let config: GatewayConfig = PersistedConfig::read(&config_path)?;
         let committee = GatewayState::make_committee(&config)?;
+        let registry = prometheus::Registry::new();
         let authority_clients = GatewayState::make_authority_clients(
             &config,
-            NetworkAuthorityClientMetrics::new_for_tests(),
+            NetworkAuthorityClientMetrics::new(&registry),
         );
-        let registry = prometheus::Registry::new();
         let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
         let aggregator = AuthorityAggregator::new(
             committee,
@@ -345,15 +428,16 @@ async fn main() -> Result<()> {
     let handle = std::thread::spawn(move || {
         client_runtime.block_on(async move {
             let committee = GatewayState::make_committee(&gateway_config).unwrap();
-            let authority_clients = GatewayState::make_authority_clients(
-                &gateway_config,
-                NetworkAuthorityClientMetrics::new_for_tests(),
-            );
             let registry: Registry = metrics::start_prometheus_server(
                 format!("{}:{}", opts.client_metric_host, opts.client_metric_port)
                     .parse()
                     .unwrap(),
             );
+            let authority_clients = GatewayState::make_authority_clients(
+                &gateway_config,
+                NetworkAuthorityClientMetrics::new(&registry),
+            );
+
             let epoch_store = Arc::new(EpochStore::new_for_testing(&committee));
             let aggregator = AuthorityAggregator::new(
                 committee,
