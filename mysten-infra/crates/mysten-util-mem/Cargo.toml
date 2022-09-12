@@ -11,7 +11,7 @@ publish = false
 
 [dependencies]
 cfg-if = "1.0.0"
-lru = { version = "0.7", optional = true }
+lru = { version = "0.8", optional = true }
 hashbrown = { version = "0.12", optional = true }
 mysten-util-mem-derive = { path = "../mysten-util-mem-derive", version = "0.1" }
 impl-trait-for-tuples = "0.2.0"
