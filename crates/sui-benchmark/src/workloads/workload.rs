@@ -3,10 +3,10 @@
 
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt};
+use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_core::{
     authority_aggregator::AuthorityAggregator, authority_client::NetworkAuthorityClient,
 };
-use sui_quorum_driver::QuorumDriverMetrics;
 use sui_types::{
     base_types::{ObjectID, ObjectRef},
     crypto::EmptySignInfo,
@@ -15,7 +15,6 @@ use sui_types::{
 };
 
 use futures::FutureExt;
-use sui_quorum_driver::QuorumDriverHandler;
 use sui_types::{
     base_types::SuiAddress,
     crypto::AccountKeyPair,

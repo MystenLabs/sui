@@ -24,8 +24,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
 use sui_core::authority_client::NetworkAuthorityClient;
-use sui_quorum_driver::QuorumDriverHandler;
-use sui_quorum_driver::QuorumDriverMetrics;
+use sui_core::quorum_driver::{QuorumDriverHandler, QuorumDriverMetrics};
 use sui_types::crypto::EmptySignInfo;
 use sui_types::messages::{
     ExecuteTransactionRequest, ExecuteTransactionRequestType, ExecuteTransactionResponse,

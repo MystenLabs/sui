@@ -7248,7 +7248,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-macros",
  "sui-node",
- "sui-quorum-driver",
  "sui-sdk",
  "sui-simulator",
  "sui-swarm",
@@ -7322,7 +7321,6 @@ dependencies = [
  "sui-core",
  "sui-json-rpc-types",
  "sui-node",
- "sui-quorum-driver",
  "sui-sdk",
  "sui-types",
  "telemetry-subscribers",
@@ -7644,7 +7642,6 @@ dependencies = [
  "sui-json-rpc-types",
  "sui-open-rpc",
  "sui-open-rpc-macros",
- "sui-quorum-driver",
  "sui-types",
  "tokio",
  "tracing",
@@ -7717,7 +7714,6 @@ dependencies = [
  "sui-core",
  "sui-json-rpc",
  "sui-network",
- "sui-quorum-driver",
  "sui-storage",
  "sui-telemetry",
  "sui-types",
@@ -7763,20 +7759,6 @@ dependencies = [
  "quote 1.0.21",
  "syn 1.0.99",
  "unescape",
- "workspace-hack 0.1.0",
-]
-
-[[package]]
-name = "sui-quorum-driver"
-version = "0.1.0"
-dependencies = [
- "arc-swap",
- "prometheus",
- "scopeguard",
- "sui-core",
- "sui-types",
- "tokio",
- "tracing",
  "workspace-hack 0.1.0",
 ]
 
