@@ -15,7 +15,8 @@ use sui_types::{
     committee::Committee,
     error::{SuiError, SuiResult},
     messages::{
-        CertifiedTransaction, SignedTransactionEffects, TransactionEffects, TransactionInfoResponse,
+        CertifiedTransaction, CertifiedTransactionEffects, SignedTransactionEffects,
+        TransactionEffects, TransactionEffectsEnvelope, TransactionInfoResponse,
     },
     messages_checkpoint::CheckpointContents,
 };
@@ -391,7 +392,7 @@ where
     ) -> SuiResult<Vec<TransactionDigest>> {
         let mut missing_parents = Vec::new();
         for parent in effects.dependencies.iter() {
-            if !self.state.database.effects_exists(parent)? {
+            if !self.is_tx_finalized_and_executed_locally(parent)? {
                 missing_parents.push(*parent);
             }
         }
@@ -417,7 +418,7 @@ where
 
         match self
             .state
-            .handle_node_sync_certificate(cert.clone(), effects.clone())
+            .handle_node_sync_certificate(&cert, &effects)
             .await
         {
             Ok(_) => Ok(SyncStatus::CertExecuted),
@@ -472,7 +473,7 @@ where
         let digest = arg.transaction_digest();
 
         // check if the tx is already locally final
-        if self.state.database.effects_exists(digest)? {
+        if self.is_tx_finalized_and_executed_locally(digest)? {
             return Ok(SyncStatus::CertExecuted);
         }
 
@@ -562,21 +563,31 @@ where
             })
             .tap_err(|e| error!(?digest, "error: {}", e))?;
 
-        self.process_parents(permit, &digests.transaction, &effects)
-            .await?;
+        self.process_parents(
+            Some(permit),
+            &digests.transaction,
+            &effects,
+            PARENT_WAIT_TIMEOUT,
+        )
+        .await?;
 
         self.state
-            .handle_node_sync_certificate(cert, effects.clone())
+            .handle_node_sync_certificate(&cert, &effects)
             .await?;
 
         Ok(SyncStatus::CertExecuted)
     }
 
-    async fn process_parents(
+    /// Transaction initialized by Node Sync passes in a Semaphore for
+    /// concurrency controlling while Transaction initialized by the write path
+    /// (TransactionOrchestrator) does not.
+    pub async fn process_parents<S>(
         &self,
-        permit: OwnedSemaphorePermit,
+        permit: Option<OwnedSemaphorePermit>,
         digest: &TransactionDigest,
-        effects: &SignedTransactionEffects,
+        // TODO: allow CertifiedTransactionEffects only
+        effects: &TransactionEffectsEnvelope<S>,
+        passive_timeout_duration: Duration,
     ) -> SuiResult {
         // Node sync requests arrive in causal order via the follower API,
         // so in general the parents of a cert should have been enqueued already. However, it is
@@ -587,7 +598,7 @@ where
         //
         // Therefore, we wait some period of time, and then take matters into our own hands.
         if let Ok(res) = timeout(
-            PARENT_WAIT_TIMEOUT,
+            passive_timeout_duration,
             self.wait_for_parents(permit, digest, effects),
         )
         .await
@@ -657,23 +668,25 @@ where
         }
     }
 
-    async fn wait_for_parents(
+    async fn wait_for_parents<S>(
         &self,
-        permit: OwnedSemaphorePermit,
-        digest: &TransactionDigest,
-        effects: &SignedTransactionEffects,
+        permit: Option<OwnedSemaphorePermit>,
+        tx_digest: &TransactionDigest,
+        effects: &TransactionEffectsEnvelope<S>,
     ) -> SuiResult {
-        // Must drop the permit before waiting to avoid deadlock.
-        std::mem::drop(permit);
+        if let Some(permit) = permit {
+            // Must drop the permit before waiting to avoid deadlock.
+            std::mem::drop(permit);
+        }
 
         for parent in effects.effects.dependencies.iter() {
             let (_, mut rx) = self.pending_parents.wait(parent);
 
-            if self.state.database.effects_exists(parent)? {
+            if self.is_tx_finalized_and_executed_locally(parent)? {
                 continue;
             }
 
-            trace!(?parent, ?digest, "waiting for parent");
+            trace!(?parent, ?tx_digest, "waiting for parent");
             // Since we no longer hold the semaphore permit, can be sure that our parent will be
             // able to start.
             rx.recv()
@@ -686,7 +699,7 @@ where
 
         if cfg!(debug_assertions) {
             for parent in effects.effects.dependencies.iter() {
-                debug_assert!(self.state.database.effects_exists(parent).unwrap());
+                debug_assert!(self.is_tx_finalized_and_executed_locally(parent).unwrap());
             }
         }
 
@@ -793,6 +806,29 @@ where
         };
 
         Ok(())
+    }
+
+    pub async fn execute_finalized_transaction_for_orchestrator(
+        &self,
+        tx_cert: &CertifiedTransaction,
+        effects_cert: &CertifiedTransactionEffects,
+    ) -> SuiResult {
+        let tx_digest = tx_cert.digest();
+        self.process_parents(None, tx_digest, effects_cert, Duration::from_secs(2))
+            .await?;
+        if self.is_tx_finalized_and_executed_locally(tx_digest)? {
+            return Ok(());
+        }
+        self.state
+            .handle_node_sync_certificate(tx_cert, effects_cert)
+            .await
+    }
+
+    pub fn is_tx_finalized_and_executed_locally(
+        &self,
+        tx_digest: &TransactionDigest,
+    ) -> SuiResult<bool> {
+        self.state.database.effects_exists(tx_digest)
     }
 }
 

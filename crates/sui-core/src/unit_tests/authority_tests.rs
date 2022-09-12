@@ -2417,7 +2417,7 @@ async fn test_consensus_message_processed() {
             handle_cert(&authority2, &certificate).await
         } else {
             authority2
-                .handle_node_sync_certificate(certificate.clone(), effects1.clone())
+                .handle_node_sync_certificate(&certificate, &effects1)
                 .await
                 .unwrap();
             authority2
