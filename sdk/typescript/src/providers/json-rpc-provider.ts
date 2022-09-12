@@ -146,6 +146,7 @@ export class JsonRpcProvider extends Provider {
         this.skipDataValidation
       );
     } catch (err) {
+      console.log(err);
       throw new Error(
         `Error fetching function: ${err} for package ${objectId}, module ${moduleName} and function ${functionName}}`
       );
@@ -353,6 +354,7 @@ export class JsonRpcProvider extends Provider {
       );
       return resp;
     } catch (err) {
+      console.log(err);
       throw new Error(`Error executing transaction: ${err}}`);
     }
   }
