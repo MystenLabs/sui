@@ -15,7 +15,7 @@ use sui_types::SUI_SYSTEM_STATE_OBJECT_ID;
 use crate::errors::Error;
 use crate::types::{
     Allow, Case, NetworkIdentifier, NetworkListResponse, NetworkOptionsResponse, NetworkRequest,
-    NetworkStatusResponse, OperationStatus, OperationType, Peer, Version,
+    NetworkStatusResponse, OperationStatus, OperationType, Peer, SyncStatus, Version,
 };
 use crate::ErrorType::InternalError;
 use crate::{ErrorType, OnlineServerContext, SuiEnv};
@@ -69,7 +69,12 @@ pub async fn status(
         current_block_timestamp: current_block.block.timestamp,
         genesis_block_identifier: blocks.genesis_block_identifier(),
         oldest_block_identifier: Some(blocks.oldest_block_identifier().await?),
-        sync_status: None,
+        sync_status: Some(SyncStatus {
+            current_index: None,
+            target_index: None,
+            stage: None,
+            synced: Some(true),
+        }),
         peers,
     })
 }

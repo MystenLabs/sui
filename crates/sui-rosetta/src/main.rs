@@ -13,9 +13,10 @@ use clap::Parser;
 use serde_json::{json, Value};
 use tracing::info;
 
-use sui_config::{sui_config_dir, SUI_KEYSTORE_FILENAME};
+use sui_config::{sui_config_dir, Config, NodeConfig, SUI_FULLNODE_CONFIG, SUI_KEYSTORE_FILENAME};
+use sui_node::{metrics, SuiNode};
 use sui_rosetta::types::{AccountIdentifier, CurveType, PrefundedAccount, SuiEnv};
-use sui_rosetta::{RosettaOfflineServer, SUI};
+use sui_rosetta::{RosettaOfflineServer, RosettaOnlineServer, SUI};
 use sui_types::base_types::{encode_bytes_hex, SuiAddress};
 use sui_types::crypto::{EncodeDecodeBase64, KeypairTraits, SuiKeyPair, ToFromBytes};
 
@@ -25,6 +26,14 @@ pub enum RosettaServerCommand {
     GenerateRosettaCLIConfig {
         #[clap(long)]
         keystore_path: Option<PathBuf>,
+    },
+    StartOnlineServer {
+        #[clap(long, default_value = "localnet")]
+        env: SuiEnv,
+        #[clap(long, default_value = "0.0.0.0:9002")]
+        addr: SocketAddr,
+        #[clap(long)]
+        node_config: Option<PathBuf>,
     },
     StartOfflineServer {
         #[clap(long, default_value = "localnet")]
@@ -75,6 +84,29 @@ impl RosettaServerCommand {
             RosettaServerCommand::StartOfflineServer { env, addr } => {
                 let server = RosettaOfflineServer::new(env);
                 server.serve(addr).await??;
+            }
+            RosettaServerCommand::StartOnlineServer {
+                env,
+                addr,
+                node_config,
+            } => {
+                let node_config = node_config.unwrap_or_else(|| {
+                    let path = sui_config_dir().unwrap().join(SUI_FULLNODE_CONFIG);
+                    info!("Using default node config from {path:?}");
+                    path
+                });
+
+                let config = NodeConfig::load(&node_config)?;
+                let prometheus_registry = metrics::start_prometheus_server(config.metrics_address);
+
+                let node = SuiNode::start(&config, prometheus_registry).await?;
+                let quorum_driver = node
+                    .quorum_driver()
+                    .ok_or_else(|| anyhow!("Quorum driver is None"))?;
+
+                let rosetta =
+                    RosettaOnlineServer::new(env, node.state(), quorum_driver, config.genesis()?);
+                rosetta.serve(addr).await??;
             }
         };
         Ok(())

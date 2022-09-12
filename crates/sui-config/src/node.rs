@@ -55,8 +55,6 @@ pub struct NodeConfig {
     pub json_rpc_address: SocketAddr,
     #[serde(default = "default_websocket_address")]
     pub websocket_address: Option<SocketAddr>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub rosetta_address: Option<SocketAddr>,
 
     #[serde(default = "default_metrics_address")]
     pub metrics_address: SocketAddr,

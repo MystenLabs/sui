@@ -50,8 +50,6 @@ use sui_json_rpc::read_api::ReadApi;
 use sui_json_rpc::transaction_execution_api::FullNodeTransactionExecutionApi;
 use sui_json_rpc::ws_server::WsServerHandle;
 use sui_json_rpc::JsonRpcServerBuilder;
-use sui_rosetta::types::SuiEnv;
-use sui_rosetta::RosettaOnlineServer;
 use sui_types::crypto::KeypairTraits;
 
 pub mod admin;
@@ -66,7 +64,6 @@ pub struct SuiNode {
     _gossip_handle: Option<tokio::task::JoinHandle<()>>,
     _execute_driver_handle: tokio::task::JoinHandle<()>,
     _checkpoint_process_handle: Option<tokio::task::JoinHandle<()>>,
-    _rosetta_handle: Option<tokio::task::JoinHandle<hyper::Result<()>>>,
     state: Arc<AuthorityState>,
     active: Arc<ActiveAuthority<NetworkAuthorityClient>>,
     transaction_orchestrator: Option<Arc<TransactiondOrchestrator<NetworkAuthorityClient>>>,
@@ -301,19 +298,6 @@ impl SuiNode {
         )
         .await?;
 
-        let rosetta_handle = quorum_driver_handler
-            .as_ref()
-            .and_then(|q| config.rosetta_address.map(|addr| (addr, q)))
-            .map(|(addr, q)| {
-                let rosetta = RosettaOnlineServer::new(
-                    SuiEnv::LocalNet,
-                    state.clone(),
-                    q.clone_quorum_driver(),
-                    genesis,
-                );
-                rosetta.serve(addr)
-            });
-
         let node = Self {
             grpc_server,
             _json_rpc_service: json_rpc_service,
@@ -327,7 +311,6 @@ impl SuiNode {
             active: active_authority,
             transaction_orchestrator,
             _prometheus_registry: prometheus_registry,
-            _rosetta_handle: rosetta_handle,
         };
 
         info!("SuiNode started!");
