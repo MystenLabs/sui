@@ -328,6 +328,13 @@ impl TransactionKind {
         )
     }
 
+    pub fn is_change_epoch_tx(&self) -> bool {
+        matches!(
+            self,
+            TransactionKind::Single(SingleTransactionKind::ChangeEpoch(_))
+        )
+    }
+
     pub fn validity_check(&self) -> SuiResult {
         match self {
             Self::Batch(b) => {

@@ -12,22 +12,20 @@ use sui_types::{
     fp_ensure,
     gas::{self, SuiGasStatus},
     messages::{
-        InputObjectKind, InputObjects, SingleTransactionKind, TransactionData, TransactionEnvelope,
+        CertifiedTransaction, InputObjectKind, InputObjects, SingleTransactionKind,
+        TransactionData, TransactionEnvelope,
     },
     object::{Object, Owner},
 };
 use tracing::instrument;
 
-#[instrument(level = "trace", skip_all)]
-pub async fn check_transaction_input<S, T>(
+async fn get_gas_status<S, T>(
     store: &SuiDataStore<S>,
     transaction: &TransactionEnvelope<T>,
-) -> Result<(SuiGasStatus<'static>, InputObjects), SuiError>
+) -> SuiResult<SuiGasStatus<'static>>
 where
     S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
 {
-    transaction.signed_data.data.kind.validity_check()?;
-
     let mut gas_status = check_gas(
         store,
         transaction.gas_payment_object_ref().0,
@@ -37,14 +35,51 @@ where
     )
     .await?;
 
-    let input_objects = check_objects(store, &transaction.signed_data.data).await?;
-
     if transaction.contains_shared_object() {
         // It's important that we do this here to make sure there is enough
         // gas to cover shared objects, before we lock all objects.
         gas_status.charge_consensus()?;
     }
 
+    Ok(gas_status)
+}
+
+#[instrument(level = "trace", skip_all)]
+pub async fn check_transaction_input<S, T>(
+    store: &SuiDataStore<S>,
+    transaction: &TransactionEnvelope<T>,
+) -> SuiResult<(SuiGasStatus<'static>, InputObjects)>
+where
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
+{
+    transaction.signed_data.data.kind.validity_check()?;
+    let gas_status = get_gas_status(store, transaction).await?;
+    let input_objects = transaction.signed_data.data.input_objects()?;
+    let objects = store.get_input_objects(&input_objects)?;
+    let input_objects =
+        check_objects(&transaction.signed_data.data, input_objects, objects).await?;
+    Ok((gas_status, input_objects))
+}
+
+pub async fn check_certificate_input<S>(
+    store: &SuiDataStore<S>,
+    cert: &CertifiedTransaction,
+) -> SuiResult<(SuiGasStatus<'static>, InputObjects)>
+where
+    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
+{
+    let gas_status = get_gas_status(store, cert).await?;
+    let input_objects = cert.signed_data.data.input_objects()?;
+
+    let tx_data = &cert.signed_data.data;
+    let objects = if tx_data.kind.is_change_epoch_tx() {
+        // When changing the epoch, we update a the system object, which is shared, without going
+        // through sequencing, so we must bypass the sequence checks here.
+        store.get_input_objects(&input_objects)?
+    } else {
+        store.get_sequenced_input_objects(cert.digest(), &input_objects)?
+    };
+    let input_objects = check_objects(&cert.signed_data.data, input_objects, objects).await?;
     Ok((gas_status, input_objects))
 }
 
@@ -98,18 +133,11 @@ where
 /// Check all the objects used in the transaction against the database, and ensure
 /// that they are all the correct version and number.
 #[instrument(level = "trace", skip_all)]
-async fn check_objects<S>(
-    store: &SuiDataStore<S>,
+async fn check_objects(
     transaction: &TransactionData,
-) -> Result<InputObjects, SuiError>
-where
-    S: Eq + Debug + Serialize + for<'de> Deserialize<'de>,
-{
-    let input_objects = transaction.input_objects()?;
-
-    // These IDs act as authenticators that can own other objects.
-    let objects = store.get_input_objects(&input_objects)?;
-
+    input_objects: Vec<InputObjectKind>,
+    objects: Vec<Option<Object>>,
+) -> Result<InputObjects, SuiError> {
     // Constructing the list of objects that could be used to authenticate other
     // objects. Any mutable object (either shared or owned) can be used to
     // authenticate other objects. Hence essentially we are building the list

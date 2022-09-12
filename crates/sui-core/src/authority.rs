@@ -749,17 +749,19 @@ impl AuthorityState {
     ) -> SuiResult<(InnerTemporaryStore, SignedTransactionEffects)> {
         let _metrics_guard = start_timer(self.metrics.prepare_certificate_latency.clone());
         let (gas_status, input_objects) =
-            transaction_input_checker::check_transaction_input(&self.database, certificate).await?;
+            transaction_input_checker::check_certificate_input(&self.database, certificate).await?;
 
         // At this point we need to check if any shared objects need locks,
         // and whether they have them.
         let shared_object_refs = input_objects.filter_shared_objects();
-        if !shared_object_refs.is_empty() && !certificate.signed_data.data.kind.is_system_tx() {
+        if !shared_object_refs.is_empty() && !certificate.signed_data.data.kind.is_change_epoch_tx()
+        {
             // If the transaction contains shared objects, we need to ensure they have been scheduled
             // for processing by the consensus protocol.
             // There is no need to go through consensus for system transactions that can
             // only be executed at a time when consensus is turned off.
-            // TODO: Add some assert here to make sure consensus is indeed off with is_system_tx.
+            // TODO: Add some assert here to make sure consensus is indeed off with
+            // is_change_epoch_tx.
             self.check_shared_locks(&transaction_digest, &shared_object_refs)
                 .await?;
         }
