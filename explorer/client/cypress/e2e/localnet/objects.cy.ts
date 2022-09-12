@@ -4,7 +4,6 @@
 Cypress.config('baseUrl', 'http://localhost:3000');
 
 describe('Objects', () => {
-
     it('can be reached through URL', () => {
         cy.task('faucet').then((address) => {
             cy.task('mint', address).then((tx) => {
