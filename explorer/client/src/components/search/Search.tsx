@@ -184,6 +184,9 @@ function Search() {
                     type="text"
                     autoComplete="off"
                     aria-label="search text"
+                    aria-expanded={resultOpen}
+                    role="combobox"
+                    aria-controls="SearchResults"
                 />
                 <button
                     id="searchBtn"
