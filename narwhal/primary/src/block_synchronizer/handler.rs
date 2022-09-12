@@ -91,7 +91,7 @@ pub trait Handler {
     ) -> Vec<Result<Certificate, Error>>;
 }
 
-/// A helper struct to allow us access the block_synchronizer in a synchronous
+/// A helper struct to allow us access the block_synchronizer in an asynchronous
 /// way. It also offers methods to both fetch the certificates and way to
 /// process them and causally complete their history.
 pub struct BlockSynchronizerHandler {
