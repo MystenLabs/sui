@@ -90,6 +90,7 @@ impl GenesisConfig {
 pub struct ValidatorGenesisInfo {
     #[serde_as(as = "KeyPairBase64")]
     pub key_pair: AuthorityKeyPair,
+    #[serde_as(as = "KeyPairBase64")]
     pub worker_key_pair: AuthorityKeyPair,
     pub account_key_pair: SuiKeyPair,
     pub network_key_pair: SuiKeyPair,
