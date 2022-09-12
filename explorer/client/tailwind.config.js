@@ -7,23 +7,28 @@ module.exports = {
     content: ['./src/**/*.{js,jsx,ts,tsx}'],
     theme: {
         extend: {
+            lineHeight: {
+                80: '0.8',
+                100: '1',
+                130: '1.3',
+            },
             fontSize: {
                 // Text sizes:
-                body: ['14px', '13px'],
-                bodySmall: ['13px', '13px'],
-                subtitle: ['12px', '12px'],
-                subtitleSmall: ['11px', '11px'],
-                subtitleSmallExtra: ['10px', '10px'],
-                caption: ['12px', '12px'],
-                captionSmall: ['11px', '11px'],
+                body: '14px',
+                bodySmall: '13px',
+                subtitle: '12px',
+                subtitleSmall: '11px',
+                subtitleSmallExtra: '10px',
+                caption: '12px',
+                captionSmall: '11px',
 
                 // Heading sizes:
-                h1: ['28px', '22px'],
-                h2: ['24px', '20px'],
-                h3: ['20px', '20px'],
-                h4: ['18px', '18px'],
-                h5: ['17px', '17px'],
-                h6: ['16px', '16px'],
+                h1: '28px',
+                h2: '24px',
+                h3: '20px',
+                h4: '18px',
+                h5: '17px',
+                h6: '16px',
             },
             fontFamily: {
                 sans: ['Inter', ...defaultTheme.fontFamily.sans],

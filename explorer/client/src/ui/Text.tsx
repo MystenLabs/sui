@@ -4,7 +4,7 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-const textStyles = cva(['font-sans', 'text-black'], {
+const textStyles = cva(['font-sans', 'leading-100'], {
     variants: {
         weight: {
             medium: 'font-medium',
@@ -18,7 +18,7 @@ const textStyles = cva(['font-sans', 'text-black'], {
             subtitleSmall: 'text-subtitleSmall',
             subtitleSmallExtra: 'text-subtitleSmallExtra',
             caption: 'uppercase text-caption',
-            captionSmall: 'uppercase text-captionSmall',
+            captionSmall: 'uppercase text-captionSmall ',
         },
         italic: {
             true: 'italic',
