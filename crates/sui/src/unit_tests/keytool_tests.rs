@@ -17,6 +17,7 @@ use sui_types::crypto::Ed25519SuiSignature;
 use sui_types::crypto::EncodeDecodeBase64;
 use sui_types::crypto::Secp256k1SuiSignature;
 use sui_types::crypto::Signature;
+use sui_types::crypto::SignatureScheme;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::crypto::SuiSignatureInner;
 use tempfile::TempDir;
@@ -135,4 +136,151 @@ fn test_load_keystore_err() {
 
     // cannot load keypair due to missing flag
     assert!(KeystoreType::File(path2).init().is_err());
+}
+
+#[test]
+fn test_mnemonics_ed25519() -> Result<(), anyhow::Error> {
+    // Test case matches with /sui/wallet/src/shared/cryptography/mnemonics.test.ts
+    let mut keystore = KeystoreType::InMem(0).init().unwrap();
+    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
+    KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::ED25519,
+        derivation_path: None,
+    }
+    .execute(&mut keystore)?;
+    keystore.keys().iter().for_each(|pk| {
+        assert_eq!(
+            hex::encode(pk.as_ref()),
+            "685b2d6f98784dd763249af21c92f588ca1be80c40a98c55bf7c91b74e5ac1e2"
+        );
+    });
+    keystore.addresses().iter().for_each(|addr| {
+        assert_eq!(
+            addr.to_string(),
+            "0x1a4623343cd42be47d67314fce0ad042f3c82685"
+        );
+    });
+    Ok(())
+}
+
+#[test]
+fn test_mnemonics_secp256k1() -> Result<(), anyhow::Error> {
+    // Test case generated from https://microbitcoinorg.github.io/mnemonic/ with path m/54'/784'/0'/0/0
+    let mut keystore = KeystoreType::InMem(0).init().unwrap();
+    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
+    KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::Secp256k1,
+        derivation_path: None,
+    }
+    .execute(&mut keystore)?;
+    keystore.keys().iter().for_each(|pk| {
+        assert_eq!(
+            hex::encode(pk.as_ref()),
+            "03e3717435582ab33d2e315d21e9bc4e19500a1fc4c8cdc73a15365891774b131f"
+        );
+    });
+    keystore.addresses().iter().for_each(|addr| {
+        assert_eq!(
+            addr.to_string(),
+            "0xed17b3f435c03ff69c2cdc6d394932e68375f20f"
+        );
+    });
+    Ok(())
+}
+
+#[test]
+fn test_invalid_derivation_path() -> Result<(), anyhow::Error> {
+    let mut keystore = KeystoreType::InMem(0).init().unwrap();
+    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::ED25519,
+        derivation_path: Some("m/44'/1'/0'/0/0".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_err());
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::ED25519,
+        derivation_path: Some("m/0'/784'/0'/0/0".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_err());
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::ED25519,
+        derivation_path: Some("m/54'/784'/0'/0/0".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_err());
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::Secp256k1,
+        derivation_path: Some("m/54'/784'/0'/0'/0'".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_err());
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::Secp256k1,
+        derivation_path: Some("m/44'/784'/0'/0/0".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_err());
+
+    Ok(())
+}
+
+#[test]
+fn test_valid_derivation_path() -> Result<(), anyhow::Error> {
+    let mut keystore = KeystoreType::InMem(0).init().unwrap();
+    let phrase = "result crisp session latin must fruit genuine question prevent start coconut brave speak student dismiss";
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::ED25519,
+        derivation_path: Some("m/44'/784'/0'/0'/0'".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_ok());
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::ED25519,
+        derivation_path: Some("m/44'/784'/0'/0'/1'".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_ok());
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::ED25519,
+        derivation_path: Some("m/44'/784'/1'/0'/1'".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_ok());
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::Secp256k1,
+        derivation_path: Some("m/54'/784'/0'/0/1".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_ok());
+
+    assert!(KeyToolCommand::Import {
+        mnemonic_phrase: phrase.to_string(),
+        key_scheme: SignatureScheme::Secp256k1,
+        derivation_path: Some("m/54'/784'/1'/0/1".parse().unwrap()),
+    }
+    .execute(&mut keystore)
+    .is_ok());
+    Ok(())
 }

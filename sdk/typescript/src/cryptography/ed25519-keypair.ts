@@ -53,8 +53,7 @@ export class Ed25519Keypair implements Keypair {
    * Create a Ed25519 keypair from a raw secret key byte array.
    *
    * This method should only be used to recreate a keypair from a previously
-   * generated secret key. Generating keypairs from a random seed should be done
-   * with the {@link Keypair.fromSeed} method.
+   * generated secret key.
    *
    * @throws error if the provided secret key is invalid and validation is not skipped.
    *

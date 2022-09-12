@@ -1,10 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-// TODO: Remove usage of rand::rngs::adapter::ReadRng.
-#![allow(deprecated)]
-
 use anyhow::anyhow;
+use bip32::DerivationPath;
+use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
 use signature::Signer;
@@ -15,15 +14,11 @@ use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
-
-use bip39::Mnemonic;
-use rand::rngs::adapter::ReadRng;
 
 use sui_types::base_types::SuiAddress;
 use sui_types::crypto::{
-    get_key_pair_from_rng, random_key_pair_by_type_from_rng, EncodeDecodeBase64, PublicKey,
-    Signature, SignatureScheme, SuiKeyPair,
+    derive_key_pair_from_path, get_key_pair_from_rng, EncodeDecodeBase64, PublicKey, Signature,
+    SignatureScheme, SuiKeyPair,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -157,15 +152,17 @@ impl SuiKeystore {
     pub fn generate_new_key(
         &mut self,
         key_scheme: SignatureScheme,
+        derivation_path: Option<DerivationPath>,
     ) -> Result<(SuiAddress, String, SignatureScheme), anyhow::Error> {
-        let mnemonic = Mnemonic::generate(12)?;
-        let seed = mnemonic.to_seed("");
-        let mut rng = RngWrapper(ReadRng::new(&seed));
-        match random_key_pair_by_type_from_rng(key_scheme, &mut rng) {
-            Ok((address, kp)) => {
-                let k = kp.public();
-                self.0.add_key(kp)?;
-                Ok((address, mnemonic.to_string(), k.scheme()))
+        let mnemonic = Mnemonic::new(MnemonicType::Words12, Language::English);
+        match derive_key_pair_from_path(
+            Seed::new(&mnemonic, "").as_bytes(),
+            derivation_path,
+            &key_scheme,
+        ) {
+            Ok((address, keypair)) => {
+                self.add_key(keypair)?;
+                Ok((address, mnemonic.phrase().to_string(), key_scheme))
             }
             Err(e) => Err(anyhow!("error generating key {:?}", e)),
         }
@@ -187,10 +184,12 @@ impl SuiKeystore {
         &mut self,
         phrase: &str,
         key_scheme: SignatureScheme,
+        derivation_path: Option<DerivationPath>,
     ) -> Result<SuiAddress, anyhow::Error> {
-        let seed = &Mnemonic::from_str(phrase).unwrap().to_seed("");
-        let mut rng = RngWrapper(ReadRng::new(seed));
-        match random_key_pair_by_type_from_rng(key_scheme, &mut rng) {
+        let mnemonic = Mnemonic::from_phrase(phrase, Language::English)
+            .map_err(|e| anyhow::anyhow!("Invalid mnemonic phrase: {:?}", e))?;
+        let seed = Seed::new(&mnemonic, "");
+        match derive_key_pair_from_path(seed.as_bytes(), derivation_path, &key_scheme) {
             Ok((address, kp)) => {
                 self.0.add_key(kp)?;
                 Ok(address)
@@ -201,28 +200,6 @@ impl SuiKeystore {
 
     pub fn sign(&self, address: &SuiAddress, msg: &[u8]) -> Result<Signature, signature::Error> {
         self.0.sign(address, msg)
-    }
-}
-
-/// wrapper for adding CryptoRng and RngCore impl to ReadRng.
-struct RngWrapper<'a>(ReadRng<&'a [u8]>);
-
-impl rand::CryptoRng for RngWrapper<'_> {}
-impl rand::RngCore for RngWrapper<'_> {
-    fn next_u32(&mut self) -> u32 {
-        self.0.next_u32()
-    }
-
-    fn next_u64(&mut self) -> u64 {
-        self.0.next_u64()
-    }
-
-    fn fill_bytes(&mut self, dest: &mut [u8]) {
-        self.0.fill_bytes(dest)
-    }
-
-    fn try_fill_bytes(&mut self, dest: &mut [u8]) -> Result<(), rand::Error> {
-        self.0.try_fill_bytes(dest)
     }
 }
 
