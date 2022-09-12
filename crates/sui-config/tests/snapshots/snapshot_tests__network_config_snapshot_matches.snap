@@ -26,10 +26,10 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
-          certificates_synchronize_timeout: 2000ms
-          payload_synchronize_timeout: 2000ms
-          payload_availability_timeout: 2000ms
-          handler_certificate_deliver_timeout: 2000ms
+          certificates_synchronize_timeout: 30000ms
+          payload_synchronize_timeout: 30000ms
+          payload_availability_timeout: 30000ms
+          handler_certificate_deliver_timeout: 30000ms
         consensus_api_grpc:
           socket_addr: ""
           get_collections_timeout: 5000ms
@@ -68,10 +68,10 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
-          certificates_synchronize_timeout: 2000ms
-          payload_synchronize_timeout: 2000ms
-          payload_availability_timeout: 2000ms
-          handler_certificate_deliver_timeout: 2000ms
+          certificates_synchronize_timeout: 30000ms
+          payload_synchronize_timeout: 30000ms
+          payload_availability_timeout: 30000ms
+          handler_certificate_deliver_timeout: 30000ms
         consensus_api_grpc:
           socket_addr: ""
           get_collections_timeout: 5000ms
@@ -110,10 +110,10 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
-          certificates_synchronize_timeout: 2000ms
-          payload_synchronize_timeout: 2000ms
-          payload_availability_timeout: 2000ms
-          handler_certificate_deliver_timeout: 2000ms
+          certificates_synchronize_timeout: 30000ms
+          payload_synchronize_timeout: 30000ms
+          payload_availability_timeout: 30000ms
+          handler_certificate_deliver_timeout: 30000ms
         consensus_api_grpc:
           socket_addr: ""
           get_collections_timeout: 5000ms
@@ -152,10 +152,10 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
-          certificates_synchronize_timeout: 2000ms
-          payload_synchronize_timeout: 2000ms
-          payload_availability_timeout: 2000ms
-          handler_certificate_deliver_timeout: 2000ms
+          certificates_synchronize_timeout: 30000ms
+          payload_synchronize_timeout: 30000ms
+          payload_availability_timeout: 30000ms
+          handler_certificate_deliver_timeout: 30000ms
         consensus_api_grpc:
           socket_addr: ""
           get_collections_timeout: 5000ms
@@ -194,10 +194,10 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
-          certificates_synchronize_timeout: 2000ms
-          payload_synchronize_timeout: 2000ms
-          payload_availability_timeout: 2000ms
-          handler_certificate_deliver_timeout: 2000ms
+          certificates_synchronize_timeout: 30000ms
+          payload_synchronize_timeout: 30000ms
+          payload_availability_timeout: 30000ms
+          handler_certificate_deliver_timeout: 30000ms
         consensus_api_grpc:
           socket_addr: ""
           get_collections_timeout: 5000ms
@@ -236,10 +236,10 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
-          certificates_synchronize_timeout: 2000ms
-          payload_synchronize_timeout: 2000ms
-          payload_availability_timeout: 2000ms
-          handler_certificate_deliver_timeout: 2000ms
+          certificates_synchronize_timeout: 30000ms
+          payload_synchronize_timeout: 30000ms
+          payload_availability_timeout: 30000ms
+          handler_certificate_deliver_timeout: 30000ms
         consensus_api_grpc:
           socket_addr: ""
           get_collections_timeout: 5000ms
@@ -278,10 +278,10 @@ validator_configs:
         batch_size: 500000
         max_batch_delay: 100ms
         block_synchronizer:
-          certificates_synchronize_timeout: 2000ms
-          payload_synchronize_timeout: 2000ms
-          payload_availability_timeout: 2000ms
-          handler_certificate_deliver_timeout: 2000ms
+          certificates_synchronize_timeout: 30000ms
+          payload_synchronize_timeout: 30000ms
+          payload_availability_timeout: 30000ms
+          handler_certificate_deliver_timeout: 30000ms
         consensus_api_grpc:
           socket_addr: ""
           get_collections_timeout: 5000ms
@@ -304,3 +304,4 @@ account_keys:
   - PvPO23Xcf7+pO4XpJeTSk+HnbBvHomH5eiXZrcP6ED+7yoogulSh/bvgp+PbcaUy+Rrg5RRpihG3aL+mKDCK9g==
   - QRJXlCdYPZTIW1/5uk1RzO8KRRO+JLxooHkVCJMxGitwxRrVJ0dTYnP2qxhjeFQCyfEIAMJlI5mGhE8E8wXeUA==
 genesis: "[fake genesis]"
+
