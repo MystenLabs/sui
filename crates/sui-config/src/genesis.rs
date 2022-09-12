@@ -18,7 +18,7 @@ use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::{InnerTemporaryStore, TemporaryStore};
 use sui_types::base_types::ObjectID;
 use sui_types::base_types::TransactionDigest;
-use sui_types::crypto::ToFromBytes;
+use sui_types::crypto::{ToFromBytes, AuthorityPublicKey};
 use sui_types::crypto::{AuthorityPublicKeyBytes, AuthoritySignature};
 use sui_types::gas::SuiGasStatus;
 use sui_types::messages::CallArg;
@@ -72,7 +72,7 @@ impl Genesis {
                 // Strong requirement here for narwhal and sui to be on the same version of fastcrypto
                 // for AuthorityPublicBytes to cast to type alias PublicKey defined in narwhal to
                 // construct narwhal Committee struct.
-                let name = narwhal_crypto::PublicKey::from_bytes(validator.protocol_key().as_ref())
+                let name = AuthorityPublicKey::from_bytes(validator.protocol_key().as_ref())
                     .expect("Can't get narwhal public key");
                 let network_key = validator.network_key().clone();
                 let primary = narwhal_config::PrimaryAddresses {
@@ -100,7 +100,7 @@ impl Genesis {
             .validator_set
             .iter()
             .map(|validator| {
-                let name = narwhal_crypto::PublicKey::from_bytes(validator.protocol_key().as_ref())
+                let name = AuthorityPublicKey::from_bytes(validator.protocol_key().as_ref())
                     .expect("Can't get narwhal public key");
                 let workers = [(
                     0, // worker_id
@@ -596,6 +596,7 @@ const GENESIS_BUILDER_COMMITTEE_DIR: &str = "committee";
 mod test {
     use super::Builder;
     use crate::{genesis_config::GenesisConfig, utils, ValidatorInfo};
+    use fastcrypto::traits::KeyPair;
     use sui_types::crypto::{
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
         NetworkKeyPair,
