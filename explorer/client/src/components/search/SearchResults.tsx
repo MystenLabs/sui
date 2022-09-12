@@ -1,6 +1,8 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Fragment } from 'react';
+
 import { type ResultType } from './SearchResultType';
 
 import styles from './SearchResults.module.css';
@@ -23,37 +25,54 @@ function SearchResults({
     };
 
     if (!result) return <></>;
+
+    if (result.length === 0)
+        return (
+            <div className={styles.results}>
+                <p className={styles.noresults} role="alert">
+                    {' '}
+                    No Results{' '}
+                </p>
+            </div>
+        );
+
     return (
         <div
             className={styles.results}
             id="SearchResults"
             aria-label="search results"
-            role="listbox"
         >
-            {result.length === 0 && (
-                <p className={styles.noresults} role="alert">
-                    No Results
-                </p>
-            )}
-            {result.map((el, index) => (
-                <dl key={index}>
-                    <dt
-                        id={`SearchResultsOption${index}`}
-                        role="option"
-                        aria-selected={index === resultIndex}
-                    >
-                        {categoryLabels[el.category]}
-                    </dt>
-                    <dd
-                        className={
-                            index === resultIndex ? styles.selectedoption : ''
-                        }
-                        onClick={optionClick(el)}
-                    >
-                        {el.input}
-                    </dd>
-                </dl>
-            ))}
+            <div
+                role="listbox"
+                aria-activedescendant={`Option-${
+                    categoryLabels[result[resultIndex].category]
+                }`}
+                tabIndex={0}
+            >
+                {result.map((el, index) => (
+                    <Fragment key={index}>
+                        <label
+                            htmlFor={`Option-${categoryLabels[el.category]}`}
+                        >
+                            <span>{categoryLabels[el.category]}</span>
+                            <span>{el.input}</span>
+                        </label>
+                        <input
+                            id={`Option-${categoryLabels[el.category]}`}
+                            type="radio"
+                            role="option"
+                            aria-selected={index === resultIndex}
+                            checked={index === resultIndex}
+                            className={
+                                index === resultIndex
+                                    ? styles.selectedoption
+                                    : ''
+                            }
+                            onClick={optionClick(el)}
+                        />
+                    </Fragment>
+                ))}
+            </div>
         </div>
     );
 }
