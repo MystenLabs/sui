@@ -23,7 +23,6 @@ use serde_with::serde_as;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
     fmt,
-    fmt::Formatter,
 };
 
 /// The round number.
@@ -34,17 +33,17 @@ pub type Transaction = Vec<u8>;
 pub struct Batch(pub Vec<Transaction>);
 
 #[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct BatchDigest(pub [u8; fastcrypto::DIGEST_LEN]);
+pub struct BatchDigest(pub [u8; DIGEST_LEN]);
 
 impl fmt::Debug for BatchDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0))
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 
 impl fmt::Display for BatchDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0).get(0..16).unwrap())
+        write!(f, "{}", base64::encode(self.0).get(0..16).unwrap())
     }
 }
 
@@ -192,13 +191,13 @@ impl From<HeaderDigest> for Digest {
 
 impl fmt::Debug for HeaderDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0))
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 
 impl fmt::Display for HeaderDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0).get(0..16).unwrap())
+        write!(f, "{}", base64::encode(self.0).get(0..16).unwrap())
     }
 }
 
@@ -334,13 +333,13 @@ impl From<VoteDigest> for Digest {
 
 impl fmt::Debug for VoteDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0))
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 
 impl fmt::Display for VoteDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0).get(0..16).unwrap())
+        write!(f, "{}", base64::encode(self.0).get(0..16).unwrap())
     }
 }
 
@@ -575,13 +574,13 @@ impl From<CertificateDigest> for CertificateDigestProto {
 
 impl fmt::Debug for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0))
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 
 impl fmt::Display for CertificateDigest {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> Result<(), fmt::Error> {
-        write!(f, "{}", base64::encode(&self.0).get(0..16).unwrap())
+        write!(f, "{}", base64::encode(self.0).get(0..16).unwrap())
     }
 }
 
@@ -625,7 +624,7 @@ impl PartialEq for Certificate {
 }
 
 impl Affiliated for Certificate {
-    fn parents(&self) -> Vec<<Self as fastcrypto::Hash>::TypedDigest> {
+    fn parents(&self) -> Vec<<Self as Hash>::TypedDigest> {
         self.header.parents.iter().cloned().collect()
     }
 
@@ -731,18 +730,18 @@ pub struct BlockError {
 
 impl<T> From<BlockError> for BlockResult<T> {
     fn from(error: BlockError) -> Self {
-        BlockResult::Err(error)
+        Err(error)
     }
 }
 
 impl fmt::Display for BlockError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "block id: {}, error type: {}", self.id, self.error)
     }
 }
 
 impl fmt::Display for BlockErrorKind {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }

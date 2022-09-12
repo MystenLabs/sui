@@ -846,7 +846,7 @@ impl BlockSynchronizer {
                             peers.add_peer(response.from.clone(), certificates);
 
                             // We have received all possible responses
-                            if (peers.unique_values().len() == total_expected_certificates &&
+                            if (peers.unique_value_count() == total_expected_certificates &&
                             Self::reached_response_ratio(num_of_responses, num_of_requests_sent))
                             || num_of_responses == num_of_requests_sent
                             {
@@ -936,7 +936,7 @@ impl BlockSynchronizer {
                     peers.add_peer(response.from.clone(), available_certs_for_peer);
 
                     // We have received all possible responses
-                    if (peers.unique_values().len() == total_expected_block_ids &&
+                    if (peers.unique_value_count() == total_expected_block_ids &&
                     Self::reached_response_ratio(num_of_responses, num_of_requests_sent))
                     || num_of_responses == num_of_requests_sent
                     {

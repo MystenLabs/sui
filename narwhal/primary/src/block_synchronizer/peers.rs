@@ -80,6 +80,10 @@ impl<Value: Hash + Clone> Peers<Value> {
         &self.peers
     }
 
+    pub fn unique_value_count(&self) -> usize {
+        self.unique_values.len()
+    }
+
     pub fn unique_values(&self) -> Vec<Value> {
         self.unique_values.values().cloned().collect()
     }

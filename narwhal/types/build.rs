@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-type Result<T> = ::std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 fn main() -> Result<()> {
     let out_dir = if env::var("DUMP_GENERATED_GRPC").is_ok() {
@@ -20,7 +20,7 @@ fn main() -> Result<()> {
 
     // Use `Bytes` instead of `Vec<u8>` for bytes fields
     let mut config = prost_build::Config::new();
-    config.bytes(&["."]);
+    config.bytes(["."]);
 
     tonic_build::configure()
         .out_dir(&out_dir)

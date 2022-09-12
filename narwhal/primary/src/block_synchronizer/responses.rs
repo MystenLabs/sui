@@ -45,7 +45,7 @@ impl<'a> FromIterator<&'a Certificate> for RequestID {
 
 impl Display for RequestID {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", base64::encode(&self.0))
+        write!(f, "{}", base64::encode(self.0))
     }
 }
 

@@ -495,7 +495,7 @@ struct PrimaryReceiverHandler {
 impl PrimaryToPrimary for PrimaryReceiverHandler {
     async fn send_message(
         &self,
-        request: anemo::Request<types::PrimaryMessage>,
+        request: anemo::Request<PrimaryMessage>,
     ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
         let message = request.into_body();
 

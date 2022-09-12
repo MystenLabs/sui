@@ -172,7 +172,7 @@ pub struct P2pNetwork {
     /// Small RNG just used to shuffle nodes and randomize connections (not crypto related).
     rng: SmallRng,
     // One bounded executor per address
-    executors: HashMap<anemo::PeerId, BoundedExecutor>,
+    executors: HashMap<PeerId, BoundedExecutor>,
 }
 
 impl P2pNetwork {
