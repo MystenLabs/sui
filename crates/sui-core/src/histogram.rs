@@ -1,5 +1,8 @@
 use futures::FutureExt;
-use prometheus::{register_int_gauge_vec_with_registry, IntGaugeVec, Registry};
+use prometheus::{
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
+    IntGaugeVec, Registry,
+};
 use std::collections::hash_map::DefaultHasher;
 use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
@@ -10,7 +13,7 @@ use tokio::sync::mpsc;
 use tokio::time::Instant;
 use tracing::error;
 
-type Point = i64;
+type Point = u64;
 type HistogramMessage = (HistogramLabels, Point);
 
 #[derive(Clone)]
@@ -31,6 +34,8 @@ pub struct HistogramVec {
 
 struct HistogramReporter {
     gauge: IntGaugeVec,
+    sum: IntCounterVec,
+    count: IntCounterVec,
     percentiles: Arc<Vec<usize>>,
     channel: mpsc::UnboundedReceiver<HistogramMessage>,
 }
@@ -81,13 +86,24 @@ impl HistogramVec {
         registry: &Registry,
         percentiles: Vec<usize>,
     ) -> Self {
+        let sum_name = format!("{}_sum", name);
+        let count_name = format!("{}_count", name);
+        let sum =
+            register_int_counter_vec_with_registry!(sum_name, desc, labels, registry).unwrap();
+        let count =
+            register_int_counter_vec_with_registry!(count_name, desc, labels, registry).unwrap();
         let labels: Vec<_> = labels.iter().cloned().chain(["pct"].into_iter()).collect();
         let gauge = register_int_gauge_vec_with_registry!(name, desc, &labels, registry).unwrap();
-        Self::new(gauge, percentiles)
+        Self::new(gauge, sum, count, percentiles)
     }
 
     // Do not expose it to public interface because we need labels to have a specific format (e.g. add last label is "pct")
-    fn new(gauge: IntGaugeVec, percentiles: Vec<usize>) -> Self {
+    fn new(
+        gauge: IntGaugeVec,
+        sum: IntCounterVec,
+        count: IntCounterVec,
+        percentiles: Vec<usize>,
+    ) -> Self {
         // The processing task is very fast and should not have realistic scenario where this channel overflows
         // If the channel is growing too fast you will start seeing error! from the
         // data points being dropped way before it will produce any measurable memory pressure
@@ -96,6 +112,8 @@ impl HistogramVec {
         let percentiles = Arc::new(percentiles);
         let reporter = HistogramReporter {
             gauge,
+            sum,
+            count,
             percentiles,
             channel: receiver,
         };
@@ -192,9 +210,11 @@ impl HistogramReporter {
         } else {
             let percentiles = self.percentiles.clone();
             let gauge = self.gauge.clone();
+            let sum = self.sum.clone();
+            let count = self.count.clone();
             // Histogram calculation can be CPU intensive, running in tokio blocking thread pool
             Handle::current()
-                .spawn_blocking(move || Self::report(percentiles, gauge, labeled_data));
+                .spawn_blocking(move || Self::report(percentiles, gauge, sum, count, labeled_data));
         }
         Ok(())
     }
@@ -202,6 +222,8 @@ impl HistogramReporter {
     fn report(
         percentiles: Arc<Vec<usize>>,
         gauge: IntGaugeVec,
+        sum_counter: IntCounterVec,
+        count_counter: IntCounterVec,
         labeled_data: HashMap<HistogramLabels, Vec<Point>>,
     ) {
         for (label, mut data) in labeled_data {
@@ -214,8 +236,16 @@ impl HistogramReporter {
                 let labels = label.labels.iter().map(|s| &s[..]).chain([&pct_str[..]]);
                 let labels: Vec<_> = labels.collect();
                 let metric = gauge.with_label_values(&labels);
-                metric.set(point);
+                metric.set(point as i64);
             }
+            let mut sum = 0u64;
+            let count = data.len() as u64;
+            for point in data {
+                sum += point;
+            }
+            let labels: Vec<_> = label.labels.iter().map(|s| &s[..]).collect();
+            sum_counter.with_label_values(&labels).inc_by(sum);
+            count_counter.with_label_values(&labels).inc_by(count);
         }
     }
 
@@ -232,7 +262,7 @@ impl HistogramReporter {
 impl<'a> Drop for HistogramTimerGuard<'a> {
     fn drop(&mut self) {
         self.histogram
-            .report(self.start.elapsed().as_millis() as i64);
+            .report(self.start.elapsed().as_millis() as u64);
     }
 }
 
