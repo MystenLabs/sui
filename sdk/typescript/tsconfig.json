@@ -34,5 +34,5 @@
     "resolveJsonModule": true,
     "composite": true
   },
-  "references": [{ "path": "./bcs" }, { "path": "./tsconfig.test.json" }]
+  "references": [{ "path": "./bcs" }]
 }
