@@ -96,7 +96,7 @@ pub trait Export: Serialize {
 
 impl<S: Serialize> Export for S {}
 
-pub type Stake = u32;
+pub type Stake = u64;
 pub type WorkerId = u32;
 
 /// Holds all the node properties. An example is provided to

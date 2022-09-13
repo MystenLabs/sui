@@ -1,7 +1,7 @@
 ---
 Authority:
   STRUCT:
-    - stake: U32
+    - stake: U64
     - primary_address: BYTES
     - network_key:
         TYPENAME: Ed25519PublicKey

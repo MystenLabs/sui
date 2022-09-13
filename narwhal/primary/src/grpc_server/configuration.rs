@@ -1,6 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::SharedCommittee;
+
+use config::{SharedCommittee, Stake};
 use crypto::PublicKey;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
@@ -98,7 +99,7 @@ impl Configuration for NarwhalConfiguration {
         for validator in validators.iter() {
             let public_key = self.get_public_key(validator.public_key.as_ref())?;
 
-            let stake_weight: u32 = validator
+            let stake_weight: Stake = validator
                 .stake_weight
                 .try_into()
                 .map_err(|_| Status::invalid_argument("Invalid stake weight"))?;
