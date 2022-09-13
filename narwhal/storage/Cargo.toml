@@ -11,7 +11,7 @@ dashmap = "5.4.0"
 fastcrypto = "0.1.2"
 futures = "0.3.24"
 store = { version = "0.1.0", package = "typed-store" }
-thiserror = "1.0.34"
+thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = { version = "0.7.2", features = ["tls"] }

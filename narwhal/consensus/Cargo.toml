@@ -14,7 +14,7 @@ match_opt = "0.1.2"
 rand = { version = "0.8.5", optional = true }
 serde = { version = "1.0.144", features = ["derive"] }
 store = { version = "0.1.0", package = "typed-store" }
-thiserror = "1.0.34"
+thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync"] }
 tracing = "0.1.36"
 

@@ -27,7 +27,7 @@ prost = "0.10.4"
 rand = { version = "0.8.5", features = ["small_rng"] }
 roaring = "0.10.1"
 serde = { version = "1.0.144", features = ["derive"] }
-thiserror = "1.0.34"
+thiserror = "1.0.35"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
 tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = "0.7.2"
@@ -60,7 +60,7 @@ proptest = "1.0.0"
 tempfile = "3.3.0"
 telemetry-subscribers = "0.1.0"
 test_utils = { path = "../test_utils" }
-thiserror = "1.0.34"
+thiserror = "1.0.35"
 tracing = "0.1.36"
 tracing-test = "0.2.3"
 worker = { path = "../worker" }
