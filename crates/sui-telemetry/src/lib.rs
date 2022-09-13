@@ -3,6 +3,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+use std::process::Command;
+use std::time::{SystemTime, UNIX_EPOCH};
 use tracing::trace;
 
 pub(crate) const GA_API_SECRET: &str = "zeq-aYEzS0aGdRJ8kNZTEg";
@@ -35,11 +37,30 @@ struct IpResponse {
     ip: String,
 }
 
-pub async fn send_telemetry_event() {
+pub async fn send_telemetry_event(is_validator: bool) {
+    let git_rev = get_git_rev();
     let ip_address = get_ip().await;
+    let since_the_epoch = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("Now should be later than epoch!");
     let telemetry_event = TelemetryEvent {
         name: GA_EVENT_NAME.into(),
-        params: BTreeMap::from([("node_address".into(), ip_address.clone())]),
+        params: BTreeMap::from([
+            ("node_address".into(), ip_address.clone()),
+            (
+                "node_type".into(),
+                if is_validator {
+                    "validator".into()
+                } else {
+                    "full_node".into()
+                },
+            ),
+            ("git_rev".into(), git_rev),
+            (
+                "seconds_since_epoch".into(),
+                since_the_epoch.as_secs().to_string(),
+            ),
+        ]),
     };
 
     let telemetry_payload = TelemetryPayload {
@@ -48,6 +69,18 @@ pub async fn send_telemetry_event() {
     };
 
     send_telemetry_event_impl(telemetry_payload).await
+}
+
+fn get_git_rev() -> String {
+    let output_res = Command::new("git")
+        .args(&["describe", "--always", "--dirty"])
+        .output();
+    if let Ok(output) = output_res {
+        if output.status.success() {
+            return String::from_utf8(output.stdout).unwrap().trim().to_owned();
+        }
+    }
+    "GIT_CMD_ERROR".into()
 }
 
 async fn get_ip() -> String {
