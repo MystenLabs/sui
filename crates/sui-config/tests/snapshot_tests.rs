@@ -26,7 +26,7 @@ use sui_config::{genesis::Builder, genesis_config::GenesisConfig};
 use sui_types::base_types::{ObjectID, SuiAddress};
 use sui_types::crypto::{
     generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-    AuthorityPublicKeyBytes,
+    AuthorityPublicKeyBytes, NetworkKeyPair,
 };
 
 #[test]
@@ -64,15 +64,15 @@ fn populated_genesis_snapshot_matches() {
         .generate_accounts(&mut StdRng::from_seed([0; 32]))
         .unwrap();
     let key: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-    let worker_key: AuthorityKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
-    let network_key: AccountKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let worker_key: NetworkKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
+    let network_key: NetworkKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
     let account_key: AccountKeyPair = get_key_pair_from_rng(&mut StdRng::from_seed([0; 32])).1;
     let validator = ValidatorInfo {
         name: "0".into(),
         protocol_key: key.public().into(),
-        worker_key: worker_key.public().into(),
+        worker_key: worker_key.public().clone(),
         account_key: account_key.public().clone().into(),
-        network_key: network_key.public().into(),
+        network_key: network_key.public().clone(),
         stake: 1,
         delegation: 0,
         gas_price: 1,

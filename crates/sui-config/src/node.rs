@@ -18,6 +18,8 @@ use sui_types::crypto::AccountKeyPair;
 use sui_types::crypto::AuthorityKeyPair;
 use sui_types::crypto::AuthorityPublicKeyBytes;
 use sui_types::crypto::KeypairTraits;
+use sui_types::crypto::NetworkKeyPair;
+use sui_types::crypto::NetworkPublicKey;
 use sui_types::crypto::PublicKey as AccountsPublicKey;
 use sui_types::crypto::SuiKeyPair;
 use sui_types::sui_serde::KeyPairBase64;
@@ -36,13 +38,13 @@ pub struct NodeConfig {
     /// The keypair that is used by the narwhal worker.
     #[serde(default = "default_worker_key_pair")]
     #[serde_as(as = "Arc<KeyPairBase64>")]
-    pub worker_key_pair: Arc<AuthorityKeyPair>,
+    pub worker_key_pair: Arc<NetworkKeyPair>,
     /// The keypair that the authority uses to receive payments
     #[serde(default = "default_sui_key_pair")]
     pub account_key_pair: Arc<SuiKeyPair>,
-    #[serde(default = "default_key_pair")]
+    #[serde(default = "default_worker_key_pair")]
     #[serde_as(as = "Arc<KeyPairBase64>")]
-    pub network_key_pair: Arc<AuthorityKeyPair>,
+    pub network_key_pair: Arc<NetworkKeyPair>,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
@@ -84,7 +86,7 @@ fn default_key_pair() -> Arc<AuthorityKeyPair> {
     Arc::new(sui_types::crypto::get_key_pair().1)
 }
 
-fn default_worker_key_pair() -> Arc<AuthorityKeyPair> {
+fn default_worker_key_pair() -> Arc<NetworkKeyPair> {
     Arc::new(sui_types::crypto::get_key_pair().1)
 }
 
@@ -131,8 +133,12 @@ impl NodeConfig {
         &self.protocol_key_pair
     }
 
-    pub fn worker_key_pair(&self) -> &AuthorityKeyPair {
+    pub fn worker_key_pair(&self) -> &NetworkKeyPair {
         &self.worker_key_pair
+    }
+
+    pub fn network_key_pair(&self) -> &NetworkKeyPair {
+        &self.network_key_pair
     }
 
     pub fn protocol_public_key(&self) -> AuthorityPublicKeyBytes {
@@ -193,8 +199,8 @@ pub struct ValidatorInfo {
     pub name: String,
     pub account_key: AccountsPublicKey,
     pub protocol_key: AuthorityPublicKeyBytes,
-    pub worker_key: AuthorityPublicKeyBytes,
-    pub network_key: AuthorityPublicKeyBytes,
+    pub worker_key: NetworkPublicKey,
+    pub network_key: NetworkPublicKey,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
     pub gas_price: u64,
@@ -219,12 +225,12 @@ impl ValidatorInfo {
         self.protocol_key
     }
 
-    pub fn worker_key(&self) -> AuthorityPublicKeyBytes {
-        self.worker_key
+    pub fn worker_key(&self) -> &NetworkPublicKey {
+        &self.worker_key
     }
 
-    pub fn network_key(&self) -> AuthorityPublicKeyBytes {
-        self.network_key
+    pub fn network_key(&self) -> &NetworkPublicKey {
+        &self.network_key
     }
 
     pub fn account_key(&self) -> &AccountsPublicKey {
