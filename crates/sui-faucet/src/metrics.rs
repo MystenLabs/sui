@@ -16,7 +16,7 @@ pub struct FaucetMetrics {
     pub(crate) process_latency: Histogram,
 }
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1., 2.5, 5., 10., 20., 30., 40., 50., 60., 90.,
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
 ];
 
 impl FaucetMetrics {

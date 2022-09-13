@@ -24,7 +24,7 @@ pub struct QuorumDriverMetrics {
 }
 
 const LATENCY_SEC_BUCKETS: &[f64] = &[
-    0.01, 0.05, 0.1, 0.5, 1., 2.5, 5., 10., 20., 30., 40., 50., 60., 90.,
+    0.01, 0.05, 0.1, 0.25, 0.5, 1., 2., 4., 6., 8., 10., 20., 30., 60., 90.,
 ];
 
 impl QuorumDriverMetrics {
