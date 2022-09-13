@@ -23,7 +23,7 @@ rand = "0.8.5"
 roaring = "0.10.1"
 serde = { version = "1.0.144", features = ["derive"] }
 serde_with = "2.0.1"
-signature = "1.6.0"
+signature = "1.6.1"
 store = {  version = "0.1.0", package = "typed-store"}
 thiserror = "1.0.34"
 tokio = { version = "1.20.1", features = ["sync", "rt", "macros"] }
