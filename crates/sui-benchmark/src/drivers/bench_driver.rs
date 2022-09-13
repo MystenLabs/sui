@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use futures::future::try_join_all;
 use futures::future::BoxFuture;
@@ -19,7 +19,7 @@ use tokio::sync::OnceCell;
 
 use crate::drivers::driver::Driver;
 use crate::workloads::workload::Payload;
-use crate::workloads::workload::Workload;
+use crate::workloads::workload::WorkloadInfo;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::Arc;
 use std::time::Duration;
@@ -115,27 +115,47 @@ async fn print_start_benchmark() {
     .await;
 }
 
-pub struct BenchDriver {
-    pub num_requests_per_worker: u64,
-    pub num_workers: u64,
+pub struct BenchWorker {
+    pub num_requests: u64,
     pub target_qps: u64,
+    pub payload: Vec<Box<dyn Payload>>,
+}
+
+pub struct BenchDriver {
     pub stat_collection_interval: u64,
 }
 
 impl BenchDriver {
-    pub fn new(
-        target_qps: u64,
-        in_flight_ratio: u64,
-        num_workers: u64,
-        stat_collection_interval: u64,
-    ) -> BenchDriver {
-        let max_in_flight_ops = target_qps as usize * in_flight_ratio as usize;
+    pub fn new(stat_collection_interval: u64) -> BenchDriver {
         BenchDriver {
-            num_requests_per_worker: max_in_flight_ops as u64 / num_workers,
-            num_workers,
-            target_qps,
             stat_collection_interval,
         }
+    }
+    pub async fn make_workers(
+        &self,
+        workload_info: &WorkloadInfo,
+        aggregator: &AuthorityAggregator<NetworkAuthorityClient>,
+    ) -> Vec<BenchWorker> {
+        let mut num_requests = workload_info.max_in_flight_ops / workload_info.num_workers;
+        let mut target_qps = workload_info.target_qps / workload_info.num_workers;
+        let mut workers = vec![];
+        for i in 0..workload_info.num_workers {
+            if i == workload_info.num_workers - 1 {
+                num_requests += workload_info.max_in_flight_ops % workload_info.num_workers;
+                target_qps += workload_info.target_qps % workload_info.num_workers;
+            }
+            if num_requests > 0 && target_qps > 0 {
+                workers.push(BenchWorker {
+                    num_requests,
+                    target_qps,
+                    payload: workload_info
+                        .workload
+                        .make_test_payloads(num_requests, aggregator)
+                        .await,
+                });
+            }
+        }
+        workers
     }
 }
 
@@ -143,21 +163,26 @@ impl BenchDriver {
 impl Driver<()> for BenchDriver {
     async fn run(
         &self,
-        workload: Box<dyn Workload<dyn Payload>>,
+        workloads: Vec<WorkloadInfo>,
         aggregator: AuthorityAggregator<NetworkAuthorityClient>,
         registry: &Registry,
     ) -> Result<(), anyhow::Error> {
         let mut tasks = Vec::new();
         let (tx, mut rx) = tokio::sync::mpsc::channel(100);
-        let request_delay_micros = (1_000_000 * self.num_workers) / self.target_qps;
+        let mut bench_workers = vec![];
+        for workload in workloads.iter() {
+            bench_workers.extend(self.make_workers(workload, &aggregator).await);
+        }
+        let num_workers = bench_workers.len() as u64;
+        if num_workers == 0 {
+            return Err(anyhow!("No workers to run benchmark!"));
+        }
         let stat_delay_micros = 1_000_000 * self.stat_collection_interval;
-        let barrier = Arc::new(Barrier::new(self.num_workers as usize));
         let metrics = Arc::new(BenchMetrics::new(registry));
-        for i in 0..self.num_workers {
-            eprintln!("Starting worker: {}", i);
-            let mut free_pool = workload
-                .make_test_payloads(self.num_requests_per_worker, &aggregator)
-                .await;
+        let barrier = Arc::new(Barrier::new(num_workers as usize));
+        for (i, worker) in bench_workers.into_iter().enumerate() {
+            let request_delay_micros = 1_000_000 / worker.target_qps;
+            let mut free_pool = worker.payload;
             let tx_cloned = tx.clone();
             let cloned_barrier = barrier.clone();
             let metrics_cloned = metrics.clone();
@@ -333,7 +358,6 @@ impl Driver<()> for BenchDriver {
             tasks.push(runner);
         }
 
-        let num_workers = self.num_workers;
         tasks.push(tokio::spawn(async move {
             let mut stat_collection: BTreeMap<usize, Stats> = BTreeMap::new();
             let mut counter = 0;

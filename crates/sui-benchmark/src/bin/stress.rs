@@ -20,6 +20,7 @@ use sui_benchmark::workloads::workload::get_latest;
 use sui_benchmark::workloads::workload::CombinationWorkload;
 use sui_benchmark::workloads::workload::Payload;
 use sui_benchmark::workloads::workload::Workload;
+use sui_benchmark::workloads::workload::WorkloadInfo;
 use sui_benchmark::workloads::workload::WorkloadType;
 use sui_config::gateway::GatewayConfig;
 use sui_config::Config;
@@ -106,6 +107,12 @@ struct Opts {
     /// Whether or no to download TXes during follow
     #[clap(long, global = true)]
     pub download_txes: bool,
+    /// Run in disjoint_mode when we don't want different workloads
+    /// to interfere with each other. This mode is useful when
+    /// we don't want backoff to penalize all workloads even if only
+    /// one (or some) is slow.
+    #[clap(long, parse(try_from_str), default_value = "true", global = true)]
+    pub disjoint_mode: bool,
 }
 
 #[derive(Debug, Clone, Parser, Eq, PartialEq, EnumString)]
@@ -198,12 +205,15 @@ pub async fn follow(authority_client: NetworkAuthorityClient, download_txes: boo
     });
 }
 
-fn make_workload(
+fn make_combination_workload(
+    target_qps: u64,
+    num_workers: u64,
+    in_flight_ratio: u64,
     primary_gas_id: ObjectID,
     primary_gas_account_owner: SuiAddress,
     primary_gas_account_keypair: Arc<AccountKeyPair>,
     opts: &Opts,
-) -> Box<dyn Workload<dyn Payload>> {
+) -> WorkloadInfo {
     let mut workloads = HashMap::<WorkloadType, (u32, Box<dyn Workload<dyn Payload>>)>::new();
     match opts.run_spec {
         RunSpec::Bench {
@@ -235,7 +245,61 @@ fn make_workload(
             }
         }
     }
-    CombinationWorkload::new_boxed(workloads)
+    let workload = CombinationWorkload::new_boxed(workloads);
+    WorkloadInfo {
+        target_qps,
+        num_workers,
+        max_in_flight_ops: in_flight_ratio * target_qps,
+        workload,
+    }
+}
+
+fn make_shared_counter_workload(
+    target_qps: u64,
+    num_workers: u64,
+    max_in_flight_ops: u64,
+    primary_gas_id: ObjectID,
+    owner: SuiAddress,
+    keypair: Arc<AccountKeyPair>,
+) -> Option<WorkloadInfo> {
+    if target_qps == 0 || max_in_flight_ops == 0 || num_workers == 0 {
+        None
+    } else {
+        let workload = SharedCounterWorkload::new_boxed(primary_gas_id, owner, keypair, None);
+        Some(WorkloadInfo {
+            target_qps,
+            num_workers,
+            max_in_flight_ops,
+            workload,
+        })
+    }
+}
+
+fn make_transfer_object_workload(
+    target_qps: u64,
+    num_workers: u64,
+    max_in_flight_ops: u64,
+    num_transfer_accounts: u64,
+    primary_gas_id: &ObjectID,
+    owner: SuiAddress,
+    keypair: Arc<AccountKeyPair>,
+) -> Option<WorkloadInfo> {
+    if target_qps == 0 || max_in_flight_ops == 0 || num_workers == 0 {
+        None
+    } else {
+        let workload = TransferObjectWorkload::new_boxed(
+            num_transfer_accounts,
+            *primary_gas_id,
+            owner,
+            keypair,
+        );
+        Some(WorkloadInfo {
+            target_qps,
+            num_workers,
+            max_in_flight_ops,
+            workload,
+        })
+    }
 }
 
 /// To spin up a local cluster and direct some load
@@ -446,23 +510,71 @@ async fn main() -> Result<()> {
                 AuthAggMetrics::new(&registry),
                 SafeClientMetrics::new(&registry),
             );
-            let mut workload = make_workload(primary_gas_id, owner, keypair, &opts);
-            workload.init(&aggregator).await;
-            let driver = match opts.run_spec {
+            match opts.run_spec {
                 RunSpec::Bench {
                     target_qps,
                     num_workers,
                     in_flight_ratio,
                     stat_collection_interval,
+                    shared_counter,
+                    transfer_object,
                     ..
-                } => BenchDriver::new(
-                    target_qps,
-                    in_flight_ratio,
-                    num_workers,
-                    stat_collection_interval,
-                ),
-            };
-            driver.run(workload, aggregator, &registry).await
+                } => {
+                    let workloads = if !opts.disjoint_mode {
+                        let mut combination_workload = make_combination_workload(
+                            target_qps,
+                            num_workers,
+                            in_flight_ratio,
+                            primary_gas_id,
+                            owner,
+                            keypair,
+                            &opts,
+                        );
+                        combination_workload.workload.init(&aggregator).await;
+                        vec![combination_workload]
+                    } else {
+                        let mut workloads = vec![];
+                        let shared_counter_weight =
+                            shared_counter as f32 / (shared_counter + transfer_object) as f32;
+                        let shared_counter_qps = (shared_counter_weight * target_qps as f32) as u64;
+                        let shared_counter_num_workers =
+                            (shared_counter_weight * num_workers as f32).ceil() as u64;
+                        let shared_counter_max_ops = (shared_counter_qps * in_flight_ratio) as u64;
+                        if let Some(mut shared_counter_workload) = make_shared_counter_workload(
+                            shared_counter_qps,
+                            shared_counter_num_workers,
+                            shared_counter_max_ops,
+                            primary_gas_id,
+                            owner,
+                            keypair.clone(),
+                        ) {
+                            shared_counter_workload.workload.init(&aggregator).await;
+                            workloads.push(shared_counter_workload);
+                        }
+                        let transfer_object_weight = 1.0 - shared_counter_weight;
+                        let transfer_object_qps = target_qps - shared_counter_qps;
+                        let trasnfer_object_num_workers =
+                            (transfer_object_weight * num_workers as f32).ceil() as u64;
+                        let trasnfer_object_max_ops =
+                            (transfer_object_qps * in_flight_ratio) as u64;
+                        if let Some(mut transfer_object_workload) = make_transfer_object_workload(
+                            transfer_object_qps,
+                            trasnfer_object_num_workers,
+                            trasnfer_object_max_ops,
+                            opts.num_transfer_accounts,
+                            &primary_gas_id,
+                            owner,
+                            keypair,
+                        ) {
+                            transfer_object_workload.workload.init(&aggregator).await;
+                            workloads.push(transfer_object_workload);
+                        }
+                        workloads
+                    };
+                    let driver = BenchDriver::new(stat_collection_interval);
+                    driver.run(workloads, aggregator, &registry).await
+                }
+            }
         })
     });
     let joined = handle.join();
