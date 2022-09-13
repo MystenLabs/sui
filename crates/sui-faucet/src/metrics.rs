@@ -15,6 +15,9 @@ pub struct FaucetMetrics {
     pub(crate) current_requests_in_flight: IntGauge,
     pub(crate) process_latency: Histogram,
 }
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
 
 impl FaucetMetrics {
     pub fn new(registry: &Registry) -> Self {
@@ -40,6 +43,7 @@ impl FaucetMetrics {
             process_latency: register_histogram_with_registry!(
                 "process_latency",
                 "Latency of processing a Faucet request",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

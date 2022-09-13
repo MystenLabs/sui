@@ -161,7 +161,9 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
     1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
 ];
 
-const LATENCY_SEC_BUCKETS: &[f64] = &[0.001, 0.01, 0.1, 1., 2., 3., 5., 10., 20., 30., 60., 180.];
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {

@@ -168,7 +168,9 @@ pub struct ValidatorServiceMetrics {
     pub handle_certificate_non_consensus_latency: Histogram,
 }
 
-const LATENCY_SEC_BUCKETS: &[f64] = &[0.001, 0.01, 0.1, 1., 2., 3., 5., 10., 20., 30., 60., 180.];
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
 
 impl ValidatorServiceMetrics {
     pub fn new(registry: &Registry) -> Self {
