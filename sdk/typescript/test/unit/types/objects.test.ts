@@ -4,7 +4,7 @@
 import { describe, it, expect } from 'vitest';
 import mockObjectData from '@mysten/sui-open-rpc/samples/objects.json';
 
-import { isGetObjectDataResponse } from '../../src/types/index.guard';
+import { isGetObjectDataResponse } from '../../../src/types/index.guard';
 
 describe('Test Objects Definition', () => {
   it('Test against different object definitions', () => {
