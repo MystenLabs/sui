@@ -19,7 +19,7 @@ primary = { path = "../primary" }
 serde = { version = "1.0.144", features = ["derive"] }
 thiserror = "1.0.34"
 tokio = { version = "1.20.1", features = ["sync"] }
-tokio-util = { version = "0.7.3", features = ["codec"] }
+tokio-util = { version = "0.7.4", features = ["codec"] }
 tonic = "0.7.2"
 tracing = "0.1.36"
 prometheus = "0.13.2"
