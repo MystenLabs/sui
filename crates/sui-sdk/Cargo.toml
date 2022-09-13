@@ -41,7 +41,7 @@ dirs = "4.0.0"
 tokio = "1.20.1"
 async-recursion = "1.0.0"
 tempfile = "3.3.0"
-sha3 = "0.10.2"
+sha3 = "0.10.4"
 
 [[example]]
 name = "tic-tac-toe"
