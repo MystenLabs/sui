@@ -19,6 +19,9 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
                         </div>
                     )}
                     <div className={styles.textitem}>
+                        {entryObj.name && (
+                            <div className={styles.name}>{entryObj.name}</div>
+                        )}
                         <div>
                             <Longtext
                                 text={entryObj.id}

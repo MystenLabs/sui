@@ -52,3 +52,7 @@
 .fail {
     @apply text-red-600 font-sans font-semibold mt-2;
 }
+
+.name {
+    @apply text-sui-grey-90 font-medium text-[13px] leading-[130%];
+}
