@@ -176,8 +176,7 @@ mod tests {
     use prometheus::Registry;
     use rand::Rng;
     use std::collections::BTreeSet;
-    use test_utils::make_consensus_store;
-    use test_utils::CommitteeFixture;
+    use test_utils::{make_consensus_store, CommitteeFixture};
     use types::Certificate;
 
     #[test]

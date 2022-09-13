@@ -3,8 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use prometheus::Registry;
-use test_utils::transaction;
-use test_utils::CommitteeFixture;
+use test_utils::{transaction, CommitteeFixture};
 
 #[tokio::test]
 async fn make_batch() {

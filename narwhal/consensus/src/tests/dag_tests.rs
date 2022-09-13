@@ -7,8 +7,7 @@ use dag::node_dag::NodeDagError;
 use fastcrypto::Hash;
 use indexmap::IndexMap;
 use prometheus::Registry;
-use std::collections::BTreeSet;
-use std::sync::Arc;
+use std::{collections::BTreeSet, sync::Arc};
 use test_utils::{make_optimal_certificates, CommitteeFixture};
 use types::Certificate;
 

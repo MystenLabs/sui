@@ -23,8 +23,11 @@ use crypto::PublicKey;
 use insta::assert_json_snapshot;
 use multiaddr::Multiaddr;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
-use std::collections::{BTreeMap, HashMap};
-use std::{fs::File, io::Write};
+use std::{
+    collections::{BTreeMap, HashMap},
+    fs::File,
+    io::Write,
+};
 use tempfile::tempdir;
 use test_utils::CommitteeFixture;
 

@@ -171,7 +171,7 @@ impl Proposer {
             }
         }
 
-        let mut enough_votes = votes_for_leader >= self.committee.quorum_threshold();
+        let mut enough_votes = votes_for_leader >= self.committee.validity_threshold();
         if enough_votes {
             if let Some(leader) = self.last_leader.as_ref() {
                 debug!(
@@ -181,7 +181,7 @@ impl Proposer {
                 );
             }
         }
-        enough_votes |= no_votes >= self.committee.validity_threshold();
+        enough_votes |= no_votes >= self.committee.quorum_threshold();
         enough_votes
     }
 
