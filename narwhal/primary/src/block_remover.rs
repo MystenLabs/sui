@@ -11,7 +11,7 @@ use futures::{
     FutureExt,
 };
 use itertools::Either;
-use network::{PrimaryToWorkerNetwork, UnreliableNetwork};
+use network::{P2pNetwork, UnreliableNetwork};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use storage::CertificateStore;
 use store::{rocks::TypedStoreError, Store};
@@ -75,7 +75,7 @@ pub struct DeleteBatchMessage {
 ///
 /// ```rust
 /// # use store::{reopen, rocks, rocks::DBMap, Store};
-/// # use network::PrimaryToWorkerNetwork;
+/// # use network::P2pNetwork;
 /// # use tokio::sync::{mpsc::{channel}, watch};
 /// # use arc_swap::ArcSwap;
 /// # use fastcrypto::Hash;
@@ -148,7 +148,7 @@ pub struct DeleteBatchMessage {
 ///         headers_store.clone(),
 ///         payload_store.clone(),
 ///         Some(dag),
-///         PrimaryToWorkerNetwork::default(),
+///         network::P2pNetwork::new(test_utils::random_network()),
 ///         rx_reconfigure,
 ///         rx_commands,
 ///         rx_delete_batches,
@@ -207,7 +207,7 @@ pub struct BlockRemover {
     dag: Option<Arc<Dag>>,
 
     /// Network driver allowing to send messages.
-    worker_network: PrimaryToWorkerNetwork,
+    worker_network: P2pNetwork,
 
     /// Watch channel to reconfigure the committee.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
@@ -243,7 +243,7 @@ impl BlockRemover {
         header_store: Store<HeaderDigest, Header>,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         dag: Option<Arc<Dag>>,
-        worker_network: PrimaryToWorkerNetwork,
+        worker_network: P2pNetwork,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_commands: Receiver<BlockRemoverCommand>,
         rx_delete_batches: Receiver<DeleteBatchResult>,
@@ -550,24 +550,24 @@ impl BlockRemover {
         // now send the requests
         for (worker_id, batch_ids) in batches_by_worker {
             // send the batches to each worker id
-            let worker_address = self
+            let worker_name = self
                 .worker_cache
                 .load()
                 .worker(&self.name, &worker_id)
                 .expect("Worker id not found")
-                .primary_to_worker;
+                .name;
 
             let message = PrimaryWorkerMessage::DeleteBatches(batch_ids.clone());
 
             // send the request
             self.worker_network
-                .unreliable_send(worker_address.clone(), &message)
+                .unreliable_send(worker_name.clone(), &message)
                 .await;
 
             debug!(
                 "Sending DeleteBatches request for batch ids {:?} to worker {}",
                 batch_ids.clone(),
-                worker_address
+                worker_name
             );
 
             // create a key based on the provided batch ids and use it as a request

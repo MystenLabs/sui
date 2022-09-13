@@ -11,24 +11,16 @@
 
 mod bounded_executor;
 pub mod metrics;
-mod primary;
+mod p2p;
 mod retry;
 mod traits;
-mod worker;
 
 pub use crate::{
     bounded_executor::BoundedExecutor,
-    primary::{P2pNetwork, PrimaryToWorkerNetwork},
+    p2p::P2pNetwork,
     retry::RetryConfig,
-    traits::{
-        Lucky, LuckyNetwork, LuckyNetwork2, ReliableNetwork, ReliableNetwork2, UnreliableNetwork,
-        UnreliableNetwork2,
-    },
-    worker::WorkerToPrimaryNetwork,
+    traits::{Lucky, LuckyNetwork, ReliableNetwork, UnreliableNetwork},
 };
-
-// the result of our network messages
-pub type MessageResult = Result<tonic::Response<types::Empty>, eyre::Report>;
 
 /// This adapter will make a [`tokio::task::JoinHandle`] abort its handled task when the handle is dropped.
 #[derive(Debug)]

@@ -8,7 +8,7 @@ use crate::{
 };
 
 use fastcrypto::{traits::KeyPair, Hash};
-use network::{P2pNetwork, PrimaryToWorkerNetwork};
+use network::P2pNetwork;
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
 use test_utils::{fixture_payload, CommitteeFixture};
@@ -55,12 +55,25 @@ async fn successfully_synchronize_batches() {
         rx_synchronizer,
         tx_core,
         metrics,
-        P2pNetwork::new(network),
-        PrimaryToWorkerNetwork::default(),
+        P2pNetwork::new(network.clone()),
     );
 
-    // AND a header
+    // AND spin up a worker node that primary owns
     let worker_id = 0;
+    let worker = primary.worker(worker_id);
+    let worker_keypair = worker.keypair();
+    let worker_name = worker_keypair.public().to_owned();
+    let worker_address = &worker.info().worker_address;
+
+    let handle = worker_listener(1, worker_address.clone(), worker_keypair);
+    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let peer_id = anemo::PeerId(worker_name.0.to_bytes());
+    network
+        .connect_with_peer_id(address, peer_id)
+        .await
+        .unwrap();
+
+    // AND a header
     let header = author
         .header_builder(&committee)
         .payload(fixture_payload(2))
@@ -81,15 +94,6 @@ async fn successfully_synchronize_batches() {
         ))
         .await
         .unwrap();
-
-    // AND spin up a worker node that primary owns
-    let worker_address = worker_cache
-        .load()
-        .worker(&name, &worker_id)
-        .unwrap()
-        .primary_to_worker;
-
-    let handle = worker_listener::<PrimaryWorkerMessage>(1, worker_address);
 
     // THEN
     if let Ok(Ok(mut result)) = timeout(Duration::from_millis(4_000), handle).await {

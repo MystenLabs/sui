@@ -69,9 +69,9 @@ async fn process_header() {
         .unwrap();
 
     let address = network::multiaddr_to_address(&address).unwrap();
-    let network_key = author.network_keypair().public();
+    let network_key = author.network_keypair().public().0.to_bytes();
     let peer_info = PeerInfo {
-        peer_id: PeerId(network_key.0.to_bytes()),
+        peer_id: PeerId(network_key),
         affinity: anemo::types::PeerAffinity::High,
         address: vec![address],
     };

@@ -4,7 +4,7 @@
 use config::{Committee, SharedWorkerCache, Stake, WorkerId};
 use crypto::PublicKey;
 use futures::stream::{futures_unordered::FuturesUnordered, StreamExt as _};
-use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork2};
+use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{
     error::DagError,

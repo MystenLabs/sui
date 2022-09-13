@@ -9,18 +9,21 @@ use crate::{
     PrimaryWorkerMessage,
 };
 
-use bincode::deserialize;
+use anemo::PeerId;
 use config::{Committee, WorkerId};
 use consensus::{dag::Dag, metrics::ConsensusMetrics};
+use crypto::{traits::KeyPair, NetworkKeyPair};
 use fastcrypto::Hash;
 use futures::{
     future::{join_all, try_join_all},
     stream::FuturesUnordered,
 };
-use network::PrimaryToWorkerNetwork;
+use network::P2pNetwork;
 use prometheus::Registry;
 use std::{borrow::Borrow, collections::HashMap, sync::Arc, time::Duration};
-use test_utils::{fixture_batch_with_transactions, CommitteeFixture, PrimaryToWorkerMockServer};
+use test_utils::{
+    fixture_batch_with_transactions, test_network, CommitteeFixture, PrimaryToWorkerMockServer,
+};
 use tokio::{
     sync::{mpsc, watch},
     task::JoinHandle,
@@ -52,6 +55,7 @@ async fn test_successful_blocks_delete() {
     let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
+    let network = test_network(primary.network_keypair(), primary.address());
     let _remover_handler = BlockRemover::spawn(
         name.clone(),
         committee.clone(),
@@ -60,7 +64,7 @@ async fn test_successful_blocks_delete() {
         header_store.clone(),
         payload_store.clone(),
         Some(dag.clone()),
-        PrimaryToWorkerNetwork::default(),
+        P2pNetwork::new(network.clone()),
         rx_reconfigure,
         rx_commands,
         rx_delete_batches,
@@ -124,15 +128,24 @@ async fn test_successful_blocks_delete() {
 
     // AND bootstrap the workers
     for (worker_id, batch_digests) in worker_batches.clone() {
-        let worker_address = worker_cache
-            .clone()
-            .load()
-            .worker(&name, &worker_id)
-            .unwrap()
-            .primary_to_worker;
+        let worker = primary.worker(worker_id);
+        let network_key = worker.keypair();
+        let address = &worker.info().worker_address;
 
-        let handle = worker_listener(worker_address, batch_digests, tx_delete_batches.clone());
+        let handle = worker_listener(
+            network_key,
+            address.to_owned(),
+            batch_digests,
+            tx_delete_batches.clone(),
+        );
         handlers.push(handle);
+
+        let address = network::multiaddr_to_address(address).unwrap();
+        let peer_id = PeerId(worker.keypair().public().0.to_bytes());
+        network
+            .connect_with_peer_id(address, peer_id)
+            .await
+            .unwrap();
     }
 
     tx_commands
@@ -208,7 +221,7 @@ async fn test_timeout() {
     let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(10);
 
     // AND the necessary keys
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let author = fixture.authorities().next().unwrap();
@@ -221,6 +234,7 @@ async fn test_timeout() {
     let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
+    let network = test_network(primary.network_keypair(), primary.address());
     let _remover_handler = BlockRemover::spawn(
         name.clone(),
         committee.clone(),
@@ -229,7 +243,7 @@ async fn test_timeout() {
         header_store.clone(),
         payload_store.clone(),
         Some(dag.clone()),
-        PrimaryToWorkerNetwork::default(),
+        P2pNetwork::new(network.clone()),
         rx_reconfigure,
         rx_commands,
         rx_delete_batches,
@@ -348,7 +362,7 @@ async fn test_unlocking_pending_requests() {
     let (tx_removed_certificates, _rx_removed_certificates) = test_utils::test_channel!(10);
 
     // AND the necessary keys
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let author = fixture.authorities().next().unwrap();
@@ -361,6 +375,7 @@ async fn test_unlocking_pending_requests() {
     let dag = Arc::new(Dag::new(&committee, rx_consensus, consensus_metrics).1);
     populate_genesis(&dag, &committee).await;
 
+    let network = test_network(primary.network_keypair(), primary.address());
     let mut remover = BlockRemover {
         name,
         committee: committee.clone(),
@@ -369,7 +384,7 @@ async fn test_unlocking_pending_requests() {
         header_store: header_store.clone(),
         payload_store: payload_store.clone(),
         dag: Some(dag.clone()),
-        worker_network: PrimaryToWorkerNetwork::default(),
+        worker_network: P2pNetwork::new(network.clone()),
         rx_reconfigure,
         rx_commands,
         pending_removal_requests: HashMap::new(),
@@ -459,21 +474,24 @@ async fn test_unlocking_pending_requests() {
 
 #[must_use]
 pub fn worker_listener(
+    keypair: NetworkKeyPair,
     address: multiaddr::Multiaddr,
     expected_batch_ids: Vec<BatchDigest>,
     tx_delete_batches: metered_channel::Sender<DeleteBatchResult>,
 ) -> JoinHandle<()> {
-    println!("[{}] Setting up server", &address);
-    let mut recv = PrimaryToWorkerMockServer::spawn(address.clone());
+    let pubkey = keypair.public().clone();
+    println!("[{}] Setting up server", pubkey);
+    let (mut recv, network) = PrimaryToWorkerMockServer::spawn(keypair, address);
     tokio::spawn(async move {
+        let _network = network;
         let message = recv.recv().await.unwrap();
-        match deserialize(&message.payload) {
-            Ok(PrimaryWorkerMessage::DeleteBatches(ids)) => {
+        match message {
+            PrimaryWorkerMessage::DeleteBatches(ids) => {
                 assert_eq!(
                     ids.clone(),
                     expected_batch_ids,
                     "Expected batch ids not the same for [{}]",
-                    &address
+                    pubkey
                 );
 
                 tx_delete_batches

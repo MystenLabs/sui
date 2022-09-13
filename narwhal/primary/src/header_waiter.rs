@@ -8,9 +8,7 @@ use crate::{
 use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
 use futures::future::{try_join_all, BoxFuture};
-use network::{
-    LuckyNetwork2, P2pNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2,
-};
+use network::{LuckyNetwork, P2pNetwork, UnreliableNetwork};
 use serde::{de::DeserializeOwned, Serialize};
 use std::{
     collections::HashMap,
@@ -77,8 +75,8 @@ pub struct HeaderWaiter {
     tx_core: Sender<Header>,
 
     /// Network driver allowing to send messages.
-    primary_network: P2pNetwork,
-    worker_network: PrimaryToWorkerNetwork,
+    network: P2pNetwork,
+
     /// Keeps the digests of the all certificates for which we sent a sync request,
     /// along with a time stamp (`u128`) indicating when we sent the request.
     parent_requests: HashMap<CertificateDigest, (Round, u128)>,
@@ -115,7 +113,6 @@ impl HeaderWaiter {
         tx_core: Sender<Header>,
         metrics: Arc<PrimaryMetrics>,
         primary_network: P2pNetwork,
-        worker_network: PrimaryToWorkerNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -131,8 +128,7 @@ impl HeaderWaiter {
                 rx_reconfigure,
                 rx_synchronizer,
                 tx_core,
-                primary_network,
-                worker_network,
+                network: primary_network,
                 parent_requests: HashMap::new(),
                 batch_requests: HashMap::new(),
                 pending: HashMap::new(),
@@ -228,15 +224,15 @@ impl HeaderWaiter {
                                 });
                             }
                             for (worker_id, digests) in requires_sync {
-                                let address = self.worker_cache
+                                let worker_name = self.worker_cache
                                     .load()
                                     .worker(&self.name, &worker_id)
                                     .expect("Author of valid header is not in the worker cache")
-                                    .primary_to_worker;
+                                    .name;
 
                                 // TODO [issue #423]: This network transmission needs to be reliable: the worker may crash-recover.
                                 let message = PrimaryWorkerMessage::Synchronize(digests, author.clone());
-                                self.worker_network.unreliable_send(address, &message).await;
+                                self.network.unreliable_send(worker_name, &message).await;
                             }
                         }
 
@@ -276,7 +272,7 @@ impl HeaderWaiter {
                             }
                             if !requires_sync.is_empty() {
                                 let message = PrimaryMessage::CertificatesRequest(requires_sync, self.name.clone());
-                                self.primary_network.unreliable_send(self.committee.network_key(&author).unwrap(), &message).await;
+                                self.network.unreliable_send(self.committee.network_key(&author).unwrap(), &message).await;
                             }
                         }
                     }
@@ -320,7 +316,7 @@ impl HeaderWaiter {
                             .map(|(_, _, network_key)| network_key)
                             .collect();
                         let message = PrimaryMessage::CertificatesRequest(retry, self.name.clone());
-                        self.primary_network.lucky_broadcast(network_keys, &message, self.sync_retry_nodes).await;
+                        self.network.lucky_broadcast(network_keys, &message, self.sync_retry_nodes).await;
                     }
                     // Reschedule the timer.
                     timer.as_mut().reset(Instant::now() + Duration::from_millis(TIMER_RESOLUTION));
@@ -333,8 +329,7 @@ impl HeaderWaiter {
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee) => {
                             // Update the committee and cleanup internal state.
-                            self.primary_network.cleanup(self.committee.network_diff(&new_committee));
-                            self.worker_network.cleanup(self.committee.network_diff(&new_committee));
+                            self.network.cleanup(self.committee.network_diff(&new_committee));
 
                             self.committee = new_committee;
 
@@ -343,8 +338,7 @@ impl HeaderWaiter {
                             self.parent_requests.clear();
                         },
                         ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.primary_network.cleanup(self.committee.network_diff(&new_committee));
-                            self.worker_network.cleanup(self.committee.network_diff(&new_committee));
+                            self.network.cleanup(self.committee.network_diff(&new_committee));
                             self.committee = new_committee;
                         },
                         ReconfigureNotification::Shutdown => return

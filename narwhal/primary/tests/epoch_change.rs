@@ -4,12 +4,12 @@ use arc_swap::ArcSwap;
 use config::{Committee, Parameters};
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
-use network::{CancelOnDropHandler, ReliableNetwork2, WorkerToPrimaryNetwork};
+use network::{CancelOnDropHandler, P2pNetwork, ReliableNetwork};
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
 use std::{sync::Arc, time::Duration};
-use test_utils::{temp_dir, CommitteeFixture};
+use test_utils::{random_network, temp_dir, CommitteeFixture};
 use tokio::sync::watch;
 use types::{ReconfigureNotification, WorkerPrimaryMessage};
 
@@ -100,7 +100,7 @@ async fn test_simple_epoch_change() {
             .await
             .unwrap();
     }
-    let mut network = WorkerToPrimaryNetwork::new(network);
+    let mut network = P2pNetwork::new(network);
 
     // Move to the next epochs.
     let mut old_committee = committee_0;
@@ -232,7 +232,7 @@ async fn test_partial_committee_change() {
             .await
             .unwrap();
     }
-    let mut network = WorkerToPrimaryNetwork::new(network);
+    let mut network = P2pNetwork::new(network);
 
     let message =
         WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee_1.clone()));
@@ -314,6 +314,8 @@ async fn test_restart_with_new_committee_change() {
     let committee_0 = fixture.committee();
     let worker_cache_0 = fixture.shared_worker_cache();
 
+    let network = random_network();
+
     // Spawn the committee of epoch 0.
     let mut rx_channels = Vec::new();
     let mut tx_channels = Vec::new();
@@ -374,13 +376,15 @@ async fn test_restart_with_new_committee_change() {
     let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::Shutdown);
     let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
     for authority in committee_0.authorities.values() {
-        let mut network = WorkerToPrimaryNetwork::new_for_single_address(
-            authority.network_key.to_owned(),
-            network::multiaddr_to_address(&authority.primary_address).unwrap(),
-        )
-        .await;
+        network
+            .connect_with_peer_id(
+                network::multiaddr_to_address(&authority.primary_address).unwrap(),
+                anemo::PeerId(authority.network_key.0.to_bytes()),
+            )
+            .await
+            .unwrap();
         _do_not_drop.push(
-            network
+            P2pNetwork::new(network.clone())
                 .send(authority.network_key.to_owned(), &message)
                 .await,
         );
@@ -389,10 +393,11 @@ async fn test_restart_with_new_committee_change() {
     // Wait for the committee to shutdown.
     join_all(handles).await;
     // Provide a small amount of time for any background tasks to shutdown
-    tokio::time::sleep(Duration::from_secs(1)).await;
+    tokio::time::sleep(Duration::from_secs(5)).await;
 
     // Move to the next epochs.
     for epoch in 1..=3 {
+        tracing::warn!("HERE");
         let mut new_committee = committee_0.clone();
         new_committee.epoch = epoch;
         let old_worker_cache = &mut worker_cache_0.clone().load().clone();
@@ -457,13 +462,15 @@ async fn test_restart_with_new_committee_change() {
         let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::Shutdown);
         let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
         for authority in committee_0.authorities.values() {
-            let mut network = WorkerToPrimaryNetwork::new_for_single_address(
-                authority.network_key.to_owned(),
-                network::multiaddr_to_address(&authority.primary_address).unwrap(),
-            )
-            .await;
+            network
+                .connect_with_peer_id(
+                    network::multiaddr_to_address(&authority.primary_address).unwrap(),
+                    anemo::PeerId(authority.network_key.0.to_bytes()),
+                )
+                .await
+                .unwrap();
             _do_not_drop.push(
-                network
+                P2pNetwork::new(network.clone())
                     .send(authority.network_key.to_owned(), &message)
                     .await,
             );
@@ -472,7 +479,7 @@ async fn test_restart_with_new_committee_change() {
         // Wait for the committee to shutdown.
         join_all(handles).await;
         // Provide a small amount of time for any background tasks to shutdown
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        tokio::time::sleep(Duration::from_secs(5)).await;
     }
 }
 
@@ -558,7 +565,7 @@ async fn test_simple_committee_update() {
         ));
         let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
         for authority in old_committee.authorities.values() {
-            let mut network = WorkerToPrimaryNetwork::new_for_single_address(
+            let mut network = P2pNetwork::new_for_single_address(
                 authority.network_key.to_owned(),
                 network::multiaddr_to_address(&authority.primary_address).unwrap(),
             )

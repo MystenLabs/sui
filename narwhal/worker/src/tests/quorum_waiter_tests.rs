@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 use super::*;
 use crate::worker::WorkerMessage;
-use test_utils::{batch, mock_network, CommitteeFixture, WorkerToWorkerMockServer};
+use test_utils::{batch, test_network, CommitteeFixture, WorkerToWorkerMockServer};
 
 #[tokio::test]
 async fn wait_for_quorum() {
@@ -19,7 +19,7 @@ async fn wait_for_quorum() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
 
     // setup network
-    let network = mock_network(myself.keypair(), &myself.info().worker_to_worker);
+    let network = test_network(myself.keypair(), &myself.info().worker_address);
     // Spawn a `QuorumWaiter` instance.
     let _quorum_waiter_handler = QuorumWaiter::spawn(
         my_primary.clone(),
@@ -39,15 +39,13 @@ async fn wait_for_quorum() {
     // Spawn enough listeners to acknowledge our batches.
     let mut listener_handles = Vec::new();
     for worker in fixture.authorities().skip(1).map(|a| a.worker(0)) {
-        let handle = WorkerToWorkerMockServer::spawn(
-            worker.keypair(),
-            worker.info().worker_to_worker.clone(),
-        );
+        let handle =
+            WorkerToWorkerMockServer::spawn(worker.keypair(), worker.info().worker_address.clone());
         listener_handles.push(handle);
 
         // ensure that the networks are connected
         network
-            .connect(network::multiaddr_to_address(&worker.info().worker_to_worker).unwrap())
+            .connect(network::multiaddr_to_address(&worker.info().worker_address).unwrap())
             .await
             .unwrap();
     }

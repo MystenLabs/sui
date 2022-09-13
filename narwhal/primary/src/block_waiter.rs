@@ -9,7 +9,7 @@ use futures::{
     stream::{futures_unordered::FuturesUnordered, StreamExt as _},
     FutureExt,
 };
-use network::{PrimaryToWorkerNetwork, UnreliableNetwork};
+use network::{P2pNetwork, UnreliableNetwork};
 use std::{
     collections::{HashMap, HashSet},
     fmt,
@@ -136,7 +136,7 @@ type RequestKey = Vec<u8>;
 /// # use fastcrypto::traits::VerifyingKey;
 /// # use async_trait::async_trait;
 /// # use std::sync::Arc;
-/// # use network::PrimaryToWorkerNetwork;
+/// # use network::P2pNetwork;
 ///
 /// # // A mock implementation of the BlockSynchronizerHandler
 /// struct BlockSynchronizerHandler;
@@ -182,7 +182,7 @@ type RequestKey = Vec<u8>;
 ///         rx_commands,
 ///         rx_batches,
 ///         Arc::new(BlockSynchronizerHandler{}),
-///         PrimaryToWorkerNetwork::default()
+///         network::P2pNetwork::new(test_utils::random_network()),
 ///     );
 ///
 ///     // Send a command to receive a block
@@ -229,7 +229,7 @@ pub struct BlockWaiter<SynchronizerHandler: Handler + Send + Sync + 'static> {
     pending_get_block: HashMap<CertificateDigest, Certificate>,
 
     /// Network driver allowing to send messages.
-    worker_network: PrimaryToWorkerNetwork,
+    worker_network: P2pNetwork,
 
     /// Watch channel to reconfigure the committee.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
@@ -274,7 +274,7 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
         rx_commands: Receiver<BlockCommand>,
         batch_receiver: Receiver<BatchResult>,
         block_synchronizer_handler: Arc<SynchronizerHandler>,
-        worker_network: PrimaryToWorkerNetwork,
+        worker_network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -757,17 +757,17 @@ impl<SynchronizerHandler: Handler + Send + Sync + 'static> BlockWaiter<Synchroni
                     worker_id
                 );
 
-                let worker_address = self
+                let worker_name = self
                     .worker_cache
                     .load()
                     .worker(&self.name, &worker_id)
                     .expect("Worker id not found")
-                    .primary_to_worker;
+                    .name;
 
                 let message = PrimaryWorkerMessage::RequestBatch(digest);
 
                 self.worker_network
-                    .unreliable_send(worker_address, &message)
+                    .unreliable_send(worker_name, &message)
                     .await;
             }
 

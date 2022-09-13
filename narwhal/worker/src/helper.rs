@@ -4,7 +4,7 @@
 
 use config::{Committee, SharedWorkerCache, WorkerId};
 use crypto::PublicKey;
-use network::{P2pNetwork, UnreliableNetwork2};
+use network::{P2pNetwork, UnreliableNetwork};
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
 use tracing::{error, trace, warn};

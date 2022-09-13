@@ -21,10 +21,10 @@ use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
     error::DagError,
-    metered_channel::{channel, Sender},
-    Batch, BatchDigest, BincodeEncodedPayload, Empty, PrimaryToWorker, PrimaryToWorkerServer,
-    ReconfigureNotification, Transaction, TransactionProto, Transactions, TransactionsServer,
-    WorkerPrimaryMessage, WorkerToWorker, WorkerToWorkerServer,
+    metered_channel::{channel, Receiver, Sender},
+    Batch, BatchDigest, Empty, PrimaryToWorker, PrimaryToWorkerServer, ReconfigureNotification,
+    Transaction, TransactionProto, Transactions, TransactionsServer, WorkerPrimaryMessage,
+    WorkerToWorker, WorkerToWorkerServer,
 };
 
 #[cfg(test)]
@@ -91,11 +91,15 @@ impl Worker {
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_helper);
         let (tx_worker_processor, rx_worker_processor) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_processor);
+        let (tx_synchronizer, rx_synchronizer) =
+            channel(CHANNEL_CAPACITY, &channel_metrics.tx_synchronizer);
 
         let worker_service = WorkerToWorkerServer::new(WorkerReceiverHandler {
             tx_worker_helper,
             tx_processor: tx_worker_processor,
         });
+        let primary_service =
+            PrimaryToWorkerServer::new(PrimaryReceiverHandler { tx_synchronizer });
 
         // Receive incoming messages from other workers.
         let address = worker
@@ -103,14 +107,16 @@ impl Worker {
             .load()
             .worker(&primary_name, &id)
             .expect("Our public key or worker id is not in the worker cache")
-            .worker_to_worker;
+            .worker_address;
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
         let addr = network::multiaddr_to_address(&address).unwrap();
 
         // Set up anemo Network.
-        let routes = anemo::Router::new().add_rpc_service(worker_service);
+        let routes = anemo::Router::new()
+            .add_rpc_service(worker_service)
+            .add_rpc_service(primary_service);
         let network = anemo::Network::bind(addr)
             .server_name("narwhal")
             .private_key(worker.keypair.copy().private().0.to_bytes())
@@ -119,14 +125,21 @@ impl Worker {
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
-        // Add other workers we want to talk with to the known peers set.
-        for (_primary_pubkey, worker_info) in worker
+        let other_workers = worker
             .worker_cache
             .load()
             .others_workers(&primary_name, &id)
-        {
-            let peer_id = PeerId(worker_info.name.0.to_bytes());
-            let address = network::multiaddr_to_address(&worker_info.worker_to_worker).unwrap();
+            .into_iter()
+            .map(|(_, info)| (info.name, info.worker_address));
+        let our_primary = std::iter::once((
+            committee.load().network_key(&primary_name).unwrap(),
+            committee.load().primary(&primary_name).unwrap(),
+        ));
+
+        // Add other workers we want to talk with to the known peers set.
+        for (public_key, address) in other_workers.chain(our_primary) {
+            let peer_id = PeerId(public_key.0.to_bytes());
+            let address = network::multiaddr_to_address(&address).unwrap();
             let peer_info = PeerInfo {
                 peer_id,
                 affinity: anemo::types::PeerAffinity::High,
@@ -156,14 +169,14 @@ impl Worker {
             primary_network_key,
             rx_reconfigure,
             rx_primary,
-            network::WorkerToPrimaryNetwork::new(network.clone()),
+            network::P2pNetwork::new(network.clone()),
         );
 
         let client_flow_handles = worker.handle_clients_transactions(
             &tx_reconfigure,
             tx_primary.clone(),
             node_metrics.clone(),
-            channel_metrics.clone(),
+            channel_metrics,
             endpoint_metrics,
             network.clone(),
         );
@@ -175,10 +188,10 @@ impl Worker {
             network.clone(),
         );
         let primary_flow_handles = worker.handle_primary_messages(
+            rx_synchronizer,
             tx_reconfigure,
             tx_primary,
             node_metrics,
-            channel_metrics,
             network,
         );
 
@@ -204,28 +217,12 @@ impl Worker {
     /// Spawn all tasks responsible to handle messages from our primary.
     fn handle_primary_messages(
         &self,
+        rx_synchronizer: Receiver<PrimaryWorkerMessage>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
         tx_primary: Sender<WorkerPrimaryMessage>,
         node_metrics: Arc<WorkerMetrics>,
-        channel_metrics: Arc<WorkerChannelMetrics>,
         network: anemo::Network,
     ) -> Vec<JoinHandle<()>> {
-        let (tx_synchronizer, rx_synchronizer) =
-            channel(CHANNEL_CAPACITY, &channel_metrics.tx_synchronizer);
-
-        // Receive incoming messages from our primary.
-        let address = self
-            .worker_cache
-            .load()
-            .worker(&self.primary_name, &self.id)
-            .expect("Our public key or worker id is not in the worker cache")
-            .primary_to_worker;
-        let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
-            .unwrap();
-        let primary_handle = PrimaryReceiverHandler { tx_synchronizer }
-            .spawn(address.clone(), tx_reconfigure.subscribe());
-
         // The `Synchronizer` is responsible to keep the worker in sync with the others. It handles the commands
         // it receives from the primary (which are mainly notifications that we are out of sync).
         let handle = Synchronizer::spawn(
@@ -244,12 +241,7 @@ impl Worker {
             P2pNetwork::new(network),
         );
 
-        info!(
-            "Worker {} listening to primary messages on {}",
-            self.id, address
-        );
-
-        vec![handle, primary_handle]
+        vec![handle]
     }
 
     /// Spawn all tasks responsible to handle clients transactions.
@@ -483,57 +475,20 @@ struct PrimaryReceiverHandler {
     tx_synchronizer: Sender<PrimaryWorkerMessage>,
 }
 
-impl PrimaryReceiverHandler {
-    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
-        loop {
-            let result = rx_reconfigure.changed().await;
-            result.expect("Committee channel dropped");
-            let message = rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::Shutdown = message {
-                break;
-            }
-        }
-    }
-
-    #[must_use]
-    fn spawn(
-        self,
-        address: Multiaddr,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    ) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            tokio::select! {
-                _result = mysten_network::config::Config::new()
-                    .server_builder()
-                    .add_service(PrimaryToWorkerServer::new(self))
-                    .bind(&address)
-                    .await
-                    .unwrap()
-                    .serve() => (),
-
-                () = Self::wait_for_shutdown(rx_reconfigure) => ()
-            }
-        })
-    }
-}
-
 #[async_trait]
 impl PrimaryToWorker for PrimaryReceiverHandler {
     async fn send_message(
         &self,
-        request: Request<BincodeEncodedPayload>,
-    ) -> Result<Response<Empty>, Status> {
-        let message: PrimaryWorkerMessage = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        request: anemo::Request<PrimaryWorkerMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
 
         self.tx_synchronizer
             .send(message)
             .await
             .map_err(|_| DagError::ShuttingDown)
-            .map_err(|e| Status::not_found(e.to_string()))?;
+            .map_err(|e| anemo::rpc::Status::internal(e.to_string()))?;
 
-        Ok(Response::new(Empty {}))
+        Ok(anemo::Response::new(()))
     }
 }

@@ -9,7 +9,7 @@ use crate::{
     synchronizer::Synchronizer,
 };
 use fastcrypto::{traits::KeyPair, Hash, SignatureService};
-use network::{P2pNetwork, PrimaryToWorkerNetwork};
+use network::P2pNetwork;
 use prometheus::Registry;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use test_utils::CommitteeFixture;
@@ -88,7 +88,6 @@ async fn process_certificate_missing_parents_in_reverse() {
         tx_headers_loopback,
         metrics.clone(),
         P2pNetwork::new(network.clone()),
-        PrimaryToWorkerNetwork::default(),
     );
 
     // Make a certificate waiter
@@ -242,7 +241,6 @@ async fn process_certificate_check_gc_fires() {
         tx_headers_loopback,
         metrics.clone(),
         P2pNetwork::new(network.clone()),
-        PrimaryToWorkerNetwork::default(),
     );
 
     // Make a certificate waiter

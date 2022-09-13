@@ -4,7 +4,7 @@
 use crate::{primary::PrimaryMessage, PayloadToken};
 use config::{Committee, WorkerId};
 use crypto::PublicKey;
-use network::{P2pNetwork, UnreliableNetwork2};
+use network::{P2pNetwork, UnreliableNetwork};
 use storage::CertificateStore;
 use store::{Store, StoreError};
 use thiserror::Error;

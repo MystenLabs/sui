@@ -1,9 +1,9 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use bincode::deserialize;
-use config::WorkerId;
 
-use serde::de::DeserializeOwned;
+use crate::PayloadToken;
+use config::WorkerId;
+use crypto::NetworkKeyPair;
 use std::time::Duration;
 use storage::CertificateStore;
 use store::{reopen, rocks, rocks::DBMap, Store};
@@ -11,10 +11,10 @@ use test_utils::{
     temp_dir, PrimaryToWorkerMockServer, CERTIFICATES_CF, CERTIFICATE_ID_BY_ROUND_CF, HEADERS_CF,
     PAYLOAD_CF,
 };
-use types::{BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, Round};
-
-use crate::PayloadToken;
 use tokio::{task::JoinHandle, time::timeout};
+use types::{
+    BatchDigest, Certificate, CertificateDigest, Header, HeaderDigest, PrimaryWorkerMessage, Round,
+};
 
 pub fn create_db_stores() -> (
     Store<HeaderDigest, Header>,
@@ -48,15 +48,13 @@ pub fn create_db_stores() -> (
 }
 
 #[must_use]
-pub fn worker_listener<T>(
+pub fn worker_listener(
     num_of_expected_responses: i32,
     address: multiaddr::Multiaddr,
-) -> JoinHandle<Vec<T>>
-where
-    T: Send + DeserializeOwned + 'static,
-{
+    keypair: NetworkKeyPair,
+) -> JoinHandle<Vec<PrimaryWorkerMessage>> {
     tokio::spawn(async move {
-        let mut recv = PrimaryToWorkerMockServer::spawn(address);
+        let (mut recv, _network) = PrimaryToWorkerMockServer::spawn(keypair, address);
         let mut responses = Vec::new();
 
         loop {
@@ -66,22 +64,15 @@ where
                     return responses;
                 }
                 Ok(Some(message)) => {
-                    match deserialize::<'_, T>(&message.payload) {
-                        Ok(msg) => {
-                            responses.push(msg);
+                    responses.push(message);
 
-                            // if -1 is given, then we don't count the number of messages
-                            // but we just rely to receive as many as possible until timeout
-                            // happens when waiting for requests.
-                            if num_of_expected_responses != -1
-                                && responses.len() as i32 == num_of_expected_responses
-                            {
-                                return responses;
-                            }
-                        }
-                        Err(err) => {
-                            panic!("Error occurred {err}");
-                        }
+                    // if -1 is given, then we don't count the number of messages
+                    // but we just rely to receive as many as possible until timeout
+                    // happens when waiting for requests.
+                    if num_of_expected_responses != -1
+                        && responses.len() as i32 == num_of_expected_responses
+                    {
+                        return responses;
                     }
                 }
                 //  sender closed

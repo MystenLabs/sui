@@ -120,12 +120,6 @@ message GetPrimaryAddressResponse {
     MultiAddr primary_address = 1;
 }
 
-// A bincode encoded payload. This is intended to be used in the short-term
-// while we don't have good protobuf definitions for Narwhal types
-message BincodeEncodedPayload {
-    bytes payload = 1;
-}
-
 // Empty message for when we don't have anything to return
 message Empty {}
 
@@ -155,12 +149,6 @@ service Configuration {
     rpc NewNetworkInfo(NewNetworkInfoRequest) returns (Empty);
     // Retrieve multiaddr of narwhal primary
     rpc GetPrimaryAddress(Empty) returns (GetPrimaryAddressResponse);
-}
-
-// The primary-to-worker interface
-service PrimaryToWorker {
-    // Sends a message
-    rpc SendMessage(BincodeEncodedPayload) returns (Empty) {}
 }
 
 service Transactions {

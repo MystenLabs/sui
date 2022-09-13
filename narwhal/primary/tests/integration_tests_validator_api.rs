@@ -226,7 +226,10 @@ async fn test_get_collections() {
 }
 
 #[tokio::test]
+#[cfg_attr(windows, ignore)]
 async fn test_remove_collections() {
+    telemetry_subscribers::init_for_testing();
+
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
         ..Parameters::default()

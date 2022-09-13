@@ -29,7 +29,7 @@ use fastcrypto::{
     SignatureService,
 };
 use multiaddr::Protocol;
-use network::{metrics::Metrics, P2pNetwork, PrimaryToWorkerNetwork};
+use network::P2pNetwork;
 use prometheus::Registry;
 use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
 use storage::CertificateStore;
@@ -94,7 +94,7 @@ impl Primary {
         // TODO Re-hookup metrics once the network migration is complete.
         let _primary_endpoint_metrics = metrics.primary_endpoint_metrics.unwrap();
         let node_metrics = Arc::new(metrics.node_metrics.unwrap());
-        let network_metrics = Arc::new(metrics.network_metrics.unwrap());
+        let _network_metrics = Arc::new(metrics.network_metrics.unwrap());
 
         let (tx_others_digests, rx_others_digests) =
             channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_others_digests);
@@ -214,8 +214,19 @@ impl Primary {
             .unwrap();
         info!("Primary {} listening on {}", name.encode_base64(), address);
 
-        for (_, address, network_pubkey) in committee.load().others_primaries(&name) {
-            let peer_id = PeerId(network_pubkey.0.to_bytes());
+        let primaries = committee
+            .load()
+            .others_primaries(&name)
+            .into_iter()
+            .map(|(_, address, network_key)| (network_key, address));
+        let workers = worker_cache
+            .load()
+            .our_workers(&name)
+            .unwrap()
+            .into_iter()
+            .map(|info| (info.name, info.worker_address));
+        for (public_key, address) in primaries.chain(workers) {
+            let peer_id = PeerId(public_key.0.to_bytes());
             let address = network::multiaddr_to_address(&address).unwrap();
             let peer_info = PeerInfo {
                 peer_id,
@@ -279,10 +290,7 @@ impl Primary {
 
         // Retrieves a block's data by contacting the worker nodes that contain the
         // underlying batches and their transactions.
-        let block_waiter_primary_network = PrimaryToWorkerNetwork::new(Metrics::new(
-            network_metrics.clone(),
-            "block_waiter".to_string(),
-        ));
+        let block_waiter_primary_network = P2pNetwork::new(network.clone());
         let block_waiter_handle = BlockWaiter::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -298,10 +306,7 @@ impl Primary {
         let internal_consensus = dag.is_none();
 
         // Orchestrates the removal of blocks across the primary and worker nodes.
-        let block_remover_primary_network = PrimaryToWorkerNetwork::new(Metrics::new(
-            network_metrics.clone(),
-            "block_remover".to_string(),
-        ));
+        let block_remover_primary_network = P2pNetwork::new(network.clone());
         let block_remover_handle = BlockRemover::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -338,8 +343,6 @@ impl Primary {
         // batch digests, it commands the `HeaderWaiter` to synchronize with other nodes, wait for their reply, and
         // re-schedule execution of the header once we have all missing data.
         let header_waiter_primary_network = P2pNetwork::new(network.clone());
-        let header_waiter_worker_network =
-            PrimaryToWorkerNetwork::new(Metrics::new(network_metrics, "header_waiter".to_string()));
         let header_waiter_handle = HeaderWaiter::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -355,7 +358,6 @@ impl Primary {
             /* tx_core */ tx_headers_loopback,
             node_metrics.clone(),
             header_waiter_primary_network,
-            header_waiter_worker_network,
         );
 
         // The `CertificateWaiter` waits to receive all the ancestors of a certificate before looping it back to the
@@ -389,7 +391,7 @@ impl Primary {
 
         // The `Helper` is dedicated to reply to certificates & payload availability requests
         // from other primaries.
-        let helper_primary_network = P2pNetwork::new(network);
+        let helper_primary_network = P2pNetwork::new(network.clone());
         let helper_handle = Helper::spawn(
             name.clone(),
             (**committee.load()).clone(),
@@ -409,6 +411,7 @@ impl Primary {
             tx_consensus_round_updates,
             rx_state_handler,
             tx_reconfigure,
+            P2pNetwork::new(network),
         );
 
         let consensus_api_handle = if !internal_consensus {

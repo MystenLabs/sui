@@ -334,10 +334,8 @@ pub struct WorkerInfo {
     pub name: NetworkPublicKey,
     /// Address to receive client transactions (WAN).
     pub transactions: Multiaddr,
-    /// Address to receive messages from other workers (WAN).
-    pub worker_to_worker: Multiaddr,
-    /// Address to receive messages from our primary (LAN).
-    pub primary_to_worker: Multiaddr,
+    /// Address to receive messages from other workers (WAN) and our primary.
+    pub worker_address: Multiaddr,
 }
 
 pub type SharedWorkerCache = Arc<ArcSwap<WorkerCache>>;
@@ -451,18 +449,7 @@ impl WorkerCache {
                     .0
                     .values()
                     .map(|address| &address.transactions)
-                    .chain(
-                        authority
-                            .0
-                            .values()
-                            .map(|address| &address.worker_to_worker),
-                    )
-                    .chain(
-                        authority
-                            .0
-                            .values()
-                            .map(|address| &address.primary_to_worker),
-                    )
+                    .chain(authority.0.values().map(|address| &address.worker_address))
             })
             .collect()
     }

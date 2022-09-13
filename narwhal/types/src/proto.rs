@@ -5,6 +5,7 @@ mod narwhal {
     tonic::include_proto!("narwhal");
 
     include!(concat!(env!("OUT_DIR"), "/narwhal.PrimaryToPrimary.rs"));
+    include!(concat!(env!("OUT_DIR"), "/narwhal.PrimaryToWorker.rs"));
     include!(concat!(env!("OUT_DIR"), "/narwhal.WorkerToPrimary.rs"));
     include!(concat!(env!("OUT_DIR"), "/narwhal.WorkerToWorker.rs"));
 }
@@ -34,12 +35,12 @@ pub use narwhal::{
     worker_to_primary_server::{WorkerToPrimary, WorkerToPrimaryServer},
     worker_to_worker_client::WorkerToWorkerClient,
     worker_to_worker_server::{WorkerToWorker, WorkerToWorkerServer},
-    BincodeEncodedPayload, CertificateDigest as CertificateDigestProto, Collection,
-    CollectionError, CollectionRetrievalResult, Empty, GetCollectionsRequest,
-    GetCollectionsResponse, GetPrimaryAddressResponse, MultiAddr as MultiAddrProto,
-    NewEpochRequest, NewNetworkInfoRequest, NodeReadCausalRequest, NodeReadCausalResponse,
-    PublicKey as PublicKeyProto, ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest,
-    RoundsRequest, RoundsResponse, Transaction as TransactionProto, ValidatorData,
+    CertificateDigest as CertificateDigestProto, Collection, CollectionError,
+    CollectionRetrievalResult, Empty, GetCollectionsRequest, GetCollectionsResponse,
+    GetPrimaryAddressResponse, MultiAddr as MultiAddrProto, NewEpochRequest, NewNetworkInfoRequest,
+    NodeReadCausalRequest, NodeReadCausalResponse, PublicKey as PublicKeyProto, ReadCausalRequest,
+    ReadCausalResponse, RemoveCollectionsRequest, RoundsRequest, RoundsResponse,
+    Transaction as TransactionProto, ValidatorData,
 };
 
 impl From<PublicKey> for PublicKeyProto {
@@ -88,22 +89,5 @@ impl TryFrom<CertificateDigestProto> for CertificateDigest {
 
     fn try_from(digest: CertificateDigestProto) -> Result<Self, Self::Error> {
         Ok(CertificateDigest::new(digest.digest.deref().try_into()?))
-    }
-}
-
-impl BincodeEncodedPayload {
-    pub fn deserialize<T: serde::de::DeserializeOwned>(&self) -> Result<T, bincode::Error> {
-        bincode::deserialize(self.payload.as_ref())
-    }
-
-    pub fn try_from<T: serde::Serialize>(value: &T) -> Result<Self, bincode::Error> {
-        let payload = bincode::serialize(value)?.into();
-        Ok(Self { payload })
-    }
-}
-
-impl From<Bytes> for BincodeEncodedPayload {
-    fn from(payload: Bytes) -> Self {
-        Self { payload }
     }
 }

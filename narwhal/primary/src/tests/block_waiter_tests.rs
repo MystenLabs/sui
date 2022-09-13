@@ -8,14 +8,15 @@ use crate::{
     },
     BlockCommand, BlockWaiter, PrimaryWorkerMessage,
 };
-
-use bincode::deserialize;
+use anemo::PeerId;
+use crypto::{traits::KeyPair as _, NetworkKeyPair};
 use fastcrypto::Hash;
 use mockall::*;
-use network::PrimaryToWorkerNetwork;
+use network::P2pNetwork;
 use std::{collections::HashMap, sync::Arc};
 use test_utils::{
-    fixture_batch_with_transactions, fixture_payload, CommitteeFixture, PrimaryToWorkerMockServer,
+    fixture_batch_with_transactions, fixture_payload, test_network, CommitteeFixture,
+    PrimaryToWorkerMockServer,
 };
 use tokio::{
     sync::{oneshot, watch},
@@ -34,7 +35,8 @@ async fn test_successfully_retrieve_block() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let author = fixture.authorities().next().unwrap();
-    let name = fixture.authorities().nth(1).unwrap().public_key();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
 
     // AND store certificate
     let header = author
@@ -64,19 +66,28 @@ async fn test_successfully_retrieve_block() {
         );
     }
 
+    let network = test_network(primary.network_keypair(), primary.address());
+
     // AND spin up a worker node
     let worker_id = 0;
-    let worker_address = worker_cache
-        .load()
-        .worker(&name, &worker_id)
-        .unwrap()
-        .primary_to_worker;
+    let worker = primary.worker(worker_id);
+    let network_key = worker.keypair();
+    let worker_name = network_key.public().clone();
+    let worker_address = &worker.info().worker_address;
 
     let handle = worker_listener(
-        worker_address,
+        network_key,
+        worker_address.to_owned(),
         expected_batch_messages.clone(),
         tx_batch_messages,
     );
+
+    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let peer_id = PeerId(worker_name.0.to_bytes());
+    network
+        .connect_with_peer_id(address, peer_id)
+        .await
+        .unwrap();
 
     // AND mock the response from the block synchronizer
     let mut mock_handler = MockHandler::new();
@@ -100,7 +111,7 @@ async fn test_successfully_retrieve_block() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
-        PrimaryToWorkerNetwork::default(),
+        P2pNetwork::new(network),
     );
 
     // WHEN we send a request to get a block
@@ -149,7 +160,8 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let author = fixture.authorities().next().unwrap();
-    let name = fixture.authorities().nth(1).unwrap().public_key();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
 
     let mut block_ids = Vec::new();
     let mut expected_batch_messages = HashMap::new();
@@ -271,18 +283,27 @@ async fn test_successfully_retrieve_multiple_blocks() {
     let (tx_get_blocks, rx_get_blocks) = oneshot::channel();
     let (tx_batch_messages, rx_batch_messages) = test_utils::test_channel!(10);
 
+    let network = test_network(primary.network_keypair(), primary.address());
+
     // AND spin up a worker node
-    let worker_address = worker_cache
-        .load()
-        .worker(&name, &worker_id)
-        .unwrap()
-        .primary_to_worker;
+    let worker = primary.worker(worker_id);
+    let network_key = worker.keypair();
+    let worker_name = network_key.public().clone();
+    let worker_address = &worker.info().worker_address;
 
     let handle = worker_listener(
-        worker_address,
+        network_key,
+        worker_address.to_owned(),
         expected_batch_messages.clone(),
         tx_batch_messages,
     );
+
+    let address = network::multiaddr_to_address(worker_address).unwrap();
+    let peer_id = PeerId(worker_name.0.to_bytes());
+    network
+        .connect_with_peer_id(address, peer_id)
+        .await
+        .unwrap();
 
     // AND mock the responses from the BlockSynchronizer
     let mut expected_result: Vec<Result<Certificate, handler::Error>> =
@@ -313,7 +334,7 @@ async fn test_successfully_retrieve_multiple_blocks() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
-        PrimaryToWorkerNetwork::default(),
+        P2pNetwork::new(network),
     );
 
     // WHEN we send a request to get a block
@@ -350,11 +371,12 @@ async fn test_successfully_retrieve_multiple_blocks() {
 #[tokio::test]
 async fn test_one_pending_request_for_block_at_time() {
     // GIVEN
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let author = fixture.authorities().next().unwrap();
-    let name = fixture.authorities().nth(1).unwrap().public_key();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
 
     // AND store certificate
     let header = author
@@ -389,13 +411,14 @@ async fn test_one_pending_request_for_block_at_time() {
         .times(4)
         .return_const(vec![Ok(certificate)]);
 
+    let network = test_network(primary.network_keypair(), primary.address());
     let mut waiter = BlockWaiter {
         name: name.clone(),
         committee: committee.clone(),
         worker_cache,
         rx_commands,
         pending_get_block: HashMap::new(),
-        worker_network: PrimaryToWorkerNetwork::default(),
+        worker_network: P2pNetwork::new(network),
         rx_reconfigure,
         rx_batch_receiver: rx_batch_messages,
         tx_pending_batch: HashMap::new(),
@@ -436,11 +459,12 @@ async fn test_one_pending_request_for_block_at_time() {
 #[tokio::test]
 async fn test_unlocking_pending_get_block_request_after_response() {
     // GIVEN
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let author = fixture.authorities().next().unwrap();
-    let name = fixture.authorities().nth(1).unwrap().public_key();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
 
     // AND store certificate
     let header = author
@@ -470,13 +494,14 @@ async fn test_unlocking_pending_get_block_request_after_response() {
         .times(3)
         .return_const(vec![Ok(certificate)]);
 
+    let network = test_network(primary.network_keypair(), primary.address());
     let mut waiter = BlockWaiter {
         name: name.clone(),
         committee: committee.clone(),
         worker_cache,
         rx_commands,
         pending_get_block: HashMap::new(),
-        worker_network: PrimaryToWorkerNetwork::default(),
+        worker_network: P2pNetwork::new(network),
         rx_reconfigure,
         rx_batch_receiver: rx_batch_messages,
         tx_pending_batch: HashMap::new(),
@@ -513,11 +538,12 @@ async fn test_unlocking_pending_get_block_request_after_response() {
 #[tokio::test]
 async fn test_batch_timeout() {
     // GIVEN
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
     let author = fixture.authorities().next().unwrap();
-    let name = fixture.authorities().nth(1).unwrap().public_key();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
 
     // AND store certificate
     let header = author
@@ -549,6 +575,7 @@ async fn test_batch_timeout() {
         .times(1)
         .return_const(vec![Ok(certificate)]);
 
+    let network = test_network(primary.network_keypair(), primary.address());
     let _waiter_handle = BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
@@ -557,7 +584,7 @@ async fn test_batch_timeout() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
-        PrimaryToWorkerNetwork::default(),
+        P2pNetwork::new(network),
     );
 
     // WHEN we send a request to get a block
@@ -592,10 +619,11 @@ async fn test_batch_timeout() {
 #[tokio::test]
 async fn test_return_error_when_certificate_is_missing() {
     // GIVEN
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().nth(1).unwrap().public_key();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
 
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
@@ -616,6 +644,7 @@ async fn test_return_error_when_certificate_is_missing() {
         .times(1)
         .return_const(vec![Err(handler::Error::BlockDeliveryTimeout { block_id })]);
 
+    let network = test_network(primary.network_keypair(), primary.address());
     let _waiter_handle = BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
@@ -624,7 +653,7 @@ async fn test_return_error_when_certificate_is_missing() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
-        PrimaryToWorkerNetwork::default(),
+        P2pNetwork::new(network),
     );
 
     // WHEN we send a request to get a block
@@ -658,10 +687,11 @@ async fn test_return_error_when_certificate_is_missing() {
 #[tokio::test]
 async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
     // GIVEN
-    let fixture = CommitteeFixture::builder().randomize_ports(true).build();
+    let fixture = CommitteeFixture::builder().build();
     let committee = fixture.committee();
     let worker_cache = fixture.shared_worker_cache();
-    let name = fixture.authorities().nth(1).unwrap().public_key();
+    let primary = fixture.authorities().nth(1).unwrap();
+    let name = primary.public_key();
 
     // AND create a certificate but don't store it
     let certificate = Certificate::default();
@@ -690,6 +720,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
         .times(1)
         .return_const(vec![]);
 
+    let network = test_network(primary.network_keypair(), primary.address());
     let _waiter_handle = BlockWaiter::spawn(
         name.clone(),
         committee.clone(),
@@ -698,7 +729,7 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
         rx_commands,
         rx_batch_messages,
         Arc::new(mock_handler),
-        PrimaryToWorkerNetwork::default(),
+        P2pNetwork::new(network),
     );
 
     // WHEN we send a request to get a block
@@ -733,20 +764,21 @@ async fn test_return_error_when_certificate_is_missing_when_get_blocks() {
 // RequestBatch requests for the provided expected_batches.
 #[must_use]
 pub fn worker_listener(
+    keypair: NetworkKeyPair,
     address: multiaddr::Multiaddr,
     expected_batches: HashMap<BatchDigest, BatchMessage>,
     tx_batch_messages: metered_channel::Sender<BatchResult>,
 ) -> JoinHandle<()> {
-    let mut recv = PrimaryToWorkerMockServer::spawn(address);
     tokio::spawn(async move {
+        let (mut recv, _network) = PrimaryToWorkerMockServer::spawn(keypair, address);
         let mut counter = 0;
         loop {
             let message = recv
                 .recv()
                 .await
                 .expect("Failed to receive network message");
-            match deserialize(&message.payload) {
-                Ok(PrimaryWorkerMessage::RequestBatch(id)) => {
+            match message {
+                PrimaryWorkerMessage::RequestBatch(id) => {
                     if expected_batches.contains_key(&id) {
                         tx_batch_messages
                             .send(Ok(expected_batches.get(&id).cloned().unwrap()))

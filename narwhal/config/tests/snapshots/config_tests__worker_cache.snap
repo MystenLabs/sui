@@ -8,104 +8,88 @@ expression: worker_cache
       "0": {
         "name": "l+fthD+rGkLOnCEpQ1IewioCVodHzAA7iB+9J/cL3+A=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "1": {
         "name": "XEf+9+MRPcAcVu9NR3v+UVevwzlpoBT4u1U34YzOxkw=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "2": {
         "name": "gznZnDM7s6J3/reAuNRsrDDNzZBQ2+I1+4zGe5HBsGo=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "3": {
         "name": "hkGX9Mxcq2yO3Ut5xIXvuaVVcYt1tgPi6LmPVewN4mc=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       }
     },
     "VayIYzPsiroVrY4eilEUVKCM/LfNcMWN2ELKoHCNGr8=": {
       "0": {
         "name": "km6ruihMw/GYnXOSgpykDtZbqz7YGGOpats+az3/X6Q=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "1": {
         "name": "fBEBLo4XV9uxBFd2fOjqDAkLzwJJ4sBIDtEayytwO7A=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "2": {
         "name": "i4VvPsULQhSm++R+hpszac5EOLnJbh02NAMScP/4+L0=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "3": {
         "name": "cseVuRrgvo0/Q0aJ5r9HHKQyf/El+gF4mpmrxVtCgOY=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       }
     },
     "ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=": {
       "0": {
         "name": "ildi4hrBzbOHBELHe0w69Yx87bh3nQJw5tTx4vc2fXQ=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "1": {
         "name": "zGIzLjS7LVzWn2Dvuyo2y5FsfrRYMB6jZjbE27ASvYg=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "2": {
         "name": "I47bbumpH9yOcb5QwKP7PPKS2QJN26wCqqcJCWsKqdo=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "3": {
         "name": "nUdhahjfIDkwfwZCImAliLUqaq6qe2/oxrTZ66inh7E=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       }
     },
     "vVDfe4JyrKvldWAMAgdqeUvACFqw15e4PUoj4ByOfCQ=": {
       "0": {
         "name": "FsiKyAGnhMcChNBf+L2B8EHX6mMup8oqJ8bK/9ZRkww=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "1": {
         "name": "O6EMZUvkFG2rPW2rgLPOJM4323x0XCslMgXWL5Z7ALM=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "2": {
         "name": "dt4/oHrYlTWhdms3mHV8irOu9b6H3uFunhBt2LUJcp4=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       },
       "3": {
         "name": "lrisYqEadH5cgLhsT1EW5q6uVKxwCXLTJQO3klahUy8=",
         "transactions": "/ip4/127.0.0.1/tcp/0/http",
-        "worker_to_worker": "/ip4/127.0.0.1/tcp/0/http",
-        "primary_to_worker": "/ip4/127.0.0.1/tcp/0/http"
+        "worker_address": "/ip4/127.0.0.1/tcp/0/http"
       }
     }
   },

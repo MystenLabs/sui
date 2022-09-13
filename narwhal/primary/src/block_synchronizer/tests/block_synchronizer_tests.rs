@@ -13,7 +13,7 @@ use anemo::{types::PeerInfo, PeerId};
 use config::BlockSynchronizerParameters;
 use fastcrypto::Hash;
 use futures::{future::try_join_all, stream::FuturesUnordered};
-use network::{P2pNetwork, PrimaryToWorkerNetwork};
+use network::P2pNetwork;
 use std::{
     collections::{HashMap, HashSet},
     time::Duration,
@@ -279,17 +279,6 @@ async fn test_successful_payload_synchronization() {
         .start(anemo::Router::new())
         .unwrap();
 
-    for (_pubkey, address, network_pubkey) in committee.others_primaries(&name) {
-        let peer_id = PeerId(network_pubkey.0.to_bytes());
-        let address = network::multiaddr_to_address(&address).unwrap();
-        let peer_info = PeerInfo {
-            peer_id,
-            affinity: anemo::types::PeerAffinity::High,
-            address: vec![address],
-        };
-        network.known_peers().insert(peer_info);
-    }
-
     // AND create the synchronizer
     let _synchronizer_handle = BlockSynchronizer::spawn(
         name.clone(),
@@ -310,46 +299,41 @@ async fn test_successful_payload_synchronization() {
 
     // AND let's assume that all the primaries are responding with the full set
     // of requested certificates.
-    let handlers_primaries: FuturesUnordered<JoinHandle<Vec<PrimaryMessage>>> = fixture
-        .authorities()
-        .filter(|a| a.public_key() != name)
-        .map(|a| {
-            let address = committee.primary(&a.public_key()).unwrap();
-            println!("New primary added: {:?}", address);
-            primary_listener(1, a.network_keypair().copy(), address)
-        })
-        .collect();
+    let mut handlers_primaries = Vec::new();
+    for primary in fixture.authorities().filter(|a| a.public_key() != name) {
+        let address = committee.primary(&primary.public_key()).unwrap();
+        println!("New primary added: {:?}", address);
+        let handler = primary_listener(1, primary.network_keypair().copy(), address.clone());
+        handlers_primaries.push(handler);
+
+        let address = network::multiaddr_to_address(&address).unwrap();
+        let peer_id = PeerId(primary.network_keypair().public().0.to_bytes());
+        network
+            .connect_with_peer_id(address, peer_id)
+            .await
+            .unwrap();
+    }
 
     // AND spin up the corresponding worker nodes
-    let mut workers = vec![
-        (
-            worker_id_0,
-            worker_cache.load().worker(&name, &worker_id_0).unwrap(),
-        ),
-        (
-            worker_id_1,
-            worker_cache.load().worker(&name, &worker_id_1).unwrap(),
-        ),
-    ];
+    let workers = vec![worker_id_0, worker_id_1];
 
-    let handlers_workers: FuturesUnordered<JoinHandle<Vec<PrimaryWorkerMessage>>> = workers
-        .iter()
-        .map(|worker| {
-            println!("New worker added: {:?}", worker.1.primary_to_worker);
-            worker_listener::<PrimaryWorkerMessage>(-1, worker.1.primary_to_worker.clone())
-        })
-        .collect();
+    let mut handlers_workers = Vec::new();
+    for worker_id in &workers {
+        let worker = primary.worker(*worker_id);
+        let network_key = worker.keypair();
+        let worker_name = network_key.public().clone();
+        let worker_address = &worker.info().worker_address;
 
-    // Wait for connectivity
-    let (mut events, mut peers) = network.subscribe();
-    while peers.len() != 3 {
-        let event = events.recv().await.unwrap();
-        match event {
-            anemo::types::PeerEvent::NewPeer(peer_id) => peers.push(peer_id),
-            anemo::types::PeerEvent::LostPeer(_, _) => {
-                panic!("we shouldn't see any lost peer events")
-            }
-        }
+        println!("New worker added: {:?}", worker_name);
+        let handler = worker_listener(-1, worker_address.clone(), network_key);
+        handlers_workers.push(handler);
+
+        let address = network::multiaddr_to_address(worker_address).unwrap();
+        let peer_id = PeerId(worker_name.0.to_bytes());
+        network
+            .connect_with_peer_id(address, peer_id)
+            .await
+            .unwrap();
     }
 
     // WHEN
@@ -409,17 +393,14 @@ async fn test_successful_payload_synchronization() {
     {
         assert!(result.is_ok(), "Error returned");
 
-        for messages in result.unwrap() {
-            // since everything is in order, just pop the next worker
-            let worker = workers.pop().unwrap();
-
+        for (messages, worker) in result.unwrap().into_iter().zip(workers.into_iter()) {
             for m in messages {
                 match m {
                     PrimaryWorkerMessage::Synchronize(batch_ids, _) => {
                         // Assume that the request is the correct one and just immediately
                         // store the batch to the payload store.
                         for batch_id in batch_ids {
-                            payload_store.write((batch_id, worker.0), 1).await;
+                            payload_store.write((batch_id, worker), 1).await;
                         }
                     }
                     _ => {
@@ -519,8 +500,7 @@ async fn test_multiple_overlapping_requests() {
         pending_requests: HashMap::new(),
         map_certificate_responses_senders: HashMap::new(),
         map_payload_availability_responses_senders: HashMap::new(),
-        primary_network: P2pNetwork::new(network),
-        worker_network: PrimaryToWorkerNetwork::default(),
+        network: P2pNetwork::new(network),
         payload_store,
         certificate_store,
         certificates_synchronize_timeout: Duration::from_secs(1),
@@ -742,8 +722,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
-        primary_network: P2pNetwork::new(network),
-        worker_network: Default::default(),
+        network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store,
         certificates_synchronize_timeout: Default::default(),
@@ -847,8 +826,7 @@ async fn test_reply_with_payload_already_in_storage() {
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
-        primary_network: P2pNetwork::new(network),
-        worker_network: Default::default(),
+        network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
         certificates_synchronize_timeout: Default::default(),
@@ -958,8 +936,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
-        primary_network: P2pNetwork::new(network),
-        worker_network: Default::default(),
+        network: P2pNetwork::new(network),
         certificate_store: certificate_store.clone(),
         payload_store: payload_store.clone(),
         certificates_synchronize_timeout: Default::default(),

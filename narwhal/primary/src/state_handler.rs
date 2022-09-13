@@ -4,7 +4,7 @@
 use crate::primary::PrimaryWorkerMessage;
 use config::{SharedCommittee, SharedWorkerCache, WorkerCache, WorkerIndex};
 use crypto::PublicKey;
-use network::{PrimaryToWorkerNetwork, UnreliableNetwork};
+use network::{P2pNetwork, UnreliableNetwork};
 use std::{collections::BTreeMap, sync::Arc};
 use tap::TapOptional;
 use tokio::{sync::watch, task::JoinHandle};
@@ -30,7 +30,7 @@ pub struct StateHandler {
     /// The latest round committed by consensus.
     last_committed_round: Round,
     /// A network sender to notify our workers of cleanup events.
-    worker_network: PrimaryToWorkerNetwork,
+    network: P2pNetwork,
 }
 
 impl StateHandler {
@@ -43,6 +43,7 @@ impl StateHandler {
         tx_consensus_round_updates: watch::Sender<u64>,
         rx_reconfigure: Receiver<ReconfigureNotification>,
         tx_reconfigure: watch::Sender<ReconfigureNotification>,
+        network: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
@@ -54,7 +55,7 @@ impl StateHandler {
                 rx_reconfigure,
                 tx_reconfigure,
                 last_committed_round: 0,
-                worker_network: Default::default(),
+                network,
             }
             .run()
             .await;
@@ -78,12 +79,10 @@ impl StateHandler {
                 .our_workers(&self.name)
                 .expect("Our public key or worker id is not in the worker cache")
                 .into_iter()
-                .map(|x| x.primary_to_worker)
+                .map(|x| x.name)
                 .collect();
             let message = PrimaryWorkerMessage::Cleanup(round);
-            self.worker_network
-                .unreliable_broadcast(addresses, &message)
-                .await;
+            self.network.unreliable_broadcast(addresses, &message).await;
         }
     }
 
@@ -102,7 +101,7 @@ impl StateHandler {
                     let shutdown = match &message {
                         ReconfigureNotification::NewEpoch(committee) => {
                             // Cleanup the network.
-                            self.worker_network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
+                            self.network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
 
                             // Update the worker cache.
                             self.worker_cache.swap(Arc::new(WorkerCache {
@@ -132,7 +131,7 @@ impl StateHandler {
                         },
                         ReconfigureNotification::UpdateCommittee(committee) => {
                             // Cleanup the network.
-                            self.worker_network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
+                            self.network.cleanup(self.worker_cache.load().network_diff(committee.keys()));
 
                             // Update the worker cache.
                             self.worker_cache.swap(Arc::new(WorkerCache {

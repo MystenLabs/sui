@@ -8,7 +8,7 @@ use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
-use network::{PrimaryToWorkerNetwork, ReliableNetwork, ReliableNetwork2, WorkerToPrimaryNetwork};
+use network::{P2pNetwork, ReliableNetwork};
 use node::{restarter::NodeRestarter, Node, NodeStorage};
 use primary::PrimaryWorkerMessage;
 use prometheus::Registry;
@@ -16,7 +16,7 @@ use std::{
     fmt::Debug,
     sync::{Arc, Mutex},
 };
-use test_utils::CommitteeFixture;
+use test_utils::{random_network, CommitteeFixture};
 use tokio::{
     sync::mpsc::{channel, Receiver, Sender},
     time::{interval, sleep, Duration, MissedTickBehavior},
@@ -323,7 +323,7 @@ async fn epoch_change() {
         let name_clone = name.clone();
         let worker_cache_clone = worker_cache.clone();
         tokio::spawn(async move {
-            let mut worker_network = PrimaryToWorkerNetwork::default();
+            let network = random_network();
 
             while let Some((_, _, committee, _, _)) = rx_node_reconfigure.recv().await {
                 // TODO: shutdown message should probably be sent in a better way than by injecting
@@ -338,25 +338,33 @@ async fn epoch_change() {
                     .network_key(&name_clone)
                     .expect("Our key is not in the committee");
                 let mut primary_network =
-                    WorkerToPrimaryNetwork::new_for_single_address(network_key.to_owned(), address)
-                        .await;
+                    P2pNetwork::new_for_single_address(network_key.to_owned(), address).await;
                 let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewEpoch(
                     committee.clone(),
                 ));
                 let primary_cancel_handle =
                     primary_network.send(network_key.to_owned(), &message).await;
 
-                let addresses = worker_cache_clone
-                    .load()
-                    .our_workers(&name_clone)
-                    .expect("Our key is not in the worker cache")
-                    .into_iter()
-                    .map(|x| x.primary_to_worker)
-                    .collect();
                 let message = PrimaryWorkerMessage::Reconfigure(ReconfigureNotification::NewEpoch(
                     committee.clone(),
                 ));
-                let worker_cancel_handles = worker_network.broadcast(addresses, &message).await;
+                let mut worker_names = Vec::new();
+                for worker in worker_cache_clone
+                    .load()
+                    .our_workers(&name_clone)
+                    .expect("Our key is not in the worker cache")
+                {
+                    let address = network::multiaddr_to_address(&worker.worker_address).unwrap();
+                    let peer_id = anemo::PeerId(worker.name.0.to_bytes());
+                    network
+                        .connect_with_peer_id(address, peer_id)
+                        .await
+                        .unwrap();
+                    worker_names.push(worker.name);
+                }
+                let worker_cancel_handles = P2pNetwork::new(network.clone())
+                    .broadcast(worker_names, &message)
+                    .await;
 
                 // Ensure the message has been received.
                 primary_cancel_handle.await.unwrap();

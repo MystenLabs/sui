@@ -4,7 +4,7 @@
 
 use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
-use network::{ReliableNetwork2, WorkerToPrimaryNetwork};
+use network::{P2pNetwork, ReliableNetwork};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{metered_channel::Receiver, ReconfigureNotification, WorkerPrimaryMessage};
 
@@ -20,7 +20,7 @@ pub struct PrimaryConnector {
     /// Input channel to receive the messages to send to the primary.
     rx_digest: Receiver<WorkerPrimaryMessage>,
     /// A network sender to send the batches' digests to the primary.
-    primary_client: WorkerToPrimaryNetwork,
+    primary_client: P2pNetwork,
 }
 
 impl PrimaryConnector {
@@ -29,7 +29,7 @@ impl PrimaryConnector {
         primary_name: NetworkPublicKey,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_digest: Receiver<WorkerPrimaryMessage>,
-        primary_client: WorkerToPrimaryNetwork,
+        primary_client: P2pNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {

@@ -17,7 +17,7 @@ use futures::{
     stream::FuturesUnordered,
     FutureExt, StreamExt,
 };
-use network::{P2pNetwork, PrimaryToWorkerNetwork, UnreliableNetwork, UnreliableNetwork2};
+use network::{P2pNetwork, UnreliableNetwork};
 use rand::{rngs::SmallRng, SeedableRng};
 use std::{
     collections::{HashMap, HashSet},
@@ -43,6 +43,7 @@ use types::{
 #[cfg(test)]
 #[path = "tests/block_synchronizer_tests.rs"]
 mod block_synchronizer_tests;
+
 pub mod handler;
 pub mod mock;
 mod peers;
@@ -185,8 +186,7 @@ pub struct BlockSynchronizer {
         HashMap<RequestID, Sender<PayloadAvailabilityResponse>>,
 
     /// Send network requests
-    primary_network: P2pNetwork,
-    worker_network: PrimaryToWorkerNetwork,
+    network: P2pNetwork,
 
     /// The store that holds the certificates
     certificate_store: CertificateStore,
@@ -231,8 +231,7 @@ impl BlockSynchronizer {
                 pending_requests: HashMap::new(),
                 map_certificate_responses_senders: HashMap::new(),
                 map_payload_availability_responses_senders: HashMap::new(),
-                primary_network: network,
-                worker_network: PrimaryToWorkerNetwork::default(),
+                network,
                 payload_store,
                 certificate_store,
                 certificates_synchronize_timeout: parameters.certificates_synchronize_timeout,
@@ -323,13 +322,11 @@ impl BlockSynchronizer {
                     let message = self.rx_reconfigure.borrow().clone();
                     match message {
                         ReconfigureNotification::NewEpoch(new_committee)=> {
-                            self.primary_network.cleanup(self.committee.network_diff(&new_committee));
-                            self.worker_network.cleanup(self.committee.network_diff(&new_committee));
+                            self.network.cleanup(self.committee.network_diff(&new_committee));
                             self.committee = new_committee;
                         }
                         ReconfigureNotification::UpdateCommittee(new_committee)=> {
-                            self.primary_network.cleanup(self.committee.network_diff(&new_committee));
-                            self.worker_network.cleanup(self.committee.network_diff(&new_committee));
+                            self.network.cleanup(self.committee.network_diff(&new_committee));
                             self.committee = new_committee;
                         }
                         ReconfigureNotification::Shutdown => return
@@ -638,7 +635,7 @@ impl BlockSynchronizer {
             .map(|(name, _address, network_key)| (name, network_key))
             .unzip();
 
-        self.primary_network
+        self.network
             .unreliable_broadcast(network_keys.clone(), &message)
             .await;
 
@@ -697,18 +694,16 @@ impl BlockSynchronizer {
         let batches_by_worker = utils::map_certificate_batches_by_worker(certificates.as_slice());
 
         for (worker_id, batch_ids) in batches_by_worker {
-            let worker_address = self
+            let worker_name = self
                 .worker_cache
                 .load()
                 .worker(&self.name, &worker_id)
                 .expect("Worker id not found")
-                .primary_to_worker;
+                .name;
 
             let message =
                 PrimaryWorkerMessage::Synchronize(batch_ids.clone(), primary_peer_name.clone());
-            self.worker_network
-                .unreliable_send(worker_address, &message)
-                .await;
+            self.network.unreliable_send(worker_name, &message).await;
 
             debug!(
                 "Sent request for batch ids {:?} to worker id {}",

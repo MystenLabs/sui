@@ -27,8 +27,7 @@ class WorkerCache:
             "primary_name": {
                 "0": {
                     "worker_name": "worker_name"
-                    "primary_to_worker": x.x.x.x:x,
-                    "worker_to_worker": x.x.x.x:x,
+                    "worker_address": x.x.x.x:x,
                     "transactions": x.x.x.x:x
                 },
                 ...
@@ -70,11 +69,10 @@ class WorkerCache:
                 for j, host in enumerate(hosts):
                     workers_addr[j] = {
                         'name': worker_key,
-                        'primary_to_worker': f'/ip4/{host}/tcp/{port}/http',
+                        'worker_address': f'/ip4/{host}/tcp/{port}/http',
                         'transactions': f'/ip4/{host}/tcp/{port + 1}/http',
-                        'worker_to_worker': f'/ip4/{host}/tcp/{port + 2}/http',
                     }
-                    port += 3
+                    port += 2
                 self.json['workers'][primary_name] = workers_addr
 
     def workers_addresses(self, faults=0):
@@ -114,8 +112,7 @@ class WorkerCache:
         ips = set()
         for name in names:
             for worker in self.json['workers'][name].values():
-                ips.add(self.ip(worker['primary_to_worker']))
-                ips.add(self.ip(worker['worker_to_worker']))
+                ips.add(self.ip(worker['worker_address']))
                 ips.add(self.ip(worker['transactions']))
         return ips
 

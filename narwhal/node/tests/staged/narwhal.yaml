@@ -113,8 +113,7 @@ WorkerInfo:
     - name:
         TYPENAME: Ed25519PublicKey
     - transactions: BYTES
-    - worker_to_worker: BYTES
-    - primary_to_worker: BYTES
+    - worker_address: BYTES
 WorkerPrimaryError:
   ENUM:
     0:
