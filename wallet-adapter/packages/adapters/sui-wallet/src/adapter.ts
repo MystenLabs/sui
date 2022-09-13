@@ -5,6 +5,7 @@ import {
   MoveCallTransaction,
   SuiAddress,
   SuiTransactionResponse,
+  SignableTransaction,
 } from "@mysten/sui.js";
 import { WalletCapabilities } from "@mysten/wallet-adapter-base";
 
@@ -16,6 +17,9 @@ interface SuiWallet {
   hasPermissions(permissions: readonly PermissionType[]): Promise<boolean>;
   requestPermissions(): Promise<boolean>;
   getAccounts(): Promise<SuiAddress[]>;
+  signTransaction(
+    transaction: SignableTransaction
+  ): Promise<SuiTransactionResponse>;
   executeMoveCall: (
     transaction: MoveCallTransaction
   ) => Promise<SuiTransactionResponse>;
@@ -23,6 +27,7 @@ interface SuiWallet {
     transactionBytes: Uint8Array
   ) => Promise<SuiTransactionResponse>;
 }
+
 interface SuiWalletWindow {
   suiWallet: SuiWallet;
 }
@@ -37,6 +42,13 @@ export class SuiWalletAdapter implements WalletCapabilities {
   getAccounts(): Promise<string[]> {
     return window.suiWallet.getAccounts();
   }
+
+  signTransaction(
+    transaction: SignableTransaction
+  ): Promise<SuiTransactionResponse> {
+    return window.suiWallet.signTransaction(transaction);
+  }
+
   executeMoveCall(
     transaction: MoveCallTransaction
   ): Promise<SuiTransactionResponse> {

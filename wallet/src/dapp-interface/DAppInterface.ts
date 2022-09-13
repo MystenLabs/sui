@@ -8,7 +8,11 @@ import { WindowMessageStream } from '_messaging/WindowMessageStream';
 import { isErrorPayload } from '_payloads';
 import { ALL_PERMISSION_TYPES } from '_payloads/permissions';
 
-import type { SuiAddress, MoveCallTransaction } from '@mysten/sui.js';
+import type {
+    SuiAddress,
+    MoveCallTransaction,
+    SignableTransaction,
+} from '@mysten/sui.js';
 import type { Payload } from '_payloads';
 import type { GetAccount } from '_payloads/account/GetAccount';
 import type { GetAccountResponse } from '_payloads/account/GetAccountResponse';
@@ -84,6 +88,10 @@ export class DAppInterface {
             }),
             (response) => response.accounts
         );
+    }
+
+    public signTransaction(transaction: SignableTransaction) {
+        throw new Error('Not yet implemented');
     }
 
     public executeMoveCall(transaction: MoveCallTransaction) {
