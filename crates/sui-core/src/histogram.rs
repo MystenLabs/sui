@@ -57,6 +57,11 @@ struct HistogramLabelsInner {
 /// It worth pointing out that due to those more precise calculations, this Histogram usage
 /// is somewhat more limited comparing to original prometheus Histogram.
 ///
+/// On the bright side, this histogram exports less data to Prometheus comparing to prometheus::Histogram,
+/// it exports each requested percentile into separate prometheus gauge, while original implementation creates
+/// gauge per bucket.
+/// It also exports _sum and _count aggregates same as original implementation.
+///
 /// It is ok to measure timings for things like network latencies and expensive crypto operations.
 /// However as a rule of thumb this histogram should not be used in places that can produce very high data point count.
 ///
@@ -269,6 +274,7 @@ impl<'a> Drop for HistogramTimerGuard<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use prometheus::proto::MetricFamily;
 
     #[test]
     fn pct_index_test() {
@@ -287,5 +293,81 @@ mod tests {
         assert_eq!(HistogramReporter::format_pct1000(999), "99.9");
         assert_eq!(HistogramReporter::format_pct1000(990), "99");
         assert_eq!(HistogramReporter::format_pct1000(900), "90");
+    }
+
+    #[tokio::test]
+    async fn histogram_test() {
+        let registry = Registry::new();
+        let histogram = HistogramVec::new_in_registry_with_percentiles(
+            "test",
+            "xx",
+            &["lab"],
+            &registry,
+            vec![500, 900],
+        );
+        let a = histogram.with_label_values(&["a"]);
+        let b = histogram.with_label_values(&["b"]);
+        a.report(1);
+        a.report(2);
+        a.report(3);
+        a.report(4);
+        b.report(10);
+        b.report(20);
+        b.report(30);
+        b.report(40);
+        tokio::time::sleep(Duration::from_millis(1500)).await;
+        let gather = registry.gather();
+        let gather: HashMap<_, _> = gather
+            .into_iter()
+            .map(|f| (f.get_name().to_string(), f))
+            .collect();
+        let hist = gather.get("test").unwrap();
+        let sum = gather.get("test_sum").unwrap();
+        let count = gather.get("test_count").unwrap();
+        let hist = aggregate_gauge_by_label(hist);
+        let sum = aggregate_counter_by_label(sum);
+        let count = aggregate_counter_by_label(count);
+        assert_eq!(Some(3.), hist.get("::a::50").cloned());
+        assert_eq!(Some(4.), hist.get("::a::90").cloned());
+        assert_eq!(Some(30.), hist.get("::b::50").cloned());
+        assert_eq!(Some(40.), hist.get("::b::90").cloned());
+
+        assert_eq!(Some(10.), sum.get("::a").cloned());
+        assert_eq!(Some(100.), sum.get("::b").cloned());
+
+        assert_eq!(Some(4.), count.get("::a").cloned());
+        assert_eq!(Some(4.), count.get("::b").cloned());
+    }
+
+    fn aggregate_gauge_by_label(family: &MetricFamily) -> HashMap<String, f64> {
+        family
+            .get_metric()
+            .iter()
+            .map(|m| {
+                let value = m.get_gauge().get_value();
+                let mut key = String::new();
+                for label in m.get_label() {
+                    key.push_str("::");
+                    key.push_str(label.get_value());
+                }
+                (key, value)
+            })
+            .collect()
+    }
+
+    fn aggregate_counter_by_label(family: &MetricFamily) -> HashMap<String, f64> {
+        family
+            .get_metric()
+            .iter()
+            .map(|m| {
+                let value = m.get_counter().get_value();
+                let mut key = String::new();
+                for label in m.get_label() {
+                    key.push_str("::");
+                    key.push_str(label.get_value());
+                }
+                (key, value)
+            })
+            .collect()
     }
 }
