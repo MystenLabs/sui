@@ -45,9 +45,9 @@ dependencies = [
 
 [[package]]
 name = "android_system_properties"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d7ed72e1635e121ca3e79420540282af22da58be50de153d36f81ddc6b83aa9e"
+checksum = "819e7219dbd41043ac279b19830f2efc897156490d7fd6ea916720117ee66311"
 dependencies = [
  "libc",
 ]
@@ -2949,13 +2949,14 @@ dependencies = [
 
 [[package]]
 name = "iana-time-zone"
-version = "0.1.45"
+version = "0.1.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef5528d9c2817db4e10cc78f8d4c8228906e5854f389ff6b076cee3572a09d35"
+checksum = "4c495f162af0bf17656d0014a0eded5f3cd2f365fdd204548c2869db89359dc7"
 dependencies = [
  "android_system_properties",
  "core-foundation-sys",
  "js-sys",
+ "once_cell",
  "wasm-bindgen",
  "winapi",
 ]
@@ -3377,7 +3378,7 @@ dependencies = [
  "ecdsa",
  "elliptic-curve",
  "sha2 0.10.2",
- "sha3 0.10.2",
+ "sha3 0.10.4",
 ]
 
 [[package]]
@@ -6366,9 +6367,9 @@ dependencies = [
 
 [[package]]
 name = "ryu"
-version = "1.0.10"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3f6f92acf49d1b98f7a81226834412ada05458b7364277387724a237f062695"
+checksum = "4501abdff3ae82a1c1b477a17252eb69cee9e66eb915c1abaa4f44d873df9f09"
 
 [[package]]
 name = "same-file"
@@ -6791,9 +6792,9 @@ dependencies = [
 
 [[package]]
 name = "sha3"
-version = "0.10.2"
+version = "0.10.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a31480366ec990f395a61b7c08122d99bd40544fdb5abcfc1b06bb29994312c"
+checksum = "eaedf34ed289ea47c2b741bb72e5357a209512d67bcd4bda44359e5bf0470f56"
 dependencies = [
  "digest 0.10.3",
  "keccak",
@@ -7388,7 +7389,7 @@ dependencies = [
  "serde 1.0.144",
  "serde_with 1.14.0",
  "serde_yaml",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "sui-adapter",
  "sui-framework",
  "sui-simulator",
@@ -7548,7 +7549,7 @@ dependencies = [
  "move-vm-types",
  "num_enum",
  "once_cell",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "smallvec",
  "sui-framework-build",
  "sui-types",
@@ -7799,7 +7800,7 @@ dependencies = [
  "rand 0.8.5",
  "serde 1.0.144",
  "serde_json",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "signature",
  "sui-adapter",
  "sui-config",
@@ -8000,7 +8001,7 @@ dependencies = [
  "serde_json",
  "serde_with 1.14.0",
  "sha2 0.9.9",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "signature",
  "static_assertions",
  "strum",
@@ -10075,7 +10076,7 @@ dependencies = [
  "sha-1 0.9.8",
  "sha2 0.10.2",
  "sha2 0.9.9",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "sha3 0.9.1",
  "sharded-slab",
  "shell-words",
@@ -10563,7 +10564,7 @@ dependencies = [
  "serde_yaml",
  "sha2 0.10.2",
  "sha2 0.9.9",
- "sha3 0.10.2",
+ "sha3 0.10.4",
  "sha3 0.9.1",
  "sharded-slab",
  "shlex",
