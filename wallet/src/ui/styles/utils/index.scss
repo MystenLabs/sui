@@ -31,13 +31,16 @@ $main-extra-space: sizing.$main-bottom-space;
 @mixin error-message-box() {
     background-color: colors.$error-light;
     color: colors.$error;
-    padding: 5px;
+    padding: 10px;
     margin-top: 10px;
-    border-radius: 6px;
+    border-radius: 10px;
     padding-left: 30px;
     word-break: break-all;
     padding-right: 20px;
     position: relative;
+    font-weight: 500;
+    font-size: 13px;
+    line-height: 130%;
 
     &::before {
         content: '';

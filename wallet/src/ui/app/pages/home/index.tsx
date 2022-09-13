@@ -47,15 +47,14 @@ const HomePage = ({ disableNavigation, limitToPopUpSize = true }: Props) => {
         <PageLayout limitToPopUpSize={limitToPopUpSize}>
             <Loading loading={guardChecking}>
                 <div className={st.container}>
-                    <div
-                        className={cl(st.header, {
-                            [st.center]: disableNavigation,
-                        })}
-                    >
+                    <div className={st.header}>
                         <Link to="/tokens" className={st.logoLink}>
                             <Logo className={st.logo} txt={true} />
                         </Link>
-                        {disableNavigation ? null : (
+                        <span />
+                        {disableNavigation ? (
+                            null
+                        ) : (
                             <>
                                 <DappStatus />
                                 <MenuButton className={st.menuButton} />
@@ -89,3 +88,4 @@ export { default as TransferCoinPage } from './transfer-coin';
 export { default as NFTDetailsPage } from './nft-details';
 export { default as ReceiptPage } from './receipt';
 export { default as CoinsSelectorPage } from './transfer-coin/CoinSelector';
+export { default as AppsPage } from './apps';

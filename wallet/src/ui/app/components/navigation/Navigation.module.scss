@@ -14,6 +14,7 @@
     align-items: center;
     justify-content: stretch;
     padding: 5px 10px;
+    padding-bottom: 0;
     overflow: hidden;
     border-top-left-radius: 20px;
     border-top-right-radius: 20px;
@@ -25,12 +26,17 @@
     display: flex;
     flex-flow: column nowrap;
     align-items: center;
-    padding: 6px 6px 14px;
+    padding: 6px;
     text-decoration: none;
     color: v.use(v.$colors-nav-item-color);
     user-select: none;
     flex-grow: 1;
     flex-basis: 80px;
+    height: 70px;
+    justify-content: space-between;
+    padding-bottom: 12px;
+    border-bottom: 2px solid;
+    border-bottom-color: transparent;
 
     &:hover {
         color: colors.$nav-item-hover;
@@ -42,12 +48,13 @@
 
     &.active {
         color: v.use(v.$colors-nav-item-highlighted-color);
+        border-bottom-color: v.use(v.$colors-nav-item-highlighted-color);
 
         &:hover {
-            color: #007195;
+            color: v.use(v.$colors-nav-item-highlighted-color);
 
             i {
-                color: #007195;
+                color: v.use(v.$colors-nav-item-highlighted-color);
             }
         }
     }
@@ -83,7 +90,15 @@
     transition: transform 300ms ease-in-out, opacity 0ms ease-in 300ms;
 }
 
+/* TODO update icons so they are all the same size */
 .wallet-activity-icon {
-    font-size: 26px;
+    font-size: 23px;
     font-weight: 500;
+    margin-top: 4px;
+}
+
+.apps-icon {
+    font-size: 23px;
+    font-weight: 500;
+    margin-top: 4px;
 }

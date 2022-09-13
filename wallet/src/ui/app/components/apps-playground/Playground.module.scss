@@ -1,0 +1,64 @@
+@use '_values/colors';
+@use '_utils';
+
+.group-buttons {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 10px;
+
+    .outline {
+        background: none;
+        color: colors.$cta-blue;
+        border: 1px solid colors.$sui-steel-blue;
+        border-radius: 12px;
+    }
+
+    .cta {
+        width: 100%;
+        font-size: 14px;
+        padding: 15px 20px;
+        text-align: center;
+        font-weight: 600;
+
+        &:hover {
+            background: colors.$button-hover;
+        }
+    }
+}
+
+.angled-arrow {
+    transform: rotate(-45deg);
+    display: inline-block;
+    font-weight: 100;
+    font-size: 10px;
+    margin-left: 5px;
+    padding: 3px;
+    color: colors.$sui-steel-blue;
+}
+
+.error {
+    @include utils.error-message-box;
+}
+
+.desc {
+    @include utils.typography('table/text-sm');
+
+    margin: 25px 0;
+    color: colors.$gray-80;
+    line-height: 130%;
+    font-weight: 400;
+
+    .title {
+        @include utils.typography('table/text-xs');
+
+        text-transform: uppercase;
+        font-weight: 600;
+        color: colors.$gray-75;
+        margin-bottom: 5px;
+    }
+}
+
+.apps {
+    margin-bottom: 80px;
+}

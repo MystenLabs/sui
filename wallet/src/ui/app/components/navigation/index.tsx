@@ -33,6 +33,13 @@ function Navigation({ className }: NavigationProps) {
                 <Icon className={st.icon} icon={SuiIcons.Nfts} />
                 <span className={st.title}>NFTs</span>
             </NavLink>
+            <NavLink to="./apps" className={makeLinkCls} title="Apps">
+                <Icon
+                    className={cl(st.icon, st.appsIcon)}
+                    icon={SuiIcons.Apps}
+                />
+                <span className={st.title}>Apps</span>
+            </NavLink>
             <NavLink
                 to="./transactions"
                 className={makeLinkCls}
