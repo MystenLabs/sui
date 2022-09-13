@@ -116,6 +116,12 @@ pub enum ToolCommand {
     DumpValidators {
         #[clap(long = "genesis")]
         genesis: PathBuf,
+
+        #[clap(
+            long = "concise",
+            help = "show concise output - name, protocol key and network address"
+        )]
+        concise: bool,
     },
 
     #[clap(name = "dump-genesis")]
@@ -597,9 +603,21 @@ impl ToolCommand {
                     None => print_db_all_tables(path)?,
                 }
             }
-            ToolCommand::DumpValidators { genesis } => {
-                let genesis = Genesis::load(genesis)?;
-                println!("{:#?}", genesis.validator_set());
+            ToolCommand::DumpValidators { genesis, concise } => {
+                let genesis = Genesis::load(genesis).unwrap();
+                if !concise {
+                    println!("{:#?}", genesis.validator_set());
+                } else {
+                    for (i, val_info) in genesis.validator_set().iter().enumerate() {
+                        println!(
+                            "#{:<2} {:<20} {:?<66} {:?}",
+                            i,
+                            val_info.name(),
+                            val_info.protocol_key(),
+                            val_info.network_address()
+                        )
+                    }
+                }
             }
             ToolCommand::DumpGenesis { genesis } => {
                 let genesis = Genesis::load(genesis)?;
