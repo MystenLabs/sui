@@ -10,6 +10,7 @@ use jsonrpsee::core::RpcResult;
 use jsonrpsee_core::server::rpc_module::RpcModule;
 use move_binary_format::normalized::{Module as NormalizedModule, Type};
 use move_core_types::identifier::Identifier;
+use signature::Signature;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 use sui_core::authority::AuthorityState;
@@ -22,8 +23,11 @@ use sui_json_rpc_types::{
 use sui_open_rpc::Module;
 use sui_types::base_types::SequenceNumber;
 use sui_types::base_types::{ObjectID, SuiAddress, TransactionDigest};
+use sui_types::crypto::{SignableBytes, SignatureScheme};
+use sui_types::messages::{Transaction, TransactionData};
 use sui_types::move_package::normalize_modules;
 use sui_types::object::{Data, ObjectRead, Owner};
+use sui_types::sui_serde::Base64;
 
 // An implementation of the read portion of the Gateway JSON-RPC interface intended for use in
 // Fullnodes.
@@ -129,6 +133,24 @@ impl SuiRpcModule for ReadApi {
 
 #[async_trait]
 impl RpcFullNodeReadApiServer for FullNodeApi {
+    async fn dry_run_transaction(
+        &self,
+        tx_bytes: Base64,
+        sig_scheme: SignatureScheme,
+        signature: Base64,
+        pub_key: Base64,
+    ) -> RpcResult<SuiTransactionEffects> {
+        let data = TransactionData::from_signable_bytes(&tx_bytes.to_vec()?)?;
+        let flag = vec![sig_scheme.flag()];
+        let signature =
+            Signature::from_bytes(&[&*flag, &*signature.to_vec()?, &pub_key.to_vec()?].concat())
+                .map_err(|e| anyhow!(e))?;
+        let txn = Transaction::new(data, signature);
+        let txn_digest = *txn.digest();
+
+        Ok(self.state.dry_run_transaction(&txn, txn_digest).await?)
+    }
+
     async fn get_normalized_move_modules_by_package(
         &self,
         package: ObjectID,
