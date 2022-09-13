@@ -351,9 +351,9 @@ pub enum CurveType {
     Edwards25519,
 }
 
-impl Into<SignatureScheme> for CurveType {
-    fn into(self) -> SignatureScheme {
-        match self {
+impl From<CurveType> for SignatureScheme {
+    fn from(type_: CurveType) -> Self {
+        match type_ {
             CurveType::Secp256k1 => SignatureScheme::Secp256k1,
             CurveType::Edwards25519 => SignatureScheme::ED25519,
         }
