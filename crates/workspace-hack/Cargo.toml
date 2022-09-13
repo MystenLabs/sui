@@ -464,7 +464,7 @@ serde_test = { version = "1", default-features = false }
 serde_urlencoded = { version = "0.7", default-features = false }
 serde_with-dff4ba8e3ae991db = { package = "serde_with", version = "1", features = ["hex", "macros", "serde_with_macros"] }
 serde_with-f595c2ba2a3f28df = { package = "serde_with", version = "2", features = ["alloc", "macros", "std"] }
-serde_yaml = { version = "0.8", default-features = false }
+serde_yaml = { version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10", features = ["std"] }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha2-93f6ce9d446188ac = { package = "sha2", version = "0.10", features = ["std"] }
@@ -1141,7 +1141,7 @@ serde_with-dff4ba8e3ae991db = { package = "serde_with", version = "1", features 
 serde_with-f595c2ba2a3f28df = { package = "serde_with", version = "2", features = ["alloc", "macros", "std"] }
 serde_with_macros-dff4ba8e3ae991db = { package = "serde_with_macros", version = "1", default-features = false }
 serde_with_macros-f595c2ba2a3f28df = { package = "serde_with_macros", version = "2", default-features = false }
-serde_yaml = { version = "0.8", default-features = false }
+serde_yaml = { version = "0.9", default-features = false }
 sha-1-93f6ce9d446188ac = { package = "sha-1", version = "0.10", features = ["std"] }
 sha-1-274715c4dabd11b0 = { package = "sha-1", version = "0.9", default-features = false }
 sha2-93f6ce9d446188ac = { package = "sha2", version = "0.10", features = ["std"] }
