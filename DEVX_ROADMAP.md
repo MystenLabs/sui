@@ -1,5 +1,5 @@
 # Developer Experience Roadmap
-(last updated 9/9/2022)
+(last updated 9/9/2022, next update approximately ~10/9/2022 following a monthly cadence)
 
 To keep Sui builders up to date with the latest happenings, we are maintaining the following list of developer-facing changes coming in the next ~30 days. While we strive to be accurate, the timing of the landing/release of these features is subject to change. More thorough documentation and references will be available as each feature is released to Devnet. Please continue to monitor Devnet release notes for the source of truth on what is currently deployed--this list is about what's next!
 
