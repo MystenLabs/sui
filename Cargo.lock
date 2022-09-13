@@ -35,6 +35,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "ahash"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "57e6e951cfbb2db8de1828d49073a113a29fd7117b1596caa781a258c7e38d72"
+dependencies = [
+ "cfg-if 1.0.0",
+ "getrandom 0.2.6",
+ "once_cell",
+ "version_check",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "0.7.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2733,7 +2745,7 @@ version = "0.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
 ]
 
 [[package]]
@@ -2742,7 +2754,7 @@ version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
 ]
 
 [[package]]
@@ -3089,7 +3101,7 @@ version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ab388864246d58a276e60e7569a833d9cc4cd75c66e5ca77c177dad38e59996"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "dashmap",
  "hashbrown 0.12.3",
  "once_cell",
@@ -4373,7 +4385,7 @@ name = "msim"
 version = "0.1.0"
 source = "git+https://github.com/MystenLabs/mysten-sim.git?rev=15dff80e8e69218bc20b08a5ef91a4f156e626ac#15dff80e8e69218bc20b08a5ef91a4f156e626ac"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "async-task",
  "bincode",
  "bytes",
@@ -7002,7 +7014,7 @@ version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c21d3b5e7cadfe9ba7cdc1295f72cc556c750b4419c27c219c0693198901f8e"
 dependencies = [
- "ahash",
+ "ahash 0.7.6",
  "atoi",
  "bitflags",
  "byteorder",
@@ -9537,7 +9549,7 @@ dependencies = [
  "Inflector",
  "addr2line",
  "adler",
- "ahash",
+ "ahash 0.8.0",
  "aho-corasick",
  "anemo",
  "anemo-build",
@@ -10249,7 +10261,7 @@ source = "git+https://github.com/MystenLabs/narwhal?rev=2b77ef805c9bce0af4d74477
 dependencies = [
  "addr2line",
  "adler",
- "ahash",
+ "ahash 0.7.6",
  "aho-corasick",
  "anemo",
  "anemo-build",
