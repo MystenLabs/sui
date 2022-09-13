@@ -9,7 +9,7 @@ edition = "2021"
 match_opt = "0.1.2"
 multiaddr = "0.14.0"
 serde = { version = "1.0.144", features = ["derive"] }
-serde_with = "2.0.0"
+serde_with = "2.0.1"
 serde_json = "1.0.85"
 thiserror = "1.0.34"
 tracing = "0.1.36"

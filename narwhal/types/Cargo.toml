@@ -22,7 +22,7 @@ prost = "0.10.4"
 rand = "0.8.5"
 roaring = "0.10.1"
 serde = { version = "1.0.144", features = ["derive"] }
-serde_with = "2.0.0"
+serde_with = "2.0.1"
 signature = "1.6.0"
 store = {  version = "0.1.0", package = "typed-store"}
 thiserror = "1.0.34"
