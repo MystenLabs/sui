@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: "16"
-          cache: 'pnpm'
+          cache: "pnpm"
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Lint
@@ -39,3 +39,20 @@ jobs:
       - name: Build
         working-directory: ${{env.working-directory}}
         run: pnpm build:prod
+      - name: Package
+        working-directory: ${{env.working-directory}}
+        run: pnpm pack:zip
+      - uses: actions/upload-artifact@v2
+        if: always()
+        with:
+          name: wallet-extension
+          path: wallet/web-ext-artifacts/*
+          if-no-files-found: error
+          retention-days: 7
+      - name: Comment PR
+        uses: thollander/actions-comment-pull-request@v1
+        with:
+          comment_includes: "💳 Wallet Extension"
+          message: |
+            💳 Wallet Extension has been built, you can download the packaged extension here: https://github.com/MystenLabs/sui/actions/runs/${{ github.run_id }}#artifacts
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
