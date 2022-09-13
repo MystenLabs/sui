@@ -1,4 +1,4 @@
-transfer(1){
+transfer(10){
   transfer{
     transfer.network = {"network":"localnet", "blockchain":"sui"};
     currency = {"symbol":"SUI", "decimals":9};
