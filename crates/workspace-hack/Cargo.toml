@@ -409,7 +409,7 @@ rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-f
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
 rand_hc = { version = "0.1", default-features = false }
 rand_isaac = { version = "0.1", default-features = false }
-rand_jitter = { version = "0.1", default-features = false, features = ["std"] }
+rand_jitter = { version = "0.3", default-features = false, features = ["std"] }
 rand_os = { version = "0.1", default-features = false }
 rand_pcg = { version = "0.1", default-features = false }
 rand_xorshift-c65f7effa3be6d31 = { package = "rand_xorshift", version = "0.1", default-features = false }
@@ -1070,7 +1070,7 @@ rand_core-3b31131e45eafb45 = { package = "rand_core", version = "0.6", default-f
 rand_distr = { version = "0.4", features = ["alloc", "std"] }
 rand_hc = { version = "0.1", default-features = false }
 rand_isaac = { version = "0.1", default-features = false }
-rand_jitter = { version = "0.1", default-features = false, features = ["std"] }
+rand_jitter = { version = "0.3", default-features = false, features = ["std"] }
 rand_os = { version = "0.1", default-features = false }
 rand_pcg = { version = "0.1", default-features = false }
 rand_xorshift-c65f7effa3be6d31 = { package = "rand_xorshift", version = "0.1", default-features = false }

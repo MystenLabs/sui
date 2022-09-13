@@ -5735,7 +5735,7 @@ dependencies = [
  "rand_core 0.4.2",
  "rand_hc 0.1.0",
  "rand_isaac",
- "rand_jitter",
+ "rand_jitter 0.1.4",
  "rand_os",
  "rand_pcg",
  "rand_xorshift 0.1.1",
@@ -5874,6 +5874,17 @@ checksum = "1166d5c91dc97b88d1decc3285bb0a99ed84b05cfd0bc2341bdf2d43fc41e39b"
 dependencies = [
  "libc",
  "rand_core 0.4.2",
+ "winapi",
+]
+
+[[package]]
+name = "rand_jitter"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a404fd88e0f817fc1c3351b9ba2207ffa65038cdde464405308a5f5d254835fe"
+dependencies = [
+ "libc",
+ "rand_core 0.5.1",
  "winapi",
 ]
 
@@ -10000,7 +10011,7 @@ dependencies = [
  "rand_distr",
  "rand_hc 0.1.0",
  "rand_isaac",
- "rand_jitter",
+ "rand_jitter 0.3.0",
  "rand_os",
  "rand_pcg",
  "rand_xorshift 0.1.1",
