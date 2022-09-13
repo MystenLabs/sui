@@ -23,5 +23,6 @@ pub mod transaction_streamer;
 #[cfg(test)]
 pub mod test_utils;
 
+mod histogram;
 mod node_sync;
 mod query_helpers;
