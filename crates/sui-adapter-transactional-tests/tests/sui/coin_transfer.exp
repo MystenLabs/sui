@@ -7,7 +7,7 @@ task 1 'view-object'. lines 8-8:
 Owner: Account Address ( A )
 Version: 0
 Child Count: None
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 100000u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 1000000u64}}
 
 task 2 'run'. lines 10-10:
 created: object(106)
@@ -17,7 +17,7 @@ task 3 'view-object'. lines 12-12:
 Owner: Account Address ( A )
 Version: 1
 Child Count: None
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 99990u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 999990u64}}
 
 task 4 'view-object'. lines 14-14:
 Owner: Account Address ( B )
@@ -33,4 +33,4 @@ task 6 'view-object'. lines 18-18:
 Owner: Account Address ( A )
 Version: 2
 Child Count: None
-Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 99990u64}}
+Contents: sui::coin::Coin<sui::sui::SUI> {id: sui::object::UID {id: sui::object::ID {bytes: fake(100)}}, balance: sui::balance::Balance<sui::sui::SUI> {value: 999990u64}}

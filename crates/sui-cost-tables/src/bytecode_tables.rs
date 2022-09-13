@@ -24,6 +24,9 @@ use move_binary_format::{
     file_format_common::instruction_key,
 };
 
+/// VM flat fee
+pub const VM_FLAT_FEE: Gas = Gas::new(1_000);
+
 /// The size in bytes for a non-string or address constant on the stack
 pub const CONST_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
 
@@ -47,6 +50,9 @@ static ZERO_COST_SCHEDULE: Lazy<CostTable> = Lazy::new(zero_cost_schedule);
 pub struct GasStatus<'a> {
     cost_table: &'a CostTable,
     gas_left: InternalGas,
+    vm_gas_left: InternalGas,
+    /// This is used for batches where we want to ensure we don't reserve multiple times
+    reserved: bool,
     charge: bool,
 }
 
@@ -59,7 +65,9 @@ impl<'a> GasStatus<'a> {
         Self {
             gas_left: gas_left.to_unit(),
             cost_table,
+            reserved: false,
             charge: true,
+            vm_gas_left: Gas::new(0).to_unit(),
         }
     }
 
@@ -71,6 +79,8 @@ impl<'a> GasStatus<'a> {
         Self {
             gas_left: InternalGas::new(0),
             cost_table: &ZERO_COST_SCHEDULE,
+            reserved: false,
+            vm_gas_left: Gas::new(0).to_unit(),
             charge: false,
         }
     }
@@ -103,8 +113,56 @@ impl<'a> GasStatus<'a> {
         }
     }
 
+    /// This takes gas from the general gas pool into the VM pool
+    /// This must be called before the VM is invoked
+    pub fn reserve_vm_gas(&mut self) -> PartialVMResult<()> {
+        if !self.charge {
+            return Ok(());
+        }
+
+        if self.reserved {
+            // Nothing to do since we already reserved gas
+            return Ok(());
+        }
+
+        let amount = VM_FLAT_FEE.to_unit();
+
+        match self.gas_left.checked_sub(amount) {
+            Some(gas_left) => {
+                self.gas_left = gas_left;
+                self.vm_gas_left = amount;
+                self.reserved = true;
+                Ok(())
+            }
+            None => {
+                self.gas_left = InternalGas::new(0);
+                self.vm_gas_left = InternalGas::new(0);
+
+                Err(PartialVMError::new(StatusCode::OUT_OF_GAS))
+            }
+        }
+    }
+
+    /// Charge a given amount of gas for VM execution and fail if not enough gas units are left.
+    pub fn deduct_vm_gas(&mut self, amount: InternalGas) -> PartialVMResult<()> {
+        if !self.charge {
+            return Ok(());
+        }
+
+        match self.vm_gas_left.checked_sub(amount) {
+            Some(gas_left) => {
+                self.vm_gas_left = gas_left;
+                Ok(())
+            }
+            None => {
+                self.vm_gas_left = InternalGas::new(0);
+                Err(PartialVMError::new(StatusCode::OUT_OF_GAS))
+            }
+        }
+    }
+
     fn charge_instr(&mut self, opcode: Opcodes) -> PartialVMResult<()> {
-        self.deduct_gas(
+        self.deduct_vm_gas(
             self.cost_table
                 .instruction_cost(opcode as u8)
                 .total()
@@ -121,7 +179,7 @@ impl<'a> GasStatus<'a> {
         // Make sure that the size is always non-zero
         let size = std::cmp::max(1.into(), size);
         debug_assert!(size > 0.into());
-        self.deduct_gas(
+        self.deduct_vm_gas(
             InternalGasPerAbstractMemoryUnit::new(
                 self.cost_table.instruction_cost(opcode as u8).total(),
             )
@@ -197,7 +255,7 @@ impl<'b> GasMeter for GasStatus<'b> {
     }
 
     fn charge_native_function(&mut self, amount: InternalGas) -> PartialVMResult<()> {
-        self.deduct_gas(amount)
+        self.deduct_vm_gas(amount)
     }
 
     fn charge_call(

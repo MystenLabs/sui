@@ -129,6 +129,13 @@ pub enum SingleTransactionKind {
 }
 
 impl SingleTransactionKind {
+    pub fn uses_vm(&self) -> bool {
+        matches!(
+            self,
+            SingleTransactionKind::Publish(_) | SingleTransactionKind::Call(_)
+        )
+    }
+
     pub fn contains_shared_object(&self) -> bool {
         self.shared_input_objects().next().is_some()
     }

@@ -214,6 +214,13 @@ impl<'a> SuiGasStatus<'a> {
         &mut self.gas_status
     }
 
+    pub fn reserve_vm_gas(&mut self) -> Result<(), ExecutionError> {
+        self.gas_status.reserve_vm_gas().map_err(|e| {
+            debug_assert_eq!(e.major_status(), StatusCode::OUT_OF_GAS);
+            ExecutionErrorKind::InsufficientGas.into()
+        })
+    }
+
     pub fn charge_min_tx_gas(&mut self) -> Result<(), ExecutionError> {
         self.deduct_computation_cost(INIT_SUI_COST_TABLE.min_transaction_cost.deref())
     }
@@ -263,7 +270,7 @@ impl<'a> SuiGasStatus<'a> {
     /// Move VM charging gas.
     pub fn charge_vm_exec_test_only(&mut self, cost: u64) -> Result<(), ExecutionError> {
         self.gas_status
-            .deduct_gas(InternalGas::new(cost))
+            .deduct_vm_gas(InternalGas::new(cost))
             .map_err(|e| {
                 debug_assert_eq!(e.major_status(), StatusCode::OUT_OF_GAS);
                 ExecutionErrorKind::InsufficientGas.into()
