@@ -152,7 +152,7 @@ impl Proposer {
         self.last_leader.is_some()
     }
 
-    /// Check whether if we have (i) 2f+1 votes for the leader, (ii) f+1 nodes not voting for the leader,
+    /// Check whether if we have (i) f+1 votes for the leader, (ii) 2f+1 nodes not voting for the leader,
     /// or (iii) there is no leader to vote for. This is only relevant in partial synchrony.
     fn enough_votes(&self) -> bool {
         let leader = match &self.last_leader {
