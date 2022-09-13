@@ -29,6 +29,27 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Test
-        run: pnpm --filter @mysten/sui.js test
+        run: pnpm --filter @mysten/sui.js test:unit
       - name: Build
         run: pnpm --filter @mysten/sui.js build
+  end_to_end:
+    name: End-to-end tests
+    needs: diff
+    if: needs.diff.outputs.isTypescriptSDK == 'true'
+    runs-on: [ubuntu-ghcloud]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+      - uses: pnpm/action-setup@v2.2.2
+        with:
+          version: 7
+      - run: cargo build --bin sui-test-validator --profile dev
+      - name: Install Nodejs
+        uses: actions/setup-node@v3
+        with:
+          node-version: "16"
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Run e2e tests
+        run: pnpm dlx concurrently --kill-others --success command-1 'cargo run --bin sui-test-validator' 'pnpm --filter @mysten/sui.js test:e2e'

@@ -3,7 +3,7 @@
 
 import nacl from 'tweetnacl';
 import { describe, it, expect } from 'vitest';
-import { Base64DataBuffer, Ed25519Keypair } from '../../src';
+import { Base64DataBuffer, Ed25519Keypair } from '../../../src';
 
 const VALID_SECRET_KEY =
   'mdqVWeFekT7pqy5T49+tV12jO0m+ESW7ki4zSU9JiCgbL0kJbj5dvQ/PqcDAzZLZqzshVEs01d1KZdmLh4uZIg==';

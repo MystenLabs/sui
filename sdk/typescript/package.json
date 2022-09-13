@@ -24,7 +24,9 @@
     "build": "node ./type_guards.mjs && pnpm build:types && tsup ./src/index.ts --format esm,cjs --sourcemap",
     "build:types": "tsc --build",
     "doc": "typedoc",
-    "test": "vitest",
+    "test": "pnpm test:unit && pnpm test:e2e",
+    "test:unit": "vitest unit",
+    "test:e2e": "wait-on http://127.0.0.1:9123 -l --timeout 120000 && vitest e2e",
     "lint": "eslint './{src,test}/**.{ts,js}'",
     "prepublishOnly": "pnpm build",
     "size": "size-limit",
@@ -76,7 +78,8 @@
     "tsup": "^6.2.2",
     "typedoc": "^0.23.11",
     "typescript": "^4.8.2",
-    "vitest": "^0.22.1"
+    "vitest": "^0.22.1",
+    "wait-on": "^6.0.1"
   },
   "dependencies": {
     "@mysten/bcs": "workspace:*",
@@ -86,9 +89,9 @@
     "buffer": "^6.0.3",
     "cross-fetch": "^3.1.5",
     "jayson": "^3.6.6",
-    "rpc-websockets": "^7.5.0",
     "js-sha3": "^0.8.0",
     "lossless-json": "^1.0.5",
+    "rpc-websockets": "^7.5.0",
     "tweetnacl": "^1.0.3"
   }
 }

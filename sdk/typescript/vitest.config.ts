@@ -6,6 +6,8 @@ import { configDefaults, defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     exclude: [...configDefaults.exclude, 'bcs/**'],
+    minThreads: 1,
+    maxThreads: 8,
   },
   resolve: {
     alias: {

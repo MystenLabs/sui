@@ -1,20 +1,20 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { Base64DataBuffer, Secp256k1Keypair } from '../../src';
+import { Base64DataBuffer, Secp256k1Keypair } from '../../../src';
 import { describe, it, expect } from 'vitest';
-import * as secp from "@noble/secp256k1";
+import * as secp from '@noble/secp256k1';
 
 // Test case from https://github.com/rust-bitcoin/rust-secp256k1/blob/master/examples/sign_verify.rs#L26
 const VALID_SECP256K1_SECRET_KEY = [
-  59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107,
-  94, 203, 174, 253, 102, 39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
+  59, 148, 11, 85, 134, 130, 61, 253, 2, 174, 59, 70, 27, 180, 51, 107, 94, 203,
+  174, 253, 102, 39, 170, 146, 46, 252, 4, 143, 236, 12, 136, 28,
 ];
 
-// Corresponding to the secret key above. 
+// Corresponding to the secret key above.
 export const VALID_SECP256K1_PUBLIC_KEY = [
-  2, 29, 21, 35, 7, 198, 183, 43, 14, 208, 65, 139, 14, 112, 205, 128, 231,
-  245, 41, 91, 141, 134, 245, 114, 45, 63, 82, 19, 251, 210, 57, 79, 54,
+  2, 29, 21, 35, 7, 198, 183, 43, 14, 208, 65, 139, 14, 112, 205, 128, 231, 245,
+  41, 91, 141, 134, 245, 114, 45, 63, 82, 19, 251, 210, 57, 79, 54,
 ];
 
 // Invalid private key with incorrect length
@@ -49,7 +49,9 @@ describe('secp256k1-keypair', () => {
   });
 
   it('generate keypair from random seed', () => {
-    const keypair = Secp256k1Keypair.fromSeed(Uint8Array.from(Array(32).fill(8)));
+    const keypair = Secp256k1Keypair.fromSeed(
+      Uint8Array.from(Array(32).fill(8))
+    );
     expect(keypair.getPublicKey().toBase64()).toEqual(
       'A/mR+UTR4ZVKf8i5v2Lg148BX0wHdi1QXiDmxFJgo2Yb'
     );
