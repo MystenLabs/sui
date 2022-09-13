@@ -1,7 +1,10 @@
 /crates/sui-types/src/crypto.rs @huitseeker
 /crates/sui-sdk/src/crypto.rs @huitseeker @patrickkuo
 
-*.md @Clay-Mysten @randall-Mysten
+*.md @randall-Mysten
+# Omit auto-generated changelogs and changesets from docs review:
+/.changeset/*.md
+CHANGELOG.md
 
 # When snapshot changes, most likely we will need to recreate the genesis blob.
 /crates/sui-config/tests/snapshot_tests.rs @tharbert @huitseeker
