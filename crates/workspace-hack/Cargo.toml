@@ -236,7 +236,7 @@ im = { version = "15", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
 indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
-insta = { version = "1", features = ["__private_legacy_default_serialization", "colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
+insta = { version = "1", features = ["colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
@@ -865,7 +865,7 @@ include_dir = { version = "0.7", features = ["glob"] }
 include_dir_macros = { version = "0.7", default-features = false }
 indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
-insta = { version = "1", features = ["__private_legacy_default_serialization", "colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
+insta = { version = "1", features = ["colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
