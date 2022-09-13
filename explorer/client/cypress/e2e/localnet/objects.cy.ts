@@ -5,13 +5,13 @@ Cypress.config('baseUrl', 'http://localhost:3000');
 
 describe('Objects', () => {
     it('can be reached through URL', () => {
-        cy.task('faucet').then((address) => {
-            cy.task('mint', address).then((tx) => {
-                const { objectId } = tx.effects.created![0].reference;
+        cy.task('faucet')
+            .then((address) => cy.task('mint', address))
+            .then(({ effects }) => {
+                const { objectId } = effects.created![0].reference;
                 cy.visit(`/objects/${objectId}`);
                 cy.get('#objectID').contains(objectId);
             });
-        });
     });
 
     it('displays an error when no objects', () => {
@@ -21,9 +21,11 @@ describe('Objects', () => {
 
     describe('Owned Objects', () => {
         it('link going from address to object and back', () => {
-            cy.task('faucet').then((address) => {
-                cy.task('mint', address).then((tx) => {
-                    const [nft] = tx.effects.created!;
+            cy.task('faucet')
+                .then((address) => cy.task('mint', address))
+                .then(({ certificate, effects }) => {
+                    const address = certificate.data.sender;
+                    const [nft] = effects.created!;
                     cy.visit(`/addresses/${address}`);
 
                     // Find a reference to the NFT:
@@ -34,7 +36,6 @@ describe('Objects', () => {
                     cy.contains(address).click();
                     cy.get('#addressID').contains(address);
                 });
-            });
         });
     });
 });
