@@ -4,12 +4,12 @@
 
 use crate::authority_client::{AuthorityAPI, BatchInfoResponseItemStream};
 use crate::epoch::epoch_store::EpochStore;
-use crate::metrics::start_timer;
+use crate::histogram::{Histogram, HistogramVec};
 use futures::StreamExt;
 use prometheus::core::{GenericCounter, GenericGauge};
 use prometheus::{
-    register_histogram_vec_with_registry, register_int_counter_vec_with_registry,
-    register_int_gauge_vec_with_registry, Histogram, HistogramVec, IntCounterVec, IntGaugeVec,
+    register_int_counter_vec_with_registry, register_int_gauge_vec_with_registry, IntCounterVec,
+    IntGaugeVec,
 };
 use std::sync::Arc;
 use sui_types::batch::{AuthorityBatch, SignedBatch, TxSequenceNumber, UpdateItem};
@@ -24,11 +24,10 @@ use sui_types::{
     messages::*,
 };
 use tap::TapFallible;
-use tokio::time::Instant;
 use tracing::info;
 
 /// Prometheus metrics which can be displayed in Grafana, queried and alerted on
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct SafeClientMetrics {
     pub(crate) total_requests_by_address_method: IntCounterVec,
     pub(crate) total_responses_by_address_method: IntCounterVec,
@@ -36,8 +35,6 @@ pub struct SafeClientMetrics {
     pub(crate) follower_streaming_reconnect_times_by_address: IntCounterVec,
     latency: HistogramVec,
 }
-
-const LATENCY_SEC_BUCKETS: &[f64] = &[0.001, 0.01, 0.1, 1., 2., 3., 5., 10., 20., 30., 60., 180.];
 
 impl SafeClientMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
@@ -70,14 +67,12 @@ impl SafeClientMetrics {
                 registry,
             )
             .unwrap(),
-            latency: register_histogram_vec_with_registry!(
+            latency: HistogramVec::new_in_registry(
                 "safe_client_latency",
                 "RPC latency observed by safe client aggregator, group by address and method",
                 &["address", "method"],
-                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
-            )
-            .unwrap(),
+            ),
         }
     }
 
@@ -461,9 +456,7 @@ where
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let digest = *transaction.digest();
-        let start_ts = Instant::now();
-        let _metrics_guard =
-            start_timer!(self.metrics_handle_transaction_latency.clone(), &start_ts);
+        let _timer = self.metrics_handle_transaction_latency.start_timer();
         let transaction_info = self
             .authority_client
             .handle_transaction(transaction)
@@ -497,9 +490,7 @@ where
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
         let digest = *certificate.digest();
-        let start_ts = Instant::now();
-        let _metrics_guard =
-            start_timer!(self.metrics_handle_certificate_latency.clone(), &start_ts);
+        let _timer = self.metrics_handle_certificate_latency.start_timer();
         let transaction_info = self
             .authority_client
             .handle_certificate(certificate)
@@ -527,9 +518,7 @@ where
     ) -> Result<ObjectInfoResponse, SuiError> {
         self.metrics_total_requests_handle_object_info_request.inc();
 
-        let start_ts = Instant::now();
-
-        let _metrics_guard = start_timer!(self.metrics_handle_obj_info_latency.clone(), &start_ts);
+        let _timer = self.metrics_handle_obj_info_latency.start_timer();
         let response = self
             .authority_client
             .handle_object_info_request(request.clone())
@@ -552,8 +541,7 @@ where
             .inc();
         let digest = request.transaction_digest;
 
-        let start_ts = Instant::now();
-        let _metrics_guard = start_timer!(self.metrics_handle_tx_info_latency.clone(), &start_ts);
+        let _timer = self.metrics_handle_tx_info_latency.start_timer();
 
         let transaction_info = self
             .authority_client
