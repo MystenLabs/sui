@@ -23,6 +23,10 @@
     @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] h-[72px] flex items-center;
 }
 
+.objectbox a {
+    @apply font-mono;
+}
+
 .ownedobjectheader {
     @apply pb-1;
 }
