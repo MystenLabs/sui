@@ -31,12 +31,12 @@ export interface HeadingProps extends VariantProps<typeof headingStyles> {
      * The HTML element that will be rendered.
      * By default, we render a "div" in order to separate presentational styles from semantic markup.
      */
-    tag?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'div';
+    as?: 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6' | 'div';
     children: ReactNode;
 }
 
 export function Heading({
-    tag: Tag = 'div',
+    as: Tag = 'div',
     children,
     ...styleProps
 }: HeadingProps) {
