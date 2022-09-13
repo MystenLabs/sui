@@ -4,7 +4,7 @@ use arc_swap::ArcSwap;
 use config::{Committee, Parameters};
 use fastcrypto::traits::KeyPair;
 use futures::future::join_all;
-use network::{CancelOnDropHandler, ReliableNetwork, WorkerToPrimaryNetwork};
+use network::{CancelOnDropHandler, ReliableNetwork2, WorkerToPrimaryNetwork};
 use node::NodeStorage;
 use primary::{NetworkModel, Primary, CHANNEL_CAPACITY};
 use prometheus::Registry;
@@ -80,6 +80,28 @@ async fn test_simple_epoch_change() {
         }
     }
 
+    let network = anemo::Network::bind("127.0.0.1:0")
+        .server_name("narwhal")
+        .private_key(
+            crypto::NetworkKeyPair::generate(&mut rand::rngs::OsRng)
+                .private()
+                .0
+                .to_bytes(),
+        )
+        .start(anemo::Router::new())
+        .unwrap();
+
+    for authority in committee_0.authorities.values() {
+        let address = network::multiaddr_to_address(&authority.primary_address).unwrap();
+        let peer_id = anemo::PeerId(authority.network_key.0.to_bytes());
+
+        network
+            .connect_with_peer_id(address, peer_id)
+            .await
+            .unwrap();
+    }
+    let mut network = WorkerToPrimaryNetwork::new(network);
+
     // Move to the next epochs.
     let mut old_committee = committee_0;
     for epoch in 1..=3 {
@@ -90,19 +112,14 @@ async fn test_simple_epoch_change() {
         };
 
         // Notify the old committee to change epoch.
-        let addresses: Vec<_> = old_committee
-            .authorities
-            .values()
-            .map(|authority| authority.primary.worker_to_primary.clone())
-            .collect();
         let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewEpoch(
             new_committee.clone(),
         ));
         let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
-        for address in addresses {
+        for authority in old_committee.authorities.values() {
             _do_not_drop.push(
-                WorkerToPrimaryNetwork::default()
-                    .send(address, &message)
+                network
+                    .send(authority.network_key.to_owned(), &message)
                     .await,
             );
         }
@@ -124,6 +141,7 @@ async fn test_simple_epoch_change() {
 #[allow(clippy::mutable_key_type)]
 #[tokio::test]
 async fn test_partial_committee_change() {
+    telemetry_subscribers::init_for_testing();
     let parameters = Parameters {
         header_size: 32, // One batch digest
         ..Parameters::default()
@@ -193,6 +211,40 @@ async fn test_partial_committee_change() {
     let committee_1 = fixture.committee();
     let worker_cache_1 = fixture.shared_worker_cache();
 
+    // Tell the nodes of epoch 0 to transition to epoch 1.
+    let network = anemo::Network::bind("127.0.0.1:0")
+        .server_name("narwhal")
+        .private_key(
+            crypto::NetworkKeyPair::generate(&mut rand::rngs::OsRng)
+                .private()
+                .0
+                .to_bytes(),
+        )
+        .start(anemo::Router::new())
+        .unwrap();
+
+    for authority in committee_0.authorities.values() {
+        let address = network::multiaddr_to_address(&authority.primary_address).unwrap();
+        let peer_id = anemo::PeerId(authority.network_key.0.to_bytes());
+
+        network
+            .connect_with_peer_id(address, peer_id)
+            .await
+            .unwrap();
+    }
+    let mut network = WorkerToPrimaryNetwork::new(network);
+
+    let message =
+        WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee_1.clone()));
+    let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
+    for authority in committee_0.authorities.values() {
+        _do_not_drop.push(
+            network
+                .send(authority.network_key.to_owned(), &message)
+                .await,
+        );
+    }
+
     // Spawn the committee of epoch 1 (only the node not already booted).
     let mut epoch_1_rx_channels = Vec::new();
     let mut epoch_1_tx_channels = Vec::new();
@@ -233,23 +285,6 @@ async fn test_partial_committee_change() {
             tx_reconfigure,
             /* tx_committed_certificates */ tx_feedback,
             &Registry::new(),
-        );
-    }
-
-    // Tell the nodes of epoch 0 to transition to epoch 1.
-    let addresses: Vec<_> = committee_0
-        .authorities
-        .values()
-        .map(|authority| authority.primary.worker_to_primary.clone())
-        .collect();
-    let message =
-        WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewEpoch(committee_1.clone()));
-    let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
-    for address in addresses {
-        _do_not_drop.push(
-            WorkerToPrimaryNetwork::default()
-                .send(address, &message)
-                .await,
         );
     }
 
@@ -336,17 +371,17 @@ async fn test_restart_with_new_committee_change() {
     }
 
     // Shutdown the committee of the previous epoch;
-    let addresses: Vec<_> = committee_0
-        .authorities
-        .values()
-        .map(|authority| authority.primary.worker_to_primary.clone())
-        .collect();
     let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::Shutdown);
     let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
-    for address in addresses {
+    for authority in committee_0.authorities.values() {
+        let mut network = WorkerToPrimaryNetwork::new_for_single_address(
+            authority.network_key.to_owned(),
+            network::multiaddr_to_address(&authority.primary_address).unwrap(),
+        )
+        .await;
         _do_not_drop.push(
-            WorkerToPrimaryNetwork::default()
-                .send(address, &message)
+            network
+                .send(authority.network_key.to_owned(), &message)
                 .await,
         );
     }
@@ -419,17 +454,17 @@ async fn test_restart_with_new_committee_change() {
         }
 
         // Shutdown the committee of the previous epoch;
-        let addresses: Vec<_> = committee_0
-            .authorities
-            .values()
-            .map(|authority| authority.primary.worker_to_primary.clone())
-            .collect();
         let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::Shutdown);
         let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
-        for address in addresses {
+        for authority in committee_0.authorities.values() {
+            let mut network = WorkerToPrimaryNetwork::new_for_single_address(
+                authority.network_key.to_owned(),
+                network::multiaddr_to_address(&authority.primary_address).unwrap(),
+            )
+            .await;
             _do_not_drop.push(
-                WorkerToPrimaryNetwork::default()
-                    .send(address, &message)
+                network
+                    .send(authority.network_key.to_owned(), &message)
                     .await,
             );
         }
@@ -513,36 +548,24 @@ async fn test_simple_committee_update() {
     for _ in 1..=3 {
         // Update the committee
         let mut new_committee = old_committee.clone();
-
-        let mut total_stake = 0;
-        let threshold = new_committee.validity_threshold();
         for (_, authority) in new_committee.authorities.iter_mut() {
-            if total_stake < threshold {
-                authority.primary.primary_to_primary = format!(
-                    "/ip4/127.0.0.1/tcp/{}/http",
-                    config::utils::get_available_port()
-                )
-                .parse()
-                .unwrap();
-
-                total_stake += authority.stake;
-            }
+            authority.stake += 1;
         }
 
         // Notify the old committee about the change in committee information.
-        let addresses: Vec<_> = old_committee
-            .authorities
-            .values()
-            .map(|authority| authority.primary.worker_to_primary.clone())
-            .collect();
         let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::UpdateCommittee(
             new_committee.clone(),
         ));
         let mut _do_not_drop: Vec<CancelOnDropHandler<_>> = Vec::new();
-        for address in addresses {
+        for authority in old_committee.authorities.values() {
+            let mut network = WorkerToPrimaryNetwork::new_for_single_address(
+                authority.network_key.to_owned(),
+                network::multiaddr_to_address(&authority.primary_address).unwrap(),
+            )
+            .await;
             _do_not_drop.push(
-                WorkerToPrimaryNetwork::default()
-                    .send(address, &message)
+                network
+                    .send(authority.network_key.to_owned(), &message)
                     .await,
             );
         }

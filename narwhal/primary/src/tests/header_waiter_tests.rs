@@ -33,9 +33,7 @@ async fn successfully_synchronize_batches() {
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
     let (_tx_consensus_round_updates, rx_consensus_round_updates) = watch::channel(0u64);
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
 
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")

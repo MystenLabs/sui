@@ -44,10 +44,7 @@ async fn process_header() {
     let expected = Vote::new(&header, &name, &mut signature_service).await;
 
     // Spawn a listener to receive the vote.
-    let address = committee
-        .primary(&header.author)
-        .unwrap()
-        .primary_to_primary;
+    let address = committee.primary(&header.author).unwrap();
     let (mut handle, _network) =
         PrimaryToPrimaryMockServer::spawn(author.network_keypair().copy(), address.clone());
 
@@ -64,9 +61,7 @@ async fn process_header() {
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -166,9 +161,7 @@ async fn process_header_missing_parent() {
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -255,9 +248,7 @@ async fn process_header_missing_payload() {
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -344,9 +335,7 @@ async fn process_votes() {
     );
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -355,7 +344,7 @@ async fn process_votes() {
 
     for (_pubkey, addresses, network_pubkey) in committee.others_primaries(&name) {
         let peer_id = PeerId(network_pubkey.0.to_bytes());
-        let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
+        let address = network::multiaddr_to_address(&addresses).unwrap();
         let peer_info = PeerInfo {
             peer_id,
             affinity: anemo::types::PeerAffinity::High,
@@ -395,10 +384,7 @@ async fn process_votes() {
         .authorities()
         .skip(1)
         .map(|a| {
-            let address = committee
-                .primary(&a.public_key())
-                .unwrap()
-                .primary_to_primary;
+            let address = committee.primary(&a.public_key()).unwrap();
             PrimaryToPrimaryMockServer::spawn(a.network_keypair().copy(), address)
         })
         .collect();
@@ -469,9 +455,7 @@ async fn process_certificates() {
 
     let metrics = Arc::new(PrimaryMetrics::new(&Registry::new()));
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -586,9 +570,7 @@ async fn shutdown_core() {
         None,
     );
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)
@@ -659,10 +641,7 @@ async fn reconfigure_core() {
     let expected = Vote::new(&header, &name, &mut signature_service).await;
 
     // Spawn a listener to receive the vote.
-    let address = new_committee
-        .primary(&header.author)
-        .unwrap()
-        .primary_to_primary;
+    let address = new_committee.primary(&header.author).unwrap();
     let (mut handle, _network) =
         PrimaryToPrimaryMockServer::spawn(author.network_keypair().copy(), address.clone());
 
@@ -677,9 +656,7 @@ async fn reconfigure_core() {
         None,
     );
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(network_key)

@@ -468,27 +468,19 @@ impl WorkerCache {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PrimaryAddresses {
-    /// Address to receive messages from other primaries (WAN).
-    pub primary_to_primary: Multiaddr,
-    /// Address to receive messages from our workers (LAN).
-    pub worker_to_primary: Multiaddr,
-}
-
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Authority {
     /// The voting power of this authority.
     pub stake: Stake,
-    /// The network addresses of the primary.
-    pub primary: PrimaryAddresses,
+    /// The network address of the primary.
+    pub primary_address: Multiaddr,
     /// Network key of the primary.
     pub network_key: NetworkPublicKey,
 }
 
 pub type SharedCommittee = Arc<ArcSwap<Committee>>;
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, Eq, PartialEq)]
 pub struct Committee {
     /// The authorities of epoch.
     pub authorities: BTreeMap<PublicKey, Authority>,
@@ -570,11 +562,11 @@ impl Committee {
             .clone()
     }
 
-    /// Returns the primary addresses of the target primary.
-    pub fn primary(&self, to: &PublicKey) -> Result<PrimaryAddresses, ConfigError> {
+    /// Returns the primary address of the target primary.
+    pub fn primary(&self, to: &PublicKey) -> Result<Multiaddr, ConfigError> {
         self.authorities
             .get(&to.clone())
-            .map(|x| x.primary.clone())
+            .map(|x| x.primary_address.clone())
             .ok_or_else(|| ConfigError::NotInCommittee((*to).encode_base64()))
     }
 
@@ -589,14 +581,14 @@ impl Committee {
     pub fn others_primaries(
         &self,
         myself: &PublicKey,
-    ) -> Vec<(PublicKey, PrimaryAddresses, NetworkPublicKey)> {
+    ) -> Vec<(PublicKey, Multiaddr, NetworkPublicKey)> {
         self.authorities
             .iter()
             .filter(|(name, _)| *name != myself)
             .map(|(name, authority)| {
                 (
                     name.clone(),
-                    authority.primary.clone(),
+                    authority.primary_address.clone(),
                     authority.network_key.clone(),
                 )
             })
@@ -606,10 +598,7 @@ impl Committee {
     fn get_all_network_addresses(&self) -> HashSet<&Multiaddr> {
         self.authorities
             .values()
-            .flat_map(|authority| {
-                std::iter::once(&authority.primary.primary_to_primary)
-                    .chain(std::iter::once(&authority.primary.worker_to_primary))
-            })
+            .map(|authority| &authority.primary_address)
             .collect()
     }
 
@@ -627,7 +616,7 @@ impl Committee {
     /// will generate no update and return a vector of errors.
     pub fn update_primary_network_info(
         &mut self,
-        mut new_info: BTreeMap<PublicKey, (Stake, PrimaryAddresses)>,
+        mut new_info: BTreeMap<PublicKey, (Stake, Multiaddr)>,
     ) -> Result<(), Vec<CommitteeUpdateError>> {
         let mut errors = None;
 
@@ -645,13 +634,13 @@ impl Committee {
         let res = table
             .iter()
             .fold(Ok(BTreeMap::new()), |acc, (pk, authority)| {
-                if let Some((stake, addresses)) = new_info.remove(pk) {
+                if let Some((stake, address)) = new_info.remove(pk) {
                     if stake == authority.stake {
                         match acc {
                             // No error met yet, update the accumulator
                             Ok(mut bmap) => {
                                 let mut res = authority.clone();
-                                res.primary = addresses;
+                                res.primary_address = address;
                                 bmap.insert(pk.clone(), res);
                                 Ok(bmap)
                             }

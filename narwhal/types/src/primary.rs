@@ -664,7 +664,7 @@ pub enum PrimaryMessage {
 }
 
 /// Message to reconfigure worker tasks. This message must be sent by a trusted source.
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum ReconfigureNotification {
     /// Indicate the committee has changed. This happens at epoch change.
     NewEpoch(Committee),
@@ -747,7 +747,7 @@ impl fmt::Display for BlockErrorKind {
 }
 
 /// The messages sent by the workers to their primary.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
 pub enum WorkerPrimaryMessage {
     /// The worker indicates it sealed a new batch.
     OurBatch(BatchDigest, WorkerId),

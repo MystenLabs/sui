@@ -1,6 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{PrimaryAddresses, SharedCommittee};
+use config::SharedCommittee;
 use crypto::PublicKey;
 use fastcrypto::traits::ToFromBytes;
 use multiaddr::Multiaddr;
@@ -60,35 +60,18 @@ impl Configuration for NarwhalConfiguration {
             let public_key = self.get_public_key(validator.public_key.as_ref())?;
 
             let stake_weight = validator.stake_weight;
-            let primary_addresses = validator
-                .primary_addresses
+            let primary_address: Multiaddr = validator
+                .primary_address
                 .as_ref()
-                .ok_or_else(|| Status::invalid_argument("Missing primary addresses"))?;
-            let primary_to_primary = primary_addresses
-                .primary_to_primary
-                .as_ref()
-                .ok_or_else(|| Status::invalid_argument("Missing primary to primary address"))?
+                .ok_or_else(|| Status::invalid_argument("Missing primary address"))?
                 .address
                 .parse()
                 .map_err(|err| {
                     Status::invalid_argument(format!("Could not serialize: {:?}", err))
                 })?;
-            let worker_to_primary = primary_addresses
-                .primary_to_primary
-                .as_ref()
-                .ok_or_else(|| Status::invalid_argument("Missing worker to primary address"))?
-                .address
-                .parse()
-                .map_err(|err| {
-                    Status::invalid_argument(format!("Could not serialize: {:?}", err))
-                })?;
-            let primary = PrimaryAddresses {
-                primary_to_primary,
-                worker_to_primary,
-            };
             parsed_input.push(format!(
-                "public_key: {:?} stake_weight: {:?} primary addresses: {:?}",
-                public_key, stake_weight, primary
+                "public_key: {:?} stake_weight: {:?} primary address: {:?}",
+                public_key, stake_weight, primary_address
             ));
         }
         Err(Status::internal(format!(
@@ -119,12 +102,8 @@ impl Configuration for NarwhalConfiguration {
                 .stake_weight
                 .try_into()
                 .map_err(|_| Status::invalid_argument("Invalid stake weight"))?;
-            let primary_addresses = validator
-                .primary_addresses
-                .as_ref()
-                .ok_or_else(|| Status::invalid_argument("Missing primary addresses"))?;
-            let primary_to_primary = primary_addresses
-                .primary_to_primary
+            let primary_address = validator
+                .primary_address
                 .as_ref()
                 .ok_or_else(|| Status::invalid_argument("Missing primary to primary address"))?
                 .address
@@ -132,20 +111,7 @@ impl Configuration for NarwhalConfiguration {
                 .map_err(|err| {
                     Status::invalid_argument(format!("Could not serialize: {:?}", err))
                 })?;
-            let worker_to_primary = primary_addresses
-                .primary_to_primary
-                .as_ref()
-                .ok_or_else(|| Status::invalid_argument("Missing worker to primary address"))?
-                .address
-                .parse()
-                .map_err(|err| {
-                    Status::invalid_argument(format!("Could not serialize: {:?}", err))
-                })?;
-            let primary = PrimaryAddresses {
-                primary_to_primary,
-                worker_to_primary,
-            };
-            new_network_info.insert(public_key, (stake_weight, primary));
+            new_network_info.insert(public_key, (stake_weight, primary_address));
         }
         let mut new_committee = (**self.committee.load()).clone();
         let res = new_committee.update_primary_network_info(new_network_info);

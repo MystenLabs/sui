@@ -5,6 +5,7 @@ mod narwhal {
     tonic::include_proto!("narwhal");
 
     include!(concat!(env!("OUT_DIR"), "/narwhal.PrimaryToPrimary.rs"));
+    include!(concat!(env!("OUT_DIR"), "/narwhal.WorkerToPrimary.rs"));
     include!(concat!(env!("OUT_DIR"), "/narwhal.WorkerToWorker.rs"));
 }
 
@@ -37,9 +38,8 @@ pub use narwhal::{
     CollectionError, CollectionRetrievalResult, Empty, GetCollectionsRequest,
     GetCollectionsResponse, GetPrimaryAddressResponse, MultiAddr as MultiAddrProto,
     NewEpochRequest, NewNetworkInfoRequest, NodeReadCausalRequest, NodeReadCausalResponse,
-    PrimaryAddresses as PrimaryAddressesProto, PublicKey as PublicKeyProto, ReadCausalRequest,
-    ReadCausalResponse, RemoveCollectionsRequest, RoundsRequest, RoundsResponse,
-    Transaction as TransactionProto, ValidatorData,
+    PublicKey as PublicKeyProto, ReadCausalRequest, ReadCausalResponse, RemoveCollectionsRequest,
+    RoundsRequest, RoundsResponse, Transaction as TransactionProto, ValidatorData,
 };
 
 impl From<PublicKey> for PublicKeyProto {

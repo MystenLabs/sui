@@ -41,8 +41,6 @@ pub struct Worker {
     /// The public key of this authority.
     primary_name: PublicKey,
     // The private-public key pair of this worker.
-    // TODO: utilize keypair in network communication
-    #[allow(dead_code)]
     keypair: NetworkKeyPair,
     /// The id of this worker used for index-based lookup by other NW nodes.
     id: WorkerId,
@@ -55,8 +53,6 @@ pub struct Worker {
     /// The persistent storage.
     store: Store<BatchDigest, Batch>,
 }
-
-const INADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
 impl Worker {
     pub fn spawn(
@@ -89,7 +85,7 @@ impl Worker {
 
         let initial_committee = (*(*(*committee).load()).clone()).clone();
         let (tx_reconfigure, rx_reconfigure) =
-            watch::channel(ReconfigureNotification::NewEpoch(initial_committee.clone()));
+            watch::channel(ReconfigureNotification::NewEpoch(initial_committee));
 
         let (tx_worker_helper, rx_worker_helper) =
             channel(CHANNEL_CAPACITY, &channel_metrics.tx_worker_helper);
@@ -123,7 +119,7 @@ impl Worker {
 
         info!("Worker {} listening to worker messages on {}", id, address);
 
-        // add other workers we want to talk with to the known peers set
+        // Add other workers we want to talk with to the known peers set.
         for (_primary_pubkey, worker_info) in worker
             .worker_cache
             .load()
@@ -138,6 +134,30 @@ impl Worker {
             };
             network.known_peers().insert(peer_info);
         }
+
+        // Connect worker to its corresponding primary.
+        let primary_address = network::multiaddr_to_address(
+            &committee
+                .load()
+                .primary(&primary_name)
+                .expect("Our primary is not in the committee"),
+        )
+        .unwrap();
+        let primary_network_key = committee
+            .load()
+            .network_key(&primary_name)
+            .expect("Our primary is not in the committee");
+        network.known_peers().insert(PeerInfo {
+            peer_id: anemo::PeerId(primary_network_key.0.to_bytes()),
+            affinity: anemo::types::PeerAffinity::High,
+            address: vec![primary_address],
+        });
+        let handle = PrimaryConnector::spawn(
+            primary_network_key,
+            rx_reconfigure,
+            rx_primary,
+            network::WorkerToPrimaryNetwork::new(network.clone()),
+        );
 
         let client_flow_handles = worker.handle_clients_transactions(
             &tx_reconfigure,
@@ -161,10 +181,6 @@ impl Worker {
             channel_metrics,
             network,
         );
-
-        // The `PrimaryConnector` allows the worker to send messages to its primary.
-        let handle =
-            PrimaryConnector::spawn(primary_name, initial_committee, rx_reconfigure, rx_primary);
 
         // NOTE: This log entry is used to compute performance.
         info!(
@@ -205,7 +221,7 @@ impl Worker {
             .expect("Our public key or worker id is not in the worker cache")
             .primary_to_worker;
         let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
+            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
         let primary_handle = PrimaryReceiverHandler { tx_synchronizer }
             .spawn(address.clone(), tx_reconfigure.subscribe());
@@ -261,7 +277,7 @@ impl Worker {
             .expect("Our public key or worker id is not in the worker cache")
             .transactions;
         let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(INADDR_ANY)))
+            .replace(0, |_protocol| Some(Protocol::Ip4(Ipv4Addr::UNSPECIFIED)))
             .unwrap();
         let tx_receiver_handle = TxReceiverHandler { tx_batch_maker }.spawn(
             address.clone(),

@@ -28,21 +28,20 @@ use fastcrypto::{
     traits::{EncodeDecodeBase64, KeyPair as _},
     SignatureService,
 };
-use multiaddr::{Multiaddr, Protocol};
+use multiaddr::Protocol;
 use network::{metrics::Metrics, P2pNetwork, PrimaryToWorkerNetwork};
 use prometheus::Registry;
 use std::{collections::BTreeMap, net::Ipv4Addr, sync::Arc};
 use storage::CertificateStore;
 use store::Store;
 use tokio::{sync::watch, task::JoinHandle};
-use tonic::{Request, Response, Status};
 use tracing::info;
 use types::{
     error::DagError,
     metered_channel::{channel, Receiver, Sender},
-    BatchDigest, BatchMessage, BincodeEncodedPayload, Certificate, Empty, Header, HeaderDigest,
-    PrimaryToPrimary, PrimaryToPrimaryServer, ReconfigureNotification, WorkerInfoResponse,
-    WorkerPrimaryError, WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
+    BatchDigest, BatchMessage, Certificate, Header, HeaderDigest, PrimaryToPrimary,
+    PrimaryToPrimaryServer, ReconfigureNotification, WorkerInfoResponse, WorkerPrimaryError,
+    WorkerPrimaryMessage, WorkerToPrimary, WorkerToPrimaryServer,
 };
 pub use types::{PrimaryMessage, PrimaryWorkerMessage};
 
@@ -183,8 +182,7 @@ impl Primary {
         let address = committee
             .load()
             .primary(&name)
-            .expect("Our public key or worker id is not in the committee")
-            .primary_to_primary;
+            .expect("Our public key or worker id is not in the committee");
         let address = address
             .replace(0, |_protocol| Some(Protocol::Ip4(Primary::INADDR_ANY)))
             .unwrap();
@@ -194,42 +192,7 @@ impl Primary {
             tx_payload_availability_responses,
             tx_certificate_responses,
         });
-
-        let addr = network::multiaddr_to_address(&address).unwrap();
-
-        let routes = anemo::Router::new().add_rpc_service(primary_service);
-        let network = anemo::Network::bind(addr)
-            .server_name("narwhal")
-            .private_key(network_signer.copy().private().0.to_bytes())
-            .start(routes)
-            .unwrap();
-        info!(
-            "Primary {} listening to primary messages on {}",
-            name.encode_base64(),
-            address
-        );
-
-        for (_, addresses, network_pubkey) in committee.load().others_primaries(&name) {
-            let peer_id = PeerId(network_pubkey.0.to_bytes());
-            let address = network::multiaddr_to_address(&addresses.primary_to_primary).unwrap();
-            let peer_info = PeerInfo {
-                peer_id,
-                affinity: anemo::types::PeerAffinity::High,
-                address: vec![address],
-            };
-            network.known_peers().insert(peer_info);
-        }
-
-        // Spawn the network receiver listening to messages from our workers.
-        let address = committee
-            .load()
-            .primary(&name)
-            .expect("Our public key or worker id is not in the committee")
-            .worker_to_primary;
-        let address = address
-            .replace(0, |_protocol| Some(Protocol::Ip4(Primary::INADDR_ANY)))
-            .unwrap();
-        let worker_receiver_handle = WorkerReceiverHandler {
+        let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
             tx_others_digests,
             tx_batches,
@@ -237,13 +200,30 @@ impl Primary {
             tx_state_handler,
             our_workers,
             metrics: node_metrics.clone(),
+        });
+
+        let addr = network::multiaddr_to_address(&address).unwrap();
+
+        let routes = anemo::Router::new()
+            .add_rpc_service(primary_service)
+            .add_rpc_service(worker_service);
+        let network = anemo::Network::bind(addr)
+            .server_name("narwhal")
+            .private_key(network_signer.copy().private().0.to_bytes())
+            .start(routes)
+            .unwrap();
+        info!("Primary {} listening on {}", name.encode_base64(), address);
+
+        for (_, address, network_pubkey) in committee.load().others_primaries(&name) {
+            let peer_id = PeerId(network_pubkey.0.to_bytes());
+            let address = network::multiaddr_to_address(&address).unwrap();
+            let peer_info = PeerInfo {
+                peer_id,
+                affinity: anemo::types::PeerAffinity::High,
+                address: vec![address],
+            };
+            network.known_peers().insert(peer_info);
         }
-        .spawn(address.clone(), tx_reconfigure.subscribe());
-        info!(
-            "Primary {} listening to workers messages on {}",
-            name.encode_base64(),
-            address
-        );
 
         // The `Synchronizer` provides auxiliary methods helping the `Core` to sync.
         let synchronizer = Synchronizer::new(
@@ -457,11 +437,9 @@ impl Primary {
                 .load()
                 .primary(&name)
                 .expect("Our public key or worker id is not in the committee")
-                .primary_to_primary
         );
 
         let mut handles = vec![
-            worker_receiver_handle,
             core_handle,
             payload_receiver_handle,
             block_synchronizer_handle,
@@ -557,51 +535,13 @@ struct WorkerReceiverHandler {
     metrics: Arc<PrimaryMetrics>,
 }
 
-impl WorkerReceiverHandler {
-    async fn wait_for_shutdown(mut rx_reconfigure: watch::Receiver<ReconfigureNotification>) {
-        loop {
-            let result = rx_reconfigure.changed().await;
-            result.expect("Committee channel dropped");
-            let message = rx_reconfigure.borrow().clone();
-            if let ReconfigureNotification::Shutdown = message {
-                break;
-            }
-        }
-    }
-
-    #[must_use]
-    fn spawn(
-        self,
-        address: Multiaddr,
-        rx_reconfigure: watch::Receiver<ReconfigureNotification>,
-    ) -> JoinHandle<()> {
-        tokio::spawn(async move {
-            info!("WorkerReceiverHandler has started successfully.");
-            tokio::select! {
-                _result = mysten_network::config::Config::default()
-                    .server_builder()
-                    .add_service(WorkerToPrimaryServer::new(self))
-                    .bind(&address)
-                    .await
-                    .unwrap()
-                    .serve() => (),
-
-                () = Self::wait_for_shutdown(rx_reconfigure) => ()
-            }
-        })
-    }
-}
-
 #[async_trait]
 impl WorkerToPrimary for WorkerReceiverHandler {
     async fn send_message(
         &self,
-        request: Request<BincodeEncodedPayload>,
-    ) -> Result<Response<Empty>, Status> {
-        let message: WorkerPrimaryMessage = request
-            .into_inner()
-            .deserialize()
-            .map_err(|e| Status::invalid_argument(e.to_string()))?;
+        request: anemo::Request<types::WorkerPrimaryMessage>,
+    ) -> Result<anemo::Response<()>, anemo::rpc::Status> {
+        let message = request.into_body();
 
         match message {
             WorkerPrimaryMessage::OurBatch(digest, worker_id) => {
@@ -655,22 +595,16 @@ impl WorkerToPrimary for WorkerReceiverHandler {
                 .await
                 .map_err(|_| DagError::ShuttingDown),
         }
-        .map_err(|e| Status::not_found(e.to_string()))?;
-
-        Ok(Response::new(Empty {}))
+        .map(|_| anemo::Response::new(()))
+        .map_err(|e| anemo::rpc::Status::internal(e.to_string()))
     }
 
     async fn worker_info(
         &self,
-        _request: Request<Empty>,
-    ) -> Result<Response<BincodeEncodedPayload>, Status> {
-        let workers = WorkerInfoResponse {
+        _request: anemo::Request<()>,
+    ) -> Result<anemo::Response<WorkerInfoResponse>, anemo::rpc::Status> {
+        Ok(anemo::Response::new(WorkerInfoResponse {
             workers: self.our_workers.clone(),
-        };
-
-        let response = BincodeEncodedPayload::try_from(&workers)
-            .map_err(|e| Status::internal(e.to_string()))?;
-
-        Ok(Response::new(response))
+        }))
     }
 }

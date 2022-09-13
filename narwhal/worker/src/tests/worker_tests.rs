@@ -57,10 +57,10 @@ async fn handle_clients_transactions() {
     let batch = batch();
     let batch_digest = batch.digest();
 
-    let primary_address = committee.primary(&name).unwrap().worker_to_primary;
-    let expected =
-        bincode::serialize(&WorkerPrimaryMessage::OurBatch(batch_digest, worker_id)).unwrap();
-    let mut handle = WorkerToPrimaryMockServer::spawn(primary_address);
+    let primary_address = committee.primary(&name).unwrap();
+    let expected = WorkerPrimaryMessage::OurBatch(batch_digest, worker_id);
+    let (mut handle, _network) =
+        WorkerToPrimaryMockServer::spawn(my_primary.network_keypair().copy(), primary_address);
 
     // Spawn enough workers' listeners to acknowledge our batches.
     let mut other_workers = Vec::new();
@@ -91,5 +91,5 @@ async fn handle_clients_transactions() {
     }
 
     // Ensure the primary received the batch's digest (ie. it did not panic).
-    assert_eq!(handle.recv().await.unwrap().payload, expected);
+    assert_eq!(handle.recv().await.unwrap(), expected);
 }

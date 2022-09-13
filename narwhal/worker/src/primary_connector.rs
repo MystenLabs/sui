@@ -1,10 +1,10 @@
 // Copyright (c) 2021, Facebook, Inc. and its affiliates
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::Committee;
-use crypto::PublicKey;
+
+use crypto::NetworkPublicKey;
 use futures::{stream::FuturesUnordered, StreamExt};
-use network::{ReliableNetwork, WorkerToPrimaryNetwork};
+use network::{ReliableNetwork2, WorkerToPrimaryNetwork};
 use tokio::{sync::watch, task::JoinHandle};
 use types::{metered_channel::Receiver, ReconfigureNotification, WorkerPrimaryMessage};
 
@@ -14,9 +14,7 @@ pub const MAX_PENDING_DIGESTS: usize = 10_000;
 // Send batches' digests to the primary.
 pub struct PrimaryConnector {
     /// The public key of this authority.
-    name: PublicKey,
-    /// The committee information.
-    committee: Committee,
+    primary_name: NetworkPublicKey,
     /// Receive reconfiguration updates.
     rx_reconfigure: watch::Receiver<ReconfigureNotification>,
     /// Input channel to receive the messages to send to the primary.
@@ -28,18 +26,17 @@ pub struct PrimaryConnector {
 impl PrimaryConnector {
     #[must_use]
     pub fn spawn(
-        name: PublicKey,
-        committee: Committee,
+        primary_name: NetworkPublicKey,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_digest: Receiver<WorkerPrimaryMessage>,
+        primary_client: WorkerToPrimaryNetwork,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             Self {
-                name,
-                committee,
+                primary_name,
                 rx_reconfigure,
                 rx_digest,
-                primary_client: WorkerToPrimaryNetwork::default(),
+                primary_client,
             }
             .run()
             .await;
@@ -57,29 +54,18 @@ impl PrimaryConnector {
                         continue;
                     }
 
-                    let address = self.committee
-                        .primary(&self.name)
-                        .expect("Our public key is not in the committee")
-                        .worker_to_primary;
-                    let handle = self.primary_client.send(address, &digest).await;
+                    let handle = self.primary_client.send(self.primary_name.to_owned(), &digest).await;
                     futures.push(handle);
                 },
 
                 // Trigger reconfigure.
                 result = self.rx_reconfigure.changed() => {
                     result.expect("Committee channel dropped");
-                    let message = self.rx_reconfigure.borrow().clone();
-                    match message {
-                        ReconfigureNotification::NewEpoch(new_committee) => {
-                            self.committee = new_committee;
-                        },
-                        ReconfigureNotification::UpdateCommittee(new_committee) => {
-                            self.committee = new_committee;
-
-                        },
-                        ReconfigureNotification::Shutdown => return
+                    // TODO: Move logic to handle epoch & committee changes to wherever anemo
+                    // network is managed after worker-to-worker interface is migrated.
+                    if self.rx_reconfigure.borrow().clone() == ReconfigureNotification::Shutdown {
+                        return
                     }
-                    tracing::debug!("Committee updated to {}", self.committee);
                 }
 
                 Some(_result) = futures.next() => ()

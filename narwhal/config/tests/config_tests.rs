@@ -18,12 +18,10 @@
 // 1. Run `cargo insta test --review` under `./config`.
 // 2. Review, accept or reject changes.
 
-use config::{
-    ConsensusAPIGrpcParameters, Import, Parameters, PrimaryAddresses, PrometheusMetricsParameters,
-    Stake,
-};
+use config::{ConsensusAPIGrpcParameters, Import, Parameters, PrometheusMetricsParameters, Stake};
 use crypto::PublicKey;
 use insta::assert_json_snapshot;
+use multiaddr::Multiaddr;
 use rand::{rngs::StdRng, seq::SliceRandom, SeedableRng};
 use std::collections::{BTreeMap, HashMap};
 use std::{fs::File, io::Write};
@@ -71,8 +69,8 @@ fn update_primary_network_info_test() {
     let invalid_new_info = committee2
         .authorities
         .iter()
-        .map(|(pk, a)| (pk.clone(), (a.stake, a.primary.clone())))
-        .collect::<BTreeMap<_, (Stake, PrimaryAddresses)>>();
+        .map(|(pk, a)| (pk.clone(), (a.stake, a.primary_address.clone())))
+        .collect::<BTreeMap<_, (Stake, Multiaddr)>>();
     let res2 = committee
         .clone()
         .update_primary_network_info(invalid_new_info)
@@ -90,8 +88,8 @@ fn update_primary_network_info_test() {
         .authorities
         .iter()
         // change the stake
-        .map(|(pk, a)| (pk.clone(), (a.stake + 1, a.primary.clone())))
-        .collect::<BTreeMap<_, (Stake, PrimaryAddresses)>>();
+        .map(|(pk, a)| (pk.clone(), (a.stake + 1, a.primary_address.clone())))
+        .collect::<BTreeMap<_, (Stake, Multiaddr)>>();
     let res2 = committee
         .clone()
         .update_primary_network_info(invalid_new_info)
@@ -109,7 +107,7 @@ fn update_primary_network_info_test() {
 
     committee4.authorities.iter().for_each(|(pk, a)| {
         pk_n_stake.push((pk.clone(), a.stake));
-        addresses.push(a.primary.clone())
+        addresses.push(a.primary_address.clone())
     });
 
     let mut rng = rand::thread_rng();
@@ -119,13 +117,13 @@ fn update_primary_network_info_test() {
         .into_iter()
         .zip(addresses)
         .map(|((pk, stk), addr)| (pk, (stk, addr)))
-        .collect::<BTreeMap<PublicKey, (Stake, PrimaryAddresses)>>();
+        .collect::<BTreeMap<PublicKey, (Stake, Multiaddr)>>();
 
     let mut comm = committee;
     let res = comm.update_primary_network_info(new_info.clone());
     assert!(res.is_ok());
     for (pk, a) in comm.authorities.iter() {
-        assert_eq!(a.primary, new_info.get(pk).unwrap().1);
+        assert_eq!(a.primary_address, new_info.get(pk).unwrap().1);
     }
 }
 

@@ -25,11 +25,6 @@ message CollectionError {
     CollectionErrorType error = 2;
 }
 
-message PrimaryAddresses {
-    MultiAddr primary_to_primary = 1;
-    MultiAddr worker_to_primary = 2;
-}
-
 message MultiAddr {
     string address = 1;
 }
@@ -41,7 +36,7 @@ message PublicKey {
 message ValidatorData {
     PublicKey public_key = 1;
     int64 stake_weight = 2;
-    PrimaryAddresses primary_addresses = 3;
+    MultiAddr primary_address = 3;
 }
 
 message Collection {
@@ -160,14 +155,6 @@ service Configuration {
     rpc NewNetworkInfo(NewNetworkInfoRequest) returns (Empty);
     // Retrieve multiaddr of narwhal primary
     rpc GetPrimaryAddress(Empty) returns (GetPrimaryAddressResponse);
-}
-
-// The worker-to-primary interface
-service WorkerToPrimary {
-    // Sends a message
-    rpc SendMessage(BincodeEncodedPayload) returns (Empty) {}
-
-    rpc WorkerInfo(Empty) returns (BincodeEncodedPayload) {}
 }
 
 // The primary-to-worker interface

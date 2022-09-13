@@ -1,11 +1,12 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
-use config::{Authority, Committee, Epoch, PrimaryAddresses, WorkerIndex, WorkerInfo};
+use config::{Authority, Committee, Epoch, WorkerIndex, WorkerInfo};
 use crypto::{KeyPair, NetworkKeyPair};
 use fastcrypto::{
     traits::{KeyPair as _, Signer},
     Digest, Hash,
 };
+use multiaddr::Multiaddr;
 use primary::PrimaryWorkerMessage;
 use rand::{prelude::StdRng, SeedableRng};
 use serde_reflection::{Registry, Result, Samples, Tracer, TracerConfig};
@@ -52,19 +53,14 @@ fn get_registry() -> Result<Registry> {
             .enumerate()
             .map(|(i, (kp, network_key))| {
                 let id = kp.public();
-                let primary = PrimaryAddresses {
-                    primary_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 100 + i)
-                        .parse()
-                        .unwrap(),
-                    worker_to_primary: format!("/ip4/127.0.0.1/tcp/{}/http", 200 + i)
-                        .parse()
-                        .unwrap(),
-                };
+                let primary_address: Multiaddr = format!("/ip4/127.0.0.1/tcp/{}/http", 100 + i)
+                    .parse()
+                    .unwrap();
                 (
                     id.clone(),
                     Authority {
                         stake: 1,
-                        primary,
+                        primary_address,
                         network_key: network_key.public().clone(),
                     },
                 )

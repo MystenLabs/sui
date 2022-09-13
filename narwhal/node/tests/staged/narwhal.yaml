@@ -2,8 +2,7 @@
 Authority:
   STRUCT:
     - stake: U32
-    - primary:
-        TYPENAME: PrimaryAddresses
+    - primary_address: BYTES
     - network_key:
         TYPENAME: Ed25519PublicKey
 BLS12381AggregateSignature:
@@ -66,10 +65,6 @@ HeaderDigest:
     TUPLEARRAY:
       CONTENT: U8
       SIZE: 32
-PrimaryAddresses:
-  STRUCT:
-    - primary_to_primary: BYTES
-    - worker_to_primary: BYTES
 PrimaryWorkerMessage:
   ENUM:
     0:

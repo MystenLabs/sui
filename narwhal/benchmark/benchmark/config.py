@@ -151,10 +151,7 @@ class Committee:
         "authorities: {
             "name": {
                 "stake": 1,
-                "primary: {
-                    "primary_to_primary": x.x.x.x:x,
-                    "worker_to_primary": x.x.x.x:x,
-                },
+                "primary_address": x.x.x.x:x,
                 "network_key: NETWORK_KEY==
             },
             ...
@@ -183,15 +180,12 @@ class Committee:
         self.json = {'authorities': OrderedDict(), 'epoch': 0}
         for name, (network_name, hosts) in addresses.items():
             host = hosts.pop(0)
-            primary_addr = {
-                'primary_to_primary': f'/ip4/{host}/tcp/{port}/http',
-                'worker_to_primary': f'/ip4/{host}/tcp/{port + 1}/http'
-            }
-            port += 2
+            primary_addr = f'/ip4/{host}/tcp/{port}/http'
+            port += 1
 
             self.json['authorities'][name] = {
                 'stake': 1,
-                'primary': primary_addr,
+                'primary_address': primary_addr,
                 'network_key': network_name
             }
 
@@ -201,8 +195,7 @@ class Committee:
         addresses = []
         good_nodes = self.size() - faults
         for authority in list(self.json['authorities'].values())[:good_nodes]:
-            addresses += [multiaddr_to_url_data(
-                authority['primary']['primary_to_primary'])]
+            addresses += [multiaddr_to_url_data(authority['primary_address'])]
         return addresses
 
     def ips(self, name=None):
@@ -214,10 +207,7 @@ class Committee:
 
         ips = set()
         for name in names:
-            addresses = self.json['authorities'][name]['primary']
-            ips.add(self.ip(addresses['primary_to_primary']))
-            ips.add(self.ip(addresses['worker_to_primary']))
-
+            ips.add(self.ip(self.json['authorities'][name]['primary_address']))
         return ips
 
     def remove_nodes(self, nodes):

@@ -7,7 +7,7 @@ use crypto::{KeyPair, NetworkKeyPair};
 use executor::{ExecutionState, ExecutorOutput};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
-use network::{PrimaryToWorkerNetwork, ReliableNetwork, WorkerToPrimaryNetwork};
+use network::{PrimaryToWorkerNetwork, ReliableNetwork, ReliableNetwork2, WorkerToPrimaryNetwork};
 use prometheus::Registry;
 use std::{fmt::Debug, path::PathBuf, sync::Arc};
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -48,7 +48,6 @@ impl NodeRestarter {
         let mut committee = committee.clone();
 
         let mut handles = Vec::new();
-        let mut primary_network = WorkerToPrimaryNetwork::default();
         let mut worker_network = PrimaryToWorkerNetwork::default();
 
         // Listen for new committees.
@@ -103,12 +102,23 @@ impl NodeRestarter {
             tracing::info!("Starting reconfiguration with committee {committee}");
 
             // Shutdown all relevant components.
-            let address = committee
-                .primary(&name)
-                .expect("Our key is not in the committee")
-                .worker_to_primary;
+            // TODO: shutdown message should probably be sent in a better way than by injecting
+            // it through the networking stack.
+            let address = network::multiaddr_to_address(
+                &committee
+                    .primary(&name)
+                    .expect("Our key is not in the committee"),
+            )
+            .unwrap();
+            let network_key = committee
+                .network_key(&name)
+                .expect("Our key is not in the committee");
+            let mut primary_network =
+                WorkerToPrimaryNetwork::new_for_single_address(network_key.to_owned(), address)
+                    .await;
             let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::Shutdown);
-            let primary_cancel_handle = primary_network.send(address, &message).await;
+            let primary_cancel_handle =
+                primary_network.send(network_key.to_owned(), &message).await;
 
             let addresses = worker_cache
                 .load()

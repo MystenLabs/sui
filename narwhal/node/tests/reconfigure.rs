@@ -8,7 +8,7 @@ use crypto::{KeyPair, NetworkKeyPair, PublicKey};
 use executor::{ExecutionIndices, ExecutionState, ExecutionStateError};
 use fastcrypto::traits::KeyPair as _;
 use futures::future::join_all;
-use network::{PrimaryToWorkerNetwork, ReliableNetwork, WorkerToPrimaryNetwork};
+use network::{PrimaryToWorkerNetwork, ReliableNetwork, ReliableNetwork2, WorkerToPrimaryNetwork};
 use node::{restarter::NodeRestarter, Node, NodeStorage};
 use primary::PrimaryWorkerMessage;
 use prometheus::Registry;
@@ -323,18 +323,28 @@ async fn epoch_change() {
         let name_clone = name.clone();
         let worker_cache_clone = worker_cache.clone();
         tokio::spawn(async move {
-            let mut primary_network = WorkerToPrimaryNetwork::default();
             let mut worker_network = PrimaryToWorkerNetwork::default();
 
             while let Some((_, _, committee, _, _)) = rx_node_reconfigure.recv().await {
-                let address = committee
-                    .primary(&name_clone)
-                    .expect("Our key is not in the committee")
-                    .primary_to_primary;
+                // TODO: shutdown message should probably be sent in a better way than by injecting
+                // it through the networking stack.
+                let address = network::multiaddr_to_address(
+                    &committee
+                        .primary(&name_clone)
+                        .expect("Our key is not in the committee"),
+                )
+                .unwrap();
+                let network_key = committee
+                    .network_key(&name_clone)
+                    .expect("Our key is not in the committee");
+                let mut primary_network =
+                    WorkerToPrimaryNetwork::new_for_single_address(network_key.to_owned(), address)
+                        .await;
                 let message = WorkerPrimaryMessage::Reconfigure(ReconfigureNotification::NewEpoch(
                     committee.clone(),
                 ));
-                let primary_cancel_handle = primary_network.send(address, &message).await;
+                let primary_cancel_handle =
+                    primary_network.send(network_key.to_owned(), &message).await;
 
                 let addresses = worker_cache_clone
                     .load()

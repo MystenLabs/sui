@@ -1,101 +1,119 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
-    traits::{BaseNetwork, ReliableNetwork},
-    BoundedExecutor, CancelOnDropHandler, MessageResult, RetryConfig, MAX_TASK_CONCURRENCY,
+    traits::{ReliableNetwork2, UnreliableNetwork2},
+    BoundedExecutor, CancelOnDropHandler, RetryConfig, MAX_TASK_CONCURRENCY,
 };
+use anemo::PeerId;
 use async_trait::async_trait;
-use multiaddr::Multiaddr;
-use tokio::runtime::Handle;
-use tonic::{transport::Channel, Code};
-use tracing::error;
-use types::{BincodeEncodedPayload, WorkerPrimaryMessage, WorkerToPrimaryClient};
+use crypto::{NetworkKeyPair, NetworkPublicKey};
+use fastcrypto::traits::KeyPair as _;
+
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use tokio::{runtime::Handle, task::JoinHandle};
+
+use types::{WorkerPrimaryMessage, WorkerToPrimaryClient};
 
 pub struct WorkerToPrimaryNetwork {
-    address: Option<Multiaddr>,
-    client: Option<WorkerToPrimaryClient<Channel>>,
-    config: mysten_network::config::Config,
+    network: anemo::Network,
     retry_config: RetryConfig,
     executor: BoundedExecutor,
 }
 
-impl Default for WorkerToPrimaryNetwork {
-    fn default() -> Self {
+impl WorkerToPrimaryNetwork {
+    pub fn new(network: anemo::Network) -> Self {
         let retry_config = RetryConfig {
-            // Retry for forever
+            // Retry forever.
             retrying_max_elapsed_time: None,
             ..Default::default()
         };
 
         Self {
-            address: None,
-            client: Default::default(),
-            config: Default::default(),
+            network,
             retry_config,
             // Note that this does not strictly break the primitive that BoundedExecutor is per address because
             // this network sender only transmits to a single address.
             executor: BoundedExecutor::new(MAX_TASK_CONCURRENCY, Handle::current()),
         }
     }
-}
 
-impl BaseNetwork for WorkerToPrimaryNetwork {
-    type Client = WorkerToPrimaryClient<Channel>;
-    type Message = WorkerPrimaryMessage;
-
-    fn client(&mut self, address: Multiaddr) -> Self::Client {
-        match (self.address.as_ref(), self.client.as_ref()) {
-            (Some(addr), Some(client)) if *addr == address => client.clone(),
-            (_, _) => {
-                let client = Self::create_client(&self.config, address.clone());
-                self.client = Some(client.clone());
-                self.address = Some(address);
-                client
-            }
-        }
-    }
-
-    fn create_client(config: &mysten_network::config::Config, address: Multiaddr) -> Self::Client {
-        //TODO don't panic here if address isn't supported
-        let channel = config.connect_lazy(&address).unwrap();
-        WorkerToPrimaryClient::new(channel)
+    // Creates a new single-use anemo::Network to connect outbound to a single
+    // address. This is for tests and should not be used from worker code.
+    pub async fn new_for_single_address(
+        name: NetworkPublicKey,
+        address: anemo::types::Address,
+    ) -> Self {
+        let routes = anemo::Router::new();
+        let network = anemo::Network::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 0))
+            .server_name("narwhal")
+            .private_key(
+                NetworkKeyPair::generate(&mut rand::rngs::OsRng)
+                    .private()
+                    .0
+                    .to_bytes(),
+            )
+            .start(routes)
+            .unwrap();
+        network
+            .connect_with_peer_id(address, anemo::PeerId(name.0.to_bytes()))
+            .await
+            .unwrap();
+        Self::new(network)
     }
 }
 
 #[async_trait]
-impl ReliableNetwork for WorkerToPrimaryNetwork {
-    // Safety
-    // Since this spawns an unbounded task, this should be called in a time-restricted fashion.
-    // Here the callers are [`WorkerToPrimaryNetwork::send`].
-    // See the TODO on spawn_with_retries for lifting this restriction.
-    async fn send_message(
+impl UnreliableNetwork2<WorkerPrimaryMessage> for WorkerToPrimaryNetwork {
+    async fn unreliable_send(
         &mut self,
-        address: Multiaddr,
-        message: BincodeEncodedPayload,
-    ) -> CancelOnDropHandler<MessageResult> {
-        let client = self.client(address);
+        peer: NetworkPublicKey,
+        message: &WorkerPrimaryMessage,
+    ) -> JoinHandle<()> {
+        let network = self.network.clone();
+        let peer_id = PeerId(peer.0.to_bytes());
+        let message = message.to_owned();
+        self.executor
+            .spawn(async move {
+                if let Some(peer) = network.peer(peer_id) {
+                    let _ = WorkerToPrimaryClient::new(peer).send_message(message).await;
+                }
+            })
+            .await
+    }
+}
+
+#[async_trait]
+impl ReliableNetwork2<WorkerPrimaryMessage> for WorkerToPrimaryNetwork {
+    async fn send(
+        &mut self,
+        peer: NetworkPublicKey,
+        message: &WorkerPrimaryMessage,
+    ) -> CancelOnDropHandler<anyhow::Result<anemo::Response<()>>> {
+        let network = self.network.clone();
+        let peer_id = PeerId(peer.0.to_bytes());
+        let message = message.to_owned();
         let message_send = move || {
-            let mut client = client.clone();
+            let network = network.clone();
             let message = message.clone();
 
             async move {
-                client.send_message(message).await.map_err(|e| {
-                    match e.code() {
-                        Code::FailedPrecondition | Code::InvalidArgument => {
-                            // these errors are not recoverable through retrying, see
-                            // https://github.com/hyperium/tonic/blob/master/tonic/src/status.rs
-                            error!("Irrecoverable network error: {e}");
-                            backoff::Error::permanent(eyre::Report::from(e))
-                        }
-                        _ => {
+                if let Some(peer) = network.peer(peer_id) {
+                    WorkerToPrimaryClient::new(peer)
+                        .send_message(message)
+                        .await
+                        .map_err(|e| {
                             // this returns a backoff::Error::Transient
-                            // so that if tonic::Status is returned, we retry
-                            Into::<backoff::Error<eyre::Report>>::into(eyre::Report::from(e))
-                        }
-                    }
-                })
+                            // so that if anemo::Status is returned, we retry
+                            backoff::Error::transient(anyhow::anyhow!("RPC error: {e:?}"))
+                        })
+                } else {
+                    Err(backoff::Error::transient(anyhow::anyhow!(
+                        "not connected to peer {peer_id}"
+                    )))
+                }
             }
         };
+
         let handle = self
             .executor
             .spawn_with_retries(self.retry_config, message_send);

@@ -218,7 +218,7 @@ impl Proposer {
             // in partially synchrony.
             let enough_parents = !self.last_parents.is_empty();
             let enough_digests = self.payload_size >= self.header_size;
-            let timer_expired = timer.is_elapsed();
+            let mut timer_expired = timer.is_elapsed();
 
             if (timer_expired || (enough_digests && advance)) && enough_parents {
                 if timer_expired && matches!(self.network_model, NetworkModel::PartiallySynchronous)
@@ -249,6 +249,7 @@ impl Proposer {
                 // Reschedule the timer.
                 let deadline = Instant::now() + self.max_header_delay;
                 timer.as_mut().reset(deadline);
+                timer_expired = false;
             }
 
             tokio::select! {

@@ -37,19 +37,14 @@ async fn test_process_certificates_stream_mode() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(author.network_keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 
-    let address = committee
-        .primary(&requestor_name)
-        .unwrap()
-        .primary_to_primary;
+    let address = committee.primary(&requestor_name).unwrap();
     let address = network::multiaddr_to_address(&address).unwrap();
     let peer_info = PeerInfo {
         peer_id: PeerId(requestor.network_public_key().0.to_bytes()),
@@ -88,10 +83,7 @@ async fn test_process_certificates_stream_mode() {
     }
 
     // AND spin up a mock node
-    let address = committee
-        .primary(&requestor_name)
-        .unwrap()
-        .primary_to_primary;
+    let address = committee.primary(&requestor_name).unwrap();
     let requestor_key = requestor.network_keypair().copy();
     let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
 
@@ -153,19 +145,14 @@ async fn test_process_certificates_batch_mode() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(author.network_keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 
-    let address = committee
-        .primary(&requestor_name)
-        .unwrap()
-        .primary_to_primary;
+    let address = committee.primary(&requestor_name).unwrap();
     let address = network::multiaddr_to_address(&address).unwrap();
     let peer_info = PeerInfo {
         peer_id: PeerId(requestor.network_public_key().0.to_bytes()),
@@ -213,10 +200,7 @@ async fn test_process_certificates_batch_mode() {
     }
 
     // AND spin up a mock node
-    let address = committee
-        .primary(&requestor_name)
-        .unwrap()
-        .primary_to_primary;
+    let address = committee.primary(&requestor_name).unwrap();
     let requestor_key = requestor.network_keypair().copy();
     let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
 
@@ -290,19 +274,14 @@ async fn test_process_payload_availability_success() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(author.network_keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 
-    let address = committee
-        .primary(&requestor_name)
-        .unwrap()
-        .primary_to_primary;
+    let address = committee.primary(&requestor_name).unwrap();
     let address = network::multiaddr_to_address(&address).unwrap();
     let peer_info = PeerInfo {
         peer_id: PeerId(requestor.network_public_key().0.to_bytes()),
@@ -354,10 +333,7 @@ async fn test_process_payload_availability_success() {
     }
 
     // AND spin up a mock node
-    let address = committee
-        .primary(&requestor_name)
-        .unwrap()
-        .primary_to_primary;
+    let address = committee.primary(&requestor_name).unwrap();
     let requestor_key = requestor.network_keypair().copy();
     let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
 
@@ -450,19 +426,14 @@ async fn test_process_payload_availability_when_failures() {
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_primaries, rx_primaries) = test_utils::test_channel!(10);
 
-    let own_address =
-        network::multiaddr_to_address(&committee.primary(&name).unwrap().primary_to_primary)
-            .unwrap();
+    let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
     let network = anemo::Network::bind(own_address)
         .server_name("narwhal")
         .private_key(author.network_keypair().copy().private().0.to_bytes())
         .start(anemo::Router::new())
         .unwrap();
 
-    let address = committee
-        .primary(&requestor_name)
-        .unwrap()
-        .primary_to_primary;
+    let address = committee.primary(&requestor_name).unwrap();
     let address = network::multiaddr_to_address(&address).unwrap();
     let peer_info = PeerInfo {
         peer_id: PeerId(requestor.network_public_key().0.to_bytes()),
@@ -520,10 +491,7 @@ async fn test_process_payload_availability_when_failures() {
     }
 
     // AND spin up a mock node
-    let address = committee
-        .primary(&requestor_name)
-        .unwrap()
-        .primary_to_primary;
+    let address = committee.primary(&requestor_name).unwrap();
     let requestor_key = requestor.network_keypair().copy();
     let (mut handler, _network) = PrimaryToPrimaryMockServer::spawn(requestor_key, address);
 
