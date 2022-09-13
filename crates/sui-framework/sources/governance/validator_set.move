@@ -180,6 +180,34 @@ module sui::validator_set {
         self.next_epoch_validators = derive_next_epoch_validators(self);
     }
 
+    public(friend) fun request_switch_delegation(
+        self: &mut ValidatorSet,
+        delegation: Delegation,
+        staked_sui: &mut StakedSui,
+        new_validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        let current_validator_address = staking_pool::validator_address(&delegation);
+        assert!(current_validator_address != new_validator_address, 0);
+        
+        let current_validator_index_opt = find_validator(&self.active_validators, current_validator_address);
+        assert!(option::is_some(&current_validator_index_opt), 0); 
+        
+        // withdraw stake and compounded rewards from the current validator's pool
+        let current_validator_index = option::extract(&mut current_validator_index_opt);
+        let current_validator = vector::borrow_mut(&mut self.active_validators, current_validator_index);
+        let (principal_stake, rewards_stake, time_lock) = 
+            staking_pool::withdraw_all_to_sui_tokens(validator::get_staking_pool_mut_ref(current_validator), delegation, staked_sui);
+        let withdraw_sui_amount = balance::value(&principal_stake) + balance::value(&rewards_stake);
+        validator::decrease_next_epoch_delegation(current_validator, withdraw_sui_amount);
+
+        // and deposit into the new validator's pool
+        request_add_delegation(self, new_validator_address, principal_stake, time_lock, ctx);
+        request_add_delegation(self, new_validator_address, rewards_stake, option::none(), ctx);
+
+        self.next_epoch_validators = derive_next_epoch_validators(self);
+    }
+
     /// Update the validator set at the end of epoch.
     /// It does the following things:
     ///   1. Distribute stake award.

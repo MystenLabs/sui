@@ -250,21 +250,16 @@ module sui::sui_system {
         );
     }
 
-    // TODO: the situation with delegation switching is different in the staking pool situation, since the
-    // rewards are auto compounded in the delegation object. Need to figure out what the story is here.
-    // // Switch delegation from the current validator to a new one.
-    // public entry fun request_switch_delegation(
-    //     self: &mut SuiSystemState,
-    //     delegation: &mut Delegation,
-    //     new_validator_address: address,
-    //     ctx: &mut TxContext,
-    // ) {
-    //     let old_validator_address = delegation::validator(delegation);
-    //     let amount = delegation::delegate_amount(delegation);
-    //     validator_set::request_remove_delegation(&mut self.validators, old_validator_address, amount);
-    //     validator_set::request_add_delegation(&mut self.validators, new_validator_address, amount);
-    //     delegation::switch_delegation(delegation, new_validator_address, ctx);
-    // }
+    // Switch delegation from the current validator to a new one.
+    public entry fun request_switch_delegation(
+        self: &mut SuiSystemState,
+        delegation: Delegation,
+        staked_sui: &mut StakedSui,
+        new_validator_address: address,
+        ctx: &mut TxContext,
+    ) {
+        validator_set::request_switch_delegation(&mut self.validators, delegation, staked_sui, new_validator_address, ctx);
+    }
 
     /// This function should be called at the end of an epoch, and advances the system to the next epoch.
     /// It does the following things:
