@@ -52,4 +52,4 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Run e2e tests
-        run: pnpm dlx concurrently 'cargo run --bin sui-test-validator' 'pnpm test:e2e'
+        run: pnpm dlx concurrently 'cargo run --bin sui-test-validator' 'pnpm --filter @mysten/sui.js test:e2e'
