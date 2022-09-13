@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 
-// This module attemps to find the computational cost of bytecode instructions by measuring the time
+// This module attempts to find the computational cost of bytecode instructions by measuring the time
 // the instruction takes to execute.
 // Isolating the bytecode is tricky, so we run two functions with and without the bytecode instruction
 // The difference in execution times is the time the instruction takes

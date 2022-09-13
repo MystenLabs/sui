@@ -54,7 +54,7 @@ module defi::pool {
     /// For when initial LSP amount is zero.
     const EShareEmpty: u64 = 3;
 
-    /// For when someone attemps to add more liquidity than u128 Math allows.
+    /// For when someone attempts to add more liquidity than u128 Math allows.
     const EPoolFull: u64 = 4;
 
     /// The integer scaling setting for fees calculation.

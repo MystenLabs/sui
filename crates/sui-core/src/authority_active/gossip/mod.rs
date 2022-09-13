@@ -100,7 +100,7 @@ impl GossipMetrics {
             .unwrap(),
             total_attempts_cert_downloads: register_int_counter_with_registry!(
                 "gossip_total_attempts_cert_downloads",
-                "Total number of certs/effects download attemps through gossip/node sync process",
+                "Total number of certs/effects download attempts through gossip/node sync process",
                 registry,
             )
             .unwrap(),
