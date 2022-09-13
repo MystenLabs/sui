@@ -27,10 +27,8 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
                                 alttext={alttextgen(entryObj.id)}
                             />
                         </div>
-                        <div>
-                            <span className={styles.typevalue}>
-                                {trimStdLibPrefix(entryObj.Type)}
-                            </span>
+                        <div className={styles.typevalue}>
+                            {trimStdLibPrefix(entryObj.Type)}
                         </div>
                     </div>
                 </div>
