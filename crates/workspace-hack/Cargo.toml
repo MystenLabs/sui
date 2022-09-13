@@ -236,7 +236,7 @@ im = { version = "15", default-features = false }
 include_dir = { version = "0.7", features = ["glob"] }
 indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
-insta = { version = "1", features = ["__private_legacy_default_serialization", "colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
+insta = { version = "1", features = ["colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
@@ -281,7 +281,7 @@ merlin = { version = "3", features = ["std"] }
 mime = { version = "0.3", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
 miniz_oxide = { version = "0.5", default-features = false }
-mio = { version = "0.8", features = ["net", "os-ext", "os-poll"] }
+mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext", "os-poll"] }
 mockall = { version = "0.11", default-features = false }
 move-abigen = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", default-features = false }
 move-binary-format = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
@@ -484,7 +484,7 @@ smallvec = { version = "1", default-features = false }
 smawk = { version = "0.3", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7" }
-spin = { version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
+spin-274715c4dabd11b0 = { package = "spin", version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct", "std"] }
 sqlformat = { version = "0.1", default-features = false }
 sqlx = { version = "0.6", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
@@ -865,7 +865,7 @@ include_dir = { version = "0.7", features = ["glob"] }
 include_dir_macros = { version = "0.7", default-features = false }
 indenter = { version = "0.3" }
 indexmap = { version = "1", default-features = false, features = ["serde", "std"] }
-insta = { version = "1", features = ["__private_legacy_default_serialization", "colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
+insta = { version = "1", features = ["colors", "console", "json", "pest", "pest_derive", "redactions", "serde", "yaml"] }
 instant = { version = "0.1", default-features = false }
 integer-encoding = { version = "3", default-features = false }
 internment = { version = "0.5", default-features = false, features = ["ahash", "arc", "dashmap", "once_cell"] }
@@ -914,7 +914,7 @@ merlin = { version = "3", features = ["std"] }
 mime = { version = "0.3", default-features = false }
 minimal-lexical = { version = "0.2", default-features = false, features = ["std"] }
 miniz_oxide = { version = "0.5", default-features = false }
-mio = { version = "0.8", features = ["net", "os-ext", "os-poll"] }
+mio-c38e5c1d305a1b54 = { package = "mio", version = "0.8", features = ["net", "os-ext", "os-poll"] }
 mockall = { version = "0.11", default-features = false }
 mockall_derive = { version = "0.11", default-features = false }
 move-abigen = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e", default-features = false }
@@ -1162,7 +1162,7 @@ smallvec = { version = "1", default-features = false }
 smawk = { version = "0.3", default-features = false }
 socket2 = { version = "0.4", default-features = false, features = ["all"] }
 soketto = { version = "0.7" }
-spin = { version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
+spin-274715c4dabd11b0 = { package = "spin", version = "0.9", features = ["barrier", "lazy", "lock_api", "lock_api_crate", "mutex", "once", "rwlock", "spin_mutex"] }
 spki = { version = "0.6", default-features = false, features = ["alloc", "base64ct", "std"] }
 sqlformat = { version = "0.1", default-features = false }
 sqlx = { version = "0.6", features = ["_rt-tokio", "macros", "migrate", "runtime-tokio-rustls", "sqlite", "sqlx-macros"] }
@@ -1310,5 +1310,173 @@ yasna = { version = "0.5", features = ["std", "time"] }
 zeroize = { version = "1", features = ["alloc", "zeroize_derive"] }
 zeroize_derive = { version = "1", default-features = false }
 zstd-sys = { version = "2", features = ["legacy", "zdict_builder"] }
+
+[target.aarch64-apple-darwin.dependencies]
+core-foundation = { version = "0.9", default-features = false }
+core-foundation-sys = { version = "0.8", default-features = false }
+cpufeatures = { version = "0.2", default-features = false }
+encoding_rs = { version = "0.8", features = ["alloc"] }
+errno = { version = "0.2", default-features = false }
+hyper-tls = { version = "0.5", default-features = false }
+io-lifetimes = { version = "0.7", default-features = false }
+ipnet = { version = "2" }
+jemalloc-ctl = { version = "0.5" }
+jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
+jemallocator = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
+libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
+mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["net", "os-ext", "os-poll", "os-util", "uds"] }
+native-tls = { version = "0.2", default-features = false }
+nix = { version = "0.23", default-features = false }
+num_threads = { version = "0.1", default-features = false }
+rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+security-framework = { version = "2", features = ["OSX_10_9"] }
+security-framework-sys = { version = "2", features = ["OSX_10_9"] }
+signal-hook = { version = "0.3", features = ["channel", "iterator"] }
+signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
+signal-hook-registry = { version = "1", default-features = false }
+tokio-native-tls = { version = "0.3", default-features = false }
+web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
+
+[target.aarch64-apple-darwin.build-dependencies]
+core-foundation = { version = "0.9", default-features = false }
+core-foundation-sys = { version = "0.8", default-features = false }
+cpufeatures = { version = "0.2", default-features = false }
+encoding_rs = { version = "0.8", features = ["alloc"] }
+errno = { version = "0.2", default-features = false }
+fs_extra = { version = "1", default-features = false }
+hyper-tls = { version = "0.5", default-features = false }
+io-lifetimes = { version = "0.7", default-features = false }
+ipnet = { version = "2" }
+jemalloc-ctl = { version = "0.5" }
+jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
+jemallocator = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
+libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
+mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["net", "os-ext", "os-poll", "os-util", "uds"] }
+native-tls = { version = "0.2", default-features = false }
+nix = { version = "0.23", default-features = false }
+num_threads = { version = "0.1", default-features = false }
+rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+security-framework = { version = "2", features = ["OSX_10_9"] }
+security-framework-sys = { version = "2", features = ["OSX_10_9"] }
+signal-hook = { version = "0.3", features = ["channel", "iterator"] }
+signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
+signal-hook-registry = { version = "1", default-features = false }
+tokio-native-tls = { version = "0.3", default-features = false }
+web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
+
+[target.x86_64-unknown-linux-gnu.dependencies]
+cpufeatures = { version = "0.2", default-features = false }
+encoding_rs = { version = "0.8", features = ["alloc"] }
+foreign-types = { version = "0.3", default-features = false }
+foreign-types-shared = { version = "0.1", default-features = false }
+hyper-tls = { version = "0.5", default-features = false }
+io-lifetimes = { version = "0.7", default-features = false }
+ipnet = { version = "2" }
+jemalloc-ctl = { version = "0.5" }
+jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
+jemallocator = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
+libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
+linux-raw-sys = { version = "0.0.46", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["net", "os-ext", "os-poll", "os-util", "uds"] }
+native-tls = { version = "0.2", default-features = false }
+nix = { version = "0.23", default-features = false }
+num_threads = { version = "0.1", default-features = false }
+openssl = { version = "0.10", default-features = false }
+openssl-probe = { version = "0.1", default-features = false }
+openssl-sys = { version = "0.9", default-features = false }
+rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+signal-hook = { version = "0.3", features = ["channel", "iterator"] }
+signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
+signal-hook-registry = { version = "1", default-features = false }
+spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
+tokio-native-tls = { version = "0.3", default-features = false }
+web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
+
+[target.x86_64-unknown-linux-gnu.build-dependencies]
+cpufeatures = { version = "0.2", default-features = false }
+encoding_rs = { version = "0.8", features = ["alloc"] }
+foreign-types = { version = "0.3", default-features = false }
+foreign-types-shared = { version = "0.1", default-features = false }
+fs_extra = { version = "1", default-features = false }
+hyper-tls = { version = "0.5", default-features = false }
+io-lifetimes = { version = "0.7", default-features = false }
+ipnet = { version = "2" }
+jemalloc-ctl = { version = "0.5" }
+jemalloc-sys = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
+jemallocator = { version = "0.5", features = ["background_threads_runtime_support", "profiling"] }
+libc = { version = "0.2", default-features = false, features = ["extra_traits"] }
+linux-raw-sys = { version = "0.0.46", default-features = false, features = ["errno", "general", "ioctl", "no_std"] }
+mio-ca01ad9e24f5d932 = { package = "mio", version = "0.7", features = ["net", "os-ext", "os-poll", "os-util", "uds"] }
+native-tls = { version = "0.2", default-features = false }
+nix = { version = "0.23", default-features = false }
+num_threads = { version = "0.1", default-features = false }
+openssl = { version = "0.10", default-features = false }
+openssl-macros = { version = "0.1", default-features = false }
+openssl-probe = { version = "0.1", default-features = false }
+openssl-sys = { version = "0.9", default-features = false }
+rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+rustix = { version = "0.35", features = ["fs", "io-lifetimes", "libc", "std", "use-libc-auxv"] }
+signal-hook = { version = "0.3", features = ["channel", "iterator"] }
+signal-hook-mio = { version = "0.2", default-features = false, features = ["mio-0_7", "mio-0_8", "support-v0_7", "support-v0_8"] }
+signal-hook-registry = { version = "1", default-features = false }
+spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
+tokio-native-tls = { version = "0.3", default-features = false }
+web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
+
+[target.x86_64-pc-windows-msvc.dependencies]
+clipboard-win = { version = "4", default-features = false }
+cpufeatures = { version = "0.2", default-features = false }
+crossterm_winapi-c38e5c1d305a1b54 = { package = "crossterm_winapi", version = "0.8", default-features = false }
+crossterm_winapi-274715c4dabd11b0 = { package = "crossterm_winapi", version = "0.9", default-features = false }
+encode_unicode = { version = "0.3", features = ["std"] }
+encoding_rs = { version = "0.8", features = ["alloc"] }
+error-code = { version = "2", default-features = false }
+hyper-tls = { version = "0.5", default-features = false }
+ipnet = { version = "2" }
+native-tls = { version = "0.2", default-features = false }
+output_vt100 = { version = "0.1", default-features = false }
+rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+schannel = { version = "0.1", default-features = false }
+spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
+str-buf = { version = "1", default-features = false }
+tokio = { version = "1", default-features = false, features = ["winapi"] }
+tokio-native-tls = { version = "0.3", default-features = false }
+web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
+widestring = { version = "0.4", features = ["alloc", "std"] }
+winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi-util = { version = "0.1", default-features = false }
+windows-sys = { version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
+windows_x86_64_msvc = { version = "0.36", default-features = false }
+winreg = { version = "0.10", default-features = false }
+
+[target.x86_64-pc-windows-msvc.build-dependencies]
+clipboard-win = { version = "4", default-features = false }
+cpufeatures = { version = "0.2", default-features = false }
+crossterm_winapi-c38e5c1d305a1b54 = { package = "crossterm_winapi", version = "0.8", default-features = false }
+crossterm_winapi-274715c4dabd11b0 = { package = "crossterm_winapi", version = "0.9", default-features = false }
+ctor = { version = "0.1", default-features = false }
+encode_unicode = { version = "0.3", features = ["std"] }
+encoding_rs = { version = "0.8", features = ["alloc"] }
+error-code = { version = "2", default-features = false }
+hyper-tls = { version = "0.5", default-features = false }
+ipnet = { version = "2" }
+native-tls = { version = "0.2", default-features = false }
+output_vt100 = { version = "0.1", default-features = false }
+rand_chacha-6f8ce4dd05d13bba = { package = "rand_chacha", version = "0.2", default-features = false, features = ["std"] }
+schannel = { version = "0.1", default-features = false }
+spin-d8f496e17d97b5cb = { package = "spin", version = "0.5", default-features = false }
+str-buf = { version = "1", default-features = false }
+tokio = { version = "1", default-features = false, features = ["winapi"] }
+tokio-native-tls = { version = "0.3", default-features = false }
+web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
+widestring = { version = "0.4", features = ["alloc", "std"] }
+winapi = { version = "0.3", default-features = false, features = ["activation", "basetsd", "combaseapi", "consoleapi", "errhandlingapi", "fileapi", "handleapi", "impl-debug", "impl-default", "knownfolders", "libloaderapi", "minwinbase", "minwindef", "namedpipeapi", "ntdef", "ntsecapi", "ntstatus", "objbase", "processenv", "processthreadsapi", "profileapi", "roapi", "shellapi", "shlobj", "std", "stringapiset", "synchapi", "sysinfoapi", "threadpoollegacyapiset", "timezoneapi", "winbase", "wincon", "winerror", "winnt", "winreg", "winstring", "winuser", "ws2ipdef", "ws2tcpip", "wtypesbase"] }
+winapi-util = { version = "0.1", default-features = false }
+windows-sys = { version = "0.36", features = ["Win32", "Win32_Foundation", "Win32_Networking", "Win32_Networking_WinSock", "Win32_Security", "Win32_Security_Authentication", "Win32_Security_Authentication_Identity", "Win32_Security_Credentials", "Win32_Security_Cryptography", "Win32_Storage", "Win32_Storage_FileSystem", "Win32_System", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Pipes", "Win32_System_SystemServices", "Win32_System_WindowsProgramming"] }
+windows_x86_64_msvc = { version = "0.36", default-features = false }
+winreg = { version = "0.10", default-features = false }
 
 ### END HAKARI SECTION

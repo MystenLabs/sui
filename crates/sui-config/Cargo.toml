@@ -37,5 +37,5 @@ sha3 = "0.10.4"
 digest = "0.10.3"
 
 [dev-dependencies]
-insta = { version = "1.17.1", features = ["redactions", "yaml"] }
+insta = { version = "1.19.1", features = ["redactions", "yaml"] }
 tempfile = "3.3.0"
