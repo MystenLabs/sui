@@ -10,6 +10,7 @@ export type DataType = {
     Version?: string;
     display?: string;
     balance?: BN;
+    name?: string;
 }[];
 
 export const ITEMS_PER_PAGE: number = 6;
