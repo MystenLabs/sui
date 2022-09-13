@@ -20,7 +20,11 @@
 }
 
 .objectbox {
-    @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] max-h-[72px] flex items-center;
+    @apply my-[5vh] sm:my-[1vh] break-all lg:w-[50%] h-[72px] flex items-center;
+}
+
+.objectbox a {
+    @apply font-mono;
 }
 
 .ownedobjectheader {
@@ -32,7 +36,13 @@
 }
 
 .typevalue {
-    @apply text-sui-grey-80;
+    @apply text-sui-grey-80 overflow-hidden;
+
+    display: block;
+    display: -webkit-box; /* stylelint-disable-line value-no-vendor-prefix */
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    text-overflow: ellipsis;
 }
 
 .gray {
