@@ -17,6 +17,7 @@ use fastcrypto::{
     Digest, Hash, SignatureService, Verifier, DIGEST_LEN,
 };
 use indexmap::IndexMap;
+use mysten_util_mem::MallocSizeOf;
 use proptest_derive::Arbitrary;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
@@ -32,7 +33,9 @@ pub type Transaction = Vec<u8>;
 #[derive(Clone, Serialize, Deserialize, Default, Debug, PartialEq, Eq, Arbitrary)]
 pub struct Batch(pub Vec<Transaction>);
 
-#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
+)]
 pub struct BatchDigest(pub [u8; DIGEST_LEN]);
 
 impl fmt::Debug for BatchDigest {
@@ -69,7 +72,7 @@ impl Hash for Batch {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Default, Builder)]
+#[derive(Builder, Clone, Default, Deserialize, MallocSizeOf, Serialize)]
 #[builder(pattern = "owned", build_fn(skip))]
 pub struct Header {
     pub author: PublicKey,
@@ -180,7 +183,9 @@ impl Header {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord, MallocSizeOf,
+)]
 pub struct HeaderDigest([u8; DIGEST_LEN]);
 
 impl From<HeaderDigest> for Digest {
@@ -379,7 +384,7 @@ impl PartialEq for Vote {
 }
 
 #[serde_as]
-#[derive(Clone, Serialize, Deserialize, Default)]
+#[derive(Clone, MallocSizeOf, Serialize, Deserialize, Default)]
 pub struct Certificate {
     pub header: Header,
     aggregated_signature: AggregateSignature,
@@ -544,7 +549,9 @@ impl Certificate {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Clone, Copy, Serialize, Deserialize, Default, MallocSizeOf, PartialEq, Eq, Hash, PartialOrd, Ord,
+)]
 pub struct CertificateDigest([u8; DIGEST_LEN]);
 
 impl CertificateDigest {

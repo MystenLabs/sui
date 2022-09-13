@@ -21,6 +21,8 @@ pub struct ConsensusMetrics {
     /// The number of certificates from consensus that were restored and sent to the executor
     /// following a node restart
     pub recovered_consensus_output: IntCounter,
+    /// The approximate size in memory (including heap allocations) of the Dag.
+    pub dag_size_bytes: IntGauge,
 }
 
 impl ConsensusMetrics {
@@ -58,6 +60,11 @@ impl ConsensusMetrics {
             recovered_consensus_output: register_int_counter_with_registry!(
                 "recovered_consensus_output", 
                 "The number of certificates from consensus that were restored and sent to the executor following a node restart",
+                registry
+            ).unwrap(),
+            dag_size_bytes: register_int_gauge_with_registry!(
+                "dag_size_bytes",
+                "The approximate size in memory (including heap allocations) of the dag",
                 registry
             ).unwrap(),
         }
