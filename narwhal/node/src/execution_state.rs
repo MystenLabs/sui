@@ -23,10 +23,6 @@ impl ExecutionState for SimpleExecutionState {
         Ok(Vec::default())
     }
 
-    fn deserialize(bytes: &[u8]) -> Result<Self::Transaction, bincode::Error> {
-        bincode::deserialize(bytes)
-    }
-
     fn ask_consensus_write_lock(&self) -> bool {
         true
     }

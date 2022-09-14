@@ -108,10 +108,6 @@ impl ExecutionState for SimpleExecutionState {
         Ok(epoch)
     }
 
-    fn deserialize(bytes: &[u8]) -> Result<Self::Transaction, bincode::Error> {
-        bincode::deserialize(bytes)
-    }
-
     fn ask_consensus_write_lock(&self) -> bool {
         true
     }

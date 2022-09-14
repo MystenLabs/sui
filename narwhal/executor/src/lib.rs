@@ -64,11 +64,6 @@ pub trait ExecutionState {
         transaction: Self::Transaction,
     ) -> Result<Self::Outcome, Self::Error>;
 
-    /// Deserialize the message bytes into Transaction type. This allows an implementation of
-    /// ExecutionState to customize how to deserialize the message, in case customized
-    /// serialization was used when sending the message.
-    fn deserialize(bytes: &[u8]) -> Result<Self::Transaction, bincode::Error>;
-
     /// Simple guardrail ensuring there is a single instance using the state
     /// to call `handle_consensus_transaction`. Many instances may read the state,
     /// or use it for other purposes.

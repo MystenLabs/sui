@@ -151,26 +151,29 @@ impl BatchMaker {
                 );
             }
 
-            // The first 8 bytes of each transaction message is reserved for an identifier
-            // that's useful for debugging and tracking the lifetime of messages between
-            // Narwhal and clients.
-            let tracking_ids: Vec<_> = batch
-                .0
-                .iter()
-                .map(|tx| {
-                    let len = tx.len();
-                    if len >= 8 {
-                        (&tx[0..8]).read_u64::<BigEndian>().unwrap_or_default()
-                    } else {
-                        0
-                    }
-                })
-                .collect();
-            tracing::debug!(
-                "Tracking IDs of transactions in the Batch {:?}: {:?}",
-                digest,
-                tracking_ids
-            );
+            #[cfg(feature = "trace_transaction")]
+            {
+                // The first 8 bytes of each transaction message is reserved for an identifier
+                // that's useful for debugging and tracking the lifetime of messages between
+                // Narwhal and clients.
+                let tracking_ids: Vec<_> = batch
+                    .0
+                    .iter()
+                    .map(|tx| {
+                        let len = tx.len();
+                        if len >= 8 {
+                            (&tx[0..8]).read_u64::<BigEndian>().unwrap_or_default()
+                        } else {
+                            0
+                        }
+                    })
+                    .collect();
+                tracing::debug!(
+                    "Tracking IDs of transactions in the Batch {:?}: {:?}",
+                    digest,
+                    tracking_ids
+                );
+            }
 
             // NOTE: This log entry is used to compute performance.
             tracing::info!("Batch {:?} contains {} B", digest, size);

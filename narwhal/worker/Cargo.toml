@@ -44,3 +44,4 @@ test_utils = { path = "../test_utils" }
 
 [features]
 benchmark = []
+trace_transaction = []
