@@ -70,7 +70,6 @@ typed-store-derive = "0.1.0"
 jsonrpsee = { version = "0.15.1", features = ["full"] }
 
 test-utils = { path = "../test-utils" }
-sui-quorum-driver = { path = "../sui-quorum-driver" }
 rand = "0.8.5"
 move-package = { git = "https://github.com/move-language/move", rev = "e1e647b73dbd3652aabb2020728a4a517c26e28e" }
 sui-core = { path = "../sui-core" }
