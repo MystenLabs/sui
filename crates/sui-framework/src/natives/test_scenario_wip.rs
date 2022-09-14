@@ -29,7 +29,7 @@ use std::collections::{BTreeMap, VecDeque};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     object::Owner,
-    storage::ObjectChange,
+    storage::{ObjectChange, WriteKind},
 };
 
 const E_OBJECT_NOT_FOUND_CODE: u64 = 5;
@@ -47,11 +47,10 @@ pub fn end_transaction(
     assert!(cfg!(feature = "testing"));
     assert!(ty_args.is_empty());
     assert!(args.is_empty());
-    let object_runtime: &mut ObjectRuntime = context.extensions_mut().get_mut();
-    let new_ids = object_runtime.new_ids.clone();
+    let object_runtime_ref: &mut ObjectRuntime = context.extensions_mut().get_mut();
     let mut new_object_values = LinkedHashMap::new();
     let mut transferred = vec![];
-    for (owner, tag, value) in &object_runtime.transfers {
+    for (owner, tag, value) in &object_runtime_ref.transfers {
         let id: ObjectID = get_object_id(value.copy_value().unwrap())
             .unwrap()
             .value_as::<AccountAddress>()
@@ -60,6 +59,8 @@ pub fn end_transaction(
         new_object_values.insert(id, (*owner, tag.clone(), value.copy_value().unwrap()));
         transferred.push((id, *owner));
     }
+    assert!(object_runtime_ref.input_objects.is_empty());
+    let object_runtime = object_runtime_ref.take();
     let results = object_runtime.finish();
     let RuntimeResults {
         changes,
@@ -73,7 +74,7 @@ pub fn end_transaction(
             ));
         }
     };
-    let inventories = &mut object_runtime.test_inventories;
+    let inventories = &mut object_runtime_ref.test_inventories;
     let mut created = vec![];
     let mut written = vec![];
     let mut deleted = vec![];
@@ -81,13 +82,12 @@ pub fn end_transaction(
     for (id, change) in changes {
         match change {
             ObjectChange::Delete(_, _) => deleted.push(id),
-            ObjectChange::Write(_) => {
+            ObjectChange::Write(_, kind) => {
                 let (owner, tag, value) = new_object_values.remove(&id).unwrap();
                 inventories.objects.insert(id, value);
-                if new_ids.contains_key(&id) {
-                    created.push(id)
-                } else {
-                    written.push(id)
+                match kind {
+                    WriteKind::Create => created.push(id),
+                    WriteKind::Mutate | WriteKind::Unwrap => written.push(id),
                 }
                 match owner {
                     Owner::AddressOwner(a) => {

@@ -242,7 +242,7 @@ module sui::test_scenario_wip {
     }
 
     /// Returns true if the object with `ID` id was in the inventory for `account`
-    public native fun was_taken_from_address(account: address, id: ID): bool;
+    native fun was_taken_from_address(account: address, id: ID): bool;
 
     // == from sender ==
 
@@ -267,7 +267,7 @@ module sui::test_scenario_wip {
     }
 
     /// Returns true if the object with `ID` id was in the inventory for the sender
-    public fun was_taken_from_sender(scenario: &Scenario, id: ID): bool {
+    fun was_taken_from_sender(scenario: &Scenario, id: ID): bool {
         was_taken_from_address(sender(scenario), id)
     }
 
@@ -288,15 +288,15 @@ module sui::test_scenario_wip {
         take_immutable_by_id(option::destroy_some(id_opt))
     }
 
-    /// Return `t` to the global invetory
+    /// Return `t` to the global inventory
     public fun return_immutable<T: key>(t: T) {
         let id = object::id(&t);
         assert!(was_taken_immutable(id), ECantReturnObject);
         sui::transfer::freeze_object(t)
     }
 
-    /// Returns true if the object with `ID` id was an immutable object in the global invetory
-    public native fun was_taken_immutable(id: ID): bool;
+    /// Returns true if the object with `ID` id was an immutable object in the global inventory
+    native fun was_taken_immutable(id: ID): bool;
 
     // == shared ==
 
@@ -315,15 +315,15 @@ module sui::test_scenario_wip {
         take_shared_by_id(option::destroy_some(id_opt))
     }
 
-    /// Return `t` to the global invetory
+    /// Return `t` to the global inventory
     public fun return_shared<T: key>(t: T) {
         let id = object::id(&t);
         assert!(was_taken_shared(id), ECantReturnObject);
         sui::transfer::share_object(t)
     }
 
-    /// Returns true if the object with `ID` id was an shared object in the global invetory
-    public native fun was_taken_shared(id: ID): bool;
+    /// Returns true if the object with `ID` id was an shared object in the global inventory
+    native fun was_taken_shared(id: ID): bool;
 
     // // == child objects ==
 
@@ -341,7 +341,7 @@ module sui::test_scenario_wip {
     //     take_shared_by_id(id)
     // }
 
-    // /// Return `t` to the global invetory
+    // /// Return `t` to the global inventory
     // /// Note that this is object will now be returned from `most_recent_id_shared`
     // public fun return_shared<T: key>(t: T) {
     //     sui::transfer::share_object(t)

@@ -1,7 +1,7 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use better_any::{Tid, TidAble};
 use linked_hash_map::LinkedHashMap;
@@ -47,10 +47,11 @@ pub struct ObjectRuntime {
     pub(crate) test_inventories: TestInventories,
     // will eventually need a reference to the state view to access child objects
     // pub(crate) state_view: &'a mut dyn ____,
+    pub(crate) input_objects: BTreeSet<ObjectID>,
     // new ids from object::new
-    pub(crate) new_ids: Set<ObjectID>,
+    new_ids: Set<ObjectID>,
     // ids passed to object::delete
-    pub(crate) deleted_ids: Set<ObjectID>,
+    deleted_ids: Set<ObjectID>,
     // transfers to a new owner (shared, immutable, object, or account address)
     pub(crate) transfers: Vec<(Owner, StructTag, Value)>,
     pub(crate) events: Vec<(StructTag, Value)>,
@@ -63,9 +64,10 @@ impl TestInventories {
 }
 
 impl ObjectRuntime {
-    pub fn new() -> Self {
+    pub fn new(input_objects: BTreeSet<ObjectID>) -> Self {
         Self {
             test_inventories: TestInventories::new(),
+            input_objects,
             new_ids: Set::new(),
             deleted_ids: Set::new(),
             transfers: vec![],
@@ -122,7 +124,18 @@ impl ObjectRuntime {
         self.events.push((ty, event))
     }
 
-    pub fn finish(&mut self) -> Result<RuntimeResults, ExecutionError> {
+    pub(crate) fn take(&mut self) -> Self {
+        // take fields for empty version
+        let test_inventories = std::mem::take(&mut self.test_inventories);
+        let input_objects = std::mem::take(&mut self.input_objects);
+        let taken = std::mem::take(self);
+        // restore fields
+        self.test_inventories = test_inventories;
+        self.input_objects = input_objects;
+        taken
+    }
+
+    pub fn finish(self) -> Result<RuntimeResults, ExecutionError> {
         // TODO bring in the adapter rules here for deleting children
         todo!()
     }
