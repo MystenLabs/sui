@@ -49,24 +49,19 @@ td:nth-child(1) {
 }
 
 .addresses {
-    @apply flex flex-wrap;
+    @apply flex flex-wrap items-center p-0 gap-[4px];
 }
 
 .table tbody tr td:hover .addresses {
     @apply bg-sui-light rounded-[4px];
 }
 
-.addresses svg {
-    @apply mr-2;
-}
-
 .addresses a {
     @apply font-mono;
 }
 
-.longtextwrapper {
-    display: flex;
-    align-items: center;
+.addresses svg {
+    @apply fill-sui-grey-60;
 }
 
 .success svg {

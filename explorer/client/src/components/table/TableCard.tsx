@@ -5,10 +5,10 @@ import {
     getCoreRowModel,
     useReactTable,
 } from '@tanstack/react-table';
-import { useMemo } from 'react';
+import { useMemo, Fragment } from 'react';
 
+import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
 import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/failed.svg';
-import { ReactComponent as ContentForwardArrow } from '../../assets/SVGIcons/forward-arrow.svg';
 import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/success.svg';
 import Longtext from '../../components/longtext/Longtext';
 
@@ -60,7 +60,7 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
     return (
         <section className={styles.addresses}>
             {content.map((itm, idx) => (
-                <div key={idx + itm.url} className={styles.longtextwrapper}>
+                <Fragment key={idx + itm.url}>
                     <Longtext
                         text={itm.url}
                         alttext={itm.name}
@@ -68,8 +68,8 @@ export function TxAddresses({ content }: { content: LinkObj[] }) {
                         isLink={itm?.isLink}
                         copyButton={itm?.copy ? '16' : 'none'}
                     />
-                    {idx !== content.length - 1 && <ContentForwardArrow />}
-                </div>
+                    {idx !== content.length - 1 && <ContentArrowRight />}
+                </Fragment>
             ))}
         </section>
     );
