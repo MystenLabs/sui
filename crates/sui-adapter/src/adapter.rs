@@ -1150,7 +1150,15 @@ fn validate_string_move_value(
             Ok(())
         }
         MoveValue::Struct(MoveStruct::Runtime(vec)) => {
-            validate_string(&move_values_to_u8(vec), idx, module)
+            // deserialization process validates the structure of this MoveValue (one struct field
+            // in string structs containing a vector of u8 values)
+            debug_assert!(vec.len() == 1);
+            if let MoveValue::Vector(u8_vec) = &vec[0] {
+                validate_string(&move_values_to_u8(u8_vec), idx, module)
+            } else {
+                debug_assert!(false);
+                Ok(())
+            }
         }
         _ => {
             debug_assert!(false);
@@ -1164,7 +1172,8 @@ fn move_values_to_u8(values: &[MoveValue]) -> Vec<u8> {
     let res: Vec<u8> = values
         .iter()
         .filter_map(|v| {
-            // deserialization of this value already validates the structure of this MoveValue
+            // deserialization process validates the structure of this MoveValue (u8 stored in a
+            // vector of a string struct)
             if let MoveValue::U8(b) = v {
                 Some(b)
             } else {
@@ -1211,7 +1220,7 @@ fn string_arg<'a>(
     match param_type {
         SignatureToken::Struct(struct_handle_idx) => {
             let resolved_struct = sui_verifier::resolve_struct(view, *struct_handle_idx);
-            if resolved_struct != RESOLVED_ASCII_STR && resolved_struct != RESOLVED_UTF8_STR {
+            if resolved_struct == RESOLVED_ASCII_STR || resolved_struct == RESOLVED_UTF8_STR {
                 Some((resolved_struct, depth))
             } else {
                 None
@@ -1229,7 +1238,7 @@ fn string_arg_move_layout(depth: u32) -> MoveTypeLayout {
             Box::new(MoveTypeLayout::U8),
         )]))
     } else {
-        MoveTypeLayout::Vector(Box::new(string_arg_move_layout(depth)))
+        MoveTypeLayout::Vector(Box::new(string_arg_move_layout(depth - 1)))
     }
 }
 
