@@ -8,7 +8,6 @@ import { NetworkContext } from '../../context';
 import { Network, getEndpoint } from '../../utils/api/DefaultRpcClient';
 import {
     IS_STATIC_ENV,
-    IS_LOCAL_ENV,
     IS_STAGING_ENV,
 } from '../../utils/envUtil';
 
@@ -53,13 +52,6 @@ export default function NetworkSelect() {
             !Object.values(Network).includes(network as Network))
             ? styles.active
             : styles.inactive;
-
-    if (IS_LOCAL_ENV)
-        return (
-            <div>
-                <div className={styles.networkbox}>Local</div>
-            </div>
-        );
 
     if (IS_STATIC_ENV)
         return (
