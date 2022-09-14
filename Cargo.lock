@@ -9456,7 +9456,7 @@ dependencies = [
  "windows_i686_gnu",
  "windows_i686_msvc",
  "windows_x86_64_gnu",
- "windows_x86_64_msvc",
+ "windows_x86_64_msvc 0.36.1",
 ]
 
 [[package]]
@@ -9488,6 +9488,12 @@ name = "windows_x86_64_msvc"
 version = "0.36.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
+
+[[package]]
+name = "windows_x86_64_msvc"
+version = "0.39.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e4d40883ae9cae962787ca76ba76390ffa29214667a111db9e0a1ad8377e809"
 
 [[package]]
 name = "winreg"
@@ -10276,7 +10282,7 @@ dependencies = [
  "winapi",
  "winapi-util",
  "windows-sys",
- "windows_x86_64_msvc",
+ "windows_x86_64_msvc 0.39.0",
  "winreg",
  "worker",
  "workspace-hack 0.1.0 (git+https://github.com/MystenLabs/narwhal?rev=2b77ef805c9bce0af4d74477dd922d150d31cb16)",
