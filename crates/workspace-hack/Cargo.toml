@@ -265,7 +265,7 @@ libc = { version = "0.2", features = ["std"] }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.8", features = ["bzip2", "bzip2-sys", "libz-sys", "lz4", "snappy", "static", "zlib", "zstd", "zstd-sys"] }
 libsqlite3-sys = { version = "0.24", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
-libtest-mimic = { version = "0.5", default-features = false }
+libtest-mimic = { version = "0.4", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api-468e82937335b1c9 = { package = "lock_api", version = "0.3", default-features = false }
@@ -898,7 +898,7 @@ libloading = { version = "0.7", default-features = false }
 libm = { version = "0.2" }
 librocksdb-sys = { version = "0.8", features = ["bzip2", "bzip2-sys", "libz-sys", "lz4", "snappy", "static", "zlib", "zstd", "zstd-sys"] }
 libsqlite3-sys = { version = "0.24", default-features = false, features = ["bundled", "bundled_bindings", "cc", "pkg-config", "unlock_notify", "vcpkg"] }
-libtest-mimic = { version = "0.5", default-features = false }
+libtest-mimic = { version = "0.4", default-features = false }
 libz-sys = { version = "1", default-features = false, features = ["static"] }
 linked-hash-map = { version = "0.5", default-features = false }
 lock_api-468e82937335b1c9 = { package = "lock_api", version = "0.3", default-features = false }
