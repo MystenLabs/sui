@@ -8,7 +8,15 @@ use std::fs;
 use std::str::FromStr;
 use strum_macros::Display;
 use strum_macros::EnumString;
+use sui_adapter::temporary_store::TemporaryStore;
+use sui_types::base_types::ObjectID;
+use sui_types::base_types::SequenceNumber;
+use sui_types::error::SuiResult;
+use sui_types::gas::start_gas_metering;
 use sui_types::gas::GasCostSummary;
+use sui_types::gas::SuiGas;
+use sui_types::gas::MAX_GAS_BUDGET;
+use sui_types::gas_coin::GasCoin;
 use sui_types::messages::SingleTransactionKind;
 use sui_types::messages::TransactionKind;
 
@@ -72,4 +80,70 @@ pub fn read_estimate_file(
         .collect();
 
     Ok(cost_map)
+}
+
+// Emulation-based estimator
+// Step 1: charge min tx fee : can be computed precisely
+// Step 2: if contains shared objs, charge consensus fee : can be computed precisely
+// Step 3: charge storage read for all input objects : can be computed precisely
+// Step 4: if package publish, charge for it per size of modules : can be computed precisely
+// Step 5: charge VM flat fee if uses VM : can be computed precisely
+// Step 6: charge for mutations, deletions, rebates: cannot be computed precisely, will approx
+pub fn estimate_transaction_inner<S>(
+    tx: TransactionKind,
+    computation_gas_unit_price: u64,
+    storage_gas_unit_price: u64,
+    mutated_object_sizes_before: usize,
+    mutated_object_sizes_after: usize,
+    storage_rebate: SuiGas,
+    temporary_store: &TemporaryStore<S>,
+) -> SuiResult<GasCostSummary> {
+    let mut gas_status = start_gas_metering(
+        *MAX_GAS_BUDGET,
+        computation_gas_unit_price,
+        storage_gas_unit_price,
+    )?;
+
+    // Step 1: charge min tx fee : can be computed precisely
+    gas_status.charge_min_tx_gas()?;
+    // Step 2: if contains shared objs, charge consensus fee : can be computed precisely
+    if tx.shared_input_objects().next().is_some() {
+        gas_status.charge_consensus()?;
+    }
+    // Step 3: charge storage read for all input objects : can be computed precisely
+    // dummy gas obj
+    let gas_obj = GasCoin::new(ObjectID::random(), 0).to_object(SequenceNumber::new());
+    let mut total_size: usize = temporary_store
+        .objects()
+        .values()
+        .map(|obj| obj.object_size_for_gas_metering())
+        .sum();
+    total_size += gas_obj.object_size_for_gas_metering();
+    gas_status.charge_storage_read(total_size)?;
+
+    // Steps 4 & 5
+    for single_tx in tx.single_transactions() {
+        match single_tx {
+            SingleTransactionKind::Publish(module) => {
+                gas_status.charge_publish_package(module.modules.iter().map(|v| v.len()).sum())?
+            }
+            SingleTransactionKind::Call(_) => (),
+            _ => continue,
+        }
+
+        // Charge for Call and Publish
+        // Emulate charging for flat fee, pending: https://github.com/MystenLabs/sui/pull/4607
+        gas_status.charge_vm_gas()?;
+    }
+
+    // Step 6: charge for mutations, deletions, rebates: cannot be computed precisely, will approx
+    // At this point we need to estimate the effects of mutating objects after execution
+    // We need to use some approx this
+    gas_status.charge_storage_mutation(
+        mutated_object_sizes_before,
+        mutated_object_sizes_after,
+        storage_rebate,
+    )?;
+
+    Ok(gas_status.summary(true))
 }

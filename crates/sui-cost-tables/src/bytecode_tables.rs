@@ -24,6 +24,9 @@ use move_binary_format::{
     file_format_common::instruction_key,
 };
 
+/// VM flat fee
+pub const VM_FLAT_FEE: Gas = Gas::new(1_000);
+
 /// The size in bytes for a non-string or address constant on the stack
 pub const CONST_SIZE: AbstractMemorySize = AbstractMemorySize::new(16);
 
