@@ -94,6 +94,7 @@ pub mod authority_store_tables;
 
 mod authority_store;
 use crate::epoch::epoch_store::EpochStore;
+use crate::metrics::TaskUtilizationExt;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
@@ -142,6 +143,8 @@ pub struct AuthorityMetrics {
     handle_node_sync_certificate_latency: Histogram,
 
     total_consensus_txns: IntCounter,
+    handle_consensus_duration_mcs: IntCounter,
+    verify_narwhal_transaction_duration_mcs: IntCounter,
 
     pub follower_items_streamed: IntCounter,
     pub follower_items_loaded: IntCounter,
@@ -280,6 +283,18 @@ impl AuthorityMetrics {
             total_consensus_txns: register_int_counter_with_registry!(
                 "total_consensus_txns",
                 "Total number of consensus transactions received from narwhal",
+                registry,
+            )
+            .unwrap(),
+            handle_consensus_duration_mcs: register_int_counter_with_registry!(
+                "handle_consensus_duration_mcs",
+                "Total duration of handle_consensus_transaction",
+                registry,
+            )
+            .unwrap(),
+            verify_narwhal_transaction_duration_mcs: register_int_counter_with_registry!(
+                "verify_narwhal_transaction_duration_mcs",
+                "Total duration of verify_narwhal_transaction",
                 registry,
             )
             .unwrap(),
@@ -1909,6 +1924,10 @@ impl AuthorityState {
     }
 
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
+        let _timer = self
+            .metrics
+            .verify_narwhal_transaction_duration_mcs
+            .utilization_timer();
         // Ensure the input is a shared object certificate. Remember that Byzantine authorities
         // may input anything into consensus.
         fp_ensure!(
@@ -1938,6 +1957,10 @@ impl ExecutionState for AuthorityState {
         transaction: Self::Transaction,
     ) -> Result<Self::Outcome, Self::Error> {
         self.metrics.total_consensus_txns.inc();
+        let _timer = self
+            .metrics
+            .handle_consensus_duration_mcs
+            .utilization_timer();
         let tracking_id = transaction.get_tracking_id();
         match transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {
