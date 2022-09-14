@@ -1,6 +1,13 @@
 @import 'vanilla-cookieconsent/dist/cookieconsent.css';
 
-@tailwind base;
+/*
+ * NOTE: The Tailwind CSS reset doesn't mix well with the existing styles.
+ * We currently disable the CSS reset and expect components to adapt accordingly.
+ */
+
+/* TODO: Uncomment when we've fixed issues with CSS reset: */
+/* @tailwind base; */
+
 @tailwind components;
 @tailwind utilities;
 

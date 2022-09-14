@@ -4,27 +4,34 @@
 import { cva, type VariantProps } from 'class-variance-authority';
 import { type ReactNode } from 'react';
 
-const headingStyles = cva(['font-sans'], {
-    variants: {
-        variant: {
-            heading1: 'text-h1',
-            heading2: 'text-h2',
-            heading3: 'text-h3',
-            heading4: 'text-h4',
-            heading5: 'text-h5',
-            heading6: 'text-h6',
+const headingStyles = cva(
+    [
+        'font-sans',
+        // TODO: Remove when
+        ['my-0'],
+    ],
+    {
+        variants: {
+            variant: {
+                heading1: 'text-h1',
+                heading2: 'text-h2',
+                heading3: 'text-h3',
+                heading4: 'text-h4',
+                heading5: 'text-h5',
+                heading6: 'text-h6',
+            },
+            weight: {
+                medium: 'font-medium',
+                semibold: 'font-semibold',
+                bold: 'font-bold',
+            },
         },
-        weight: {
-            medium: 'font-medium',
-            semibold: 'font-semibold',
-            bold: 'font-bold',
+        defaultVariants: {
+            variant: 'heading1',
+            weight: 'semibold',
         },
-    },
-    defaultVariants: {
-        variant: 'heading1',
-        weight: 'semibold',
-    },
-});
+    }
+);
 
 export interface HeadingProps extends VariantProps<typeof headingStyles> {
     /**

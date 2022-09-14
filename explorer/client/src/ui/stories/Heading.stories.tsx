@@ -25,19 +25,19 @@ const Template: ComponentStory<typeof Heading> = (args) => (
 );
 
 export const Heading1 = Template.bind({});
-Heading1.args = { tag: 'h1', variant: 'heading1' };
+Heading1.args = { as: 'h1', variant: 'heading1' };
 
 export const Heading2 = Template.bind({});
-Heading2.args = { tag: 'h2', variant: 'heading2' };
+Heading2.args = { as: 'h2', variant: 'heading2' };
 
 export const Heading3 = Template.bind({});
-Heading3.args = { tag: 'h3', variant: 'heading3' };
+Heading3.args = { as: 'h3', variant: 'heading3' };
 
 export const Heading4 = Template.bind({});
-Heading4.args = { tag: 'h4', variant: 'heading4' };
+Heading4.args = { as: 'h4', variant: 'heading4' };
 
 export const Heading5 = Template.bind({});
-Heading5.args = { tag: 'h5', variant: 'heading5' };
+Heading5.args = { as: 'h5', variant: 'heading5' };
 
 export const Heading6 = Template.bind({});
-Heading6.args = { tag: 'h6', variant: 'heading6' };
+Heading6.args = { as: 'h6', variant: 'heading6' };
