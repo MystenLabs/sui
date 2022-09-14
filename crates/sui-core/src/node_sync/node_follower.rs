@@ -410,8 +410,7 @@ mod test {
         Arc::new(NodeSyncStore::open_tables_read_write(db_path, None, None))
     }
 
-    // #[tokio::test(flavor = "current_thread", start_paused = true)]
-    #[tokio::test]
+    #[tokio::test(flavor = "current_thread", start_paused = true)]
     async fn test_follower() {
         telemetry_subscribers::init_for_testing();
 
@@ -479,7 +478,6 @@ mod test {
             // At least 3 more were fetched from the stream - this number can't be checked exactly
             // because the authority returns everything in the current batch even if fewer items
             // were requested, and batch boundaries are non-deterministic.
-            dbg!(&result);
             assert!(result.items_from_stream >= 3 && result.items_from_stream <= 10);
         }
 
