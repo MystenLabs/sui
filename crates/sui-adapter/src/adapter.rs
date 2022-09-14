@@ -6,6 +6,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     convert::TryFrom,
     fmt::Debug,
+    str,
 };
 
 use anyhow::Result;
@@ -17,9 +18,10 @@ use move_binary_format::{
 };
 use move_core_types::{
     account_address::AccountAddress,
-    identifier::Identifier,
+    identifier::{IdentStr, Identifier},
     language_storage::{ModuleId, StructTag, TypeTag},
     resolver::{ModuleResolver, ResourceResolver},
+    value::{MoveStruct, MoveStructLayout, MoveTypeLayout, MoveValue},
 };
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
@@ -39,7 +41,9 @@ use sui_types::{
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_verifier::{
-    entry_points_verifier::{is_tx_context, RESOLVED_STD_OPTION, RESOLVED_SUI_ID},
+    entry_points_verifier::{
+        is_tx_context, RESOLVED_ASCII_STR, RESOLVED_STD_OPTION, RESOLVED_SUI_ID, RESOLVED_UTF8_STR,
+    },
     verifier, INIT_FN_NAME,
 };
 
@@ -1016,6 +1020,7 @@ pub fn resolve_and_type_check(
                             msg,
                         ));
                     }
+                    validate_primitive_arg(&arg, idx, param_type, view)?;
                     return Ok(arg);
                 }
                 CallArg::Object(ObjectArg::ImmOrOwnedObject(ref_)) => {
@@ -1098,6 +1103,134 @@ pub fn resolve_and_type_check(
         args: bcs_args,
         has_ctx_arg,
     })
+}
+
+// Validation of a primitive argument
+fn validate_primitive_arg(
+    arg: &[u8],
+    idx: LocalIndex,
+    param_type: &SignatureToken,
+    view: &BinaryIndexedView,
+) -> Result<(), ExecutionError> {
+    // at this point we only check validity of string arguments (ascii and utf8)
+    let string_arg_opt = string_arg(param_type, view, 0);
+    if string_arg_opt.is_none() {
+        return Ok(());
+    }
+
+    let (string_struct, depth) = string_arg_opt.unwrap();
+
+    let string_struct_layout = string_arg_move_layout(depth);
+
+    let string_move_value =
+        MoveValue::simple_deserialize(arg, &string_struct_layout).map_err(|_| {
+            ExecutionError::new_with_source(
+                ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
+                format!(
+                "Function expects {}::{}::{} struct but provided argument's value does not match",
+                string_struct.0, string_struct.1, string_struct.2,
+            ),
+            )
+        })?;
+    validate_string_move_value(&string_move_value, idx, string_struct.1)
+}
+
+// Given a MoveValue representing an string argument (string itself or arbitrarily nested vector of
+// strings), validate that the content of the data represents a valid string
+fn validate_string_move_value(
+    value: &MoveValue,
+    idx: LocalIndex,
+    module: &IdentStr,
+) -> Result<(), ExecutionError> {
+    match value {
+        MoveValue::Vector(vec) => {
+            for v in vec {
+                validate_string_move_value(v, idx, module)?;
+            }
+            Ok(())
+        }
+        MoveValue::Struct(MoveStruct::Runtime(vec)) => {
+            validate_string(&move_values_to_u8(vec), idx, module)
+        }
+        _ => {
+            debug_assert!(false);
+            Ok(())
+        }
+    }
+}
+
+// Converts a Vec<MoveValue::U8> to a Vec<U8>
+fn move_values_to_u8(values: &[MoveValue]) -> Vec<u8> {
+    let res: Vec<u8> = values
+        .iter()
+        .filter_map(|v| {
+            // deserialization of this value already validates the structure of this MoveValue
+            if let MoveValue::U8(b) = v {
+                Some(b)
+            } else {
+                None
+            }
+        })
+        .cloned()
+        .collect();
+    debug_assert!(res.len() == values.len());
+    res
+}
+
+// Validates that Vec<u8> represents a valid string
+fn validate_string(bytes: &[u8], idx: LocalIndex, module: &IdentStr) -> Result<(), ExecutionError> {
+    if module == STD_ASCII_MODULE_NAME {
+        for b in bytes {
+            if *b > 0x7F {
+                return Err(ExecutionError::new_with_source(
+                    ExecutionErrorKind::entry_argument_error(
+                        idx,
+                        EntryArgumentErrorKind::TypeMismatch,
+                    ),
+                    format!("Unexpected non-ASCII value in argument {}", idx),
+                ));
+            }
+        }
+    } else {
+        debug_assert!(module == STD_UTF8_MODULE_NAME);
+        if str::from_utf8(bytes).is_err() {
+            return Err(ExecutionError::new_with_source(
+                ExecutionErrorKind::entry_argument_error(idx, EntryArgumentErrorKind::TypeMismatch),
+                format!("Unexpected non-UTF8 value in argument {}", idx),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn string_arg<'a>(
+    param_type: &SignatureToken,
+    view: &'a BinaryIndexedView,
+    depth: u32,
+) -> Option<((&'a AccountAddress, &'a IdentStr, &'a IdentStr), u32)> {
+    match param_type {
+        SignatureToken::Struct(struct_handle_idx) => {
+            let resolved_struct = sui_verifier::resolve_struct(view, *struct_handle_idx);
+            if resolved_struct != RESOLVED_ASCII_STR && resolved_struct != RESOLVED_UTF8_STR {
+                Some((resolved_struct, depth))
+            } else {
+                None
+            }
+        }
+        SignatureToken::Vector(el_token) => string_arg(el_token, view, depth + 1),
+        _ => None,
+    }
+}
+
+fn string_arg_move_layout(depth: u32) -> MoveTypeLayout {
+    if depth == 0 {
+        // both structs structs representing strings have one field - a vector of type u8
+        MoveTypeLayout::Struct(MoveStructLayout::Runtime(vec![MoveTypeLayout::Vector(
+            Box::new(MoveTypeLayout::U8),
+        )]))
+    } else {
+        MoveTypeLayout::Vector(Box::new(string_arg_move_layout(depth)))
+    }
 }
 
 /// Serialize object with ID encoded in object_kind and also verify if various object properties are
@@ -1356,6 +1489,8 @@ fn is_primitive(
             let resolved_struct = sui_verifier::resolve_struct(view, *idx);
             // is ID
             resolved_struct == RESOLVED_SUI_ID
+                || resolved_struct == RESOLVED_ASCII_STR
+                || resolved_struct == RESOLVED_UTF8_STR
         }
 
         SignatureToken::StructInstantiation(idx, targs) => {
