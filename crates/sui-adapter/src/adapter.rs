@@ -24,6 +24,7 @@ use move_core_types::{
 pub use move_vm_runtime::move_vm::MoveVM;
 use move_vm_runtime::{native_functions::NativeFunctionTable, session::SerializedReturnValues};
 
+use sui_cost_tables::bytecode_tables::GasStatus;
 use sui_framework::EventType;
 use sui_types::{
     base_types::*,
@@ -31,7 +32,6 @@ use sui_types::{
     error::ExecutionError,
     error::{ExecutionErrorKind, SuiError},
     event::{Event, TransferType},
-    gas::SuiGasStatus,
     id::UID,
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
@@ -70,7 +70,7 @@ pub fn execute<
     function: &Identifier,
     type_args: Vec<TypeTag>,
     args: Vec<CallArg>,
-    gas_status: &mut SuiGasStatus,
+    gas_status: &mut GasStatus,
     ctx: &mut TxContext,
 ) -> Result<(), ExecutionError> {
     let objects = args
@@ -146,7 +146,7 @@ fn execute_internal<
     object_data: BTreeMap<ObjectID, (object::Owner, SequenceNumber, Option<u32>)>,
     by_value_objects: BTreeSet<ObjectID>,
     mut mutable_ref_objects: BTreeMap<LocalIndex, ObjectID>,
-    gas_status: &mut SuiGasStatus, // gas status for the current call operation
+    gas_status: &mut GasStatus, // gas status for the current call operation
     ctx: &mut TxContext,
 ) -> Result<(), ExecutionError> {
     // object_owner_map maps from object ID to its exclusive object owner.
@@ -170,13 +170,7 @@ fn execute_internal<
         },
         (change_set, events),
     ) = session
-        .execute_function_bypass_visibility(
-            module_id,
-            function,
-            type_args,
-            args,
-            &mut gas_status.create_move_gas_status(),
-        )
+        .execute_function_bypass_visibility(module_id, function, type_args, args, gas_status)
         .and_then(|ret| Ok((ret, session.finish()?)))?;
 
     // Sui Move programs should never touch global state, so ChangeSet should be empty
@@ -250,9 +244,8 @@ pub fn publish<
     natives: NativeFunctionTable,
     module_bytes: Vec<Vec<u8>>,
     ctx: &mut TxContext,
-    gas_status: &mut SuiGasStatus,
+    gas_status: &mut GasStatus,
 ) -> Result<(), ExecutionError> {
-    gas_status.charge_publish_package(module_bytes.iter().map(|v| v.len()).sum())?;
     let mut modules = module_bytes
         .iter()
         .map(|b| {
@@ -283,7 +276,7 @@ pub fn store_package_and_init_modules<
     vm: &MoveVM,
     modules: Vec<CompiledModule>,
     ctx: &mut TxContext,
-    gas_status: &mut SuiGasStatus,
+    gas_status: &mut GasStatus,
 ) -> Result<(), ExecutionError> {
     let modules_to_init = modules
         .iter()
@@ -322,7 +315,7 @@ fn init_modules<
     vm: &MoveVM,
     module_ids_to_init: Vec<(ModuleId, usize)>,
     ctx: &mut TxContext,
-    gas_status: &mut SuiGasStatus,
+    gas_status: &mut GasStatus,
 ) -> Result<(), ExecutionError> {
     let init_ident = Identifier::new(INIT_FN_NAME.as_str()).unwrap();
     for (module_id, num_args) in module_ids_to_init {
@@ -368,7 +361,7 @@ pub fn verify_and_link<
     modules: &[CompiledModule],
     package_id: ObjectID,
     natives: NativeFunctionTable,
-    gas_status: &mut SuiGasStatus,
+    gas_status: &mut GasStatus,
 ) -> Result<MoveVM, ExecutionError> {
     // Run the Move bytecode verifier and linker.
     // It is important to do this before running the Sui verifier, since the sui
@@ -390,7 +383,7 @@ pub fn verify_and_link<
         AccountAddress::from(package_id),
         // TODO: publish_module_bundle() currently doesn't charge gas.
         // Do we want to charge there?
-        &mut gas_status.create_move_gas_status(),
+        gas_status,
     )?;
 
     // run the Sui verifier
