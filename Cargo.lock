@@ -513,7 +513,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "libc",
  "miniz_oxide",
- "object 0.29.0",
+ "object",
  "rustc-demangle",
 ]
 
@@ -885,15 +885,6 @@ name = "cassowary"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df8670b8c7b9dae1793364eafadf7239c40d669904660c5960d74cfd80b46a53"
-
-[[package]]
-name = "cast"
-version = "0.2.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4c24dab4283a142afa2fdca129b80ad2c6284e073930f964c3a1293c225ee39a"
-dependencies = [
- "rustc_version 0.4.0",
-]
 
 [[package]]
 name = "cast"
@@ -1285,7 +1276,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b01d6de93b2b6c65e17c634a26653a29d107b3c98c607c765bf38d041531cd8f"
 dependencies = [
  "atty",
- "cast 0.3.0",
+ "cast",
  "clap 2.34.0",
  "criterion-plot",
  "csv",
@@ -1310,7 +1301,7 @@ version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2673cc8207403546f45f5fd319a974b1e6983ad1a3ee7e6041650013be041876"
 dependencies = [
- "cast 0.3.0",
+ "cast",
  "itertools",
 ]
 
@@ -1696,7 +1687,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "907076dfda823b0b36d2a1bb5f90c96660a5bbcd7729e10727f07858f22c4edc"
 dependencies = [
  "cfg-if 1.0.0",
- "hashbrown 0.12.3",
+ "hashbrown",
  "lock_api 0.4.8",
  "once_cell",
  "parking_lot_core 0.9.3",
@@ -1714,7 +1705,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4eaf86e44e9f0a21f6e42d8e7f83c9ee049f081745eeed1c6f47a613c76e5977"
 dependencies = [
- "libtest-mimic 0.5.2",
+ "libtest-mimic",
  "regex",
  "walkdir",
 ]
@@ -2734,15 +2725,6 @@ checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
 
 [[package]]
 name = "hashbrown"
-version = "0.11.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5ef0d4909ef3724cc8cce6ccc8572c5c817592e9285f5464f8e86f8bd3726e"
-dependencies = [
- "ahash",
-]
-
-[[package]]
-name = "hashbrown"
 version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
@@ -2756,7 +2738,7 @@ version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d452c155cb93fecdfb02a73dd57b5d8e442c2063bd7aac72f1bc5e4263a43086"
 dependencies = [
- "hashbrown 0.12.3",
+ "hashbrown",
 ]
 
 [[package]]
@@ -3064,7 +3046,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "10a35a97730320ffe8e2d410b5d3b69279b98d2c14bdb8b70ea89ecf7888d41e"
 dependencies = [
  "autocfg 1.1.0",
- "hashbrown 0.12.3",
+ "hashbrown",
  "serde 1.0.144",
 ]
 
@@ -3107,7 +3089,7 @@ checksum = "6ab388864246d58a276e60e7569a833d9cc4cd75c66e5ca77c177dad38e59996"
 dependencies = [
  "ahash",
  "dashmap",
- "hashbrown 0.12.3",
+ "hashbrown",
  "once_cell",
  "parking_lot 0.12.1",
 ]
@@ -3499,18 +3481,6 @@ dependencies = [
 
 [[package]]
 name = "libtest-mimic"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc195aab5b803465bf614a5a4765741abce6c8d64e7d8ca57acd2923661fba9f"
-dependencies = [
- "clap 3.2.21",
- "crossbeam-channel",
- "rayon",
- "termcolor",
-]
-
-[[package]]
-name = "libtest-mimic"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "79529479c298f5af41375b0c1a77ef670d450b4c9cd7949d2b43af08121b20ec"
@@ -3578,7 +3548,7 @@ version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e999beba7b6e8345721bd280141ed958096a2e4abdf74f67ff4ce49b4b54e47a"
 dependencies = [
- "hashbrown 0.12.3",
+ "hashbrown",
 ]
 
 [[package]]
@@ -4511,7 +4481,7 @@ dependencies = [
  "cfg-if 1.0.0",
  "ed25519-consensus",
  "fastcrypto",
- "hashbrown 0.12.3",
+ "hashbrown",
  "impl-trait-for-tuples",
  "indexmap",
  "mysten-util-mem-derive",
@@ -4869,15 +4839,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2819ce041d2ee131036f4fc9d6ae7ae125a3a40e97ba64d04fe799ad9dabbb44"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "object"
-version = "0.28.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e42c982f2d955fac81dd7e1d0e1426a7d702acd9c98d19ab01083a6a0328c424"
-dependencies = [
- "memchr",
 ]
 
 [[package]]
@@ -6292,15 +6253,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0dfe2087c51c460008730de8b57e6a320782fbfb312e1f4d520e6c6fae155ee"
 dependencies = [
  "semver 0.11.0",
-]
-
-[[package]]
-name = "rustc_version"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfa0f585226d2e68097d4f95d113b15b83a82e819ab25717ec0590d9584ef366"
-dependencies = [
- "semver 1.0.13",
 ]
 
 [[package]]
@@ -8594,7 +8546,7 @@ dependencies = [
  "futures-io",
  "futures-sink",
  "futures-util",
- "hashbrown 0.12.3",
+ "hashbrown",
  "pin-project-lite",
  "real_tokio",
  "slab",
@@ -9686,8 +9638,7 @@ dependencies = [
  "cargo_metadata 0.14.2",
  "cargo_metadata 0.15.0",
  "cassowary",
- "cast 0.2.7",
- "cast 0.3.0",
+ "cast",
  "cc",
  "cexpr",
  "cfg-expr",
@@ -9849,8 +9800,7 @@ dependencies = [
  "h2",
  "hakari",
  "half",
- "hashbrown 0.11.2",
- "hashbrown 0.12.3",
+ "hashbrown",
  "hashlink",
  "hdrhistogram",
  "heck 0.3.3",
@@ -9877,6 +9827,7 @@ dependencies = [
  "if_chain",
  "ignore",
  "im",
+ "impl-trait-for-tuples",
  "include_dir",
  "include_dir_macros",
  "indenter",
@@ -9919,7 +9870,7 @@ dependencies = [
  "libm",
  "librocksdb-sys",
  "libsqlite3-sys",
- "libtest-mimic 0.4.1",
+ "libtest-mimic",
  "libz-sys",
  "linked-hash-map",
  "linux-raw-sys",
@@ -9980,6 +9931,8 @@ dependencies = [
  "multihash-derive",
  "multimap",
  "mysten-network",
+ "mysten-util-mem",
+ "mysten-util-mem-derive",
  "name-variant",
  "named-lock",
  "native-tls",
@@ -10005,8 +9958,7 @@ dependencies = [
  "num_enum",
  "num_enum_derive",
  "num_threads",
- "object 0.28.4",
- "object 0.29.0",
+ "object",
  "oid-registry",
  "once_cell",
  "oorandom",
@@ -10131,7 +10083,6 @@ dependencies = [
  "rustc-hash",
  "rustc_version 0.2.3",
  "rustc_version 0.3.3",
- "rustc_version 0.4.0",
  "rusticata-macros",
  "rustix",
  "rustls",
@@ -10424,7 +10375,7 @@ dependencies = [
  "bytemuck",
  "byteorder",
  "bytes",
- "cast 0.3.0",
+ "cast",
  "cc",
  "cexpr",
  "cfg-if 0.1.10",
@@ -10508,7 +10459,7 @@ dependencies = [
  "group",
  "h2",
  "half",
- "hashbrown 0.12.3",
+ "hashbrown",
  "hdrhistogram",
  "heck 0.3.3",
  "heck 0.4.0",
@@ -10574,7 +10525,7 @@ dependencies = [
  "num-integer",
  "num-traits 0.2.15",
  "num_cpus",
- "object 0.29.0",
+ "object",
  "oid-registry",
  "once_cell",
  "oorandom",

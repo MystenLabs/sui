@@ -123,9 +123,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                             get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
                                 .1
                                 .into(),
-                            get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
-                                .1
-                                .into(),
+                            get_key_pair_from_rng(&mut rng).1,
                         ),
                     )
                 })
