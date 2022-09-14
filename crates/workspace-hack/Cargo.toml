@@ -349,7 +349,7 @@ oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
 opentelemetry = { version = "0.17", features = ["async-trait", "crossbeam-channel", "percent-encoding", "pin-project", "rand", "rt-tokio", "tokio", "tokio-stream", "trace"] }
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio", "tokio"] }
-opentelemetry-semantic-conventions = { version = "0.9", default-features = false }
+opentelemetry-semantic-conventions = { version = "0.10", default-features = false }
 ordered-float-dff4ba8e3ae991db = { package = "ordered-float", version = "1", features = ["std"] }
 ordered-float-f595c2ba2a3f28df = { package = "ordered-float", version = "2", features = ["std"] }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
@@ -987,7 +987,7 @@ oorandom = { version = "11", default-features = false }
 opaque-debug = { version = "0.3", default-features = false }
 opentelemetry = { version = "0.17", features = ["async-trait", "crossbeam-channel", "percent-encoding", "pin-project", "rand", "rt-tokio", "tokio", "tokio-stream", "trace"] }
 opentelemetry-jaeger = { version = "0.16", features = ["rt-tokio", "tokio"] }
-opentelemetry-semantic-conventions = { version = "0.9", default-features = false }
+opentelemetry-semantic-conventions = { version = "0.10", default-features = false }
 ordered-float-dff4ba8e3ae991db = { package = "ordered-float", version = "1", features = ["std"] }
 ordered-float-f595c2ba2a3f28df = { package = "ordered-float", version = "2", features = ["std"] }
 os_str_bytes = { version = "6", default-features = false, features = ["raw_os_str"] }
