@@ -1211,7 +1211,7 @@ dependencies = [
  "encode_unicode",
  "libc",
  "once_cell",
- "terminal_size",
+ "terminal_size 0.1.17",
  "winapi",
 ]
 
@@ -8186,6 +8186,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "terminal_size"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8440c860cf79def6164e4a0a983bcc2305d82419177a0e0c71930d049e3ac5a1"
+dependencies = [
+ "rustix",
+ "windows-sys",
+]
+
+[[package]]
 name = "termtree"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10165,7 +10175,7 @@ dependencies = [
  "tempfile",
  "tera",
  "termcolor",
- "terminal_size",
+ "terminal_size 0.2.1",
  "termtree",
  "test-fuzz",
  "test-fuzz-internal",
@@ -10636,7 +10646,7 @@ dependencies = [
  "telemetry-subscribers",
  "tempfile",
  "termcolor",
- "terminal_size",
+ "terminal_size 0.1.17",
  "termtree",
  "textwrap 0.11.0",
  "textwrap 0.15.0",
