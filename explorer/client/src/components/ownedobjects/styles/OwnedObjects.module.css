@@ -11,6 +11,14 @@
     @apply h-[60px] w-[60px] mr-[20px];
 }
 
+.brokenimage {
+    @apply bg-sui-grey-45 rounded-[6px] flex items-center justify-center;
+}
+
+.brokenimage svg {
+    @apply stroke-sui-grey-65;
+}
+
 .layout > div:first-child {
     @apply sm:pr-[4vw] sm:mr-[4vw] sm:border-0 sm:border-r sm:border-solid sm:border-sui-grey-45;
 }
