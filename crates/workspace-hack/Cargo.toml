@@ -510,7 +510,7 @@ telemetry-subscribers = { version = "0.1", features = ["chrome", "jaeger", "open
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
-terminal_size = { version = "0.2", default-features = false }
+terminal_size = { version = "0.1", default-features = false }
 termtree = { version = "0.2", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
@@ -1195,7 +1195,7 @@ telemetry-subscribers = { version = "0.1", features = ["chrome", "jaeger", "open
 tempfile = { version = "3", default-features = false }
 tera = { version = "1", features = ["builtins", "chrono", "chrono-tz", "humansize", "percent-encoding", "rand", "slug", "urlencode"] }
 termcolor = { version = "1", default-features = false }
-terminal_size = { version = "0.2", default-features = false }
+terminal_size = { version = "0.1", default-features = false }
 termtree = { version = "0.2", default-features = false }
 test-fuzz = { version = "3", default-features = false }
 test-fuzz-internal = { version = "3", default-features = false }
