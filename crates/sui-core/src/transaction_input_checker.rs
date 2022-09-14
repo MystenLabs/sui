@@ -5,9 +5,10 @@ use crate::authority::SuiDataStore;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fmt::Debug;
+use sui_types::base_types::ObjectRef;
 use sui_types::messages::TransactionKind;
 use sui_types::{
-    base_types::{ObjectID, SequenceNumber, SuiAddress},
+    base_types::{SequenceNumber, SuiAddress},
     error::{SuiError, SuiResult},
     fp_ensure,
     gas::{self, SuiGasStatus},
@@ -28,7 +29,7 @@ where
 {
     let mut gas_status = check_gas(
         store,
-        transaction.gas_payment_object_ref().0,
+        transaction.gas_payment_object_ref(),
         transaction.signed_data.data.gas_budget,
         transaction.signed_data.data.gas_price,
         &transaction.signed_data.data.kind,
@@ -90,7 +91,7 @@ where
 #[instrument(level = "trace", skip_all)]
 async fn check_gas<S>(
     store: &SuiDataStore<S>,
-    gas_payment_id: ObjectID,
+    gas_payment: &ObjectRef,
     gas_budget: u64,
     computation_gas_price: u64,
     tx_kind: &TransactionKind,
@@ -101,9 +102,11 @@ where
     if tx_kind.is_system_tx() {
         Ok(SuiGasStatus::new_unmetered())
     } else {
-        let gas_object = store.get_object(&gas_payment_id)?;
-        let gas_object = gas_object.ok_or(SuiError::ObjectNotFound {
-            object_id: gas_payment_id,
+        let gas_object = store.get_object_by_key(&gas_payment.0, gas_payment.1)?;
+        let gas_object = gas_object.ok_or(SuiError::ObjectErrors {
+            errors: vec![SuiError::ObjectNotFound {
+                object_id: gas_payment.0,
+            }],
         })?;
 
         //TODO: cache this storage_gas_price in memory
