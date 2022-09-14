@@ -1369,7 +1369,7 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 [target.x86_64-unknown-linux-gnu.dependencies]
 cpufeatures = { version = "0.2", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
-foreign-types = { version = "0.5", default-features = false }
+foreign-types = { version = "0.3", default-features = false }
 foreign-types-shared = { version = "0.1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
 io-lifetimes = { version = "0.7", default-features = false }
@@ -1398,7 +1398,7 @@ web-sys = { version = "0.3", default-features = false, features = ["Worker"] }
 [target.x86_64-unknown-linux-gnu.build-dependencies]
 cpufeatures = { version = "0.2", default-features = false }
 encoding_rs = { version = "0.8", features = ["alloc"] }
-foreign-types = { version = "0.5", default-features = false }
+foreign-types = { version = "0.3", default-features = false }
 foreign-types-shared = { version = "0.1", default-features = false }
 fs_extra = { version = "1", default-features = false }
 hyper-tls = { version = "0.5", default-features = false }
