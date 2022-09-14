@@ -1707,11 +1707,11 @@ checksum = "3ee2393c4a91429dffb4bedf19f4d6abf27d8a732c8ce4980305d782e5426d57"
 
 [[package]]
 name = "datatest-stable"
-version = "0.1.2"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b205281eb7972a6e3a1aa8d55aef938bea2ba9b9ba1bc4ae52539e392386372d"
+checksum = "4eaf86e44e9f0a21f6e42d8e7f83c9ee049f081745eeed1c6f47a613c76e5977"
 dependencies = [
- "libtest-mimic",
+ "libtest-mimic 0.5.2",
  "regex",
  "walkdir",
 ]
@@ -3491,6 +3491,17 @@ dependencies = [
  "crossbeam-channel",
  "rayon",
  "termcolor",
+]
+
+[[package]]
+name = "libtest-mimic"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "79529479c298f5af41375b0c1a77ef670d450b4c9cd7949d2b43af08121b20ec"
+dependencies = [
+ "clap 3.2.17",
+ "termcolor",
+ "threadpool",
 ]
 
 [[package]]
@@ -9848,7 +9859,7 @@ dependencies = [
  "libm",
  "librocksdb-sys",
  "libsqlite3-sys",
- "libtest-mimic",
+ "libtest-mimic 0.4.1",
  "libz-sys",
  "linked-hash-map",
  "linux-raw-sys",
