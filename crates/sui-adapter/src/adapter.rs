@@ -1105,7 +1105,7 @@ pub fn resolve_and_type_check(
     })
 }
 
-// Validation of a primitive argument
+// Validates a primitive argument
 fn validate_primitive_arg(
     arg: &[u8],
     idx: LocalIndex,
