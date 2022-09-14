@@ -5,7 +5,7 @@ expression: genesis.narwhal_committee()
 authorities:
   ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=:
     stake: 1
-    primary:
-      primary_to_primary: ""
-      worker_to_primary: ""
+    primary_address: ""
+    network_key: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
 epoch: 0
+
