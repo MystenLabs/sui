@@ -1,19 +1,13 @@
 ---
-name: Sui Doc Bug
-about: Create a new documentation bug for contents found on docs.sui.io
-title: 'Sui Doc Bug or Feature Request'
-labels: bug
-assignees: 'Clay-Mysten'
+name: Sui doc content issue or request
+about: Creates an issue for Sui documentation
+title: 'Sui doc content issue or request'
+labels: doc-issue
+assignees: 'randall-Mysten'
 ---
 
-What are the existing URLs containing the issue, if any?
+If this is an issue with existing content, provide the URL or GitHub path to the topic. Otherwise, use **New**.
 
-How would you describe the issue? (What needs changing?)
+Describe the issue or request. Provide as much detail as possible. For issues, it is helpful to copy the specific section of the topic into the issue.
 
-Where should this information land if new? (Learn, Build, Explore, Contribute.)
-
-What changes are needed to support this new feature or product? (A simple overview, detailed procedures?)
-
-Who is the audience for that information? (App developers, investors, creators, validators, someone else?)
-
-What precisely must they do with it? (Configure a new service? Process some output?)
+Thank you for taking the time to let us know about the issue or request. We triage all new issues and requests within 2 business days. We will follow up if we need additional information. 
