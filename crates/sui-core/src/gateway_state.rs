@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
@@ -653,21 +653,29 @@ where
         );
 
         // Download the latest content of every mutated object from the authorities.
-        let mutated_object_refs: BTreeSet<_> = effects
-            .effects
-            .all_mutated()
-            .map(|(obj_ref, _)| *obj_ref)
-            .collect();
+        let mut mutated_object_kinds = BTreeMap::new();
+        let mut mutated_object_refs = BTreeSet::new();
+        for (obj_ref, _, kind) in effects.effects.all_mutated() {
+            mutated_object_kinds.insert(obj_ref.0, kind);
+            mutated_object_refs.insert(*obj_ref);
+        }
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
+        let mutated_objects_with_kind = mutated_objects
+            .into_iter()
+            .map(|(obj_ref, obj)| {
+                let kind = mutated_object_kinds.get(&obj_ref.0).copied().unwrap();
+                (obj_ref, (obj, kind))
+            })
+            .collect();
         let seq = self
             .next_tx_seq_number
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.store
             .update_gateway_state(
                 input_objects,
-                mutated_objects,
+                mutated_objects_with_kind,
                 new_certificate.clone(),
                 seq,
                 effects.clone().to_unsigned_effects(),
@@ -820,12 +828,12 @@ where
         &self,
         // TODO: HashSet probably works here just fine.
         object_refs: BTreeSet<ObjectRef>,
-    ) -> Result<HashMap<ObjectRef, Object>, SuiError> {
+    ) -> Result<BTreeMap<ObjectRef, Object>, SuiError> {
         let mut receiver = self
             .authorities
             .fetch_objects_from_authorities(object_refs.clone());
 
-        let mut objects = HashMap::new();
+        let mut objects = BTreeMap::new();
         while let Some(resp) = receiver.recv().await {
             if let Ok(o) = resp {
                 // TODO: Make fetch_objects_from_authorities also return object ref
@@ -913,13 +921,13 @@ where
         let mutated_objects = self.store.get_objects(
             &effects
                 .all_mutated()
-                .map(|((object_id, _, _), _)| *object_id)
+                .map(|((object_id, _, _), _, _)| *object_id)
                 .collect::<Vec<_>>(),
         )?;
         let mut updated_gas = None;
         let mut package = None;
         let mut created_objects = vec![];
-        for ((obj_ref, _), object) in effects.all_mutated().zip(mutated_objects) {
+        for ((obj_ref, _, _), object) in effects.all_mutated().zip(mutated_objects) {
             let object = object.ok_or(SuiError::InconsistentGatewayResult {
                 error: format!(
                     "Crated/Updated object doesn't exist in the store: {:?}",

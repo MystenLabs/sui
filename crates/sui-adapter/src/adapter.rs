@@ -35,7 +35,7 @@ use sui_types::{
     id::UID,
     messages::{CallArg, EntryArgumentErrorKind, InputObjectKind, ObjectArg},
     object::{self, Data, MoveObject, Object, Owner, ID_END_INDEX},
-    storage::{DeleteKind, ObjectChange, ParentSync, Storage},
+    storage::{DeleteKind, ObjectChange, ParentSync, Storage, WriteKind},
     SUI_SYSTEM_STATE_OBJECT_ID,
 };
 use sui_verifier::{
@@ -306,8 +306,7 @@ pub fn store_package_and_init_modules<
     // The call to unwrap() will go away once we remove address owner from Immutable objects.
     let package_object = Object::new_package(modules, ctx.digest());
     let id = package_object.id();
-    state_view.set_create_object_ids(BTreeSet::from([id]));
-    let changes = BTreeMap::from([(id, ObjectChange::Write(package_object))]);
+    let changes = BTreeMap::from([(id, ObjectChange::Write(package_object, WriteKind::Create))]);
     state_view.apply_object_changes(changes);
 
     init_modules(state_view, vm, modules_to_init, ctx, gas_status)
@@ -475,7 +474,7 @@ fn process_successful_execution<
             .try_as_move_mut()
             .expect("We previously checked that mutable ref inputs are Move objects")
             .update_contents_and_increment_version(new_contents);
-        changes.insert(obj_id, ObjectChange::Write(obj));
+        changes.insert(obj_id, ObjectChange::Write(obj, WriteKind::Mutate));
     }
     let tx_digest = ctx.digest();
     // newly_generated_ids contains all object IDs generated in this transaction.
@@ -509,7 +508,7 @@ fn process_successful_execution<
                     EventType::ShareObject => Owner::Shared,
                     _ => unreachable!(),
                 };
-                let obj = handle_transfer(
+                let (obj, write_kind) = handle_transfer(
                     ctx.sender(),
                     new_owner,
                     type_,
@@ -525,7 +524,7 @@ fn process_successful_execution<
                     &mut frozen_object_ids,
                     &mut child_count_deltas,
                 )?;
-                changes.insert(obj.id(), ObjectChange::Write(obj));
+                changes.insert(obj.id(), ObjectChange::Write(obj, write_kind));
             }
             EventType::DeleteObjectID => {
                 // unwrap safe because this event can only be emitted from processing
@@ -673,10 +672,10 @@ fn process_successful_execution<
             let mut object = state_view.read_object(&id).unwrap().clone();
             // Active input object must be Move object.
             object.data.try_as_move_mut().unwrap().increment_version();
-            ObjectChange::Write(object)
+            ObjectChange::Write(object, WriteKind::Mutate)
         });
         match change {
-            ObjectChange::Write(object) => {
+            ObjectChange::Write(object, _) => {
                 object
                     .data
                     .try_as_move_mut()
@@ -697,7 +696,6 @@ fn process_successful_execution<
     }
 
     // apply object writes and object deletions
-    state_view.set_create_object_ids(newly_generated_ids);
     state_view.apply_object_changes(changes);
 
     // check all frozen objects have a child count of zero
@@ -738,7 +736,7 @@ fn handle_transfer<
     newly_generated_unused: &mut BTreeSet<ObjectID>,
     frozen_object_ids: &mut BTreeSet<ObjectID>,
     child_count_deltas: &mut BTreeMap<ObjectID, i64>,
-) -> Result<Object, ExecutionError> {
+) -> Result<(Object, WriteKind), ExecutionError> {
     let s_type = match type_ {
         TypeTag::Struct(s_type) => s_type,
         _ => unreachable!("Only structs can be transferred"),
@@ -750,15 +748,15 @@ fn handle_transfer<
     newly_generated_unused.remove(&id);
     let old_object = by_value_objects.remove(&id);
     let mut is_unwrapped = !(newly_generated_ids.contains(&id) || id == SUI_SYSTEM_STATE_OBJECT_ID);
-    let (version, child_count) = match old_object {
-        Some((_, version, child_count)) => (version, child_count),
+    let (write_kind, version, child_count) = match old_object {
+        Some((_, version, child_count)) => (WriteKind::Mutate, version, child_count),
         // When an object was wrapped at version `v`, we added an record into `parent_sync`
         // with version `v+1` along with OBJECT_DIGEST_WRAPPED. Now when the object is unwrapped,
         // it will also have version `v+1`, leading to a violation of the invariant that any
         // object_id and version pair must be unique. We use the version from parent_sync and
         // increment it (below), so we will have `(v+1)+1`, thus preserving the uniqueness
         None if is_unwrapped => match state_view.get_latest_parent_entry_ref(id) {
-            Ok(Some((_, last_version, _))) => (last_version, None),
+            Ok(Some((_, last_version, _))) => (WriteKind::Unwrap, last_version, None),
             // if the object is not in parent sync, it was wrapped before ever being stored into
             // storage.
             // we set is_unwrapped to false since the object has never been in storage
@@ -766,7 +764,7 @@ fn handle_transfer<
             Ok(None) => {
                 is_unwrapped = false;
                 newly_generated_ids.insert(id);
-                (SequenceNumber::new(), None)
+                (WriteKind::Create, SequenceNumber::new(), None)
             }
             Err(_) => {
                 // TODO this error is (hopefully) transient and should not be
@@ -777,7 +775,7 @@ fn handle_transfer<
                 ));
             }
         },
-        None => (SequenceNumber::new(), None),
+        None => (WriteKind::Create, SequenceNumber::new(), None),
     };
 
     // safe because `has_public_transfer` was properly determined from the abilities
@@ -878,8 +876,7 @@ fn handle_transfer<
             object_owner_map.insert(obj_address, new_owner);
         }
     }
-
-    Ok(obj)
+    Ok((obj, write_kind))
 }
 
 #[cfg(debug_assertions)]

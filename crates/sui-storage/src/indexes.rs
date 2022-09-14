@@ -74,11 +74,11 @@ fn timestamps_table_default_config() -> Options {
 }
 
 impl IndexStore {
-    pub fn index_tx<'a>(
+    pub fn index_tx(
         &self,
         sender: SuiAddress,
         active_inputs: impl Iterator<Item = ObjectID>,
-        mutated_objects: impl Iterator<Item = &'a (ObjectRef, Owner)> + Clone,
+        mutated_objects: impl Iterator<Item = (ObjectRef, Owner)> + Clone,
         move_functions: impl Iterator<Item = (ObjectID, Identifier, Identifier)> + Clone,
         sequence: TxSequenceNumber,
         digest: &TransactionDigest,

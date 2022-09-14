@@ -6,6 +6,7 @@ use narwhal_executor::ExecutionIndices;
 use rocksdb::Options;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use std::collections::BTreeMap;
 use std::iter;
 use std::path::Path;
 use std::sync::atomic::AtomicU64;
@@ -18,6 +19,7 @@ use sui_storage::{
 use sui_types::batch::{SignedBatch, TxSequenceNumber};
 use sui_types::crypto::{AuthoritySignInfo, EmptySignInfo};
 use sui_types::object::{Owner, OBJECT_START_VERSION};
+use sui_types::storage::WriteKind;
 use sui_types::{base_types::SequenceNumber, storage::ParentSync};
 use tokio::sync::Notify;
 use tokio_retry::strategy::{jitter, ExponentialBackoff};
@@ -674,7 +676,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
     pub async fn update_gateway_state(
         &self,
         input_objects: InputObjects,
-        mutated_objects: HashMap<ObjectRef, Object>,
+        mutated_objects: BTreeMap<ObjectRef, (Object, WriteKind)>,
         certificate: CertifiedTransaction,
         proposed_seq: TxSequenceNumber,
         effects: TransactionEffectsEnvelope<S>,
@@ -683,8 +685,8 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         let transaction_digest = certificate.digest();
         let mut temporary_store =
             TemporaryStore::new(Arc::new(&self), input_objects, *transaction_digest);
-        for (_, object) in mutated_objects {
-            temporary_store.write_object(object);
+        for (_, (object, kind)) in mutated_objects {
+            temporary_store.write_object(object, kind);
         }
         for obj_ref in &effects.effects.deleted {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Normal);
@@ -692,16 +694,14 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         for obj_ref in &effects.effects.wrapped {
             temporary_store.delete_object(&obj_ref.0, obj_ref.1, DeleteKind::Wrap);
         }
+        let (inner_temporary_store, _events) = temporary_store.into_inner();
 
         let mut write_batch = self.tables.certificates.batch();
-
         // Store the certificate indexed by transaction digest
         write_batch = write_batch.insert_batch(
             &self.tables.certificates,
             std::iter::once((transaction_digest, &certificate)),
         )?;
-
-        let (inner_temporary_store, _events) = temporary_store.into_inner();
         self.sequence_tx(
             write_batch,
             inner_temporary_store,
@@ -788,7 +788,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             written,
             deleted,
         } = inner_temporary_store;
-        trace!(written =? written.values().map(|((obj_id, ver, _), _)| (obj_id, ver)).collect::<Vec<_>>(),
+        trace!(written =? written.values().map(|((obj_id, ver, _), _, _)| (obj_id, ver)).collect::<Vec<_>>(),
                "batch_update_objects: temp store written");
 
         let owned_inputs: Vec<_> = active_inputs
@@ -802,22 +802,21 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
         // For wrapped objects, although their owners technically didn't change, we will lose track
         // of them and there is no guarantee on their owner in the future. Hence we treat them
         // the same as deleted.
-        let old_object_owners = deleted
-            .iter()
-            // We need to call get() on objects because some object that were just deleted may not
-            // be in the objects list. This can happen if these deleted objects were wrapped in the past,
-            // and hence will not show up in the input objects.
-            .filter_map(|(id, _)| objects.get(id).and_then(Object::get_owner_and_id))
-            .chain(
-                written
-                    .iter()
-                    .filter_map(|(id, (_, new_object))| match objects.get(id) {
+        let old_object_owners =
+            deleted
+                .iter()
+                // We need to call get() on objects because some object that were just deleted may not
+                // be in the objects list. This can happen if these deleted objects were wrapped in the past,
+                // and hence will not show up in the input objects.
+                .filter_map(|(id, _)| objects.get(id).and_then(Object::get_owner_and_id))
+                .chain(written.iter().filter_map(
+                    |(id, (_, new_object, _))| match objects.get(id) {
                         Some(old_object) if old_object.owner != new_object.owner => {
                             old_object.get_owner_and_id()
                         }
                         _ => None,
-                    }),
-            );
+                    },
+                ));
 
         // Delete the old owner index entries
         write_batch = write_batch.delete_batch(&self.tables.owner_index, old_object_owners)?;
@@ -827,7 +826,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             &self.tables.parent_sync,
             written
                 .iter()
-                .map(|(_, (object_ref, _object_))| (object_ref, transaction_digest)),
+                .map(|(_, (object_ref, _object, _kind))| (object_ref, transaction_digest)),
         )?;
 
         // Index the certificate by the objects deleted
@@ -862,7 +861,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             &self.tables.owner_index,
             written
                 .iter()
-                .filter_map(|(_id, (object_ref, new_object))| {
+                .filter_map(|(_id, (object_ref, new_object, _kind))| {
                     trace!(?object_ref, owner =? new_object.owner, "Updating owner_index");
                     new_object
                         .get_owner_and_id()
@@ -875,7 +874,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             &self.tables.objects,
             written
                 .iter()
-                .map(|(_, (obj_ref, new_object))| (ObjectKey::from(obj_ref), new_object)),
+                .map(|(_, (obj_ref, new_object, _kind))| (ObjectKey::from(obj_ref), new_object)),
         )?;
 
         // Atomic write of all data other than locks
@@ -899,7 +898,7 @@ impl<S: Eq + Debug + Serialize + for<'de> Deserialize<'de>> SuiDataStore<S> {
             //    been deleted by a concurrent tx that finished first. In that case, check if the tx effects exist.
             let new_locks_to_init: Vec<_> = written
                 .iter()
-                .filter_map(|(_, (object_ref, new_object))| {
+                .filter_map(|(_, (object_ref, new_object, _kind))| {
                     if new_object.is_owned_or_quasi_shared() {
                         Some(*object_ref)
                     } else {

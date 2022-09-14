@@ -12,7 +12,7 @@ use crate::crypto::{
 use crate::gas::GasCostSummary;
 use crate::messages_checkpoint::{CheckpointFragment, CheckpointSequenceNumber};
 use crate::object::{Object, ObjectFormatOptions, Owner, OBJECT_START_VERSION};
-use crate::storage::DeleteKind;
+use crate::storage::{DeleteKind, WriteKind};
 use crate::sui_serde::Base64;
 use crate::SUI_SYSTEM_STATE_OBJECT_ID;
 use base64ct::Encoding;
@@ -1430,11 +1430,16 @@ impl TransactionEffects {
     /// created and unwrapped objects. In other words, all objects that still exist
     /// in the object state after this transaction.
     /// It doesn't include deleted/wrapped objects.
-    pub fn all_mutated(&self) -> impl Iterator<Item = &(ObjectRef, Owner)> + Clone {
+    pub fn all_mutated(&self) -> impl Iterator<Item = (&ObjectRef, &Owner, WriteKind)> + Clone {
         self.mutated
             .iter()
-            .chain(self.created.iter())
-            .chain(self.unwrapped.iter())
+            .map(|(r, o)| (r, o, WriteKind::Mutate))
+            .chain(self.created.iter().map(|(r, o)| (r, o, WriteKind::Create)))
+            .chain(
+                self.unwrapped
+                    .iter()
+                    .map(|(r, o)| (r, o, WriteKind::Unwrap)),
+            )
     }
 
     /// Return an iterator of mutated objects, but excluding the gas object.
@@ -1448,7 +1453,7 @@ impl TransactionEffects {
 
     pub fn is_object_mutated_here(&self, obj_ref: ObjectRef) -> bool {
         // The mutated or created case
-        if self.all_mutated().any(|(oref, _)| *oref == obj_ref) {
+        if self.all_mutated().any(|(oref, _, _)| *oref == obj_ref) {
             return true;
         }
 
