@@ -69,5 +69,5 @@ td:nth-child(1) {
 }
 
 .fail svg {
-    @apply stroke-issue-dark;
+    @apply fill-issue-dark;
 }

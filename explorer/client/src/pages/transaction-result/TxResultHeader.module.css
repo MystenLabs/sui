@@ -7,12 +7,12 @@
 }
 
 .explain,
-.txresulttype {
+.statuslabel {
     @apply text-[14px] leading-[12.6px] font-sans font-medium;
 }
 
-.txresulttype {
-    @apply capitalize pt-[4px] pb-[5px] px-[8px] flex items-center gap-[6px] mt-[8px] lg:ml-[6px] lg:mt-0  rounded-[6px] w-fit;
+.statuslabel {
+    @apply capitalize py-[4px] px-[8px] flex items-center gap-[6px] mt-[8px] lg:ml-[6px] lg:mt-0  rounded-[6px] w-fit;
 }
 
 .explain > span,
@@ -36,6 +36,14 @@
     @apply fill-success-dark;
 }
 
+.failed.statuslabel svg {
+    @apply fill-issue-dark;
+}
+
+.statuslabel span {
+    @apply pb-[1px] self-start;
+}
+
 .failed {
-    @apply bg-issue-light text-issue-dark stroke-issue-dark break-all leading-[16.9px] w-fit;
+    @apply bg-issue-light text-issue-dark break-all leading-[16.9px] w-fit;
 }

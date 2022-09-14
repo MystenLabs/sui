@@ -7,9 +7,9 @@ import {
 } from '@tanstack/react-table';
 import { useMemo, Fragment } from 'react';
 
+import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/12px/Check.svg';
+import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12px/X.svg';
 import { ReactComponent as ContentArrowRight } from '../../assets/SVGIcons/16px/ArrowRight.svg';
-import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/failed.svg';
-import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/success.svg';
 import Longtext from '../../components/longtext/Longtext';
 
 import type { ExecutionStatusType, TransactionKindName } from '@mysten/sui.js';

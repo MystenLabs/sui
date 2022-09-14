@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 import cl from 'classnames';
 
+import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/12px/Check.svg';
+import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/12px/X.svg';
 import { ReactComponent as CallTypeIcon } from '../../assets/SVGIcons/Call.svg';
 import { ReactComponent as InfoIcon } from '../../assets/SVGIcons/Info.svg';
 import { ReactComponent as PublishTypeIcon } from '../../assets/SVGIcons/Publish.svg';
 import { ReactComponent as TransferObjectTypeIcon } from '../../assets/SVGIcons/TransferObject.svg';
-import { ReactComponent as ContentFailedStatus } from '../../assets/SVGIcons/failed.svg';
-import { ReactComponent as ContentSuccessStatus } from '../../assets/SVGIcons/success.svg';
 import Longtext from '../../components/longtext/Longtext';
 import resultheaderstyle from '../../styles/resultheader.module.css';
 
@@ -59,10 +59,7 @@ function TxAddressHeader({ data }: { data: TxResultState }) {
                         copyButton="24"
                     />
                     <div
-                        className={cl([
-                            styles.txresulttype,
-                            styles[statusName],
-                        ])}
+                        className={cl([styles[statusName], styles.statuslabel])}
                     >
                         <TxResultStatus />
                         <span>
