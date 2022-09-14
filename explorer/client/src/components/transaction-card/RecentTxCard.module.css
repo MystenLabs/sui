@@ -75,9 +75,21 @@ div.txadd {
 }
 
 .moretxbtn {
-    @apply text-left bg-transparent cursor-pointer border-0 pl-0 pr-0 text-sui-grey-90  hover:text-gray-400 transition-colors duration-200 ease-in-out font-normal text-sm w-full;
+    @apply bg-transparent cursor-pointer border-0 pl-0 pr-0 w-full
+   flex items-center gap-[6px] 
+    text-sui-grey-90 font-semibold text-[14px]
+    hover:text-sui-grey-70;
 
     text-decoration: none;
+}
+
+.moretxbtn svg {
+    @apply fill-sui-grey-75;
+}
+
+.moretxbtn:hover svg,
+.moretxbtn:hover {
+    @apply fill-sui-grey-70 transition-colors duration-200 ease-in-out;
 }
 
 .txlatestresults td:nth-child(1) {

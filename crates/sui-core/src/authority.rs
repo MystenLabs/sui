@@ -17,7 +17,6 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bincode::Error;
 use chrono::prelude::*;
-use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
@@ -52,6 +51,7 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
+use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -94,11 +94,11 @@ pub mod authority_store_tables;
 
 mod authority_store;
 use crate::epoch::epoch_store::EpochStore;
+use crate::metrics::TaskUtilizationExt;
 pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::AuthorityKeyPair;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -114,9 +114,10 @@ pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
 
 pub type ReconfigConsensusMessage = (
-    ConsensusKeyPair,
+    AuthorityKeyPair,
+    NetworkKeyPair,
     ConsensusCommittee,
-    Vec<(ConsensusWorkerId, ConsensusKeyPair)>,
+    Vec<(ConsensusWorkerId, NetworkKeyPair)>,
     ConsensusWorkerCache,
 );
 
@@ -141,6 +142,8 @@ pub struct AuthorityMetrics {
     handle_node_sync_certificate_latency: Histogram,
 
     total_consensus_txns: IntCounter,
+    handle_consensus_duration_mcs: IntCounter,
+    verify_narwhal_transaction_duration_mcs: IntCounter,
 
     pub follower_items_streamed: IntCounter,
     pub follower_items_loaded: IntCounter,
@@ -161,7 +164,9 @@ const POSITIVE_INT_BUCKETS: &[f64] = &[
     1., 2., 5., 10., 20., 50., 100., 200., 500., 1000., 2000., 5000., 10000., 20000., 50000.,
 ];
 
-const LATENCY_SEC_BUCKETS: &[f64] = &[0.001, 0.01, 0.1, 1., 2., 3., 5., 10., 20., 30., 60., 180.];
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
 
 impl AuthorityMetrics {
     pub fn new(registry: &prometheus::Registry) -> AuthorityMetrics {
@@ -277,6 +282,18 @@ impl AuthorityMetrics {
             total_consensus_txns: register_int_counter_with_registry!(
                 "total_consensus_txns",
                 "Total number of consensus transactions received from narwhal",
+                registry,
+            )
+            .unwrap(),
+            handle_consensus_duration_mcs: register_int_counter_with_registry!(
+                "handle_consensus_duration_mcs",
+                "Total duration of handle_consensus_transaction",
+                registry,
+            )
+            .unwrap(),
+            verify_narwhal_transaction_duration_mcs: register_int_counter_with_registry!(
+                "verify_narwhal_transaction_duration_mcs",
+                "Total duration of verify_narwhal_transaction",
                 registry,
             )
             .unwrap(),
@@ -848,7 +865,10 @@ impl AuthorityState {
                 .input_objects()?
                 .iter()
                 .map(|o| o.object_id()),
-            effects.effects.all_mutated(),
+            effects
+                .effects
+                .all_mutated()
+                .map(|(obj_ref, owner, _kind)| (*obj_ref, *owner)),
             cert.signed_data
                 .data
                 .move_calls()
@@ -1906,6 +1926,10 @@ impl AuthorityState {
     }
 
     fn verify_narwhal_transaction(&self, certificate: &CertifiedTransaction) -> SuiResult {
+        let _timer = self
+            .metrics
+            .verify_narwhal_transaction_duration_mcs
+            .utilization_timer();
         // Ensure the input is a shared object certificate. Remember that Byzantine authorities
         // may input anything into consensus.
         fp_ensure!(
@@ -1935,6 +1959,10 @@ impl ExecutionState for AuthorityState {
         transaction: Self::Transaction,
     ) -> Result<Self::Outcome, Self::Error> {
         self.metrics.total_consensus_txns.inc();
+        let _timer = self
+            .metrics
+            .handle_consensus_duration_mcs
+            .utilization_timer();
         let tracking_id = transaction.get_tracking_id();
         match transaction.kind {
             ConsensusTransactionKind::UserTransaction(certificate) => {

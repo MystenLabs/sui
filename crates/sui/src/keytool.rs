@@ -5,14 +5,18 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use anyhow::anyhow;
+use base64ct::Encoding as _;
 use clap::*;
+use fastcrypto::traits::{ToFromBytes, VerifyingKey};
 use tracing::info;
 
+use fastcrypto::ed25519::{Ed25519KeyPair, Ed25519PrivateKey, Ed25519PublicKey};
 use sui_sdk::crypto::SuiKeystore;
 use sui_types::base_types::SuiAddress;
 use sui_types::base_types::{decode_bytes_hex, encode_bytes_hex};
 use sui_types::crypto::{
-    random_key_pair_by_type, AuthorityKeyPair, EncodeDecodeBase64, SignatureScheme, SuiKeyPair,
+    get_key_pair, random_key_pair_by_type, AuthorityKeyPair, Ed25519SuiSignature,
+    EncodeDecodeBase64, NetworkKeyPair, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::sui_serde::{Base64, Encoding};
 
@@ -61,14 +65,20 @@ impl KeyToolCommand {
         match self {
             KeyToolCommand::Generate { key_scheme } => {
                 let k = key_scheme.to_string();
-                match random_key_pair_by_type(key_scheme) {
-                    Ok((address, keypair)) => {
-                        let file_name = format!("{address}.key");
-                        write_keypair_to_file(&keypair, &file_name)?;
-                        println!("{:?} key generated and saved to '{file_name}'", k);
-                    }
-                    Err(e) => {
-                        println!("Failed to generate keypair: {:?}", e)
+                if "bls12381" == key_scheme.to_string() {
+                    let (address, keypair): (_, AuthorityKeyPair) = get_key_pair();
+                    let file_name = format!("bls-{address}.key");
+                    write_authority_keypair_to_file(&keypair, &file_name)?;
+                } else {
+                    match random_key_pair_by_type(key_scheme) {
+                        Ok((address, keypair)) => {
+                            let file_name = format!("{address}.key");
+                            write_keypair_to_file(&keypair, &file_name)?;
+                            println!("{:?} key generated and saved to '{file_name}'", k);
+                        }
+                        Err(e) => {
+                            println!("Failed to generate keypair: {:?}", e)
+                        }
                     }
                 }
             }
@@ -178,19 +188,38 @@ pub fn write_keypair_to_file<P: AsRef<std::path::Path>>(
     Ok(())
 }
 
+pub fn write_authority_keypair_to_file<P: AsRef<std::path::Path>>(
+    keypair: &AuthorityKeyPair,
+    path: P,
+) -> anyhow::Result<()> {
+    let contents = keypair.encode_base64();
+    std::fs::write(path, contents)?;
+    Ok(())
+}
+
 pub fn read_authority_keypair_from_file<P: AsRef<std::path::Path>>(
     path: P,
 ) -> anyhow::Result<AuthorityKeyPair> {
-    match read_keypair_from_file(path) {
-        Ok(kp) => match kp {
-            SuiKeyPair::Ed25519SuiKeyPair(k) => Ok(k),
-            SuiKeyPair::Secp256k1SuiKeyPair(_) => Err(anyhow!("Invalid authority keypair type")),
-        },
-        Err(e) => Err(anyhow!("Failed to read keypair file {:?}", e)),
-    }
+    let contents = std::fs::read_to_string(path)?;
+    AuthorityKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
 }
 
 pub fn read_keypair_from_file<P: AsRef<std::path::Path>>(path: P) -> anyhow::Result<SuiKeyPair> {
     let contents = std::fs::read_to_string(path)?;
     SuiKeyPair::decode_base64(contents.as_str().trim()).map_err(|e| anyhow!(e))
+}
+
+pub fn read_network_keypair_from_file<P: AsRef<std::path::Path>>(
+    path: P,
+) -> anyhow::Result<NetworkKeyPair> {
+    let value = std::fs::read_to_string(path)?;
+    let bytes =
+        base64ct::Base64::decode_vec(value.as_str()).map_err(|e| anyhow!("{}", e.to_string()))?;
+    if let Some(flag) = bytes.first() {
+        if flag == &Ed25519SuiSignature::SCHEME.flag() {
+            let sk = Ed25519PrivateKey::from_bytes(&bytes[1 + Ed25519PublicKey::LENGTH..])?;
+            return Ok(<Ed25519KeyPair as From<Ed25519PrivateKey>>::from(sk));
+        }
+    }
+    Err(anyhow!("Invalid bytes"))
 }

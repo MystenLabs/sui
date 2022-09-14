@@ -3,8 +3,13 @@
 
 import nacl from 'tweetnacl';
 import { describe, it, expect } from 'vitest';
-import { Base64DataBuffer, Ed25519Keypair, RawSigner, Secp256k1Keypair } from '../../src';
-import * as secp from "@noble/secp256k1";
+import {
+  Base64DataBuffer,
+  Ed25519Keypair,
+  RawSigner,
+  Secp256k1Keypair,
+} from '../../../src';
+import * as secp from '@noble/secp256k1';
 
 describe('RawSigner', () => {
   it('Ed25519 keypair signData', async () => {

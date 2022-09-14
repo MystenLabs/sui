@@ -36,9 +36,9 @@ use std::{
     path::Path,
     sync::Arc,
 };
+use sui_adapter::in_memory_storage::InMemoryStorage;
 use sui_adapter::temporary_store::TemporaryStore;
 use sui_adapter::{adapter::new_move_vm, genesis};
-use sui_adapter::{in_memory_storage::InMemoryStorage, temporary_store::InnerTemporaryStore};
 use sui_core::execution_engine;
 use sui_framework::DEFAULT_FRAMEWORK_PATH;
 use sui_types::{
@@ -489,12 +489,12 @@ impl<'a> SuiTestAdapter<'a> {
                 status,
                 events,
                 created,
+                mutated,
+                unwrapped,
                 // TODO display all these somehow
                 transaction_digest: _,
-                mutated: _,
-                unwrapped: _,
-                deleted: _,
-                wrapped: _,
+                deleted,
+                wrapped,
                 gas_object: _,
                 ..
             },
@@ -511,29 +511,27 @@ impl<'a> SuiTestAdapter<'a> {
             // TODO: Support different epochs in transactional tests.
             0,
         );
-        let InnerTemporaryStore {
-            written, deleted, ..
-        } = inner;
         let created_set: BTreeSet<_> = created.iter().map(|((id, _, _), _)| *id).collect();
         let mut created_ids: Vec<_> = created_set.iter().copied().collect();
-        let mut written_ids: Vec<_> = written
-            .keys()
-            .copied()
-            .filter(|id| !created_set.contains(id))
+        let mut written_ids: Vec<_> = mutated
+            .iter()
+            .chain(&unwrapped)
+            .map(|((id, _, _), _)| *id)
             .collect();
-        let mut deleted_ids: Vec<_> = deleted.keys().copied().collect();
+        let mut deleted_ids: Vec<_> = deleted
+            .iter()
+            .chain(&wrapped)
+            .map(|(id, _, _)| *id)
+            .collect();
         // update storage
         Arc::get_mut(&mut self.storage)
             .unwrap()
-            .finish(written, deleted);
+            .finish(inner.written, inner.deleted);
         // enumerate objects after written to storage, sort by a "stable" sorting as the
         // object ID is not stable
-        let mut created_ids_vec = created
-            .iter()
-            .map(|((id, _, _), _)| *id)
-            .collect::<Vec<_>>();
+        let mut created_ids_vec = created_set.iter().collect::<Vec<_>>();
         created_ids_vec.sort_by_key(|id| self.get_object_sorting_key(id));
-        for id in &created_ids_vec {
+        for id in created_ids_vec {
             self.enumerate_fake(*id);
         }
         // sort by fake id

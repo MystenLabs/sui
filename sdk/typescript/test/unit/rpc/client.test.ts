@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
-import { JsonRpcClient } from '../../src/rpc/client';
+import { JsonRpcClient } from '../../../src/rpc/client';
 import {
   mockRpcResponse,
   mockServer,
   MOCK_ENDPOINT,
   MOCK_PORT,
 } from '../mocks/rpc-http';
-import { isGetOwnedObjectsResponse } from '../../src/types/index.guard';
-import { SuiObjectInfo } from '../../src';
+import { isGetOwnedObjectsResponse } from '../../../src/types/index.guard';
+import { SuiObjectInfo } from '../../../src';
 
 const EXAMPLE_OBJECT: SuiObjectInfo = {
   objectId: '8dc6a6f70564e29a01c7293a9c03818fda2d049f',

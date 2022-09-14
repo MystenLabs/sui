@@ -8,7 +8,17 @@ use crate::{
     object::Object,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
+pub enum WriteKind {
+    /// The object was in storage already but has been modified
+    Mutate,
+    /// The object was created in this transaction
+    Create,
+    /// The object was previously wrapped in another object, but has been restored to storage
+    Unwrap,
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Serialize, Deserialize)]
 pub enum DeleteKind {
@@ -22,7 +32,7 @@ pub enum DeleteKind {
 }
 
 pub enum ObjectChange {
-    Write(Object),
+    Write(Object, WriteKind),
     Delete(SequenceNumber, DeleteKind),
 }
 
@@ -31,10 +41,6 @@ pub trait Storage {
     fn reset(&mut self);
 
     fn read_object(&self, id: &ObjectID) -> Option<&Object>;
-
-    // Specify the list of object IDs created during the transaction.
-    // This is needed to determine unwrapped objects at the end.
-    fn set_create_object_ids(&mut self, ids: BTreeSet<ObjectID>);
 
     /// Record an event that happened during execution
     fn log_event(&mut self, event: Event);

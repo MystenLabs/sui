@@ -478,7 +478,7 @@ mod test {
             // At least 3 more were fetched from the stream - this number can't be checked exactly
             // because the authority returns everything in the current batch even if fewer items
             // were requested, and batch boundaries are non-deterministic.
-            assert!(result.items_from_stream >= 3 && result.items_from_stream <= 5);
+            assert!(result.items_from_stream >= 3 && result.items_from_stream <= 10);
         }
 
         // test follower_process

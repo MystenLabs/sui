@@ -11,7 +11,7 @@ import cl from 'classnames';
 import { useEffect, useState, useContext, useCallback } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 
-import { ReactComponent as ContentForwardArrowDark } from '../../assets/SVGIcons/forward-arrow-dark.svg';
+import { ReactComponent as ArrowRight } from '../../assets/SVGIcons/12px/ArrowRight.svg';
 import TableCard from '../../components/table/TableCard';
 import TabFooter from '../../components/tabs/TabFooter';
 import Tabs from '../../components/tabs/Tabs';
@@ -233,7 +233,7 @@ function LatestTxCard({ ...data }: RecentTx) {
         ) : (
             <TabFooter stats={stats}>
                 <Link className={styles.moretxbtn} to="/transactions">
-                    More Transactions <ContentForwardArrowDark />
+                    <div>More Transactions</div> <ArrowRight />
                 </Link>
             </TabFooter>
         );

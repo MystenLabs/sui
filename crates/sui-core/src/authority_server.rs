@@ -168,7 +168,9 @@ pub struct ValidatorServiceMetrics {
     pub handle_certificate_non_consensus_latency: Histogram,
 }
 
-const LATENCY_SEC_BUCKETS: &[f64] = &[0.001, 0.01, 0.1, 1., 2., 3., 5., 10., 20., 30., 60., 180.];
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
 
 impl ValidatorServiceMetrics {
     pub fn new(registry: &Registry) -> Self {
@@ -261,11 +263,13 @@ impl ValidatorService {
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
         let consensus_execution_state = state.clone();
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
+        let network_keypair = config.network_key_pair.copy();
 
         let registry = prometheus_registry.clone();
         tokio::spawn(async move {
             narwhal_node::restarter::NodeRestarter::watch(
                 consensus_keypair,
+                network_keypair,
                 vec![(0, consensus_worker_keypair)],
                 &consensus_committee,
                 consensus_worker_cache,

@@ -7,7 +7,7 @@ use sui_types::{
     base_types::{ObjectID, ObjectRef, SequenceNumber},
     error::{SuiError, SuiResult},
     object::Object,
-    storage::{BackingPackageStore, DeleteKind, ParentSync},
+    storage::{BackingPackageStore, DeleteKind, ParentSync, WriteKind},
 };
 
 // TODO: We should use AuthorityTemporaryStore instead.
@@ -97,11 +97,11 @@ impl InMemoryStorage {
 
     pub fn finish(
         &mut self,
-        written: BTreeMap<ObjectID, (ObjectRef, Object)>,
+        written: BTreeMap<ObjectID, (ObjectRef, Object, WriteKind)>,
         deleted: BTreeMap<ObjectID, (SequenceNumber, DeleteKind)>,
     ) {
         debug_assert!(written.keys().all(|id| !deleted.contains_key(id)));
-        for (_id, (_, new_object)) in written {
+        for (_id, (_, new_object, _)) in written {
             debug_assert!(new_object.id() == _id);
             self.insert_object(new_object);
         }

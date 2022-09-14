@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 
-// This module attemps to find the computational cost of native function by measuring the time
+// This module attempts to find the computational cost of native function by measuring the time
 // the native takes to execute.
 // Isolating the native function is tricky, so we run two functions with and without the native
 // The difference in execution times is the time the native takes
