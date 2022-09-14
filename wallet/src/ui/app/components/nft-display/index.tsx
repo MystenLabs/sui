@@ -29,14 +29,17 @@ function NFTDisplayCard({
     const { filePath, nftObjectID, nftFields, fileExtentionType } =
         useNFTBasicData(nftobj);
 
+    const name = nftFields?.name || nftFields?.metadata?.fields?.name;
+
     const wideviewSection = (
         <div className={st.nftfields}>
-            <div className={st.nftName}>{nftFields?.name}</div>
+            <div className={st.nftName}>{name}</div>
             <div className={st.nftType}>
                 {fileExtentionType?.name} {fileExtentionType.type}
             </div>
         </div>
     );
+
     const defaultSection = (
         <>
             {expandable ? (
@@ -51,8 +54,8 @@ function NFTDisplayCard({
                     </ExplorerLink>
                 </div>
             ) : null}
-            {showlabel && nftFields?.name ? (
-                <div className={st.nftfields}>{nftFields.name}</div>
+            {showlabel && name ? (
+                <div className={st.nftfields}>{name}</div>
             ) : null}
         </>
     );

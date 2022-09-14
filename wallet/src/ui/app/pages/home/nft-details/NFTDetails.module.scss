@@ -107,6 +107,11 @@
     background-repeat: no-repeat;
     width: 100%;
 
+    .nft-details-inner {
+        height: 64px;
+        overflow: auto;
+    }
+
     .nft-item-detail {
         display: flex;
         flex-flow: row nowrap;
