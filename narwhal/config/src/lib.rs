@@ -145,8 +145,9 @@ pub struct PrometheusMetricsParameters {
 
 impl Default for PrometheusMetricsParameters {
     fn default() -> Self {
+        let host = "127.0.0.1";
         Self {
-            socket_addr: format!("/ip4/127.0.0.1/tcp/{}/http", get_available_port())
+            socket_addr: format!("/ip4/{}/tcp/{}/http", host, get_available_port(host))
                 .parse()
                 .unwrap(),
         }
@@ -167,8 +168,9 @@ pub struct ConsensusAPIGrpcParameters {
 
 impl Default for ConsensusAPIGrpcParameters {
     fn default() -> Self {
+        let host = "127.0.0.1";
         Self {
-            socket_addr: format!("/ip4/127.0.0.1/tcp/{}/http", get_available_port())
+            socket_addr: format!("/ip4/{}/tcp/{}/http", host, get_available_port(host))
                 .parse()
                 .unwrap(),
             get_collections_timeout: Duration::from_millis(5_000),
