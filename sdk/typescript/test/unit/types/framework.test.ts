@@ -3,7 +3,7 @@
 
 import { describe, it, expect } from 'vitest';
 import mockObjectData from '@mysten/sui-open-rpc/samples/objects.json';
-import { Coin, GetObjectDataResponse } from '../../src';
+import { Coin, GetObjectDataResponse } from '../../../src';
 
 import BN from 'bn.js';
 

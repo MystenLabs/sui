@@ -57,6 +57,13 @@ pub struct GossipMetrics {
     pub follower_stream_duration: Histogram,
 }
 
+const WAIT_FOR_FINALITY_LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+const FOLLOWER_STREAM_DURATION_SEC_BUCKETS: &[f64] = &[
+    0.1, 1., 5., 10., 20., 30., 40., 50., 60., 90., 120., 180., 240., 300.,
+];
+
 impl GossipMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
@@ -87,6 +94,7 @@ impl GossipMetrics {
             wait_for_finality_latency_sec: register_histogram_with_registry!(
                 "gossip_wait_for_finality_latency_sec",
                 "Latency histogram for gossip/node sync process to wait for txs to become final, in seconds",
+                WAIT_FOR_FINALITY_LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
@@ -105,6 +113,7 @@ impl GossipMetrics {
             follower_stream_duration: register_histogram_with_registry!(
                 "follower_stream_duration",
                 "Latency histogram of the duration of the follower streams to peers, in seconds",
+                FOLLOWER_STREAM_DURATION_SEC_BUCKETS.to_vec(),
                 registry,
             )
                 .unwrap(),

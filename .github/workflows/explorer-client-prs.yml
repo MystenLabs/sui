@@ -86,7 +86,7 @@ jobs:
         uses: cypress-io/github-action@v4
         with:
           install: false
-          start: pnpm dlx concurrently 'cargo run --bin sui-test-validator' 'pnpm dev:local'
+          start: pnpm dlx concurrently --kill-others 'cargo run --bin sui-test-validator' 'pnpm dev:local'
           working-directory: ./explorer/client
           spec: cypress/e2e/localnet/*
           # Wait on faucet and explorer:

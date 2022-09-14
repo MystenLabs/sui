@@ -23,6 +23,10 @@ pub struct QuorumDriverMetrics {
     pub(crate) current_requests_in_flight: IntGauge,
 }
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.01, 0.05, 0.1, 0.25, 0.5, 1., 2., 4., 6., 8., 10., 20., 30., 60., 90.,
+];
+
 impl QuorumDriverMetrics {
     pub fn new(registry: &Registry) -> Self {
         Self {
@@ -65,18 +69,21 @@ impl QuorumDriverMetrics {
             latency_sec_immediate_return: register_histogram_with_registry!(
                 "quorum_driver_latency_sec_immediate_return",
                 "Latency of processing an immdediate_return execution request, in sec",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             latency_sec_wait_for_tx_cert: register_histogram_with_registry!(
                 "quorum_driver_latency_sec_wait_for_tx_cert",
                 "Latency of processing an wait_for_tx_cert execution request, in sec",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
             latency_sec_wait_for_effects_cert: register_histogram_with_registry!(
                 "quorum_driver_latency_sec_wait_for_effects_cert",
                 "Latency of processing an wait_for_effects_cert execution request, in sec",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),
