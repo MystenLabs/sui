@@ -134,21 +134,16 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         transaction: Transaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let timer = self
+        let _timer = self
             .metrics
             .handle_transaction_request_latency
             .start_timer();
 
-        let response = self
-            .client()
+        self.client()
             .transaction(transaction)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into);
-
-        timer.stop_and_record();
-
-        response
+            .map_err(Into::into)
     }
 
     /// Execute a certificate.
@@ -156,63 +151,48 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         certificate: CertifiedTransaction,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let timer = self
+        let _timer = self
             .metrics
             .handle_certificate_request_latency
             .start_timer();
 
-        let response = self
-            .client()
+        self.client()
             .handle_certificate(certificate)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into);
-
-        timer.stop_and_record();
-
-        response
+            .map_err(Into::into)
     }
 
     async fn handle_account_info_request(
         &self,
         request: AccountInfoRequest,
     ) -> Result<AccountInfoResponse, SuiError> {
-        let timer = self
+        let _timer = self
             .metrics
             .handle_account_info_request_latency
             .start_timer();
 
-        let response = self
-            .client()
+        self.client()
             .account_info(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into);
-
-        timer.stop_and_record();
-
-        response
+            .map_err(Into::into)
     }
 
     async fn handle_object_info_request(
         &self,
         request: ObjectInfoRequest,
     ) -> Result<ObjectInfoResponse, SuiError> {
-        let timer = self
+        let _timer = self
             .metrics
             .handle_object_info_request_latency
             .start_timer();
 
-        let response = self
-            .client()
+        self.client()
             .object_info(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into);
-
-        timer.stop_and_record();
-
-        response
+            .map_err(Into::into)
     }
 
     /// Handle Object information requests for this account.
@@ -220,21 +200,16 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: TransactionInfoRequest,
     ) -> Result<TransactionInfoResponse, SuiError> {
-        let timer = self
+        let _timer = self
             .metrics
             .handle_transaction_info_request_latency
             .start_timer();
 
-        let response = self
-            .client()
+        self.client()
             .transaction_info(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into);
-
-        timer.stop_and_record();
-
-        response
+            .map_err(Into::into)
     }
 
     /// Handle Batch information requests for this authority.
@@ -257,18 +232,13 @@ impl AuthorityAPI for NetworkAuthorityClient {
         &self,
         request: CheckpointRequest,
     ) -> Result<CheckpointResponse, SuiError> {
-        let timer = self.metrics.handle_checkpoint_request_latency.start_timer();
+        let _timer = self.metrics.handle_checkpoint_request_latency.start_timer();
 
-        let response = self
-            .client()
+        self.client()
             .checkpoint(request)
             .await
             .map(tonic::Response::into_inner)
-            .map_err(Into::into);
-
-        timer.stop_and_record();
-
-        response
+            .map_err(Into::into)
     }
 
     async fn handle_epoch(&self, request: EpochRequest) -> Result<EpochResponse, SuiError> {
@@ -488,42 +458,52 @@ pub struct NetworkAuthorityClientMetrics {
     pub handle_checkpoint_request_latency: Histogram,
 }
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+
 impl NetworkAuthorityClientMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
         Self {
             handle_transaction_request_latency: register_histogram_with_registry!(
                 "handle_transaction_request_latency",
                 "Latency of handle transaction request",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),
             handle_certificate_request_latency: register_histogram_with_registry!(
                 "handle_certificate_request_latency",
                 "Latency of handle certificate request",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),
             handle_account_info_request_latency: register_histogram_with_registry!(
                 "handle_account_info_request_latency",
                 "Latency of handle account info request",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),
             handle_object_info_request_latency: register_histogram_with_registry!(
                 "handle_object_info_request_latency",
                 "Latency of handle object info request",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),
             handle_transaction_info_request_latency: register_histogram_with_registry!(
                 "handle_transaction_info_request_latency",
                 "Latency of handle transaction info request",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),
             handle_checkpoint_request_latency: register_histogram_with_registry!(
                 "handle_checkpoint_request_latency",
                 "Latency of handle checkpoint request",
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry
             )
             .unwrap(),

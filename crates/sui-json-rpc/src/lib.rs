@@ -197,6 +197,10 @@ pub struct JsonRpcMetrics {
     errors_by_route: IntCounterVec,
 }
 
+const LATENCY_SEC_BUCKETS: &[f64] = &[
+    0.001, 0.005, 0.01, 0.05, 0.1, 0.25, 0.5, 1., 2.5, 5., 10., 20., 30., 60., 90.,
+];
+
 impl JsonRpcMetrics {
     pub fn new(registry: &prometheus::Registry) -> Self {
         Self {
@@ -211,6 +215,7 @@ impl JsonRpcMetrics {
                 "req_latency_by_route",
                 "Latency of a request by route",
                 &["route"],
+                LATENCY_SEC_BUCKETS.to_vec(),
                 registry,
             )
             .unwrap(),

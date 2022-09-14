@@ -2,55 +2,40 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { describe, it, expect } from 'vitest';
-import { Ed25519PublicKey } from '../../src';
+import { Ed25519PublicKey } from '../../../src';
 
 // Test case generated against CLI:
 // cargo build --bin sui
 // ../sui/target/debug/sui client new-address ed25519
 // ../sui/target/debug/sui keytool list
 let TEST_CASES = new Map<string, string>([
-  ["UdGRWooy48vGTs0HBokIis5NK+DUjiWc9ENUlcfCCBE=", "3415400a4bfdf924aefa55446e5f4cd6e9a9399f"],
-  ["0PTAfQmNiabgbak9U/stWZzKc5nsRqokda2qnV2DTfg=", "2e6dad710b343b8655825bc420783aaa5ade08c2"],
-  ["6L/l0uhGt//9cf6nLQ0+24Uv2qanX/R6tn7lWUJX1Xk=", "607a2403069d547c3fbba4b9e22793c7d78abb1f"],
-  ["6qZ88i8NJjaD+qZety3qXi4pLptGKS3wwO8bfDmUD+Y=", "7a4b0fd76cce17ef014d64ec5e073117bfc0b4de"],
-  ["RgdFhZXGe21x48rhe9X+Kh/WyFCo9ft6e9nQKZYHpi0=", "ecd7ef15f92a26bc8f22a88a7786fe1aae1051c6"],
+  [
+    'UdGRWooy48vGTs0HBokIis5NK+DUjiWc9ENUlcfCCBE=',
+    '3415400a4bfdf924aefa55446e5f4cd6e9a9399f',
+  ],
+  [
+    '0PTAfQmNiabgbak9U/stWZzKc5nsRqokda2qnV2DTfg=',
+    '2e6dad710b343b8655825bc420783aaa5ade08c2',
+  ],
+  [
+    '6L/l0uhGt//9cf6nLQ0+24Uv2qanX/R6tn7lWUJX1Xk=',
+    '607a2403069d547c3fbba4b9e22793c7d78abb1f',
+  ],
+  [
+    '6qZ88i8NJjaD+qZety3qXi4pLptGKS3wwO8bfDmUD+Y=',
+    '7a4b0fd76cce17ef014d64ec5e073117bfc0b4de',
+  ],
+  [
+    'RgdFhZXGe21x48rhe9X+Kh/WyFCo9ft6e9nQKZYHpi0=',
+    'ecd7ef15f92a26bc8f22a88a7786fe1aae1051c6',
+  ],
 ]);
 
 const VALID_KEY_BASE64 = 'Uz39UFseB/B38iBwjesIU1JZxY6y+TRL9P84JFw41W4=';
 
 const BASE64_KEY_BYTES = [
-  180,
-  107,
-  26,
-  32,
-  169,
-  88,
-  248,
-  46,
-  88,
-  100,
-  108,
-  243,
-  255,
-  87,
-  146,
-  92,
-  42,
-  147,
-  104,
-  2,
-  39,
-  200,
-  114,
-  145,
-  37,
-  122,
-  8,
-  37,
-  170,
-  238,
-  164,
-  236,
+  180, 107, 26, 32, 169, 88, 248, 46, 88, 100, 108, 243, 255, 87, 146, 92, 42,
+  147, 104, 2, 39, 200, 114, 145, 37, 122, 8, 37, 170, 238, 164, 236,
 ];
 
 describe('Ed25519PublicKey', () => {
@@ -58,39 +43,8 @@ describe('Ed25519PublicKey', () => {
     // public key length 33 is invalid for Ed25519
     expect(() => {
       new Ed25519PublicKey([
-        3,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
-        0,
+        3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0,
       ]);
     }).toThrow();
 

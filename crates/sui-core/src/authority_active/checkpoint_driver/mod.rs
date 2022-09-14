@@ -10,7 +10,7 @@ use std::{
 
 use parking_lot::Mutex;
 use prometheus::{
-    register_histogram_with_registry, register_int_counter_with_registry,
+    linear_buckets, register_histogram_with_registry, register_int_counter_with_registry,
     register_int_gauge_with_registry, Histogram, IntCounter, IntGauge, Registry,
 };
 use sui_types::{
@@ -122,6 +122,9 @@ impl CheckpointMetrics {
             checkpoint_frequency: register_histogram_with_registry!(
                 "checkpoint_frequency",
                 "Number of seconds elapsed between two consecutive checkpoint certificates",
+                // start from 1 min, increase by 3 min, so [1, 4, ... 58]
+                // safe to unwrap because params are good
+                linear_buckets(60., 180., 20).unwrap(),
                 registry,
             )
             .unwrap(),
