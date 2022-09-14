@@ -53,21 +53,19 @@ pub async fn init_local_authorities(
         let worker_key_pair: AuthorityKeyPair = get_key_pair().1;
         let worker_name = worker_key_pair.public().into();
         let account_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
-        let network_key_pair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
+        let network_key_pair: AuthorityKeyPair = get_key_pair().1;
         let validator_info = ValidatorInfo {
             name: format!("validator-{i}"),
             protocol_key: authority_name,
             worker_key: worker_name,
             account_key: account_key_pair.public(),
-            network_key: network_key_pair.public(),
+            network_key: network_key_pair.public().into(),
             stake: 1,
             delegation: 0,
             gas_price: 1,
             network_address: sui_config::utils::new_network_address(),
-            narwhal_primary_to_primary: sui_config::utils::new_network_address(),
-            narwhal_worker_to_primary: sui_config::utils::new_network_address(),
-            narwhal_primary_to_worker: sui_config::utils::new_network_address(),
-            narwhal_worker_to_worker: sui_config::utils::new_network_address(),
+            narwhal_primary_address: sui_config::utils::new_network_address(),
+            narwhal_worker_address: sui_config::utils::new_network_address(),
             narwhal_consensus_address: sui_config::utils::new_network_address(),
         };
         let pop = generate_proof_of_possession(&key_pair, (&account_key_pair.public()).into());

@@ -263,11 +263,13 @@ impl ValidatorService {
         let consensus_storage_base_path = consensus_config.db_path().to_path_buf();
         let consensus_execution_state = state.clone();
         let consensus_parameters = consensus_config.narwhal_config().to_owned();
+        let network_keypair = config.network_key_pair.copy();
 
         let registry = prometheus_registry.clone();
         tokio::spawn(async move {
             narwhal_node::restarter::NodeRestarter::watch(
                 consensus_keypair,
+                network_keypair,
                 vec![(0, consensus_worker_keypair)],
                 &consensus_committee,
                 consensus_worker_cache,

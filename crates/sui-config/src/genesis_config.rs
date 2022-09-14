@@ -93,14 +93,13 @@ pub struct ValidatorGenesisInfo {
     #[serde_as(as = "KeyPairBase64")]
     pub worker_key_pair: AuthorityKeyPair,
     pub account_key_pair: SuiKeyPair,
-    pub network_key_pair: SuiKeyPair,
+    #[serde_as(as = "KeyPairBase64")]
+    pub network_key_pair: AuthorityKeyPair,
     pub network_address: Multiaddr,
     pub stake: StakeUnit,
     pub gas_price: u64,
-    pub narwhal_primary_to_primary: Multiaddr,
-    pub narwhal_worker_to_primary: Multiaddr,
-    pub narwhal_primary_to_worker: Multiaddr,
-    pub narwhal_worker_to_worker: Multiaddr,
+    pub narwhal_primary_address: Multiaddr,
+    pub narwhal_worker_address: Multiaddr,
     pub narwhal_consensus_address: Multiaddr,
 }
 
@@ -109,7 +108,7 @@ impl ValidatorGenesisInfo {
         key_pair: AuthorityKeyPair,
         worker_key_pair: AuthorityKeyPair,
         account_key_pair: SuiKeyPair,
-        network_key_pair: SuiKeyPair,
+        network_key_pair: AuthorityKeyPair,
     ) -> Self {
         Self {
             key_pair,
@@ -119,10 +118,8 @@ impl ValidatorGenesisInfo {
             network_address: utils::new_network_address(),
             stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
-            narwhal_primary_to_primary: utils::new_network_address(),
-            narwhal_worker_to_primary: utils::new_network_address(),
-            narwhal_primary_to_worker: utils::new_network_address(),
-            narwhal_worker_to_worker: utils::new_network_address(),
+            narwhal_primary_address: utils::new_network_address(),
+            narwhal_worker_address: utils::new_network_address(),
             narwhal_consensus_address: utils::new_network_address(),
         }
     }
@@ -131,7 +128,7 @@ impl ValidatorGenesisInfo {
         key_pair: AuthorityKeyPair,
         worker_key_pair: AuthorityKeyPair,
         account_key_pair: SuiKeyPair,
-        network_key_pair: SuiKeyPair,
+        network_key_pair: AuthorityKeyPair,
         ip: String,
         // Port offset allows running many SuiNodes inside the same simulator node, which is
         // helpful for tests that don't use Swarm.
@@ -150,11 +147,9 @@ impl ValidatorGenesisInfo {
             network_address: make_addr(1000 + port_offset),
             stake: DEFAULT_STAKE,
             gas_price: DEFAULT_GAS_PRICE,
-            narwhal_primary_to_primary: make_addr(2000 + port_offset),
-            narwhal_worker_to_primary: make_addr(3000 + port_offset),
-            narwhal_primary_to_worker: make_addr(4000 + port_offset),
-            narwhal_worker_to_worker: make_addr(5000 + port_offset),
-            narwhal_consensus_address: make_addr(6000 + port_offset),
+            narwhal_primary_address: make_addr(2000 + port_offset),
+            narwhal_worker_address: make_addr(3000 + port_offset),
+            narwhal_consensus_address: make_addr(4000 + port_offset),
         }
     }
 }

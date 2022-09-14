@@ -72,15 +72,13 @@ fn populated_genesis_snapshot_matches() {
         protocol_key: key.public().into(),
         worker_key: worker_key.public().into(),
         account_key: account_key.public().clone().into(),
-        network_key: network_key.public().clone().into(),
+        network_key: network_key.public().into(),
         stake: 1,
         delegation: 0,
         gas_price: 1,
         network_address: Multiaddr::empty(),
-        narwhal_primary_to_primary: Multiaddr::empty(),
-        narwhal_worker_to_primary: Multiaddr::empty(),
-        narwhal_primary_to_worker: Multiaddr::empty(),
-        narwhal_worker_to_worker: Multiaddr::empty(),
+        narwhal_primary_address: Multiaddr::empty(),
+        narwhal_worker_address: Multiaddr::empty(),
         narwhal_consensus_address: Multiaddr::empty(),
     };
     let pop = generate_proof_of_possession(&key, account_key.public().into());
