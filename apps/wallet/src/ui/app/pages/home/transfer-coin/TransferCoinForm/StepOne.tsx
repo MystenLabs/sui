@@ -55,6 +55,7 @@ function StepOne({
                         name="amount"
                         placeholder={`Total ${coinSymbol.toLocaleUpperCase()} to send`}
                         className={st.input}
+                        decimals={true}
                     />
 
                     <ErrorMessage

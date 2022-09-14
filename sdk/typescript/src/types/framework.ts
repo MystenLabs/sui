@@ -23,12 +23,20 @@ export const COIN_MODULE_NAME = 'coin';
 export const COIN_TYPE = `${COIN_PACKAGE_ID}::${COIN_MODULE_NAME}::Coin`;
 export const COIN_SPLIT_VEC_FUNC_NAME = 'split_vec';
 export const COIN_JOIN_FUNC_NAME = 'join';
+export const COIN_DENOMINATIONS: Record<string, number> = {
+  '0x2::sui::SUI': 1e9,
+} as const;
 const COIN_TYPE_ARG_REGEX = /^0x2::coin::Coin<(.+)>$/;
 
 export const SUI_TYPE_ARG = '0x2::sui::SUI';
 
 type ObjectData = ObjectDataFull | SuiObjectInfo;
 type ObjectDataFull = GetObjectDataResponse | SuiMoveObject;
+type NumberFormatOptions = {
+  notation?: 'standard' | 'compact',
+  minimumFractionDigits?: number,
+  maximumFractionDigits?: number,
+};
 
 /**
  * Utility class for 0x2::coin
@@ -165,6 +173,42 @@ export class Coin {
 
   static getZero(): bigint {
     return BigInt(0);
+  }
+
+  // XXX: there are cases where we lose precision so don't use it for calculations
+  // TODO: fix precision loss
+  static getFormatData(
+      balance: bigint,
+      coinArgType: string,
+      mode: 'accurate' | 'loose',
+    ): { value: number, symbol: string, formatOptions: NumberFormatOptions, forcedFormatValue?: string } {
+      const denomination = COIN_DENOMINATIONS[coinArgType] || 1;
+      const adjValue = Number(balance) / denomination;
+      const formatOptions: NumberFormatOptions = {};
+      if (mode === 'accurate') {
+        formatOptions.maximumFractionDigits = 20;
+      }
+      if (mode === 'loose') {
+        if (balance < denomination) {
+          formatOptions.maximumFractionDigits = 8;
+        } else {
+          formatOptions.maximumFractionDigits = 3;
+          formatOptions.notation = 'compact';
+        }
+      }
+    return {
+      value: adjValue,
+      symbol: Coin.getCoinSymbol(coinArgType),
+      formatOptions,
+      forcedFormatValue: mode === 'loose' && adjValue < 1e-8 ? '- -' : undefined,
+    };
+  }
+
+  // XXX: there are cases where we lose precision so don't use it for calculations
+  // TODO: fix precision loss
+  static fromInput(inputValue: string, denomination: number): bigint {
+    const value = parseFloat(inputValue);
+    return BigInt(Math.round(value * denomination));
   }
 
   private static getType(data: ObjectData): string | undefined {

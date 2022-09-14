@@ -9,7 +9,7 @@ import CoinBalance from '_app/shared/coin-balance';
 import { epochSelector, getValidatorSelector } from '_app/staking/selectors';
 import Icon, { SuiIcons } from '_components/icon';
 import { useAppSelector } from '_hooks';
-import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
+import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { suiObjectsAdapterSelectors } from '_redux/slices/sui-objects/index';
 
 import type { RootState } from '_redux/RootReducer';
@@ -59,7 +59,7 @@ function DelegationCard({ className, id }: DelegationCardProps) {
             <div className={st.balance}>
                 <CoinBalance
                     balance={BigInt(delegation?.delegateAmount?.() || 0)}
-                    symbol={GAS_SYMBOL}
+                    coinTypeArg={GAS_TYPE_ARG}
                     className={st.balance}
                 />
             </div>

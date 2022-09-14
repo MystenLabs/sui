@@ -3,14 +3,13 @@
 
 import cl from 'classnames';
 import { memo } from 'react';
-import { useIntl } from 'react-intl';
 import { Link } from 'react-router-dom';
 
+import { useCoinFormat } from '_app/shared/coin-balance/coin-format';
 import Icon, { SuiIcons } from '_components/icon';
 import { formatDate } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
-import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
+import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
@@ -23,8 +22,6 @@ const TRUNCATE_PREFIX_LENGTH = 4;
 const TRUNCATE_MAX_CHAR = 35;
 
 function TransactionCard({ txn }: { txn: TxResultState }) {
-    const intl = useIntl();
-
     const toAddrStr = useMiddleEllipsis(
         txn.to || '',
         TRUNCATE_MAX_LENGTH,
@@ -47,13 +44,26 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
         TRUNCATE_MAX_CHAR - 1
     );
 
-    const coinSymbol = txn.coinSymbol || GAS_SYMBOL;
+    const coinSymbol =
+        txn.coinSymbol && txn.coinSymbol !== GAS_SYMBOL
+            ? txn.coinSymbol
+            : GAS_TYPE_ARG;
 
     // TODO: update to account for bought, minted, swapped, etc
     const transferType =
         txn.kind === 'Call' ? 'Call' : txn.isSender ? 'Sent' : 'Received';
 
-    const amount = txn?.balance || txn?.amount || txn?.txGas || 0;
+    const { balance, amount, txGas } = txn;
+    const balanceOrAmountFmt = useCoinFormat(
+        BigInt(balance || amount || txGas || 0),
+        coinSymbol,
+        'accurate'
+    );
+    const amountFmt = useCoinFormat(
+        BigInt(txn?.amount || txn?.txGas || 0),
+        coinSymbol,
+        'accurate'
+    );
 
     const transferMeta = {
         Call: {
@@ -63,7 +73,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
             address: false,
             icon: SuiIcons.Buy,
             iconClassName: cl(st.arrowActionIcon, st.buyIcon),
-            amount: amount,
+            amount: balanceOrAmountFmt,
         },
         Sent: {
             txName: 'Sent',
@@ -71,7 +81,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
             address: toAddrStr,
             icon: SuiIcons.ArrowLeft,
             iconClassName: cl(st.arrowActionIcon, st.angledArrow),
-            amount: amount,
+            amount: amountFmt,
         },
         Received: {
             txName: 'Received',
@@ -79,7 +89,7 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
             address: fromAddrStr,
             icon: SuiIcons.ArrowLeft,
             iconClassName: cl(st.arrowActionIcon, st.angledArrow, st.received),
-            amount: amount,
+            amount: amountFmt,
         },
     };
 
@@ -133,11 +143,14 @@ function TransactionCard({ txn }: { txn: TxResultState }) {
 
                         <div className={st.txTransferred}>
                             <div className={st.txAmount}>
-                                {intl.formatNumber(
-                                    BigInt(transferMeta[transferType].amount),
-                                    balanceFormatOptions
-                                )}{' '}
-                                <span>{coinSymbol}</span>
+                                {
+                                    transferMeta[transferType].amount[
+                                        'displayBalance'
+                                    ]
+                                }{' '}
+                                <span>
+                                    {transferMeta[transferType].amount.symbol}
+                                </span>
                             </div>
                         </div>
                     </div>

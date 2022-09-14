@@ -21,7 +21,7 @@ import Alert from '_components/alert';
 import Icon, { SuiIcons } from '_components/icon';
 import Loading from '_components/loading';
 import { useAppSelector, useObjectsState } from '_hooks';
-import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
+import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 import st from './StakeHome.module.scss';
 
@@ -52,7 +52,7 @@ function StakeHome() {
                                     <Loading loading={loading}>
                                         <CoinBalance
                                             balance={totalStaked}
-                                            symbol={GAS_SYMBOL}
+                                            coinTypeArg={GAS_TYPE_ARG}
                                             diffSymbol={true}
                                         />
                                     </Loading>
@@ -64,7 +64,7 @@ function StakeHome() {
                                 value={
                                     <CoinBalance
                                         balance={BigInt(0)}
-                                        symbol={GAS_SYMBOL}
+                                        coinTypeArg={GAS_TYPE_ARG}
                                         mode="positive"
                                         diffSymbol={true}
                                         title="This value currently is not available"

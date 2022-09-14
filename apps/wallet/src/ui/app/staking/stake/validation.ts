@@ -1,39 +1,55 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Coin, COIN_DENOMINATIONS } from '@mysten/sui.js';
 import * as Yup from 'yup';
 
+import { coinFormat } from '_app/shared/coin-balance/coin-format';
 import {
     DEFAULT_GAS_BUDGET_FOR_STAKE,
     GAS_TYPE_ARG,
     GAS_SYMBOL,
 } from '_redux/slices/sui-objects/Coin';
 
-import type { FormatNumberOptions, IntlShape } from 'react-intl';
+import type { IntlShape } from 'react-intl';
 
 export function createValidationSchema(
     coinType: string,
     coinBalance: bigint,
-    coinSymbol: string,
     gasBalance: bigint,
     totalGasCoins: number,
-    intl: IntlShape,
-    formatOptions: FormatNumberOptions
+    intl: IntlShape
 ) {
+    const minValue = BigInt(1);
+    const balanceFormatted = coinFormat(
+        intl,
+        coinBalance,
+        coinType,
+        'accurate'
+    ).displayFull;
+    const minFormatted = coinFormat(
+        intl,
+        minValue,
+        coinType,
+        'accurate'
+    ).displayFull;
+    // this should be provided by the input component but for now we only select sui
+    // TODO: get denomination from the input component
+    const denomination =
+        coinType in COIN_DENOMINATIONS ? COIN_DENOMINATIONS[GAS_TYPE_ARG] : 1;
     return Yup.object({
         amount: Yup.number()
-            .integer()
             .required()
+            .transform((_, original) =>
+                Number(Coin.fromInput(original, denomination))
+            )
             .min(
-                1,
-                `\${path} must be greater than or equal to \${min} ${coinSymbol}`
+                Number(minValue),
+                `\${path} must be greater than or equal to ${minFormatted}`
             )
             .test(
                 'max',
-                `\${path} must be less than or equal to ${intl.formatNumber(
-                    coinBalance,
-                    formatOptions
-                )} ${coinSymbol}`,
+                `\${path} must be less than or equal to ${balanceFormatted}`,
                 (amount) =>
                     typeof amount === 'undefined' ||
                     BigInt(amount) <= coinBalance

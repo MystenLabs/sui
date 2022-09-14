@@ -1,6 +1,7 @@
 // Copyright (c) Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Coin as CoinSDK, COIN_DENOMINATIONS } from '@mysten/sui.js';
 import { Formik } from 'formik';
 import { useCallback, useMemo, useState } from 'react';
 import { useIntl } from 'react-intl';
@@ -16,7 +17,6 @@ import {
 } from '_redux/slices/account';
 import { Coin, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 import { StakeTokens } from '_redux/slices/transactions';
-import { balanceFormatOptions } from '_shared/formatting';
 
 import type { SerializedError } from '@reduxjs/toolkit';
 import type { FormikHelpers } from 'formik';
@@ -29,6 +29,8 @@ export type FormValues = typeof initialValues;
 
 function StakePage() {
     const coinType = GAS_TYPE_ARG;
+    // TODO: this should be provided from the input component
+    const coinInputDenomination = COIN_DENOMINATIONS[coinType];
     const balances = useAppSelector(accountItemizedBalancesSelector);
     const aggregateBalances = useAppSelector(accountAggregateBalancesSelector);
     const coinBalance = useMemo(
@@ -54,20 +56,11 @@ function StakePage() {
             createValidationSchema(
                 coinType || '',
                 coinBalance,
-                coinSymbol,
                 gasAggregateBalance,
                 totalGasCoins,
-                intl,
-                balanceFormatOptions
+                intl
             ),
-        [
-            coinType,
-            coinBalance,
-            coinSymbol,
-            gasAggregateBalance,
-            totalGasCoins,
-            intl,
-        ]
+        [coinType, coinBalance, gasAggregateBalance, totalGasCoins, intl]
     );
 
     const dispatch = useAppDispatch();
@@ -84,7 +77,10 @@ function StakePage() {
             try {
                 const response = await dispatch(
                     StakeTokens({
-                        amount: BigInt(amount),
+                        amount: CoinSDK.fromInput(
+                            amount,
+                            coinInputDenomination
+                        ),
                         tokenTypeArg: coinType,
                     })
                 ).unwrap();
@@ -95,7 +91,7 @@ function StakePage() {
                 setSendError((e as SerializedError).message || null);
             }
         },
-        [dispatch, navigate, coinType]
+        [dispatch, navigate, coinType, coinInputDenomination]
     );
     const handleOnClearSubmitError = useCallback(() => {
         setSendError(null);
@@ -120,8 +116,8 @@ function StakePage() {
                 >
                     <StakeForm
                         submitError={sendError}
-                        coinBalance={coinBalance.toString()}
-                        coinSymbol={coinSymbol}
+                        coinBalance={coinBalance}
+                        coinTypeArg={coinType}
                         onClearSubmitError={handleOnClearSubmitError}
                     />
                 </Formik>

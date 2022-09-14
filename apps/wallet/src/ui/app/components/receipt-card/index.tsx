@@ -2,14 +2,18 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import cl from 'classnames';
+import { useMemo } from 'react';
 import { useIntl } from 'react-intl';
 
+import {
+    coinFormat,
+    useCoinFormat,
+} from '_app/shared/coin-balance/coin-format';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
 import { formatDate } from '_helpers';
 import { useMiddleEllipsis } from '_hooks';
-import { GAS_SYMBOL } from '_redux/slices/sui-objects/Coin';
-import { balanceFormatOptions } from '_shared/formatting';
+import { GAS_SYMBOL, GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
 
 import type { TxResultState } from '_redux/slices/txresults';
 
@@ -122,6 +126,44 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
     const statusClassName =
         txDigest.status === 'success' ? st.success : st.failed;
 
+    const {
+        amount: txAmount,
+        txGas,
+        balance: txBalance,
+        coinSymbol: txCoinSymbol,
+    } = txDigest;
+    const txDigestAmountBalanceFormatData = useMemo(
+        () =>
+            txAmount || txBalance
+                ? coinFormat(
+                      intl,
+                      BigInt(txAmount || txBalance || 0),
+                      txCoinSymbol && txCoinSymbol !== GAS_SYMBOL
+                          ? txCoinSymbol
+                          : GAS_TYPE_ARG,
+                      'accurate'
+                  )
+                : null,
+        [txAmount, intl, txBalance, txCoinSymbol]
+    );
+    const gasFormatted = useCoinFormat(
+        BigInt(txGas),
+        GAS_TYPE_ARG,
+        'accurate'
+    ).displayFull;
+    // XXX: same as above this only works when the transferred coin was SUI
+    const totalFormatted = useMemo(
+        () =>
+            txAmount
+                ? coinFormat(
+                      intl,
+                      BigInt(txAmount) + BigInt(txGas),
+                      GAS_TYPE_ARG,
+                      'accurate'
+                  ).displayFull
+                : null,
+        [txAmount, txGas, intl]
+    );
     return (
         <>
             <div className={cl(st.txnResponse, statusClassName)}>
@@ -140,19 +182,18 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                                     ? transferMeta[transferType].txName
                                     : transferMeta[transferType].failedMsg}
                             </div>
-                            {(txDigest.amount || txDigest.balance) && (
+                            {txDigestAmountBalanceFormatData ? (
                                 <div className={st.amount}>
-                                    {intl.formatNumber(
-                                        BigInt(
-                                            txDigest.amount ||
-                                                txDigest.balance ||
-                                                0
-                                        ),
-                                        balanceFormatOptions
-                                    )}
-                                    <span>{txDigest.coinSymbol}</span>
+                                    {
+                                        txDigestAmountBalanceFormatData?.displayBalance
+                                    }
+                                    <span>
+                                        {
+                                            txDigestAmountBalanceFormatData?.symbol
+                                        }
+                                    </span>
                                 </div>
-                            )}
+                            ) : null}
                         </div>
 
                         {assetCard}
@@ -189,23 +230,15 @@ function ReceiptCard({ txDigest }: TxResponseProps) {
                             )}
                         >
                             <div className={st.label}>Gas Fees</div>
-                            <div className={st.value}>
-                                {txDigest.txGas} {GAS_SYMBOL}
-                            </div>
+                            <div className={st.value}>{gasFormatted}</div>
                         </div>
                     )}
 
-                    {txDigest.amount && txDigest.isSender && (
+                    {totalFormatted && txDigest.isSender && (
                         <div className={cl(st.txFees, st.txnItem)}>
                             <div className={st.txInfoLabel}>Total Amount</div>
                             <div className={st.walletInfoValue}>
-                                {intl.formatNumber(
-                                    BigInt(
-                                        txDigest.amount + txDigest.txGas || 0
-                                    ),
-                                    balanceFormatOptions
-                                )}{' '}
-                                {GAS_SYMBOL}
+                                {totalFormatted}
                             </div>
                         </div>
                     )}
