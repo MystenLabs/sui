@@ -83,12 +83,14 @@ function TxStatusType({ content }: { content: TxStatus }) {
     const TxResultStatus =
         content.status === 'success' ? TxStatus.success : TxStatus.fail;
     return (
-        <section
-            className={
-                content.status === 'success' ? styles.success : styles.fail
-            }
-        >
-            <TxResultStatus /> {content.txTypeName}
+        <section className={styles.statuswrapper}>
+            <div
+                className={
+                    content.status === 'success' ? styles.success : styles.fail
+                }
+            >
+                <TxResultStatus /> <div>{content.txTypeName}</div>
+            </div>
         </section>
     );
 }
