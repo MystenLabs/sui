@@ -115,6 +115,7 @@ type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
 
 pub type ReconfigConsensusMessage = (
     ConsensusKeyPair,
+    ConsensusKeyPair,
     ConsensusCommittee,
     Vec<(ConsensusWorkerId, ConsensusKeyPair)>,
     ConsensusWorkerCache,

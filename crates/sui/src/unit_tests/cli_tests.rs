@@ -109,6 +109,7 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let working_dir = temp_dir.path();
     let keypair: AuthorityKeyPair = get_key_pair().1;
     let worker_keypair: AuthorityKeyPair = get_key_pair().1;
+    let network_keypair: AuthorityKeyPair = get_key_pair().1;
     let account_keypair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
 
     let wallet_config = SuiClientConfig {
@@ -120,15 +121,13 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
                 protocol_key: keypair.public().into(),
                 worker_key: worker_keypair.public().into(),
                 account_key: account_keypair.public(),
-                network_key: get_key_pair::<AccountKeyPair>().1.public().clone().into(),
+                network_key: network_keypair.public().into(),
                 stake: 1,
                 delegation: 1,
                 gas_price: 1,
                 network_address: sui_config::utils::new_network_address(),
-                narwhal_primary_to_primary: sui_config::utils::new_network_address(),
-                narwhal_worker_to_primary: sui_config::utils::new_network_address(),
-                narwhal_primary_to_worker: sui_config::utils::new_network_address(),
-                narwhal_worker_to_worker: sui_config::utils::new_network_address(),
+                narwhal_primary_address: sui_config::utils::new_network_address(),
+                narwhal_worker_address: sui_config::utils::new_network_address(),
                 narwhal_consensus_address: sui_config::utils::new_network_address(),
             }],
             ..Default::default()

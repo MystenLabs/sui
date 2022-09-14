@@ -40,8 +40,9 @@ pub struct NodeConfig {
     /// The keypair that the authority uses to receive payments
     #[serde(default = "default_sui_key_pair")]
     pub account_key_pair: Arc<SuiKeyPair>,
-    #[serde(default = "default_sui_key_pair")]
-    pub network_key_pair: Arc<SuiKeyPair>,
+    #[serde(default = "default_key_pair")]
+    #[serde_as(as = "Arc<KeyPairBase64>")]
+    pub network_key_pair: Arc<AuthorityKeyPair>,
     pub db_path: PathBuf,
     #[serde(default = "default_grpc_address")]
     pub network_address: Multiaddr,
@@ -193,17 +194,15 @@ pub struct ValidatorInfo {
     pub account_key: AccountsPublicKey,
     pub protocol_key: AuthorityPublicKeyBytes,
     pub worker_key: AuthorityPublicKeyBytes,
-    pub network_key: AccountsPublicKey,
+    pub network_key: AuthorityPublicKeyBytes,
     pub stake: StakeUnit,
     pub delegation: StakeUnit,
     pub gas_price: u64,
     pub network_address: Multiaddr,
-    pub narwhal_primary_to_primary: Multiaddr,
+    pub narwhal_primary_address: Multiaddr,
 
     //TODO remove all of these as they shouldn't be needed to be encoded in genesis
-    pub narwhal_worker_to_primary: Multiaddr,
-    pub narwhal_primary_to_worker: Multiaddr,
-    pub narwhal_worker_to_worker: Multiaddr,
+    pub narwhal_worker_address: Multiaddr,
     pub narwhal_consensus_address: Multiaddr,
 }
 
@@ -224,8 +223,8 @@ impl ValidatorInfo {
         self.worker_key
     }
 
-    pub fn network_key(&self) -> &AccountsPublicKey {
-        &self.network_key
+    pub fn network_key(&self) -> AuthorityPublicKeyBytes {
+        self.network_key
     }
 
     pub fn account_key(&self) -> &AccountsPublicKey {

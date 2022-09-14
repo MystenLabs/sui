@@ -73,13 +73,14 @@ impl Genesis {
                 // construct narwhal Committee struct.
                 let name = narwhal_crypto::PublicKey::from_bytes(validator.protocol_key().as_ref())
                     .expect("Can't get narwhal public key");
-                let primary = narwhal_config::PrimaryAddresses {
-                    primary_to_primary: validator.narwhal_primary_to_primary.clone(),
-                    worker_to_primary: validator.narwhal_worker_to_primary.clone(),
-                };
+                let network_key =
+                    narwhal_crypto::NetworkPublicKey::from_bytes(validator.network_key().as_ref())
+                        .expect("Can't get narwhal public key");
+                let primary_address = validator.narwhal_primary_address.clone();
                 let authority = narwhal_config::Authority {
                     stake: validator.stake as narwhal_config::Stake, //TODO this should at least be the same size integer
-                    primary,
+                    primary_address,
+                    network_key,
                 };
 
                 (name, authority)
@@ -105,9 +106,8 @@ impl Genesis {
                             .worker_key()
                             .try_into()
                             .expect("Can't get narwhal worker public key"),
-                        primary_to_worker: validator.narwhal_primary_to_worker.clone(),
                         transactions: validator.narwhal_consensus_address.clone(),
-                        worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                        worker_address: validator.narwhal_worker_address.clone(),
                     },
                 )]
                 .into_iter()
@@ -621,21 +621,19 @@ mod test {
         let key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let worker_key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let account_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
-        let network_key: AccountKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
+        let network_key: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
         let validator = ValidatorInfo {
             name: "0".into(),
             protocol_key: key.public().into(),
             worker_key: worker_key.public().into(),
             account_key: account_key.public().clone().into(),
-            network_key: network_key.public().clone().into(),
+            network_key: network_key.public().into(),
             stake: 1,
             delegation: 0,
             gas_price: 1,
             network_address: utils::new_network_address(),
-            narwhal_primary_to_primary: utils::new_network_address(),
-            narwhal_worker_to_primary: utils::new_network_address(),
-            narwhal_primary_to_worker: utils::new_network_address(),
-            narwhal_worker_to_worker: utils::new_network_address(),
+            narwhal_primary_address: utils::new_network_address(),
+            narwhal_worker_address: utils::new_network_address(),
             narwhal_consensus_address: utils::new_network_address(),
         };
         let pop = generate_proof_of_possession(&key, account_key.public().into());

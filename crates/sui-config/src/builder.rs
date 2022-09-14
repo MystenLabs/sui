@@ -123,16 +123,19 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                             get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
                                 .1
                                 .into(),
-                            get_key_pair_from_rng::<AccountKeyPair, _>(&mut rng)
-                                .1
-                                .into(),
+                            get_key_pair_from_rng(&mut rng).1,
                         ),
                     )
                 })
                 .map(
                     |(i, (key_pair, worker_key_pair, account_key_pair, network_key_pair)): (
                         _,
-                        (AuthorityKeyPair, AuthorityKeyPair, SuiKeyPair, SuiKeyPair),
+                        (
+                            AuthorityKeyPair,
+                            AuthorityKeyPair,
+                            SuiKeyPair,
+                            AuthorityKeyPair,
+                        ),
                     )| {
                         self.build_validator(
                             i,
@@ -156,7 +159,7 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         key_pair: AuthorityKeyPair,
         worker_key_pair: AuthorityKeyPair,
         account_key_pair: SuiKeyPair,
-        network_key_pair: SuiKeyPair,
+        network_key_pair: AuthorityKeyPair,
     ) -> ValidatorGenesisInfo {
         match self.validator_ip_sel {
             ValidatorIpSelection::Localhost => ValidatorGenesisInfo::from_localhost_for_testing(
@@ -199,7 +202,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                 let protocol_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
                 let worker_key: AuthorityPublicKeyBytes = validator.worker_key_pair.public().into();
                 let account_key: PublicKey = validator.account_key_pair.public();
-                let network_key: PublicKey = validator.network_key_pair.public();
+                let network_key: AuthorityPublicKeyBytes =
+                    validator.network_key_pair.public().into();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
                 let pop = generate_proof_of_possession(
@@ -218,10 +222,8 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
                         delegation: 0, // no delegation yet at genesis
                         gas_price: validator.gas_price,
                         network_address,
-                        narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
-                        narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
-                        narwhal_primary_to_worker: validator.narwhal_primary_to_worker.clone(),
-                        narwhal_worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                        narwhal_primary_address: validator.narwhal_primary_address.clone(),
+                        narwhal_worker_address: validator.narwhal_worker_address.clone(),
                         narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
                     },
                     pop,

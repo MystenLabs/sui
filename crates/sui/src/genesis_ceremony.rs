@@ -57,13 +57,9 @@ pub enum CeremonyCommand {
         #[clap(long)]
         network_address: Multiaddr,
         #[clap(long)]
-        narwhal_primary_to_primary: Multiaddr,
+        narwhal_primary_address: Multiaddr,
         #[clap(long)]
-        narwhal_worker_to_primary: Multiaddr,
-        #[clap(long)]
-        narwhal_primary_to_worker: Multiaddr,
-        #[clap(long)]
-        narwhal_worker_to_worker: Multiaddr,
+        narwhal_worker_address: Multiaddr,
         #[clap(long)]
         narwhal_consensus_address: Multiaddr,
     },
@@ -108,10 +104,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             account_key_file,
             network_key_file,
             network_address,
-            narwhal_primary_to_primary,
-            narwhal_worker_to_primary,
-            narwhal_primary_to_worker,
-            narwhal_worker_to_worker,
+            narwhal_primary_address,
+            narwhal_worker_address,
             narwhal_consensus_address,
         } => {
             let mut builder = Builder::load(&dir)?;
@@ -119,7 +113,8 @@ pub fn run(cmd: Ceremony) -> Result<()> {
             let worker_keypair: AuthorityKeyPair =
                 read_authority_keypair_from_file(worker_key_file)?;
             let account_keypair: SuiKeyPair = read_keypair_from_file(account_key_file)?;
-            let network_keypair: SuiKeyPair = read_keypair_from_file(network_key_file)?;
+            let network_keypair: AuthorityKeyPair =
+                read_authority_keypair_from_file(network_key_file)?;
             let pop = generate_proof_of_possession(&keypair, (&account_keypair.public()).into());
             builder = builder.add_validator(
                 sui_config::ValidatorInfo {
@@ -127,15 +122,13 @@ pub fn run(cmd: Ceremony) -> Result<()> {
                     protocol_key: keypair.public().into(),
                     worker_key: worker_keypair.public().into(),
                     account_key: account_keypair.public(),
-                    network_key: network_keypair.public(),
+                    network_key: network_keypair.public().into(),
                     stake: 1,
                     delegation: 0,
                     gas_price: 1,
                     network_address,
-                    narwhal_primary_to_primary,
-                    narwhal_worker_to_primary,
-                    narwhal_primary_to_worker,
-                    narwhal_worker_to_worker,
+                    narwhal_primary_address,
+                    narwhal_worker_address,
                     narwhal_consensus_address,
                 },
                 pop,
@@ -286,7 +279,7 @@ mod test {
                 let keypair: AuthorityKeyPair = get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
                 let worker_keypair: AuthorityKeyPair =
                     get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
-                let network_keypair: AccountKeyPair =
+                let network_keypair: AuthorityKeyPair =
                     get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
                 let account_keypair: AccountKeyPair =
                     get_key_pair_from_rng(&mut rand::rngs::OsRng).1;
@@ -295,15 +288,13 @@ mod test {
                     protocol_key: keypair.public().into(),
                     worker_key: worker_keypair.public().into(),
                     account_key: account_keypair.public().clone().into(),
-                    network_key: network_keypair.public().clone().into(),
+                    network_key: network_keypair.public().into(),
                     stake: 1,
                     delegation: 0,
                     gas_price: 1,
                     network_address: utils::new_network_address(),
-                    narwhal_primary_to_primary: utils::new_network_address(),
-                    narwhal_worker_to_primary: utils::new_network_address(),
-                    narwhal_primary_to_worker: utils::new_network_address(),
-                    narwhal_worker_to_worker: utils::new_network_address(),
+                    narwhal_primary_address: utils::new_network_address(),
+                    narwhal_worker_address: utils::new_network_address(),
                     narwhal_consensus_address: utils::new_network_address(),
                 };
                 let key_file = dir.path().join(format!("{}.key", info.name));
@@ -360,10 +351,8 @@ mod test {
                     network_key_file: network_key_file.into(),
                     account_key_file: account_key_file.into(),
                     network_address: validator.network_address().to_owned(),
-                    narwhal_primary_to_primary: validator.narwhal_primary_to_primary.clone(),
-                    narwhal_worker_to_primary: validator.narwhal_worker_to_primary.clone(),
-                    narwhal_primary_to_worker: validator.narwhal_primary_to_worker.clone(),
-                    narwhal_worker_to_worker: validator.narwhal_worker_to_worker.clone(),
+                    narwhal_primary_address: validator.narwhal_primary_address.clone(),
+                    narwhal_worker_address: validator.narwhal_worker_address.clone(),
                     narwhal_consensus_address: validator.narwhal_consensus_address.clone(),
                 },
             };

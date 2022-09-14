@@ -76,11 +76,7 @@ impl NetworkConfig {
                 .1
                 .into(),
         );
-        let network_key_pair: Arc<SuiKeyPair> = Arc::new(
-            get_key_pair_from_rng::<AccountKeyPair, _>(&mut OsRng)
-                .1
-                .into(),
-        );
+        let network_key_pair: Arc<AuthorityKeyPair> = Arc::new(get_key_pair_from_rng(&mut OsRng).1);
         let validator_config = &self.validator_configs[0];
 
         let mut db_path = validator_config.db_path.clone();
