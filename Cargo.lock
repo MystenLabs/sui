@@ -1711,7 +1711,7 @@ version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4eaf86e44e9f0a21f6e42d8e7f83c9ee049f081745eeed1c6f47a613c76e5977"
 dependencies = [
- "libtest-mimic 0.5.2",
+ "libtest-mimic",
  "regex",
  "walkdir",
 ]
@@ -3479,18 +3479,6 @@ dependencies = [
  "cc",
  "pkg-config",
  "vcpkg",
-]
-
-[[package]]
-name = "libtest-mimic"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cc195aab5b803465bf614a5a4765741abce6c8d64e7d8ca57acd2923661fba9f"
-dependencies = [
- "clap 3.2.17",
- "crossbeam-channel",
- "rayon",
- "termcolor",
 ]
 
 [[package]]
@@ -9859,7 +9847,7 @@ dependencies = [
  "libm",
  "librocksdb-sys",
  "libsqlite3-sys",
- "libtest-mimic 0.4.1",
+ "libtest-mimic",
  "libz-sys",
  "linked-hash-map",
  "linux-raw-sys",
