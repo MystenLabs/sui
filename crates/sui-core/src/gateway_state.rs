@@ -653,21 +653,29 @@ where
         );
 
         // Download the latest content of every mutated object from the authorities.
-        let mutated_object_refs: BTreeMap<_, _> = effects
-            .effects
-            .all_mutated()
-            .map(|(obj_ref, _, kind)| (*obj_ref, kind))
-            .collect();
+        let mut mutated_object_kinds = BTreeMap::new();
+        let mut mutated_object_refs = BTreeSet::new();
+        for (obj_ref, _, kind) in effects.effects.all_mutated() {
+            mutated_object_kinds.insert(obj_ref.0, kind);
+            mutated_object_refs.insert(*obj_ref);
+        }
         let mutated_objects = self
             .download_objects_from_authorities(mutated_object_refs)
             .await?;
+        let mutated_objects_with_kind = mutated_objects
+            .into_iter()
+            .map(|(obj_ref, obj)| {
+                let kind = mutated_object_kinds.get(&obj_ref.0).copied().unwrap();
+                (obj_ref, (obj, kind))
+            })
+            .collect();
         let seq = self
             .next_tx_seq_number
             .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         self.store
             .update_gateway_state(
                 input_objects,
-                mutated_objects,
+                mutated_objects_with_kind,
                 new_certificate.clone(),
                 seq,
                 effects.clone().to_unsigned_effects(),
@@ -816,35 +824,25 @@ where
         Ok(result)
     }
 
-    async fn download_objects_from_authorities<T: std::fmt::Debug>(
+    async fn download_objects_from_authorities(
         &self,
-        mut object_refs: BTreeMap<ObjectRef, T>,
-    ) -> Result<BTreeMap<ObjectRef, (Object, T)>, SuiError> {
+        // TODO: HashSet probably works here just fine.
+        object_refs: BTreeSet<ObjectRef>,
+    ) -> Result<BTreeMap<ObjectRef, Object>, SuiError> {
         let mut receiver = self
             .authorities
-            .fetch_objects_from_authorities(object_refs.keys().copied().collect());
+            .fetch_objects_from_authorities(object_refs.clone());
 
         let mut objects = BTreeMap::new();
         while let Some(resp) = receiver.recv().await {
             if let Ok(o) = resp {
                 // TODO: Make fetch_objects_from_authorities also return object ref
                 // to avoid recomputation here.
-                let obj_ref = o.compute_object_reference();
-                let v_opt = object_refs.remove(&obj_ref);
-                fp_ensure!(
-                    v_opt.is_some(),
-                    SuiError::InconsistentGatewayResult {
-                        error: format!(
-                            "Fetched object {:?} that was not present in the queried refs",
-                            obj_ref
-                        )
-                    }
-                );
-                objects.insert(obj_ref, (o, v_opt.unwrap()));
+                objects.insert(o.compute_object_reference(), o);
             }
         }
         fp_ensure!(
-            object_refs.is_empty(),
+            object_refs.len() == objects.len(),
             SuiError::InconsistentGatewayResult {
                 error: "Failed to download some objects after transaction succeeded".to_owned(),
             }
