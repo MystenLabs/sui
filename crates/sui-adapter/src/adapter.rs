@@ -175,7 +175,7 @@ fn execute_internal<
             function,
             type_args,
             args,
-            gas_status.get_move_gas_status(),
+            &mut gas_status.create_move_gas_status(),
         )
         .and_then(|ret| Ok((ret, session.finish()?)))?;
 
@@ -390,7 +390,7 @@ pub fn verify_and_link<
         AccountAddress::from(package_id),
         // TODO: publish_module_bundle() currently doesn't charge gas.
         // Do we want to charge there?
-        gas_status.get_move_gas_status(),
+        &mut gas_status.create_move_gas_status(),
     )?;
 
     // run the Sui verifier

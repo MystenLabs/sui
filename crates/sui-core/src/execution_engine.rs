@@ -124,9 +124,8 @@ fn execute_transaction<S: BackingPackageStore + ParentSync>(
         // once across single tx, we should be able to run them in parallel.
         for single_tx in transaction_data.kind.into_single_transactions() {
             if single_tx.uses_vm() {
-                // Reserve gas for this VM execution
-                // Reserving only done once for the whole batch
-                if let Err(e) = gas_status.reserve_vm_gas() {
+                // Charge gas for this VM execution
+                if let Err(e) = gas_status.charge_vm_gas() {
                     result = Err(e);
                     break;
                 }

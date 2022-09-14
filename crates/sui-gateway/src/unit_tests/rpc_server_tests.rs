@@ -134,7 +134,7 @@ async fn test_move_call() -> Result<(), anyhow::Error> {
             vec![GAS::type_tag().into()],
             json_args,
             Some(gas.object_id),
-            1000,
+            10_000,
         )
         .await?;
 
