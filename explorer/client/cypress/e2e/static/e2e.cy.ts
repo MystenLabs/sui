@@ -9,10 +9,6 @@ const nftObject = (num: number) => `div#ownedObjects > div:nth-child(${num}) a`;
 const ownerButton = 'td#owner > div > div';
 
 // Standardized expectations:
-const expectHome = () => {
-    cy.get(mainBodyCSS).invoke('attr', 'data-testid').should('eq', 'home-page');
-};
-
 const expectErrorResult = () => {
     cy.get(mainBodyCSS).invoke('attr', 'id').should('eq', 'errorResult');
 };
@@ -23,70 +19,10 @@ const searchText = (text: string) => {
 };
 
 describe('End-to-end Tests', () => {
-    describe('The Home Page', () => {
-        it('is the landing page', () => {
-            cy.visit('/');
-            expectHome();
-        });
-
-        it('is the redirect page', () => {
-            cy.visit('/apples');
-            expectHome();
-        });
-
-        it('has a go home button', () => {
-            cy.visit('/objects/CollectionObject');
-            cy.get('#homeBtn').click();
-            expectHome();
-        });
-    });
-
     describe('Wrong Search', () => {
         it('leads to error page', () => {
             cy.visit('/');
             searchText('apples');
-            expectErrorResult();
-        });
-    });
-
-    describe('Object Results', () => {
-        const successObjectID = 'CollectionObject';
-        const problemObjectID = 'ProblemObject';
-
-        it('can be searched', () => {
-            cy.visit('/');
-            searchText(successObjectID);
-            cy.get('#objectID').contains(successObjectID);
-        });
-
-        it('can be reached through URL', () => {
-            cy.visit(`/objects/${successObjectID}`);
-            cy.get('#objectID').contains(successObjectID);
-        });
-
-        it('can have missing data', () => {
-            cy.visit(`/objects/${problemObjectID}`);
-            expectErrorResult();
-        });
-    });
-
-    describe('Address Results', () => {
-        const successAddressID = 'receiverAddress';
-        const noObjectsAddressID = 'senderAddress';
-
-        it('can be searched', () => {
-            cy.visit('/');
-            searchText(successAddressID);
-            cy.get('#addressID').contains(successAddressID);
-        });
-
-        it('can be reached through URL', () => {
-            cy.visit(`/addresses/${successAddressID}`);
-            cy.get('#addressID').contains(successAddressID);
-        });
-
-        it('displays error when no objects', () => {
-            cy.visit(`/objects/${noObjectsAddressID}`);
             expectErrorResult();
         });
     });
@@ -113,14 +49,6 @@ describe('End-to-end Tests', () => {
     });
 
     describe('Owned Objects have links that enable', () => {
-        it('going from address to object and back', () => {
-            cy.visit('/addresses/receiverAddress');
-            cy.get(nftObject(1)).click();
-            cy.get('#objectID').contains('player1');
-            cy.get(ownerButton).click();
-            cy.get('#addressID').contains('receiverAddress');
-        });
-
         it('going from object to child object and back', () => {
             cy.visit('/objects/player2');
             cy.get(nftObject(1)).click();
