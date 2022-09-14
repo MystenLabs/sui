@@ -1,9 +1,9 @@
 [
     {
-        "name": "Capy",
-        "description": "Capy is a simple, yet powerful, web scraping and web automation library for Python. It's designed to be easy to use and to have a small learning curve. It's also designed to be extensible, so you can easily write your own extensions to do things that Capy doesn't support out of the box.",
-        "appLink": "https://sui.io",
-        "image": "",
-        "tags": ["NTFs"]
+        "name": "Mystanlab",
+        "description": "We are designers bringing digital asset ownership to billions of people.",
+        "appLink": "https://mystenlabs.com/",
+        "image": "https://sui.io/img/sui-social.jpg",
+        "tags": ["Dapp"]
     }
 ]

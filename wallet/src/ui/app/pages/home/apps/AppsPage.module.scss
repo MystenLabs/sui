@@ -1,5 +1,10 @@
-.page-title {
-    justify-content: center;
+@use '_utils';
+@use '_values/colors';
+
+.active-section-title {
+    @include utils.typography('table/text-xs');
+
+    text-transform: uppercase;
 }
 
 .container {

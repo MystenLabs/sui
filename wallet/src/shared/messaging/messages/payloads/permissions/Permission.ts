@@ -4,7 +4,9 @@
 import type { PermissionType } from './PermissionType';
 import type { SuiAddress } from '@mysten/sui.js';
 
+//TODO: add description, name, tags
 export interface Permission {
+    name?: string;
     id: string;
     origin: string;
     favIcon: string | undefined;

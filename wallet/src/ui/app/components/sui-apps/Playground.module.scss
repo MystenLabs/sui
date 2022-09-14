@@ -12,6 +12,10 @@
         color: colors.$cta-blue;
         border: 1px solid colors.$sui-steel-blue;
         border-radius: 12px;
+
+        &:visited {
+            color: colors.$cta-blue;
+        }
     }
 
     .cta {
@@ -28,12 +32,13 @@
 }
 
 .angled-arrow {
+    @include utils.angled-arrow;
+
     transform: rotate(-45deg);
     display: inline-block;
     font-weight: 100;
+    margin-left: 10px;
     font-size: 10px;
-    margin-left: 5px;
-    padding: 3px;
     color: colors.$sui-steel-blue;
 }
 
@@ -44,7 +49,7 @@
 .desc {
     @include utils.typography('table/text-sm');
 
-    margin: 25px 0;
+    margin: 15px 0;
     color: colors.$gray-80;
     line-height: 130%;
     font-weight: 400;
@@ -61,4 +66,16 @@
 
 .apps {
     margin-bottom: 80px;
+}
+
+.app-cards {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.active-section-title {
+    @include utils.typography('table/text-xs');
+
+    text-transform: uppercase;
 }
