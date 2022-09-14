@@ -13,11 +13,13 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
         <div id="ownedObjects" className={styles.ownedobjects}>
             {results.map((entryObj, index1) => (
                 <div className={styles.objectbox} key={`object-${index1}`}>
-                    {entryObj.display !== undefined && (
-                        <div className={styles.previewimage}>
+                    <div className={styles.previewimage}>
+                        {entryObj.display !== undefined ? (
                             <DisplayBox display={entryObj.display} />
-                        </div>
-                    )}
+                        ) : (
+                            <div />
+                        )}
+                    </div>
                     <div className={styles.textitem}>
                         {entryObj.name && (
                             <div className={styles.name}>{entryObj.name}</div>
