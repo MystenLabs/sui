@@ -95,6 +95,10 @@ module sui::validator {
             crypto::ed25519_verify_with_domain(proof_of_possession, pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
             0
         );
+        // assert!(
+        //     crypto::bls12381_verify_with_domain(proof_of_possession, pubkey_bytes, signed_bytes, PROOF_OF_POSSESSION_DOMAIN) == true,
+        //     0
+        // );
     }
 
     public(friend) fun new(

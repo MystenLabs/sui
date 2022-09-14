@@ -24,8 +24,8 @@ use sui_json_rpc_types::{GetObjectDataResponse, SuiData, SuiParsedObject, SuiTra
 use sui_sdk::crypto::KeystoreType;
 use sui_sdk::ClientType;
 use sui_types::crypto::{
-    AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature, KeypairTraits, Secp256k1SuiSignature,
-    SignatureScheme, SuiKeyPair, SuiSignatureInner,
+    AccountKeyPair, AuthorityKeyPair, Ed25519SuiSignature, KeypairTraits, NetworkKeyPair,
+    Secp256k1SuiSignature, SignatureScheme, SuiKeyPair, SuiSignatureInner,
 };
 use sui_types::{base_types::ObjectID, crypto::get_key_pair, gas_coin::GasCoin};
 use sui_types::{sui_framework_address_concat_string, SUI_FRAMEWORK_ADDRESS};
@@ -108,8 +108,8 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
     let temp_dir = tempfile::tempdir().unwrap();
     let working_dir = temp_dir.path();
     let keypair: AuthorityKeyPair = get_key_pair().1;
-    let worker_keypair: AuthorityKeyPair = get_key_pair().1;
-    let network_keypair: AuthorityKeyPair = get_key_pair().1;
+    let worker_keypair: NetworkKeyPair = get_key_pair().1;
+    let network_keypair: NetworkKeyPair = get_key_pair().1;
     let account_keypair: SuiKeyPair = get_key_pair::<AccountKeyPair>().1.into();
 
     let wallet_config = SuiClientConfig {
@@ -119,9 +119,9 @@ async fn test_addresses_command() -> Result<(), anyhow::Error> {
             validator_set: vec![ValidatorInfo {
                 name: "0".into(),
                 protocol_key: keypair.public().into(),
-                worker_key: worker_keypair.public().into(),
+                worker_key: worker_keypair.public().clone(),
                 account_key: account_keypair.public(),
-                network_key: network_keypair.public().into(),
+                network_key: network_keypair.public().clone(),
                 stake: 1,
                 delegation: 1,
                 gas_price: 1,

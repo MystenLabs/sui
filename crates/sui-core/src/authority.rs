@@ -17,7 +17,6 @@ use arc_swap::ArcSwap;
 use async_trait::async_trait;
 use bincode::Error;
 use chrono::prelude::*;
-use fastcrypto::ed25519::Ed25519KeyPair as ConsensusKeyPair;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
 use move_core_types::{language_storage::ModuleId, resolver::ModuleResolver};
@@ -52,6 +51,7 @@ use sui_storage::{
     write_ahead_log::{DBTxGuard, TxGuard, WriteAheadLog},
     IndexStore,
 };
+use sui_types::crypto::{AuthorityKeyPair, NetworkKeyPair};
 use sui_types::{
     base_types::*,
     batch::{TxSequenceNumber, UpdateItem},
@@ -99,7 +99,6 @@ pub use authority_store::{
     AuthorityStore, GatewayStore, ResolverWrapper, SuiDataStore, UpdateType,
 };
 use sui_types::committee::EpochId;
-use sui_types::crypto::AuthorityKeyPair;
 use sui_types::messages_checkpoint::{
     CheckpointRequest, CheckpointRequestType, CheckpointResponse, CheckpointSequenceNumber,
 };
@@ -115,10 +114,10 @@ pub(crate) const MAX_TX_RECOVERY_RETRY: u32 = 3;
 type CertTxGuard<'a> = DBTxGuard<'a, CertifiedTransaction>;
 
 pub type ReconfigConsensusMessage = (
-    ConsensusKeyPair,
-    ConsensusKeyPair,
+    AuthorityKeyPair,
+    NetworkKeyPair,
     ConsensusCommittee,
-    Vec<(ConsensusWorkerId, ConsensusKeyPair)>,
+    Vec<(ConsensusWorkerId, NetworkKeyPair)>,
     ConsensusWorkerCache,
 );
 

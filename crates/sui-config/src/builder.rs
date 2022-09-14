@@ -17,7 +17,8 @@ use sui_types::{
     base_types::encode_bytes_hex,
     crypto::{
         generate_proof_of_possession, get_key_pair_from_rng, AccountKeyPair, AuthorityKeyPair,
-        AuthorityPublicKeyBytes, KeypairTraits, PublicKey, SuiKeyPair,
+        AuthorityPublicKeyBytes, KeypairTraits, NetworkKeyPair, NetworkPublicKey, PublicKey,
+        SuiKeyPair,
     },
 };
 
@@ -157,9 +158,9 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
         &self,
         index: usize,
         key_pair: AuthorityKeyPair,
-        worker_key_pair: AuthorityKeyPair,
+        worker_key_pair: NetworkKeyPair,
         account_key_pair: SuiKeyPair,
-        network_key_pair: AuthorityKeyPair,
+        network_key_pair: NetworkKeyPair,
     ) -> ValidatorGenesisInfo {
         match self.validator_ip_sel {
             ValidatorIpSelection::Localhost => ValidatorGenesisInfo::from_localhost_for_testing(
@@ -200,10 +201,9 @@ impl<R: ::rand::RngCore + ::rand::CryptoRng> ConfigBuilder<R> {
             .map(|(i, validator)| {
                 let name = format!("validator-{i}");
                 let protocol_key: AuthorityPublicKeyBytes = validator.key_pair.public().into();
-                let worker_key: AuthorityPublicKeyBytes = validator.worker_key_pair.public().into();
                 let account_key: PublicKey = validator.account_key_pair.public();
-                let network_key: AuthorityPublicKeyBytes =
-                    validator.network_key_pair.public().into();
+                let network_key: NetworkPublicKey = validator.network_key_pair.public().clone();
+                let worker_key: NetworkPublicKey = validator.worker_key_pair.public().clone();
                 let stake = validator.stake;
                 let network_address = validator.network_address.clone();
                 let pop = generate_proof_of_possession(

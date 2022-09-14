@@ -111,6 +111,7 @@ pub enum CheckpointRequestType {
     CheckpointProposal,
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CheckpointResponse {
     AuthenticatedCheckpoint {

@@ -7238,6 +7238,7 @@ dependencies = [
  "clap 3.2.21",
  "colored",
  "executor",
+ "fastcrypto",
  "futures",
  "hex",
  "jemalloc-ctl",
