@@ -3,9 +3,8 @@
     "version": "0.1.0",
     "private": true,
     "scripts": {
-        "dev": "VITE_NETWORK=prod vite --port 3000",
+        "dev": "vite --port 3000",
         "dev:static": "VITE_NETWORK=static vite --port 8080",
-        "dev:local": "VITE_NETWORK=local vite --port 3000",
         "test": "pnpm test:unit && pnpm test:cypress",
         "test:unit": "vitest run",
         "test:cypress": "start-server-and-test dev:static 8080 'cypress run --spec \"cypress/e2e/static/*\"'",

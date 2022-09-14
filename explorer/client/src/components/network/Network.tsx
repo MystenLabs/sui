@@ -6,10 +6,7 @@ import { useCallback, useContext, useState } from 'react';
 import { ReactComponent as DownSVG } from '../../assets/Down.svg';
 import { NetworkContext } from '../../context';
 import { Network, getEndpoint } from '../../utils/api/DefaultRpcClient';
-import {
-    IS_STATIC_ENV,
-    IS_STAGING_ENV,
-} from '../../utils/envUtil';
+import { IS_STATIC_ENV, IS_STAGING_ENV } from '../../utils/envUtil';
 
 import styles from './Network.module.css';
 
