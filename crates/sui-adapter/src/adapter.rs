@@ -1212,6 +1212,7 @@ fn validate_string(bytes: &[u8], idx: LocalIndex, module: &IdentStr) -> Result<(
     Ok(())
 }
 
+/// Check if a given argument is a string (or vector of strings) and, if so, return it
 fn string_arg<'a>(
     param_type: &SignatureToken,
     view: &'a BinaryIndexedView,
@@ -1231,6 +1232,8 @@ fn string_arg<'a>(
     }
 }
 
+// Constructs MoveTypeLayout for a string value (depth argument indicates if the argument is a
+// vector of strings and, if so, of what depth)
 fn string_arg_move_layout(depth: u32) -> MoveTypeLayout {
     if depth == 0 {
         // both structs structs representing strings have one field - a vector of type u8
