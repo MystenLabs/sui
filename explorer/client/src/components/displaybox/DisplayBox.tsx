@@ -3,7 +3,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
-import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/broken-image.svg';
+import { ReactComponent as BrokenImage } from '../../assets/SVGIcons/24px/NFTTypeImage.svg';
 import {
     FALLBACK_IMAGE,
     ImageModClient,

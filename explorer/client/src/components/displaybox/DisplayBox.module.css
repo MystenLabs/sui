@@ -1,5 +1,5 @@
 div.imagebox {
-    @apply h-full w-full flex items-center justify-center;
+    @apply h-full w-full flex items-center justify-center stroke-sui-grey-65;
 }
 
 img.smallimage {
