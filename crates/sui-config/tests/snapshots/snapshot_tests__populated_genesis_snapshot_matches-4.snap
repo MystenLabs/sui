@@ -7,7 +7,6 @@ workers:
     0:
       name: ucbuFjDvPnERRKZI2wa7sihPcnTPvuU//O5QPMGkkgA=
       transactions: ""
-      worker_to_worker: ""
-      primary_to_worker: ""
+      worker_address: ""
 epoch: 0
 
