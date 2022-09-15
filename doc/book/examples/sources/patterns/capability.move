@@ -15,7 +15,7 @@ module examples::item {
 
     /// Module initializer is called once on module publish.
     /// Here we create only one instance of `AdminCap` and send it to the publisher.
-    fun item(ctx: &mut TxContext) {
+    fun init(ctx: &mut TxContext) {
         transfer::transfer(AdminCap {
             id: object::new(ctx)
         }, tx_context::sender(ctx))
