@@ -7,6 +7,7 @@ pub enum Env {
     DevNet,
     Staging,
     Continuous,
+    Testnet,
     CustomRemote,
     NewLocal,
 }
