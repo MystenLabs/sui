@@ -656,6 +656,19 @@ impl Signature {
                 .expect("Message serialization should not fail"),
         )
     }
+
+    // Helper function for Testing only.
+    // #[cfg(test)]
+    pub fn new<T>(value: &T, secret: &dyn signature::Signer<Signature>) -> Signature
+    where
+        T: Serialize,
+    {
+        let intent = Intent::default_with_scope(IntentScope::TransactionData);
+        secret.sign(
+            &bcs::to_bytes(&IntentMessage::new(intent, value))
+                .expect("Message serialization should not fail"),
+        )
+    }
 }
 
 impl AsRef<[u8]> for Signature {

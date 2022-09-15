@@ -572,7 +572,7 @@ impl WalletContext {
                 config_path
             ))
         })?;
-        let keystore = config.keystore.init()?;
+        let keystore = config.keystore.init(&config.chain_id)?;
         let client = config.client_type.init().await?;
 
         let config = config.persisted(config_path);

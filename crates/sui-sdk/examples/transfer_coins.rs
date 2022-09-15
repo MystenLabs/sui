@@ -6,11 +6,11 @@ use sui_sdk::{
     crypto::KeystoreType,
     types::{
         base_types::{ObjectID, SuiAddress},
-        crypto::Signature,
         messages::Transaction,
     },
     SuiClient,
 };
+use sui_types::intent::ChainId;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
@@ -21,7 +21,7 @@ async fn main() -> Result<(), anyhow::Error> {
         None => panic!("Cannot obtain home directory path"),
     };
 
-    let my_address = SuiAddress::from_str("0x47722589dc23d63e82862f7814070002ffaaa465")?;
+    let my_address = SuiAddress::from_str("&0x47722589dc23d63e82862f7814070002ffaaa465")?;
     let gas_object_id = ObjectID::from_str("0x273b2a83f1af1fda3ddbc02ad31367fcb146a814")?;
     let recipient = SuiAddress::from_str("0xbd42a850e81ebb8f80283266951d4f4f5722e301")?;
 
@@ -32,18 +32,17 @@ async fn main() -> Result<(), anyhow::Error> {
         .await?;
 
     // Get signer from keystore
-    let keystore = KeystoreType::File(keystore_path).init()?;
-    let signer = keystore.signer(my_address);
+    let keystore = KeystoreType::File(keystore_path).init(&ChainId::Testing)?;
+    // let signer = keystore.signer(my_address);
 
     // Sign the transaction
-    let signature = Signature::new(&transfer_tx, &signer);
+    let signature = keystore.sign(&my_address, &transfer_tx.to_bytes())?;
 
     // Execute the transaction
     let transaction_response = sui
         .quorum_driver()
         .execute_transaction(Transaction::new(transfer_tx, signature))
         .await?;
-
     println!("{:?}", transaction_response);
 
     Ok(())

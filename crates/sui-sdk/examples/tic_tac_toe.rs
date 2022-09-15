@@ -19,18 +19,18 @@ use sui_sdk::{
     rpc_types::SuiData,
     types::{
         base_types::{ObjectID, SuiAddress},
-        crypto::Signature,
         id::UID,
         messages::Transaction,
     },
     SuiClient,
 };
+use sui_types::intent::ChainId;
 
 #[tokio::main]
 async fn main() -> Result<(), anyhow::Error> {
     let opts: TicTacToeOpts = TicTacToeOpts::parse();
     let keystore_path = opts.keystore_path.unwrap_or_else(default_keystore_path);
-    let keystore = KeystoreType::File(keystore_path).init()?;
+    let keystore = KeystoreType::File(keystore_path).init(&opts.chain_id)?;
 
     let game = TicTacToe {
         game_package_id: opts.game_package_id,
@@ -97,10 +97,12 @@ impl TicTacToe {
             .await?;
 
         // Get signer from keystore
-        let signer = self.keystore.signer(player_x);
+        // let signer = self.keystore.signer(player_x, ChainId::Testing);
 
         // Sign the transaction
-        let signature = Signature::new(&create_game_call, &signer);
+        let signature = self
+            .keystore
+            .sign(&player_x, &create_game_call.to_bytes())?;
 
         // Execute the transaction.
         let response = self
@@ -187,11 +189,14 @@ impl TicTacToe {
                 )
                 .await?;
 
-            // Get signer from keystore
-            let signer = self.keystore.signer(my_identity);
+            // // Get signer from keystore
+            // let signer = self.keystore.signer(my_identity);
 
-            // Sign the transaction
-            let signature = Signature::new(&place_mark_call, &signer);
+            // // Sign the transaction
+            // let signature = Signature::new_secure(&place_mark_call, &signer);
+            let signature = self
+                .keystore
+                .sign(&my_identity, &place_mark_call.to_bytes())?;
 
             // Execute the transaction.
             let response = self
@@ -199,6 +204,18 @@ impl TicTacToe {
                 .quorum_driver()
                 .execute_transaction(Transaction::new(place_mark_call, signature))
                 .await?;
+
+            // match self.keystore.sign(&my_identity, &place_mark_call.to_bytes()) {
+            //     Ok(signature) => {
+            //         // Execute the transaction.
+            //         let response = self
+            //             .client
+            //             .quorum_driver()
+            //             .execute_transaction(Transaction::new(place_mark_call, signature))
+            //             .await?;
+            //     },
+            //     Err(e) => println!("Error signing transfer: {}", e),
+            // }
 
             // Print any execution error.
             let status = response.effects.status;
@@ -275,6 +292,8 @@ struct TicTacToeOpts {
     keystore_path: Option<PathBuf>,
     #[clap(long, default_value = "https://gateway.devnet.sui.io:443")]
     rpc_server_url: String,
+    #[clap(long, default_value = "0")]
+    chain_id: ChainId,
     #[clap(subcommand)]
     subcommand: TicTacToeCommand,
 }

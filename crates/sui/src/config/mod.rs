@@ -7,6 +7,7 @@ use serde_with::serde_as;
 use std::fmt::{Display, Formatter, Write};
 use sui_sdk::crypto::KeystoreType;
 use sui_types::base_types::*;
+use sui_types::intent::ChainId;
 
 pub use sui_config::Config;
 pub use sui_config::PersistedConfig;
@@ -20,6 +21,7 @@ pub struct SuiClientConfig {
     pub keystore: KeystoreType,
     pub client_type: ClientType,
     pub active_address: Option<SuiAddress>,
+    pub chain_id: ChainId,
 }
 
 impl Config for SuiClientConfig {}
@@ -31,7 +33,11 @@ impl Display for SuiClientConfig {
         writeln!(
             writer,
             "Managed addresses : {}",
-            self.keystore.init().unwrap().addresses().len()
+            self.keystore
+                .init(&self.chain_id)
+                .unwrap()
+                .addresses()
+                .len()
         )?;
         write!(writer, "Active address: ")?;
         match self.active_address {
@@ -40,6 +46,7 @@ impl Display for SuiClientConfig {
         };
         writeln!(writer, "{}", self.keystore)?;
         write!(writer, "{}", self.client_type)?;
+        write!(writer, "{:?}", self.chain_id)?;
         write!(f, "{}", writer)
     }
 }

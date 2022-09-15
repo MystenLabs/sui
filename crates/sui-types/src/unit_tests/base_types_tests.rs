@@ -14,6 +14,7 @@ use crate::crypto::{
     get_key_pair_from_bytes, AccountKeyPair, AuthorityKeyPair, AuthoritySignature,
     SuiAuthoritySignature, SuiSignature,
 };
+use crate::intent::{Intent, IntentScope};
 use crate::{
     crypto::{get_key_pair, Signature},
     gas_coin::GasCoin,
@@ -32,11 +33,12 @@ fn test_signatures() {
     let foox = Foo("hellox".into());
     let bar = Bar("hello".into());
 
+    let intent = Intent::default_with_scope(IntentScope::PersonalMessage);
     let s = Signature::new(&foo, &sec1);
-    assert!(s.verify(&foo, addr1).is_ok());
-    assert!(s.verify(&foo, addr2).is_err());
-    assert!(s.verify(&foox, addr1).is_err());
-    assert!(s.verify(&bar, addr1).is_err());
+    assert!(s.verify_secure(&foo, intent, addr1).is_ok());
+    assert!(s.verify_secure(&foo, intent, addr2).is_err());
+    assert!(s.verify_secure(&foox, intent, addr1).is_err());
+    assert!(s.verify_secure(&bar, intent, addr1).is_err());
 }
 
 #[test]
