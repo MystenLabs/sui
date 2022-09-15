@@ -27,7 +27,11 @@ use crate::types::{
 use crate::ErrorType::UnsupportedOperation;
 use crate::{Error, ErrorType, SUI};
 
-#[derive(Deserialize, Serialize, Clone)]
+#[cfg(test)]
+#[path = "unit_tests/operations_tests.rs"]
+mod operations_tests;
+
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Operation {
     pub operation_identifier: OperationIdentifier,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -300,7 +304,6 @@ fn parse_operations(
             operations.extend(coin_change_operations);
         }
     }
-
     Ok(operations)
 }
 

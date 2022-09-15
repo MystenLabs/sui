@@ -1,4 +1,4 @@
-FROM rust:1.62.0 AS chef
+FROM rust:1.64.0 AS chef
 WORKDIR sui
 ARG GIT_REVISION
 ENV GIT_REVISION=$GIT_REVISION
@@ -40,7 +40,7 @@ COPY crates crates
 RUN cargo build --release --bin sui --bin sui-rosetta
 
 # Production Image
-FROM debian:bullseye-slim AS runtime
+FROM ubuntu:latest AS runtime
 WORKDIR sui
 COPY --from=builder /sui/target/release/sui /usr/local/bin
 COPY --from=builder /sui/target/release/sui-rosetta /usr/local/bin

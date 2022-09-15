@@ -62,11 +62,11 @@ impl SuiEnv {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct AccountIdentifier {
     pub address: SuiAddress,
 }
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Currency {
     pub symbol: String,
     pub decimals: u64,
@@ -114,13 +114,13 @@ impl TryFrom<&[u8]> for BlockHash {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Amount {
     pub value: SignedValue,
     pub currency: Currency,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Debug)]
 pub struct SignedValue {
     negative: bool,
     value: u64,
@@ -242,12 +242,12 @@ pub struct Coin {
     pub amount: Amount,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct CoinIdentifier {
     pub identifier: CoinID,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct CoinID {
     pub id: ObjectID,
     pub version: SequenceNumber,
@@ -398,20 +398,20 @@ pub enum OperationType {
     Genesis,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct OperationIdentifier {
     pub index: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub network_index: Option<u64>,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CoinChange {
     pub coin_identifier: CoinIdentifier,
     pub coin_action: CoinAction,
 }
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 #[serde(rename_all = "snake_case")]
 pub enum CoinAction {
     CoinCreated,
@@ -668,7 +668,7 @@ pub struct Allow {
     pub transaction_hash_case: Option<Case>,
 }
 
-#[derive(Copy, Clone, Deserialize, Serialize)]
+#[derive(Copy, Clone, Deserialize, Serialize, Debug)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum OperationStatus {
     Success,

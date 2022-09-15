@@ -303,6 +303,9 @@ impl PublicKey {
             SignatureScheme::Secp256k1 => {
                 PublicKey::Secp256k1KeyPair(Secp256k1PublicKey::from_bytes(key_bytes)?)
             }
+            SignatureScheme::BLS12381 => {
+                return Err(eyre::Report::msg(format!("Unsupported scheme {curve:?}.")))
+            }
         })
     }
     pub fn scheme(&self) -> SignatureScheme {
