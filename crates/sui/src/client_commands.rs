@@ -21,16 +21,16 @@ use tracing::info;
 
 use sui_framework::build_move_package_to_bytes;
 use sui_json::SuiJsonValue;
-use sui_json_rpc_types::SuiData;
 use sui_json_rpc_types::{
     GetObjectDataResponse, SuiExecuteTransactionResponse, SuiObjectInfo, SuiParsedObject,
     SuiTransactionResponse,
 };
+use sui_json_rpc_types::{GetRawObjectDataResponse, SuiData, SuiObjectRead, SuiRawData};
 use sui_json_rpc_types::{SuiCertifiedTransaction, SuiExecutionStatus, SuiTransactionEffects};
 use sui_sdk::crypto::SuiKeystore;
 use sui_sdk::{ClientType, SuiClient};
-use sui_types::crypto::SignatureScheme;
 use sui_types::sui_serde::{Base64, Encoding};
+use sui_types::{base_types::ObjectRef, crypto::SignatureScheme};
 use sui_types::{
     base_types::{ObjectID, SuiAddress},
     gas_coin::GasCoin,
@@ -610,6 +610,14 @@ impl WalletContext {
         );
 
         Ok(self.config.active_address.unwrap())
+    }
+
+    /// Get the latest object reference given a object id
+    pub async fn get_object_ref(
+        &self,
+        object_id: ObjectID,
+    ) -> Result<GetRawObjectDataResponse, anyhow::Error> {
+        self.client.read_api().get_object(object_id).await
     }
 
     /// Get all the gas objects (and conveniently, gas amounts) for the address
