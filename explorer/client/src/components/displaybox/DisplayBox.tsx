@@ -12,11 +12,12 @@ import { transformURL, genFileTypeMsg } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
-function ShowBrokenImage() {
+function ShowBrokenImage({ onClick }: { onClick?: () => void }) {
     return (
         <div
             className={`${styles.imagebox} ${styles.brokenimage}`}
             id="noImage"
+            onClick={onClick}
         >
             <div>
                 <BrokenImage />
@@ -224,7 +225,9 @@ function DisplayBoxWString({
                             Image Loading...
                         </div>
                     )}
-                    {hasFailedToLoad && <ShowBrokenImage />}
+                    {hasFailedToLoad && (
+                        <ShowBrokenImage onClick={handleImageClick} />
+                    )}
                     {!hasFailedToLoad && (
                         <img
                             id="loadedImage"
