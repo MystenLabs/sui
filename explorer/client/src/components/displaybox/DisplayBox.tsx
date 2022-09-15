@@ -178,12 +178,16 @@ function DisplayBoxWString({
                         <div className={styles.modal}>
                             <figure className={styles.fig}>
                                 <div className={styles.imageandcross}>
-                                    <img
-                                        id="loadedImage"
-                                        className={styles.largeimage}
-                                        alt="NFT"
-                                        src={transformURL(display)}
-                                    />
+                                    {hasFailedToLoad ? (
+                                        <ShowBrokenImage />
+                                    ) : (
+                                        <img
+                                            id="loadedImage"
+                                            className={styles.largeimage}
+                                            alt="NFT"
+                                            src={transformURL(display)}
+                                        />
+                                    )}
                                     <span className={styles.desktopcross}>
                                         <span className={styles.cross}>
                                             &times;
