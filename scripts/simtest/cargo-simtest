@@ -52,7 +52,7 @@ fi
 cargo ${CARGO_COMMAND[@]} \
   --config 'build.rustflags = ["--cfg", "msim"]' \
   --config 'patch.crates-io.tokio.git = "https://github.com/MystenLabs/mysten-sim.git"' \
-  --config 'patch.crates-io.tokio.rev = "bccf26947cc8a22cc69526f1720edde6e55a7d8c"' \
+  --config 'patch.crates-io.tokio.rev = "39ce01e1c8433d1557d95b3bb1f2cf4e4ebebc14"' \
   --config 'patch.crates-io.hyper.git = "https://github.com/mystenmark/hyper-madsim-fork.git"' \
   --config 'patch.crates-io.hyper.rev = "2b2eca1e983376294c84c93385ebe848ccf9a99f"' \
   "$@"
