@@ -57,6 +57,7 @@ test_utils = { path = "../test_utils" }
 [features]
 benchmark = ["worker/benchmark", "primary/benchmark", "consensus/benchmark"]
 dhat-heap = ["dhat"]    # if you are doing heap profiling
+trace_transaction = ["worker/trace_transaction"]
 
 [[bin]]
 name = "benchmark_client"
