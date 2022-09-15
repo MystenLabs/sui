@@ -8,7 +8,10 @@ use crate::authority::authority_tests::{
     TestCallArg,
 };
 
-use move_core_types::{language_storage::TypeTag, value::MoveValue};
+use move_core_types::{
+    language_storage::TypeTag,
+    value::{MoveStruct, MoveValue},
+};
 use move_package::BuildConfig;
 use sui_types::{
     crypto::{get_key_pair, AccountKeyPair, Signature},
@@ -935,13 +938,13 @@ async fn test_entry_point_string() {
 
     // pass a valid ascii string
     let ascii_str = "SomeString";
-    let ascii_str_bcs = MoveValue::Vector(
+    let ascii_str_bcs = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
         ascii_str
             .as_bytes()
             .iter()
             .map(|c| MoveValue::U8(*c))
             .collect(),
-    )
+    )]))
     .simple_serialize()
     .unwrap();
 
@@ -966,13 +969,13 @@ async fn test_entry_point_string() {
 
     // pass a valid utf8 string
     let utf8_str = "çå∞≠¢õß∂ƒ∫";
-    let utf_str_bcs = MoveValue::Vector(
+    let utf_str_bcs = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
         utf8_str
             .as_bytes()
             .iter()
             .map(|c| MoveValue::U8(*c))
             .collect(),
-    )
+    )]))
     .simple_serialize()
     .unwrap();
 
@@ -1015,20 +1018,20 @@ async fn test_entry_point_string_vec() {
     let utf8_str_1 = "çå∞≠¢";
     let utf8_str_2 = "õß∂ƒ∫";
     let utf_str_vec_bcs = MoveValue::Vector(vec![
-        MoveValue::Vector(
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
             utf8_str_1
                 .as_bytes()
                 .iter()
                 .map(|c| MoveValue::U8(*c))
                 .collect(),
-        ),
-        MoveValue::Vector(
+        )])),
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
             utf8_str_2
                 .as_bytes()
                 .iter()
                 .map(|c| MoveValue::U8(*c))
                 .collect(),
-        ),
+        )])),
     ])
     .simple_serialize()
     .unwrap();
@@ -1078,7 +1081,10 @@ async fn test_entry_point_string_error() {
     // mess up one element
     ascii_u8_vec[7] = MoveValue::U8(255);
 
-    let ascii_str_bcs = MoveValue::Vector(ascii_u8_vec).simple_serialize().unwrap();
+    let ascii_str_bcs =
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(ascii_u8_vec)]))
+            .simple_serialize()
+            .unwrap();
 
     let effects = call_move(
         &authority,
@@ -1109,7 +1115,9 @@ async fn test_entry_point_string_error() {
     // mess up one element
     utf8_u8_vec[7] = MoveValue::U8(255);
 
-    let utf8_str_bcs = MoveValue::Vector(utf8_u8_vec).simple_serialize().unwrap();
+    let utf8_str_bcs = MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(utf8_u8_vec)]))
+        .simple_serialize()
+        .unwrap();
 
     let effects = call_move(
         &authority,
@@ -1157,14 +1165,14 @@ async fn test_entry_point_string_vec_error() {
     // mess up one element
     utf8_u8_vec_1[7] = MoveValue::U8(255);
     let utf_str_vec_bcs = MoveValue::Vector(vec![
-        MoveValue::Vector(utf8_u8_vec_1),
-        MoveValue::Vector(
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(utf8_u8_vec_1)])),
+        MoveValue::Struct(MoveStruct::Runtime(vec![MoveValue::Vector(
             utf8_str_2
                 .as_bytes()
                 .iter()
                 .map(|c| MoveValue::U8(*c))
                 .collect(),
-        ),
+        )])),
     ])
     .simple_serialize()
     .unwrap();
