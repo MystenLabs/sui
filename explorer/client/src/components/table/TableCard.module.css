@@ -69,5 +69,14 @@ td:nth-child(1) {
 }
 
 .fail svg {
-    @apply stroke-issue-dark;
+    @apply fill-issue-dark;
+}
+
+.statuswrapper {
+    @apply flex flex-col justify-center items-start;
+}
+
+.success,
+.fail {
+    @apply flex items-center gap-[6px] justify-center;
 }
