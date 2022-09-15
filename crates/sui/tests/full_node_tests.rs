@@ -724,8 +724,10 @@ async fn test_full_node_event_read_api_ok() -> Result<(), anyhow::Error> {
 
 #[sui_test]
 async fn test_full_node_quorum_driver_basic() -> Result<(), anyhow::Error> {
-    let (swarm, mut context, _address) = setup_network_and_wallet().await?;
-    let (node, _jsonrpc_client, _) = set_up_jsonrpc(&swarm, None).await?;
+    let (swarm, mut context, _address) = setup_network_and_wallet().await.unwrap();
+    let config = swarm.config().generate_fullnode_config();
+    let node = SuiNode::start(&config, Registry::new()).await?;
+
     let quorum_driver = node
         .quorum_driver()
         .expect("Fullnode should have quorum driver toggled on.");
