@@ -567,7 +567,6 @@ impl Core {
                                 Ok(()) => self.process_header(&header).await,
                                 error => error
                             }
-
                         },
                         PrimaryMessage::Vote(vote) => {
                             match self.sanitize_vote(&vote) {

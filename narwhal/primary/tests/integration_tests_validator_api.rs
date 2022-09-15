@@ -865,6 +865,7 @@ async fn test_get_collections_with_missing_certificates() {
     let parameters = Parameters {
         batch_size: 200, // Two transactions.
         block_synchronizer: BlockSynchronizerParameters {
+            range_synchronize_timeout: Duration::from_secs(10),
             certificates_synchronize_timeout: Duration::from_secs(1),
             payload_synchronize_timeout: Duration::from_secs(1),
             payload_availability_timeout: Duration::from_secs(1),

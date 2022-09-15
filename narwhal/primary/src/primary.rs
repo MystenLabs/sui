@@ -4,7 +4,9 @@
 use crate::{
     block_remover::DeleteBatchResult,
     block_synchronizer::{
-        handler::BlockSynchronizerHandler, responses::AvailabilityResponse, BlockSynchronizer,
+        handler::BlockSynchronizerHandler,
+        responses::{AvailabilityResponse, CertificateDigestsResponse},
+        BlockSynchronizer,
     },
     block_waiter::{BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
@@ -332,7 +334,7 @@ impl Primary {
             block_synchronizer_network,
             payload_store.clone(),
             certificate_store.clone(),
-            parameters.block_synchronizer,
+            parameters.clone(),
         );
 
         // Whenever the `Synchronizer` does not manage to validate a header due to missing parent certificates of
@@ -481,6 +483,19 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 .send(message)
                 .await
                 .map_err(|_| DagError::ShuttingDown),
+            PrimaryMessage::CertificatesRangeResponse {
+                certificate_ids,
+                from,
+            } => self
+                .tx_availability_responses
+                .send(AvailabilityResponse::CertificateDigest(
+                    CertificateDigestsResponse {
+                        certificate_ids,
+                        from,
+                    },
+                ))
+                .await
+                .map_err(|_| DagError::ShuttingDown),
             PrimaryMessage::CertificatesBatchRequest { .. } => self
                 .tx_helper_requests
                 .send(message)
@@ -489,8 +504,8 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
             PrimaryMessage::CertificatesBatchResponse { certificates, from } => self
                 .tx_availability_responses
                 .send(AvailabilityResponse::Certificate(CertificatesResponse {
-                    certificates: certificates.to_vec(),
-                    from: from.clone(),
+                    certificates,
+                    from,
                 }))
                 .await
                 .map_err(|_| DagError::ShuttingDown),

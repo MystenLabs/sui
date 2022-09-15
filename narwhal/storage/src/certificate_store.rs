@@ -284,6 +284,21 @@ impl CertificateStore {
         Ok(certificates)
     }
 
+    /// Retrieves the latest round number of certificates in store.
+    /// Returns None if there is no certificate.
+    pub fn last_round_number(&self) -> Option<Round> {
+        if let Some(((last_round_num, _), _)) = self
+            .certificate_ids_by_round
+            .iter()
+            .skip_to_last()
+            .reverse()
+            .next()
+        {
+            return Some(last_round_num);
+        }
+        None
+    }
+
     /// Clears both the main storage of the certificates and the secondary index
     pub fn clear(&self) -> StoreResult<()> {
         self.certificates_by_id.clear()?;
@@ -413,13 +428,28 @@ mod test {
 
         // WHEN
         let result = store.last_round().unwrap();
+        let last_round = store.last_round_number().unwrap();
 
         // THEN
         assert_eq!(result.len(), 4);
-
+        assert_eq!(last_round, 50);
         for certificate in result {
-            assert_eq!(certificate.round(), 50);
+            assert_eq!(certificate.round(), last_round);
         }
+    }
+
+    #[tokio::test]
+    async fn test_last_round_in_empty_store() {
+        // GIVEN
+        let store = new_store(temp_dir());
+
+        // WHEN
+        let result = store.last_round().unwrap();
+        let last_round = store.last_round_number();
+
+        // THEN
+        assert!(result.is_empty());
+        assert!(last_round.is_none());
     }
 
     #[tokio::test]

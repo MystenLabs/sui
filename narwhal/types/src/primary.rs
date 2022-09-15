@@ -659,6 +659,23 @@ pub enum PrimaryMessage {
         from: PublicKey,
     },
 
+    CertificatesRangeRequest {
+        // Requests certificate digests with rounds >= `range_start` to be sent back.
+        // No upper range limit is specified, because the requestor does not know the
+        // current upper limit. The response size should still be acceptable if all
+        // certificate digests from an authority are returned: e.g. a response can be
+        // 32B / digest * 200 authorities * 50 rounds ~ 320KB
+        range_start: Round,
+        // Maximum number of rounds that should be contained in each reply.
+        max_rounds: u64,
+        requestor: PublicKey,
+    },
+    CertificatesRangeResponse {
+        // Certificate digests, grouped by round numbers.
+        certificate_ids: BTreeMap<Round, Vec<CertificateDigest>>,
+        from: PublicKey,
+    },
+
     PayloadAvailabilityRequest {
         certificate_ids: Vec<CertificateDigest>,
         requestor: PublicKey,

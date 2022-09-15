@@ -171,6 +171,7 @@ fn parameters_import_snapshot_matches() {
          "batch_size": 500000,
          "max_batch_delay": "100ms",
          "block_synchronizer": {
+             "range_synchronize_timeout": "30s",
              "certificates_synchronize_timeout": "2s",
              "payload_synchronize_timeout": "3_000ms",
              "payload_availability_timeout": "4_000ms"

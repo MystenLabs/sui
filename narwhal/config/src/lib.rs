@@ -182,6 +182,12 @@ impl Default for ConsensusAPIGrpcParameters {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(default)]
 pub struct BlockSynchronizerParameters {
+    /// The timeout configuration for synchronizing certificate digests from a starting round.
+    #[serde(
+        with = "duration_format",
+        default = "BlockSynchronizerParameters::default_range_synchronize_timeout"
+    )]
+    pub range_synchronize_timeout: Duration,
     /// The timeout configuration when requesting certificates from peers.
     #[serde(
         with = "duration_format",
@@ -216,6 +222,9 @@ pub struct BlockSynchronizerParameters {
 }
 
 impl BlockSynchronizerParameters {
+    fn default_range_synchronize_timeout() -> Duration {
+        Duration::from_secs(30)
+    }
     fn default_certificates_synchronize_timeout() -> Duration {
         Duration::from_secs(30)
     }
@@ -233,6 +242,8 @@ impl BlockSynchronizerParameters {
 impl Default for BlockSynchronizerParameters {
     fn default() -> Self {
         Self {
+            range_synchronize_timeout:
+                BlockSynchronizerParameters::default_range_synchronize_timeout(),
             certificates_synchronize_timeout:
                 BlockSynchronizerParameters::default_certificates_synchronize_timeout(),
             payload_synchronize_timeout:
@@ -280,6 +291,10 @@ impl Parameters {
         info!(
             "Max batch delay set to {} ms",
             self.max_batch_delay.as_millis()
+        );
+        info!(
+            "Synchronize range timeout set to {} s",
+            self.block_synchronizer.range_synchronize_timeout.as_secs()
         );
         info!(
             "Synchronize certificates timeout set to {} s",

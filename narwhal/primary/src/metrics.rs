@@ -63,7 +63,7 @@ pub struct PrimaryChannelMetrics {
     pub tx_sync_certificates: IntGauge,
     /// occupancy of the channel from the `primary::HeaderWaiter` to the `primary::Core`
     pub tx_headers_loopback: IntGauge,
-    /// occupancy of the channel from the `primary::CertificateWaiter` to the `primary::Core`    
+    /// occupancy of the channel from the `primary::CertificateWaiter` to the `primary::Core`
     pub tx_certificates_loopback: IntGauge,
     /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::Core`
     pub tx_primary_messages: IntGauge,

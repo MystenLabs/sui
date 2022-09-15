@@ -32,6 +32,7 @@ def local(ctx, debug=True):
         'batch_size': 500_000,  # bytes
         'max_batch_delay': '200ms',  # ms,
         'block_synchronizer': {
+            'range_synchronize_timeout': '30_000ms',
             'certificates_synchronize_timeout': '2_000ms',
             'payload_synchronize_timeout': '2_000ms',
             'payload_availability_timeout': '2_000ms',
@@ -69,6 +70,7 @@ def demo(ctx, debug=True):
     node_params = {
         "batch_size": 500000,
         "block_synchronizer": {
+            'range_synchronize_timeout': '30_000ms',
             "certificates_synchronize_timeout": "2_000ms",
             "handler_certificate_deliver_timeout": "2_000ms",
             "payload_availability_timeout": "2_000ms",
@@ -194,6 +196,7 @@ def remote(ctx, debug=False):
         'batch_size': 500_000,  # bytes
         'max_batch_delay': '200ms',  # ms,
         'block_synchronizer': {
+            'range_synchronize_timeout': '30_000ms',
             'certificates_synchronize_timeout': '2_000ms',
             'payload_synchronize_timeout': '2_000ms',
             'payload_availability_timeout': '2_000ms',
