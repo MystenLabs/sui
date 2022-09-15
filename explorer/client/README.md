@@ -14,7 +14,7 @@ $ pnpm install
 
 # How to Switch Environment
 
-By default, the Sui Explorer will attempt to connect to a locally running RPC server. Refer to [Local RPC Server & JSON-RPC API Quick Start](../../doc/src/build/json-rpc.md) on setting up a Local RPC Server.
+By default, the Sui Explorer attempts to connect to a local RPC server. For more information about using a  local RPC server, see [Local RPC Server & JSON-RPC API Quick Start](../../doc/src/build/json-rpc.md).
 
 If you want to use the explorer with another network, you can select your preferred network in the header of the explorer.
 
