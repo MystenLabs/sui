@@ -12,7 +12,43 @@ import { transformURL, genFileTypeMsg } from '../../utils/stringUtils';
 
 import styles from './DisplayBox.module.css';
 
+function ShowBrokenImage() {
+    return (
+        <div
+            className={`${styles.imagebox} ${styles.brokenimage}`}
+            id="noImage"
+        >
+            <div>
+                <BrokenImage />
+            </div>
+        </div>
+    );
+}
+
 function DisplayBox({
+    display,
+    caption,
+    fileInfo,
+    modalImage,
+}: {
+    display: string | undefined;
+    caption?: string;
+    fileInfo?: string;
+    modalImage?: [boolean, (hasClickedImage: boolean) => void];
+}) {
+    if (!display) return <ShowBrokenImage />;
+
+    return (
+        <DisplayBoxWString
+            display={display}
+            caption={caption}
+            fileInfo={fileInfo}
+            modalImage={modalImage}
+        />
+    );
+}
+
+function DisplayBoxWString({
     display,
     caption,
     fileInfo,
@@ -184,11 +220,7 @@ function DisplayBox({
                             Image Loading...
                         </div>
                     )}
-                    {hasFailedToLoad && (
-                        <div className={styles.imagebox} id="noImage">
-                            <BrokenImage />
-                        </div>
-                    )}
+                    {hasFailedToLoad && <ShowBrokenImage />}
                     {!hasFailedToLoad && (
                         <img
                             id="loadedImage"

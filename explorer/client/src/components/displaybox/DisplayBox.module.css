@@ -1,5 +1,5 @@
 div.imagebox {
-    @apply h-full w-full flex items-center justify-center stroke-sui-grey-65;
+    @apply h-full w-full flex items-center justify-center;
 }
 
 img.smallimage {
@@ -88,4 +88,8 @@ div.detailsbg {
     padding: 1rem !important;
     margin-top: 2rem;
     word-wrap: normal;
+}
+
+.brokenimage {
+    @apply stroke-sui-grey-65 bg-sui-grey-45 rounded-[6px];
 }

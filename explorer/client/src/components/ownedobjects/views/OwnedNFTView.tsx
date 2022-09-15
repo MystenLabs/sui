@@ -1,7 +1,6 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { ReactComponent as BrokenImage } from '../../../assets/SVGIcons/24px/NFTTypeImage.svg';
 import { trimStdLibPrefix, alttextgen } from '../../../utils/stringUtils';
 import DisplayBox from '../../displaybox/DisplayBox';
 import Longtext from '../../longtext/Longtext';
@@ -15,13 +14,7 @@ export default function OwnedNFTView({ results }: { results: DataType }) {
             {results.map((entryObj, index1) => (
                 <div className={styles.objectbox} key={`object-${index1}`}>
                     <div className={styles.previewimage}>
-                        {entryObj.display !== undefined ? (
-                            <DisplayBox display={entryObj.display} />
-                        ) : (
-                            <div className={styles.brokenimage}>
-                                <BrokenImage />
-                            </div>
-                        )}
+                        <DisplayBox display={entryObj.display} />
                     </div>
                     <div className={styles.textitem}>
                         {entryObj.name && (
