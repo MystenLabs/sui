@@ -15,7 +15,6 @@ use crate::{
 };
 use arc_swap::ArcSwap;
 use async_trait::async_trait;
-use bincode::Error;
 use chrono::prelude::*;
 use fastcrypto::traits::KeyPair;
 use move_bytecode_utils::module_cache::SyncModuleCache;
@@ -2034,10 +2033,6 @@ impl ExecutionState for AuthorityState {
                 Ok(Vec::default())
             }
         }
-    }
-
-    fn deserialize(bytes: &[u8]) -> Result<Self::Transaction, Error> {
-        bincode::deserialize(bytes)
     }
 
     fn ask_consensus_write_lock(&self) -> bool {
