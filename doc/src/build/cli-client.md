@@ -252,7 +252,7 @@ $ sui console --client.config /path/to/client/config/file
 ```
 
 Within the console, running a command such as `addresses` returns the output of
-`sui client addresses`, for the currently defined client configuration. This is
+`sui client addresses` for the currently defined client configuration. This is
 particularly helpful if you have a custom config directory.
 
 The Sui interactive client console supports the following shell functionality:
