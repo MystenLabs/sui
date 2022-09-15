@@ -1,8 +1,13 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
+import { Route, Routes } from 'react-router-dom';
+
 import { Content } from '_app/shared/bottom-menu-layout';
-import AppsPlayGround, { AppFiltersPortal } from '_components/sui-apps';
+import AppsPlayGround, {
+    ConnectedAppsCard,
+    AppFiltersPortal,
+} from '_components/sui-apps';
 
 import st from './AppsPage.module.scss';
 
@@ -12,7 +17,13 @@ function AppsPage() {
             <Content>
                 <section>
                     <AppFiltersPortal />
-                    <AppsPlayGround />
+                    <Routes>
+                        <Route path="/" element={<AppsPlayGround />} />
+                        <Route
+                            path="/connected"
+                            element={<ConnectedAppsCard />}
+                        />
+                    </Routes>
                 </section>
             </Content>
         </div>

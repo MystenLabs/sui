@@ -89,5 +89,3 @@ export { default as NFTDetailsPage } from './nft-details';
 export { default as ReceiptPage } from './receipt';
 export { default as CoinsSelectorPage } from './transfer-coin/CoinSelector';
 export { default as AppsPage } from './apps';
-export { default as SuiConnectedAppsPage } from './apps/ConnectedApps';
-export { default as DisconnectAppPage } from './apps/DisconnectApp';

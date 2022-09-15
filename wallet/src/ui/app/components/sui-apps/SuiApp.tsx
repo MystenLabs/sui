@@ -101,8 +101,8 @@ function SuiApp({
 
                     {displaytype === 'full' && tags?.length && (
                         <div className={st.tags}>
-                            {tags?.map((tag, index) => (
-                                <div className={st.tag} key={index}>
+                            {tags?.map((tag) => (
+                                <div className={st.tag} key={tag}>
                                     {tag}
                                 </div>
                             ))}

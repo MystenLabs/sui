@@ -37,6 +37,10 @@ export const getCuratedApps = createAsyncThunk<
         throw new Error('SUI_APPS_API_ENDPOINT is not defined');
     }
     const response = await fetch(SUI_APPS_API_ENDPOINT);
+    if (!response.ok) {
+        throw new Error('No data returned from SUI Apps API');
+    }
+
     const data = await response.json();
     if (!data || !data.length) {
         throw new Error('No data returned from SUI Apps API');

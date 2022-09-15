@@ -69,7 +69,7 @@ function AppsPlayGround() {
                     onClick={handleMint}
                     disabled={mintInProgress || mintStatus !== null}
                 >
-                    {mintInProgress ? <LoadingIndicator /> : ' Mint an NFT'}
+                    {mintInProgress ? <LoadingIndicator /> : 'Mint an NFT'}
 
                     {mintStatusIcon ? (
                         <Icon

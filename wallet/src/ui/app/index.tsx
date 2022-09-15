@@ -18,8 +18,6 @@ import HomePage, {
     ReceiptPage,
     CoinsSelectorPage,
     AppsPage,
-    SuiConnectedAppsPage,
-    DisconnectAppPage,
 } from '_pages/home';
 import InitializePage from '_pages/initialize';
 import BackupPage from '_pages/initialize/backup';
@@ -61,15 +59,7 @@ const App = () => {
             <Route path="/*" element={<HomePage />}>
                 <Route path="tokens" element={<TokensPage />} />
                 <Route path="nfts" element={<NftsPage />} />
-                <Route path="apps" element={<AppsPage />} />
-                <Route
-                    path="apps/connected"
-                    element={<SuiConnectedAppsPage />}
-                />
-                <Route
-                    path="apps/disconnectapp"
-                    element={<DisconnectAppPage />}
-                />
+                <Route path="apps/*" element={<AppsPage />} />
                 <Route path="nft-details" element={<NFTDetailsPage />} />
                 <Route path="transactions" element={<TransactionsPage />} />
                 <Route path="send" element={<TransferCoinPage />} />

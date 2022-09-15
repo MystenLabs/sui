@@ -34,7 +34,7 @@ function ConnectedDapps() {
                 return {
                     name,
                     icon: appData?.favIcon,
-                    link: appData.origin,
+                    link: appData.origin.replace('https://', ''),
                     description: '',
                     id: appData.id,
                     accounts: appData.accounts,

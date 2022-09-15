@@ -121,11 +121,11 @@
                 border-radius: 4px;
                 display: flex;
                 align-items: center;
-                padding: 3px 6px;
+                justify-content: center;
+                padding: 0 6px;
                 height: 18px;
                 font-weight: 500;
                 font-size: 11px;
-                line-height: 100%;
                 color: colors.$sui-steel-blue;
                 letter-spacing: 0.05em;
                 text-transform: uppercase;
@@ -153,6 +153,14 @@
         .external-link-icon {
             height: 10px;
             margin: 0;
+        }
+
+        .title {
+            margin-bottom: 0;
+        }
+
+        .info {
+            gap: 5px;
         }
     }
 }
