@@ -261,6 +261,21 @@ importers:
       react: 18.2.0
       react-dom: 18.2.0_react@18.2.0
 
+  sdk/bcs:
+    specifiers:
+      '@types/bn.js': ^5.1.0
+      bn.js: ^5.2.1
+      tsup: ^6.2.2
+      typescript: ^4.8.2
+      vitest: ^0.22.1
+    dependencies:
+      bn.js: 5.2.1
+    devDependencies:
+      '@types/bn.js': 5.1.0
+      tsup: 6.2.2_typescript@4.8.2
+      typescript: 4.8.2
+      vitest: 0.22.1
+
   sdk/typescript:
     specifiers:
       '@mysten/bcs': workspace:*
@@ -295,7 +310,7 @@ importers:
       vitest: ^0.22.1
       wait-on: ^6.0.1
     dependencies:
-      '@mysten/bcs': link:bcs
+      '@mysten/bcs': link:../bcs
       '@noble/hashes': 1.1.2
       '@noble/secp256k1': 1.6.3
       bn.js: 5.2.1
@@ -328,21 +343,6 @@ importers:
       vitest: 0.22.1
       wait-on: 6.0.1
 
-  sdk/typescript/bcs:
-    specifiers:
-      '@types/bn.js': ^5.1.0
-      bn.js: ^5.2.1
-      tsup: ^6.2.2
-      typescript: ^4.8.2
-      vitest: ^0.22.1
-    dependencies:
-      bn.js: 5.2.1
-    devDependencies:
-      '@types/bn.js': 5.1.0
-      tsup: 6.2.2_typescript@4.8.2
-      typescript: 4.8.2
-      vitest: 0.22.1
-
   sdk/typescript/experimental:
     specifiers:
       '@mysten/bcs': workspace:*
@@ -358,7 +358,7 @@ importers:
       webpack: ^5.73.0
       webpack-cli: ^4.9.2
     dependencies:
-      '@mysten/bcs': link:../bcs
+      '@mysten/bcs': link:../../bcs
       '@types/bn.js': 5.1.0
       '@types/node-fetch': 2.6.2
       bn.js: 5.2.1
