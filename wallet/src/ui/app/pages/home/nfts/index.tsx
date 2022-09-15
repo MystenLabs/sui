@@ -9,6 +9,7 @@ import PageTitle from '_app/shared/page-title';
 import NFTdisplay from '_components/nft-display';
 import { useAppSelector } from '_hooks';
 import { accountNftsSelector } from '_redux/slices/account';
+import { trackPageview } from '_shared/constants';
 
 import st from './NFTPage.module.scss';
 
@@ -19,6 +20,7 @@ function NftsPage() {
         [nfts]
     );
 
+    trackPageview();
     return (
         <div className={st.container}>
             <PageTitle

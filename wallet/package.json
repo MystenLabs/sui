@@ -53,6 +53,7 @@
         "html-webpack-plugin": "^5.5.0",
         "mini-css-extract-plugin": "^2.6.1",
         "onchange": "^7.1.0",
+        "plausible-tracker": "^0.3.0",
         "postcss": "^8.4.6",
         "postcss-loader": "^7.0.1",
         "postcss-preset-env": "^7.7.2",

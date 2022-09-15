@@ -12,6 +12,7 @@ import { SuiIcons } from '_font-icons/output/sui-icons';
 import { useAppSelector, useObjectsState } from '_hooks';
 import { accountAggregateBalancesSelector } from '_redux/slices/account';
 import { GAS_TYPE_ARG } from '_redux/slices/sui-objects/Coin';
+import { trackPageview } from '_shared/constants';
 
 import st from './TokensPage.module.scss';
 
@@ -23,6 +24,7 @@ function TokensPage() {
         () => Object.keys(balances).filter((aType) => aType !== GAS_TYPE_ARG),
         [balances]
     );
+    trackPageview();
     return (
         <div className={st.container}>
             {showError && error ? (
