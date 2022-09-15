@@ -174,6 +174,12 @@ impl From<ObjectID> for SuiAddress {
     }
 }
 
+impl From<AccountAddress> for SuiAddress {
+    fn from(address: AccountAddress) -> SuiAddress {
+        Self(address.into_bytes())
+    }
+}
+
 impl TryFrom<Vec<u8>> for SuiAddress {
     type Error = SuiError;
 

@@ -7550,6 +7550,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bcs",
+ "better_any",
  "curve25519-dalek-ng",
  "fastcrypto",
  "linked-hash-map",
