@@ -3,7 +3,9 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_remover::DeleteBatchResult,
-    block_synchronizer::{handler::BlockSynchronizerHandler, BlockSynchronizer},
+    block_synchronizer::{
+        handler::BlockSynchronizerHandler, responses::AvailabilityResponse, BlockSynchronizer,
+    },
     block_waiter::{BatchMessageError, BatchResult, BlockWaiter},
     certificate_waiter::CertificateWaiter,
     core::Core,
@@ -138,13 +140,9 @@ impl Primary {
             CHANNEL_CAPACITY,
             &primary_channel_metrics.tx_block_synchronizer_commands,
         );
-        let (tx_certificate_responses, rx_certificate_responses) = channel(
+        let (tx_availability_responses, rx_availability_responses) = channel(
             CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_certificate_responses,
-        );
-        let (tx_payload_availability_responses, rx_payload_availability_responses) = channel(
-            CHANNEL_CAPACITY,
-            &primary_channel_metrics.tx_payload_availability_responses,
+            &primary_channel_metrics.tx_availability_responses,
         );
         let (tx_state_handler, rx_state_handler) =
             channel(CHANNEL_CAPACITY, &primary_channel_metrics.tx_state_handler);
@@ -189,8 +187,7 @@ impl Primary {
         let primary_service = PrimaryToPrimaryServer::new(PrimaryReceiverHandler {
             tx_primary_messages: tx_primary_messages.clone(),
             tx_helper_requests,
-            tx_payload_availability_responses,
-            tx_certificate_responses,
+            tx_availability_responses,
         });
         let worker_service = WorkerToPrimaryServer::new(WorkerReceiverHandler {
             tx_our_digests,
@@ -331,8 +328,7 @@ impl Primary {
             worker_cache.clone(),
             tx_reconfigure.subscribe(),
             rx_block_synchronizer_commands,
-            rx_certificate_responses,
-            rx_payload_availability_responses,
+            rx_availability_responses,
             block_synchronizer_network,
             payload_store.clone(),
             certificate_store.clone(),
@@ -468,8 +464,7 @@ impl Primary {
 struct PrimaryReceiverHandler {
     tx_primary_messages: Sender<PrimaryMessage>,
     tx_helper_requests: Sender<PrimaryMessage>,
-    tx_payload_availability_responses: Sender<PayloadAvailabilityResponse>,
-    tx_certificate_responses: Sender<CertificatesResponse>,
+    tx_availability_responses: Sender<AvailabilityResponse>,
 }
 
 #[async_trait]
@@ -492,11 +487,11 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 .await
                 .map_err(|_| DagError::ShuttingDown),
             PrimaryMessage::CertificatesBatchResponse { certificates, from } => self
-                .tx_certificate_responses
-                .send(CertificatesResponse {
+                .tx_availability_responses
+                .send(AvailabilityResponse::Certificate(CertificatesResponse {
                     certificates: certificates.to_vec(),
                     from: from.clone(),
-                })
+                }))
                 .await
                 .map_err(|_| DagError::ShuttingDown),
             PrimaryMessage::PayloadAvailabilityRequest { .. } => self
@@ -508,11 +503,11 @@ impl PrimaryToPrimary for PrimaryReceiverHandler {
                 payload_availability,
                 from,
             } => self
-                .tx_payload_availability_responses
-                .send(PayloadAvailabilityResponse {
+                .tx_availability_responses
+                .send(AvailabilityResponse::Payload(PayloadAvailabilityResponse {
                     block_ids: payload_availability.to_vec(),
                     from: from.clone(),
-                })
+                }))
                 .await
                 .map_err(|_| DagError::ShuttingDown),
             _ => self

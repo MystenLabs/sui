@@ -137,6 +137,12 @@ impl CertificatesResponse {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum AvailabilityResponse {
+    Certificate(CertificatesResponse),
+    Payload(PayloadAvailabilityResponse),
+}
+
 #[derive(Debug, Error, Clone, PartialEq)]
 pub enum CertificatesResponseError {
     #[error("Found invalid certificates form peer {name} - potentially Byzantine.")]

@@ -82,9 +82,7 @@ pub struct PrimaryChannelMetrics {
     /// occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`
     pub tx_block_synchronizer_commands: IntGauge,
     /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`
-    pub tx_certificate_responses: IntGauge,
-    /// occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`
-    pub tx_payload_availability_responses: IntGauge,
+    pub tx_availability_responses: IntGauge,
     /// occupancy of the channel from the `primary::WorkerReceiverHandler` to the `primary::StateHandler`
     pub tx_state_handler: IntGauge,
     /// occupancy of the channel from the reconfigure notification to most components.
@@ -189,13 +187,8 @@ impl PrimaryChannelMetrics {
                 "occupancy of the channel from the `primary::BlockSynchronizerHandler` to the `primary::BlockSynchronizer`",
                 registry
             ).unwrap(),
-            tx_certificate_responses: register_int_gauge_with_registry!(
-                "tx_certificate_responses",
-                "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`",
-                registry
-            ).unwrap(),
-            tx_payload_availability_responses: register_int_gauge_with_registry!(
-                "tx_payload_availability_responses",
+            tx_availability_responses: register_int_gauge_with_registry!(
+                "tx_availability_responses",
                 "occupancy of the channel from the `primary::PrimaryReceiverHandler` to the `primary::BlockSynchronizer`",
                 registry
             ).unwrap(),

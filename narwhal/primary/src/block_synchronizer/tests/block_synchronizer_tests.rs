@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 use crate::{
     block_synchronizer::{
-        responses::PayloadAvailabilityResponse, BlockSynchronizer, CertificatesResponse, Command,
-        PendingIdentifier, RequestID, SyncError,
+        responses::{AvailabilityResponse, PayloadAvailabilityResponse},
+        BlockSynchronizer, CertificatesResponse, Command, PendingIdentifier, RequestID, SyncError,
     },
     common::{create_db_stores, worker_listener},
     primary::PrimaryMessage,
@@ -49,8 +49,7 @@ async fn test_successful_headers_synchronization() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_commands) = test_utils::test_channel!(10);
-    let (tx_certificate_responses, rx_certificate_responses) = test_utils::test_channel!(10);
-    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
+    let (tx_availability_responses, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
@@ -101,8 +100,7 @@ async fn test_successful_headers_synchronization() {
         worker_cache.clone(),
         rx_reconfigure,
         rx_commands,
-        rx_certificate_responses,
-        rx_payload_availability_responses,
+        rx_availability_responses,
         P2pNetwork::new(network.clone()),
         payload_store.clone(),
         certificate_store.clone(),
@@ -177,11 +175,11 @@ async fn test_successful_headers_synchronization() {
 
                     debug!("{:?}", requestor);
 
-                    tx_certificate_responses
-                        .send(CertificatesResponse {
+                    tx_availability_responses
+                        .send(AvailabilityResponse::Certificate(CertificatesResponse {
                             certificates: response_certificates,
                             from: primaries.pop().unwrap().0,
-                        })
+                        }))
                         .await
                         .unwrap();
                 }
@@ -244,9 +242,7 @@ async fn test_successful_payload_synchronization() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_commands) = test_utils::test_channel!(10);
-    let (_tx_certificate_responses, rx_certificate_responses) = test_utils::test_channel!(10);
-    let (tx_payload_availability_responses, rx_payload_availability_responses) =
-        test_utils::test_channel!(10);
+    let (tx_availability_responses, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
@@ -286,8 +282,7 @@ async fn test_successful_payload_synchronization() {
         worker_cache.clone(),
         rx_reconfigure,
         rx_commands,
-        rx_certificate_responses,
-        rx_payload_availability_responses,
+        rx_availability_responses,
         P2pNetwork::new(network.clone()),
         payload_store.clone(),
         certificate_store.clone(),
@@ -373,11 +368,11 @@ async fn test_successful_payload_synchronization() {
 
                     debug!("{:?}", requestor);
 
-                    tx_payload_availability_responses
-                        .send(PayloadAvailabilityResponse {
+                    tx_availability_responses
+                        .send(AvailabilityResponse::Payload(PayloadAvailabilityResponse {
                             block_ids: response,
                             from: primaries.pop().unwrap().0,
-                        })
+                        }))
                         .await
                         .unwrap();
                 }
@@ -460,8 +455,7 @@ async fn test_multiple_overlapping_requests() {
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
-    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
-    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
+    let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some blocks (certificates)
     let mut certificates: HashMap<CertificateDigest, Certificate> = HashMap::new();
@@ -495,8 +489,7 @@ async fn test_multiple_overlapping_requests() {
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
         rx_commands,
-        rx_certificate_responses,
-        rx_payload_availability_responses,
+        rx_availability_responses,
         pending_requests: HashMap::new(),
         map_certificate_responses_senders: HashMap::new(),
         map_payload_availability_responses_senders: HashMap::new(),
@@ -591,8 +584,7 @@ async fn test_timeout_while_waiting_for_certificates() {
     let (_tx_reconfigure, rx_reconfigure) =
         watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (tx_commands, rx_commands) = test_utils::test_channel!(10);
-    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
-    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
+    let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     // AND some random block ids
     let block_ids: Vec<CertificateDigest> = (0..10)
@@ -627,8 +619,7 @@ async fn test_timeout_while_waiting_for_certificates() {
         worker_cache.clone(),
         rx_reconfigure,
         rx_commands,
-        rx_certificate_responses,
-        rx_payload_availability_responses,
+        rx_availability_responses,
         P2pNetwork::new(network),
         payload_store.clone(),
         certificate_store.clone(),
@@ -700,8 +691,7 @@ async fn test_reply_with_certificates_already_in_storage() {
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
-    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
-    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
+    let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
 
@@ -717,8 +707,7 @@ async fn test_reply_with_certificates_already_in_storage() {
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
         rx_commands,
-        rx_certificate_responses,
-        rx_payload_availability_responses,
+        rx_availability_responses,
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
@@ -805,8 +794,7 @@ async fn test_reply_with_payload_already_in_storage() {
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
-    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
-    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
+    let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
 
@@ -821,8 +809,7 @@ async fn test_reply_with_payload_already_in_storage() {
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
         rx_commands,
-        rx_certificate_responses,
-        rx_payload_availability_responses,
+        rx_availability_responses,
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),
@@ -915,8 +902,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
 
     let (_, rx_reconfigure) = watch::channel(ReconfigureNotification::NewEpoch(committee.clone()));
     let (_, rx_commands) = test_utils::test_channel!(10);
-    let (_, rx_certificate_responses) = test_utils::test_channel!(10);
-    let (_, rx_payload_availability_responses) = test_utils::test_channel!(10);
+    let (_, rx_availability_responses) = test_utils::test_channel!(10);
 
     let own_address = network::multiaddr_to_address(&committee.primary(&name).unwrap()).unwrap();
 
@@ -931,8 +917,7 @@ async fn test_reply_with_payload_already_in_storage_for_own_certificates() {
         worker_cache: worker_cache.clone(),
         rx_reconfigure,
         rx_commands,
-        rx_certificate_responses,
-        rx_payload_availability_responses,
+        rx_availability_responses,
         pending_requests: Default::default(),
         map_certificate_responses_senders: Default::default(),
         map_payload_availability_responses_senders: Default::default(),

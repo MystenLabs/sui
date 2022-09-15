@@ -40,6 +40,8 @@ use types::{
     ReconfigureNotification,
 };
 
+use self::responses::AvailabilityResponse;
+
 #[cfg(test)]
 #[path = "tests/block_synchronizer_tests.rs"]
 mod block_synchronizer_tests;
@@ -168,12 +170,8 @@ pub struct BlockSynchronizer {
     /// Receive the commands for the synchronizer
     rx_commands: metered_channel::Receiver<Command>,
 
-    /// Receive the requested list of certificates through this channel
-    rx_certificate_responses: metered_channel::Receiver<CertificatesResponse>,
-
-    /// Receive the availability for the requested certificates through this
-    /// channel
-    rx_payload_availability_responses: metered_channel::Receiver<PayloadAvailabilityResponse>,
+    /// Receive answers to requested assets (certificates, payloads) through this channel
+    rx_availability_responses: metered_channel::Receiver<AvailabilityResponse>,
 
     /// Pending block requests either for header or payload type
     pending_requests: HashMap<PendingIdentifier, Vec<ResultSender>>,
@@ -212,8 +210,7 @@ impl BlockSynchronizer {
         worker_cache: SharedWorkerCache,
         rx_reconfigure: watch::Receiver<ReconfigureNotification>,
         rx_commands: metered_channel::Receiver<Command>,
-        rx_certificate_responses: metered_channel::Receiver<CertificatesResponse>,
-        rx_payload_availability_responses: metered_channel::Receiver<PayloadAvailabilityResponse>,
+        rx_availability_responses: metered_channel::Receiver<AvailabilityResponse>,
         network: P2pNetwork,
         payload_store: Store<(BatchDigest, WorkerId), PayloadToken>,
         certificate_store: CertificateStore,
@@ -226,8 +223,7 @@ impl BlockSynchronizer {
                 worker_cache,
                 rx_reconfigure,
                 rx_commands,
-                rx_certificate_responses,
-                rx_payload_availability_responses,
+                rx_availability_responses,
                 pending_requests: HashMap::new(),
                 map_certificate_responses_senders: HashMap::new(),
                 map_payload_availability_responses_senders: HashMap::new(),
@@ -275,11 +271,11 @@ impl BlockSynchronizer {
                         }
                     }
                 },
-                Some(response) = self.rx_certificate_responses.recv() => {
-                    self.handle_certificates_response(response).await;
-                },
-                Some(response) = self.rx_payload_availability_responses.recv() => {
-                    self.handle_payload_availability_response(response).await;
+                Some(response) = self.rx_availability_responses.recv() => {
+                    match response {
+                        AvailabilityResponse::Certificate(certificate_response) => self.handle_certificates_response(certificate_response).await,
+                        AvailabilityResponse::Payload(payload_availability_response) => self.handle_payload_availability_response(payload_availability_response).await,
+                    }
                 },
                 Some(state) = waiting.next() => {
                     match state {
