@@ -7,6 +7,7 @@ use move_core_types::account_address::AccountAddress;
 use move_core_types::ident_str;
 use move_core_types::language_storage::TypeTag;
 use move_package::BuildConfig;
+use signature::Signer;
 use std::path::PathBuf;
 use sui::client_commands::WalletContext;
 use sui::client_commands::{SuiClientCommandResult, SuiClientCommands};
@@ -149,6 +150,55 @@ pub async fn make_transactions_with_wallet_context(
     res
 }
 
+pub async fn make_counter_increment_transaction_with_wallet_context(
+    context: &WalletContext,
+    sender: SuiAddress,
+    counter_id: ObjectID,
+    gas_object_ref: Option<ObjectRef>,
+) -> Transaction {
+    let package_object_ref = genesis::get_framework_object_ref();
+    let gas_objeect_ref = match gas_object_ref {
+        Some(obj_ref) => obj_ref,
+        None => get_gas_object_with_wallet_context(context, &sender)
+            .await
+            .unwrap(),
+    };
+    let data = TransactionData::new_move_call(
+        sender,
+        package_object_ref,
+        "counter".parse().unwrap(),
+        "increment".parse().unwrap(),
+        Vec::new(),
+        gas_objeect_ref,
+        vec![CallArg::Object(ObjectArg::SharedObject(counter_id))],
+        MAX_GAS,
+    );
+    let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+    Transaction::new(data, signature)
+}
+
+// pub async fn make_counter_create_transaction_with_wallet_context(
+//     context: &mut WalletContext,
+// ) -> Transaction {
+//     let sender = context.active_address().unwrap();
+//     let package_object_ref = genesis::get_framework_object_ref();
+//     let gas_object_ref = get_gas_object_with_wallet_context(context, &sender)
+//         .await
+//         .unwrap();
+//     let data = TransactionData::new_move_call(
+//         sender,
+//         package_object_ref,
+//         "counter".parse().unwrap(),
+//         "create".parse().unwrap(),
+//         Vec::new(),
+//         gas_object_ref,
+//         vec![],
+//         MAX_GAS,
+//     );
+//     let signature = context.keystore.sign(&sender, &data.to_bytes()).unwrap();
+//     Transaction::new(data, signature)
+// }
+
 /// Make a few different single-writer test transactions owned by specific addresses.
 pub fn make_transactions_with_pre_genesis_objects(
     keys: SuiKeystore,
@@ -197,11 +247,11 @@ pub fn test_shared_object_transactions() -> Vec<Transaction> {
     // Make one transaction per gas object (all containing the same shared object).
     let mut transactions = Vec::new();
     let shared_object_id = test_shared_object().id();
-    for gas_object in test_gas_objects() {
-        let module = "object_basics";
-        let function = "create";
-        let package_object_ref = genesis::get_framework_object_ref();
+    let module = "object_basics";
+    let function = "create";
+    let package_object_ref = genesis::get_framework_object_ref();
 
+    for gas_object in test_gas_objects() {
         let data = TransactionData::new_move_call(
             sender,
             package_object_ref,
@@ -327,6 +377,7 @@ pub fn make_counter_increment_transaction(
     counter_id: ObjectID,
     sender: SuiAddress,
     keypair: &AccountKeyPair,
+    // keypair: &dyn Signer<Signature>,
 ) -> Transaction {
     let data = TransactionData::new_move_call(
         sender,
