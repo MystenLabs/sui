@@ -93,7 +93,7 @@ jobs:
       - uses: taiki-e/install-action@nextest
       - name: cargo simtest
         run: |
-          scripts/simtest/cargo-simtest simtest build
+          scripts/simtest/cargo-simtest simtest
 
   # This is a no-op job that allows the resulting action names to line up when
   # there are no rust changes in a given PR/commit. This ensures that we can
