@@ -20,7 +20,6 @@ type AppState = {
     navVisible: boolean;
     activeOrigin: string | null;
     activeOriginFavIcon: string | null;
-    navFilterTag: { name: string; link: string }[] | [];
 };
 
 const initialState: AppState = {
@@ -29,7 +28,6 @@ const initialState: AppState = {
     navVisible: true,
     activeOrigin: null,
     activeOriginFavIcon: null,
-    navFilterTag: [],
 };
 
 // On network change, set setNewJsonRpcProvider, fetch all owned objects, and fetch all transactions
@@ -83,12 +81,6 @@ const slice = createSlice({
             state.activeOrigin = payload.origin;
             state.activeOriginFavIcon = payload.favIcon;
         },
-        setNavFilterTag: (
-            state,
-            { payload: data }: PayloadAction<{ name: string; link: string }[]>
-        ) => {
-            state.navFilterTag = data;
-        },
     },
     initialState,
 });
@@ -98,9 +90,7 @@ export const {
     setApiEnv,
     setNavVisibility,
     setActiveOrigin,
-    setNavFilterTag,
 } = slice.actions;
 export const getNavIsVisible = ({ app }: RootState) => app.navVisible;
-export const getNavFilterTag = ({ app }: RootState) => app.navFilterTag;
 
 export default slice.reducer;

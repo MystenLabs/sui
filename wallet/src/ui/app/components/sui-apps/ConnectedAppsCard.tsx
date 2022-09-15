@@ -5,7 +5,6 @@ import cl from 'classnames';
 import { useEffect } from 'react';
 
 import SuiApp, { SuiAppEmpty } from './SuiApp';
-import AppFilters from './filters';
 import { useAppSelector } from '_hooks';
 import { thunkExtras } from '_store/thunk-extras';
 
@@ -48,7 +47,6 @@ function ConnectedDapps() {
 
     return (
         <div className={cl(st.container)}>
-            <AppFilters />
             <div className={st.desc}>
                 <div className={st.title}>
                     {formattedApps.length

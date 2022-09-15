@@ -5,7 +5,6 @@ import cl from 'classnames';
 import { useCallback, useEffect, useState } from 'react';
 
 import SuiApp, { SuiAppEmpty } from './SuiApp';
-import AppFilters from './filters';
 import Button from '_app/shared/button';
 import ExplorerLink from '_components/explorer-link';
 import { ExplorerLinkType } from '_components/explorer-link/ExplorerLinkType';
@@ -61,7 +60,6 @@ function AppsPlayGround() {
 
     return (
         <div className={cl(st.container)}>
-            <AppFilters />
             <h4 className={st.activeSectionTitle}>Playground</h4>
             <div className={st.groupButtons}>
                 <Button
@@ -145,3 +143,4 @@ function AppsPlayGround() {
 
 export default AppsPlayGround;
 export { default as ConnectedAppsCard } from './ConnectedAppsCard';
+export { default as AppFiltersPortal } from './filters';

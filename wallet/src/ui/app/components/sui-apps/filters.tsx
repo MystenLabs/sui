@@ -1,31 +1,61 @@
 // Copyright (c) 2022, Mysten Labs, Inc.
 // SPDX-License-Identifier: Apache-2.0
 
-import { useEffect, memo } from 'react';
+import cl from 'classnames';
+import { useEffect, useState } from 'react';
+import ReactDOM from 'react-dom';
+import { NavLink } from 'react-router-dom';
 
-import { useAppDispatch } from '_hooks';
-import { setNavFilterTag } from '_redux/slices/app';
+import st from './Filters.module.scss';
 
-function AppFilters() {
-    const dispatch = useAppDispatch();
-    useEffect(() => {
-        setTimeout(() => {
-            dispatch(
-                setNavFilterTag([
-                    {
-                        name: 'Playground',
-                        link: 'apps',
-                    },
-                    {
-                        name: 'Active Connections',
-                        link: 'apps/connected',
-                    },
-                ])
-            );
-        }, 30);
-    }, [dispatch]);
-
-    return null;
+const ELEMENT_ID = '#sui-apps-filters';
+function activeTagsFilter({ isActive }: { isActive: boolean }) {
+    return cl({ [st.active]: isActive }, st.filter);
 }
 
-export default memo(AppFilters);
+function AppFiltersPortal() {
+    const [ready, setReady] = useState(false);
+    const content = document.querySelector(ELEMENT_ID) as HTMLElement;
+
+    const filterTags = [
+        {
+            name: 'Playground',
+            link: 'apps',
+        },
+        {
+            name: 'Active Connections',
+            link: 'apps/connected',
+        },
+    ];
+
+    useEffect(() => {
+        // TODO - Remove this hack
+        const content = document.querySelector(ELEMENT_ID) as HTMLElement;
+        if (content) setReady(true);
+    }, [content]);
+
+    return (
+        <>
+            {ready
+                ? ReactDOM.createPortal(
+                      <div className={st.filterTags}>
+                          {filterTags.map((tag) => (
+                              <NavLink
+                                  key={tag.link}
+                                  to={`/${tag.link}`}
+                                  end
+                                  className={activeTagsFilter}
+                                  title={tag.name}
+                              >
+                                  <span className={st.title}>{tag.name}</span>
+                              </NavLink>
+                          ))}
+                      </div>,
+                      content
+                  )
+                : null}
+        </>
+    );
+}
+
+export default AppFiltersPortal;

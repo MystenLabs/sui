@@ -29,7 +29,7 @@ import SelectPage from '_pages/initialize/select';
 import SiteConnectPage from '_pages/site-connect';
 import WelcomePage from '_pages/welcome';
 import { loadAccountFromStorage } from '_redux/slices/account';
-import { setNavVisibility, setNavFilterTag } from '_redux/slices/app';
+import { setNavVisibility } from '_redux/slices/app';
 
 const HIDDEN_MENU_PATHS = [
     '/stake',
@@ -54,7 +54,6 @@ const App = () => {
     const location = useLocation();
     useEffect(() => {
         const menuVisible = !HIDDEN_MENU_PATHS.includes(location.pathname);
-        dispatch(setNavFilterTag([]));
         dispatch(setNavVisibility(menuVisible));
     }, [location, dispatch]);
     return (

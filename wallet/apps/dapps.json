@@ -2,8 +2,36 @@
     {
         "name": "Mystanlab",
         "description": "We are designers bringing digital asset ownership to billions of people.",
-        "appLink": "https://mystenlabs.com/",
-        "image": "https://sui.io/img/sui-social.jpg",
+        "link": "https://mystenlabs.com/",
+        "icon": "https://sui.io/img/sui-social.jpg",
         "tags": ["Dapp"]
+    },
+    {
+        "name": "Axelar",
+        "description": "Axelar delivers secure cross-chain communication for web3",
+        "link": "https://axelar.network/",
+        "icon": "https://storage.googleapis.com/sui-cms-content/Axelar_Logo_522d0ce4b6/Axelar_Logo_522d0ce4b6.png",
+        "tags": ["Bridge"]
+    },
+    {
+        "name": "Cramium",
+        "description": "Axelar delivers secure cross-chain communication for web3",
+        "link": "https://cramium.io/home/",
+        "icon": "https://storage.googleapis.com/sui-cms-content/Cramium_Logo_13e3d3c382/Cramium_Logo_13e3d3c382.png",
+        "tags": ["NFT"]
+    },
+    {
+        "name": "Ethos",
+        "description": "A wallet to effortlessly explore the decentralized web",
+        "link": "https://ethoswallet.xyz/",
+        "icon": "https://storage.googleapis.com/sui-cms-content/Frame33_b4ef0ab552/Frame33_b4ef0ab552.png",
+        "tags": ["Wallet"]
+    },
+    {
+        "name": "Gaggle Studios",
+        "description": "Building new social gaming experiences",
+        "link": "https://gaggle.fun/",
+        "icon": "https://storage.googleapis.com/sui-cms-content/Gaggle_circle_gradient_a5d1a37283/Gaggle_circle_gradient_a5d1a37283.png",
+        "tags": ["Gaming"]
     }
 ]
